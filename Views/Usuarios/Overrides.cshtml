@@ -1,0 +1,152 @@
+﻿@using ERP.NSQuell.Areas.AdminUsuarios.DTOs
+@model ERP.NSQuell.Areas.AdminUsuarios.DTOs.OverridesVm
+
+@{
+    var items = Model?.Items ?? new List<OverrideItemDto>();
+    // En tu GET ya seteas ViewBag.RolId si lo necesitas para mostrar algo.
+}
+
+<div class="overrides-view">
+    <form id="frmOverrides"
+          asp-controller="Usuarios"
+          asp-action="GuardarOverrides"
+          method="post">
+        @Html.AntiForgeryToken()
+
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+        <!-- Claves -->
+        <input type="hidden" name="UsuarioID" value="@Model?.UsuarioID" />
+        @* EmpresaID es global (null) en tu GET; no lo necesita el POST *@
+
+        @* Mensajes opcionales *@
+        @if (TempData["WarningMessage"] != null)
+        {
+            <div class="alert alert-warning">@TempData["WarningMessage"]</div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+        }
+        @if (TempData["SuccessMessage"] != null || TempData["Ok"] != null)
+        {
+            <div class="alert alert-success">@((TempData["SuccessMessage"] ?? TempData["Ok"])!.ToString())</div>
+        }
+
+        <!-- Toolbar acciones masivas -->
+        <div class="d-flex align-items-center justify-content-end gap-2 mb-2">
+            <button type="button" id="btnAllHeredar" class="btn btn-outline-secondary btn-sm">Heredar todos</button>
+            <button type="button" id="btnAllPermitir" class="btn btn-outline-success btn-sm">Permitir todos</button>
+            <button type="button" id="btnAllDenegar" class="btn btn-outline-danger btn-sm">Denegar todos</button>
+        </div>
+
+        <div class="table-responsive" style="max-height: calc(100vh - 200px); overflow:auto;">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Submenú</th>
+                        <th class="text-center" style="min-width:320px;">Override</th>
+                        <th class="text-center">Efectivo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="3">
+                                <div class="alert alert-info mb-0">
+                                    No hay overrides para mostrar.
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        for (int i = 0; i < items.Count; i++)
+                        {
+                            <tr>
+                                <td>
+                                    @items[i].Nombre
+                                    <input type="hidden" name="Items[@i].SubMenuID" value="@items[i].SubMenuID" />
+                                    <input type="hidden" name="Items[@i].Nombre" value="@items[i].Nombre" />
+                                    @* Si el POST llegara a requerir más campos (p.ej. MenuID), agrega aquí más hidden *@
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group" role="group" aria-label="Override">
+                                        <input class="btn-check" type="radio" name="Items[@i].Estado" id="her_@i" value="-1" @(items[i].Estado == -1 ? "checked" : "") />
+                                        <label class="btn btn-outline-secondary" for="her_@i">Heredar</label>
+
+                                        <input class="btn-check" type="radio" name="Items[@i].Estado" id="per_@i" value="1" @(items[i].Estado == 1 ? "checked" : "") />
+                                        <label class="btn btn-outline-success" for="per_@i">Permitir</label>
+
+                                        <input class="btn-check" type="radio" name="Items[@i].Estado" id="den_@i" value="0" @(items[i].Estado == 0 ? "checked" : "") />
+                                        <label class="btn btn-outline-danger" for="den_@i">Denegar</label>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    @if (items[i].PermisoEfectivo)
+                                    {
+                                        <span class="badge bg-success">Sí</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">No</span>
+                                    }
+                                    @* No es necesario postear PermisoEfectivo; es informativo. Si lo necesitas, descomenta:
+                                <input type="hidden" name="Items[@i].PermisoEfectivo" value="@(items[i].PermisoEfectivo ? "true" : "false")" />
+                                *@
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Botón flotante siempre visible -->
+        <div class="override-savebar">
+            <button type="submit" id="btnSaveOverrides" class="btn btn-primary">
+                <i class="bi bi-save"></i> Guardar overrides
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+    /* Botón flotante */
+    .override-savebar {
+        position: fixed;
+        right: 24px;
+        bottom: 20px;
+        z-index: 5000;
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 9999px;
+        padding: 8px 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.08);
+    }
+
+    /* Espacio inferior solo en esta vista (no tocar body global) */
+    .overrides-view {
+        padding-bottom: 90px;
+    }
+</style>
+
+<script>
+    (function () {
+      const frm = document.getElementById('frmOverrides');
+      if (!frm) return;
+
+      function setAll(val) {
+        const rows = frm.querySelectorAll('tbody tr');
+        rows.forEach((tr, idx) => {
+          const input = frm.querySelector(`input[name="Items[${idx}].Estado"][value="${val}"]`);
+          if (input) input.checked = true;
+        });
+      }
+
+      document.getElementById('btnAllHeredar')?.addEventListener('click', () => setAll(-1));
+      document.getElementById('btnAllPermitir')?.addEventListener('click', () => setAll(1));
+      document.getElementById('btnAllDenegar')?.addEventListener('click', () => setAll(0));
+    })();
+</script>

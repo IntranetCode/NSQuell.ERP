@@ -1,0 +1,513 @@
+@using System.Security.Claims
+
+@{
+    // Datos dinámicos de sesión / claims
+    var nombreUsuario = Context.Session.GetString("NombreMostrar")
+        ?? Context.Session.GetString("Username")
+        ?? User.FindFirst(ClaimTypes.Name)?.Value
+        ?? "Invitado";
+
+    var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NS Group";
+    var logoEmpresa = Context.Session.GetString("EmpresaLogo") ?? "default-logo.png";
+
+    var rolUsuario = Context.Session.GetString("Rol")
+        ?? Context.Session.GetString("NombreRol")
+        ?? User.FindFirst(ClaimTypes.Role)?.Value
+        ?? "Colaborador";
+
+    var inicialUsuario = !string.IsNullOrWhiteSpace(nombreUsuario)
+        ? nombreUsuario.Trim().Substring(0, 1).ToUpper()
+        : "U";
+}
+
+<nav class="top-navbar" role="navigation" aria-label="Navegación principal">
+    <div class="navbar-content">
+        <div class="navbar-left">
+            <a href="@Url.Action("Index", "Menu")" class="navbar-brand">
+                @if (!string.IsNullOrEmpty(logoEmpresa) && logoEmpresa != "default-logo.png")
+                {
+                    <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="navbar-logo" loading="lazy" />
+                }
+                else
+                {
+                    <i class="fas fa-building" aria-hidden="true"></i>
+                }
+
+                <span class="navbar-title">@nombreEmpresa</span>
+            </a>
+        </div>
+
+        <div class="navbar-right">
+            <div class="quick-actions-navbar">
+                <a class="quick-action-btn" id="btnNotificaciones" aria-haspopup="true" aria-expanded="false" title="Notificaciones">
+                    <i class="fas fa-bell" aria-hidden="true"></i>
+                    <span id="notifCount" class="badge rounded-pill" hidden="true">0</span>
+                </a>
+
+                <div id="notifDropdown" class="notif-dropdown" aria-labelledby="btnNotificaciones">
+                    <div class="notif-header"><strong>Notificaciones</strong></div>
+                    <ul id="notifList" class="notif-list"></ul>
+                </div>
+            </div>
+
+            <div class="user-menu">
+                <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario">
+                    <div class="user-avatar" aria-hidden="true">@inicialUsuario</div>
+
+                    <div class="user-info">
+                        <div class="user-name">@nombreUsuario</div>
+                        <div class="user-role">@rolUsuario</div>
+                    </div>
+
+                    <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                </button>
+
+                <div class="user-dropdown" id="userDropdownMenu" role="menu" aria-labelledby="userToggle">
+                    <a href="#" id="linkMiPerfil" class="dropdown-item" role="menuitem">
+                        <i class="fas fa-user" aria-hidden="true"></i> Mi Perfil
+                    </a>
+
+                    <a href="#"
+                       class="dropdown-item"
+                       role="menuitem"
+                       data-bs-toggle="modal"
+                       data-bs-target="#modalDenunciaAnonima">
+                        <i class="fas fa-user-secret" aria-hidden="true"></i> Denuncia anónima
+                    </a>
+
+                    <a href="/Login/Logout" class="dropdown-item">
+                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar Sesión
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
+
+@Html.AntiForgeryToken()
+
+<!-- Modal de Perfil -->
+<div class="modal fade" id="modalPerfil" tabindex="-1" aria-labelledby="modalPerfilLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-perfil">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalPerfilLabel">
+                    <i class="fas fa-user-circle"></i> Mi Perfil
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <i class="fas fa-user-circle fa-5x text-primary"></i>
+                </div>
+
+                <div class="perfil-info">
+                    <div class="mb-3">
+                        <label class="fw-bold"><i class="fas fa-user"></i> Nombre:</label>
+                        <p id="perfilNombre" class="ms-3"></p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold"><i class="fas fa-id-badge"></i> Usuario:</label>
+                        <p id="perfilUsername" class="ms-3"></p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold"><i class="fas fa-envelope"></i> Correo:</label>
+                        <p id="perfilCorreo" class="ms-3"></p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold"><i class="fas fa-phone"></i> Teléfono:</label>
+                        <p id="perfilTelefono" class="ms-3"></p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold"><i class="fas fa-user-tag"></i> Rol:</label>
+                        <p id="perfilRol" class="ms-3"></p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="fw-bold"><i class="fas fa-info-circle"></i> Descripción del Rol:</label>
+                        <p id="perfilDescripcionRol" class="ms-3"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de denuncia anónima -->
+<div class="modal fade" id="modalDenunciaAnonima" tabindex="-1" role="dialog" aria-labelledby="modalDenunciaAnonimaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content modal-denuncia">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDenunciaAnonimaLabel">
+                    Denuncia anónima y confidencial
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            @using (Html.BeginForm("Crear", "DenunciasAnonimas", FormMethod.Post, new { id = "formDenunciaAnonima" }))
+            {
+                @Html.AntiForgeryToken()
+
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        Tu identidad no se mostrará en ningún lado. La información se enviará de forma confidencial.
+                    </p>
+
+                    <div class="form-group">
+                        <label for="TipoDenuncia">Tipo de denuncia *</label>
+                        <select id="TipoDenuncia" name="TipoDenuncia" class="form-control" required>
+                            <option value="">-- Selecciona una opción --</option>
+                            <option value="Acoso">Acoso</option>
+                            <option value="Fraude">Fraude</option>
+                            <option value="Conducta inadecuada">Conducta inadecuada</option>
+                            <option value="Seguridad">Seguridad</option>
+                            <option value="Otros">Otros</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="DepartamentoAfectado">Departamento afectado *</label>
+                        <select id="DepartamentoAfectado" name="DepartamentoAfectado" class="form-control" required>
+                            <option value="">-- Selecciona una opción --</option>
+                            <option value="Recursos Humanos">Recursos Humanos</option>
+                            <option value="Ventas">Compras</option>
+                            <option value="Proyectos">Proyectos</option>
+                            <option value="Operaciones">Almacén</option>
+                            <option value="Finanzas">Finanzas</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="Descripcion">Descripción detallada *</label>
+                        <textarea id="Descripcion" name="Descripcion" class="form-control" rows="4" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="FechaHechos">Fecha aproximada de los hechos *</label>
+                        <input type="date" id="FechaHechos" name="FechaHechos" class="form-control" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="LugarHechos">Lugar de los hechos *</label>
+                        <input type="text" id="LugarHechos" name="LugarHechos" class="form-control" maxlength="200" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="camposObligatorios">* Todos los campos son obligatorios</label>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Enviar denuncia</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const toggleBtn = document.getElementById('userToggle');
+        const dropdown = document.getElementById('userDropdownMenu');
+
+        if (toggleBtn && dropdown && toggleBtn.dataset.topNavbarInit !== '1') {
+            toggleBtn.dataset.topNavbarInit = '1';
+
+            toggleBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                dropdown.classList.toggle('show');
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+        }
+    });
+</script>
+
+<script>
+    (function () {
+        const btn = document.getElementById('btnNotificaciones');
+        const badge = document.getElementById('notifCount');
+        const dropdown = document.getElementById('notifDropdown');
+        const list = document.getElementById('notifList');
+
+        if (!btn || !badge || !dropdown || !list || btn.dataset.notifInit === '1') {
+            return;
+        }
+
+        btn.dataset.notifInit = '1';
+
+        function getToken() {
+            return (
+                document.querySelector('meta[name="request-verification-token"]')?.content ||
+                document.querySelector('input[name="__RequestVerificationToken"]')?.value ||
+                ''
+            );
+        }
+
+        function renderBadge(total) {
+            const n = Number(total) || 0;
+
+            if (n > 0) {
+                badge.textContent = n;
+                badge.hidden = false;
+            } else {
+                badge.textContent = '0';
+                badge.hidden = true;
+            }
+        }
+
+        function bust(url) {
+            return url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+        }
+
+        async function post(url, body = {}) {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': getToken()
+                },
+                credentials: 'same-origin',
+                cache: 'no-store',
+                body: JSON.stringify(body)
+            });
+
+            if (!res.ok) throw new Error('POST ' + url + ' -> ' + res.status);
+
+            try {
+                return await res.json();
+            } catch {
+                return {};
+            }
+        }
+
+        async function getJson(url) {
+            const res = await fetch(bust(url), {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!res.ok) throw new Error('GET ' + url + ' -> ' + res.status);
+
+            return await res.json();
+        }
+
+        async function actualizarContador() {
+            try {
+                const data = await getJson('/Notificaciones/Contar');
+                const total = data.total ?? data.unread ?? data.count ?? 0;
+                renderBadge(total);
+            } catch (e) {
+                console.error('Contar:', e);
+            }
+        }
+
+        function val(n, up, low) {
+            return n[up] ?? n[low];
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function linkDestino(tipo, idOrigen) {
+            let url = '#';
+
+            if (tipo === 'CursoAsignado') url = `/Universidad/MisCursos/${idOrigen}`;
+            else if (tipo === 'WebinarAsignado') url = `/Lider/Lista/${idOrigen}`;
+            else if (tipo === 'Comunicado_Nuevo') url = `/Comunicados/Index/${idOrigen}`;
+
+            return `<a class="js-ver" href="${url}">Ver</a>`;
+        }
+
+        async function cargarLista(pagina = 1, tamanio = 10) {
+            try {
+                const data = await getJson(`/Notificaciones/Listar?pagina=${pagina}&tamanio=${tamanio}`);
+                list.innerHTML = '';
+
+                if (!data.items || data.items.length === 0) {
+                    list.innerHTML = '<li class="notif-empty">Sin notificaciones</li>';
+                    return;
+                }
+
+                data.items.forEach(n => {
+                    const id = val(n, 'Id', 'id');
+                    const titulo = val(n, 'Titulo', 'titulo') ?? '';
+                    const mensaje = val(n, 'Mensaje', 'mensaje') ?? '';
+                    const tipo = val(n, 'Tipo', 'tipo') ?? '';
+                    const idOrigen = val(n, 'IdOrigen', 'idOrigen');
+                    const fechaStr = val(n, 'FechaCreacion', 'fechaCreacion');
+                    const fecha = new Date(fechaStr || Date.now()).toLocaleString();
+                    const esLeida = !!(n.Leida ?? n.leida ?? n.EsLeida ?? n.esLeida);
+                    const li = document.createElement('li');
+
+                    li.className = 'notif-item' + (!esLeida ? ' unread' : '');
+                    li.dataset.id = id;
+                    li.dataset.tipo = tipo;
+                    li.dataset.idorigen = idOrigen;
+                    li.innerHTML = `
+                        <div class="notif-row">
+                            <div class="notif-main">
+                                <div class="notif-title">${escapeHtml(titulo)}</div>
+                                <div class="notif-date">${fecha}</div>
+                                ${mensaje ? `<div class="notif-msg">${escapeHtml(mensaje)}</div>` : ''}
+                            </div>
+                            ${!esLeida ? '<span class="notif-new">Nueva</span>' : ''}
+                        </div>
+                        <div class="notif-actions">
+                            ${linkDestino(tipo, idOrigen)}
+                        </div>
+                    `;
+
+                    list.appendChild(li);
+                });
+            } catch (e) {
+                console.error('Listar:', e);
+                list.innerHTML = '<li class="notif-error">Error al cargar</li>';
+            }
+        }
+
+        async function marcarTodasAlAbrir() {
+            try {
+                const r = await post('/Notificaciones/MarcarTodasLeidas');
+
+                list?.querySelectorAll('.notif-item.unread').forEach(li => {
+                    li.classList.remove('unread');
+                    li.querySelector('.notif-new')?.remove();
+                });
+
+                await actualizarContador();
+
+                if (typeof r.updated !== 'undefined' || typeof r.total !== 'undefined') {
+                    console.debug('Notificaciones actualizadas:', r.updated ?? r.total);
+                }
+            } catch (e) {
+                console.error('MarcarTodasLeidas:', e);
+
+                try {
+                    await actualizarContador();
+                } catch { }
+            }
+        }
+
+        let yaMarqueEnEstaApertura = false;
+
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+
+            const open = dropdown.getAttribute('data-open') === '1';
+
+            if (open) {
+                dropdown.setAttribute('data-open', '0');
+                dropdown.style.display = 'none';
+                yaMarqueEnEstaApertura = false;
+                return;
+            }
+
+            dropdown.setAttribute('data-open', '1');
+            dropdown.style.display = 'block';
+
+            await cargarLista();
+
+            if (!yaMarqueEnEstaApertura) {
+                yaMarqueEnEstaApertura = true;
+                await marcarTodasAlAbrir();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+                dropdown.setAttribute('data-open', '0');
+                dropdown.style.display = 'none';
+                yaMarqueEnEstaApertura = false;
+            }
+        });
+
+        actualizarContador();
+        setInterval(actualizarContador, 30000);
+
+        window.Notificaciones = {
+            actualizarContador,
+            cargarLista,
+            abrir: async () => {
+                dropdown.setAttribute('data-open', '1');
+                dropdown.style.display = 'block';
+
+                await cargarLista();
+
+                if (!yaMarqueEnEstaApertura) {
+                    yaMarqueEnEstaApertura = true;
+                    await marcarTodasAlAbrir();
+                }
+            }
+        };
+    })();
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const linkMiPerfil = document.getElementById('linkMiPerfil');
+
+        if (!linkMiPerfil || linkMiPerfil.dataset.perfilInit === '1') {
+            return;
+        }
+
+        linkMiPerfil.dataset.perfilInit = '1';
+
+        linkMiPerfil.addEventListener('click', function (e) {
+            e.preventDefault();
+            cargarPerfil();
+        });
+
+        function cargarPerfil() {
+            fetch('/Perfil/ObtenerMiPerfil')
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        const data = result.data;
+
+                        document.getElementById('perfilNombre').textContent = data.nombreUsuario || 'N/A';
+                        document.getElementById('perfilUsername').textContent = data.username || 'N/A';
+                        document.getElementById('perfilCorreo').textContent = data.correo || 'N/A';
+                        document.getElementById('perfilTelefono').textContent = data.telefono || 'N/A';
+                        document.getElementById('perfilRol').textContent = data.nombreRol || 'N/A';
+                        document.getElementById('perfilDescripcionRol').textContent = data.descripcionRol || 'N/A';
+
+                        const modalPerfil = document.getElementById('modalPerfil');
+
+                        if (modalPerfil && window.bootstrap) {
+                            const modal = new bootstrap.Modal(modalPerfil);
+                            modal.show();
+                        }
+                    } else {
+                        alert('Error: ' + result.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al cargar el perfil');
+                });
+        }
+    });
+</script>

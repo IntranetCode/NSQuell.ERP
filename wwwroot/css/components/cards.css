@@ -1,0 +1,330 @@
+﻿/* =====================================================
+   ARCHIVO: wwwroot/css/components/cards.css
+   PROPÓSITO: Sistema de tarjetas reutilizable
+   ===================================================== */
+
+/* Quick Actions Grid */
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+/* Base Card Styles */
+.action-card {
+    background: #fff !important;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px 0 rgb(0 0 0 / 0.06);
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    position: relative;
+    overflow: hidden;
+    min-height: 200px;
+}
+
+    .action-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 25px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+        border-color: var(--color-primario);
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .action-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        transform: scaleX(0);
+        transition: transform 0.3s ease;
+    }
+
+    .action-card:hover::before {
+        transform: scaleX(1);
+    }
+
+/* Card Icon */
+.action-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.1);
+}
+
+    .action-icon i {
+        font-size: 1.75rem;
+        color: #fff;
+    }
+
+/* Card Content */
+.action-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+}
+
+.action-description {
+    color: #64748b;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* External Link Badge */
+.external-link-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* ===== TEMAS DE COLORES PARA DIFERENTES MÓDULOS ===== */
+
+/* Universidad NS */
+.action-card.universidad::before {
+    background: #3b82f6;
+}
+
+.action-card.universidad .action-icon {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+/* Versión especial con logo de fondo para Universidad */
+.action-card.universidad.with-logo {
+    background: #ffffff url('/Imagenes/logo-universidad-ns.png') no-repeat center center !important;
+    background-size: 140px 140px !important;
+}
+
+    .action-card.universidad.with-logo::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.70) 100%);
+        z-index: 1;
+        pointer-events: none;
+    }
+
+    .action-card.universidad.with-logo > * {
+        position: relative !important;
+        z-index: 10 !important;
+    }
+
+    .action-card.universidad.with-logo .action-title,
+    .action-card.universidad.with-logo .action-description {
+        text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+    }
+
+    .action-card.universidad.with-logo .action-title {
+        color: #1e293b;
+        font-weight: 700;
+    }
+
+    .action-card.universidad.with-logo .action-description {
+        color: #374151;
+        font-weight: 500;
+    }
+
+/* Lider */
+.action-card.lider::before {
+    background: #10b981;
+}
+
+.action-card.lider .action-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+/* Comunicados */
+.action-card.comunicados::before {
+    background: #f59e0b;
+}
+
+.action-card.comunicados .action-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+/* Mejora Continua */
+.action-card.mejora::before {
+    background: #ffd500;
+}
+
+.action-card.mejora .action-icon {
+    background: linear-gradient(135deg, #f7d723, #f4d109);
+}
+
+/* Compras */
+.action-card.compras::before {
+    background: #ef4444;
+}
+
+.action-card.compras .action-icon {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+/* Logística */
+.action-card.logistica::before {
+    background: #06b6d4;
+}
+
+.action-card.logistica .action-icon {
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+}
+
+/* Embarques */
+.action-card.embarques::before {
+    background: #84cc16;
+}
+
+.action-card.embarques .action-icon {
+    background: linear-gradient(135deg, #84cc16, #65a30d);
+}
+
+/* Help Desk */
+.action-card.helpdesk::before {
+    background: #ec4899;
+}
+
+.action-card.helpdesk .action-icon {
+    background: linear-gradient(135deg, #ec4899, #db2777);
+}
+
+/* Proyectos */
+.action-card.proyectos::before {
+    background: #f97316;
+}
+
+.action-card.proyectos .action-icon {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 1200px) {
+    .quick-actions {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .quick-actions {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    .action-card {
+        padding: 1.5rem;
+        min-height: 180px;
+    }
+
+    .action-icon {
+        width: 60px;
+        height: 60px;
+    }
+
+        .action-icon i {
+            font-size: 1.5rem;
+        }
+}
+
+/* ===== ANIMACIONES ===== */
+@keyframes cardFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.action-card.animate-in {
+    animation: cardFadeIn 0.5s ease forwards;
+}
+
+/* Estados de carga */
+.action-card.loading {
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+/* ===== CLASES FALTANTES PARA MENÚS Y GRUPOS ===== */
+
+/* Genérico / Por defecto */
+.action-card.generico::before {
+    background: #64748b;
+}
+.action-card.generico .action-icon {
+    background: linear-gradient(135deg, #64748b, #475569);
+}
+
+/* Gestión de Usuarios / RRHH */
+.action-card.gestion-usuarios::before {
+    background: #8b5cf6;
+}
+.action-card.gestion-usuarios .action-icon {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+/* Directorio */
+.action-card.directorio::before {
+    background: #0ea5e9;
+}
+.action-card.directorio .action-icon {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+}
+
+/* Compras Internacional */
+.action-card.compras-internacional::before {
+    background: #f43f5e;
+}
+.action-card.compras-internacional .action-icon {
+    background: linear-gradient(135deg, #f43f5e, #e11d48);
+}
+
+/* Compras Nacional */
+.action-card.compras-nacional::before {
+    background: #fb923c;
+}
+.action-card.compras-nacional .action-icon {
+    background: linear-gradient(135deg, #fb923c, #f97316);
+}
+
+/* ===== NUEVOS MÓDULOS ===== */
+
+/* Vacaciones */
+.action-card.vacaciones::before {
+    background: #14b8a6; /* Turquesa */
+}
+.action-card.vacaciones .action-icon {
+    background: linear-gradient(135deg, #14b8a6, #0d9488);
+}
+
+/* Citas */
+.action-card.citas::before {
+    background: #8b5cf6; /* Violeta */
+}
+.action-card.citas .action-icon {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}

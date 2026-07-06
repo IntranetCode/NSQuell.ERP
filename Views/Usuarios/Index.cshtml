@@ -1,0 +1,2086 @@
+﻿@using System.Linq
+@model IEnumerable<ERP.NSQuell.Models.V_InformacionUsuarioCompleta>
+
+@{
+    Layout = "_LayoutUsuarios";
+
+    var actionActual = ViewContext.RouteData.Values["action"]?.ToString();
+    var modoAccesos = ViewData["ModoAccesos"] as bool? ?? string.Equals(actionActual, "Accesos", StringComparison.OrdinalIgnoreCase);
+    ViewData["Title"] = modoAccesos ? "Enviar accesos por correo" : "Administración de Usuarios";
+
+    var usuarios = Model?.ToList() ?? new List<ERP.NSQuell.Models.V_InformacionUsuarioCompleta>();
+    var busquedaActual = ViewData["BusquedaActual"] as string;
+    var filtroCampoActual = ViewData["FiltroCampoActual"] as string;
+    filtroCampoActual = string.IsNullOrWhiteSpace(filtroCampoActual) ? "Todos" : filtroCampoActual;
+     
+    var actionBusqueda = modoAccesos ? "Accesos" : "Index";
+    var activosQuery = Context.Request.Query["activos"].ToString();
+
+    var totalUsuarios = usuarios.Count;
+    var totalActivos = usuarios.Count(x => x?.Activo == true);
+    var totalInactivos = usuarios.Count(x => x?.Activo != true);
+    var totalSinCorreo = usuarios.Count(x => string.IsNullOrWhiteSpace(x?.Correo));
+
+    string Safe(string? s) => string.IsNullOrWhiteSpace(s) ? "" : s.Trim();
+
+    string NombreCompleto(ERP.NSQuell.Models.V_InformacionUsuarioCompleta u)
+    {
+        var nombre = Safe(u?.Nombre);
+        var apePat = Safe(u?.ApellidoPaterno);
+        var apeMat = Safe(u?.ApellidoMaterno);
+
+        var partes = new[] { nombre, apePat, apeMat }.Where(x => !string.IsNullOrWhiteSpace(x));
+        var full = string.Join(" ", partes);
+        return string.IsNullOrWhiteSpace(full) ? "(Sin nombre)" : full;
+    }
+
+    string Iniciales(string? nombre, string? apePat)
+    {
+        var n = Safe(nombre);
+        var a = Safe(apePat);
+        var i1 = n.Length > 0 ? n.Substring(0, 1).ToUpper() : "";
+        var i2 = a.Length > 0 ? a.Substring(0, 1).ToUpper() : "";
+        var ini = i1 + i2;
+        return string.IsNullOrEmpty(ini) ? "NA" : ini;
+    }
+
+    string EstadoFiltroLabel()
+    {
+        if (modoAccesos) return "Reenvío de accesos";
+        if (string.Equals(activosQuery, "true", StringComparison.OrdinalIgnoreCase)) return "Usuarios activos";
+        if (string.Equals(activosQuery, "false", StringComparison.OrdinalIgnoreCase)) return "Usuarios inactivos";
+        return "Todos los usuarios";
+    }
+}
+
+<style>
+    :root {
+        --ns-primary: #1a237e;
+        --ns-primary-dark: #0d47a1;
+        --ns-primary-soft: #eef2ff;
+        --ns-accent: #ff6d00;
+        --ns-accent-dark: #e65100;
+        --ns-bg: #f4f6fb;
+        --ns-card: #ffffff;
+        --ns-border: #e5e7eb;
+        --ns-text: #1f2937;
+        --ns-muted: #6b7280;
+        --ns-success: #16a34a;
+        --ns-danger: #dc2626;
+        --ns-warning: #f59e0b;
+        --ns-shadow-sm: 0 10px 24px rgba(15, 23, 42, .06);
+        --ns-shadow-md: 0 18px 42px rgba(15, 23, 42, .10);
+    }
+
+    body {
+        background: var(--ns-bg);
+    }
+
+    .page-container {
+        min-height: calc(100dvh - 72px);
+        padding: clamp(.85rem, 1.5vw, 1.35rem);
+        background:
+            radial-gradient(circle at top left, rgba(26, 35, 126, .10), transparent 34%),
+            radial-gradient(circle at bottom right, rgba(255, 109, 0, .10), transparent 34%),
+            var(--ns-bg);
+    }
+
+    .usuarios-shell {
+        width: min(100%, 1500px);
+        margin: 0 auto;
+    }
+
+    .page-header-static {
+        margin-bottom: .95rem;
+    }
+
+    .usuarios-hero {
+        border: 0;
+        border-radius: 22px;
+        overflow: hidden;
+        background: var(--ns-card);
+        box-shadow: 0 14px 34px rgba(15, 23, 42, .09);
+    }
+
+    .usuarios-hero-grid {
+        display: grid;
+        grid-template-columns: minmax(285px, 360px) 1fr;
+        min-height: 128px;
+    }
+
+    .usuarios-hero-side {
+        position: relative;
+        color: #ffffff;
+        background: linear-gradient(135deg, var(--ns-primary) 0%, var(--ns-primary-dark) 100%);
+        padding: clamp(.9rem, 1.35vw, 1.15rem);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: .75rem;
+    }
+
+    .usuarios-hero-side::before,
+    .usuarios-hero-side::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, .12);
+        pointer-events: none;
+    }
+
+    .usuarios-hero-side::before {
+        width: 150px;
+        height: 150px;
+        top: -70px;
+        right: -70px;
+    }
+
+    .usuarios-hero-side::after {
+        width: 92px;
+        height: 92px;
+        bottom: -45px;
+        left: -42px;
+    }
+
+    .usuarios-hero-content,
+    .usuarios-filter-note {
+        position: relative;
+        z-index: 1;
+    }
+
+    .usuarios-icon-box {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, .16);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        margin-bottom: .55rem;
+    }
+
+    .usuarios-title {
+        margin: 0;
+        font-weight: 850;
+        font-size: clamp(1.08rem, 1.8vw, 1.38rem);
+        line-height: 1.16;
+    }
+
+    .usuarios-subtitle {
+        margin: .35rem 0 .85rem;
+        color: rgba(255, 255, 255, .84);
+        font-size: .84rem;
+        line-height: 1.38;
+    }
+
+    .usuarios-filter-note {
+        width: fit-content;
+        max-width: 100%;
+        padding: .38rem .65rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .14);
+        border: 1px solid rgba(255, 255, 255, .18);
+        font-size: .76rem;
+        color: rgba(255, 255, 255, .9);
+    }
+
+    .usuarios-hero-main {
+        padding: clamp(.9rem, 1.35vw, 1.15rem);
+        display: flex;
+        flex-direction: column;
+        gap: .85rem;
+        justify-content: center;
+    }
+
+    .usuarios-actions-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .7rem;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .usuarios-search-form {
+        width: 100%;
+        max-width: 760px;
+        margin-left: auto;
+    }
+
+    .usuarios-search-group {
+        border: 1px solid var(--ns-border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #ffffff;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, .045);
+    }
+
+    .usuarios-search-group .form-select,
+    .usuarios-search-group .form-control,
+    .usuarios-search-group .btn {
+        border: 0 !important;
+        box-shadow: none !important;
+        min-height: 40px;
+    }
+
+    .usuarios-search-group .form-select {
+        max-width: 185px;
+        border-right: 1px solid var(--ns-border) !important;
+        color: var(--ns-text);
+        font-weight: 650;
+    }
+
+    .usuarios-search-group .form-control {
+        min-width: 180px;
+    }
+
+    .usuarios-search-group .btn-search {
+        background: var(--ns-primary);
+        color: #ffffff;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .usuarios-search-group .btn-search:hover {
+        background: var(--ns-primary-dark);
+        color: #ffffff;
+    }
+
+    .usuarios-search-group .btn-clear {
+        color: var(--ns-danger);
+        background: #fff7f7;
+        border-left: 1px solid var(--ns-border) !important;
+    }
+
+    .usuarios-search-group .btn-clear:hover {
+        background: #fee2e2;
+        color: var(--ns-danger);
+    }
+
+    .btn-modern-primary {
+        border: 0;
+        border-radius: 14px;
+        padding: .68rem 1rem;
+        font-weight: 850;
+        background: linear-gradient(135deg, var(--ns-accent) 0%, var(--ns-accent-dark) 100%) !important;
+        color: #ffffff !important;
+        box-shadow: 0 10px 22px rgba(255, 109, 0, .26);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .45rem;
+        text-decoration: none;
+        transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+    }
+
+    .btn-modern-primary:hover {
+        filter: brightness(1.05);
+        transform: translateY(-2px);
+        color: #ffffff !important;
+        box-shadow: 0 14px 28px rgba(255, 109, 0, .34);
+    }
+
+    .hero-info-note {
+        display: inline-flex;
+        align-items: center;
+        gap: .55rem;
+        width: fit-content;
+        max-width: 100%;
+        color: #ffffff;
+        background: rgba(255, 255, 255, .14);
+        border: 1px solid rgba(255, 255, 255, .18);
+        border-radius: 14px;
+        padding: .68rem .8rem;
+        font-weight: 750;
+        font-size: .86rem;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(145px, 1fr));
+        gap: .6rem;
+    }
+
+    .stat-card {
+        border: 1px solid var(--ns-border);
+        background: #f8fafc;
+        border-radius: 15px;
+        padding: .62rem .72rem;
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+        min-width: 0;
+    }
+
+    .stat-icon {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        border-radius: 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        background: var(--ns-primary);
+        font-size: .88rem;
+    }
+
+    .stat-icon.success { background: var(--ns-success); }
+    .stat-icon.danger { background: var(--ns-danger); }
+    .stat-icon.warning { background: var(--ns-accent); }
+
+    .stat-value {
+        margin: 0;
+        color: var(--ns-text);
+        font-weight: 850;
+        font-size: 1.05rem;
+        line-height: 1;
+    }
+
+    .stat-label {
+        margin: .12rem 0 0;
+        color: var(--ns-muted);
+        font-size: .68rem;
+        font-weight: 650;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .scrollable-content {
+        padding-top: 0;
+    }
+
+    .usuarios-list-card {
+        border: 0;
+        border-radius: 24px;
+        overflow: hidden;
+        background: var(--ns-card);
+        box-shadow: var(--ns-shadow-md);
+    }
+
+    .usuarios-list-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.05rem 1.25rem;
+        border-bottom: 1px solid var(--ns-border);
+        background: #ffffff;
+    }
+
+    .usuarios-list-title {
+        margin: 0;
+        color: var(--ns-text);
+        font-weight: 850;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .usuarios-list-title i {
+        color: var(--ns-accent);
+    }
+
+    .usuarios-list-count {
+        color: var(--ns-muted);
+        font-size: .85rem;
+        font-weight: 650;
+    }
+
+    .usuarios-table {
+        margin: 0;
+        vertical-align: middle;
+    }
+
+    .usuarios-table thead th {
+        background: linear-gradient(135deg, var(--ns-primary) 0%, var(--ns-primary-dark) 100%);
+        color: #ffffff;
+        text-transform: uppercase;
+        font-size: .75rem;
+        font-weight: 800;
+        letter-spacing: .05em;
+        border: 0 !important;
+        padding: .95rem 1rem;
+        white-space: nowrap;
+    }
+
+    .usuarios-table tbody td {
+        border-top: 1px solid #f1f5f9;
+        color: var(--ns-text);
+        padding: .95rem 1rem;
+    }
+
+    .usuarios-table tbody tr {
+        transition: background .18s ease;
+    }
+
+    .usuarios-table tbody tr:hover {
+        background: #fafbff;
+    }
+
+    .user-cell {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        min-width: 220px;
+    }
+
+    .user-avatar {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        border-radius: 15px;
+        background: linear-gradient(135deg, var(--ns-primary) 0%, var(--ns-primary-dark) 100%);
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 850;
+        font-size: .86rem;
+        box-shadow: 0 8px 18px rgba(26, 35, 126, .18);
+    }
+
+    .user-name-main {
+        color: var(--ns-text);
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
+    .user-name-sub {
+        color: var(--ns-primary);
+        font-size: .82rem;
+        font-weight: 750;
+        margin-top: .15rem;
+    }
+
+    .correo-muted {
+        color: var(--ns-muted);
+    }
+
+    .sin-correo {
+        color: var(--ns-danger);
+        background: rgba(220, 38, 38, .08);
+        padding: .3rem .65rem;
+        border-radius: 999px;
+        font-weight: 750;
+        font-size: .78rem;
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+    }
+
+    .role-pill {
+        color: var(--ns-primary);
+        background: var(--ns-primary-soft);
+        border: 1px solid rgba(26, 35, 126, .10);
+        border-radius: 999px;
+        padding: .35rem .7rem;
+        font-weight: 800;
+        font-size: .78rem;
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        max-width: 210px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .badge-estado {
+        border-radius: 999px;
+        font-weight: 850;
+        font-size: .75rem;
+        padding: .42rem .75rem;
+        display: inline-flex;
+        align-items: center;
+        gap: .38rem;
+    }
+
+    .badge-estado.activo {
+        background: rgba(22, 163, 74, .10);
+        color: #15803d;
+    }
+
+    .badge-estado.inactivo {
+        background: rgba(220, 38, 38, .10);
+        color: #b91c1c;
+    }
+
+    .btn-row-action {
+        border: 0;
+        border-radius: 13px;
+        padding: .62rem .85rem;
+        color: #ffffff !important;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .4rem;
+        text-decoration: none;
+        box-shadow: 0 8px 18px rgba(255, 109, 0, .18);
+        transition: transform .18s ease, filter .18s ease;
+    }
+
+    .btn-row-action:hover {
+        filter: brightness(1.05);
+        transform: translateY(-1px);
+        color: #ffffff !important;
+    }
+
+    .btn-edit-user,
+    .btn-send-access {
+        background: linear-gradient(135deg, var(--ns-accent) 0%, var(--ns-accent-dark) 100%) !important;
+    }
+
+    .btn-row-disabled {
+        border: 0;
+        border-radius: 13px;
+        padding: .62rem .85rem;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .4rem;
+    }
+
+    .usuarios-mobile-list {
+        display: none;
+        padding: 1rem;
+        gap: .85rem;
+    }
+
+    .usuario-mobile-card {
+        border: 1px solid var(--ns-border);
+        border-radius: 18px;
+        padding: 1rem;
+        background: #ffffff;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, .06);
+    }
+
+    .usuario-mobile-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: .85rem;
+        margin-bottom: .85rem;
+    }
+
+    .usuario-mobile-info {
+        min-width: 0;
+        display: flex;
+        gap: .75rem;
+        align-items: center;
+    }
+
+    .usuario-mobile-name {
+        font-weight: 850;
+        color: var(--ns-text);
+        line-height: 1.2;
+        word-break: break-word;
+    }
+
+    .usuario-mobile-user {
+        color: var(--ns-primary);
+        font-weight: 800;
+        font-size: .82rem;
+        margin-top: .15rem;
+    }
+
+    .usuario-mobile-detail {
+        display: grid;
+        gap: .55rem;
+        color: var(--ns-muted);
+        font-size: .9rem;
+        margin-bottom: .9rem;
+    }
+
+    .usuario-mobile-detail div {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        min-width: 0;
+    }
+
+    .usuario-mobile-detail i {
+        color: var(--ns-accent);
+        width: 18px;
+        text-align: center;
+    }
+
+    .alerta-accesos {
+        border: none;
+        border-radius: 16px;
+        font-weight: 700;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1rem;
+    }
+
+    .modal-accesos .modal-content {
+        border: none;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+    }
+
+    .modal-header-accesos {
+        background: linear-gradient(135deg, var(--ns-primary) 0%, var(--ns-primary-dark) 100%);
+        color: #ffffff;
+        border-bottom: none;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .modal-header-accesos small {
+        color: rgba(255, 255, 255, 0.78);
+        font-weight: 500;
+    }
+
+    .modal-icon-accesos {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .modal-accesos .modal-body {
+        padding: 1.5rem;
+        color: var(--ns-text);
+    }
+
+    .modal-user-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        background: #f6f7fb;
+        border: 1px solid #e7e9ef;
+        border-radius: 14px;
+        padding: 1rem;
+    }
+
+    .modal-user-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--ns-primary);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-user-name {
+        font-weight: 800;
+        color: var(--ns-primary);
+    }
+
+    .modal-user-email {
+        color: var(--ns-muted);
+        font-size: 0.9rem;
+        word-break: break-all;
+    }
+
+    .modal-accesos .modal-footer {
+        border-top: 1px solid #e7e9ef;
+        padding: 1rem 1.5rem;
+    }
+
+    .modal-accesos .btn-warning {
+        background-color: var(--ns-accent) !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-weight: 800;
+    }
+
+
+    .modal-operacion-usuario .modal-content {
+        border: none;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+    }
+
+    .modal-header-operacion {
+        background: linear-gradient(135deg, var(--ns-primary) 0%, var(--ns-primary-dark) 100%);
+        color: #ffffff;
+        border-bottom: none;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .modal-icon-operacion {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .modal-operacion-usuario .modal-body {
+        padding: 1.5rem;
+        color: var(--ns-text);
+    }
+
+    .modal-operacion-usuario .modal-footer {
+        border-top: 1px solid #e7e9ef;
+        padding: 1rem 1.5rem;
+    }
+
+    .modal-operacion-usuario .btn-primary {
+        background: linear-gradient(135deg, var(--ns-primary) 0%, var(--ns-primary-dark) 100%) !important;
+        border: none !important;
+        font-weight: 800;
+        border-radius: 12px;
+    }
+
+
+    /* FIX PUNTUAL: modal de Restablecer contraseña cargado desde el panel lateral.
+       El problema era que el backdrop de Bootstrap quedaba por encima del modal,
+       por eso el modal se veía gris y no permitía interactuar con los campos. */
+    body.pm-reset-password-open > .modal-backdrop,
+    body.pm-reset-password-open > .modal-backdrop.show,
+    .modal-backdrop.pm-reset-password-backdrop {
+        z-index: 2147482990 !important;
+    }
+
+    body > .modal.pm-reset-password-modal,
+    body > .modal.pm-reset-password-modal.show {
+        z-index: 2147483000 !important;
+    }
+
+    body > .modal.pm-reset-password-modal .modal-dialog,
+    body > .modal.pm-reset-password-modal .modal-content {
+        pointer-events: auto !important;
+    }
+
+    .empty-state {
+        padding: clamp(2rem, 5vw, 4rem) 1rem;
+        text-align: center;
+    }
+
+    .empty-icon {
+        width: 74px;
+        height: 74px;
+        margin: 0 auto 1rem;
+        border-radius: 24px;
+        background: var(--ns-primary-soft);
+        color: var(--ns-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+    }
+
+    .empty-title {
+        margin: 0;
+        font-weight: 850;
+        color: var(--ns-text);
+        font-size: 1.15rem;
+    }
+
+    .empty-text {
+        margin: .45rem auto 0;
+        max-width: 440px;
+        color: var(--ns-muted);
+    }
+
+    @@media (max-width: 1199.98px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 991.98px) {
+        .usuarios-hero-grid {
+            grid-template-columns: 1fr;
+            min-height: auto;
+        }
+
+        .usuarios-hero-side {
+            min-height: 138px;
+        }
+
+        .usuarios-search-form {
+            width: 100%;
+            max-width: none;
+            margin-left: 0;
+        }
+
+        .usuarios-actions-row {
+            align-items: stretch;
+        }
+
+        .btn-modern-primary,
+        .hero-info-note {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+
+    @@media (max-width: 767.98px) {
+        .page-container {
+            padding: .85rem;
+        }
+
+        .usuarios-hero,
+        .usuarios-list-card {
+            border-radius: 18px;
+        }
+
+        .usuarios-hero-side,
+        .usuarios-hero-main {
+            padding: 1rem;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .65rem;
+        }
+
+        .usuarios-search-group {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            border-radius: 16px;
+        }
+
+        .usuarios-search-group .form-select {
+            grid-column: 1 / -1;
+            max-width: none;
+            width: 100%;
+            border-right: 0 !important;
+            border-bottom: 1px solid var(--ns-border) !important;
+        }
+
+        .usuarios-table-wrap {
+            display: none;
+        }
+
+        .usuarios-mobile-list {
+            display: grid;
+        }
+
+        .usuarios-list-header {
+            padding: 1rem;
+            align-items: flex-start;
+            flex-direction: column;
+            gap: .3rem;
+        }
+    }
+
+    @@media (max-width: 420px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .usuarios-search-group {
+            grid-template-columns: 1fr auto;
+        }
+
+        .usuarios-search-group .form-control {
+            grid-column: 1 / 2;
+            min-width: 0;
+        }
+
+        .usuarios-search-group .btn-clear {
+            grid-column: 1 / -1;
+            border-left: 0 !important;
+            border-top: 1px solid var(--ns-border) !important;
+        }
+    }
+</style>
+
+<div class="page-container">
+    <div class="usuarios-shell">
+        <div class="page-header-static">
+            <section class="usuarios-hero">
+                <div class="usuarios-hero-grid">
+                    <aside class="usuarios-hero-side">
+                        <div class="usuarios-hero-content">
+                            <div class="usuarios-icon-box">
+                                <i class="@(modoAccesos ? "fas fa-paper-plane" : "fas fa-users-cog")"></i>
+                            </div>
+
+                            <h1 class="usuarios-title">@ViewData["Title"]</h1>
+                            <p class="usuarios-subtitle">
+                                @if (modoAccesos)
+                                {
+                                    @:Selecciona un usuario activo con correo para reenviarle sus credenciales de acceso.
+                                }
+                                else
+                                {
+                                    @:Administra usuarios, consulta su estado y actualiza su información de forma rápida.
+                                }
+                            </p>
+
+                            @if (!modoAccesos)
+                            {
+                                <a id="btn-crear-usuario"
+                                   asp-action="Crear"
+                                   asp-controller="Usuarios"
+                                   class="btn-modern-primary">
+                                    <i class="fas fa-plus"></i>
+                                    Agregar usuario
+                                </a>
+                            }
+                            else
+                            {
+                                <div class="hero-info-note">
+                                    <i class="fas fa-envelope"></i>
+                                    Reenvío individual por correo
+                                </div>
+                            }
+                        </div>
+
+                        <div class="usuarios-filter-note">
+                            <i class="fas fa-filter me-1"></i>@EstadoFiltroLabel()
+                        </div>
+                    </aside>
+
+                    <main class="usuarios-hero-main">
+                        <div class="usuarios-actions-row">
+                            <form asp-action="@actionBusqueda" method="get" class="usuarios-search-form">
+                                @if (!modoAccesos)
+                                {
+                                    <input type="hidden" name="activos" value="@activosQuery" />
+                                }
+
+                                <div class="input-group usuarios-search-group">
+                                    <select name="filtroCampo" class="form-select flex-grow-0" aria-label="Campo de búsqueda">
+                                        <option value="Todos" selected="@(filtroCampoActual == "Todos")">Todos los campos</option>
+                                        <option value="Nombre" selected="@(filtroCampoActual == "Nombre")">Nombre</option>
+                                        <option value="ApellidoPaterno" selected="@(filtroCampoActual == "ApellidoPaterno")">Apellido</option>
+                                        <option value="Correo" selected="@(filtroCampoActual == "Correo")">Correo</option>
+                                        <option value="Username" selected="@(filtroCampoActual == "Username")">Username</option>
+                                    </select>
+
+                                    <input type="text"
+                                           name="busqueda"
+                                           class="form-control"
+                                           placeholder="Buscar usuario..."
+                                           value="@busquedaActual"
+                                           aria-label="Buscar usuario" />
+
+                                    <button class="btn btn-search" type="submit" title="Buscar">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+
+                                    @if (!string.IsNullOrWhiteSpace(busquedaActual))
+                                    {
+                                        if (modoAccesos)
+                                        {
+                                            <a asp-action="Accesos"
+                                               class="btn btn-clear"
+                                               title="Limpiar filtro">
+                                                <i class="fas fa-times"></i>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a asp-action="Index"
+                                               asp-route-activos="@activosQuery"
+                                               class="btn btn-clear"
+                                               title="Limpiar filtro">
+                                                <i class="fas fa-times"></i>
+                                            </a>
+                                        }
+                                    }
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div>
+                                    <p class="stat-value">@totalUsuarios</p>
+                                    <p class="stat-label">Mostrados</p>
+                                </div>
+                            </div>
+
+                            <div class="stat-card">
+                                <div class="stat-icon success">
+                                    <i class="fas fa-user-check"></i>
+                                </div>
+                                <div>
+                                    <p class="stat-value">@totalActivos</p>
+                                    <p class="stat-label">Activos</p>
+                                </div>
+                            </div>
+
+                            <div class="stat-card">
+                                <div class="stat-icon danger">
+                                    <i class="fas fa-user-slash"></i>
+                                </div>
+                                <div>
+                                    <p class="stat-value">@totalInactivos</p>
+                                    <p class="stat-label">Inactivos</p>
+                                </div>
+                            </div>
+
+                            <div class="stat-card">
+                                <div class="stat-icon warning">
+                                    <i class="fas fa-envelope-open-text"></i>
+                                </div>
+                                <div>
+                                    <p class="stat-value">@totalSinCorreo</p>
+                                    <p class="stat-label">Sin correo</p>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            </section>
+        </div>
+
+        @if (modoAccesos)
+        {
+            @Html.AntiForgeryToken()
+            <div id="alertaAccesos" class="alert d-none alerta-accesos" role="alert"></div>
+
+            <div class="modal fade modal-accesos" id="modalConfirmarAccesos" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header modal-header-accesos">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="modal-icon-accesos">
+                                    <i class="fas fa-paper-plane"></i>
+                                </div>
+                                <div>
+                                    <h5 class="modal-title mb-0">Enviar accesos por correo</h5>
+                                    <small>Confirma el envío de credenciales</small>
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+
+                        <div class="modal-body">
+                            <p class="mb-3">
+                                Se enviarán las credenciales de acceso al siguiente usuario:
+                            </p>
+
+                            <div class="modal-user-card">
+                                <div class="modal-user-avatar">
+                                    <i class="fas fa-user"></i>
+                                </div>
+
+                                <div>
+                                    <div class="modal-user-name" id="modalAccesosNombre">Usuario</div>
+                                    <div class="modal-user-email" id="modalAccesosCorreo">correo@empresa.com</div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-warning mt-3 mb-0">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                Esta acción enviará el usuario y contraseña registrados en la base de datos.
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-1"></i> Cancelar
+                            </button>
+
+                            <button type="button" class="btn btn-warning" id="btnConfirmarEnviarAccesos">
+                                <i class="fas fa-paper-plane me-1"></i> Enviar accesos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="scrollable-content">
+            <section class="usuarios-list-card">
+                <div class="usuarios-list-header">
+                    <h2 class="usuarios-list-title">
+                        <i class="@(modoAccesos ? "fas fa-envelope-open-text" : "fas fa-address-book")"></i>
+                        @(modoAccesos ? "Usuarios disponibles para envío" : "Listado de usuarios")
+                    </h2>
+                    <div class="usuarios-list-count">
+                        @totalUsuarios registro@(totalUsuarios == 1 ? "" : "s") encontrado@(totalUsuarios == 1 ? "" : "s")
+                    </div>
+                </div>
+
+                @if (usuarios.Any())
+                {
+                    <div class="table-responsive usuarios-table-wrap">
+                        <table class="table table-hover usuarios-table">
+                            <thead>
+                                <tr>
+                                    <th class="ps-4">Username</th>
+                                    <th>Nombre completo</th>
+                                    <th>Correo</th>
+                                    <th>Rol</th>
+                                    <th class="text-center">Estado</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in usuarios)
+                                {
+                                    var correo = Safe(item?.Correo);
+                                    var nombreCompleto = NombreCompleto(item);
+                                    var activo = item?.Activo == true;
+                                    var usuarioId = item?.UsuarioID ?? 0;
+                                    var username = Safe(item?.Username);
+                                    var rol = Safe(item?.Rol);
+
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="user-cell">
+                                                <span class="user-avatar">
+                                                    @Iniciales(item?.Nombre, item?.ApellidoPaterno)
+                                                </span>
+                                                <div>
+                                                    <div class="user-name-main">@username</div>
+                                                    <div class="user-name-sub">ID @usuarioId</div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <strong>@nombreCompleto</strong>
+                                        </td>
+
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(correo))
+                                            {
+                                                <span class="correo-muted">@correo</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="sin-correo">
+                                                    <i class="fas fa-exclamation-circle"></i>
+                                                    Sin correo
+                                                </span>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            <span class="role-pill" title="@rol">
+                                                <i class="fas fa-user-tag"></i>
+                                                @(string.IsNullOrWhiteSpace(rol) ? "Sin rol" : rol)
+                                            </span>
+                                        </td>
+
+                                        <td class="text-center">
+                                            @if (activo)
+                                            {
+                                                <span class="badge-estado activo">
+                                                    <i class="fas fa-circle-check"></i>
+                                                    Activo
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge-estado inactivo">
+                                                    <i class="fas fa-circle-xmark"></i>
+                                                    Inactivo
+                                                </span>
+                                            }
+                                        </td>
+
+                                        <td class="text-center">
+                                            @if (modoAccesos)
+                                            {
+                                                if (!activo)
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-secondary btn-row-disabled btn-sm"
+                                                            disabled
+                                                            title="No se pueden enviar accesos a usuarios inactivos">
+                                                        <i class="fas fa-ban me-1"></i> Inactivo
+                                                    </button>
+                                                }
+                                                else if (string.IsNullOrWhiteSpace(correo))
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-secondary btn-row-disabled btn-sm"
+                                                            disabled
+                                                            title="El usuario no tiene correo registrado">
+                                                        <i class="fas fa-envelope-open-text me-1"></i> Sin correo
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button"
+                                                            class="btn-row-action btn-send-access btn-sm btn-enviar-accesos"
+                                                            data-id="@usuarioId"
+                                                            data-nombre="@nombreCompleto"
+                                                            data-correo="@correo">
+                                                        <i class="fas fa-paper-plane me-1"></i> Enviar accesos
+                                                    </button>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <a class="btn-editar-usuario btn-row-action btn-edit-user btn-sm"
+                                                   asp-action="Editar"
+                                                   asp-controller="Usuarios"
+                                                   asp-route-id="@usuarioId"
+                                                   title="Editar">
+                                                    <i class="fas fa-pencil-alt"></i> Editar
+                                                </a>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="usuarios-mobile-list">
+                        @foreach (var item in usuarios)
+                        {
+                            var correo = Safe(item?.Correo);
+                            var nombreCompleto = NombreCompleto(item);
+                            var activo = item?.Activo == true;
+                            var usuarioId = item?.UsuarioID ?? 0;
+                            var username = Safe(item?.Username);
+                            var rol = Safe(item?.Rol);
+
+                            <article class="usuario-mobile-card">
+                                <div class="usuario-mobile-head">
+                                    <div class="usuario-mobile-info">
+                                        <span class="user-avatar">
+                                            @Iniciales(item?.Nombre, item?.ApellidoPaterno)
+                                        </span>
+                                        <div>
+                                            <div class="usuario-mobile-name">@nombreCompleto</div>
+                                            <div class="usuario-mobile-user">@username</div>
+                                        </div>
+                                    </div>
+
+                                    @if (activo)
+                                    {
+                                        <span class="badge-estado activo">
+                                            <i class="fas fa-circle-check"></i>
+                                            Activo
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-estado inactivo">
+                                            <i class="fas fa-circle-xmark"></i>
+                                            Inactivo
+                                        </span>
+                                    }
+                                </div>
+
+                                <div class="usuario-mobile-detail">
+                                    <div>
+                                        <i class="fas fa-user"></i>
+                                        <span>@username</span>
+                                    </div>
+
+                                    <div>
+                                        <i class="fas fa-envelope"></i>
+                                        @if (!string.IsNullOrWhiteSpace(correo))
+                                        {
+                                            <span>@correo</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-danger fw-semibold">Sin correo</span>
+                                        }
+                                    </div>
+
+                                    <div>
+                                        <i class="fas fa-user-tag"></i>
+                                        <span>@(string.IsNullOrWhiteSpace(rol) ? "Sin rol" : rol)</span>
+                                    </div>
+                                </div>
+
+                                @if (modoAccesos)
+                                {
+                                    if (!activo)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-secondary btn-row-disabled w-100"
+                                                disabled
+                                                title="No se pueden enviar accesos a usuarios inactivos">
+                                            <i class="fas fa-ban me-1"></i> Usuario inactivo
+                                        </button>
+                                    }
+                                    else if (string.IsNullOrWhiteSpace(correo))
+                                    {
+                                        <button type="button"
+                                                class="btn btn-secondary btn-row-disabled w-100"
+                                                disabled
+                                                title="El usuario no tiene correo registrado">
+                                            <i class="fas fa-envelope-open-text me-1"></i> Sin correo registrado
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="btn-row-action btn-send-access w-100 btn-enviar-accesos"
+                                                data-id="@usuarioId"
+                                                data-nombre="@nombreCompleto"
+                                                data-correo="@correo">
+                                            <i class="fas fa-paper-plane me-1"></i> Enviar accesos
+                                        </button>
+                                    }
+                                }
+                                else
+                                {
+                                    <a class="btn-editar-usuario btn-row-action btn-edit-user w-100"
+                                       asp-action="Editar"
+                                       asp-controller="Usuarios"
+                                       asp-route-id="@usuarioId"
+                                       title="Editar">
+                                        <i class="fas fa-pencil-alt"></i> Editar usuario
+                                    </a>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="fas fa-user-slash"></i>
+                        </div>
+                        <h3 class="empty-title">No hay usuarios para mostrar</h3>
+                        <p class="empty-text">
+                            Ajusta los filtros de búsqueda o registra un nuevo usuario para verlo en este listado.
+                        </p>
+                    </div>
+                }
+            </section>
+        </div>
+    </div>
+</div>
+
+
+
+<div class="modal fade modal-operacion-usuario" id="modalOperacionUsuarioExitosa" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header modal-header-operacion">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="modal-icon-operacion">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0">Operación completada</h5>
+                        <small class="text-white-50">La información fue procesada correctamente</small>
+                    </div>
+                </div>
+
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+                <p id="modalOperacionUsuarioMensaje" class="mb-0">
+                    La operación se realizó correctamente.
+                </p>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Aceptar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@*<div class="modal fade" id="modalAjusteVacaciones" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fas fa-history me-2"></i>Cargar Días Tomados (Histórico)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAjusteVacaciones">
+                    <input type="hidden" id="ajusteUsuarioID" name="UsuarioID" />
+                    <div class="mb-3">
+                        <label class="form-label">Días a descontar</label>
+                        <input type="number" step="0.5" class="form-control" name="Dias" placeholder="Ej: 3.5" required>
+                        <div class="form-text">Estos días se restarán del saldo disponible del colaborador.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo / Observaciones</label>
+                        <textarea class="form-control" name="Observaciones" rows="2" placeholder="Días tomados en diciembre 2025..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" onclick="guardarAjuste()">Guardar Histórico</button>
+            </div>
+        </div>
+    </div>
+</div>*@
+
+@section Scripts {
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="~/js/usuarios/usuarios-panel.js" asp-append-version="true"></script>
+
+    <script>
+        document.addEventListener('submit', async function (event) {
+            const form = event.target.closest('#ov-form');
+
+            if (!form) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            if (form.dataset.enviandoPermisos === '1') return;
+            form.dataset.enviandoPermisos = '1';
+
+            const submitBtn = form.querySelector('#ov-save');
+            const originalHtml = submitBtn ? submitBtn.innerHTML : '';
+
+            function mostrarModalPermisos(mensaje) {
+                let modalEl = document.getElementById('modalPermisosGuardados');
+
+                if (!modalEl) {
+                    modalEl = document.createElement('div');
+                    modalEl.className = 'modal fade';
+                    modalEl.id = 'modalPermisosGuardados';
+                    modalEl.tabIndex = -1;
+                    modalEl.setAttribute('aria-hidden', 'true');
+
+                    modalEl.innerHTML = `
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content border-0 rounded-4 shadow">
+                                <div class="modal-header text-white" style="background: linear-gradient(135deg,#1a237e 0%,#0d47a1 100%);">
+                                    <h5 class="modal-title">
+                                        <i class="fas fa-shield-alt me-2"></i>Permisos actualizados
+                                    </h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                                </div>
+
+                                <div class="modal-body">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center"
+                                            style="width:46px;height:46px;background:#e8f5e9;color:#16a34a;flex:0 0 46px;">
+                                            <i class="fas fa-check-circle fa-lg"></i>
+                                        </div>
+
+                                        <div>
+                                            <h6 class="fw-bold mb-1">Cambios guardados correctamente</h6>
+                                            <p id="modalPermisosGuardadosMensaje" class="mb-0 text-muted">
+                                                Los permisos del usuario fueron actualizados correctamente.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                                        <i class="fas fa-check me-1"></i>Aceptar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    document.body.appendChild(modalEl);
+                }
+
+                const msgEl = document.getElementById('modalPermisosGuardadosMensaje');
+                if (msgEl) {
+                    msgEl.textContent = mensaje || 'Los permisos del usuario fueron actualizados correctamente.';
+                }
+
+                if (window.bootstrap?.Modal) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                } else {
+                    alert(mensaje || 'Los permisos del usuario fueron actualizados correctamente.');
+                }
+            }
+
+            function mostrarErrorPermisos(mensaje) {
+                let alertEl = document.getElementById('alertPermisosError');
+
+                if (!alertEl) {
+                    alertEl = document.createElement('div');
+                    alertEl.id = 'alertPermisosError';
+                    alertEl.className = 'alert alert-danger mt-3';
+                    alertEl.setAttribute('role', 'alert');
+
+                    const permisosContainer = form.closest('.permissions-container') || form;
+                    permisosContainer.prepend(alertEl);
+                }
+
+                alertEl.innerHTML = `<i class="fas fa-exclamation-circle me-1"></i>${mensaje || 'No fue posible guardar los permisos.'}`;
+                alertEl.classList.remove('d-none');
+
+                setTimeout(function () {
+                    alertEl.classList.add('d-none');
+                }, 7000);
+            }
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+            }
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: new FormData(form),
+                    credentials: 'same-origin'
+                });
+
+                const data = await response.json().catch(function () {
+                    return null;
+                });
+
+                if (!response.ok || !data?.ok) {
+                    throw new Error(data?.message || 'No fue posible guardar los permisos.');
+                }
+
+                document.querySelectorAll('#ov-dirty-indicator, #ov-dirty-indicator-bottom').forEach(function (badge) {
+                    badge.classList.add('d-none');
+                });
+
+                document.querySelectorAll('#ov-form tr[data-submenu]').forEach(function (tr) {
+                    const checked = tr.querySelector('.ov-radio:checked');
+                    if (checked) {
+                        tr.setAttribute('data-estado-inicial', checked.value);
+                    }
+                });
+
+                mostrarModalPermisos(data.message || 'Permisos actualizados correctamente.');
+            } catch (error) {
+                mostrarErrorPermisos(error.message || 'Error al guardar los permisos.');
+            } finally {
+                form.dataset.enviandoPermisos = '0';
+
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalHtml;
+                }
+            }
+        }, true);
+    </script>
+    <script>
+        (function (window, document) {
+            'use strict';
+
+            function togglePasswordFromButton(button) {
+                if (!button) button = document.querySelector('.js-toggle-password, #btnTogglePassword, .js-toggle-password-crear');
+                const root = button?.closest('#user-form') || button?.closest('.tab-content-modern') || document;
+                const selector = button?.getAttribute('data-password-target') || '#txtPassword';
+                const input = root.querySelector?.(selector) || document.querySelector(selector) || document.querySelector('input[name="Password"]');
+                const icon = button?.querySelector('i') || root.querySelector?.('#eyeIcon') || document.getElementById('eyeIcon');
+
+                if (!input) return false;
+
+                const show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+
+                if (icon) {
+                    icon.classList.toggle('fa-eye', !show);
+                    icon.classList.toggle('fa-eye-slash', show);
+                }
+
+                if (button) {
+                    button.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+                    button.setAttribute('title', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+                }
+
+                return false;
+            }
+
+            window.togglePasswordVisibility = function () {
+                return togglePasswordFromButton(document.querySelector('.js-toggle-password, #btnTogglePassword'));
+            };
+
+            document.addEventListener('click', function (event) {
+                const btn = event.target.closest('.js-toggle-password, #btnTogglePassword, .js-toggle-password-crear');
+                if (!btn) return;
+                event.preventDefault();
+                togglePasswordFromButton(btn);
+            });
+
+            function esModalRestablecerPassword(modalEl) {
+                if (!modalEl || !modalEl.classList || !modalEl.classList.contains('modal')) return false;
+
+                if (modalEl.querySelector('#form-restablecer-password')) return true;
+
+                const id = (modalEl.id || '').toLowerCase();
+                if (id.includes('restablecer') && (id.includes('password') || id.includes('contrasena') || id.includes('contraseña'))) return true;
+
+                const titulo = (modalEl.querySelector('.modal-title')?.textContent || '').toLowerCase();
+                return titulo.includes('restablecer') && (titulo.includes('contraseña') || titulo.includes('contrasena') || titulo.includes('password'));
+            }
+
+            function obtenerModalDesdeDisparador(disparador) {
+                if (!disparador) return null;
+
+                const selector = disparador.getAttribute('data-bs-target')
+                    || disparador.getAttribute('data-target')
+                    || disparador.getAttribute('href');
+
+                if (!selector || !selector.startsWith('#')) return null;
+
+                try {
+                    return document.querySelector(selector);
+                } catch {
+                    return null;
+                }
+            }
+
+            function ajustarBackdropsRestablecerPassword() {
+                document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                    backdrop.classList.add('pm-reset-password-backdrop');
+                    backdrop.style.setProperty('z-index', '2147482990', 'important');
+                });
+            }
+
+            function prepararModalRestablecerPassword(modalEl) {
+                if (!esModalRestablecerPassword(modalEl)) return;
+
+                // Si el modal viene dentro del panel lateral/AJAX, queda debajo del backdrop.
+                // Moverlo al body antes/durante la apertura evita que se vea gris y bloqueado.
+                if (modalEl.parentElement !== document.body) {
+                    document.body.appendChild(modalEl);
+                }
+
+                modalEl.classList.add('pm-reset-password-modal');
+                modalEl.style.setProperty('z-index', '2147483000', 'important');
+                document.body.classList.add('pm-reset-password-open');
+
+                ajustarBackdropsRestablecerPassword();
+                setTimeout(ajustarBackdropsRestablecerPassword, 0);
+                setTimeout(ajustarBackdropsRestablecerPassword, 60);
+            }
+
+            // Captura antes de que Bootstrap abra el modal por data-bs-toggle.
+            document.addEventListener('pointerdown', function (event) {
+                const disparador = event.target.closest('[data-bs-toggle="modal"], [data-bs-target], [data-target], a[href^="#"]');
+                const modalEl = obtenerModalDesdeDisparador(disparador);
+
+                if (esModalRestablecerPassword(modalEl)) {
+                    prepararModalRestablecerPassword(modalEl);
+                }
+            }, true);
+
+            document.addEventListener('click', function (event) {
+                const disparador = event.target.closest('[data-bs-toggle="modal"], [data-bs-target], [data-target], a[href^="#"]');
+                const modalEl = obtenerModalDesdeDisparador(disparador);
+
+                if (esModalRestablecerPassword(modalEl)) {
+                    prepararModalRestablecerPassword(modalEl);
+                }
+            }, true);
+
+            document.addEventListener('show.bs.modal', function (event) {
+                if (esModalRestablecerPassword(event.target)) {
+                    prepararModalRestablecerPassword(event.target);
+                }
+            }, true);
+
+            document.addEventListener('shown.bs.modal', function (event) {
+                if (esModalRestablecerPassword(event.target)) {
+                    prepararModalRestablecerPassword(event.target);
+                }
+            }, true);
+
+            document.addEventListener('hidden.bs.modal', function (event) {
+                if (!esModalRestablecerPassword(event.target)) return;
+
+                event.target.classList.remove('pm-reset-password-modal');
+                event.target.style.removeProperty('z-index');
+                document.body.classList.remove('pm-reset-password-open');
+
+                setTimeout(function () {
+                    limpiarBackdropsSiNoHayModales();
+                }, 80);
+            }, true);
+
+
+            function limpiarBackdropsSiNoHayModales() {
+                if (document.querySelector('.modal.show')) return;
+
+                document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                    backdrop.remove();
+                });
+
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+            }
+
+            function mostrarModalOperacionUsuario(mensaje) {
+                const modalEl = document.getElementById('modalOperacionUsuarioExitosa');
+                const mensajeEl = document.getElementById('modalOperacionUsuarioMensaje');
+
+                if (mensajeEl) {
+                    mensajeEl.textContent = mensaje || 'La operación se realizó correctamente.';
+                }
+
+                if (!modalEl || !window.bootstrap?.Modal) {
+                    alert(mensaje || 'La operación se realizó correctamente.');
+                    return;
+                }
+
+                if (modalEl.parentElement !== document.body) {
+                    document.body.appendChild(modalEl);
+                }
+
+                limpiarBackdropsSiNoHayModales();
+
+                bootstrap.Modal.getOrCreateInstance(modalEl, {
+                    backdrop: true,
+                    keyboard: true,
+                    focus: true
+                }).show();
+            }
+
+            window.mostrarModalOperacionUsuario = mostrarModalOperacionUsuario;
+
+            document.addEventListener('submit', async function (event) {
+                const form = event.target.closest('#form-restablecer-password');
+                if (!form) return;
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+
+                if (form.dataset.enviandoResetPassword === '1') return;
+                form.dataset.enviandoResetPassword = '1';
+
+                const nueva = form.querySelector('[name="nuevaPassword"]')?.value || '';
+                const confirmar = form.querySelector('[name="confirmarPassword"]')?.value || '';
+                const resultado = form.querySelector('#resetPasswordResultado');
+                const submitBtn = form.querySelector('#btnRestablecerPasswordSubmit');
+
+                function mostrarResultado(tipo, mensaje) {
+                    if (!resultado) {
+                        alert(mensaje);
+                        return;
+                    }
+
+                    resultado.className = 'alert ' + (tipo === 'success' ? 'alert-success' : 'alert-danger');
+                    resultado.textContent = mensaje;
+                    resultado.classList.remove('d-none');
+                }
+
+                function limpiarResultado() {
+                    if (!resultado) return;
+
+                    resultado.className = 'alert d-none';
+                    resultado.textContent = '';
+                }
+
+                limpiarResultado();
+
+                if (nueva.length < 6) {
+                    mostrarResultado('error', 'La contraseña debe tener al menos 6 caracteres.');
+                    form.dataset.enviandoResetPassword = '0';
+                    return;
+                }
+
+                if (nueva !== confirmar) {
+                    mostrarResultado('error', 'La confirmación no coincide con la nueva contraseña.');
+                    form.dataset.enviandoResetPassword = '0';
+                    return;
+                }
+
+                const htmlOriginal = submitBtn?.innerHTML;
+
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        },
+                        body: new FormData(form),
+                        credentials: 'same-origin'
+                    });
+
+                    const data = await response.json().catch(function () {
+                        return null;
+                    });
+
+                    if (!response.ok || !data?.ok) {
+                        throw new Error(data?.message || 'No fue posible restablecer la contraseña.');
+                    }
+
+                    const modalActual = form.closest('.modal');
+                    const mensajeExito = data.message || 'Contraseña restablecida correctamente.';
+
+                    if (modalActual && window.bootstrap?.Modal) {
+                        modalActual.addEventListener('hidden.bs.modal', function handler() {
+                            modalActual.removeEventListener('hidden.bs.modal', handler);
+                            limpiarBackdropsSiNoHayModales();
+                            mostrarModalOperacionUsuario(mensajeExito);
+                        }, { once: true });
+
+                        const modalInstance = bootstrap.Modal.getInstance(modalActual)
+                            || bootstrap.Modal.getOrCreateInstance(modalActual);
+
+                        modalInstance.hide();
+                    } else {
+                        mostrarModalOperacionUsuario(mensajeExito);
+                    }
+
+                    form.reset();
+                } catch (error) {
+                    mostrarResultado('error', error.message || 'Error al restablecer la contraseña.');
+                } finally {
+                    form.dataset.enviandoResetPassword = '0';
+
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = htmlOriginal;
+                    }
+                }
+            }, true);
+
+            function ejecutarScriptsParciales(contenedor) {
+                if (!contenedor || !contenedor.querySelectorAll) return;
+
+                const scripts = [];
+                if (contenedor.matches && contenedor.matches('script')) scripts.push(contenedor);
+                contenedor.querySelectorAll('script').forEach(function (script) { scripts.push(script); });
+
+                scripts.forEach(function (oldScript) {
+                    if (oldScript.dataset.usuarioScriptEjecutado === '1') return;
+
+                    const newScript = document.createElement('script');
+                    Array.from(oldScript.attributes).forEach(function (attr) {
+                        if (attr.name !== 'data-usuario-script-ejecutado') {
+                            newScript.setAttribute(attr.name, attr.value);
+                        }
+                    });
+
+                    newScript.dataset.usuarioScriptEjecutado = '1';
+                    newScript.textContent = oldScript.textContent;
+                    oldScript.replaceWith(newScript);
+                });
+            }
+
+            function inicializarFormularioUsuario(contenedor) {
+                if (!contenedor) return;
+
+                ejecutarScriptsParciales(contenedor);
+
+                const root = contenedor.querySelector?.('#user-form') ? contenedor : document;
+
+                if (window.UsuarioFormPanel && typeof window.UsuarioFormPanel.init === 'function') {
+                    window.UsuarioFormPanel.init(root);
+                }
+            }
+
+            window.ejecutarScriptsParciales = ejecutarScriptsParciales;
+            window.inicializarFormularioUsuario = inicializarFormularioUsuario;
+
+            const observer = new MutationObserver(function (mutations) {
+                mutations.forEach(function (mutation) {
+                    mutation.addedNodes.forEach(function (node) {
+                        if (!(node instanceof Element)) return;
+
+                        if (node.matches('#user-form, .tab-content-modern') || node.querySelector?.('#user-form')) {
+                            inicializarFormularioUsuario(node);
+                        }
+                    });
+                });
+            });
+
+            if (document.body) {
+                observer.observe(document.body, { childList: true, subtree: true });
+            }
+        })(window, document);
+
+        function abrirModalAjuste(usuarioId) {
+            $('#ajusteUsuarioID').val(usuarioId);
+            $('#formAjusteVacaciones')[0].reset();
+            $('#modalAjusteVacaciones').modal('show');
+        }
+
+        function guardarAjuste() {
+            const formData = $('#formAjusteVacaciones').serialize();
+
+            $.post('/AdminUsuarios/Usuarios/RegistrarAjusteVacaciones', formData, function (response) {
+                if (response.success) {
+                    Swal.fire('¡Éxito!', response.message, 'success');
+                    $('#modalAjusteVacaciones').modal('hide');
+                } else {
+                    Swal.fire('Error', response.message, 'error');
+                }
+            });
+        }
+    </script>
+
+    @if (modoAccesos)
+    {
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const alerta = document.getElementById('alertaAccesos');
+                const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+
+                const modalEl = document.getElementById('modalConfirmarAccesos');
+                const modal = modalEl && window.bootstrap
+                    ? bootstrap.Modal.getOrCreateInstance(modalEl)
+                    : null;
+
+                const modalNombre = document.getElementById('modalAccesosNombre');
+                const modalCorreo = document.getElementById('modalAccesosCorreo');
+                const btnConfirmar = document.getElementById('btnConfirmarEnviarAccesos');
+
+                let usuarioSeleccionado = null;
+
+                function mostrarAlerta(tipo, mensaje) {
+                    if (!alerta) {
+                        alert(mensaje);
+                        return;
+                    }
+
+                    alerta.className = 'alert alert-' + tipo + ' alerta-accesos';
+                    alerta.textContent = mensaje;
+                    alerta.classList.remove('d-none');
+
+                    setTimeout(function () {
+                        alerta.classList.add('d-none');
+                    }, 7000);
+                }
+
+                function abrirConfirmacion(datos) {
+                    usuarioSeleccionado = datos;
+
+                    if (modalNombre) {
+                        modalNombre.textContent = datos.nombre || 'Usuario';
+                    }
+
+                    if (modalCorreo) {
+                        modalCorreo.textContent = datos.correo || 'Sin correo';
+                    }
+
+                    if (modal) {
+                        modal.show();
+                    } else {
+                        enviarAccesos();
+                    }
+                }
+
+                async function enviarAccesos() {
+                    if (!usuarioSeleccionado) return;
+
+                    const botonFila = usuarioSeleccionado.boton;
+                    const htmlOriginalFila = botonFila?.innerHTML;
+                    const htmlOriginalConfirmar = btnConfirmar?.innerHTML;
+
+                    let tipoAlerta = null;
+                    let mensajeAlerta = null;
+
+                    if (botonFila) {
+                        botonFila.disabled = true;
+                        botonFila.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Enviando...';
+                    }
+
+                    if (btnConfirmar) {
+                        btnConfirmar.disabled = true;
+                        btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Enviando...';
+                    }
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', usuarioSeleccionado.id);
+                        formData.append('__RequestVerificationToken', token);
+
+                        const response = await fetch('@Url.Action("EnviarAccesosPorCorreo", "Usuarios")', {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json'
+                            },
+                            body: formData,
+                            credentials: 'same-origin'
+                        });
+
+                        let data = null;
+
+                        try {
+                            data = await response.json();
+                        } catch {
+                            data = null;
+                        }
+
+                        if (!response.ok || !data?.ok) {
+                            throw new Error(data?.message || 'No fue posible enviar los accesos.');
+                        }
+
+                        tipoAlerta = 'success';
+                        mensajeAlerta = data.message || 'Accesos enviados correctamente.';
+                    } catch (error) {
+                        tipoAlerta = 'danger';
+                        mensajeAlerta = error.message || 'Ocurrió un error al enviar los accesos.';
+                    } finally {
+                        if (modal) {
+                            modal.hide();
+                        }
+
+                        if (botonFila) {
+                            botonFila.disabled = false;
+                            botonFila.innerHTML = htmlOriginalFila;
+                        }
+
+                        if (btnConfirmar) {
+                            btnConfirmar.disabled = false;
+                            btnConfirmar.innerHTML = htmlOriginalConfirmar;
+                        }
+
+                        usuarioSeleccionado = null;
+
+                        if (tipoAlerta && mensajeAlerta) {
+                            mostrarAlerta(tipoAlerta, mensajeAlerta);
+                        }
+                    }
+                }
+
+                document.querySelectorAll('.btn-enviar-accesos').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        abrirConfirmacion({
+                            id: this.dataset.id,
+                            nombre: this.dataset.nombre,
+                            correo: this.dataset.correo,
+                            boton: this
+                        });
+                    });
+                });
+
+                btnConfirmar?.addEventListener('click', function () {
+                    enviarAccesos();
+                });
+
+                modalEl?.addEventListener('hidden.bs.modal', function () {
+                    usuarioSeleccionado = null;
+                });
+            });
+        </script>
+    }
+}

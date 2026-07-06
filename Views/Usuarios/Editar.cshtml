@@ -1,0 +1,102 @@
+﻿@model ERP.NSQuell.Areas.AdminUsuarios.DTOs.UsuarioEdicionDTO
+@{
+    Layout = "_LayoutUsuarios";
+    
+}
+
+<div class="card shadow-sm">
+    <div class="card-header">
+        <h1 class="h4 mb-0">@ViewData["Title"]</h1>
+    </div>
+    <div class="card-body">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+
+                <form asp-action="Editar" method="post">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+                    <input type="hidden" asp-for="UsuarioID" />
+
+                    <h5 class="text-primary"><i class="fas fa-user-edit"></i> Datos Personales</h5>
+                    <hr class="mt-2 mb-4" />
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="Nombre" class="form-label"></label>
+                            <input asp-for="Nombre" class="form-control" />
+                            <span asp-validation-for="Nombre" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="ApellidoPaterno" class="form-label"></label>
+                            <input asp-for="ApellidoPaterno" class="form-control" />
+                            <span asp-validation-for="ApellidoPaterno" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Correo" class="form-label"></label>
+                        <input asp-for="Correo" class="form-control" />
+                        <span asp-validation-for="Correo" class="text-danger"></span>
+                    </div>
+
+                    <h5 class="mt-4 text-primary"><i class="fas fa-cog"></i> Datos de la Cuenta</h5>
+                    <hr class="mt-2 mb-4" />
+
+                    <div class="mb-3">
+                        <label asp-for="RolID" class="form-label"></label>
+                        <input asp-for="RolID" type="number" class="form-control" />
+                        <span asp-validation-for="RolID" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" asp-for="Activo" />
+                        <label class="form-check-label" asp-for="Activo"></label>
+                    </div>
+
+                    <div class="form-group mt-4 text-end">
+                        <a asp-action="Index" class="btn btn-secondary me-2"><i class="fas fa-times"></i> Cancelar</a>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar Cambios</button>
+                    </div>
+                </form>
+
+                @if (Model.HistorialDeCambios != null && Model.HistorialDeCambios.Any())
+                {
+                    <h5 class="mt-5 text-primary"><i class="fas fa-history"></i> Historial de Cambios</h5>
+                    <hr class="mt-2 mb-4" />
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped table-bordered">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Cambio Realizado</th>
+                                    <th>Modificado Por</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model.HistorialDeCambios)
+                                {
+                                    <tr>
+                                        <td>@item.FechaModificacion.ToString("g")</td>
+                                        <td>@item.DescripcionDelCambio</td>
+                                        <td>@item.ModificadoPor</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+
+    
+
+}
+

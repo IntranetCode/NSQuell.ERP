@@ -1,0 +1,755 @@
+﻿@model List<ERP.NSQuell.Models.MenuGrupoModel>
+
+@using System.Security.Claims
+@using ERP.NSQuell.Areas.AdminUsuarios.Interfaces
+
+@{
+    Layout = null;
+    ViewData["Title"] = "ERP Industrial | NSQuell";
+
+    // Datos de sesión
+    var nombreUsuario = Context.Session.GetString("NombreMostrar") ?? Context.Session.GetString("Username") ?? "Invitado";
+   var nombreEmpresa = "NSQuell ERP";
+var logoEmpresa = "default-logo.png";
+
+    // SIEMPRE desde sesión
+    var currentUserId = Context.Session.GetInt32("UsuarioID") ?? 0;
+
+
+
+    var currentUrl = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.Path}";
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="stylesheet" href="~/css/globals/variables.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/components/navbar.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components/cards.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/pages/dashboard.css" asp-append-version="true" />
+   
+    <link href="~/css/stylesMenuGrupos.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="preload" href="~/js/dashboard.js" as="script" />
+
+    <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
+
+    
+</head>
+
+<body>
+    @await Html.PartialAsync("_Overlay")
+
+    <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
+
+    <div class="main-wrapper">
+        <nav class="top-navbar" role="navigation" aria-label="Navegación principal">
+            <div class="navbar-content">
+                <div class="navbar-left">
+                    <a href="#" class="navbar-brand">
+                        @if (!string.IsNullOrEmpty(logoEmpresa) && logoEmpresa != "default-logo.png")
+                        {
+                            <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="navbar-logo" loading="lazy" />
+                        }
+                        else
+                        {
+                            <i class="fas fa-building" aria-hidden="true"></i>
+                        }
+
+                        <span class="navbar-title">@nombreEmpresa</span>
+                    </a>
+                </div>
+
+                <div class="navbar-right">
+                    <div class="quick-actions-navbar">
+                        <a class="quick-action-btn" id="btnNotificaciones" aria-haspopup="true" aria-expanded="false" title="Notificaciones">
+                            <i class="fas fa-bell" aria-hidden="true"></i>
+                            <span id="notifCount" class="badge rounded-pill" hidden="true">0</span>
+                        </a>
+
+                        <div id="notifDropdown" class="notif-dropdown" aria-labelledby="btnNotificaciones">
+                            <div class="notif-header"><strong>Notificaciones</strong></div>
+                            <ul id="notifList" class="notif-list"></ul>
+                        </div>
+                    </div>
+
+                    <div class="user-menu">
+                        <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario">
+                            <div class="user-avatar" aria-hidden="true">@(nombreUsuario.Substring(0, 1).ToUpper())</div>
+
+                            <div class="user-info">
+                                <div class="user-name">@nombreUsuario</div>
+                                <div class="user-role">Colaborador</div>
+                            </div>
+
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </button>
+
+                        <div class="user-dropdown" id="userDropdownMenu" role="menu" aria-labelledby="userToggle">
+                            <a href="#" id="linkMiPerfil" class="dropdown-item" role="menuitem">
+                                <i class="fas fa-user" aria-hidden="true"></i> Mi Perfil
+                            </a>
+
+                            <a href="#" class="dropdown-item" role="menuitem" data-bs-toggle="modal"
+                               data-bs-target="#modalDenunciaAnonima">
+                                <i class="fas fa-user-secret" aria-hidden="true"></i> Denuncia anónima
+                            </a>
+
+                            @*
+                            <a href="#" class="dropdown-item" role="menuitem">
+                                <i class="fas fa-cog" aria-hidden="true"></i> Configuración
+                            </a>
+                            <a href="#" class="dropdown-item" role="menuitem">
+                                <i class="fas fa-question-circle" aria-hidden="true"></i> Ayuda
+                            </a>
+                            *@
+
+                            <a href="/Login/Logout" class="dropdown-item">
+                                <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar Sesión
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="main-content" id="main-content" role="main">
+            @{
+                var claseBienvenida = (ViewBag.MostrarBienvenida == true) ? "welcome-section as-overlay" : "welcome-section is-pinned";
+            }
+
+            <section id="welcome-section" class="@claseBienvenida" aria-labelledby="welcome-title">
+                <div class="welcome-box">
+                    <h1 id="welcome-title" class="welcome-title">¡Hola, @nombreUsuario!</h1>
+                    <p class="welcome-subtitle">
+    Centro de operación industrial para producción, almacén, compras, calidad, logística y mantenimiento.
+</p>
+                </div>
+            </section>
+
+            <div id="welcome-pinned-container" style="display: none;"></div>
+
+            <section class="quick-actions" aria-label="Grupos disponibles">
+                @if (Model != null && Model.Any())
+                {
+                    @foreach (var g in Model.OrderBy(x => x.Orden))
+                    {
+                        var iconoGrupo = GetIconClassForGrupo(g.IconoCss);
+                        var colores = GetDynamicColors(g.MenuGrupoID);
+                        var cardStyle = $"--card-bg:{colores.Fondo}; --card-border:{colores.Borde}; --icon-bg:{colores.Icono}; --stripe-bg:{colores.Principal};";
+
+                        <article class="action-card"
+                                 style="@cardStyle"
+                                 data-href="@Url.Action("Grupo", "Menu", new { id = g.MenuGrupoID })"
+                                 role="button"
+                                 tabindex="0">
+
+                            <div class="action-icon" aria-hidden="true">
+                                <i class="@iconoGrupo"></i>
+                            </div>
+
+                            <h2 class="action-title">@g.Nombre</h2>
+
+                            <p class="action-description">
+                                @(!string.IsNullOrWhiteSpace(g.Descripcion) ? g.Descripcion : $"Accede a {g.Nombre}")
+                            </p>
+                        </article>
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-info" role="alert">
+                        No hay grupos disponibles.
+                    </div>
+                }
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal de Perfil -->
+    <div class="modal fade" id="modalPerfil" tabindex="-1" aria-labelledby="modalPerfilLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content modal-perfil">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalPerfilLabel">
+                        <i class="fas fa-user-circle"></i> Mi Perfil
+                    </h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-user-circle fa-5x text-primary"></i>
+                    </div>
+
+                    <div class="perfil-info">
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-user"></i> Nombre:</label>
+                            <p id="perfilNombre" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-id-badge"></i> Usuario:</label>
+                            <p id="perfilUsername" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-envelope"></i> Correo:</label>
+                            <p id="perfilCorreo" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-phone"></i> Teléfono:</label>
+                            <p id="perfilTelefono" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-user-tag"></i> Rol:</label>
+                            <p id="perfilRol" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-info-circle"></i> Descripción del Rol:</label>
+                            <p id="perfilDescripcionRol" class="ms-3"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de la denuncia anónima -->
+    <div class="modal fade" id="modalDenunciaAnonima" tabindex="-1" role="dialog" aria-labelledby="modalDenunciaAnonimaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content modal-denuncia">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalDenunciaAnonimaLabel">
+                        Denuncia anónima y confidencial
+                    </h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                @using (Html.BeginForm("Crear", "DenunciasAnonimas", FormMethod.Post, new { id = "formDenunciaAnonima" }))
+                {
+                    @Html.AntiForgeryToken()
+
+                    <div class="modal-body">
+                        <p class="text-muted small">
+                            Tu identidad no se mostrará en ningún lado. La información se enviará de forma confidencial.
+                        </p>
+
+                        <div class="form-group">
+                            <label for="TipoDenuncia">Tipo de denuncia *</label>
+                            <select id="TipoDenuncia" name="TipoDenuncia" class="form-control" required>
+                                <option value="">-- Selecciona una opción --</option>
+                                <option value="Acoso">Acoso</option>
+                                <option value="Fraude">Fraude</option>
+                                <option value="Conducta inadecuada">Conducta inadecuada</option>
+                                <option value="Seguridad">Seguridad</option>
+                                <option value="Otros">Otros</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="DepartamentoAfectado">Departamento afectado *</label>
+                            <select id="DepartamentoAfectado" name="DepartamentoAfectado" class="form-control" required>
+                                <option value="">-- Selecciona una opción --</option>
+                                <option value="Recursos Humanos">Recursos Humanos</option>
+                                <option value="Ventas">Compras</option>
+                                <option value="Proyectos">Proyectos</option>
+                                <option value="Operaciones">Almacén</option>
+                                <option value="Finanzas">Finanzas</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="Descripcion">Descripción detallada *</label>
+                            <textarea id="Descripcion" name="Descripcion" class="form-control" rows="4" required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="FechaHechos">Fecha aproximada de los hechos *</label>
+                            <input type="date" id="FechaHechos" name="FechaHechos" class="form-control" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="LugarHechos">Lugar de los hechos *</label>
+                            <input type="text" id="LugarHechos" name="LugarHechos" class="form-control" maxlength="200" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="camposObligatorios">* Todos los campos son obligatorios</label>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Enviar denuncia</button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <script src="~/js/overlay.js" asp-append-version="true"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+
+    <script type="application/ld+json">
+        {
+            "@@context": "https://schema.org",
+            "@@type": "WebApplication",
+            "name": "Intranet NS Group",
+            "description": "Portal interno de @nombreEmpresa",
+            "url": "@currentUrl",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web"
+        }
+    </script>
+
+    <script>
+        window.mostrarBienvenida = '@((ViewBag.MostrarBienvenida == true) ? "true" : "false")';
+    </script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const welcomeSectionOverlay = document.getElementById("welcome-section");
+            const mainWrapper = document.querySelector(".main-wrapper");
+            const pinnedContainer = document.getElementById("welcome-pinned-container");
+
+            if (welcomeSectionOverlay && welcomeSectionOverlay.classList.contains("as-overlay")) {
+                mainWrapper.classList.add("overlay-lock");
+
+                const welcomePinned = welcomeSectionOverlay.cloneNode(true);
+                welcomePinned.classList.remove("as-overlay", "leaving");
+                welcomePinned.classList.add("is-pinned");
+                welcomePinned.style.opacity = '0';
+                welcomePinned.style.transition = 'opacity 0.4s ease-in-out';
+
+                pinnedContainer.appendChild(welcomePinned);
+                pinnedContainer.style.display = 'block';
+
+                setTimeout(() => {
+                    welcomeSectionOverlay.classList.add("leaving");
+                    welcomePinned.style.opacity = '1';
+                }, 2000);
+
+                setTimeout(() => {
+                    if (document.getElementById("welcome-section")) {
+                        welcomeSectionOverlay.remove();
+                        mainWrapper.classList.remove("overlay-lock");
+                    }
+                }, 3200);
+
+                welcomeSectionOverlay.addEventListener("transitionend", function handler(event) {
+                    if (event.propertyName === 'opacity' && welcomeSectionOverlay.classList.contains("leaving")) {
+                        welcomeSectionOverlay.remove();
+                        mainWrapper.classList.remove("overlay-lock");
+                        welcomeSectionOverlay.removeEventListener('transitionend', handler);
+                    }
+                });
+            }
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const cards = document.querySelectorAll('.action-card');
+
+            cards.forEach(function (card) {
+                card.addEventListener('click', function () {
+                    const url = card.getAttribute('data-href') || card.getAttribute('data-href-external');
+
+                    if (url && url !== "#") {
+                        if (card.hasAttribute('data-href-external')) {
+                            window.open(url, '_blank');
+                        } else {
+                            window.location.href = url;
+                        }
+                    }
+                });
+
+                card.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        const url = card.getAttribute('data-href') || card.getAttribute('data-href-external');
+
+                        if (url && url !== "#") {
+                            if (card.hasAttribute('data-href-external')) {
+                                window.open(url, '_blank');
+                            } else {
+                                window.location.href = url;
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const toggleBtn = document.getElementById('userToggle');
+            const dropdown = document.getElementById('userDropdownMenu');
+
+            if (!toggleBtn || !dropdown) return;
+
+            toggleBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                dropdown.classList.toggle('show');
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+        });
+    </script>
+
+    <script>
+        if (window.history.replaceState) {
+            window.history.replaceState(null, '', '/Menu/Index');
+        }
+    </script>
+
+    @Html.AntiForgeryToken()
+
+    <script>
+        @if (TempData["RefreshMenu"] as string == "true")
+        {
+            <text>
+                console.log('Permisos actualizados - Recargando menú...');
+                setTimeout(() => {
+                    if (window.Notificaciones && typeof window.Notificaciones.actualizarContador === 'function') {
+                        window.Notificaciones.actualizarContador();
+                    }
+                }, 1000);
+            </text>
+        }
+    </script>
+
+    <script>
+        (function () {
+            const btn = document.getElementById('btnNotificaciones');
+            const badge = document.getElementById('notifCount');
+            const dropdown = document.getElementById('notifDropdown');
+            const list = document.getElementById('notifList');
+
+            function getToken() {
+                return (
+                    document.querySelector('meta[name="request-verification-token"]')?.content ||
+                    document.querySelector('input[name="__RequestVerificationToken"]')?.value ||
+                    ''
+                );
+            }
+
+            function renderBadge(total) {
+                if (!badge) return;
+
+                const n = Number(total) || 0;
+
+                if (n > 0) {
+                    badge.textContent = n;
+                    badge.hidden = false;
+                } else {
+                    badge.textContent = '0';
+                    badge.hidden = true;
+                }
+            }
+
+            function bust(url) {
+                return url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+            }
+
+            async function post(url, body = {}) {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': getToken()
+                    },
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    body: JSON.stringify(body)
+                });
+
+                if (!res.ok) throw new Error('POST ' + url + ' -> ' + res.status);
+
+                try {
+                    return await res.json();
+                } catch {
+                    return {};
+                }
+            }
+
+            async function getJson(url) {
+                const res = await fetch(bust(url), {
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!res.ok) throw new Error('GET ' + url + ' -> ' + res.status);
+
+                return await res.json();
+            }
+
+            async function actualizarContador() {
+                try {
+                    const data = await getJson('/Notificaciones/Contar');
+                    const total = data.total ?? data.unread ?? data.count ?? 0;
+                    renderBadge(total);
+                } catch (e) {
+                    console.error('Contar:', e);
+                }
+            }
+
+            function val(n, up, low) {
+                return n[up] ?? n[low];
+            }
+
+            function escapeHtml(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function linkDestino(tipo, idOrigen) {
+                let url = '#';
+
+                if (tipo === 'CursoAsignado') url = `/Universidad/MisCursos/${idOrigen}`;
+                else if (tipo === 'WebinarAsignado') url = `/Lider/Lista/${idOrigen}`;
+                else if (tipo === 'Comunicado_Nuevo') url = `/Comunicados/Index/${idOrigen}`;
+
+                return `<a class="js-ver" href="${url}">Ver</a>`;
+            }
+
+            async function cargarLista(pagina = 1, tamanio = 10) {
+                try {
+                    const data = await getJson(`/Notificaciones/Listar?pagina=${pagina}&tamanio=${tamanio}`);
+                    list.innerHTML = '';
+
+                    if (!data.items || data.items.length === 0) {
+                        list.innerHTML = '<li class="notif-empty">Sin notificaciones</li>';
+                        return;
+                    }
+
+                    data.items.forEach(n => {
+                        const id = val(n, 'Id', 'id');
+                        const titulo = val(n, 'Titulo', 'titulo') ?? '';
+                        const mensaje = val(n, 'Mensaje', 'mensaje') ?? '';
+                        const tipo = val(n, 'Tipo', 'tipo') ?? '';
+                        const idOrigen = val(n, 'IdOrigen', 'idOrigen');
+                        const fechaStr = val(n, 'FechaCreacion', 'fechaCreacion');
+                        const fecha = new Date(fechaStr || Date.now()).toLocaleString();
+                        const esLeida = !!(n.Leida ?? n.leida ?? n.EsLeida ?? n.esLeida);
+
+                        const li = document.createElement('li');
+                        li.className = 'notif-item' + (!esLeida ? ' unread' : '');
+                        li.dataset.id = id;
+                        li.dataset.tipo = tipo;
+                        li.dataset.idorigen = idOrigen;
+
+                        li.innerHTML = `
+                            <div class="notif-row">
+                                <div class="notif-main">
+                                    <div class="notif-title">${escapeHtml(titulo)}</div>
+                                    <div class="notif-date">${fecha}</div>
+                                    ${mensaje ? `<div class="notif-msg">${escapeHtml(mensaje)}</div>` : ''}
+                                </div>
+                                ${!esLeida ? '<span class="notif-new">Nueva</span>' : ''}
+                            </div>
+                            <div class="notif-actions">
+                                ${linkDestino(tipo, idOrigen)}
+                            </div>
+                        `;
+
+                        list.appendChild(li);
+                    });
+                } catch (e) {
+                    console.error('Listar:', e);
+                    list.innerHTML = '<li class="notif-error">Error al cargar</li>';
+                }
+            }
+
+            async function marcarTodasAlAbrir() {
+                try {
+                    const r = await post('/Notificaciones/MarcarTodasLeidas');
+
+                    list?.querySelectorAll('.notif-item.unread').forEach(li => {
+                        li.classList.remove('unread');
+                        li.querySelector('.notif-new')?.remove();
+                    });
+
+                    await actualizarContador();
+
+                    if (typeof r.updated !== 'undefined' || typeof r.total !== 'undefined') {
+                        console.debug('Notificaciones actualizadas:', r.updated ?? r.total);
+                    }
+                } catch (e) {
+                    console.error('MarcarTodasLeidas:', e);
+
+                    try {
+                        await actualizarContador();
+                    } catch { }
+                }
+            }
+
+            let yaMarqueEnEstaApertura = false;
+
+            btn?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+
+                const open = dropdown.getAttribute('data-open') === '1';
+
+                if (open) {
+                    dropdown.setAttribute('data-open', '0');
+                    dropdown.style.display = 'none';
+                    yaMarqueEnEstaApertura = false;
+                    return;
+                }
+
+                dropdown.setAttribute('data-open', '1');
+                dropdown.style.display = 'block';
+
+                await cargarLista();
+
+                if (!yaMarqueEnEstaApertura) {
+                    yaMarqueEnEstaApertura = true;
+                    await marcarTodasAlAbrir();
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!dropdown.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+                    dropdown.setAttribute('data-open', '0');
+                    dropdown.style.display = 'none';
+                    yaMarqueEnEstaApertura = false;
+                }
+            });
+
+            actualizarContador();
+            setInterval(actualizarContador, 30000);
+
+            window.Notificaciones = {
+                actualizarContador,
+                cargarLista,
+                abrir: async () => {
+                    dropdown.setAttribute('data-open', '1');
+                    dropdown.style.display = 'block';
+
+                    await cargarLista();
+
+                    if (!yaMarqueEnEstaApertura) {
+                        yaMarqueEnEstaApertura = true;
+                        await marcarTodasAlAbrir();
+                    }
+                }
+            };
+        })();
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const linkMiPerfil = document.getElementById('linkMiPerfil');
+
+            if (linkMiPerfil) {
+                linkMiPerfil.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    cargarPerfil();
+                });
+            }
+
+            function cargarPerfil() {
+                fetch('/Perfil/ObtenerMiPerfil')
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            const data = result.data;
+
+                            document.getElementById('perfilNombre').textContent = data.nombreUsuario || 'N/A';
+                            document.getElementById('perfilUsername').textContent = data.username || 'N/A';
+                            document.getElementById('perfilCorreo').textContent = data.correo || 'N/A';
+                            document.getElementById('perfilTelefono').textContent = data.telefono || 'N/A';
+                            document.getElementById('perfilRol').textContent = data.nombreRol || 'N/A';
+                            document.getElementById('perfilDescripcionRol').textContent = data.descripcionRol || 'N/A';
+
+                            const modal = new bootstrap.Modal(document.getElementById('modalPerfil'));
+                            modal.show();
+                        } else {
+                            alert('Error: ' + result.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error al cargar el perfil');
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
+
+@functions {
+    private string GetIconClassForGrupo(string? iconoActual)
+    {
+        // Si el icono viene desde BD, lo respetamos.
+        if (!string.IsNullOrWhiteSpace(iconoActual))
+            return FormatIcon(iconoActual);
+
+        // Si no viene icono, usamos uno genérico.
+        return "fas fa-layer-group";
+    }
+
+    private (string Fondo, string Borde, string Icono, string Principal) GetDynamicColors(int id)
+    {
+        // Paleta automática. Cada grupo toma color según su MenuGrupoID.
+        // Si entra un nuevo registro en BD, automáticamente recibe color.
+        var paletas = new[]
+        {
+            ("#eff6ff", "#bfdbfe", "linear-gradient(135deg, #3b82f6, #1d4ed8)", "#3b82f6"),
+            ("#f0fdf4", "#bbf7d0", "linear-gradient(135deg, #22c55e, #15803d)", "#22c55e"),
+            ("#fefce8", "#fde68a", "linear-gradient(135deg, #eab308, #ca8a04)", "#eab308"),
+            ("#fff7ed", "#fed7aa", "linear-gradient(135deg, #f97316, #ea580c)", "#f97316"),
+            ("#fdf2f8", "#fbcfe8", "linear-gradient(135deg, #ec4899, #db2777)", "#ec4899"),
+            ("#f5f3ff", "#ddd6fe", "linear-gradient(135deg, #8b5cf6, #6d28d9)", "#8b5cf6"),
+            ("#ecfeff", "#a5f3fc", "linear-gradient(135deg, #06b6d4, #0891b2)", "#06b6d4"),
+            ("#f0fdfa", "#99f6e4", "linear-gradient(135deg, #14b8a6, #0f766e)", "#14b8a6"),
+            ("#fef2f2", "#fecaca", "linear-gradient(135deg, #ef4444, #dc2626)", "#ef4444"),
+            ("#f8fafc", "#cbd5e1", "linear-gradient(135deg, #64748b, #334155)", "#64748b")
+        };
+
+        var index = Math.Abs(id) % paletas.Length;
+        return paletas[index];
+    }
+
+    private string FormatIcon(string? icono)
+    {
+        if (string.IsNullOrWhiteSpace(icono))
+            return "fas fa-layer-group";
+
+        var clean = icono.Trim();
+
+        // Si en BD viene completo: "fas fa-users"
+        if (clean.Contains(" "))
+            return clean;
+
+        // Si en BD viene solo: "fa-users"
+        return $"fas {clean}";
+    }
+}

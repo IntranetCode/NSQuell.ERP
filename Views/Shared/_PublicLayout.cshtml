@@ -1,0 +1,26 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - NS Streaming</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="public-page compact-public">
+    <header class="public-header compact-header">
+        <a class="public-brand" asp-controller="Home" asp-action="Index" aria-label="Ir al inicio">
+            <span class="brand-mark">NS</span>
+            <span>NS Streaming</span>
+        </a>
+        <nav class="public-nav" aria-label="Navegación principal">
+            <a href="#reproductor">Reproductor</a>
+        </nav>
+    </header>
+
+    <main>
+        @RenderBody()
+    </main>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

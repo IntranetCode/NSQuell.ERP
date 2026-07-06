@@ -1,0 +1,154 @@
+@{
+    ViewData["Title"] = "Acceso denegado - Intranet";
+    Layout = null;
+
+    var empresaId = Context.Session.GetString("EmpresaId") ?? "1";
+
+    var cssEmpresaFile = empresaId switch
+    {
+        "1" => "LoginNutriservicios.css",
+        "2" => "LoginNS_Equipo.css",
+        "3" => "LoginBSP.css",
+        "4" => "LoginHypor.css",
+        _ => "site.css"
+    };
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="stylesheet" href="~/css/globals/variables.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/components/navbar.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components/cards.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/pages/dashboard.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/@cssEmpresaFile" asp-append-version="true" />
+    <link href="~/css/stylesMenuIndex.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
+
+    <style>
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        body {
+            background: #f8fafc;
+        }
+
+        .access-denied-page {
+            min-height: calc(100vh - 74px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+            background:
+                radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.08), transparent 30%),
+                linear-gradient(135deg, #07164a 0%, #102b63 54%, #f47b20 100%);
+        }
+
+        .access-denied-card {
+            width: 100%;
+            max-width: 520px;
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+
+        .access-denied-header {
+            background: #0b1744;
+            color: #ffffff;
+            padding: 32px;
+            text-align: center;
+        }
+
+        .access-denied-icon {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 16px auto;
+            border-radius: 50%;
+            background: rgba(244, 123, 32, 0.18);
+            color: #f47b20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 38px;
+            font-weight: 800;
+        }
+
+        .access-denied-body {
+            padding: 32px;
+            text-align: center;
+        }
+
+        .btn-access-primary {
+            background: #0b1744;
+            border-color: #0b1744;
+            color: #ffffff;
+        }
+
+        .btn-access-primary:hover {
+            background: #142463;
+            border-color: #142463;
+            color: #ffffff;
+        }
+
+        .btn-access-outline {
+            border-color: #f47b20;
+            color: #f47b20;
+        }
+
+        .btn-access-outline:hover {
+            background: #f47b20;
+            color: #ffffff;
+        }
+    </style>
+</head>
+
+<body data-empresa="@empresaId">
+    @await Html.PartialAsync("_Overlay")
+
+    <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
+
+    <div class="main-wrapper">
+        @await Html.PartialAsync("_TopNavbar")
+
+        <main class="access-denied-page" id="main-content" role="main">
+            <section class="access-denied-card" aria-labelledby="access-denied-title">
+                <div class="access-denied-header">
+                    <div class="access-denied-icon" aria-hidden="true">!</div>
+
+                    <h1 id="access-denied-title" class="mb-1">Acceso denegado</h1>
+                    <p class="mb-0 opacity-75">No tienes permiso para acceder a esta sección.</p>
+                </div>
+
+                <div class="access-denied-body">
+                    <p class="text-muted mb-4">
+                        Tu usuario inició sesión correctamente, pero no cuenta con los permisos necesarios para abrir esta página.
+                    </p>
+
+                    <div class="alert alert-warning text-start">
+                        Si consideras que deberías tener acceso, solicita al administrador que revise tus permisos dentro de la intranet.
+                    </div>
+
+                    <div class="d-flex gap-2 justify-content-center mt-4">
+                        <a href="/Menu/Index" class="btn btn-access-primary">
+                            Volver al inicio
+                        </a>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="~/js/overlay.js" asp-append-version="true"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

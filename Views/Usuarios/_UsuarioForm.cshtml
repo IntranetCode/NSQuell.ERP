@@ -1,0 +1,1933 @@
+﻿@using System.Linq
+@using Microsoft.AspNetCore.Mvc.Rendering
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@using ERP.NSQuell.Models.ModelUsuarios
+@model UsuarioFormViewModel
+
+@{
+    var accion = Model.EsModoCrear ? "Crear" : "Editar";
+    var iniciales = "NU";
+    if (!Model.EsModoCrear && !string.IsNullOrWhiteSpace(Model.Nombre))
+    {
+        iniciales = $"{Model.Nombre[0]}".ToUpper();
+        if (!string.IsNullOrWhiteSpace(Model.ApellidoPaterno))
+        {
+            iniciales += $"{Model.ApellidoPaterno[0]}".ToUpper();
+        }
+    }
+    var nombreCompleto = Model.EsModoCrear ? "Nuevo Usuario" : $"{Model.Nombre} {Model.ApellidoPaterno}";
+    var overrideGrupos = (ViewBag.OverrideGrupos as List<OverridesVm>) ?? new List<OverridesVm>();
+
+    // ⚙️ EmpresaID para overrides: primero sesión, si no existe toma el primero seleccionado
+    
+
+    var resetPasswordModalId = $"modalRestablecerPassword_{(Model.UsuarioID.HasValue ? Model.UsuarioID.Value.ToString() : "0")}";
+    var resetPasswordModalLabelId = $"{resetPasswordModalId}_Label";
+
+
+}
+
+<style>
+    :root {
+        --pm-indigo: #ff6d00;
+        --pm-purple: #1a237e;
+        --pm-muted: #f6f7fb;
+        --pm-surface: #ffffff;
+        --pm-border: #e7e9ef;
+        --pm-text: #283046;
+        --pm-text-muted: #6b7280;
+    }
+
+    .panel-header-modern {
+        background: linear-gradient(135deg,#1a237e 0%,#0d47a1 100%);
+        padding: 1.5rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #fff;
+        border-radius: 12px 12px 0 0
+    }
+
+    .user-profile-section {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem
+    }
+
+    .user-avatar-circle {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: rgba(0,0,153,.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        border: 2px solid rgba(255,255,255,.35);
+        box-shadow: 0 4px 12px rgba(0,0,0,.15)
+    }
+
+    .user-name {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700
+    }
+
+    .user-meta {
+        display: flex;
+        gap: .75rem;
+        margin-top: .25rem
+    }
+
+    .reset-password-link {
+        color: #fff;
+        opacity: .92;
+        text-decoration: none;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        font: inherit;
+        cursor: pointer;
+    }
+
+        .reset-password-link:hover {
+            opacity: 1;
+            text-decoration: underline
+        }
+
+    .btn-close-modern {
+        background: rgba(255,255,255,.22);
+        border: 0;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        color: #fff
+    }
+
+        .btn-close-modern:hover {
+            background: rgba(255,255,255,.32);
+            transform: rotate(90deg)
+        }
+
+    .nav-tabs-modern {
+        background: var(--pm-muted);
+        border-bottom: 1px solid var(--pm-border);
+        padding: 0 1rem
+    }
+
+        .nav-tabs-modern .nav-link {
+            border: 0;
+            color: var(--pm-text-muted);
+            font-weight: 600;
+            padding: 1rem 1.2rem;
+            border-radius: .5rem .5rem 0 0
+        }
+
+            .nav-tabs-modern .nav-link.active {
+                color: #ff6d00;
+                background: var(--pm-surface)
+            }
+
+                .nav-tabs-modern .nav-link.active::after {
+                    content: "";
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    bottom: -1px;
+                    height: 2px;
+                    background: linear-gradient(90deg,#ff6d00,#1a237e)
+                }
+
+    .tab-content-modern {
+        background: var(--pm-surface);
+        padding: 0;
+        border-radius: 0 0 12px 12px;
+        height: calc(100vh - 180px);
+        overflow: hidden
+    }
+
+    .tab-pane {
+        height: 100%
+    }
+
+    .pane-scroll {
+        height: 100%;
+        overflow: auto;
+        padding: 1.5rem
+    }
+
+    .form-modern {
+        max-width: 1000px;
+        margin: 0 auto
+    }
+
+    .form-section {
+        margin-bottom: 1.5rem;
+        padding: 1.1rem;
+        background: var(--pm-muted);
+        border-radius: 12px;
+        border: 1px solid var(--pm-border)
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        margin-bottom: 1rem
+    }
+
+    .section-icon {
+        color: #ff6d00
+    }
+
+    .section-title {
+        margin: 0;
+        font-weight: 700;
+        color: var(--pm-text)
+    }
+
+    .form-label-modern {
+        font-weight: 600;
+        color: var(--pm-text);
+        margin-bottom: .4rem
+    }
+
+    .form-control-modern, .form-select {
+        border: 2px solid var(--pm-border);
+        border-radius: 10px;
+        padding: .62rem .9rem
+    }
+
+        .form-control-modern:focus, .form-select:focus {
+            border-color: #ff6d00;
+            box-shadow: 0 0 0 .2rem rgba(102,126,234,.15)
+        }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: .75rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--pm-border)
+    }
+
+    .permissions-container {
+        max-width: 1280px;
+        margin: 0 auto
+    }
+
+    .permissions-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: .75rem;
+        border-bottom: 1px solid var(--pm-border)
+    }
+
+    .permission-group {
+        margin-bottom: 1rem;
+        border: 1px solid var(--pm-border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #fff
+    }
+
+    .permission-group-header {
+        background: linear-gradient(135deg,#1a237e 0%,#0d47a1 100%);
+        color: #fff;
+        padding: .85rem 1.1rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        z-index: 3
+    }
+
+    .ov-table-scroll {
+        max-height: 56vh;
+        overflow: auto;
+        border-top: 1px solid var(--pm-border)
+    }
+
+    .table-permissions {
+        margin: 0;
+        border-collapse: separate;
+        border-spacing: 0
+    }
+
+        .table-permissions thead {
+            background: var(--pm-muted);
+            position: sticky;
+            top: 0;
+            z-index: 2
+        }
+
+        .table-permissions th, .table-permissions td {
+            padding: .85rem .9rem;
+            vertical-align: middle
+        }
+
+        .table-permissions th {
+            font-weight: 700;
+            color: var(--pm-text);
+            border-bottom: 1px solid var(--pm-border)
+        }
+
+        .table-permissions tbody tr {
+            border-bottom: 1px solid var(--pm-border)
+        }
+
+            .table-permissions tbody tr:hover {
+                background: #fafbff
+            }
+
+        .table-permissions th:first-child, .table-permissions td:first-child {
+            position: sticky;
+            left: 0;
+            background: #fff;
+            z-index: 3;
+            box-shadow: 1px 0 0 var(--pm-border)
+        }
+
+        .table-permissions .btn-group {
+            flex-wrap: wrap;
+            gap: .4rem;
+            justify-content: center
+        }
+
+            .table-permissions .btn-group .btn {
+                min-width: 108px
+            }
+
+    @@media (max-width:640px) {
+        .table-permissions .btn-group .btn {
+            min-width: auto;
+            padding: .45rem .6rem
+        }
+
+        .table-permissions .btn i {
+            margin-right: 0
+        }
+
+        .table-permissions .btn {
+            font-size: 0
+        }
+
+            .table-permissions .btn i {
+                font-size: 14px
+            }
+
+        .table-permissions th:first-child, .table-permissions td:first-child {
+            display: none
+        }
+    }
+
+    .ov-sticky-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 4;
+        background: linear-gradient(0deg,rgba(255,255,255,1) 70%,rgba(255,255,255,0) 100%);
+        padding: .8rem 0 0;
+        margin-top: .5rem;
+        border-top: 1px solid var(--pm-border)
+    }
+
+    /* Estilos para los radio buttons de permisos */
+    .form-check-input.ov-radio {
+        margin-right: 0.5rem;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        transition: all 0.2s;
+    }
+
+    .form-check-input:checked + .form-check-label {
+        font-weight: bold;
+    }
+
+    .form-check-input[value="1"]:checked + .form-check-label {
+        background-color: rgba(40, 167, 69, 0.1);
+        border: 1px solid #28a745;
+    }
+
+    .form-check-input[value="0"]:checked + .form-check-label {
+        background-color: rgba(220, 53, 69, 0.1);
+        border: 1px solid #dc3545;
+    }
+
+    .form-check-input[value="-1"]:checked + .form-check-label {
+        background-color: rgba(108, 117, 125, 0.1);
+        border: 1px solid #6c757d;
+    }
+
+    .btn-group-vertical .form-check {
+        margin-bottom: 0.25rem;
+    }
+
+    
+    /* ... (tus estilos anteriores) ... */
+    /* Estilo especial para la sección de excepciones */
+    .border-orange {
+        border: 1px solid rgba(255, 109, 0, 0.3) !important;
+        background: rgba(255, 109, 0, 0.02) !important;
+    }
+
+    .icon-orange {
+        color: #ff6d00 !important;
+    }
+
+    /* Switch Color Naranja Matrix */
+    .form-check-input.check-adelantadas:checked {
+        background-color: #ff6d00 !important;
+        border-color: #ff6d00 !important;
+    }
+
+    .form-check-input.check-adelantadas:focus {
+        box-shadow: 0 0 0 0.25rem rgba(255, 109, 0, 0.2) !important;
+    }
+
+    /* Asegurar que los estilos de los switches se mantengan modernos */
+    .form-switch-modern .form-check-input {
+        width: 3em;
+        height: 1.5em;
+        cursor: pointer;
+    }
+
+    .form-switch-modern .form-check-label {
+        padding-left: 10px;
+        cursor: pointer;
+    }
+
+
+    /* Corrección puntual para modales cargados dentro del panel lateral por AJAX.
+               El modal de restablecer contraseña se mueve al body antes de abrirse; estas reglas
+               aseguran que quede por encima del backdrop y que sus controles sigan interactivos. */
+    body.pm-reset-password-open > .modal-backdrop,
+    body.pm-reset-password-open > .modal-backdrop.show,
+    .modal-backdrop.pm-reset-password-backdrop {
+        z-index: 2147482990 !important;
+    }
+
+    body > .modal.modal-reset-password-usuario,
+    body > .modal.modal-reset-password-usuario.show,
+    body > .modal.pm-reset-password-modal,
+    body > .modal.pm-reset-password-modal.show {
+        z-index: 2147483000 !important;
+    }
+
+        body > .modal.modal-reset-password-usuario .modal-dialog,
+        body > .modal.modal-reset-password-usuario .modal-content,
+        body > .modal.pm-reset-password-modal .modal-dialog,
+        body > .modal.pm-reset-password-modal .modal-content {
+            pointer-events: auto !important;
+        }
+
+    #modalUsuarioGuardado {
+        z-index: 2147483000 !important;
+    }
+
+        #modalUsuarioGuardado .modal-dialog,
+        #modalUsuarioGuardado .modal-content {
+            pointer-events: auto !important;
+        }
+
+
+
+
+    /* Departamento con icono integrado y compatible con Select2 */
+    .departamento-input-group {
+        flex-wrap: nowrap;
+    }
+
+    .departamento-icon {
+        width: 46px;
+        justify-content: center;
+        border: 2px solid var(--pm-border);
+        border-right: 0;
+        border-radius: 10px 0 0 10px;
+        background: #ffffff;
+        color: #ff6d00;
+    }
+
+    .departamento-select {
+        border-left: 0 !important;
+        border-radius: 0 10px 10px 0 !important;
+    }
+
+    .departamento-input-group .select2-container {
+        flex: 1 1 auto;
+        width: 1% !important;
+        min-width: 0;
+    }
+
+    .departamento-input-group .select2-container--bootstrap-5 .select2-selection {
+        min-height: 43px;
+        border: 2px solid var(--pm-border);
+        border-left: 0;
+        border-radius: 0 10px 10px 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .departamento-input-group .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        padding-left: .9rem;
+        color: var(--pm-text);
+    }
+
+    .departamento-input-group .select2-container--bootstrap-5 .select2-selection--single .select2-selection__placeholder {
+        color: var(--pm-text-muted);
+    }
+
+    .departamento-input-group .select2-container--bootstrap-5.select2-container--focus .select2-selection,
+    .departamento-input-group .select2-container--bootstrap-5.select2-container--open .select2-selection {
+        border-color: #ff6d00;
+        box-shadow: 0 0 0 .2rem rgba(255, 109, 0, .15);
+    }
+
+    .departamento-input-group:focus-within .departamento-icon {
+        border-color: #ff6d00;
+        color: #1a237e;
+    }
+
+    /* Password fields sin controles nativos del navegador.
+               Usamos type="text" + máscara visual para evitar el ojo/popup nativo de Edge dentro del modal. */
+    .pm-secret-field.pm-secret-masked {
+        -webkit-text-security: disc;
+        text-security: disc;
+    }
+
+    .pm-secret-field.pm-secret-unmasked {
+        -webkit-text-security: none;
+        text-security: none;
+    }
+
+    input.pm-secret-field::-ms-reveal,
+    input.pm-secret-field::-ms-clear,
+    input[type="password"]::-ms-reveal,
+    input[type="password"]::-ms-clear {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+    }
+
+    input.pm-secret-field::-webkit-credentials-auto-fill-button,
+    input.pm-secret-field::-webkit-caps-lock-indicator,
+    input[type="password"]::-webkit-credentials-auto-fill-button,
+    input[type="password"]::-webkit-caps-lock-indicator {
+        visibility: hidden !important;
+        display: none !important;
+        pointer-events: none !important;
+    }
+
+
+    /* ===== Notificaciones modernas de UsuarioForm ===== */
+    .toast-usuario-form {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 2147483000;
+        width: min(520px, calc(100vw - 32px));
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid rgba(231, 233, 239, .95);
+        box-shadow: 0 18px 45px rgba(15, 23, 42, .18);
+        overflow: hidden;
+        animation: toastUsuarioFormIn .22s ease-out;
+    }
+
+    .toast-usuario-form-inner {
+        display: flex;
+        gap: 14px;
+        padding: 16px 18px 14px 16px;
+        align-items: flex-start;
+    }
+
+    .toast-usuario-form-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 42px;
+        font-size: 18px;
+    }
+
+    .toast-usuario-form-title {
+        font-weight: 800;
+        color: #1f2937;
+        font-size: .98rem;
+        margin-bottom: 4px;
+    }
+
+    .toast-usuario-form-message {
+        color: #4b5563;
+        font-size: .9rem;
+        line-height: 1.45;
+    }
+
+    .toast-usuario-form-close {
+        border: 0;
+        background: transparent;
+        color: #6b7280;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex: 0 0 28px;
+    }
+
+        .toast-usuario-form-close:hover {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+    .toast-usuario-form-progress-wrap {
+        height: 4px;
+        background: #eef2f7;
+    }
+
+    .toast-usuario-form-progress {
+        height: 100%;
+        width: 100%;
+        animation-name: toastUsuarioFormProgress;
+        animation-timing-function: linear;
+        animation-fill-mode: forwards;
+    }
+
+    @@keyframes toastUsuarioFormIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px) translateX(12px) scale(.98);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0) translateX(0) scale(1);
+        }
+    }
+
+    @@keyframes toastUsuarioFormOut {
+        from {
+            opacity: 1;
+            transform: translateY(0) translateX(0) scale(1);
+        }
+
+        to {
+            opacity: 0;
+            transform: translateY(-8px) translateX(12px) scale(.98);
+        }
+    }
+
+    @@keyframes toastUsuarioFormProgress {
+        from {
+            width: 100%;
+        }
+
+        to {
+            width: 0%;
+        }
+    }
+</style>
+
+<div data-usuario-form-root="true">
+
+    <!-- ENCABEZADO -->
+    <div class="panel-header-modern">
+        <div class="user-profile-section">
+            <div class="user-avatar-circle">@iniciales</div>
+            <div class="user-info">
+                <h2 class="user-name">@nombreCompleto</h2>
+                @if (!Model.EsModoCrear)
+                {
+                    <div class="user-meta">
+                        <span class="badge @(Model.Activo ? "bg-success" : "bg-secondary")">
+                            @(Model.Activo ? "Activo" : "Inactivo")
+                        </span>
+                        <button type="button"
+                                class="reset-password-link"
+                                id="btnAbrirRestablecerPassword"
+                                data-bs-toggle="modal"
+                                data-bs-target="#@resetPasswordModalId"
+                                onmousedown="var m=document.getElementById('@resetPasswordModalId');if(m){document.querySelectorAll('#@resetPasswordModalId').forEach(function(x){if(x!==m)x.remove();});if(m.parentElement!==document.body){m.__usuarioFormOriginalParent=m.parentElement;m.__usuarioFormNextSibling=m.nextSibling;document.body.appendChild(m);}m.classList.add('pm-reset-password-modal');m.style.setProperty('z-index','2147483000','important');document.body.classList.add('pm-reset-password-open');setTimeout(function(){document.querySelectorAll('.modal-backdrop').forEach(function(b){b.classList.add('pm-reset-password-backdrop');b.style.setProperty('z-index','2147482990','important');});},0);}">
+                            <i class="fas fa-key"></i> Restablecer contraseña
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+        <button type="button" class="btn-close-modern" id="close-panel-btn" aria-label="Cerrar">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Tokens / IDs ocultos para AJAX -->
+    <input type="hidden" id="__RequestVerificationToken" value="@Antiforgery.GetAndStoreTokens(Context).RequestToken" />
+    <input type="hidden" id="UsuarioIDPanel" value="@Model.UsuarioID" />
+
+    <!-- TABS -->
+    <ul class="nav nav-tabs nav-tabs-modern" id="userTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="cuenta-tab" data-bs-toggle="tab" data-bs-target="#tab-cuenta" type="button" role="tab">
+                <i class="fas fa-user me-2"></i>Cuenta
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="permisos-tab" data-bs-toggle="tab" data-bs-target="#tab-permisos" type="button" role="tab">
+                <i class="fas fa-shield-alt me-2"></i>Permisos
+            </button>
+        </li>
+        @if (!Model.EsModoCrear && Model.HistorialDeCambios != null && Model.HistorialDeCambios.Any())
+        {
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="auditoria-tab" data-bs-toggle="tab" data-bs-target="#tab-auditoria" type="button" role="tab">
+                    <i class="fas fa-history me-2"></i>Auditoría
+                </button>
+            </li>
+        }
+
+    </ul>
+
+    <!-- CONTENIDO -->
+    <div class="tab-content tab-content-modern" id="userTabContent">
+        <!-- CUENTA -->
+        <div class="tab-pane fade show active" id="tab-cuenta" role="tabpanel">
+            <div class="pane-scroll">
+                <form id="user-form" asp-action="@accion" asp-controller="Usuarios" asp-route-id="@Model.UsuarioID" method="post" class="form-modern">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                    @if (!Model.EsModoCrear)
+                    {
+                        <input type="hidden" asp-for="UsuarioID" />
+                    }
+
+                    <div class="form-section">
+                        <div class="section-header">
+                            <i class="fas fa-user-circle section-icon"></i>
+                            <h5 class="section-title">Datos Personales</h5>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="Nombre" class="form-label-modern"></label>
+                                <input asp-for="Nombre" class="form-control form-control-modern" placeholder="Ingrese el nombre" />
+                                <span asp-validation-for="Nombre" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="ApellidoPaterno" class="form-label-modern"></label>
+                                <input asp-for="ApellidoPaterno" class="form-control form-control-modern" placeholder="Ingrese el apellido paterno" />
+                                <span asp-validation-for="ApellidoPaterno" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="ApellidoMaterno" class="form-label-modern"></label>
+                                <input asp-for="ApellidoMaterno" class="form-control form-control-modern" placeholder="Ingrese el apellido materno" />
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Telefono" class="form-label-modern"></label>
+                                <input asp-for="Telefono" class="form-control form-control-modern" placeholder="+52 000 000 0000" />
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Correo" class="form-label-modern">Correo electrónico <span class="text-muted fw-normal">(opcional)</span></label>
+                                <input asp-for="Correo" type="email" class="form-control form-control-modern" placeholder="correo@ejemplo.com" />
+                                <span asp-validation-for="Correo" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="section-header">
+                            <i class="fas fa-briefcase section-icon"></i>
+                            <h5 class="section-title">Información de Empleado</h5>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label asp-for="NumeroEmpleado" class="form-label-modern">Número de Empleado</label>
+                                <input asp-for="NumeroEmpleado" class="form-control form-control-modern" placeholder="Ej: 00123" />
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="ClaveEmpleadoNomina" class="form-label-modern">Clave Nómina</label>
+                                <input asp-for="ClaveEmpleadoNomina" type="text" class="form-control form-control-modern" placeholder="Ej: NSE00033" autocomplete="off" />
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="FechaIngreso" class="form-label-modern">Fecha de Ingreso</label>
+                                <input asp-for="FechaIngreso" type="date" class="form-control form-control-modern" />
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Puesto" class="form-label-modern">Puesto</label>
+                                <input asp-for="Puesto" class="form-control form-control-modern" placeholder="Cargo del colaborador" />
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="FechaNacimiento" class="form-label-modern">Fecha de Nacimiento</label>
+                                <input asp-for="FechaNacimiento" type="date" class="form-control form-control-modern" />
+                            </div>
+
+
+                            @{
+                                var departamentos = ViewBag.Departamentos as IEnumerable<SelectListItem>
+                                                    ?? Enumerable.Empty<SelectListItem>();
+
+                                var departamentoActual = Model.DepartamentoID?.ToString();
+                            }
+
+                            <div class="col-md-12 mb-3">
+                                <label asp-for="DepartamentoID" class="form-label-modern">Departamento</label>
+
+                                <div class="input-group departamento-input-group">
+                                    <span class="input-group-text departamento-icon">
+                                        <i class="fas fa-building"></i>
+                                    </span>
+
+                                    <select asp-for="DepartamentoID"
+                                            id="selectDepartamento"
+                                            name="DepartamentoID"
+                                            class="form-select form-control-modern departamento-select">
+                                        <option value="">-- Seleccione un Departamento --</option>
+
+                                        @foreach (var depto in departamentos)
+                                        {
+                                            if (depto.Value == departamentoActual)
+                                            {
+                                                <option value="@depto.Value" selected>@depto.Text</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@depto.Value">@depto.Text</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+
+                                <span asp-validation-for="DepartamentoID" class="text-danger small"></span>
+                            </div>
+
+                            <div class="col-md-12 mb-3">
+                                <label class="form-label-modern">Jefe Directo</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="fas fa-user-tie text-primary"></i></span>
+                                    <select asp-for="JefeInmediatoPersonaID" id="selectJefe" class="form-select">
+                                        @if (Model.JefeInmediatoPersonaID > 0)
+                                        {
+                                            <option value="@Model.JefeInmediatoPersonaID" selected>@Model.JefeInmediatoNombreCompleto</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="">-- Buscar Jefe --</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                        
+                            @*    @if (!Model.EsModoCrear)
+                        {
+                            <div class="col-md-12 mt-3">
+                                <div class="p-3 border border-warning rounded bg-light bg-opacity-10">
+                                    <h6 class="text-warning d-flex align-items-center">
+                                        <i class="fas fa-calendar-alt me-2"></i> Ajuste Manual de Vacaciones (RH)
+                                    </h6>
+                                    <p class="small text-muted mb-3">Utilice esta opción para cargar días que el colaborador ya tomó antes de la implementación del sistema.</p>
+                                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="abrirModalAjuste(@Model.UsuarioID)">
+                                        <i class="fas fa-plus-circle me-1"></i> Cargar Saldo Pendiente
+                                    </button>
+                                </div>
+                            </div>
+                        }*@
+
+                        </div>
+                    </div>
+
+
+                    @if (Model.EsModoCrear)
+                    {
+                        <div class="form-section">
+                            <div class="section-header">
+                                <i class="fas fa-lock section-icon"></i>
+                                <h5 class="section-title">Credenciales de Acceso</h5>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label asp-for="Username" class="form-label-modern"></label>
+                                    <input asp-for="Username" class="form-control form-control-modern" placeholder="usuario123" />
+                                    <span asp-validation-for="Username" class="text-danger small"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Password" class="form-label-modern">Contraseña</label>
+                                    <div class="input-group">
+                                        <input asp-for="Password" type="text" id="txtPassword" class="form-control form-control-modern pm-secret-field pm-secret-masked" placeholder="••••••••" autocomplete="off" data-lpignore="true" data-1p-ignore="true" />
+                                        <button class="btn btn-outline-secondary border-2" type="button" onclick="if(event){event.preventDefault();event.stopPropagation();}var input=this.closest('.input-group').querySelector('input');var icon=this.querySelector('i');if(input){input.type='text';input.classList.add('pm-secret-field');var reveal=input.classList.contains('pm-secret-masked');input.classList.toggle('pm-secret-masked',!reveal);input.classList.toggle('pm-secret-unmasked',reveal);if(icon){icon.classList.toggle('fa-eye',!reveal);icon.classList.toggle('fa-eye-slash',reveal);}}return false;">
+                                            <i id="eyeIcon" class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                    <span asp-validation-for="Password" class="text-danger small"></span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="form-section">
+                        <div class="section-header">
+                            <i class="fas fa-cogs section-icon"></i>
+                            <h5 class="section-title">Configuración de Cuenta</h5>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="RolID" class="form-label-modern">Rol</label>
+                                <select asp-for="RolID"
+                                        asp-items="@ViewBag.URol"
+                                        class="form-select form-control-modern">
+                                    <option value="">-- Seleccione un rol --</option>
+                                </select>
+                                <span asp-validation-for="RolID" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="EmpresasIDs" class="form-label-modern"></label>
+                                <select asp-for="EmpresasIDs" asp-items="@ViewBag.Empresas" class="form-select form-control-modern" multiple size="4"></select>
+                                <span asp-validation-for="EmpresasIDs" class="text-danger small"></span>
+                                <small class="text-muted d-block mt-1">Mantén Ctrl para seleccionar varias</small>
+                            </div>
+
+                            @if (!Model.EsModoCrear)
+                            {
+                                <div class="col-12">
+                                    <div class="form-check form-switch form-switch-modern">
+                                        <input class="form-check-input" type="checkbox" role="switch" asp-for="Activo" id="switchActivo" />
+                                        <label class="form-check-label" for="switchActivo">
+                                            <strong>Usuario Activo</strong>
+                                            <small class="d-block text-muted">Desactiva para suspender el acceso</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @*
+
+@if (!Model.EsModoCrear)
+                {
+                    <div class="form-section border-orange">
+                        <div class="section-header">
+                            <i class="fas fa-exclamation-triangle section-icon icon-orange"></i>
+                            <h5 class="section-title">Permisos Especiales de RH</h5>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="form-check form-switch form-switch-modern">
+                                    <input class="form-check-input check-adelantadas" type="checkbox" role="switch" asp-for="PermiteAdelantadas" id="switchAdelantadas" />
+                                    <label class="form-check-label" for="switchAdelantadas">
+                                        <strong>Habilitar Vacaciones Adelantadas</strong>
+                                        <small class="d-block text-muted">Permite al usuario solicitar vacaciones aunque no haya cumplido el año de antigüedad.</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }*@
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline-secondary btn-modern" id="cancel-btn">
+                            <i class="fas fa-times me-2"></i>Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary btn-modern">
+                            <i class="fas fa-save me-2"></i>@(Model.EsModoCrear ? "Crear Usuario" : "Guardar Cambios")
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- PERMISOS -->
+        <div class="tab-pane fade" id="tab-permisos" role="tabpanel" aria-labelledby="permisos-tab">
+            <div class="pane-scroll">
+                <div class="permissions-container">
+                    <div class="permissions-header">
+                        <div>
+                            <h5 class="mb-1">Permisos Personalizados</h5>
+                            <p class="text-muted small mb-0">Configura permisos específicos para este usuario. Por defecto hereda los del rol.</p>
+                        </div>
+
+                        @if ((ViewBag.OverrideGrupos is List<OverridesVm> _gr) && _gr.Count > 0 && !Model.EsModoCrear)
+                        {
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="ov-dirty-indicator" class="badge bg-warning text-dark d-none">Cambios sin guardar</span>
+
+                            </div>
+                        }
+                    </div>
+
+                    @if (!(ViewBag.OverrideGrupos is List<OverridesVm> grupos) || grupos.Count == 0)
+                    {
+                        <div class="alert alert-warning"><i class="fas fa-exclamation-triangle me-2"></i>No hay información de permisos disponible.</div>
+                    }
+                    else
+                    {
+                        <form id="ov-form" asp-action="GuardarOverrides" asp-controller="Usuarios" method="post" data-ajax-permisos="true">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="UsuarioID" value="@Model.UsuarioID" />
+                            @{
+                                var idx = 0;
+                            }
+
+                            @foreach (var grupo in grupos)
+                            {
+                                <div class="permission-group mb-3">
+                                    <div class="permission-group-header sticky-top">
+                                        <i class="fas fa-folder-open me-2"></i>
+                                        <strong>@grupo.MenuNombre</strong>
+                                        <span class="badge bg-light text-dark ms-2">@grupo.Items.Count permisos</span>
+                                    </div>
+
+                                    <div class="table-responsive ov-table-scroll">
+                                        <table class="table table-permissions align-middle mb-0">
+                                            <thead class="sticky-top">
+                                                <tr>
+                                                    <th style="width:60px;">ID</th>
+                                                    <th>Permiso</th>
+                                                    <th class="text-center" style="width:200px;">Acceso</th>
+                                                    <th class="text-center" style="width:100px;">Estado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var it in grupo.Items)
+                                                {
+                                                    <tr data-submenu="@it.SubMenuID" data-estado-inicial="@(it.Estado >= -1 ? it.Estado : -1)">
+                                                        <td class="text-muted">@it.SubMenuID</td>
+                                                        <td>
+                                                            <strong>@it.Nombre</strong>
+                                                            <div class="ov-badge mt-1 @(it.Estado == -1 ? "d-none" : "")">
+                                                                <span class="badge @(it.Estado == 1 ? "bg-success" : "bg-warning text-dark")">
+                                                                    @(it.Estado == 1 ? "Override: Permitido" : "Override: Denegado")
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <!-- Radio buttons para selección -->
+                                                            <div class="btn-group-vertical btn-group-sm" role="group">
+                                                                <div class="form-check">
+                                                                    <input class="form-check-input ov-radio" type="radio"
+                                                                           name="Items[@idx].Estado" value="1"
+                                                                           id="perm_@it.SubMenuID"
+                                                                    @(it.Estado == 1 ? "checked" : "")>
+                                                                    <label class="form-check-label text-success" for="perm_@it.SubMenuID">
+                                                                        <i class="fas fa-check me-1"></i> Permitir
+                                                                    </label>
+                                                                </div>
+                                                                <div class="form-check">
+                                                                    <input class="form-check-input ov-radio" type="radio"
+                                                                           name="Items[@idx].Estado" value="0"
+                                                                           id="deny_@it.SubMenuID"
+                                                                    @(it.Estado == 0 ? "checked" : "")>
+                                                                    <label class="form-check-label text-danger" for="deny_@it.SubMenuID">
+                                                                        <i class="fas fa-times me-1"></i> Denegar
+                                                                    </label>
+                                                                </div>
+                                                                <div class="form-check">
+                                                                    <input class="form-check-input ov-radio" type="radio"
+                                                                           name="Items[@idx].Estado" value="-1"
+                                                                           id="inherit_@it.SubMenuID"
+                                                                    @(it.Estado == -1 ? "checked" : "")>
+                                                                    <label class="form-check-label text-muted" for="inherit_@it.SubMenuID">
+                                                                        <i class="fas fa-undo me-1"></i> Heredar
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-center ov-estado">
+                                                            @if (it.PermisoEfectivo)
+                                                            {
+                                                                <span class="text-success" title="Efectivo: Sí"><i class="fas fa-check-circle fa-lg"></i></span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-muted" title="Efectivo: No"><i class="fas fa-times-circle fa-lg"></i></span>
+                                                            }
+                                                        </td>
+                                                        <td class="d-none">
+                                                            <input type="hidden" name="Items[@idx].SubMenuID" value="@it.SubMenuID" />
+                                                        </td>
+                                                    </tr>
+                                                    idx++;
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="ov-sticky-footer">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span id="ov-dirty-indicator-bottom" class="badge bg-warning text-dark d-none">Cambios sin guardar</span>
+                                    <button type="submit" class="btn btn-primary btn-modern" id="ov-save">
+                                        <i class="fas fa-save me-2"></i>Guardar overrides
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-modern" id="ov-reset-all">
+                                        <i class="fas fa-undo me-2"></i>Revertir cambios
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- AUDITORÍA -->
+        @if (!Model.EsModoCrear && Model.HistorialDeCambios != null && Model.HistorialDeCambios.Any())
+        {
+            <div class="tab-pane fade" id="tab-auditoria" role="tabpanel">
+                <div class="pane-scroll">
+                    <div class="audit-container">
+                        <div class="audit-header">
+                            <h5 class="mb-1">Historial de Cambios</h5>
+                            <p class="text-muted small mb-0">Registro completo de modificaciones</p>
+                        </div>
+                        <div class="timeline">
+                            @foreach (var item in Model.HistorialDeCambios.OrderByDescending(x => x.FechaModificacion))
+                            {
+                                <div class="timeline-item">
+                                    <div class="timeline-marker"></div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-date"><i class="fas fa-clock me-1"></i>@item.FechaModificacion.ToString("dd/MM/yyyy HH:mm")</div>
+                                        <div class="timeline-description">@item.DescripcionDelCambio</div>
+                                        <div class="timeline-user"><i class="fas fa-user me-1"></i>@item.ModificadoPor</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- MODAL DE CONFIRMACIÓN PARA GUARDADO AJAX -->
+    <div class="modal fade" id="modalUsuarioGuardado" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="fas fa-check-circle me-2"></i>Cambios guardados</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="modalUsuarioGuardadoMensaje" class="mb-0">Los cambios se han guardado correctamente.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="btnModalUsuarioGuardadoOk" data-bs-dismiss="modal">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!Model.EsModoCrear)
+    {
+        <div class="modal fade modal-reset-password-usuario" id="@resetPasswordModalId" tabindex="-1" aria-labelledby="@resetPasswordModalLabelId" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form id="form-restablecer-password" method="post" action="@Url.Action("RestablecerPassword", "Usuarios")">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="usuarioId" value="@Model.UsuarioID" />
+
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title" id="@resetPasswordModalLabelId">
+                                <i class="fas fa-key me-2"></i>Restablecer contraseña
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+
+                        <div class="modal-body">
+                            <div class="alert alert-info small mb-3">
+                                Se actualizará la contraseña del usuario <strong>@Model.Username</strong>.
+                                Si dejas marcada la opción de cambio obligatorio, al iniciar sesión se le pedirá crear una contraseña nueva.
+                            </div>
+
+                            <div id="resetPasswordResultado" class="alert d-none" role="alert"></div>
+
+                            <div class="mb-3">
+                                <label for="resetNuevaPassword" class="form-label-modern">Nueva contraseña</label>
+                                <div class="input-group">
+                                    <input type="text"
+                                           class="form-control form-control-modern pm-secret-field pm-secret-masked"
+                                           id="resetNuevaPassword"
+                                           name="nuevaPassword"
+                                           autocomplete="off"
+                                           aria-autocomplete="none"
+                                           data-lpignore="true"
+                                           data-1p-ignore="true"
+                                           minlength="6"
+                                           required />
+                                    <button class="btn btn-outline-secondary border-2 js-toggle-reset-password"
+                                            type="button"
+                                            data-target="resetNuevaPassword"
+                                            onclick="if(event){event.preventDefault();event.stopPropagation();}var input=this.closest('.input-group').querySelector('input');var icon=this.querySelector('i');if(input){input.type='text';input.classList.add('pm-secret-field');var reveal=input.classList.contains('pm-secret-masked');input.classList.toggle('pm-secret-masked',!reveal);input.classList.toggle('pm-secret-unmasked',reveal);if(icon){icon.classList.toggle('fa-eye',!reveal);icon.classList.toggle('fa-eye-slash',reveal);}}return false;"
+                                            aria-label="Ver u ocultar contraseña">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Mínimo 6 caracteres.</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="resetConfirmarPassword" class="form-label-modern">Confirmar contraseña</label>
+                                <div class="input-group">
+                                    <input type="text"
+                                           class="form-control form-control-modern pm-secret-field pm-secret-masked"
+                                           id="resetConfirmarPassword"
+                                           name="confirmarPassword"
+                                           autocomplete="off"
+                                           aria-autocomplete="none"
+                                           data-lpignore="true"
+                                           data-1p-ignore="true"
+                                           minlength="6"
+                                           required />
+                                    <button class="btn btn-outline-secondary border-2 js-toggle-reset-password"
+                                            type="button"
+                                            data-target="resetConfirmarPassword"
+                                            onclick="if(event){event.preventDefault();event.stopPropagation();}var input=this.closest('.input-group').querySelector('input');var icon=this.querySelector('i');if(input){input.type='text';input.classList.add('pm-secret-field');var reveal=input.classList.contains('pm-secret-masked');input.classList.toggle('pm-secret-masked',!reveal);input.classList.toggle('pm-secret-unmasked',reveal);if(icon){icon.classList.toggle('fa-eye',!reveal);icon.classList.toggle('fa-eye-slash',reveal);}}return false;"
+                                            aria-label="Ver u ocultar confirmación">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="resetForzarCambio"
+                                       name="forzarCambio"
+                                       value="true"
+                                       checked />
+
+                                <input type="hidden" name="forzarCambio" value="false" />
+
+                                <label class="form-check-label" for="resetForzarCambio">
+                                    Obligar al usuario a cambiar la contraseña al iniciar sesión
+                                </label>
+                            </div>
+
+                            <div class="form-check form-switch">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="resetEnviarCorreo"
+                                       name="enviarCorreo"
+                                       value="true"
+                                       checked />
+
+                                <input type="hidden" name="enviarCorreo" value="false" />
+
+                                <label class="form-check-label" for="resetEnviarCorreo">
+                                    Enviar la nueva contraseña por correo si el usuario tiene correo registrado
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary" id="btnRestablecerPasswordSubmit">
+                                <i class="fas fa-save me-2"></i>Guardar contraseña
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+<script>
+
+
+    // ===== NOTIFICACIONES MODERNAS =====
+    function escapeHtmlUsuarioForm(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function mostrarNotificacionUsuarioForm(mensaje, tipo, redirectUrl) {
+        document.querySelectorAll('.toast-usuario-form').forEach(function (x) {
+            x.remove();
+        });
+
+        const esError = tipo === 'error';
+        const esInfo = tipo === 'info';
+
+        const config = {
+            success: {
+                titulo: 'Operación completada',
+                icono: 'fa-check-circle',
+                fondoIcono: '#dcfce7',
+                colorIcono: '#16a34a',
+                borde: '#10b981',
+                duracion: 5000
+            },
+            error: {
+                titulo: 'No se pudo completar',
+                icono: 'fa-exclamation-circle',
+                fondoIcono: '#fee2e2',
+                colorIcono: '#dc2626',
+                borde: '#ef4444',
+                duracion: 8000
+            },
+            info: {
+                titulo: 'Información',
+                icono: 'fa-info-circle',
+                fondoIcono: '#e0ecff',
+                colorIcono: '#1d4ed8',
+                borde: '#1d4ed8',
+                duracion: 6000
+            }
+        };
+
+        const estilo = esError ? config.error : esInfo ? config.info : config.success;
+
+        const alerta = document.createElement('div');
+        alerta.className = 'toast-usuario-form';
+        alerta.style.borderLeft = '5px solid ' + estilo.borde;
+
+        alerta.innerHTML = `
+            <div class="toast-usuario-form-inner">
+                <div class="toast-usuario-form-icon" style="background:${estilo.fondoIcono}; color:${estilo.colorIcono};">
+                    <i class="fas ${estilo.icono}"></i>
+                </div>
+
+                <div style="flex:1; min-width:0;">
+                    <div class="toast-usuario-form-title">${estilo.titulo}</div>
+                    <div class="toast-usuario-form-message">
+                        ${escapeHtmlUsuarioForm(mensaje || (esError ? 'No fue posible guardar los cambios.' : 'La operación se realizó correctamente.'))}
+                    </div>
+                </div>
+
+                <button type="button" class="toast-usuario-form-close" aria-label="Cerrar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="toast-usuario-form-progress-wrap">
+                <div class="toast-usuario-form-progress"
+                     style="background:${estilo.borde}; animation-duration:${estilo.duracion}ms;">
+                </div>
+            </div>
+        `;
+
+        function cerrarToast() {
+            alerta.style.animation = 'toastUsuarioFormOut .18s ease-in forwards';
+
+            setTimeout(function () {
+                alerta.remove();
+
+                if (redirectUrl) {
+                    window.location.href = redirectUrl;
+                }
+            }, 180);
+        }
+
+        alerta.querySelector('.toast-usuario-form-close')?.addEventListener('click', cerrarToast);
+
+        document.body.appendChild(alerta);
+
+        setTimeout(cerrarToast, estilo.duracion);
+    }
+
+    // ===== MODAL RESTABLECER CONTRASEÑA =====
+    window.prepararModalRestablecerPasswordUsuario = function (modalId) {
+        if (!modalId) return null;
+
+        const modalEl = document.getElementById(modalId);
+        if (!modalEl) return null;
+
+        document.querySelectorAll('#' + modalId).forEach(function (x) {
+            if (x !== modalEl) x.remove();
+        });
+
+        if (modalEl.parentElement !== document.body) {
+            modalEl.__usuarioFormOriginalParent = modalEl.parentElement;
+            modalEl.__usuarioFormNextSibling = modalEl.nextSibling;
+            document.body.appendChild(modalEl);
+        }
+
+        modalEl.classList.add('pm-reset-password-modal');
+        modalEl.style.setProperty('z-index', '2147483000', 'important');
+        document.body.classList.add('pm-reset-password-open');
+
+        function ajustarBackdrops() {
+            document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                backdrop.classList.add('pm-reset-password-backdrop');
+                backdrop.style.setProperty('z-index', '2147482990', 'important');
+            });
+        }
+
+        ajustarBackdrops();
+        setTimeout(ajustarBackdrops, 0);
+        setTimeout(ajustarBackdrops, 80);
+
+        return modalEl;
+    };
+
+    window.abrirRestablecerPasswordUsuario = function (ev, modalId) {
+        if (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+        }
+
+        const modalEl = window.prepararModalRestablecerPasswordUsuario(modalId);
+
+        if (!modalEl) {
+            alert('No se encontró el modal de restablecer contraseña.');
+            return false;
+        }
+
+        if (!window.bootstrap?.Modal) {
+            alert('No se encontró Bootstrap Modal. Revisa que bootstrap.bundle.js esté cargado.');
+            return false;
+        }
+
+        const form = modalEl.querySelector('#form-restablecer-password');
+        if (form) form.reset();
+
+        const resultado = modalEl.querySelector('#resetPasswordResultado');
+        if (resultado) {
+            resultado.className = 'alert d-none';
+            resultado.textContent = '';
+        }
+
+        const forzar = modalEl.querySelector('#resetForzarCambio');
+        const enviar = modalEl.querySelector('#resetEnviarCorreo');
+        if (forzar) forzar.checked = true;
+        if (enviar) enviar.checked = true;
+
+        modalEl.querySelectorAll('.pm-secret-field').forEach(function (input) {
+            input.type = 'text';
+            input.classList.add('pm-secret-masked');
+            input.classList.remove('pm-secret-unmasked');
+        });
+
+        modalEl.querySelectorAll('.js-toggle-reset-password i').forEach(function (icon) {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        });
+
+        bootstrap.Modal.getOrCreateInstance(modalEl, {
+            backdrop: true,
+            keyboard: true,
+            focus: true
+        }).show();
+
+        return false;
+    };
+
+
+    (function () {
+        const resetModalId = '@resetPasswordModalId';
+        const modalEl = document.getElementById(resetModalId);
+        const form = modalEl?.querySelector('#form-restablecer-password');
+        const abrirBtn = document.getElementById('btnAbrirRestablecerPassword');
+
+        if (!modalEl || !form || form.dataset.bound === '1') return;
+        form.dataset.bound = '1';
+
+        const resultado = modalEl.querySelector('#resetPasswordResultado');
+        const submitBtn = modalEl.querySelector('#btnRestablecerPasswordSubmit');
+
+        function moverModalAlBody() {
+            document.querySelectorAll('#' + resetModalId).forEach(function (x) {
+                if (x !== modalEl) x.remove();
+            });
+
+            if (modalEl.parentElement === document.body) return;
+
+            modalEl.__usuarioFormOriginalParent = modalEl.parentElement;
+            modalEl.__usuarioFormNextSibling = modalEl.nextSibling;
+            document.body.appendChild(modalEl);
+        }
+
+        function regresarModalAlPanel() {
+            const originalParent = modalEl.__usuarioFormOriginalParent;
+            const nextSibling = modalEl.__usuarioFormNextSibling;
+
+            if (!originalParent || !document.body.contains(modalEl)) return;
+
+            if (nextSibling && nextSibling.parentElement === originalParent) {
+                originalParent.insertBefore(modalEl, nextSibling);
+            } else {
+                originalParent.appendChild(modalEl);
+            }
+        }
+
+        function limpiarBackdropsHuerfanos() {
+            if (document.querySelector('.modal.show')) return;
+            document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                backdrop.remove();
+            });
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }
+
+        function mostrarResultado(tipo, mensaje) {
+            if (!resultado) {
+                alert(mensaje);
+                return;
+            }
+
+            resultado.className = 'alert ' + (tipo === 'success' ? 'alert-success' : 'alert-danger');
+            resultado.textContent = mensaje;
+            resultado.classList.remove('d-none');
+        }
+
+        function limpiarResultado() {
+            if (!resultado) return;
+            resultado.className = 'alert d-none';
+            resultado.textContent = '';
+        }
+
+        function limpiarFormulario() {
+            limpiarResultado();
+            form.reset();
+
+            const forzar = modalEl.querySelector('#resetForzarCambio');
+            const enviar = modalEl.querySelector('#resetEnviarCorreo');
+            const nueva = modalEl.querySelector('#resetNuevaPassword');
+            const confirmar = modalEl.querySelector('#resetConfirmarPassword');
+
+            if (forzar) forzar.checked = true;
+            if (enviar) enviar.checked = true;
+
+            [nueva, confirmar].forEach(function (input) {
+                if (!input) return;
+                input.type = 'text';
+                input.classList.add('pm-secret-field', 'pm-secret-masked');
+                input.classList.remove('pm-secret-unmasked');
+            });
+
+            modalEl.querySelectorAll('.js-toggle-reset-password i').forEach(function (icon) {
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            });
+        }
+
+        function reforzarCapasRestablecerPassword() {
+            modalEl.classList.add('pm-reset-password-modal');
+            modalEl.style.setProperty('z-index', '2147483000', 'important');
+            document.body.classList.add('pm-reset-password-open');
+
+            document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                backdrop.classList.add('pm-reset-password-backdrop');
+                backdrop.style.setProperty('z-index', '2147482990', 'important');
+            });
+
+            setTimeout(function () {
+                document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                    backdrop.classList.add('pm-reset-password-backdrop');
+                    backdrop.style.setProperty('z-index', '2147482990', 'important');
+                });
+            }, 0);
+        }
+
+        modalEl.addEventListener('show.bs.modal', function () {
+            moverModalAlBody();
+            limpiarFormulario();
+            reforzarCapasRestablecerPassword();
+        });
+
+        modalEl.addEventListener('shown.bs.modal', function () {
+            reforzarCapasRestablecerPassword();
+
+            const primerInput = modalEl.querySelector('#resetNuevaPassword');
+            if (primerInput) primerInput.focus();
+        });
+
+        abrirBtn?.addEventListener('pointerdown', function () {
+            moverModalAlBody();
+            reforzarCapasRestablecerPassword();
+        }, true);
+
+        abrirBtn?.addEventListener('click', function () {
+            moverModalAlBody();
+            reforzarCapasRestablecerPassword();
+            // No usamos preventDefault: Bootstrap abre el modal por data-bs-toggle/data-bs-target.
+        }, true);
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            limpiarFormulario();
+
+            modalEl.classList.remove('pm-reset-password-modal');
+            modalEl.style.removeProperty('z-index');
+            document.body.classList.remove('pm-reset-password-open');
+
+            regresarModalAlPanel();
+            limpiarBackdropsHuerfanos();
+        });
+
+        document.addEventListener('click', function (ev) {
+            const btn = ev.target.closest('.js-toggle-reset-password');
+            if (!btn || !modalEl.contains(btn)) return;
+            if (btn.hasAttribute('onclick')) return;
+
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            const input = modalEl.querySelector('#' + btn.dataset.target);
+            const icon = btn.querySelector('i');
+            if (!input) return;
+
+            input.type = 'text';
+            input.classList.add('pm-secret-field');
+
+            const revelar = input.classList.contains('pm-secret-masked');
+            input.classList.toggle('pm-secret-masked', !revelar);
+            input.classList.toggle('pm-secret-unmasked', revelar);
+
+            if (icon) {
+                icon.classList.toggle('fa-eye', !revelar);
+                icon.classList.toggle('fa-eye-slash', revelar);
+            }
+        });
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            limpiarResultado();
+
+            const nueva = form.querySelector('[name="nuevaPassword"]')?.value || '';
+            const confirmar = form.querySelector('[name="confirmarPassword"]')?.value || '';
+
+            if (nueva.length < 6) {
+                mostrarResultado('error', 'La contraseña debe tener al menos 6 caracteres.');
+                return;
+            }
+
+            if (nueva !== confirmar) {
+                mostrarResultado('error', 'La confirmación no coincide con la nueva contraseña.');
+                return;
+            }
+
+            const originalHtml = submitBtn?.innerHTML;
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+            }
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: new FormData(form),
+                    credentials: 'same-origin'
+                });
+
+                const data = await response.json().catch(function () { return null; });
+                if (!response.ok || !data?.ok) {
+                    throw new Error(data?.message || 'No fue posible restablecer la contraseña.');
+                }
+
+                mostrarResultado('success', data.message || 'Contraseña restablecida correctamente.');
+
+                const nuevaInput = form.querySelector('[name="nuevaPassword"]');
+                const confirmarInput = form.querySelector('[name="confirmarPassword"]');
+                if (nuevaInput) nuevaInput.value = '';
+                if (confirmarInput) confirmarInput.value = '';
+            } catch (err) {
+                mostrarResultado('error', err.message || 'Error al restablecer la contraseña.');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalHtml;
+                }
+            }
+        });
+    })();
+
+    (function () {
+        const userForm = document.getElementById('user-form');
+        if (!userForm) return;
+
+        function mostrarModalConfirmacion(message, redirectUrl) {
+            mostrarNotificacionUsuarioForm(
+                message || 'Los cambios se han guardado correctamente.',
+                'success',
+                redirectUrl
+            );
+        }
+
+        if (userForm.dataset.ajaxUsuarioBound === '1') return;
+        userForm.dataset.ajaxUsuarioBound = '1';
+
+        userForm.addEventListener('submit', async function (e) {
+            // Importante:
+            // Este formulario vive dentro del panel lateral y usuarios-panel.js tambien puede
+            // escuchar submits. Detenemos la propagacion para que ningun otro handler tome
+            // el JSON y lo pinte como HTML dentro del panel.
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            if (window.jQuery && $.validator && !$(userForm).valid()) return;
+
+            const submitBtn = userForm.querySelector('button[type="submit"]');
+            const originalHtml = submitBtn?.innerHTML;
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+            }
+
+            try {
+                const response = await fetch(userForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: new FormData(userForm),
+                    credentials: 'same-origin'
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+
+                if (contentType.includes('application/json')) {
+                    const data = await response.json();
+
+                    if (!response.ok || !data?.ok) {
+                        throw new Error(data?.message || 'No fue posible guardar los cambios.');
+                    }
+
+                    mostrarModalConfirmacion(data.message, data.redirectUrl);
+                    return;
+                }
+
+                const html = await response.text();
+
+                // Respaldo: si el servidor devuelve JSON con content-type incorrecto,
+                // lo procesamos como JSON y NO lo insertamos en el panel.
+                const htmlLimpio = (html || '').trim();
+                if (htmlLimpio.startsWith('{') || htmlLimpio.startsWith('[')) {
+                    let data = null;
+
+                    try {
+                        data = JSON.parse(htmlLimpio);
+                    } catch {
+                        data = null;
+                    }
+
+                    if (data) {
+                        if (!response.ok || !data?.ok) {
+                            throw new Error(data?.message || 'No fue posible guardar los cambios.');
+                        }
+
+                        mostrarModalConfirmacion(data.message, data.redirectUrl);
+                        return;
+                    }
+                }
+
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const updatedForm = doc.getElementById('user-form');
+
+                if (updatedForm) {
+                    userForm.outerHTML = updatedForm.outerHTML;
+                } else {
+                    throw new Error('La respuesta del servidor no pudo procesarse correctamente.');
+                }
+            } catch (err) {
+                alert(err.message || 'Error al guardar los cambios.');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalHtml;
+                }
+            }
+        }, true);
+    })();
+
+    // ===== GESTOR DE PERMISOS =====
+    (function () {
+        const ovForm = document.getElementById('ov-form');
+        const ovSave = document.getElementById('ov-save');
+        const dirtyTop = document.getElementById('ov-dirty-indicator');
+        const dirtyBot = document.getElementById('ov-dirty-indicator-bottom');
+        const resetAllBtn = document.getElementById('ov-reset-all');
+
+        if (!ovForm) return;
+
+        let isDirty = false;
+
+        function markDirty() {
+            if (!isDirty) {
+                isDirty = true;
+                dirtyTop?.classList.remove('d-none');
+                dirtyBot?.classList.remove('d-none');
+            }
+        }
+
+        function clearDirty() {
+            isDirty = false;
+            dirtyTop?.classList.add('d-none');
+            dirtyBot?.classList.add('d-none');
+        }
+
+        function updateBadge(tr, estado) {
+            const badgeWrap = tr.querySelector('.ov-badge');
+            const badge = badgeWrap?.querySelector('.badge');
+            if (estado === -1) {
+                badgeWrap?.classList.add('d-none');
+            } else {
+                if (badge) {
+                    badge.className = 'badge ' + (estado === 1 ? 'bg-success' : 'bg-warning text-dark');
+                    badge.textContent = estado === 1 ? 'Override: Permitido' : 'Override: Denegado';
+                }
+                badgeWrap?.classList.remove('d-none');
+            }
+        }
+
+        function showToast(type, message) {
+            const tipo = type === 'error'
+                ? 'error'
+                : type === 'info'
+                    ? 'info'
+                    : 'success';
+
+            mostrarNotificacionUsuarioForm(message, tipo);
+        }
+
+        document.getElementById('tab-permisos')?.addEventListener('change', (ev) => {
+            if (!ev.target.classList.contains('ov-radio')) return;
+            const tr = ev.target.closest('tr');
+            updateBadge(tr, parseInt(ev.target.value));
+            markDirty();
+        });
+
+        ovForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const originalHtml = ovSave.innerHTML;
+            ovSave.disabled = true;
+            ovSave.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+
+            try {
+                const fd = new FormData(ovForm);
+                const url = '@Url.Action("GuardarOverrides", "Usuarios")';
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    body: fd,
+                    credentials: 'same-origin'
+                });
+
+                const data = await res.json();
+                if (!res.ok || !data?.ok) throw new Error(data?.message || `Error HTTP ${res.status}`);
+
+                clearDirty();
+                showToast('success', data.message || 'Permisos actualizados correctamente');
+
+                document.querySelectorAll('#tab-permisos tr[data-submenu]').forEach(tr => {
+                    const checked = tr.querySelector('.ov-radio:checked');
+                    if (checked) tr.setAttribute('data-estado-inicial', checked.value);
+                });
+
+            } catch (err) {
+                showToast('error', err.message || 'Error al guardar los cambios');
+            } finally {
+                ovSave.disabled = false;
+                ovSave.innerHTML = originalHtml;
+            }
+        });
+
+        resetAllBtn?.addEventListener('click', () => {
+            if (!isDirty) { showToast('info', 'No hay cambios para deshacer'); return; }
+            if (!confirm('¿Descartar todos los cambios no guardados?')) return;
+
+            document.querySelectorAll('#ov-form tr[data-submenu]').forEach(tr => {
+                const estadoInicial = parseInt(tr.getAttribute('data-estado-inicial') ?? '-1');
+                const radio = tr.querySelector(`.ov-radio[value="${estadoInicial}"]`);
+                if (radio) { radio.checked = true; updateBadge(tr, estadoInicial); }
+            });
+            clearDirty();
+        });
+    })();
+
+    // ===== VER/OCULTAR CONTRASEÑA =====
+
+    // ===== BUSCADORES SELECT2 =====
+    if (window.jQuery && $.fn && $.fn.select2) {
+    $(document).ready(function() {
+           const commonOptions = {
+        theme: 'bootstrap-5',
+        width: '100%',
+        // Esto asegura que el buscador "viva" dentro del panel y no sea bloqueado
+        dropdownParent: $('#user-form'),
+        language: {
+            inputTooShort: () => "Por favor, introduzca 1 o más caracteres",
+            noResults: () => "No se encontraron resultados",
+            searching: () => "Buscando..."
+        },
+        minimumInputLength: 1
+    };
+
+        // 1. Selector de Departamento vinculado directamente al campo DepartamentoID
+        $('#selectDepartamento').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            dropdownParent: $('#user-form'),
+            placeholder: '-- Seleccione un Departamento --',
+            allowClear: true,
+            language: {
+                noResults: () => "No se encontraron resultados"
+            }
+        });
+
+        // 2. Buscador de Jefes
+        $('#selectJefe').select2({
+            ...commonOptions,
+            placeholder: '-- Buscar Jefe --',
+            ajax: {
+                url: '@Url.Action("BuscarPersonasJefes", "Usuarios")',
+                dataType: 'json',
+                delay: 250,
+                data: params => ({ term: params.term }),
+                processResults: data => ({ results: data.results })
+            }
+        });
+
+    
+
+        @if (Model.JefeInmediatoPersonaID > 0)
+        {
+                        <text>
+                                var optJefe = new Option('@Model.JefeInmediatoNombreCompleto', '@Model.JefeInmediatoPersonaID', true, true);
+                                $('#selectJefe').append(optJefe).trigger('change');
+                        </text>
+        }
+    });
+    }
+
+    window.togglePasswordVisibility = function togglePasswordVisibility() {
+        const passInput = document.getElementById('txtPassword');
+        const eyeIcon = document.getElementById('eyeIcon');
+        if (!passInput) return;
+
+        passInput.type = 'text';
+        passInput.classList.add('pm-secret-field');
+
+        const revelar = passInput.classList.contains('pm-secret-masked');
+        passInput.classList.toggle('pm-secret-masked', !revelar);
+        passInput.classList.toggle('pm-secret-unmasked', revelar);
+
+        if (eyeIcon) {
+            eyeIcon.classList.toggle('fa-eye', !revelar);
+            eyeIcon.classList.toggle('fa-eye-slash', revelar);
+        }
+    };
+</script>

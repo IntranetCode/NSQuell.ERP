@@ -1,0 +1,165 @@
+﻿/* =================================================================
+   ESTILOS PERSONALIZADOS PARA EL ÁREA DE ADMINISTRACIÓN DE USUARIOS
+   ================================================================= */
+
+/* Fuente y Colores Globales */
+body {
+    background-color: #f8f9fa; /* Un gris muy claro para el fondo */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Fuente moderna */
+}
+
+/* Estilo de las Tarjetas (Cards) */
+.card {
+    border: none; /* Quitamos el borde por defecto */
+    border-radius: 0.75rem; /* Bordes más redondeados */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important; /* Sombra más suave y profesional */
+    transition: all 0.3s ease-in-out;
+}
+
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+    }
+
+.card-header {
+    background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%); /* Gradiente elegante */
+    color: white;
+    border-top-left-radius: 0.75rem;
+    border-top-right-radius: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-bottom: none;
+}
+
+    .card-header .h4 {
+        font-weight: 600;
+        margin-bottom: 0;
+    }
+
+.card-body {
+    padding: 2rem;
+}
+
+/* Estilos para la Tabla de Usuarios */
+.table {
+    border-collapse: separate;
+    border-spacing: 0 10px; /* Espacio entre filas */
+}
+
+    .table thead th {
+        background-color: #f1f3f5;
+        border: none;
+        font-weight: 600;
+        color: #495057;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        padding: 1rem;
+    }
+
+    .table tbody tr {
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        border-radius: 0.5rem; /* Bordes redondeados para las filas */
+        transition: all 0.2s ease;
+    }
+
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.02);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+        }
+
+    .table td, .table th {
+        vertical-align: middle;
+        padding: 1rem;
+    }
+
+        .table td:first-child, .table th:first-child {
+            border-top-left-radius: 0.5rem;
+            border-bottom-left-radius: 0.5rem;
+        }
+
+        .table td:last-child, .table th:last-child {
+            border-top-right-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+        }
+
+/* Estilos para los Botones de Acción */
+.btn-primary {
+    background-color: #4b6cb7;
+    border: none;
+    transition: background-color 0.3s;
+    font-weight: 600;
+}
+
+    .btn-primary:hover {
+        background-color: #182848;
+    }
+
+.btn-secondary {
+    font-weight: 600;
+}
+
+.btn-sm {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.btn-warning {
+    color: #fff;
+    background-color: #f0ad4e;
+    border-color: #f0ad4e;
+}
+
+.btn-danger {
+    background-color: #d9534f;
+    border-color: #d9534f;
+}
+
+/* Estilos para los Formularios */
+.form-label {
+    font-weight: 600;
+    color: #343a40;
+}
+
+.form-control {
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid #ced4da;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+    .form-control:focus {
+        border-color: #4b6cb7;
+        box-shadow: 0 0 0 0.25rem rgba(75, 108, 183, 0.25);
+    }
+
+.form-check-input:checked {
+    background-color: #4b6cb7;
+    border-color: #4b6cb7;
+}
+
+/* Badges de Estado */
+.badge {
+    padding: 0.5em 0.9em;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.page-container {
+    display: flex;
+    flex-direction: column;
+    /* Ocupa el 100% de la altura de su contenedor padre (el main#main-content) */
+    height: 100%;
+}
+
+.page-header-static {
+    /* El encabezado no se encoge */
+    flex-shrink: 0;
+}
+
+.scrollable-content {
+    /* La tabla ocupa todo el espacio restante */
+    flex-grow: 1;
+    /* Activa el scroll vertical solo para esta área */
+    overflow-y: auto;
+}

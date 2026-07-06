@@ -1,0 +1,506 @@
+﻿* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #04173b 0%, #063f63 50%, #04173b 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+    /* Elementos de fondo decorativos */
+    body::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(30, 144, 255, 0.1) 0%, transparent 50%);
+        animation: float 20s ease-in-out infinite;
+        z-index: 0;
+    }
+
+    body::after {
+        content: '';
+        position: absolute;
+        bottom: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(0, 119, 204, 0.08) 0%, transparent 50%);
+        animation: float 25s ease-in-out infinite reverse;
+        z-index: 0;
+    }
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+    }
+
+    50% {
+        transform: translateY(-20px) rotate(180deg);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+}
+.login-container {
+    background: transparent;
+}
+
+
+.login-card {
+    background-color: #ffffff !important;
+    border-radius: 24px; /* Asegura el redondeo */
+    padding: 3rem 2.5rem;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+    overflow: hidden; /* Previene que algo sobresalga y rompa el borde */
+    position: relative;
+    z-index: 1;
+}
+
+
+
+    .login-card::before {
+        z-index:0;
+    }
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.brand-section {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    background : #ffffff;
+}
+
+.brand-logo img.icon-image {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+  }
+
+
+
+
+.brand-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #1e40af, #3b82f6, #0ea5e9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+}
+
+.brand-subtitle {
+    color: #64748b;
+    font-size: 1rem;
+    font-weight: 400;
+    margin: 0;
+    margin-top: 1rem;
+}
+
+.form-section {
+    margin-bottom: 2rem;
+}
+
+.input-group-custom {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+    .input-group-custom .form-control {
+        width: 100%;
+        padding: 1rem 1rem 1rem 3.5rem;
+        font-size: 1rem;
+        font-weight: 400;
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        outline: none;
+    }
+
+        .input-group-custom .form-control:focus { 
+           border-color: #db5f13;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1), 0 10px 25px rgba(59, 130, 246, 0.1);
+            transform: translateY(-1px);
+        }
+        .input-group-custom .form-control:focus-visible {
+            outline: 2px solid #3b82f6;
+        }
+
+            .input-group-custom .form-control:focus + .input-icon {
+                color: #3b82f6;
+                transform: scale(1.1);
+            }
+
+            .input-group-custom .form-control:focus ~ label {
+                color: #3b82f6;
+                transform: translateY(-2.5rem) scale(0.85);
+                font-weight: 500;
+            }
+
+        .input-group-custom .form-control:not(:placeholder-shown) ~ label {
+            transform: translateY(-2.5rem) scale(0.85);
+            color: #64748b;
+        }
+
+.input-group-custom label {
+    position: absolute;
+    left: 3.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 1rem;
+    font-weight: 400;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 0 0.5rem;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    z-index: 2;
+}
+
+    .password-toggle:hover {
+        color: #3b82f6;
+        background: rgba(59, 130, 246, 0.1);
+    }
+
+.btn-login {
+    width: 100%;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #121360 0%, #063f63 50%, #0d0e68 100%);
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 25px rgba(30, 64, 175, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+    .btn-login:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 15px 35px rgba(30, 64, 175, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-login:active {
+        transform: translateY(0);
+    }
+
+    .btn-login.loading {
+        pointer-events: none;
+        opacity: 0.8;
+    }
+
+        .btn-login.loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
+            border: 2px solid transparent;
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.alert-custom {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    backdrop-filter: blur(10px);
+}
+
+.alert-title {
+    color: #dc2626;
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.error-message {
+    color: #dc2626;
+    font-size: 0.9rem;
+    margin-left: 1.5rem;
+}
+
+.validation-error {
+    color: #dc2626;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    display: block;
+}
+
+.footer-section {
+    text-align: center;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.footer-text {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* Estilos del modal de empresas */
+.modal-empresa {
+    backdrop-filter: blur(15px);
+    background: rgba(0, 0, 0, 0.7);
+}
+
+    .modal-empresa .modal-content {
+        border: none;
+        border-radius: 24px;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #0ea5e9 100%);
+        color: white;
+        overflow: hidden;
+    }
+
+        .modal-empresa .modal-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.3));
+        }
+
+    .modal-empresa .modal-header {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 2rem 2rem 1rem;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .modal-empresa .modal-title {
+        font-weight: 700;
+        font-size: 1.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .modal-empresa .btn-close {
+        filter: invert(1);
+        opacity: 0.7;
+        background-size: 24px;
+    }
+
+        .modal-empresa .btn-close:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+    .modal-empresa .modal-body {
+        padding: 1.5rem 2rem 2rem;
+    }
+
+.empresa-card {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 1.75rem;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    color: white;
+    text-decoration: none;
+    display: block;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+    .empresa-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        transition: left 0.5s ease;
+    }
+
+    .empresa-card:hover::before {
+        left: 100%;
+    }
+
+    .empresa-card:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        border-color: rgba(255, 255, 255, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+.empresa-logo {
+    width: 70px;
+    height: 70px;
+    border-radius: 16px;
+    object-fit: cover;
+    margin: 0 auto 1.25rem;
+    display: block;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.empresa-card:hover .empresa-logo {
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+}
+
+.empresa-nombre {
+    font-weight: 600;
+    font-size: 1rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.empresa-icon {
+    font-size: 3rem;
+    margin-bottom: 1.25rem;
+    opacity: 0.9;
+    transition: all 0.3s ease;
+}
+
+.empresa-card:hover .empresa-icon {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* Animaciones del modal */
+.modal.fade .modal-dialog {
+    transform: scale(0.7) translateY(-100px);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal.show .modal-dialog {
+    transform: scale(1) translateY(0);
+}
+
+/* Responsive */
+@media (max-width: 576px) {
+    .login-container {
+        padding: 1rem;
+    }
+
+    .login-card {
+        padding: 2rem 1.5rem;
+    }
+
+    .brand-title {
+        font-size: 2rem;
+    }
+
+    .brand-logo {
+        width: 70px;
+        height: 70px;
+    }
+
+        .brand-logo i {
+            font-size: 2rem;
+        }
+}
+
+/* Estados de focus mejorados */
+.focused {
+    transform: scale(1.02);
+}
+
+.input-group-custom.focused .form-control {
+    border-color: #1e40af;
+    box-shadow: 0 0 0 4px rgba(30, 64, 175, 0.1), 0 10px 25px rgba(30, 64, 175, 0.15);
+}
+
+.input-group-custom.focused .input-icon {
+    color: #1e40af;
+}
+
+.input-group-custom .input-icon {
+    position: absolute;
+    top: 50%;
+    left: 1rem;
+    transform: translateY(-50%);
+    font-size: 1.2rem;
+    color: #94a3b8;
+    pointer-events: none;
+    transition: 0.3s ease;
+}

@@ -1,0 +1,118 @@
+﻿@using System.Text.Json
+@{
+    Layout = null;
+    ViewData["Title"] = "Intranet - NS Group";
+    var nombreUsuario = Context.Session.GetString("Username") ?? "Invitado";
+    var rol = Context.Session.GetString("Rol") ?? "Colaborador";
+    var tituloNavbar = ViewBag.TituloNavbar?.ToString() ?? "Universidad NS Group";
+    var logoNavbar = ViewBag.LogoNavbar?.ToString() ?? "logo-universidad-ns.png";
+
+    // *** CARGAR CSS DINÁMICO POR EMPRESA ***
+    var empresaId = Context.Session.GetString("EmpresaId") ?? "default";
+    var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NS Group";
+    var cssFile = empresaId switch
+    {
+        "1" => "LoginNutriservicios.css",
+        "2" => "LoginNS_Equipo.css",
+        "3" => "LoginBSP.css",
+        "4" => "LoginHypor.css",
+        _ => "site.css"
+    };
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <!-- *** CARGAR CSS DINÁMICO POR EMPRESA *** -->
+    <link rel="stylesheet" href="@(Url.Content($"~/css/{cssFile}"))" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link href="~/css/stylesSharedColaborador.css" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
+
+
+    @RenderSection("Estilos", required: false)  @* Sección opcional para estilos personalizados *@
+</head>
+
+<body class="empresa-@empresaId">
+    @await Html.PartialAsync("_Overlay")
+
+    <!-- Navbar con colores dinámicos -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-colaborador">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Menu/Index">
+                @if (!string.IsNullOrEmpty(logoNavbar))
+                {
+                    <img src="~/Imagenes/@logoNavbar" alt="@tituloNavbar" style="height:40px; margin-right: 10px;" />
+                }
+                else
+                {
+                    <i class="fas fa-graduation-cap me-2"></i>
+                }
+                @tituloNavbar
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMenu"
+                    aria-controls="navbarMenu" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarMenu">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/Menu/Index">
+                            <i class="fas fa-home me-1"></i>Inicio
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/Universidad">
+                            <i class="fas fa-graduation-cap me-1"></i>Universidad
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/Proyectos/Index">
+                            <i class="fas fa-project-diagram me-1"></i>Proyectos
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle me-1"></i>@nombreUsuario
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Mi Perfil</a></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Configuración</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="/Menu/Logout">
+                                    <i class="fas fa-sign-out-alt me-2">
+
+                                    </i>Cerrar Sesión
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Info de empresa y rol -->
+
+        </div>
+    </nav>
+
+    <!-- Contenedor principal -->
+    <div class="container container-colaborador">
+        @RenderBody()
+    </div>
+
+    <!-- Scripts -->
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+
+    @RenderSection("Scripts", required: false)  @* Sección opcional para scripts personalizados *@
+    <script src="~/js/overlay.js" asp-append-version="true"></script>
+
+</body>
+</html>

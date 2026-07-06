@@ -1,0 +1,10 @@
+# Carpetas de compilación
+bin/
+obj/
+
+# Configuraciones locales de Visual Studio
+.vs/
+*.user
+
+# Archivos de configuración con contraseñas reales (un ejemplo si aplica)
+appsettings.Development.json

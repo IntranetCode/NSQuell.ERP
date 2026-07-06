@@ -1,0 +1,195 @@
+/* Fondo dinámico usando variables CSS de cada empresa */
+body {
+    background: linear-gradient(135deg, var(--color-primario, #f8fafc) 0%, var(--color-secundario, #f1f5f9) 25%, var(--color-terciario, #e2e8f0) 50%, var(--color-primario, #f8fafc) 100%) !important;
+    background-size: 400% 400% !important;
+    animation: gradientShift 20s ease infinite !important;
+    min-height: 100vh !important;
+    background-attachment: fixed !important;
+}
+
+/* Overlay sutil para mejor legibilidad */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* Animación del gradiente */
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Navbar con colores dinámicos */
+.navbar-colaborador {
+    background: linear-gradient(135deg, #04173b 0%, #063f63 50%, #04173b 100%) !important;
+    backdrop-filter: blur(10px) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.navbar-brand {
+    color: #ffffff !important;
+}
+
+.navbar,
+.navbar .nav-item,
+.dropdown {
+    position: relative;
+    z-index: 1000;
+}
+
+
+.navbar-nav .nav-link {
+    
+    color: #f1f5f9 !important;
+}
+
+    .navbar-nav .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1); /* Fondo sutil */
+        border-radius: 6px;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2); /* Contorno */
+        transition: all 0.2s ease-in-out;
+    }
+
+
+/* Contenedor principal con fondo */
+.container-colaborador {
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(10px) !important;
+    border-radius: 15px !important;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    margin-top: 2rem !important;
+    margin-bottom: 2rem !important;
+    padding: 2rem !important;
+}
+
+/* Botones con colores dinámicos */
+.btn-primary {
+    background: var(--color-primario, #007bff) !important;
+    border-color: var(--color-primario, #007bff) !important;
+}
+
+    .btn-primary:hover {
+        background: var(--color-secundario, #0056b3) !important;
+        border-color: var(--color-secundario, #0056b3) !important;
+    }
+
+/* Enlaces con colores dinámicos */
+a {
+    color: var(--color-primario, #007bff) !important;
+}
+
+    a:hover {
+        color: var(--color-secundario, #0056b9) !important;
+    }
+
+/* Badges y elementos de estado */
+.badge-primary {
+    background-color: var(--color-primario, #007bff) !important;
+}
+
+.text-primary {
+    color: var(--color-primario, #007bff) !important;
+}
+
+/* Progress bars */
+.progress-bar {
+    background-color: var(--color-primario, #007bff) !important;
+}
+
+/* Cards y elementos destacados */
+.card {
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08) !important;
+}
+
+    .card:hover {
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.15) !important;
+        transform: translateY(-2px) !important;
+        transition: all 0.3s ease !important;
+    }
+
+/* Para empresas específicas - colores más intensos */
+@media screen {
+    /* Nutriservicios - Azul */
+    body .empresa-1 {
+        background: linear-gradient(135deg, #004AAD 0%, #0066CC 25%, #0080FF 50%, #004AAD 100%) !important;
+    }
+
+        body.empresa-1::before {
+            background: rgba(255, 255, 255, 0.88) !important;
+        }
+    /* NS Equipo - Marrón */
+    body.empresa-2 {
+        background: linear-gradient(135deg, #7B3F00 0%, #A0522D 25%, #CD853F 50%, #7B3F00 100%) !important;
+    }
+
+        body.empresa-2::before {
+            background: rgba(255, 255, 255, 0.88) !important;
+        }
+    /* BSP - Verde */
+    body.empresa-3 {
+        background: linear-gradient(135deg, #2E8B57 0%, #3CB371 25%, #90EE90 50%, #2E8B57 100%) !important;
+    }
+
+        body.empresa-3::before {
+            background: rgba(255, 255, 255, 0.88) !important;
+        }
+    /* Hypor - Morado */
+    body.empresa-4 {
+        background: linear-gradient(135deg, #880088 0%, #AA00AA 25%, #CC44CC 50%, #880088 100%) !important;
+    }
+
+        body.empresa-4::before {
+            background: rgba(255, 255, 255, 0.88) !important;
+        }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    body:: before {
+        background: rgba(255, 255, 255, 0.92) !important;
+    }
+
+    .container-colaborador {
+        margin: 1rem !important;
+        padding: 1rem !important;
+        border-radius: 10px !important;
+    }
+
+    .navbar-brand img {
+        height: 30px !important;
+    }
+}
+
+/* Estados y alertas con colores dinámicos */
+.alert-primary {
+    background-color: rgba(var(--color-primario-rgb, 0, 123, 255), 0.1) !important;
+    border-color: var(--color-primario, #007bff) !important;
+    color: var(--color-primario, #007bff) !important;
+}
+
+/* Iconos con colores dinámicos */
+.text-primary i,
+.btn-primary i {
+    color: inherit !important;
+}
+
+

@@ -1,0 +1,1408 @@
+﻿@model List<ERP.NSQuell.Models.MenuModel>
+@using System.Security.Claims
+@using ERP.NSQuell.Areas.AdminUsuarios.Interfaces
+
+@{
+    Layout = null;
+    ViewData["Title"] = "Intranet - NS Group";
+
+    // Datos de sesión
+    var nombreUsuario = Context.Session.GetString("NombreMostrar") ?? Context.Session.GetString("Username") ?? "Invitado";
+    var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NS Group";
+    var logoEmpresa = Context.Session.GetString("EmpresaLogo") ?? "default-logo.png";
+    var empresaIdStr = Context.Session.GetString("EmpresaID");
+    var empresaId = Context.Session.GetString("EmpresaID") ?? "1";
+
+    // SIEMPRE desde sesión
+    var currentUserId = Context.Session.GetInt32("UsuarioID") ?? 0;
+
+    // Empresa como nullable (null = global)
+    int? empresaIdInt = int.TryParse(empresaIdStr, out var tmpEmp) ? tmpEmp : (int?)null;
+
+    // CSS por empresa
+    var cssEmpresaFile = empresaId switch
+    {
+        "1" => "LoginNutriservicios.css",
+        "2" => "LoginNS_Equipo.css",
+        "3" => "LoginBSP.css",
+        "4" => "LoginHypor.css",
+        _ => "site.css"
+    };
+
+    // Enlaces externos
+    var enlacesMejoraContina = "https://nsgroupmx.sharepoint.com/sites/ProcesosyMejoraContinua";
+    // var enlacesCompras = "https://forms.office.com/r/K7u3UMVVKi";
+    // var enlacesLogistica = "https://forms.office.com/r/77fwUyxuE0";
+    var enlacesEmbarques = "https://forms.office.com/r/MRjsPtpUrv";
+
+    var currentUrl = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.Path}";
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="stylesheet" href="~/css/globals/variables.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/components/navbar.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components/cards.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/pages/dashboard.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/@cssEmpresaFile" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="preload" href="~/js/dashboard.js" as="script" />
+    <link rel="preload" href="~/Imagenes/logo-universidad-ns.png" as="image" />
+    <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
+
+    <style>
+        /* =====================================================
+           ERP NS GROUP - MENU POR GRUPO CON ESTRUCTURA NUEVA
+           CSS integrado directamente en esta vista Razor.
+           IMPORTANTE: en Razor, las reglas CSS media van escapadas como @@media.
+           ===================================================== */
+
+        :root {
+            --erp-bg-0: #070b12;
+            --erp-bg-1: #0b1220;
+            --erp-bg-2: #101827;
+            --erp-panel: rgba(15, 23, 42, .82);
+            --erp-panel-strong: rgba(15, 23, 42, .95);
+            --erp-border: rgba(255, 255, 255, .13);
+            --erp-border-soft: rgba(255, 255, 255, .08);
+            --erp-text: #f8fafc;
+            --erp-muted: #cbd5e1;
+            --erp-muted-2: #94a3b8;
+            --erp-orange: #f47b20;
+            --erp-orange-2: #ffb86b;
+            --erp-blue: #38bdf8;
+            --erp-shadow: 0 28px 90px rgba(0, 0, 0, .44);
+            --erp-shadow-soft: 0 18px 45px rgba(0, 0, 0, .30);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            min-height: 100%;
+        }
+
+        body {
+            margin: 0;
+            color: var(--erp-text) !important;
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
+            background:
+                radial-gradient(circle at 8% 7%, rgba(244, 123, 32, .24), transparent 26%),
+                radial-gradient(circle at 90% 12%, rgba(56, 189, 248, .15), transparent 28%),
+                radial-gradient(circle at 72% 92%, rgba(244, 123, 32, .11), transparent 30%),
+                linear-gradient(135deg, var(--erp-bg-0) 0%, var(--erp-bg-1) 46%, var(--erp-bg-2) 100%) !important;
+            overflow-x: hidden;
+        }
+
+
+
+        body::after {
+            content: "";
+            position: fixed;
+            width: 780px;
+            height: 780px;
+            right: -330px;
+            bottom: -360px;
+            z-index: 0;
+            pointer-events: none;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(244, 123, 32, .18), transparent 64%);
+            filter: blur(12px);
+        }
+
+        .main-wrapper {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+        }
+
+        .top-navbar {
+            position: sticky !important;
+            top: 0;
+            z-index: 999;
+            padding: 1rem 1.4rem .75rem !important;
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .navbar-content {
+            max-width: 1480px;
+            min-height: 78px !important;
+            height: auto !important;
+            margin: 0 auto;
+            padding: .75rem .95rem !important;
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(15, 23, 42, .90), rgba(17, 24, 39, .76)) !important;
+            border: 1px solid var(--erp-border);
+            box-shadow: 0 18px 55px rgba(0, 0, 0, .32);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+        }
+
+        .navbar-brand {
+            color: #fff !important;
+            text-decoration: none !important;
+            font-weight: 950 !important;
+            letter-spacing: -.02em;
+        }
+
+        .navbar-brand i {
+            width: 48px !important;
+            height: 48px !important;
+            border-radius: 17px !important;
+            background: linear-gradient(135deg, var(--erp-orange), #b45309) !important;
+            color: #fff !important;
+            box-shadow: 0 14px 32px rgba(244, 123, 32, .34);
+        }
+
+        .navbar-logo {
+            width: 52px !important;
+            height: 52px !important;
+            border-radius: 17px !important;
+            object-fit: contain;
+            background: rgba(255, 255, 255, .10) !important;
+            border: 1px solid rgba(255, 255, 255, .12);
+            padding: 6px;
+        }
+
+        .navbar-title {
+            color: #fff !important;
+            font-size: 1rem !important;
+            font-weight: 950 !important;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .navbar-title::after {
+            content: " · ERP SUITE";
+            color: var(--erp-orange-2);
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .12em;
+            margin-left: .5rem;
+        }
+
+        .user-toggle {
+            background: rgba(255,255,255,.075) !important;
+            border: 1px solid rgba(255,255,255,.13) !important;
+            border-radius: 999px !important;
+            padding: .38rem .75rem .38rem .42rem !important;
+            color: #fff !important;
+        }
+
+        .user-toggle:hover {
+            background: rgba(255,255,255,.12) !important;
+            border-color: rgba(244, 123, 32, .45) !important;
+        }
+
+        .user-avatar {
+            width: 42px !important;
+            height: 42px !important;
+            background: linear-gradient(135deg, #f8fafc, #cbd5e1) !important;
+            color: #0f172a !important;
+            font-weight: 950 !important;
+        }
+
+        .user-name {
+            color: #fff !important;
+            font-weight: 900 !important;
+        }
+
+        .user-role {
+            color: var(--erp-orange-2) !important;
+            font-weight: 800 !important;
+            letter-spacing: .03em;
+        }
+
+        .user-dropdown {
+            background: rgba(15,23,42,.98) !important;
+            border: 1px solid rgba(255,255,255,.12) !important;
+            border-radius: 20px !important;
+            box-shadow: var(--erp-shadow-soft) !important;
+            backdrop-filter: blur(18px);
+        }
+
+        .dropdown-item {
+            color: #e2e8f0 !important;
+            font-weight: 800 !important;
+            border-radius: 14px !important;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(244, 123, 32, .16) !important;
+            color: #fff !important;
+        }
+
+        .dropdown-item:last-child {
+            color: #fca5a5 !important;
+            border-top: 1px solid rgba(255,255,255,.08) !important;
+        }
+
+        .main-content {
+            max-width: 1480px !important;
+            margin: 0 auto !important;
+            padding: 1.35rem 1.5rem 4rem !important;
+        }
+
+        .migapan {
+            position: relative;
+            overflow: hidden;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            gap: 14px !important;
+            margin: 1rem 0 1.25rem !important;
+            padding: 14px 18px !important;
+            min-height: 72px;
+            border-radius: 26px !important;
+            background: linear-gradient(135deg, rgba(15,23,42,.88), rgba(17,24,39,.66)) !important;
+            border: 1px solid rgba(255,255,255,.12) !important;
+            box-shadow: 0 18px 55px rgba(0,0,0,.28) !important;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .migapan::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 8% 0%, rgba(244,123,32,.22), transparent 25%),
+                linear-gradient(90deg, rgba(255,255,255,.06), transparent 48%);
+        }
+
+        .migapan > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .migapan__back {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            min-height: 42px;
+            padding: 10px 15px !important;
+            border-radius: 999px !important;
+            color: #fff !important;
+            text-decoration: none !important;
+            font-weight: 950 !important;
+            white-space: nowrap;
+            background: rgba(255,255,255,.10) !important;
+            border: 1px solid rgba(255,255,255,.16) !important;
+            box-shadow: 0 10px 24px rgba(0,0,0,.18) !important;
+            transition: transform .18s ease, background .18s ease, border-color .18s ease;
+        }
+
+        .migapan__back:hover {
+            color: #fff !important;
+            background: rgba(244,123,32,.22) !important;
+            border-color: rgba(244,123,32,.52) !important;
+            transform: translateY(-2px);
+        }
+
+        .migapan__list {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            list-style: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            color: var(--erp-muted-2) !important;
+            font-weight: 850 !important;
+        }
+
+        .migapan__item {
+            display: inline-flex !important;
+            align-items: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1 !important;
+        }
+
+        .migapan__item a {
+            color: #e2e8f0 !important;
+            text-decoration: none !important;
+            font-weight: 850 !important;
+        }
+
+        .migapan__item a:hover {
+            color: #fff !important;
+            text-decoration: none !important;
+        }
+
+        .migapan__item--current {
+            color: #fff !important;
+            font-weight: 950 !important;
+        }
+
+        .migapan__sep {
+            display: inline-flex !important;
+            align-items: center !important;
+            color: #94a3b8 !important;
+            font-weight: 900 !important;
+        }
+
+        .group-hero {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: stretch;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 0 0 1.35rem;
+            padding: 1.35rem;
+            border-radius: 30px;
+            background:
+                linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.045)),
+                radial-gradient(circle at 80% 20%, rgba(244, 123, 32, .18), transparent 30%);
+            border: 1px solid rgba(255,255,255,.12);
+            box-shadow: 0 24px 70px rgba(0,0,0,.26);
+            backdrop-filter: blur(18px);
+        }
+
+        .group-hero::after {
+            content: "ERP";
+            position: absolute;
+            right: 2.2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: clamp(4rem, 10vw, 8rem);
+            line-height: 1;
+            font-weight: 950;
+            letter-spacing: -.10em;
+            color: rgba(255,255,255,.035);
+            pointer-events: none;
+        }
+
+        .group-hero__copy,
+        .group-hero__metric {
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-eyebrow {
+            display: inline-flex;
+            width: fit-content;
+            margin-bottom: .75rem;
+            padding: .42rem .7rem;
+            border-radius: 999px;
+            color: var(--erp-orange-2);
+            background: rgba(244, 123, 32, .12);
+            border: 1px solid rgba(244, 123, 32, .30);
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+
+        .group-hero h1 {
+            margin: 0;
+            color: #fff;
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            line-height: .95;
+            font-weight: 950;
+            letter-spacing: -.07em;
+        }
+
+        .group-hero p {
+            margin: .85rem 0 0;
+            max-width: 720px;
+            color: var(--erp-muted);
+            font-size: .98rem;
+            line-height: 1.65;
+            font-weight: 650;
+        }
+
+        .group-hero__metric {
+            min-width: 190px;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            border-radius: 24px;
+            background: rgba(15,23,42,.48);
+            border: 1px solid rgba(255,255,255,.10);
+        }
+
+        .group-hero__metric span {
+            display: block;
+            color: #fff;
+            font-size: 2.6rem;
+            line-height: 1;
+            font-weight: 950;
+        }
+
+        .group-hero__metric small {
+            display: block;
+            margin-top: .35rem;
+            color: var(--erp-orange-2);
+            font-size: .75rem;
+            font-weight: 900;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .quick-actions {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)) !important;
+            gap: 1.15rem !important;
+            margin-top: 0 !important;
+        }
+
+        .action-card.module-card {
+            position: relative;
+            isolation: isolate;
+            min-height: 245px !important;
+            padding: 0 !important;
+            border-radius: 30px !important;
+            overflow: hidden;
+            cursor: pointer;
+            color: #fff !important;
+            background:
+                linear-gradient(145deg, rgba(255,255,255,.11), rgba(255,255,255,.045)) !important;
+            border: 1px solid var(--card-border, rgba(255,255,255,.13)) !important;
+            box-shadow: 0 22px 62px rgba(0, 0, 0, .28) !important;
+            backdrop-filter: blur(18px);
+            transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease !important;
+        }
+
+        .action-card.module-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -2;
+            height: auto !important;
+            transform: none !important;
+            background:
+                radial-gradient(circle at 16% 18%, rgba(255,255,255,.20), transparent 22%),
+                radial-gradient(circle at 88% 86%, rgba(255,255,255,.08), transparent 30%),
+                linear-gradient(135deg, rgba(244, 123, 32, .10), transparent 48%) !important;
+            pointer-events: none;
+        }
+
+        .action-card.module-card::after {
+            content: "";
+            position: absolute;
+            right: -74px;
+            bottom: -74px;
+            width: 185px;
+            height: 185px;
+            z-index: -1;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,.12);
+            box-shadow: 0 0 0 38px rgba(255,255,255,.025), 0 0 0 76px rgba(255,255,255,.015);
+            pointer-events: none;
+        }
+
+        .module-accent {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 7px;
+            background: var(--stripe-bg, var(--erp-orange));
+            box-shadow: 0 0 30px var(--stripe-bg, var(--erp-orange));
+        }
+
+        .module-card__inner {
+            min-height: 245px;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            padding: 1.25rem 1.28rem 1.15rem 1.55rem;
+        }
+
+        .module-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .module-icon.action-icon {
+            width: 66px !important;
+            height: 66px !important;
+            margin: 0 !important;
+            border-radius: 22px !important;
+            display: grid !important;
+            place-items: center !important;
+            color: #fff !important;
+            background: var(--icon-bg, linear-gradient(135deg, var(--erp-orange), #b45309)) !important;
+            box-shadow:
+                0 18px 38px rgba(0,0,0,.26),
+                inset 0 1px 0 rgba(255,255,255,.25) !important;
+            transition: transform .22s ease;
+        }
+
+        .module-icon i {
+            color: #fff !important;
+            font-size: 1.55rem !important;
+        }
+
+        .module-index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 86px;
+            padding: .48rem .72rem;
+            border-radius: 999px;
+            color: #fff;
+            background: rgba(15,23,42,.52);
+            border: 1px solid rgba(255,255,255,.11);
+            font-size: .74rem;
+            font-weight: 950;
+            letter-spacing: .10em;
+            text-transform: uppercase;
+        }
+
+        .module-body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 1.25rem 0 1.05rem;
+        }
+
+        .module-kicker {
+            width: fit-content;
+            margin-bottom: .58rem;
+            padding: .34rem .56rem;
+            border-radius: 999px;
+            color: var(--erp-orange-2);
+            background: rgba(244, 123, 32, .12);
+            border: 1px solid rgba(244, 123, 32, .24);
+            font-size: .68rem;
+            font-weight: 950;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        .module-title.action-title {
+            margin: 0 !important;
+            color: #fff !important;
+            font-size: clamp(1.7rem, 3.2vw, 2.45rem) !important;
+            line-height: .92 !important;
+            font-weight: 950 !important;
+            letter-spacing: -.075em;
+        }
+
+        .module-description.action-description {
+            margin: .72rem 0 0 !important;
+            color: var(--erp-muted) !important;
+            max-width: 90%;
+            font-size: .94rem !important;
+            line-height: 1.58 !important;
+            font-weight: 650;
+        }
+
+        .module-description.action-description::after {
+            content: none !important;
+        }
+
+        .module-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255,255,255,.09);
+        }
+
+        .module-status {
+            display: inline-flex;
+            align-items: center;
+            gap: .45rem;
+            color: #dbeafe;
+            font-size: .78rem;
+            font-weight: 850;
+        }
+
+        .module-status i {
+            color: #22c55e;
+            font-size: .66rem;
+        }
+
+        .module-open {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .62rem .85rem;
+            border-radius: 999px;
+            color: #fff;
+            background: rgba(244, 123, 32, .16);
+            border: 1px solid rgba(244, 123, 32, .32);
+            font-size: .78rem;
+            font-weight: 950;
+            letter-spacing: .03em;
+            transition: transform .2s ease, background .2s ease, border-color .2s ease;
+        }
+
+        .action-card.module-card:hover,
+        .action-card.module-card:focus-visible {
+            outline: none;
+            transform: translateY(-8px) scale(1.012) !important;
+            border-color: rgba(244, 123, 32, .52) !important;
+            background: linear-gradient(145deg, rgba(255,255,255,.15), rgba(255,255,255,.06)) !important;
+            box-shadow:
+                0 34px 88px rgba(0,0,0,.38),
+                0 0 0 1px rgba(244,123,32,.12) inset !important;
+        }
+
+        .action-card.module-card:hover .module-icon {
+            transform: rotate(-2deg) scale(1.06);
+        }
+
+        .action-card.module-card:hover .module-open {
+            background: rgba(244, 123, 32, .25);
+            border-color: rgba(244, 123, 32, .55);
+            transform: translateX(2px);
+        }
+
+        .action-card.universidad.with-logo {
+            background:
+                linear-gradient(145deg, rgba(255,255,255,.13), rgba(255,255,255,.05)),
+                url('/Imagenes/logo-universidad-ns.png') no-repeat right 1.2rem center !important;
+            background-size: 150px 150px !important;
+        }
+
+        .action-card.universidad.with-logo .module-card__inner {
+            background: linear-gradient(90deg, rgba(15,23,42,.94), rgba(15,23,42,.72), rgba(15,23,42,.50));
+        }
+
+        .alert-info {
+            color: #dbeafe !important;
+            background: rgba(59, 130, 246, .12) !important;
+            border: 1px solid rgba(147, 197, 253, .24) !important;
+            border-radius: 22px !important;
+        }
+
+        .modal-content,
+        .modal-perfil,
+        .modal-denuncia {
+            background: rgba(15, 23, 42, .98) !important;
+            border: 1px solid rgba(255,255,255,.12) !important;
+            border-radius: 26px !important;
+            box-shadow: var(--erp-shadow) !important;
+            color: #e2e8f0 !important;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, rgba(244,123,32,.22), rgba(15,23,42,.98)) !important;
+            border-bottom: 1px solid rgba(255,255,255,.10) !important;
+        }
+
+        .modal-title {
+            color: #fff !important;
+            font-weight: 950 !important;
+        }
+
+        .modal-body {
+            background: rgba(15,23,42,.98) !important;
+        }
+
+        .modal-footer {
+            background: rgba(255,255,255,.04) !important;
+            border-top: 1px solid rgba(255,255,255,.08) !important;
+        }
+
+        .perfil-info {
+            background: rgba(255,255,255,.06) !important;
+            border: 1px solid rgba(255,255,255,.10);
+            border-radius: 18px;
+        }
+
+        .perfil-info label {
+            color: #cbd5e1 !important;
+        }
+
+        .perfil-info p {
+            color: #fff !important;
+        }
+
+        .modal-denuncia .text-muted.small {
+            color: #dbeafe !important;
+            background: rgba(59, 130, 246, .13) !important;
+            border-left: 4px solid var(--erp-blue) !important;
+        }
+
+        .modal-denuncia .form-group label {
+            color: #e2e8f0 !important;
+        }
+
+        .modal-denuncia .form-control {
+            color: #fff !important;
+            background: rgba(255,255,255,.07) !important;
+            border-color: rgba(255,255,255,.14) !important;
+            border-radius: 14px !important;
+        }
+
+        .modal-denuncia .form-control:focus {
+            box-shadow: 0 0 0 .18rem rgba(244, 123, 32, .22) !important;
+            border-color: rgba(244, 123, 32, .48) !important;
+        }
+
+        @@media (max-width: 1100px) {
+            .quick-actions {
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important;
+            }
+
+            .group-hero {
+                flex-direction: column;
+            }
+
+            .group-hero__metric {
+                min-height: 110px;
+            }
+        }
+
+        @@media (max-width: 900px) {
+            .navbar-content {
+                border-radius: 26px !important;
+            }
+
+            .navbar-title::after {
+                display: none;
+            }
+
+            .user-info {
+                display: none !important;
+            }
+        }
+
+        @@media (max-width: 640px) {
+            .top-navbar {
+                padding: .75rem !important;
+            }
+
+            .navbar-content {
+                padding: .7rem !important;
+            }
+
+            .navbar-title {
+                display: none;
+            }
+
+            .main-content {
+                padding: 1rem .85rem 2.5rem !important;
+            }
+
+            .migapan {
+                flex-wrap: wrap;
+                border-radius: 20px !important;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr !important;
+            }
+
+            .module-card__inner {
+                min-height: 220px;
+                padding: 1.15rem 1.1rem 1.1rem 1.35rem;
+            }
+
+            .module-title.action-title {
+                font-size: 1.8rem !important;
+            }
+
+            .module-footer {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .module-open {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @@media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation: none !important;
+                transition: none !important;
+                scroll-behavior: auto !important;
+            }
+        }
+    </style>
+</head>
+
+<body data-empresa="@empresaId">
+    @await Html.PartialAsync("_Overlay")
+
+    <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
+
+    <div class="main-wrapper">
+        <nav class="top-navbar" role="navigation" aria-label="Navegación principal">
+            <div class="navbar-content">
+                <div class="navbar-left">
+                    <a href="#" class="navbar-brand">
+                        @if (!string.IsNullOrEmpty(logoEmpresa) && logoEmpresa != "default-logo.png")
+                        {
+                            <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="navbar-logo" loading="lazy" />
+                        }
+                        else
+                        {
+                            <i class="fas fa-building" aria-hidden="true"></i>
+                        }
+
+                        <span class="navbar-title">@nombreEmpresa</span>
+                    </a>
+                </div>
+
+                <div class="navbar-right">
+                    <div class="user-menu">
+                        <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario">
+                            <div class="user-avatar" aria-hidden="true">@(nombreUsuario.Substring(0, 1).ToUpper())</div>
+
+                            <div class="user-info">
+                                <div class="user-name">@nombreUsuario</div>
+                                <div class="user-role">Colaborador</div>
+                            </div>
+
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </button>
+
+                        <div class="user-dropdown" id="userDropdownMenu" role="menu" aria-labelledby="userToggle">
+                            <a href="#" id="linkMiPerfil" class="dropdown-item" role="menuitem">
+                                <i class="fas fa-user" aria-hidden="true"></i> Mi Perfil
+                            </a>
+
+                            <a href="#" class="dropdown-item" role="menuitem" data-bs-toggle="modal" data-bs-target="#modalDenunciaAnonima">
+                                <i class="fas fa-user-secret" aria-hidden="true"></i> Denuncia anónima
+                            </a>
+
+                            @*
+                            <a href="#" class="dropdown-item" role="menuitem">
+                                <i class="fas fa-cog" aria-hidden="true"></i> Configuración
+                            </a>
+                            <a href="#" class="dropdown-item" role="menuitem">
+                                <i class="fas fa-question-circle" aria-hidden="true"></i> Ayuda
+                            </a>
+                            *@
+
+                            <a href="/Login/Logout" class="dropdown-item">
+                                <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar Sesión
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="main-content" id="main-content" role="main">
+            @{
+                var claseBienvenida = (ViewBag.MostrarBienvenida == true) ? "welcome-section as-overlay" : "welcome-section is-pinned";
+            }
+
+            <nav class="migapan" aria-label="Ruta">
+                <a class="migapan__back" href="@Url.Action("Index", "Menu")">
+                    <i class="fas fa-arrow-left"></i> Regresar
+                </a>
+
+                <ol class="migapan__list">
+                    <li class="migapan__item">
+                        <a href="@Url.Action("Index", "Menu")">Inicio</a>
+                    </li>
+
+                    <li class="migapan__sep">›</li>
+
+                    <li class="migapan__item migapan__item--current" aria-current="page">
+                        @ViewBag.NombreGrupo
+                    </li>
+                </ol>
+            </nav>
+
+            <section class="group-hero" aria-labelledby="grupo-title">
+                <div class="group-hero__copy">
+                    <span class="section-eyebrow">Panel de operación</span>
+                    <h1 id="grupo-title">@ViewBag.NombreGrupo</h1>
+                    <p>Selecciona el módulo que necesitas abrir. Cada tarjeta ahora funciona como una entrada ejecutiva con estado, acceso directo y lectura más clara.</p>
+                </div>
+
+                <div class="group-hero__metric" aria-label="Módulos disponibles">
+                    <div>
+                        <span>@(Model?.Count ?? 0)</span>
+                        <small>Módulos disponibles</small>
+                    </div>
+                </div>
+            </section>
+
+            <section class="quick-actions" aria-label="Módulos disponibles">
+                @if (Model != null && Model.Any())
+                {
+                    @foreach (var menu in Model)
+                    {
+                        var cssClass = GetCssClassForMenu(menu.Nombre);
+                        var iconClass = GetIconClassForMenu(menu.Nombre, menu.Icono);
+                        var colores = GetDynamicColors(menu.MenuID);
+                        var isUniversidad = Normalizar(menu.Nombre).Contains("universidad");
+
+                        var cardStyle = $"--card-bg:{colores.Fondo}; --card-border:{colores.Borde}; --icon-bg:{colores.Icono}; --stripe-bg:{colores.Principal};";
+
+                        <article class="action-card module-card @cssClass @(isUniversidad ? "with-logo" : "")"
+                                 style="@cardStyle"
+                                 data-href="@menu.Url"
+                                 role="button"
+                                 tabindex="0"
+                                 aria-label="Abrir módulo @menu.Nombre">
+                            <span class="module-accent" aria-hidden="true"></span>
+
+                            <div class="module-card__inner">
+                                <div class="module-top">
+                                    <div class="action-icon module-icon" aria-hidden="true">
+                                        <i class="@iconClass"></i>
+                                    </div>
+
+                                    <span class="module-index">ID @menu.MenuID</span>
+                                </div>
+
+                                <div class="module-body">
+                                    <span class="module-kicker">@ViewBag.NombreGrupo</span>
+
+                                    <h2 class="action-title module-title">@menu.Nombre</h2>
+
+                                    <p class="action-description module-description">
+                                        @(!string.IsNullOrEmpty(menu.Descripcion) ? menu.Descripcion : $"Accede a {menu.Nombre}")
+                                    </p>
+                                </div>
+
+                                <div class="module-footer">
+                                    <span class="module-status">
+                                        <i class="fas fa-circle" aria-hidden="true"></i>
+                                        Disponible
+                                    </span>
+
+                                    <span class="module-open">
+                                        Abrir módulo
+                                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-info" role="alert">
+                        No hay módulos disponibles para este grupo.
+                    </div>
+                }
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal de Perfil -->
+    <div class="modal fade" id="modalPerfil" tabindex="-1" aria-labelledby="modalPerfilLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content modal-perfil">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalPerfilLabel">
+                        <i class="fas fa-user-circle"></i> Mi Perfil
+                    </h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-user-circle fa-5x text-primary"></i>
+                    </div>
+
+                    <div class="perfil-info">
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-user"></i> Nombre:</label>
+                            <p id="perfilNombre" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-id-badge"></i> Usuario:</label>
+                            <p id="perfilUsername" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-envelope"></i> Correo:</label>
+                            <p id="perfilCorreo" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-phone"></i> Teléfono:</label>
+                            <p id="perfilTelefono" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-user-tag"></i> Rol:</label>
+                            <p id="perfilRol" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-info-circle"></i> Descripción del Rol:</label>
+                            <p id="perfilDescripcionRol" class="ms-3"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de la denuncia anónima -->
+    <div class="modal fade" id="modalDenunciaAnonima" tabindex="-1" role="dialog" aria-labelledby="modalDenunciaAnonimaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content modal-denuncia">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalDenunciaAnonimaLabel">
+                        Denuncia anónima y confidencial
+                    </h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                @using (Html.BeginForm("Crear", "DenunciasAnonimas", FormMethod.Post, new { id = "formDenunciaAnonima" }))
+                {
+                    @Html.AntiForgeryToken()
+
+                    <div class="modal-body">
+                        <p class="text-muted small">
+                            Tu identidad no se mostrará en ningún lado. La información se enviará de forma confidencial.
+                        </p>
+
+                        <div class="form-group">
+                            <label for="TipoDenuncia">Tipo de denuncia *</label>
+                            <select id="TipoDenuncia" name="TipoDenuncia" class="form-control" required>
+                                <option value="">-- Selecciona una opción --</option>
+                                <option value="Acoso">Acoso</option>
+                                <option value="Fraude">Fraude</option>
+                                <option value="Conducta inadecuada">Conducta inadecuada</option>
+                                <option value="Seguridad">Seguridad</option>
+                                <option value="Otros">Otros</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="DepartamentoAfectado">Departamento afectado *</label>
+                            <select id="DepartamentoAfectado" name="DepartamentoAfectado" class="form-control" required>
+                                <option value="">-- Selecciona una opción --</option>
+                                <option value="Recursos Humanos">Recursos Humanos</option>
+                                <option value="Ventas">Compras</option>
+                                <option value="Proyectos">Proyectos</option>
+                                <option value="Operaciones">Almacén</option>
+                                <option value="Finanzas">Finanzas</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="Descripcion">Descripción detallada *</label>
+                            <textarea id="Descripcion" name="Descripcion" class="form-control" rows="4" required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="FechaHechos">Fecha aproximada de los hechos *</label>
+                            <input type="date" id="FechaHechos" name="FechaHechos" class="form-control" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="LugarHechos">Lugar de los hechos *</label>
+                            <input type="text" id="LugarHechos" name="LugarHechos" class="form-control" maxlength="200" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="camposObligatorios">* Todos los campos son obligatorios</label>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Enviar denuncia</button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <script src="~/js/overlay.js" asp-append-version="true"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+
+    <script type="application/ld+json">
+        {
+            "@@context": "https://schema.org",
+            "@@type": "WebApplication",
+            "name": "Intranet NS Group",
+            "description": "Portal interno de @nombreEmpresa",
+            "url": "@currentUrl",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web"
+        }
+    </script>
+
+    <script>
+        window.mostrarBienvenida = '@((ViewBag.MostrarBienvenida == true) ? "true" : "false")';
+    </script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const welcomeSectionOverlay = document.getElementById("welcome-section");
+            const mainWrapper = document.querySelector(".main-wrapper");
+            const pinnedContainer = document.getElementById("welcome-pinned-container");
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const cards = document.querySelectorAll('.action-card');
+
+            cards.forEach(function (card) {
+                card.addEventListener('click', function () {
+                    const url = card.getAttribute('data-href') || card.getAttribute('data-href-external');
+
+                    if (url && url !== "#") {
+                        if (card.hasAttribute('data-href-external')) {
+                            window.open(url, '_blank');
+                        } else {
+                            window.location.href = url;
+                        }
+                    }
+                });
+
+                card.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        const url = card.getAttribute('data-href') || card.getAttribute('data-href-external');
+
+                        if (url && url !== "#") {
+                            if (card.hasAttribute('data-href-external')) {
+                                window.open(url, '_blank');
+                            } else {
+                                window.location.href = url;
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const toggleBtn = document.getElementById('userToggle');
+            const dropdown = document.getElementById('userDropdownMenu');
+
+            if (!toggleBtn || !dropdown) return;
+
+            toggleBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                dropdown.classList.toggle('show');
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+        });
+    </script>
+
+    @Html.AntiForgeryToken()
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const linkMiPerfil = document.getElementById('linkMiPerfil');
+
+            if (linkMiPerfil) {
+                linkMiPerfil.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    cargarPerfil();
+                });
+            }
+
+            function cargarPerfil() {
+                fetch('/Perfil/ObtenerMiPerfil')
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            const data = result.data;
+
+                            document.getElementById('perfilNombre').textContent = data.nombreUsuario || 'N/A';
+                            document.getElementById('perfilUsername').textContent = data.username || 'N/A';
+                            document.getElementById('perfilCorreo').textContent = data.correo || 'N/A';
+                            document.getElementById('perfilTelefono').textContent = data.telefono || 'N/A';
+                            document.getElementById('perfilRol').textContent = data.nombreRol || 'N/A';
+                            document.getElementById('perfilDescripcionRol').textContent = data.descripcionRol || 'N/A';
+
+                            const modal = new bootstrap.Modal(document.getElementById('modalPerfil'));
+                            modal.show();
+                        } else {
+                            alert('Error: ' + result.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error al cargar el perfil');
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
+
+@functions {
+    private string GetCssClassForMenu(string menuNombre)
+    {
+        if (string.IsNullOrWhiteSpace(menuNombre)) return "generico";
+
+        var nm = Normalizar(menuNombre);
+
+        // Solo dejamos clases para casos visuales especiales, como universidad con logo.
+        return nm switch
+        {
+            var x when x.Contains("universidad") => "universidad",
+            _ => "generico"
+        };
+    }
+
+    private string GetIconClassForMenu(string menuNombre, string? iconoActual)
+    {
+        var nm = Normalizar(menuNombre);
+
+        // Primero detectamos por nombre para corregir cuando venga fa-cogs desde el controlador.
+        if (nm.Contains("vacaciones"))
+            return "fas fa-umbrella-beach";
+
+        if (nm.Contains("cita"))
+            return "fas fa-calendar-check";
+
+        if (nm.Contains("universidad") || nm.Contains("capacitacion"))
+            return "fas fa-graduation-cap";
+
+        if (nm.Contains("lider"))
+            return "fas fa-user-shield";
+
+        if (nm.Contains("comunicado") || nm.Contains("anuncio"))
+            return "fas fa-bullhorn";
+
+        if (nm.Contains("directorio"))
+            return "fas fa-address-book";
+
+        if (nm.Contains("proyecto"))
+            return "fas fa-folder-open";
+
+        if (nm.Contains("internacional"))
+            return "fas fa-plane-departure";
+
+        if (nm.Contains("nacional"))
+            return "fas fa-cart-shopping";
+
+        if (nm.Contains("transporte"))
+            return "fas fa-truck";
+
+        if (nm.Contains("guia"))
+            return "fas fa-map-location-dot";
+
+        if (nm.Contains("embarque"))
+            return "fas fa-ship";
+
+        if (nm.Contains("usuario"))
+            return "fas fa-users";
+
+        if (nm.Contains("gestion"))
+            return "fas fa-user-gear";
+
+        if (nm.Contains("help") || nm.Contains("soporte"))
+            return "fas fa-circle-question";
+
+        if (nm.Contains("ticket"))
+            return "fas fa-ticket";
+
+        if (nm.Contains("kpi"))
+            return "fas fa-chart-simple";
+
+        // Si no se reconoció por nombre, usa el icono de BD/controlador solo si no es genérico.
+        if (!string.IsNullOrWhiteSpace(iconoActual) && !EsIconoGenerico(iconoActual))
+            return FormatIcon(iconoActual);
+
+        return "fas fa-cogs";
+    }
+
+    private bool EsIconoGenerico(string? icono)
+    {
+        if (string.IsNullOrWhiteSpace(icono)) return true;
+
+        var clean = icono.Trim().ToLowerInvariant();
+
+        return clean == "fa-cogs"
+            || clean == "fas fa-cogs"
+            || clean == "fa-cog"
+            || clean == "fas fa-cog"
+            || clean == "fa-gears"
+            || clean == "fas fa-gears"
+            || clean == "fa-layer-group"
+            || clean == "fas fa-layer-group";
+    }
+
+    private (string Fondo, string Borde, string Icono, string Principal) GetDynamicColors(int id)
+    {
+        var paletas = new[]
+        {
+            ("#eff6ff", "#bfdbfe", "linear-gradient(135deg, #3b82f6, #1d4ed8)", "#3b82f6"),
+            ("#f0fdf4", "#bbf7d0", "linear-gradient(135deg, #22c55e, #15803d)", "#22c55e"),
+            ("#fefce8", "#fde68a", "linear-gradient(135deg, #eab308, #ca8a04)", "#eab308"),
+            ("#fff7ed", "#fed7aa", "linear-gradient(135deg, #f97316, #ea580c)", "#f97316"),
+            ("#fdf2f8", "#fbcfe8", "linear-gradient(135deg, #ec4899, #db2777)", "#ec4899"),
+            ("#f5f3ff", "#ddd6fe", "linear-gradient(135deg, #8b5cf6, #6d28d9)", "#8b5cf6"),
+            ("#ecfeff", "#a5f3fc", "linear-gradient(135deg, #06b6d4, #0891b2)", "#06b6d4"),
+            ("#f0fdfa", "#99f6e4", "linear-gradient(135deg, #14b8a6, #0f766e)", "#14b8a6"),
+            ("#fef2f2", "#fecaca", "linear-gradient(135deg, #ef4444, #dc2626)", "#ef4444"),
+            ("#f8fafc", "#cbd5e1", "linear-gradient(135deg, #64748b, #334155)", "#64748b")
+        };
+
+        var index = Math.Abs(id) % paletas.Length;
+        return paletas[index];
+    }
+
+    private string FormatIcon(string? icono)
+    {
+        if (string.IsNullOrWhiteSpace(icono))
+            return "fas fa-cogs";
+
+        var clean = icono.Trim();
+
+        if (clean.Contains(" "))
+            return clean;
+
+        return $"fas {clean}";
+    }
+
+    private string Normalizar(string texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) return "";
+
+        var normalized = texto.Trim().ToLowerInvariant()
+            .Normalize(System.Text.NormalizationForm.FormD);
+
+        var sb = new System.Text.StringBuilder();
+
+        foreach (var c in normalized)
+        {
+            var category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c);
+
+            if (category != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
+    }
+}

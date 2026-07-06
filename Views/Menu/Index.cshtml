@@ -1,0 +1,1300 @@
+﻿@model List<ERP.NSQuell.Models.MenuModel>
+@using System.Security.Claims
+@using ERP.NSQuell.Areas.AdminUsuarios.Interfaces
+
+@{
+    Layout = null;
+    ViewData["Title"] = "ERP Industrial | NSQuell";
+
+    var nombreUsuario = Context.Session.GetString("NombreMostrar") ?? Context.Session.GetString("Username") ?? "Invitado";
+    var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NSQuell";
+    var logoEmpresa = Context.Session.GetString("EmpresaLogo") ?? "default-logo.png";
+    var empresaIdStr = Context.Session.GetString("EmpresaId");
+    var empresaId = Context.Session.GetString("EmpresaId") ?? "1";
+
+    var currentUserId = Context.Session.GetInt32("UsuarioID") ?? 0;
+    int? empresaIdInt = int.TryParse(empresaIdStr, out var tmpEmp) ? tmpEmp : (int?)null;
+
+    var enlacesMejoraContina = "https://nsgroupmx.sharepoint.com/sites/ProcesosyMejoraContinua";
+    var enlacesEmbarques = "https://forms.office.com/r/MRjsPtpUrv";
+
+    var currentUrl = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.Path}";
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"]</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <style>
+        :root {
+            --bg-main: #f4f6f8;
+            --panel: rgba(255, 255, 255, .88);
+            --panel-solid: #ffffff;
+            --dark: #0f172a;
+            --dark-2: #111827;
+            --muted: #64748b;
+            --muted-2: #94a3b8;
+            --line: #e5e7eb;
+            --line-soft: #edf2f7;
+            --orange: #f47b20;
+            --orange-dark: #d96512;
+            --steel: #334155;
+            --soft: #f8fafc;
+            --shadow: 0 24px 70px rgba(15, 23, 42, .10);
+            --radius-xl: 30px;
+            --radius-lg: 22px;
+            --radius-md: 16px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(244, 123, 32, .13), transparent 34%),
+                radial-gradient(circle at bottom right, rgba(15, 23, 42, .08), transparent 32%),
+                linear-gradient(135deg, #f8fafc 0%, #eef2f6 45%, #e7edf2 100%);
+            color: var(--dark);
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(15, 23, 42, .045) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(15, 23, 42, .045) 1px, transparent 1px);
+            background-size: 44px 44px;
+            mask-image: linear-gradient(90deg, black, transparent 80%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::after {
+            content: "";
+            position: fixed;
+            width: 540px;
+            height: 540px;
+            left: -150px;
+            bottom: -190px;
+            border-radius: 50%;
+            border: 1px solid rgba(15, 23, 42, .08);
+            box-shadow:
+                0 0 0 80px rgba(15, 23, 42, .025),
+                0 0 0 160px rgba(15, 23, 42, .018);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .skip-link {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            z-index: 9999;
+            background: var(--dark);
+            color: #fff;
+            padding: .75rem 1rem;
+            border-radius: 999px;
+        }
+
+        .main-wrapper {
+            min-height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+
+        .main-wrapper.overlay-lock {
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* NAVBAR */
+        .top-navbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            padding: 1rem 1.5rem .65rem;
+        }
+
+        .navbar-content {
+            max-width: 1320px;
+            margin: 0 auto;
+            min-height: 72px;
+            padding: .65rem .8rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .82);
+            border: 1px solid rgba(15, 23, 42, .08);
+            box-shadow: 0 16px 45px rgba(15, 23, 42, .08);
+            backdrop-filter: blur(18px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .navbar-left,
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+        }
+
+        .navbar-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: .8rem;
+            text-decoration: none;
+            color: var(--dark);
+            padding: .25rem .75rem .25rem .25rem;
+            border-radius: 999px;
+        }
+
+        .navbar-logo {
+            width: 46px;
+            height: 46px;
+            border-radius: 15px;
+            object-fit: cover;
+            background: var(--dark);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .18);
+        }
+
+        .navbar-brand > i {
+            width: 46px;
+            height: 46px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            background: var(--dark);
+            color: #fff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .18);
+        }
+
+        .navbar-title {
+            font-size: .95rem;
+            font-weight: 900;
+            letter-spacing: -.03em;
+            color: var(--dark);
+        }
+
+        .quick-actions-navbar {
+            position: relative;
+        }
+
+        .quick-action-btn {
+            width: 46px;
+            height: 46px;
+            display: grid;
+            place-items: center;
+            border-radius: 16px;
+            background: #fff;
+            border: 1px solid var(--line);
+            color: var(--steel);
+            text-decoration: none;
+            cursor: pointer;
+            position: relative;
+            transition: .18s ease;
+        }
+
+        .quick-action-btn:hover {
+            color: var(--orange);
+            border-color: rgba(244, 123, 32, .35);
+            transform: translateY(-1px);
+        }
+
+        #notifCount {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            min-width: 20px;
+            height: 20px;
+            display: inline-grid;
+            place-items: center;
+            background: var(--orange);
+            color: #fff;
+            font-size: .68rem;
+            font-weight: 900;
+            border: 2px solid #fff;
+        }
+
+        .notif-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + .75rem);
+            right: 0;
+            width: min(380px, 88vw);
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            z-index: 100;
+        }
+
+        .notif-header {
+            padding: 1rem 1.1rem;
+            border-bottom: 1px solid var(--line-soft);
+            color: var(--dark);
+            font-size: .95rem;
+        }
+
+        .notif-list {
+            list-style: none;
+            padding: .35rem;
+            margin: 0;
+            max-height: 420px;
+            overflow-y: auto;
+        }
+
+        .notif-item,
+        .notif-empty,
+        .notif-error {
+            padding: .9rem;
+            border-radius: 16px;
+            color: var(--muted);
+            font-size: .82rem;
+        }
+
+        .notif-item {
+            border: 1px solid transparent;
+        }
+
+        .notif-item.unread {
+            background: #fff7ed;
+            border-color: #fed7aa;
+        }
+
+        .notif-row {
+            display: flex;
+            gap: .75rem;
+            justify-content: space-between;
+        }
+
+        .notif-title {
+            color: var(--dark);
+            font-weight: 900;
+            margin-bottom: .2rem;
+        }
+
+        .notif-date {
+            color: var(--muted-2);
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .notif-msg {
+            margin-top: .4rem;
+            line-height: 1.45;
+        }
+
+        .notif-new {
+            align-self: flex-start;
+            background: var(--orange);
+            color: #fff;
+            border-radius: 999px;
+            padding: .25rem .45rem;
+            font-size: .65rem;
+            font-weight: 900;
+        }
+
+        .notif-actions {
+            margin-top: .55rem;
+        }
+
+        .notif-actions a {
+            color: var(--orange);
+            font-weight: 900;
+            text-decoration: none;
+        }
+
+        .user-menu {
+            position: relative;
+        }
+
+        .user-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: .75rem;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 999px;
+            padding: .3rem .55rem .3rem .3rem;
+            color: var(--dark);
+            cursor: pointer;
+            transition: .18s ease;
+        }
+
+        .user-toggle:hover {
+            border-color: rgba(244, 123, 32, .35);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+        }
+
+        .user-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: var(--dark);
+            color: #fff;
+            font-size: .95rem;
+            font-weight: 900;
+        }
+
+        .user-info {
+            text-align: left;
+            line-height: 1.1;
+        }
+
+        .user-name {
+            color: var(--dark);
+            font-size: .84rem;
+            font-weight: 900;
+            max-width: 160px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-role {
+            color: var(--muted-2);
+            font-size: .72rem;
+            font-weight: 800;
+        }
+
+        .user-toggle .fa-chevron-down {
+            color: var(--muted-2);
+            font-size: .75rem;
+        }
+
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + .75rem);
+            right: 0;
+            min-width: 240px;
+            padding: .45rem;
+            border-radius: 20px;
+            background: #fff;
+            border: 1px solid var(--line);
+            box-shadow: var(--shadow);
+            z-index: 100;
+        }
+
+        .user-dropdown.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: .65rem;
+            padding: .85rem .9rem;
+            border-radius: 14px;
+            color: var(--steel);
+            font-size: .86rem;
+            font-weight: 800;
+            text-decoration: none;
+            transition: .15s ease;
+        }
+
+        .dropdown-item:hover {
+            background: #fff7ed;
+            color: var(--orange);
+        }
+
+        /* MAIN */
+        .main-content {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 1.4rem 1.5rem 4rem;
+        }
+
+        .welcome-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .welcome-section.as-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            display: grid;
+            place-items: center;
+            padding: 2rem;
+            background:
+                radial-gradient(circle at top left, rgba(244, 123, 32, .16), transparent 34%),
+                linear-gradient(135deg, rgba(248, 250, 252, .96), rgba(231, 237, 242, .96));
+            transition: opacity .55s ease, visibility .55s ease;
+        }
+
+        .welcome-section.as-overlay.leaving {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .welcome-box {
+            position: relative;
+            overflow: hidden;
+            padding: 2.2rem;
+            border-radius: var(--radius-xl);
+            background: rgba(255, 255, 255, .86);
+            border: 1px solid rgba(15, 23, 42, .08);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+
+        .welcome-box::before {
+            content: "";
+            position: absolute;
+            width: 170px;
+            height: 170px;
+            right: -80px;
+            top: -90px;
+            border-radius: 50%;
+            background: rgba(244, 123, 32, .12);
+        }
+
+        .welcome-title {
+            position: relative;
+            margin: 0 0 .55rem;
+            color: var(--dark);
+            font-size: clamp(2rem, 4vw, 4rem);
+            line-height: .95;
+            letter-spacing: -.07em;
+            font-weight: 900;
+        }
+
+        .welcome-subtitle {
+            position: relative;
+            margin: 0;
+            max-width: 760px;
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1.65;
+            font-weight: 600;
+        }
+
+        #welcome-pinned-container .welcome-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .dashboard-header {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1rem;
+            align-items: end;
+            margin: 1.8rem 0 1.2rem;
+        }
+
+        .dashboard-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .55rem;
+            width: fit-content;
+            margin-bottom: .75rem;
+            padding: .55rem .8rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .72);
+            border: 1px solid rgba(15, 23, 42, .08);
+            color: var(--orange);
+            font-size: .75rem;
+            font-weight: 900;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        .dashboard-title {
+            margin: 0;
+            color: var(--dark);
+            font-size: clamp(2rem, 4vw, 4.5rem);
+            line-height: .95;
+            letter-spacing: -.07em;
+            font-weight: 900;
+        }
+
+        .dashboard-description {
+            margin: 1rem 0 0;
+            max-width: 680px;
+            color: var(--muted);
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.7;
+        }
+
+        .dashboard-meta {
+            display: flex;
+            flex-direction: column;
+            gap: .65rem;
+            align-items: flex-end;
+        }
+
+        .meta-card {
+            min-width: 210px;
+            padding: .85rem 1rem;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .75);
+            border: 1px solid rgba(15, 23, 42, .08);
+            color: var(--steel);
+            box-shadow: 0 12px 34px rgba(15, 23, 42, .06);
+        }
+
+        .meta-label {
+            display: block;
+            color: var(--muted-2);
+            font-size: .7rem;
+            font-weight: 900;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .meta-value {
+            display: block;
+            margin-top: .2rem;
+            color: var(--dark);
+            font-size: .92rem;
+            font-weight: 900;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+            gap: 1rem;
+            margin-top: 1.4rem;
+        }
+
+        .action-card {
+            position: relative;
+            min-height: 205px;
+            padding: 1.35rem;
+            border-radius: var(--radius-lg);
+            background: rgba(255, 255, 255, .86);
+            border: 1px solid rgba(15, 23, 42, .08);
+            box-shadow: 0 18px 46px rgba(15, 23, 42, .075);
+            backdrop-filter: blur(14px);
+            cursor: pointer;
+            overflow: hidden;
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        .action-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(135deg, rgba(244, 123, 32, .10), transparent 40%),
+                linear-gradient(180deg, transparent, rgba(15, 23, 42, .03));
+            opacity: .75;
+            pointer-events: none;
+        }
+
+        .action-card::after {
+            content: "";
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            right: -45px;
+            bottom: -45px;
+            border-radius: 50%;
+            border: 1px solid rgba(15, 23, 42, .08);
+            box-shadow: 0 0 0 34px rgba(15, 23, 42, .025);
+            pointer-events: none;
+        }
+
+        .action-card:hover,
+        .action-card:focus-visible {
+            outline: none;
+            transform: translateY(-5px);
+            border-color: rgba(244, 123, 32, .42);
+            box-shadow: 0 26px 64px rgba(15, 23, 42, .13);
+        }
+
+        .action-icon {
+            position: relative;
+            width: 54px;
+            height: 54px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            background: var(--dark);
+            color: #fff;
+            font-size: 1.25rem;
+            box-shadow: 0 16px 32px rgba(15, 23, 42, .22);
+            margin-bottom: 1.1rem;
+        }
+
+        .action-card:hover .action-icon {
+            background: var(--orange);
+        }
+
+        .action-title {
+            position: relative;
+            margin: 0;
+            color: var(--dark);
+            font-size: 1.15rem;
+            font-weight: 900;
+            letter-spacing: -.035em;
+        }
+
+        .action-description {
+            position: relative;
+            margin: .55rem 0 0;
+            color: var(--muted);
+            font-size: .88rem;
+            font-weight: 600;
+            line-height: 1.55;
+        }
+
+        .external-link-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            z-index: 2;
+            padding: .35rem .55rem;
+            border-radius: 999px;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            color: var(--orange-dark);
+            font-size: .65rem;
+            font-weight: 900;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        /* MODALES */
+        .modal-content {
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: 26px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            border-bottom: 1px solid var(--line-soft);
+            background: #f8fafc;
+            padding: 1.1rem 1.35rem;
+        }
+
+        .modal-title {
+            color: var(--dark);
+            font-weight: 900;
+            letter-spacing: -.03em;
+        }
+
+        .modal-body {
+            padding: 1.35rem;
+        }
+
+        .modal-footer {
+            border-top: 1px solid var(--line-soft);
+            background: #f8fafc;
+            padding: 1rem 1.35rem;
+        }
+
+        .modal-perfil .fa-user-circle {
+            color: var(--orange) !important;
+        }
+
+        .perfil-info label {
+            color: var(--dark);
+            font-size: .86rem;
+        }
+
+        .perfil-info p {
+            color: var(--muted);
+            font-weight: 700;
+            margin-bottom: 0;
+        }
+
+        .modal-denuncia .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .modal-denuncia label {
+            color: var(--dark);
+            font-weight: 800;
+            margin-bottom: .4rem;
+        }
+
+        .modal-denuncia .form-control {
+            border-radius: 14px;
+            border: 1px solid #dbe3ea;
+            min-height: 46px;
+            font-weight: 600;
+            box-shadow: none;
+        }
+
+        .modal-denuncia .form-control:focus {
+            border-color: rgba(244, 123, 32, .55);
+            box-shadow: 0 0 0 4px rgba(244, 123, 32, .11);
+        }
+
+        .btn-primary {
+            background: var(--dark);
+            border-color: var(--dark);
+            border-radius: 14px;
+            font-weight: 900;
+            padding: .7rem 1rem;
+        }
+
+        .btn-primary:hover {
+            background: var(--orange);
+            border-color: var(--orange);
+        }
+
+        .btn-secondary {
+            border-radius: 14px;
+            font-weight: 900;
+            padding: .7rem 1rem;
+        }
+
+        @@media (max-width: 900px) {
+            .navbar-content {
+                border-radius: 26px;
+                align-items: flex-start;
+            }
+
+            .user-info {
+                display: none;
+            }
+
+            .dashboard-header {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-meta {
+                align-items: stretch;
+            }
+
+            .meta-card {
+                min-width: 0;
+            }
+        }
+
+        @@media (max-width: 640px) {
+            .top-navbar {
+                padding: .75rem;
+            }
+
+            .navbar-content {
+                min-height: auto;
+                padding: .6rem;
+            }
+
+            .navbar-title {
+                display: none;
+            }
+
+            .main-content {
+                padding: 1rem .85rem 2.5rem;
+            }
+
+            .welcome-box {
+                padding: 1.45rem;
+                border-radius: 24px;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .action-card {
+                min-height: 180px;
+            }
+        }
+    </style>
+</head>
+
+<body data-empresa="@empresaId">
+    @await Html.PartialAsync("_Overlay")
+
+    <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
+
+    <div class="main-wrapper">
+        <nav class="top-navbar" role="navigation" aria-label="Navegación principal">
+            <div class="navbar-content">
+                <div class="navbar-left">
+                    <a href="/Menu/Index" class="navbar-brand">
+                        @if (!string.IsNullOrEmpty(logoEmpresa) && logoEmpresa != "default-logo.png")
+                        {
+                            <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="navbar-logo" loading="lazy" />
+                        }
+                        else
+                        {
+                            <i class="fas fa-industry" aria-hidden="true"></i>
+                        }
+
+                        <span class="navbar-title">@nombreEmpresa</span>
+                    </a>
+                </div>
+
+                <div class="navbar-right">
+                    <div class="quick-actions-navbar">
+                        <a class="quick-action-btn" id="btnNotificaciones" aria-haspopup="true" aria-expanded="false" title="Notificaciones">
+                            <i class="fas fa-bell" aria-hidden="true"></i>
+                            <span id="notifCount" class="badge rounded-pill" hidden="true">0</span>
+                        </a>
+
+                        <div id="notifDropdown" class="notif-dropdown" aria-labelledby="btnNotificaciones">
+                            <div class="notif-header">
+                                <strong>Notificaciones</strong>
+                            </div>
+                            <ul id="notifList" class="notif-list"></ul>
+                        </div>
+                    </div>
+
+                    <div class="user-menu">
+                        <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario">
+                            <div class="user-avatar" aria-hidden="true">@(nombreUsuario.Substring(0, 1).ToUpper())</div>
+
+                            <div class="user-info">
+                                <div class="user-name">@nombreUsuario</div>
+                                <div class="user-role">Colaborador</div>
+                            </div>
+
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </button>
+
+                        <div class="user-dropdown" id="userDropdownMenu" role="menu" aria-labelledby="userToggle">
+                            <a href="#" id="linkMiPerfil" class="dropdown-item" role="menuitem">
+                                <i class="fas fa-user" aria-hidden="true"></i>
+                                Mi Perfil
+                            </a>
+
+                            <a href="#" class="dropdown-item" role="menuitem" data-bs-toggle="modal" data-bs-target="#modalDenunciaAnonima">
+                                <i class="fas fa-user-secret" aria-hidden="true"></i>
+                                Denuncia anónima
+                            </a>
+
+                            <a href="/Login/Logout" class="dropdown-item">
+                                <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+                                Cerrar Sesión
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="main-content" id="main-content" role="main">
+            @{
+                var claseBienvenida = (ViewBag.MostrarBienvenida == true) ? "welcome-section as-overlay" : "welcome-section is-pinned";
+            }
+
+            <section id="welcome-section" class="@claseBienvenida" aria-labelledby="welcome-title">
+                <div class="welcome-box">
+                    <h1 id="welcome-title" class="welcome-title">¡Hola, @nombreUsuario!</h1>
+                    <p class="welcome-subtitle">
+                        Bienvenido al ERP industrial de NSQuell. Controla procesos, solicitudes, trazabilidad y reportes de operación.
+                    </p>
+                </div>
+            </section>
+
+            <div id="welcome-pinned-container" style="display: none;"></div>
+
+            <section class="dashboard-header" aria-label="Encabezado del portal">
+                <div>
+                    <div class="dashboard-kicker">
+                        <i class="fas fa-gears"></i>
+                        Inyección de plásticos · Automotriz
+                    </div>
+
+                    <h2 class="dashboard-title">
+                        Centro de operación
+                    </h2>
+
+                    <p class="dashboard-description">
+                        Accede a tus módulos internos para dar seguimiento a producción, almacén, logística, reportes y procesos administrativos.
+                    </p>
+                </div>
+
+                <div class="dashboard-meta">
+                    <div class="meta-card">
+                        <span class="meta-label">Empresa</span>
+                        <span class="meta-value">@nombreEmpresa</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Usuario</span>
+                        <span class="meta-value">@nombreUsuario</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="quick-actions" aria-label="Módulos disponibles">
+                @if (Model != null && Model.Any())
+                {
+                    @foreach (var menu in Model)
+                    {
+                        var cssClass = GetCssClassForMenu(menu.Nombre);
+                        var isUniversidad = menu.Nombre.Contains("Universidad", StringComparison.OrdinalIgnoreCase);
+
+                        <article class="action-card @cssClass @(isUniversidad ? "with-logo" : "")"
+                                 data-href="@menu.Url"
+                                 role="button"
+                                 tabindex="0">
+                            <div class="action-icon" aria-hidden="true">
+                                <i class="fas @menu.Icono"></i>
+                            </div>
+
+                            <h2 class="action-title">@menu.Nombre</h2>
+
+                            <p class="action-description">
+                                @(!string.IsNullOrEmpty(menu.Descripcion) ? menu.Descripcion : $"Accede a {menu.Nombre}")
+                            </p>
+                        </article>
+                    }
+                }
+
+                <article class="action-card mejora" data-href-external="@enlacesMejoraContina" role="button" tabindex="0">
+                    <div class="external-link-badge">SharePoint</div>
+
+                    <div class="action-icon" aria-hidden="true">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+
+                    <h2 class="action-title">Mejora Continua</h2>
+                    <p class="action-description">Procesos y mejora continua del grupo</p>
+                </article>
+
+                <article class="action-card embarques" data-href-external="@enlacesEmbarques" role="button" tabindex="0">
+                    <div class="external-link-badge">Forms</div>
+
+                    <div class="action-icon" aria-hidden="true">
+                        <i class="fas fa-ship"></i>
+                    </div>
+
+                    <h2 class="action-title">Embarques</h2>
+                    <p class="action-description">Control de embarques y envíos</p>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal de Perfil -->
+    <div class="modal fade" id="modalPerfil" tabindex="-1" aria-labelledby="modalPerfilLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content modal-perfil">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalPerfilLabel">
+                        <i class="fas fa-user-circle"></i>
+                        Mi Perfil
+                    </h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-user-circle fa-5x text-primary"></i>
+                    </div>
+
+                    <div class="perfil-info">
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-user"></i> Nombre:</label>
+                            <p id="perfilNombre" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-id-badge"></i> Usuario:</label>
+                            <p id="perfilUsername" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-envelope"></i> Correo:</label>
+                            <p id="perfilCorreo" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-phone"></i> Teléfono:</label>
+                            <p id="perfilTelefono" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-user-tag"></i> Rol:</label>
+                            <p id="perfilRol" class="ms-3"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold"><i class="fas fa-info-circle"></i> Descripción del Rol:</label>
+                            <p id="perfilDescripcionRol" class="ms-3"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de denuncia anónima -->
+    <div class="modal fade" id="modalDenunciaAnonima" tabindex="-1" role="dialog" aria-labelledby="modalDenunciaAnonimaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content modal-denuncia">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalDenunciaAnonimaLabel">
+                        Denuncia anónima y confidencial
+                    </h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                @using (Html.BeginForm("Crear", "DenunciasAnonimas", FormMethod.Post, new { id = "formDenunciaAnonima" }))
+                {
+                    @Html.AntiForgeryToken()
+
+                    <div class="modal-body">
+                        <p class="text-muted small">
+                            Tu identidad no se mostrará en ningún lado. La información se enviará de forma confidencial.
+                        </p>
+
+                        <div class="form-group">
+                            <label for="TipoDenuncia">Tipo de denuncia *</label>
+                            <select id="TipoDenuncia" name="TipoDenuncia" class="form-control" required>
+                                <option value="">-- Selecciona una opción --</option>
+                                <option value="Acoso">Acoso</option>
+                                <option value="Fraude">Fraude</option>
+                                <option value="Conducta inadecuada">Conducta inadecuada</option>
+                                <option value="Seguridad">Seguridad</option>
+                                <option value="Otros">Otros</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="DepartamentoAfectado">Departamento afectado *</label>
+                            <select id="DepartamentoAfectado" name="DepartamentoAfectado" class="form-control" required>
+                                <option value="">-- Selecciona una opción --</option>
+                                <option value="Recursos Humanos">Recursos Humanos</option>
+                                <option value="Ventas">Compras</option>
+                                <option value="Proyectos">Proyectos</option>
+                                <option value="Operaciones">Almacén</option>
+                                <option value="Finanzas">Finanzas</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="Descripcion">Descripción detallada *</label>
+                            <textarea id="Descripcion" name="Descripcion" class="form-control" rows="4" required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="FechaHechos">Fecha aproximada de los hechos *</label>
+                            <input type="date" id="FechaHechos" name="FechaHechos" class="form-control" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="LugarHechos">Lugar de los hechos *</label>
+                            <input type="text" id="LugarHechos" name="LugarHechos" class="form-control" maxlength="200" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="camposObligatorios">* Todos los campos son obligatorios</label>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Enviar denuncia</button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <script src="~/js/overlay.js" asp-append-version="true"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script type="application/ld+json">
+        {
+            "@@context": "https://schema.org",
+            "@@type": "WebApplication",
+            "name": "ERP Industrial NSQuell",
+            "description": "Portal interno de @nombreEmpresa",
+            "url": "@currentUrl",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web"
+        }
+    </script>
+
+    <script>
+        window.mostrarBienvenida = '@((ViewBag.MostrarBienvenida == true) ? "true" : "false")';
+    </script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const welcomeSectionOverlay = document.getElementById("welcome-section");
+            const mainWrapper = document.querySelector(".main-wrapper");
+            const pinnedContainer = document.getElementById("welcome-pinned-container");
+
+            if (!welcomeSectionOverlay || !mainWrapper || !pinnedContainer) return;
+
+            if (welcomeSectionOverlay.classList.contains("as-overlay")) {
+                mainWrapper.classList.add("overlay-lock");
+
+                const welcomePinned = welcomeSectionOverlay.cloneNode(true);
+                welcomePinned.classList.remove("as-overlay", "leaving");
+                welcomePinned.classList.add("is-pinned");
+                welcomePinned.style.opacity = '0';
+                welcomePinned.style.transition = 'opacity 0.4s ease-in-out';
+
+                pinnedContainer.appendChild(welcomePinned);
+                pinnedContainer.style.display = 'block';
+
+                setTimeout(() => {
+                    welcomeSectionOverlay.classList.add("leaving");
+                    welcomePinned.style.opacity = '1';
+                }, 1600);
+
+                welcomeSectionOverlay.addEventListener("transitionend", function handler(event) {
+                    if (event.propertyName === 'opacity' && welcomeSectionOverlay.classList.contains("leaving")) {
+                        welcomeSectionOverlay.remove();
+                        mainWrapper.classList.remove("overlay-lock");
+                        welcomeSectionOverlay.removeEventListener('transitionend', handler);
+                    }
+                });
+            }
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const cards = document.querySelectorAll('.action-card');
+
+            cards.forEach(function (card) {
+                function openCard() {
+                    const url = card.getAttribute('data-href') || card.getAttribute('data-href-external');
+
+                    if (url && url !== "#") {
+                        if (card.hasAttribute('data-href-external')) {
+                            window.open(url, '_blank');
+                        } else {
+                            window.location.href = url;
+                        }
+                    }
+                }
+
+                card.addEventListener('click', openCard);
+
+                card.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openCard();
+                    }
+                });
+            });
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const toggleBtn = document.getElementById('userToggle');
+            const dropdown = document.getElementById('userDropdownMenu');
+
+            if (!toggleBtn || !dropdown) return;
+
+            toggleBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                dropdown.classList.toggle('show');
+
+                const expanded = dropdown.classList.contains('show');
+                toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                    toggleBtn.setAttribute('aria-expanded', 'false');
+                }
+            });
+        });
+    </script>
+
+    <script>
+        if (window.history.replaceState) {
+            window.history.replaceState(null, '', '/Menu/Index');
+        }
+    </script>
+
+    @Html.AntiForgeryToken()
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const linkMiPerfil = document.getElementById('linkMiPerfil');
+
+            if (linkMiPerfil) {
+                linkMiPerfil.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    cargarPerfil();
+                });
+            }
+
+            function cargarPerfil() {
+                fetch('/Perfil/ObtenerMiPerfil')
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            const data = result.data;
+
+                            document.getElementById('perfilNombre').textContent = data.nombreUsuario || 'N/A';
+                            document.getElementById('perfilUsername').textContent = data.username || 'N/A';
+                            document.getElementById('perfilCorreo').textContent = data.correo || 'N/A';
+                            document.getElementById('perfilTelefono').textContent = data.telefono || 'N/A';
+                            document.getElementById('perfilRol').textContent = data.nombreRol || 'N/A';
+                            document.getElementById('perfilDescripcionRol').textContent = data.descripcionRol || 'N/A';
+
+                            const modal = new bootstrap.Modal(document.getElementById('modalPerfil'));
+                            modal.show();
+                        } else {
+                            alert('Error: ' + result.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error al cargar el perfil');
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
+
+@functions {
+    private string GetCssClassForMenu(string menuNombre)
+    {
+        if (string.IsNullOrEmpty(menuNombre)) return "";
+
+        var menuLower = menuNombre.ToLowerInvariant();
+
+        return menuLower switch
+        {
+            var x when x.Contains("universidad") => "universidad",
+            var x when x.Contains("líder") || x.Contains("lider") => "lider",
+            var x when x.Contains("comunicados") => "comunicados",
+            var x when x.Contains("proyectos") => "proyectos",
+            var x when x.Contains("directorio") => "directorio",
+            _ => ""
+        };
+    }
+}
