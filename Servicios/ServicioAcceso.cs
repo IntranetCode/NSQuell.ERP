@@ -39,18 +39,24 @@ namespace ERP.NSQuell.Servicios
             await cn.OpenAsync();
 
             const string sql = @"
-                DECLARE @SubId INT = (SELECT TOP 1 SubMenuID FROM dbo.SubMenus WHERE Nombre=@s);
+                DECLARE @SubId INT = (
+                    SELECT TOP 1 SubMenuID 
+                    FROM dbo.SubMenus 
+                    WHERE UPPER(LTRIM(RTRIM(Nombre))) = UPPER(LTRIM(RTRIM(@s)))
+                );
+
                 IF @SubId IS NULL
                 BEGIN
                     SELECT CAST(0 AS bit);
                     RETURN;
                 END
 
-                -- 1) Permiso EFECTIVO a nivel SubMenú (rol ± overrides de SubMenú)
+                -- 1) Permiso EFECTIVO a nivel SubMenú
                 IF NOT EXISTS(
                     SELECT 1
-                    FROM dbo.fn_PermisosEfectivosUsuario(@u,@e) f
-                    WHERE f.SubMenuID = @SubId AND f.TienePermiso = 1
+                    FROM dbo.fn_PermisosEfectivosUsuario(@u) f
+                    WHERE f.SubMenuID = @SubId 
+                    AND f.TienePermiso = 1
                 )
                 BEGIN
                     SELECT CAST(0 AS bit);
@@ -71,17 +77,18 @@ namespace ERP.NSQuell.Servicios
                     RETURN;
                 END
 
-                -- 3) OVERRIDES por ACCIÓN (precedencia: DENEGAR > PERMITIR > ROL)
-
                 -- 3a) DENEGAR por override
                 IF EXISTS(
                     SELECT 1
                     FROM dbo.PermisosUsuarioOverride o
-                    JOIN dbo.SubMenuAcciones sma ON sma.SubMenuID = o.SubMenuID AND sma.SubMenuID = @SubId
-                    JOIN dbo.Acciones a          ON a.AccionID = sma.AccionID
+                    JOIN dbo.SubMenuAcciones sma 
+                        ON sma.SubMenuID = o.SubMenuID 
+                    AND sma.SubMenuID = @SubId
+                    JOIN dbo.Acciones a          
+                        ON a.AccionID = sma.AccionID
                     WHERE o.UsuarioID = @u
-                      AND a.Nombre = @accion
-                      AND o.Decision = 0              -- 0 = Denegar
+                    AND UPPER(LTRIM(RTRIM(a.Nombre))) = UPPER(LTRIM(RTRIM(@accion)))
+                    AND o.Decision = 0
                 )
                 BEGIN
                     SELECT CAST(0 AS bit);
@@ -92,40 +99,46 @@ namespace ERP.NSQuell.Servicios
                 IF EXISTS(
                     SELECT 1
                     FROM dbo.PermisosUsuarioOverride o
-                    JOIN dbo.SubMenuAcciones sma ON sma.SubMenuID = o.SubMenuID AND sma.SubMenuID = @SubId
-                    JOIN dbo.Acciones a          ON a.AccionID = sma.AccionID
+                    JOIN dbo.SubMenuAcciones sma 
+                        ON sma.SubMenuID = o.SubMenuID 
+                    AND sma.SubMenuID = @SubId
+                    JOIN dbo.Acciones a          
+                        ON a.AccionID = sma.AccionID
                     WHERE o.UsuarioID = @u
-                      AND a.Nombre = @accion
-                      AND o.Decision = 1              -- 1 = Permitir
+                    AND UPPER(LTRIM(RTRIM(a.Nombre))) = UPPER(LTRIM(RTRIM(@accion)))
+                    AND o.Decision = 1
                 )
                 BEGIN
                     SELECT CAST(1 AS bit);
                     RETURN;
                 END
 
-                -- 4) Fallback por ROL (cuando no hay override de acción)
+                -- 4) Fallback por ROL
                 SELECT CAST(CASE WHEN EXISTS(
                     SELECT 1
                     FROM dbo.Usuarios u
-                    JOIN dbo.PermisosPorRol pr   ON pr.RolID = u.RolID AND pr.Activo = 1
-                    JOIN dbo.SubMenuAcciones sma ON sma.SubMenuAccionID = pr.SubMenuAccionID   -- <- AQUÍ el join correcto
-                    JOIN dbo.Acciones a          ON a.AccionID = sma.AccionID
+                    JOIN dbo.PermisosPorRol pr   
+                        ON pr.RolID = u.RolID 
+                    AND pr.Activo = 1
+                    JOIN dbo.SubMenuAcciones sma 
+                        ON sma.SubMenuAccionID = pr.SubMenuAccionID
+                    JOIN dbo.Acciones a          
+                        ON a.AccionID = sma.AccionID
                     WHERE u.UsuarioID = @u
-                      AND sma.SubMenuID = @SubId
-                      AND UPPER(LTRIM(RTRIM(a.Nombre))) = UPPER(LTRIM(RTRIM(@accion)))
+                    AND sma.SubMenuID = @SubId
+                    AND UPPER(LTRIM(RTRIM(a.Nombre))) = UPPER(LTRIM(RTRIM(@accion)))
                 ) THEN 1 ELSE 0 END AS bit);
-                ";
-
+            ";
 
             using var cmd = new SqlCommand(sql, cn);
+
             cmd.Parameters.AddWithValue("@u", usuarioId);
-            var pE = cmd.Parameters.Add("@e", SqlDbType.Int);
-            pE.Value = (object?)empresaId ?? DBNull.Value;
             cmd.Parameters.AddWithValue("@s", subMenu);
             cmd.Parameters.AddWithValue("@accion", (object?)accion ?? DBNull.Value);
 
             var r = await cmd.ExecuteScalarAsync();
-            return r is bool b && b;
+
+            return r != null && r != DBNull.Value && Convert.ToBoolean(r);
         }
     }
 }
