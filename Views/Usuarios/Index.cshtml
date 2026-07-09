@@ -2,7 +2,7 @@
 @model IEnumerable<ERP.NSQuell.Models.V_InformacionUsuarioCompleta>
 
 @{
-    Layout = null;
+    Layout = "_LayoutUsuarios";
 
     var actionActual = ViewContext.RouteData.Values["action"]?.ToString();
     var modoAccesos = ViewData["ModoAccesos"] as bool? ?? string.Equals(actionActual, "Accesos", StringComparison.OrdinalIgnoreCase);
@@ -59,274 +59,106 @@
 }
 
 <style>
-    /* =====================================================
-       ERP NS GROUP - USUARIOS / ESTILO DARK ERP SUITE
-       Estilo integrado en la vista Razor.
-       IMPORTANTE: en Razor, las reglas CSS media van escapadas como @@media.
-       ===================================================== */
-
     :root {
-        --erp-bg-0: #070b12;
-        --erp-bg-1: #0b1220;
-        --erp-bg-2: #101827;
-        --erp-panel: rgba(15, 23, 42, .82);
-        --erp-panel-strong: rgba(15, 23, 42, .96);
-        --erp-panel-soft: rgba(255, 255, 255, .075);
-        --erp-card: rgba(255, 255, 255, .095);
-        --erp-card-hover: rgba(255, 255, 255, .135);
-        --erp-border: rgba(255, 255, 255, .13);
-        --erp-border-soft: rgba(255, 255, 255, .08);
-        --erp-text: #f8fafc;
-        --erp-muted: #cbd5e1;
-        --erp-muted-2: #94a3b8;
-        --erp-orange: #f47b20;
-        --erp-orange-2: #ffb86b;
-        --erp-blue: #38bdf8;
-        --erp-green: #22c55e;
-        --erp-red: #ef4444;
-        --erp-amber: #f59e0b;
-        --erp-shadow: 0 28px 90px rgba(0, 0, 0, .44);
-        --erp-shadow-soft: 0 18px 45px rgba(0, 0, 0, .30);
-        --erp-radius-xl: 30px;
-        --erp-radius-lg: 24px;
-        --erp-radius-md: 18px;
-    }
+        --ns-primary: #f47b20;
+        --ns-primary-dark: #c2410c;
+        --ns-primary-soft: rgba(244, 123, 32, .14);
+        --ns-accent: #f47b20;
+        --ns-accent-dark: #ea580c;
 
-    * {
-        box-sizing: border-box;
-    }
+        --ns-bg: #070b12;
+        --ns-bg-2: #0b1220;
+        --ns-panel: rgba(15, 23, 42, .88);
+        --ns-panel-2: rgba(17, 24, 39, .78);
+        --ns-card: rgba(255, 255, 255, .075);
+        --ns-card-strong: rgba(255, 255, 255, .105);
+        --ns-border: rgba(255, 255, 255, .12);
 
-    html,
-    body {
-        min-height: 100%;
+        --ns-text: #f8fafc;
+        --ns-muted: #cbd5e1;
+        --ns-muted-2: #94a3b8;
+
+        --ns-success: #22c55e;
+        --ns-danger: #ef4444;
+        --ns-warning: #f97316;
+
+        --ns-shadow-sm: 0 12px 28px rgba(0, 0, 0, .22);
+        --ns-shadow-md: 0 22px 62px rgba(0, 0, 0, .34);
+        --ns-shadow-xl: 0 30px 90px rgba(0, 0, 0, .45);
     }
 
     body {
-        margin: 0;
-        color: var(--erp-text) !important;
-        font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
+        color: var(--ns-text) !important;
         background:
-            radial-gradient(circle at 8% 7%, rgba(244, 123, 32, .24), transparent 26%),
-            radial-gradient(circle at 90% 12%, rgba(56, 189, 248, .15), transparent 28%),
-            radial-gradient(circle at 72% 92%, rgba(244, 123, 32, .11), transparent 30%),
-            linear-gradient(135deg, var(--erp-bg-0) 0%, var(--erp-bg-1) 46%, var(--erp-bg-2) 100%) !important;
-        overflow-x: hidden;
-    }
-
-    body::before {
-        content: none !important;
-        display: none !important;
-    }
-
-    body::after {
-        content: "";
-        position: fixed;
-        width: 780px;
-        height: 780px;
-        right: -330px;
-        bottom: -360px;
-        z-index: 0;
-        pointer-events: none;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(244, 123, 32, .18), transparent 64%);
-        filter: blur(12px);
-    }
-
-    a {
-        text-decoration: none;
-    }
-
-    .erp-page {
-        position: relative;
-        z-index: 1;
-        min-height: 100vh;
-        padding: 1rem 1.4rem 4rem;
-        background: transparent;
-    }
-
-    .erp-topbar {
-        width: min(100%, 1480px);
-        min-height: 78px;
-        margin: 0 auto 1.35rem;
-        padding: .75rem .95rem;
-        border-radius: 999px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        background: linear-gradient(135deg, rgba(15, 23, 42, .90), rgba(17, 24, 39, .76)) !important;
-        border: 1px solid var(--erp-border);
-        box-shadow: 0 18px 55px rgba(0, 0, 0, .32);
-        backdrop-filter: blur(22px);
-        -webkit-backdrop-filter: blur(22px);
-    }
-
-    .erp-brand {
-        display: flex;
-        align-items: center;
-        gap: .8rem;
-        color: #fff;
-        min-width: 0;
-    }
-
-    .erp-brand-mark,
-    .erp-brand-logo {
-        width: 52px;
-        height: 52px;
-        flex: 0 0 52px;
-        border-radius: 17px;
-        display: grid;
-        place-items: center;
-        color: #fff;
-        background: linear-gradient(135deg, var(--erp-orange), #b45309);
-        box-shadow: 0 14px 32px rgba(244, 123, 32, .34);
-    }
-
-    .erp-brand-logo {
-        object-fit: contain;
-        background: rgba(255,255,255,.10);
-        border: 1px solid rgba(255,255,255,.12);
-        padding: 6px;
-    }
-
-    .erp-brand-name {
-        margin: 0;
-        color: #fff;
-        font-size: 1rem;
-        font-weight: 950;
-        line-height: 1.1;
-        text-transform: uppercase;
-        letter-spacing: .08em;
-    }
-
-    .erp-brand-sub {
-        margin: .18rem 0 0;
-        color: var(--erp-orange-2);
-        font-size: .72rem;
-        font-weight: 950;
-        letter-spacing: .12em;
-        line-height: 1.1;
-        text-transform: uppercase;
-    }
-
-    .erp-user-box {
-        display: flex;
-        align-items: center;
-        gap: .72rem;
-        min-width: 0;
-        padding: .38rem .75rem .38rem .42rem;
-        border-radius: 999px;
-        color: #fff;
-        background: rgba(255,255,255,.075);
-        border: 1px solid rgba(255,255,255,.13);
-        transition: background .18s ease, border-color .18s ease;
-    }
-
-    .erp-user-box:hover {
-        background: rgba(255,255,255,.12);
-        border-color: rgba(244, 123, 32, .45);
-    }
-
-    .erp-user-avatar {
-        width: 42px;
-        height: 42px;
-        flex: 0 0 42px;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-        color: #0f172a;
-        background: linear-gradient(135deg, #f8fafc, #cbd5e1);
-        font-weight: 950;
-    }
-
-    .erp-user-name {
-        color: #fff;
-        font-size: .86rem;
-        font-weight: 900;
-        line-height: 1.1;
-        white-space: nowrap;
-    }
-
-    .erp-user-role {
-        color: var(--erp-orange-2);
-        font-size: .72rem;
-        font-weight: 800;
-        line-height: 1.1;
-        letter-spacing: .03em;
+            radial-gradient(circle at 7% 6%, rgba(244, 123, 32, .24), transparent 27%),
+            radial-gradient(circle at 93% 12%, rgba(56, 189, 248, .12), transparent 28%),
+            radial-gradient(circle at 78% 92%, rgba(244, 123, 32, .10), transparent 32%),
+            linear-gradient(135deg, #070b12 0%, #0b1220 48%, #101827 100%) !important;
     }
 
     .page-container {
-        width: min(100%, 1480px);
-        min-height: calc(100vh - 98px);
-        margin: 0 auto;
-        padding: 0 0 2rem;
+        min-height: calc(100dvh - 72px);
+        padding: clamp(1rem, 1.7vw, 1.6rem);
         background: transparent !important;
     }
 
     .usuarios-shell {
-        width: 100%;
+        width: min(100%, 1500px);
         margin: 0 auto;
     }
 
     .page-header-static {
-        margin-bottom: 1.35rem;
+        margin-bottom: 1.1rem;
     }
 
     .usuarios-hero {
         position: relative;
         overflow: hidden;
-        border: 1px solid rgba(255,255,255,.12);
-        border-radius: var(--erp-radius-xl);
+        border-radius: 30px;
         background:
-            linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.045)),
-            radial-gradient(circle at 80% 20%, rgba(244, 123, 32, .18), transparent 30%);
-        box-shadow: 0 24px 70px rgba(0,0,0,.26);
+            linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.045)),
+            radial-gradient(circle at 78% 22%, rgba(244, 123, 32, .18), transparent 30%) !important;
+        border: 1px solid var(--ns-border);
+        box-shadow: var(--ns-shadow-md);
         backdrop-filter: blur(18px);
-    }
-
-    .usuarios-hero::before {
-        content: "USERS";
-        position: absolute;
-        right: 2rem;
-        top: 50%;
-        transform: translateY(-50%);
-        color: rgba(255,255,255,.035);
-        font-size: clamp(4rem, 9vw, 8rem);
-        line-height: 1;
-        font-weight: 950;
-        letter-spacing: -.10em;
-        pointer-events: none;
+        -webkit-backdrop-filter: blur(18px);
     }
 
     .usuarios-hero::after {
-        content: "";
+        content: "ERP";
         position: absolute;
-        inset: 0;
+        right: 2.2rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: clamp(4rem, 10vw, 8rem);
+        line-height: 1;
+        font-weight: 950;
+        letter-spacing: -.10em;
+        color: rgba(255,255,255,.035);
         pointer-events: none;
-        background:
-            radial-gradient(circle at 8% 0%, rgba(244,123,32,.22), transparent 25%),
-            linear-gradient(90deg, rgba(255,255,255,.06), transparent 48%);
     }
 
     .usuarios-hero-grid {
         position: relative;
         z-index: 1;
         display: grid;
-        grid-template-columns: minmax(340px, 430px) 1fr;
-        min-height: 220px;
+        grid-template-columns: minmax(310px, 390px) 1fr;
+        min-height: 270px;
     }
 
     .usuarios-hero-side {
         position: relative;
+        color: #fff;
+        background:
+            linear-gradient(135deg, rgba(15,23,42,.92), rgba(17,24,39,.78)),
+            radial-gradient(circle at 10% 20%, rgba(244, 123, 32, .24), transparent 32%) !important;
+        padding: clamp(1.35rem, 2vw, 1.8rem);
+        overflow: hidden;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         gap: 1rem;
-        padding: clamp(1.25rem, 2vw, 1.65rem);
-        color: #fff;
-        background: rgba(15,23,42,.38);
-        border-right: 1px solid rgba(255,255,255,.09);
-        overflow: hidden;
+        border-right: 1px solid rgba(255,255,255,.10);
     }
 
     .usuarios-hero-side::before,
@@ -334,25 +166,23 @@
         content: "";
         position: absolute;
         border-radius: 50%;
+        background: rgba(255, 255, 255, .08);
         pointer-events: none;
     }
 
     .usuarios-hero-side::before {
-        width: 210px;
-        height: 210px;
-        right: -95px;
-        top: -95px;
-        background: rgba(244, 123, 32, .16);
-        border: 1px solid rgba(244, 123, 32, .18);
+        width: 180px;
+        height: 180px;
+        top: -85px;
+        right: -75px;
+        border: 1px solid rgba(244, 123, 32, .20);
     }
 
     .usuarios-hero-side::after {
         width: 110px;
         height: 110px;
-        left: -45px;
-        bottom: -45px;
-        background: rgba(56, 189, 248, .10);
-        border: 1px solid rgba(56, 189, 248, .13);
+        bottom: -52px;
+        left: -48px;
     }
 
     .usuarios-hero-content,
@@ -362,67 +192,62 @@
     }
 
     .usuarios-icon-box {
-        width: 56px;
-        height: 56px;
-        margin-bottom: .95rem;
+        width: 58px;
+        height: 58px;
         border-radius: 19px;
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark));
         display: grid;
         place-items: center;
-        color: #fff;
-        background: linear-gradient(135deg, var(--erp-orange), #b45309);
-        box-shadow: 0 18px 38px rgba(244, 123, 32, .26), inset 0 1px 0 rgba(255,255,255,.24);
         font-size: 1.25rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 16px 32px rgba(244, 123, 32, .32);
     }
 
     .usuarios-title {
         margin: 0;
         color: #fff;
-        font-size: clamp(1.8rem, 3.8vw, 3.15rem);
-        line-height: .95;
         font-weight: 950;
-        letter-spacing: -.07em;
+        font-size: clamp(2.1rem, 4.2vw, 3.25rem);
+        line-height: .95;
+        letter-spacing: -.075em;
     }
 
     .usuarios-subtitle {
-        max-width: 520px;
         margin: .85rem 0 1.1rem;
-        color: var(--erp-muted);
-        font-size: .94rem;
-        line-height: 1.65;
+        color: var(--ns-muted);
+        font-size: .95rem;
+        line-height: 1.6;
         font-weight: 650;
+        max-width: 350px;
     }
 
-    .usuarios-filter-note,
-    .hero-info-note {
-        display: inline-flex;
-        align-items: center;
-        gap: .45rem;
+    .usuarios-filter-note {
         width: fit-content;
         max-width: 100%;
         padding: .48rem .72rem;
         border-radius: 999px;
-        color: var(--erp-orange-2);
-        background: rgba(244, 123, 32, .12);
+        background: rgba(244, 123, 32, .13);
         border: 1px solid rgba(244, 123, 32, .30);
-        font-size: .75rem;
-        font-weight: 950;
+        font-size: .76rem;
+        color: #ffb86b;
+        font-weight: 900;
         letter-spacing: .04em;
     }
 
     .usuarios-hero-main {
+        padding: clamp(1.25rem, 2vw, 1.8rem);
         display: flex;
         flex-direction: column;
+        gap: 1rem;
         justify-content: center;
-        gap: 1.05rem;
-        padding: clamp(1.25rem, 2vw, 1.65rem);
     }
 
     .usuarios-actions-row {
         display: flex;
         flex-wrap: wrap;
+        gap: .8rem;
         align-items: center;
         justify-content: flex-end;
-        gap: .7rem;
     }
 
     .usuarios-search-form {
@@ -432,128 +257,152 @@
     }
 
     .usuarios-search-group {
+        min-height: 54px;
+        border: 1px solid rgba(255,255,255,.13);
+        border-radius: 18px;
         overflow: hidden;
-        border-radius: 20px;
-        background: rgba(15,23,42,.52);
-        border: 1px solid rgba(255,255,255,.12);
-        box-shadow: 0 18px 45px rgba(0,0,0,.18);
+        background: rgba(255,255,255,.08);
+        box-shadow: 0 18px 42px rgba(0,0,0,.24);
         backdrop-filter: blur(16px);
     }
 
     .usuarios-search-group .form-select,
     .usuarios-search-group .form-control,
     .usuarios-search-group .btn {
-        min-height: 50px;
+        min-height: 54px;
         border: 0 !important;
         box-shadow: none !important;
     }
 
-    .usuarios-search-group .form-select,
-    .usuarios-search-group .form-control {
-        color: #f8fafc;
-        background: rgba(255,255,255,.055);
-    }
-
     .usuarios-search-group .form-select {
-        max-width: 205px;
+        max-width: 195px;
+        color: #fff;
+        background-color: rgba(15,23,42,.65);
         border-right: 1px solid rgba(255,255,255,.10) !important;
         font-weight: 850;
     }
 
+    .usuarios-search-group .form-control {
+        min-width: 180px;
+        color: #fff;
+        background: rgba(255,255,255,.04);
+        font-weight: 700;
+    }
+
     .usuarios-search-group .form-control::placeholder {
-        color: #94a3b8;
+        color: rgba(226, 232, 240, .62);
     }
 
     .usuarios-search-group .btn-search {
+        min-width: 58px;
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark)) !important;
         color: #fff;
-        background: linear-gradient(135deg, var(--erp-orange), #b45309);
-        padding-inline: 1.1rem;
+        font-size: 1rem;
     }
 
     .usuarios-search-group .btn-search:hover {
+        filter: brightness(1.07);
         color: #fff;
-        filter: brightness(1.08);
     }
 
     .usuarios-search-group .btn-clear {
         color: #fecaca;
-        background: rgba(239, 68, 68, .14);
+        background: rgba(239, 68, 68, .15);
         border-left: 1px solid rgba(255,255,255,.10) !important;
     }
 
+    .usuarios-search-group .btn-clear:hover {
+        color: #fff;
+        background: rgba(239, 68, 68, .24);
+    }
+
+    /* Botón Agregar usuario corregido: más ancho, alto y legible */
     .btn-modern-primary {
+        min-width: 190px;
+        min-height: 48px;
+        border: 0;
+        border-radius: 999px;
+        padding: .78rem 1.25rem;
+        font-weight: 950;
+        font-size: .92rem;
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark)) !important;
+        color: #ffffff !important;
+        box-shadow: 0 16px 32px rgba(244, 123, 32, .28);
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: .5rem;
-        width: fit-content;
-        border: 0;
-        border-radius: 999px;
-        padding: .75rem 1rem;
-        color: #fff !important;
-        background: linear-gradient(135deg, var(--erp-orange), #b45309) !important;
-        box-shadow: 0 18px 38px rgba(244, 123, 32, .26);
-        font-weight: 950;
-        letter-spacing: .02em;
+        gap: .55rem;
+        text-decoration: none;
+        white-space: nowrap;
         transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
     }
 
     .btn-modern-primary:hover {
-        color: #fff !important;
-        filter: brightness(1.05);
+        filter: brightness(1.06);
         transform: translateY(-2px);
-        box-shadow: 0 22px 42px rgba(244, 123, 32, .34);
+        color: #ffffff !important;
+        box-shadow: 0 20px 38px rgba(244, 123, 32, .36);
+    }
+
+    .hero-info-note {
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        gap: .6rem;
+        width: fit-content;
+        max-width: 100%;
+        color: #fff;
+        background: rgba(244, 123, 32, .13);
+        border: 1px solid rgba(244, 123, 32, .30);
+        border-radius: 999px;
+        padding: .78rem 1rem;
+        font-weight: 900;
+        font-size: .86rem;
     }
 
     .stats-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(145px, 1fr));
-        gap: .75rem;
+        gap: .8rem;
     }
 
     .stat-card {
-        position: relative;
-        overflow: hidden;
-        min-width: 0;
+        border: 1px solid rgba(255,255,255,.12);
+        background: rgba(255,255,255,.075);
+        border-radius: 20px;
+        padding: .85rem .9rem;
         display: flex;
         align-items: center;
-        gap: .72rem;
-        padding: .85rem .9rem;
-        border-radius: 20px;
-        color: #fff;
-        background: linear-gradient(145deg, rgba(255,255,255,.11), rgba(255,255,255,.045));
-        border: 1px solid rgba(255,255,255,.12);
-        box-shadow: 0 18px 42px rgba(0,0,0,.18);
-    }
-
-    .stat-card::after {
-        content: "";
-        position: absolute;
-        width: 88px;
-        height: 88px;
-        right: -42px;
-        bottom: -42px;
-        border-radius: 50%;
-        border: 1px solid rgba(255,255,255,.10);
-        box-shadow: 0 0 0 24px rgba(255,255,255,.025);
-        pointer-events: none;
+        gap: .75rem;
+        min-width: 0;
+        box-shadow: 0 14px 30px rgba(0,0,0,.18);
+        backdrop-filter: blur(14px);
     }
 
     .stat-icon {
         width: 44px;
         height: 44px;
         flex: 0 0 44px;
-        border-radius: 16px;
+        border-radius: 15px;
         display: grid;
         place-items: center;
-        color: #fff;
+        color: #ffffff;
         background: linear-gradient(135deg, #64748b, #334155);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.24);
+        font-size: 1rem;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
     }
 
-    .stat-icon.success { background: linear-gradient(135deg, #22c55e, #15803d); }
-    .stat-icon.danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
-    .stat-icon.warning { background: linear-gradient(135deg, #f97316, #ea580c); }
+    .stat-icon.success {
+        background: linear-gradient(135deg, #22c55e, #15803d);
+    }
+
+    .stat-icon.danger {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    .stat-icon.warning {
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark));
+    }
 
     .stat-value {
         margin: 0;
@@ -565,14 +414,14 @@
 
     .stat-label {
         margin: .18rem 0 0;
-        color: var(--erp-muted-2);
-        font-size: .72rem;
-        font-weight: 850;
+        color: var(--ns-muted-2);
+        font-size: .68rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .08em;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        letter-spacing: .04em;
-        text-transform: uppercase;
     }
 
     .scrollable-content {
@@ -580,11 +429,11 @@
     }
 
     .usuarios-list-card {
-        overflow: hidden;
-        border-radius: var(--erp-radius-xl);
-        background: linear-gradient(145deg, rgba(255,255,255,.10), rgba(255,255,255,.045));
         border: 1px solid rgba(255,255,255,.12);
-        box-shadow: 0 24px 70px rgba(0,0,0,.26);
+        border-radius: 28px;
+        overflow: hidden;
+        background: rgba(15,23,42,.82);
+        box-shadow: var(--ns-shadow-md);
         backdrop-filter: blur(18px);
     }
 
@@ -593,10 +442,9 @@
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-        padding: 1.15rem 1.35rem;
-        color: #fff;
-        background: rgba(15,23,42,.48);
-        border-bottom: 1px solid rgba(255,255,255,.09);
+        padding: 1.1rem 1.25rem;
+        border-bottom: 1px solid rgba(255,255,255,.10);
+        background: rgba(255,255,255,.045);
     }
 
     .usuarios-list-title {
@@ -607,61 +455,55 @@
         display: flex;
         align-items: center;
         gap: .55rem;
-        letter-spacing: .01em;
     }
 
     .usuarios-list-title i {
-        color: var(--erp-orange-2);
+        color: #ffb86b;
     }
 
     .usuarios-list-count {
-        color: var(--erp-muted-2);
-        font-size: .84rem;
+        color: var(--ns-muted-2);
+        font-size: .85rem;
         font-weight: 850;
     }
 
     .usuarios-table {
         margin: 0;
         vertical-align: middle;
-        color: #e2e8f0;
-        --bs-table-bg: transparent;
-        --bs-table-color: #e2e8f0;
-        --bs-table-hover-bg: rgba(244, 123, 32, .08);
-        --bs-table-hover-color: #fff;
     }
 
     .usuarios-table thead th {
-        padding: .95rem 1rem;
+        background: rgba(15,23,42,.96) !important;
         color: #ffedd5;
-        background: rgba(15,23,42,.72) !important;
-        border: 0 !important;
-        border-bottom: 1px solid rgba(244,123,32,.26) !important;
+        text-transform: uppercase;
         font-size: .72rem;
         font-weight: 950;
-        letter-spacing: .10em;
-        text-transform: uppercase;
+        letter-spacing: .08em;
+        border: 0 !important;
+        border-bottom: 1px solid rgba(244, 123, 32, .24) !important;
+        padding: 1rem 1rem;
         white-space: nowrap;
     }
 
     .usuarios-table tbody td {
-        padding: 1rem;
-        color: #e2e8f0;
-        background: transparent !important;
-        border-top: 1px solid rgba(255,255,255,.065);
+        border-top: 1px solid rgba(255,255,255,.07);
+        color: var(--ns-muted);
+        padding: .95rem 1rem;
+        font-weight: 750;
     }
 
     .usuarios-table tbody tr {
-        transition: background .18s ease, transform .18s ease;
+        transition: background .18s ease;
     }
 
     .usuarios-table tbody tr:hover {
-        background: rgba(244, 123, 32, .08) !important;
+        background: rgba(244, 123, 32, .065);
     }
 
     .user-cell {
         display: flex;
         align-items: center;
-        gap: .78rem;
+        gap: .75rem;
         min-width: 220px;
     }
 
@@ -670,125 +512,125 @@
         height: 44px;
         flex: 0 0 44px;
         border-radius: 16px;
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark));
+        color: #fff;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        color: #fff;
-        background: linear-gradient(135deg, var(--erp-orange), #b45309);
-        box-shadow: 0 12px 26px rgba(244,123,32,.22), inset 0 1px 0 rgba(255,255,255,.22);
         font-weight: 950;
         font-size: .86rem;
+        box-shadow: 0 12px 24px rgba(244, 123, 32, .24);
     }
 
-    .user-name-main {
+    .user-name-main,
+    .usuarios-table strong {
         color: #fff;
         font-weight: 900;
         line-height: 1.2;
     }
 
     .user-name-sub {
-        color: var(--erp-orange-2);
-        font-size: .76rem;
-        font-weight: 850;
-        margin-top: .18rem;
-        letter-spacing: .05em;
+        color: #ffb86b;
+        font-size: .78rem;
+        font-weight: 900;
+        margin-top: .15rem;
     }
 
     .correo-muted {
-        color: var(--erp-muted);
-        font-weight: 650;
+        color: #cbd5e1;
     }
 
     .sin-correo {
-        display: inline-flex;
-        align-items: center;
-        gap: .36rem;
-        padding: .38rem .68rem;
-        border-radius: 999px;
         color: #fecaca;
         background: rgba(239, 68, 68, .13);
-        border: 1px solid rgba(239, 68, 68, .22);
+        border: 1px solid rgba(239, 68, 68, .28);
+        padding: .35rem .65rem;
+        border-radius: 999px;
         font-weight: 850;
         font-size: .78rem;
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
     }
 
     .role-pill {
+        color: #dbeafe;
+        background: rgba(59, 130, 246, .13);
+        border: 1px solid rgba(147, 197, 253, .22);
+        border-radius: 999px;
+        padding: .38rem .72rem;
+        font-weight: 850;
+        font-size: .76rem;
         display: inline-flex;
         align-items: center;
-        gap: .38rem;
-        max-width: 240px;
+        gap: .35rem;
+        max-width: 230px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        padding: .38rem .7rem;
-        border-radius: 999px;
-        color: #dbeafe;
-        background: rgba(59, 130, 246, .12);
-        border: 1px solid rgba(147, 197, 253, .18);
-        font-weight: 850;
-        font-size: .78rem;
     }
 
     .badge-estado {
+        border-radius: 999px;
+        font-weight: 950;
+        font-size: .75rem;
+        padding: .44rem .78rem;
         display: inline-flex;
         align-items: center;
         gap: .38rem;
-        border-radius: 999px;
-        padding: .46rem .76rem;
-        font-weight: 950;
-        font-size: .74rem;
     }
 
     .badge-estado.activo {
-        color: #bbf7d0;
         background: rgba(34, 197, 94, .13);
-        border: 1px solid rgba(34, 197, 94, .22);
+        color: #86efac;
+        border: 1px solid rgba(34, 197, 94, .32);
     }
 
     .badge-estado.inactivo {
-        color: #fecaca;
         background: rgba(239, 68, 68, .13);
-        border: 1px solid rgba(239, 68, 68, .22);
-    }
-
-    .btn-row-action,
-    .btn-row-disabled {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: .42rem;
-        border: 0;
-        border-radius: 999px;
-        padding: .65rem .9rem;
-        font-weight: 950;
-        text-decoration: none;
+        color: #fca5a5;
+        border: 1px solid rgba(239, 68, 68, .32);
     }
 
     .btn-row-action {
-        color: #fff !important;
-        background: rgba(244, 123, 32, .16);
-        border: 1px solid rgba(244, 123, 32, .32);
-        box-shadow: 0 12px 26px rgba(0,0,0,.18);
-        transition: transform .18s ease, background .18s ease, border-color .18s ease;
+        min-height: 42px;
+        min-width: 96px;
+        border: 0;
+        border-radius: 999px;
+        padding: .62rem .95rem;
+        color: #ffffff !important;
+        font-weight: 950;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .45rem;
+        text-decoration: none;
+        box-shadow: 0 12px 24px rgba(244, 123, 32, .22);
+        transition: transform .18s ease, filter .18s ease;
+        white-space: nowrap;
     }
 
     .btn-row-action:hover {
-        color: #fff !important;
-        background: rgba(244, 123, 32, .25);
-        border-color: rgba(244, 123, 32, .55);
-        transform: translateY(-2px);
+        filter: brightness(1.06);
+        transform: translateY(-1px);
+        color: #ffffff !important;
     }
 
     .btn-edit-user,
     .btn-send-access {
-        background: linear-gradient(135deg, rgba(244,123,32,.92), rgba(180,83,9,.92)) !important;
-        border: 1px solid rgba(255,255,255,.10) !important;
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark)) !important;
     }
 
     .btn-row-disabled {
-        color: #cbd5e1;
-        background: rgba(255,255,255,.08);
-        border: 1px solid rgba(255,255,255,.10);
+        border: 0;
+        border-radius: 999px;
+        padding: .62rem .95rem;
+        min-height: 42px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .4rem;
     }
 
     .usuarios-mobile-list {
@@ -798,12 +640,11 @@
     }
 
     .usuario-mobile-card {
-        border-radius: 24px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 20px;
         padding: 1rem;
-        color: #e2e8f0;
-        background: rgba(15,23,42,.48);
-        border: 1px solid rgba(255,255,255,.10);
-        box-shadow: 0 16px 38px rgba(0,0,0,.20);
+        background: rgba(255,255,255,.075);
+        box-shadow: 0 14px 30px rgba(0,0,0,.18);
     }
 
     .usuario-mobile-head {
@@ -822,23 +663,23 @@
     }
 
     .usuario-mobile-name {
-        color: #fff;
         font-weight: 950;
+        color: #fff;
         line-height: 1.2;
         word-break: break-word;
     }
 
     .usuario-mobile-user {
-        color: var(--erp-orange-2);
-        font-weight: 850;
+        color: #ffb86b;
+        font-weight: 900;
         font-size: .82rem;
         margin-top: .15rem;
     }
 
     .usuario-mobile-detail {
         display: grid;
-        gap: .58rem;
-        color: var(--erp-muted);
+        gap: .55rem;
+        color: var(--ns-muted);
         font-size: .9rem;
         margin-bottom: .9rem;
     }
@@ -851,7 +692,7 @@
     }
 
     .usuario-mobile-detail i {
-        color: var(--erp-orange-2);
+        color: #ffb86b;
         width: 18px;
         text-align: center;
     }
@@ -859,136 +700,98 @@
     .alerta-accesos {
         border: 1px solid rgba(255,255,255,.12);
         border-radius: 18px;
-        font-weight: 800;
-        box-shadow: 0 18px 42px rgba(0,0,0,.20);
+        font-weight: 850;
+        box-shadow: var(--ns-shadow-sm);
         margin-bottom: 1rem;
     }
 
-    .empty-state {
-        padding: clamp(2rem, 5vw, 4rem) 1rem;
-        text-align: center;
-        color: var(--erp-muted);
-    }
-
-    .empty-icon {
-        width: 78px;
-        height: 78px;
-        margin: 0 auto 1rem;
-        border-radius: 24px;
-        display: grid;
-        place-items: center;
-        color: var(--erp-orange-2);
-        background: rgba(244, 123, 32, .12);
-        border: 1px solid rgba(244, 123, 32, .28);
-        font-size: 1.85rem;
-    }
-
-    .empty-title {
-        margin: 0;
-        color: #fff;
-        font-weight: 950;
-        font-size: 1.15rem;
-    }
-
-    .empty-text {
-        margin: .45rem auto 0;
-        max-width: 440px;
-        color: var(--erp-muted-2);
-    }
-
-    .modal-content,
     .modal-accesos .modal-content,
     .modal-operacion-usuario .modal-content {
-        color: #e2e8f0 !important;
-        background: rgba(15,23,42,.98) !important;
-        border: 1px solid rgba(255,255,255,.12) !important;
-        border-radius: 26px !important;
-        box-shadow: var(--erp-shadow) !important;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 24px;
         overflow: hidden;
+        background: rgba(15,23,42,.98);
+        color: #e2e8f0;
+        box-shadow: var(--ns-shadow-xl);
     }
 
-    .modal-header,
     .modal-header-accesos,
     .modal-header-operacion {
-        color: #fff !important;
-        background: linear-gradient(135deg, rgba(244,123,32,.22), rgba(15,23,42,.98)) !important;
-        border-bottom: 1px solid rgba(255,255,255,.10) !important;
+        background: linear-gradient(135deg, rgba(244,123,32,.22), rgba(15,23,42,.98));
+        color: #ffffff;
+        border-bottom: 1px solid rgba(255,255,255,.10);
         padding: 1.25rem 1.5rem;
     }
 
-    .modal-title {
-        color: #fff !important;
-        font-weight: 950 !important;
-    }
-
-    .modal-body,
-    .modal-accesos .modal-body,
-    .modal-operacion-usuario .modal-body {
-        color: #e2e8f0 !important;
-        background: rgba(15,23,42,.98) !important;
-        padding: 1.5rem;
-    }
-
-    .modal-footer,
-    .modal-accesos .modal-footer,
-    .modal-operacion-usuario .modal-footer {
-        background: rgba(255,255,255,.04) !important;
-        border-top: 1px solid rgba(255,255,255,.08) !important;
-        padding: 1rem 1.5rem;
+    .modal-header-accesos small {
+        color: rgba(255, 255, 255, 0.78);
+        font-weight: 500;
     }
 
     .modal-icon-accesos,
-    .modal-icon-operacion,
-    .modal-user-avatar {
-        width: 46px;
-        height: 46px;
-        flex: 0 0 46px;
-        border-radius: 50%;
+    .modal-icon-operacion {
+        width: 48px;
+        height: 48px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark));
         display: grid;
         place-items: center;
-        color: #fff;
-        background: rgba(244,123,32,.16);
-        border: 1px solid rgba(244,123,32,.28);
+        font-size: 1.15rem;
+        box-shadow: 0 14px 28px rgba(244,123,32,.26);
+    }
+
+    .modal-accesos .modal-body,
+    .modal-operacion-usuario .modal-body {
+        padding: 1.5rem;
+        color: #e2e8f0;
+        background: rgba(15,23,42,.98);
     }
 
     .modal-user-card {
         display: flex;
         align-items: center;
         gap: 1rem;
+        background: rgba(255,255,255,.07);
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 16px;
         padding: 1rem;
-        border-radius: 18px;
-        background: rgba(255,255,255,.06);
-        border: 1px solid rgba(255,255,255,.10);
+    }
+
+    .modal-user-avatar {
+        width: 46px;
+        height: 46px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark));
+        color: #ffffff;
+        display: grid;
+        place-items: center;
     }
 
     .modal-user-name {
-        color: #fff;
         font-weight: 950;
+        color: #fff;
     }
 
     .modal-user-email {
-        color: var(--erp-muted-2);
-        font-size: .9rem;
+        color: var(--ns-muted);
+        font-size: 0.9rem;
         word-break: break-all;
+    }
+
+    .modal-accesos .modal-footer,
+    .modal-operacion-usuario .modal-footer {
+        background: rgba(255,255,255,.04);
+        border-top: 1px solid rgba(255,255,255,.08);
+        padding: 1rem 1.5rem;
     }
 
     .modal-accesos .btn-warning,
     .modal-operacion-usuario .btn-primary {
+        background: linear-gradient(135deg, var(--ns-accent), var(--ns-accent-dark)) !important;
         color: #fff !important;
-        background: linear-gradient(135deg, var(--erp-orange), #b45309) !important;
         border: none !important;
-        border-radius: 12px;
-        font-weight: 900;
-    }
-
-    .modal-accesos .btn-outline-secondary {
-        color: #e2e8f0 !important;
-        border-color: rgba(255,255,255,.18) !important;
-    }
-
-    .modal-accesos .btn-outline-secondary:hover {
-        color: #fff !important;
-        background: rgba(255,255,255,.08) !important;
+        font-weight: 950;
+        border-radius: 999px;
     }
 
     body.pm-reset-password-open > .modal-backdrop,
@@ -1007,27 +810,67 @@
         pointer-events: auto !important;
     }
 
+    .empty-state {
+        padding: clamp(2rem, 5vw, 4rem) 1rem;
+        text-align: center;
+    }
+
+    .empty-icon {
+        width: 78px;
+        height: 78px;
+        margin: 0 auto 1rem;
+        border-radius: 24px;
+        background: rgba(244, 123, 32, .14);
+        border: 1px solid rgba(244, 123, 32, .30);
+        color: #ffb86b;
+        display: grid;
+        place-items: center;
+        font-size: 1.8rem;
+    }
+
+    .empty-title {
+        margin: 0;
+        font-weight: 950;
+        color: #fff;
+        font-size: 1.15rem;
+    }
+
+    .empty-text {
+        margin: .45rem auto 0;
+        max-width: 440px;
+        color: var(--ns-muted);
+    }
+
+    /* FIX: evita que los modales aparezcan abajo como contenido normal */
+    .modal.fade:not(.show),
+    .modal:not(.show) {
+        display: none !important;
+    }
+
+    .modal.show {
+        display: block !important;
+    }
+
     @@media (max-width: 1199.98px) {
         .stats-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-
-        .usuarios-hero-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .usuarios-hero-side {
-            border-right: 0;
-            border-bottom: 1px solid rgba(255,255,255,.09);
-        }
     }
 
     @@media (max-width: 991.98px) {
-        .erp-topbar {
-            border-radius: 26px;
+        .usuarios-hero-grid {
+            grid-template-columns: 1fr;
+            min-height: auto;
+        }
+
+        .usuarios-hero-side {
+            min-height: 250px;
+            border-right: 0;
+            border-bottom: 1px solid rgba(255,255,255,.10);
         }
 
         .usuarios-search-form {
+            width: 100%;
             max-width: none;
             margin-left: 0;
         }
@@ -1038,18 +881,14 @@
 
         .btn-modern-primary,
         .hero-info-note {
-            width: 100%;
+            width: auto;
             justify-content: center;
         }
     }
 
     @@media (max-width: 767.98px) {
-        .erp-page {
-            padding: .75rem .85rem 2.5rem;
-        }
-
-        .erp-user-box > div:not(.erp-user-avatar) {
-            display: none;
+        .page-container {
+            padding: .85rem;
         }
 
         .usuarios-hero,
@@ -1059,7 +898,7 @@
 
         .usuarios-hero-side,
         .usuarios-hero-main {
-            padding: 1rem;
+            padding: 1.1rem;
         }
 
         .stats-grid {
@@ -1075,8 +914,8 @@
 
         .usuarios-search-group .form-select {
             grid-column: 1 / -1;
-            width: 100%;
             max-width: none;
+            width: 100%;
             border-right: 0 !important;
             border-bottom: 1px solid rgba(255,255,255,.10) !important;
         }
@@ -1090,24 +929,14 @@
         }
 
         .usuarios-list-header {
+            padding: 1rem;
             align-items: flex-start;
             flex-direction: column;
-            padding: 1rem;
             gap: .3rem;
         }
-    }
 
-    @@media (max-width: 520px) {
-        .erp-brand-name {
-            font-size: .82rem;
-        }
-
-        .erp-brand-sub {
-            display: none;
-        }
-
-        .usuarios-title {
-            font-size: 2rem;
+        .btn-modern-primary {
+            width: 100%;
         }
     }
 
@@ -1132,25 +961,368 @@
         }
     }
 
-    @@media (prefers-reduced-motion: reduce) {
-        *,
-        *::before,
-        *::after {
-            animation: none !important;
-            transition: none !important;
-            scroll-behavior: auto !important;
-        }
+
+    /* ============================================================
+       FIX FINAL - LayoutUsuarios + Index en modo oscuro ERP
+       Este bloque va al final para ganar prioridad sobre site.css,
+       usuarios-styles.css, panel.css y estilos del layout.
+       ============================================================ */
+
+    html,
+    body {
+        min-height: 100% !important;
+        background:
+            radial-gradient(circle at 6% 8%, rgba(244, 123, 32, .22), transparent 27%),
+            radial-gradient(circle at 92% 14%, rgba(56, 189, 248, .12), transparent 30%),
+            radial-gradient(circle at 78% 95%, rgba(244, 123, 32, .10), transparent 33%),
+            linear-gradient(135deg, #070b12 0%, #0b1220 48%, #101827 100%) !important;
+        color: #f8fafc !important;
     }
-    /* FIX: evita que los modales aparezcan como contenido normal */
+
+    body {
+        overflow-x: hidden;
+    }
+
+    /* Layout principal */
+    .app-container {
+        min-height: 100vh !important;
+        display: flex !important;
+        align-items: stretch !important;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(244,123,32,.18), transparent 28%),
+            linear-gradient(135deg, #070b12 0%, #0b1220 55%, #101827 100%) !important;
+        color: #f8fafc !important;
+    }
+
+    .app-content {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        background: transparent !important;
+        color: #f8fafc !important;
+    }
+
+    .app-content > .container-fluid,
+    main.app-content > .container-fluid,
+    #main-content > .container-fluid {
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 100vh !important;
+        padding: clamp(1rem, 1.6vw, 1.55rem) !important;
+        background: transparent !important;
+    }
+
+    /* Sidebar del layout */
+    .app-sidebar {
+        position: sticky !important;
+        top: 0 !important;
+        align-self: flex-start !important;
+        width: 258px !important;
+        flex: 0 0 258px !important;
+        min-height: 100vh !important;
+        padding: 1rem .85rem !important;
+        background:
+            linear-gradient(180deg, rgba(15, 23, 42, .98), rgba(7, 11, 18, .98)) !important;
+        border-right: 1px solid rgba(255,255,255,.10) !important;
+        box-shadow: 18px 0 45px rgba(0,0,0,.28) !important;
+        overflow-y: auto !important;
+        z-index: 20 !important;
+    }
+
+    .sidebar-header {
+        padding: 0 0 .9rem 0 !important;
+        margin: 0 0 .9rem 0 !important;
+        border-bottom: 1px solid rgba(255,255,255,.08) !important;
+    }
+
+    /* Botón "Volver al menú principal" más ancho y sin compresión */
+    .sidebar-header a {
+        width: 100% !important;
+        min-height: 66px !important;
+        padding: .78rem .9rem !important;
+        border-radius: 22px !important;
+        color: #ffffff !important;
+        text-decoration: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: .78rem !important;
+        background: rgba(255,255,255,.075) !important;
+        border: 1px solid rgba(255,255,255,.13) !important;
+        box-shadow: 0 14px 30px rgba(0,0,0,.22) !important;
+        font-weight: 950 !important;
+        font-size: .92rem !important;
+        line-height: 1.18 !important;
+        white-space: normal !important;
+        word-break: normal !important;
+        transition: transform .18s ease, background .18s ease, border-color .18s ease !important;
+    }
+
+    .sidebar-header a::before {
+        content: "\f060";
+        font-family: "Font Awesome 5 Free";
+        font-weight: 900;
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+        border-radius: 15px;
+        display: grid;
+        place-items: center;
+        color: #ffb86b;
+        background: rgba(244, 123, 32, .16);
+        border: 1px solid rgba(244, 123, 32, .34);
+    }
+
+    .sidebar-header a:hover {
+        color: #fff !important;
+        background: rgba(244, 123, 32, .18) !important;
+        border-color: rgba(244, 123, 32, .42) !important;
+        transform: translateY(-2px);
+    }
+
+    .sidebar-nav {
+        padding-top: .35rem !important;
+    }
+
+    .sidebar-nav .nav-link {
+        border-radius: 16px !important;
+        padding: .75rem .85rem !important;
+        color: #cbd5e1 !important;
+        font-weight: 850 !important;
+        transition: background .18s ease, color .18s ease, transform .18s ease !important;
+    }
+
+    .sidebar-nav .nav-link:hover,
+    .sidebar-nav .nav-link[aria-expanded="true"] {
+        color: #fff !important;
+        background: rgba(244, 123, 32, .16) !important;
+    }
+
+    .sidebar-nav .nav-link i {
+        color: #ffb86b !important;
+        margin-right: .45rem;
+    }
+
+    .sidebar-nav .text-white-50 {
+        color: #cbd5e1 !important;
+        font-size: .88rem !important;
+        padding-left: 1rem !important;
+    }
+
+    .sidebar-nav .text-white-50:hover {
+        color: #fff !important;
+        background: rgba(255,255,255,.07) !important;
+    }
+
+    .sub-item-line {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-right: .5rem;
+        border-radius: 999px;
+        background: #f47b20;
+        vertical-align: middle;
+    }
+
+    /* Header superior del Index */
+    .erp-page {
+        width: 100%;
+        min-height: 100%;
+    }
+
+    .erp-topbar {
+        width: min(100%, 1500px);
+        min-height: 78px;
+        margin: 0 auto 1.25rem;
+        padding: .75rem .95rem;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        background: linear-gradient(135deg, rgba(15, 23, 42, .92), rgba(17, 24, 39, .76));
+        border: 1px solid rgba(255,255,255,.13);
+        box-shadow: 0 18px 55px rgba(0,0,0,.32);
+        backdrop-filter: blur(22px);
+        -webkit-backdrop-filter: blur(22px);
+    }
+
+    .erp-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: .85rem;
+        min-width: 0;
+    }
+
+    .erp-brand-logo,
+    .erp-brand-mark {
+        width: 50px;
+        height: 50px;
+        flex: 0 0 50px;
+        border-radius: 17px;
+        display: grid;
+        place-items: center;
+        object-fit: contain;
+        padding: 6px;
+        color: #fff;
+        background: linear-gradient(135deg, #f47b20, #c2410c);
+        box-shadow: 0 14px 32px rgba(244,123,32,.32);
+    }
+
+    .erp-brand-name,
+    .erp-brand-sub {
+        margin: 0;
+        line-height: 1.1;
+    }
+
+    .erp-brand-name {
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+    }
+
+    .erp-brand-sub {
+        margin-top: .22rem;
+        color: #ffb86b;
+        font-size: .72rem;
+        font-weight: 950;
+        letter-spacing: .12em;
+    }
+
+    .erp-user-box {
+        min-height: 52px;
+        padding: .38rem .85rem .38rem .4rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: .7rem;
+        color: #fff;
+        background: rgba(255,255,255,.075);
+        border: 1px solid rgba(255,255,255,.13);
+        box-shadow: 0 12px 28px rgba(0,0,0,.20);
+    }
+
+    .erp-user-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: #0f172a;
+        background: linear-gradient(135deg, #f8fafc, #cbd5e1);
+        font-weight: 950;
+    }
+
+    .erp-user-name {
+        color: #fff;
+        font-weight: 950;
+        line-height: 1.1;
+        font-size: .92rem;
+    }
+
+    .erp-user-role {
+        margin-top: .15rem;
+        color: #ffb86b;
+        font-size: .74rem;
+        font-weight: 850;
+        line-height: 1;
+    }
+
+    /* Reforzar modo oscuro dentro del Index */
+    .page-container {
+        padding-top: 0 !important;
+    }
+
+    .usuarios-hero,
+    .usuarios-list-card {
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.10), rgba(255,255,255,.045)) !important;
+        border: 1px solid rgba(255,255,255,.13) !important;
+    }
+
+    .usuarios-hero-main {
+        background: transparent !important;
+    }
+
+    .usuarios-search-group {
+        background: rgba(15,23,42,.72) !important;
+    }
+
+    .usuarios-search-group select option {
+        background: #111827;
+        color: #fff;
+    }
+
+    .stat-card {
+        background: rgba(255,255,255,.075) !important;
+    }
+
+    .usuarios-table {
+        color: #f8fafc !important;
+    }
+
+    .usuarios-table tbody tr {
+        background: transparent !important;
+    }
+
+    .usuarios-table tbody td {
+        background: transparent !important;
+    }
+
+    .table-hover > tbody > tr:hover > * {
+        color: #fff !important;
+        background-color: rgba(244,123,32,.075) !important;
+    }
+
+    /* Asegura que Bootstrap no muestre modales ocultos como contenido al final */
     .modal.fade:not(.show),
     .modal:not(.show) {
         display: none !important;
     }
 
-    /* Cuando Bootstrap sí lo abre, debe mostrarse como modal */
     .modal.show {
         display: block !important;
     }
+
+    @@media (max-width: 991.98px) {
+        .app-container {
+            display: block !important;
+        }
+
+        .app-sidebar {
+            position: relative !important;
+            width: 100% !important;
+            min-height: auto !important;
+            flex: none !important;
+            border-right: 0 !important;
+            border-bottom: 1px solid rgba(255,255,255,.10) !important;
+        }
+
+        .sidebar-header a {
+            min-height: 58px !important;
+        }
+
+        .erp-topbar {
+            border-radius: 26px;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .erp-topbar {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .erp-user-box {
+            width: 100%;
+        }
+
+        .erp-brand-name {
+            font-size: .88rem;
+        }
+    }
+
 </style>
 
 
@@ -1165,7 +1337,7 @@
             else
             {
                 <div class="erp-brand-mark" aria-hidden="true">
-                    <i class="fas fa-users-gear"></i>
+                    <i class="fas fa-users-cog"></i>
                 </div>
             }
 
@@ -1472,7 +1644,7 @@
                                             else
                                             {
                                                 <span class="badge-estado inactivo">
-                                                    <i class="fas fa-circle-xmark"></i>
+                                                    <i class="fas fa-times-circle"></i>
                                                     Inactivo
                                                 </span>
                                             }
@@ -1559,7 +1731,7 @@
                                     else
                                     {
                                         <span class="badge-estado inactivo">
-                                            <i class="fas fa-circle-xmark"></i>
+                                            <i class="fas fa-times-circle"></i>
                                             Inactivo
                                         </span>
                                     }

@@ -27,6 +27,14 @@ var logoEmpresa = "default-logo.png";
     <title>@ViewData["Title"]</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('nsq-theme') || 'dark';
+            const theme = savedTheme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-nsq-theme', theme);
+        })();
+    </script>
+
     <link rel="stylesheet" href="~/css/globals/variables.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/components/navbar.css" asp-append-version="true" />
@@ -38,11 +46,11 @@ var logoEmpresa = "default-logo.png";
     <link rel="preload" href="~/js/dashboard.js" as="script" />
 
     <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
 
-    
 </head>
 
-<body>
+<body class="nsq-theme-dark">
     @await Html.PartialAsync("_Overlay")
 
     <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
@@ -66,6 +74,17 @@ var logoEmpresa = "default-logo.png";
                 </div>
 
                 <div class="navbar-right">
+                    <button type="button"
+                            class="theme-switcher"
+                            id="btnThemeToggle"
+                            aria-label="Cambiar a modo claro"
+                            title="Cambiar a modo claro">
+                        <span class="theme-switcher-icon" aria-hidden="true">
+                            <i class="fas fa-sun" id="themeToggleIcon"></i>
+                        </span>
+                        <span class="theme-switcher-text" id="themeToggleText">Claro</span>
+                    </button>
+
                     <div class="quick-actions-navbar">
                         <a class="quick-action-btn" id="btnNotificaciones" aria-haspopup="true" aria-expanded="false" title="Notificaciones">
                             <i class="fas fa-bell" aria-hidden="true"></i>
@@ -416,6 +435,61 @@ var logoEmpresa = "default-logo.png";
                 }
             });
         });
+    </script>
+
+    <script>
+        (function () {
+            const STORAGE_KEY = 'nsq-theme';
+
+            function applyTheme(theme) {
+                const selectedTheme = theme === 'light' ? 'light' : 'dark';
+
+                document.documentElement.setAttribute('data-nsq-theme', selectedTheme);
+
+                if (document.body) {
+                    document.body.classList.remove('nsq-theme-dark', 'nsq-theme-light');
+                    document.body.classList.add(selectedTheme === 'light' ? 'nsq-theme-light' : 'nsq-theme-dark');
+                }
+
+                localStorage.setItem(STORAGE_KEY, selectedTheme);
+
+                const btn = document.getElementById('btnThemeToggle');
+                const icon = document.getElementById('themeToggleIcon');
+                const text = document.getElementById('themeToggleText');
+
+                if (btn) {
+                    btn.hidden = false;
+                    btn.style.removeProperty('display');
+                    btn.setAttribute('title', selectedTheme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
+                    btn.setAttribute('aria-label', selectedTheme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
+                }
+
+                if (icon) {
+                    icon.className = selectedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+                }
+
+                if (text) {
+                    text.textContent = selectedTheme === 'light' ? 'Oscuro' : 'Claro';
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                const savedTheme = localStorage.getItem(STORAGE_KEY) || 'dark';
+                const btn = document.getElementById('btnThemeToggle');
+
+                applyTheme(savedTheme);
+
+                if (!btn || btn.dataset.themeInit === '1') return;
+
+                btn.dataset.themeInit = '1';
+
+                btn.addEventListener('click', function () {
+                    const currentTheme = document.documentElement.getAttribute('data-nsq-theme') || 'dark';
+                    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+                    applyTheme(nextTheme);
+                });
+            });
+        })();
     </script>
 
     <script>

@@ -1,0 +1,629 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Http
+@inject ERP.NSQuell.Areas.AdminUsuarios.Interfaces.IUsuarioService UsuarioService
+
+@{
+    var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+    int.TryParse(userIdString, out int currentUserId);
+
+    if (currentUserId <= 0)
+    {
+        currentUserId = Context.Session.GetInt32("UsuarioID") ?? 0;
+    }
+
+    var nombreUsuario = Context.Session.GetString("NombreMostrar")
+        ?? Context.Session.GetString("Username")
+        ?? User?.Identity?.Name
+        ?? "Usuario";
+
+    var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NS Group";
+    var logoEmpresa = Context.Session.GetString("EmpresaLogo") ?? "default-logo.png";
+    var inicialUsuario = string.IsNullOrWhiteSpace(nombreUsuario)
+        ? "U"
+        : nombreUsuario.Trim().Substring(0, 1).ToUpper();
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ERP NSQuell</title>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/usuarios/panel.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/usuarios-styles.css" asp-append-version="true" />
+
+    <style>
+        :root {
+            --erp-bg-0: #070b12;
+            --erp-bg-1: #0b1220;
+            --erp-bg-2: #101827;
+            --erp-panel: rgba(15, 23, 42, .90);
+            --erp-panel-soft: rgba(255, 255, 255, .075);
+            --erp-panel-hover: rgba(255, 255, 255, .11);
+            --erp-border: rgba(255, 255, 255, .13);
+            --erp-border-soft: rgba(255, 255, 255, .08);
+            --erp-text: #f8fafc;
+            --erp-muted: #cbd5e1;
+            --erp-muted-2: #94a3b8;
+            --erp-orange: #f47b20;
+            --erp-orange-dark: #c2410c;
+            --erp-orange-soft: rgba(244, 123, 32, .16);
+            --erp-orange-border: rgba(244, 123, 32, .36);
+            --erp-shadow: 0 26px 80px rgba(0, 0, 0, .42);
+            --erp-shadow-soft: 0 16px 38px rgba(0, 0, 0, .28);
+            --erp-sidebar-width: 320px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            min-height: 100%;
+        }
+
+        body {
+            margin: 0;
+            color: var(--erp-text);
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            background:
+                radial-gradient(circle at 7% 6%, rgba(244, 123, 32, .24), transparent 28%),
+                radial-gradient(circle at 93% 12%, rgba(56, 189, 248, .12), transparent 28%),
+                radial-gradient(circle at 78% 92%, rgba(244, 123, 32, .10), transparent 32%),
+                linear-gradient(135deg, var(--erp-bg-0) 0%, var(--erp-bg-1) 48%, var(--erp-bg-2) 100%) !important;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: stretch;
+            background: transparent !important;
+        }
+
+        .app-sidebar {
+            width: var(--erp-sidebar-width) !important;
+            min-width: var(--erp-sidebar-width) !important;
+            min-height: 100vh;
+            position: sticky;
+            top: 0;
+            align-self: flex-start;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background:
+                radial-gradient(circle at 18% 7%, rgba(244, 123, 32, .18), transparent 30%),
+                linear-gradient(180deg, rgba(11, 18, 32, .98) 0%, rgba(7, 11, 18, .98) 100%) !important;
+            border-right: 1px solid rgba(255, 255, 255, .10);
+            box-shadow: 18px 0 60px rgba(0, 0, 0, .34);
+            z-index: 50;
+        }
+
+        .app-sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .app-sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, .03);
+        }
+
+        .app-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(244, 123, 32, .35);
+            border-radius: 999px;
+        }
+
+        .sidebar-header {
+            padding: 18px 16px 16px;
+            display: grid;
+            gap: 14px;
+        }
+
+        .sidebar-brand-card {
+            min-height: 84px;
+            padding: 16px 18px;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.045));
+            border: 1px solid var(--erp-border);
+            box-shadow: var(--erp-shadow-soft);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sidebar-brand-card::after {
+            content: "";
+            position: absolute;
+            right: -46px;
+            top: -46px;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255,255,255,.055);
+            pointer-events: none;
+        }
+
+        .sidebar-brand-icon,
+        .sidebar-brand-logo {
+            width: 54px;
+            height: 54px;
+            flex: 0 0 54px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            background: linear-gradient(135deg, var(--erp-orange), var(--erp-orange-dark));
+            box-shadow: 0 16px 32px rgba(244,123,32,.30);
+            font-size: 1.15rem;
+            object-fit: contain;
+            padding: 7px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .sidebar-brand-logo {
+            background: rgba(255,255,255,.10);
+            border: 1px solid rgba(255,255,255,.13);
+        }
+
+        .sidebar-brand-text {
+            min-width: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .sidebar-brand-name {
+            color: #fff;
+            font-weight: 950;
+            font-size: 1.05rem;
+            line-height: 1.05;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            word-break: break-word;
+        }
+
+        .sidebar-brand-sub {
+            margin-top: 5px;
+            color: #ffb86b;
+            font-weight: 950;
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: .12em;
+        }
+
+        /* Botón único de regreso: sin iconos/cuadritos internos */
+        .sidebar-return-btn {
+            width: 100%;
+            min-height: 66px;
+            padding: 14px 18px;
+            border-radius: 24px;
+            color: #fff !important;
+            text-decoration: none !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            background: rgba(255,255,255,.075);
+            border: 1px solid var(--erp-border);
+            box-shadow: 0 14px 30px rgba(0,0,0,.22);
+            transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+        }
+
+        .sidebar-return-btn:hover {
+            color: #fff !important;
+            background: rgba(244,123,32,.18);
+            border-color: rgba(244,123,32,.42);
+            transform: translateY(-2px);
+            box-shadow: 0 18px 36px rgba(0,0,0,.28);
+        }
+
+        .sidebar-return-text {
+            display: block;
+            width: 100%;
+            color: #fff;
+            font-weight: 950;
+            font-size: 1rem;
+            line-height: 1.15;
+            white-space: normal;
+        }
+
+        .sidebar-user-card {
+            min-height: 78px;
+            padding: 14px 16px;
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            background: rgba(255,255,255,.075);
+            border: 1px solid var(--erp-border);
+        }
+
+        .sidebar-user-avatar {
+            width: 46px;
+            height: 46px;
+            flex: 0 0 46px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: #e2e8f0;
+            color: #0f172a;
+            font-weight: 950;
+            box-shadow: 0 12px 24px rgba(0,0,0,.22);
+        }
+
+        .sidebar-user-name {
+            color: #fff;
+            font-weight: 900;
+            font-size: .9rem;
+            line-height: 1.15;
+            word-break: break-word;
+        }
+
+        .sidebar-user-role {
+            margin-top: 3px;
+            color: #ffb86b;
+            font-weight: 850;
+            font-size: .72rem;
+        }
+
+        .sidebar-nav {
+            padding: 10px 16px 24px;
+        }
+
+        .sidebar-section-label {
+            margin: 10px 12px 10px;
+            color: #94a3b8;
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+
+        .sidebar-nav .nav,
+        .sidebar-nav ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .sidebar-nav .nav-item {
+            margin-bottom: 8px;
+        }
+
+        .sidebar-main-link {
+            min-height: 48px;
+            padding: 12px 14px;
+            border-radius: 18px;
+            color: #fff !important;
+            text-decoration: none !important;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 950;
+            background: rgba(244, 123, 32, .13);
+            border: 1px solid rgba(244, 123, 32, .20);
+        }
+
+        .sidebar-main-link i {
+            color: #ffb86b;
+            width: 22px;
+            text-align: center;
+        }
+
+        .sidebar-submenu {
+            margin: 10px 0 0 0 !important;
+            padding: 0 0 0 12px !important;
+        }
+
+        .sidebar-submenu li {
+            margin: 3px 0;
+        }
+
+        .sidebar-submenu .nav-link {
+            min-height: 34px;
+            padding: 7px 10px !important;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #cbd5e1 !important;
+            border-radius: 12px;
+            font-size: .86rem;
+            font-weight: 800;
+            text-decoration: none;
+            transition: background .18s ease, color .18s ease, transform .18s ease;
+        }
+
+        .sidebar-submenu .nav-link:hover {
+            color: #fff !important;
+            background: rgba(255,255,255,.075);
+            transform: translateX(2px);
+        }
+
+        .sub-item-line {
+            width: 5px;
+            height: 5px;
+            flex: 0 0 5px;
+            border-radius: 50%;
+            background: var(--erp-orange);
+            box-shadow: 0 0 10px rgba(244,123,32,.65);
+        }
+
+        .app-content {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 100vh;
+            background: transparent !important;
+        }
+
+        .app-content > .container-fluid {
+            max-width: none;
+            min-height: 100vh;
+            padding: 0 !important;
+        }
+
+        #success-alert {
+            border-radius: 18px !important;
+            border: 1px solid rgba(34, 197, 94, .25) !important;
+            background: rgba(22, 163, 74, .12) !important;
+            color: #dcfce7 !important;
+            backdrop-filter: blur(12px);
+        }
+
+        .panel-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1040;
+            display: none;
+            background: rgba(0, 0, 0, .45);
+            backdrop-filter: blur(5px);
+        }
+
+        .panel-overlay.is-open,
+        .panel-overlay.open,
+        .panel-overlay.active {
+            display: block;
+        }
+
+        .slide-out-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: min(100%, 980px);
+            height: 100vh;
+            z-index: 1050;
+            transform: translateX(100%);
+            transition: transform .28s ease;
+            background: #0f172a;
+            box-shadow: -24px 0 70px rgba(0,0,0,.45);
+        }
+
+        .slide-out-panel.is-open,
+        .slide-out-panel.open,
+        .slide-out-panel.active {
+            transform: translateX(0);
+        }
+
+        @@media (max-width: 1100px) {
+            :root {
+                --erp-sidebar-width: 290px;
+            }
+        }
+
+        @@media (max-width: 900px) {
+            .app-container {
+                flex-direction: column;
+            }
+
+            .app-sidebar {
+                width: 100% !important;
+                min-width: 0 !important;
+                height: auto;
+                min-height: auto;
+                position: relative;
+                border-right: 0;
+                border-bottom: 1px solid rgba(255,255,255,.10);
+            }
+
+            .sidebar-header {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar-brand-card,
+            .sidebar-return-btn,
+            .sidebar-user-card {
+                max-width: 100%;
+            }
+
+            .sidebar-nav {
+                padding-bottom: 14px;
+            }
+
+            .app-content {
+                min-height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="app-sidebar" aria-label="Menú de administración de usuarios">
+            <div class="sidebar-header">
+                <div class="sidebar-brand-card" aria-label="Marca ERP">
+                    @if (!string.IsNullOrWhiteSpace(logoEmpresa) && logoEmpresa != "default-logo.png")
+                    {
+                        <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="sidebar-brand-logo" />
+                    }
+                    else
+                    {
+                        <div class="sidebar-brand-icon" aria-hidden="true">
+                            <i class="fas fa-building"></i>
+                        </div>
+                    }
+
+                    <div class="sidebar-brand-text">
+                        <div class="sidebar-brand-name">@nombreEmpresa</div>
+                        <div class="sidebar-brand-sub">ERP Suite</div>
+                    </div>
+                </div>
+
+                <a asp-controller="Menu"
+                   asp-action="Index"
+                   class="sidebar-return-btn"
+                   aria-label="Volver al menú principal">
+                    <span class="sidebar-return-text">Volver al menú principal</span>
+                </a>
+
+                <div class="sidebar-user-card" aria-label="Usuario actual">
+                    <div class="sidebar-user-avatar" aria-hidden="true">@inicialUsuario</div>
+                    <div>
+                        <div class="sidebar-user-name">@nombreUsuario</div>
+                        <div class="sidebar-user-role">Colaborador</div>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="sidebar-section-label">Administración</div>
+
+                <ul class="nav flex-column">
+                    @{
+                        var puedeVerUsuariosActivos = currentUserId > 0 && await UsuarioService.VerificarPermisoAsync(currentUserId, 1);
+                        var puedeVerUsuariosInactivos = currentUserId > 0 && await UsuarioService.VerificarPermisoAsync(currentUserId, 2);
+                        var puedeVerTodos = currentUserId > 0 && await UsuarioService.VerificarPermisoAsync(currentUserId, 3);
+
+                        // Temporal: se conserva el permiso 2 porque así se venía probando Enviar accesos.
+                        var puedeEnviarAccesos = currentUserId > 0 && await UsuarioService.VerificarPermisoAsync(currentUserId, 2);
+
+                        var mostrarMenuUsuarios = puedeVerUsuariosActivos
+                                               || puedeVerUsuariosInactivos
+                                               || puedeVerTodos
+                                               || puedeEnviarAccesos;
+                    }
+
+                    @if (mostrarMenuUsuarios)
+                    {
+                        <li class="nav-item">
+                            <a href="#usuarios-submenu"
+                               data-bs-toggle="collapse"
+                               role="button"
+                               aria-expanded="true"
+                               class="sidebar-main-link">
+                                <i class="fas fa-users-gear" aria-hidden="true"></i>
+                                <span>Usuarios</span>
+                            </a>
+
+                            <ul id="usuarios-submenu" class="collapse show sidebar-submenu">
+                                @if (puedeVerUsuariosActivos)
+                                {
+                                    <li>
+                                        <a asp-controller="Usuarios"
+                                           asp-action="Index"
+                                           asp-route-activos="true"
+                                           class="nav-link">
+                                            <span class="sub-item-line"></span>
+                                            Usuarios activos
+                                        </a>
+                                    </li>
+                                }
+
+                                @if (puedeVerUsuariosInactivos)
+                                {
+                                    <li>
+                                        <a asp-controller="Usuarios"
+                                           asp-action="Index"
+                                           asp-route-activos="false"
+                                           class="nav-link">
+                                            <span class="sub-item-line"></span>
+                                            Usuarios inactivos
+                                        </a>
+                                    </li>
+                                }
+
+                                @if (puedeVerTodos)
+                                {
+                                    <li>
+                                        <a asp-controller="Usuarios"
+                                           asp-action="Index"
+                                           class="nav-link">
+                                            <span class="sub-item-line"></span>
+                                            Todos los usuarios
+                                        </a>
+                                    </li>
+                                }
+
+                                @if (puedeEnviarAccesos)
+                                {
+                                    <li>
+                                        <a asp-controller="Usuarios"
+                                           asp-action="Accesos"
+                                           class="nav-link">
+                                            <span class="sub-item-line"></span>
+                                            Enviar accesos
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        </aside>
+
+        <main id="main-content" class="app-content">
+            <div class="container-fluid h-100">
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div id="success-alert"
+                         class="alert alert-success d-flex align-items-center shadow-sm"
+                         role="alert"
+                         style="position: fixed; top: 20px; right: 20px; z-index: 1060; min-width: 300px; border-left: 5px solid #22c55e;">
+                        <i class="fas fa-check-circle fa-lg me-2"></i>
+                        <div>@TempData["SuccessMessage"]</div>
+                        <button type="button"
+                                class="btn-close ms-auto"
+                                data-bs-dismiss="alert"
+                                aria-label="Close">
+                        </button>
+                    </div>
+                }
+
+                @RenderBody()
+            </div>
+        </main>
+    </div>
+
+    <div id="panel-overlay" class="panel-overlay"></div>
+
+    <div id="slide-out-panel" class="slide-out-panel">
+        <div id="panel-content" class="d-flex flex-column h-100"></div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var successAlert = document.getElementById('success-alert');
+
+            if (successAlert) {
+                setTimeout(function () {
+                    var instance = bootstrap.Alert.getOrCreateInstance(successAlert);
+                    instance.close();
+                }, 5000);
+            }
+        });
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

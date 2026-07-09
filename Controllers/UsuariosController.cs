@@ -240,7 +240,7 @@ namespace ERP.NSQuell.Controllers
         }
 
         // GET: /Usuarios/Crear
-        [AutorizarAccion("Crear Usuario", "Crear")]
+        [AutorizarAccion("Crear Usuarios", "Crear")]
         public async Task<IActionResult> Crear()
         {
           
@@ -290,7 +290,7 @@ namespace ERP.NSQuell.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [AutorizarAccion("Crear Usuario", "Crear")]
+        [AutorizarAccion("Crear Usuarios", "Crear")]
         public async Task<IActionResult> Crear(UsuarioFormViewModel viewModel)
         {
             if (ModelState.IsValid)
@@ -376,7 +376,7 @@ namespace ERP.NSQuell.Controllers
         }
 
         // GET: /Usuarios/Editar/5
-        [AutorizarAccion("Editar Usuario", "Editar")]
+        [AutorizarAccion("Editar Usuarios", "Editar")]
         public async Task<IActionResult> Editar(int id)
         {
             var usuarioDto = await _usuarioService.ObtenerParaEditarAsync(id);
@@ -524,7 +524,7 @@ namespace ERP.NSQuell.Controllers
         // POST: /Usuarios/Editar/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [AutorizarAccion("Editar Usuario", "Editar")]
+        [AutorizarAccion("Editar Usuarios", "Editar")]
         public async Task<IActionResult> Editar(int id, UsuarioFormViewModel viewModel)
         {
             var routeValues = new
@@ -619,7 +619,7 @@ namespace ERP.NSQuell.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [AutorizarAccion("Editar Usuario", "Editar")]
+        [AutorizarAccion("Editar Usuarios", "Editar")]
         public async Task<IActionResult> RestablecerPassword(
             int usuarioId,
             string nuevaPassword,
@@ -754,7 +754,7 @@ namespace ERP.NSQuell.Controllers
         // POST: /Usuarios/Eliminar/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [AutorizarAccion("Eliminar Usuario", "Eliminar")]
+        [AutorizarAccion("Eliminar Usuarios", "Eliminar")]
         public async Task<IActionResult> Eliminar(int id)
         {
             var routeValues = new
@@ -772,7 +772,7 @@ namespace ERP.NSQuell.Controllers
 
         // VALIDACIÓN REMOTA
         [AcceptVerbs("GET", "POST")]
-        [AutorizarAccion("Editar Usuario", "Editar")]
+        [AutorizarAccion("Editar Usuarios", "Editar")]
         public async Task<IActionResult> VerificarUsername(string username, int? usuarioID)
         {
             var query = _context.Usuarios.AsQueryable();

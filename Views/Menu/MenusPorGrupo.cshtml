@@ -37,13 +37,20 @@
 
     var currentUrl = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.Path}";
 }
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
     <title>@ViewData["Title"]</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('nsq-theme') || 'dark';
+            const theme = savedTheme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-nsq-theme', theme);
+        })();
+    </script>
 
     <link rel="stylesheet" href="~/css/globals/variables.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -55,6 +62,7 @@
     <link rel="preload" href="~/js/dashboard.js" as="script" />
     <link rel="preload" href="~/Imagenes/logo-universidad-ns.png" as="image" />
     <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
 
     <style>
         /* =====================================================
@@ -749,6 +757,267 @@
             border-color: rgba(244, 123, 32, .48) !important;
         }
 
+
+
+        /* =====================================================
+           THEME SWITCHER + LIGHT/DARK OVERRIDES PARA SUBMENUS
+           Esta vista tiene CSS interno con !important; por eso los
+           overrides van al final del mismo <style>.
+           ===================================================== */
+
+        .navbar-right {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: .75rem !important;
+            flex-wrap: nowrap !important;
+        }
+
+        .theme-switcher {
+            display: inline-flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: .55rem !important;
+            min-width: 112px !important;
+            height: 50px !important;
+            padding: 0 .9rem !important;
+            border-radius: 18px !important;
+            border: 1px solid rgba(255,255,255,.13) !important;
+            background: rgba(255,255,255,.075) !important;
+            color: #ffffff !important;
+            font-family: inherit !important;
+            font-size: .78rem !important;
+            font-weight: 950 !important;
+            line-height: 1 !important;
+            cursor: pointer !important;
+            white-space: nowrap !important;
+            box-shadow: var(--erp-shadow-soft) !important;
+            transition: transform .18s ease, background .22s ease, color .22s ease, border-color .22s ease, box-shadow .22s ease !important;
+            flex: 0 0 auto !important;
+            position: relative !important;
+            z-index: 5 !important;
+        }
+
+        .theme-switcher:hover {
+            color: #ffffff !important;
+            background: linear-gradient(135deg, #f47b20, #b45309) !important;
+            border-color: rgba(244, 123, 32, .52) !important;
+            transform: translateY(-2px) !important;
+        }
+
+        .theme-switcher-icon {
+            width: 26px !important;
+            height: 26px !important;
+            display: inline-grid !important;
+            place-items: center !important;
+            border-radius: 10px !important;
+            background: rgba(244, 123, 32, .16) !important;
+            color: #ffb86b !important;
+            flex: 0 0 26px !important;
+        }
+
+        .theme-switcher:hover .theme-switcher-icon {
+            background: rgba(255,255,255,.18) !important;
+            color: #ffffff !important;
+        }
+
+        .theme-switcher-text {
+            display: inline-block !important;
+        }
+
+        html[data-nsq-theme="dark"] body {
+            color: var(--erp-text) !important;
+            background:
+                radial-gradient(circle at 8% 7%, rgba(244, 123, 32, .24), transparent 26%),
+                radial-gradient(circle at 90% 12%, rgba(56, 189, 248, .15), transparent 28%),
+                radial-gradient(circle at 72% 92%, rgba(244, 123, 32, .11), transparent 30%),
+                linear-gradient(135deg, var(--erp-bg-0) 0%, var(--erp-bg-1) 46%, var(--erp-bg-2) 100%) !important;
+        }
+
+        html[data-nsq-theme="light"] body {
+            color: #0D1929 !important;
+            background:
+                radial-gradient(circle at 7% 8%, rgba(255, 130, 0, .14), transparent 30%),
+                radial-gradient(circle at 94% 12%, rgba(0, 83, 155, .12), transparent 32%),
+                linear-gradient(135deg, #F4F6F9 0%, #EAEDF2 48%, #EEF4FA 100%) !important;
+        }
+
+        html[data-nsq-theme="light"] body::after {
+            background: radial-gradient(circle, rgba(0, 83, 155, .10), transparent 64%) !important;
+        }
+
+        html[data-nsq-theme="light"] .navbar-content,
+        html[data-nsq-theme="light"] .migapan,
+        html[data-nsq-theme="light"] .group-hero,
+        html[data-nsq-theme="light"] .action-card.module-card {
+            background: rgba(255, 255, 255, .88) !important;
+            border-color: #E8F0FB !important;
+            color: #0D1929 !important;
+            box-shadow: 0 18px 45px rgba(13, 25, 41, .12) !important;
+        }
+
+        html[data-nsq-theme="light"] .navbar-content {
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+        }
+
+        html[data-nsq-theme="light"] .navbar-brand,
+        html[data-nsq-theme="light"] .navbar-title,
+        html[data-nsq-theme="light"] .group-hero h1,
+        html[data-nsq-theme="light"] .module-title,
+        html[data-nsq-theme="light"] .module-title.action-title,
+        html[data-nsq-theme="light"] .migapan__item--current,
+        html[data-nsq-theme="light"] .group-hero__metric span {
+            color: #0D1929 !important;
+            text-shadow: none !important;
+        }
+
+        html[data-nsq-theme="light"] .navbar-title::after,
+        html[data-nsq-theme="light"] .section-eyebrow,
+        html[data-nsq-theme="light"] .group-hero__metric small,
+        html[data-nsq-theme="light"] .module-kicker,
+        html[data-nsq-theme="light"] .user-role {
+            color: #f47b20 !important;
+        }
+
+        html[data-nsq-theme="light"] .group-hero p,
+        html[data-nsq-theme="light"] .module-description,
+        html[data-nsq-theme="light"] .module-description.action-description,
+        html[data-nsq-theme="light"] .migapan__item a,
+        html[data-nsq-theme="light"] .module-status,
+        html[data-nsq-theme="light"] .migapan__list,
+        html[data-nsq-theme="light"] .migapan__sep {
+            color: #2C3E55 !important;
+            text-shadow: none !important;
+        }
+
+        html[data-nsq-theme="light"] .migapan__back,
+        html[data-nsq-theme="light"] .module-index,
+        html[data-nsq-theme="light"] .module-open,
+        html[data-nsq-theme="light"] .theme-switcher,
+        html[data-nsq-theme="light"] .user-toggle {
+            color: #0D1929 !important;
+            background: rgba(255,255,255,.88) !important;
+            border-color: #E8F0FB !important;
+            box-shadow: 0 12px 28px rgba(13,25,41,.10) !important;
+        }
+
+        html[data-nsq-theme="light"] .migapan__back:hover,
+        html[data-nsq-theme="light"] .module-open:hover,
+        html[data-nsq-theme="light"] .theme-switcher:hover {
+            color: #ffffff !important;
+            background: linear-gradient(135deg, #f47b20, #b45309) !important;
+            border-color: rgba(244, 123, 32, .52) !important;
+        }
+
+        html[data-nsq-theme="light"] .user-name,
+        html[data-nsq-theme="light"] .user-toggle .fa-chevron-down {
+            color: #0D1929 !important;
+        }
+
+        html[data-nsq-theme="light"] .user-avatar {
+            background: #E8F0FB !important;
+            color: #0D1929 !important;
+            border: 1px solid #D7E3F3 !important;
+        }
+
+        html[data-nsq-theme="light"] .user-dropdown,
+        html[data-nsq-theme="light"] .modal-content,
+        html[data-nsq-theme="light"] .modal-perfil,
+        html[data-nsq-theme="light"] .modal-denuncia,
+        html[data-nsq-theme="light"] .modal-body,
+        html[data-nsq-theme="light"] .modal-header,
+        html[data-nsq-theme="light"] .modal-footer {
+            background: rgba(255,255,255,.96) !important;
+            border-color: #E8F0FB !important;
+            color: #0D1929 !important;
+            box-shadow: 0 22px 62px rgba(13,25,41,.14) !important;
+        }
+
+        html[data-nsq-theme="light"] .dropdown-item,
+        html[data-nsq-theme="light"] .perfil-info label,
+        html[data-nsq-theme="light"] .perfil-info p,
+        html[data-nsq-theme="light"] .modal-denuncia .form-group label,
+        html[data-nsq-theme="light"] .modal-title {
+            color: #0D1929 !important;
+        }
+
+        html[data-nsq-theme="light"] .perfil-info,
+        html[data-nsq-theme="light"] .modal-denuncia .form-control {
+            background: rgba(244,246,249,.92) !important;
+            border-color: #E8F0FB !important;
+            color: #0D1929 !important;
+        }
+
+        html[data-nsq-theme="light"] .modal-denuncia .text-muted.small {
+            color: #2C3E55 !important;
+            background: rgba(0, 83, 155, .08) !important;
+            border-left-color: #00539B !important;
+        }
+
+        html[data-nsq-theme="light"] .group-hero::after {
+            color: rgba(0, 58, 112, .07) !important;
+        }
+
+        html[data-nsq-theme="light"] .section-eyebrow,
+        html[data-nsq-theme="light"] .module-kicker {
+            background: rgba(244, 123, 32, .10) !important;
+            border-color: rgba(244, 123, 32, .28) !important;
+        }
+
+        html[data-nsq-theme="light"] .group-hero__metric {
+            background: rgba(255,255,255,.76) !important;
+            border-color: #E8F0FB !important;
+        }
+
+        html[data-nsq-theme="light"] .action-card.module-card {
+            background:
+                radial-gradient(circle at 16% 18%, color-mix(in srgb, var(--stripe-bg, #f47b20) 11%, transparent), transparent 26%),
+                linear-gradient(145deg, rgba(255,255,255,.96), rgba(240,244,250,.92)) !important;
+            border-color: var(--card-border, #E8F0FB) !important;
+        }
+
+        html[data-nsq-theme="light"] .action-card.module-card::before {
+            background:
+                radial-gradient(circle at 16% 18%, rgba(255,255,255,.26), transparent 22%),
+                radial-gradient(circle at 88% 86%, rgba(0,83,155,.06), transparent 30%),
+                linear-gradient(135deg, color-mix(in srgb, var(--stripe-bg, #f47b20) 10%, transparent), transparent 48%) !important;
+        }
+
+        html[data-nsq-theme="light"] .action-card.module-card::after {
+            border-color: color-mix(in srgb, var(--stripe-bg, #f47b20) 25%, transparent) !important;
+            box-shadow: 0 0 0 38px rgba(0,58,112,.025), 0 0 0 76px rgba(0,58,112,.018) !important;
+        }
+
+        html[data-nsq-theme="light"] .module-footer {
+            border-top-color: rgba(13,25,41,.10) !important;
+        }
+
+        html[data-nsq-theme="light"] .module-icon,
+        html[data-nsq-theme="light"] .module-icon i,
+        html[data-nsq-theme="light"] .navbar-brand i {
+            color: #ffffff !important;
+        }
+
+        html[data-nsq-theme="dark"] .theme-switcher {
+            background: rgba(255,255,255,.075) !important;
+            color: #ffffff !important;
+            border-color: rgba(255,255,255,.13) !important;
+        }
+
+        @@media (max-width: 720px) {
+            .theme-switcher {
+                min-width: 50px !important;
+                width: 50px !important;
+                padding: 0 !important;
+            }
+
+            .theme-switcher-text {
+                display: none !important;
+            }
+        }
+
         @@media (max-width: 1100px) {
             .quick-actions {
                 grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important;
@@ -835,7 +1104,7 @@
     </style>
 </head>
 
-<body data-empresa="@empresaId">
+<body class="nsq-theme-dark" data-empresa="@empresaId">
     @await Html.PartialAsync("_Overlay")
 
     <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
@@ -859,6 +1128,18 @@
                 </div>
 
                 <div class="navbar-right">
+                    <button type="button"
+                            class="theme-switcher"
+                            id="btnThemeToggle"
+                            data-theme-toggle
+                            aria-label="Cambiar tema"
+                            title="Cambiar tema">
+                        <span class="theme-switcher-icon" aria-hidden="true">
+                            <i class="fas fa-sun" data-theme-icon></i>
+                        </span>
+                        <span class="theme-switcher-text" data-theme-text>Claro</span>
+                    </button>
+
                     <div class="user-menu">
                         <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario">
                             <div class="user-avatar" aria-hidden="true">@(nombreUsuario.Substring(0, 1).ToUpper())</div>
@@ -1254,6 +1535,64 @@
             }
         });
     </script>
+
+
+    <script>
+        (function () {
+            const STORAGE_KEY = 'nsq-theme';
+
+            function normalizeTheme(theme) {
+                return theme === 'light' ? 'light' : 'dark';
+            }
+
+            function applyTheme(theme) {
+                const selectedTheme = normalizeTheme(theme);
+
+                document.documentElement.setAttribute('data-nsq-theme', selectedTheme);
+
+                if (document.body) {
+                    document.body.classList.remove('nsq-theme-dark', 'nsq-theme-light');
+                    document.body.classList.add(selectedTheme === 'light' ? 'nsq-theme-light' : 'nsq-theme-dark');
+                }
+
+                localStorage.setItem(STORAGE_KEY, selectedTheme);
+
+                document.querySelectorAll('[data-theme-toggle]').forEach(function (btn) {
+                    const icon = btn.querySelector('[data-theme-icon]');
+                    const text = btn.querySelector('[data-theme-text]');
+
+                    btn.setAttribute('title', selectedTheme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
+                    btn.setAttribute('aria-label', selectedTheme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
+
+                    if (icon) {
+                        icon.className = selectedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+                    }
+
+                    if (text) {
+                        text.textContent = selectedTheme === 'light' ? 'Oscuro' : 'Claro';
+                    }
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                const savedTheme = localStorage.getItem(STORAGE_KEY) || 'dark';
+                applyTheme(savedTheme);
+
+                document.querySelectorAll('[data-theme-toggle]').forEach(function (btn) {
+                    if (btn.dataset.themeInit === '1') return;
+
+                    btn.dataset.themeInit = '1';
+
+                    btn.addEventListener('click', function () {
+                        const currentTheme = document.documentElement.getAttribute('data-nsq-theme') || 'dark';
+                        const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+                        applyTheme(nextTheme);
+                    });
+                });
+            });
+        })();
+    </script>
+
 </body>
 </html>
 
