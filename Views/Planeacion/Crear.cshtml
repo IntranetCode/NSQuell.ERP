@@ -1,0 +1,1046 @@
+﻿@model ERP.NSQuell.Models.PlaneacionOFCrearVm
+
+@{
+    Layout = null;
+
+    var clientesData = Model.Clientes.Select(x => new { value = x.Value, text = x.Text }).ToList();
+    var partesData = Model.Partes.Select(x => new { value = x.Value, text = x.Text }).ToList();
+    var moldesData = Model.Moldes.Select(x => new { value = x.Value, text = x.Text }).ToList();
+    var maquinasData = Model.Maquinas.Select(x => new { value = x.Value, text = x.Text }).ToList();
+
+    var clientesJson = System.Text.Json.JsonSerializer.Serialize(clientesData);
+    var partesJson = System.Text.Json.JsonSerializer.Serialize(partesData);
+    var moldesJson = System.Text.Json.JsonSerializer.Serialize(moldesData);
+    var maquinasJson = System.Text.Json.JsonSerializer.Serialize(maquinasData);
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Nueva OF | Planeación</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --erp-blue: #004AAD;
+            --erp-blue-dark: #00347a;
+            --erp-gray: #f3f5f8;
+            --erp-border: #d9e1ec;
+            --erp-text: #263238;
+        }
+
+        body {
+            background: var(--erp-gray);
+            color: var(--erp-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .erp-shell {
+            max-width: 1550px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .erp-header {
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+            color: white;
+            border-radius: 20px;
+            padding: 26px 30px;
+            box-shadow: 0 14px 34px rgba(0, 74, 173, .22);
+            margin-bottom: 22px;
+        }
+
+            .erp-header h1 {
+                font-size: 1.55rem;
+                margin: 0;
+                font-weight: 800;
+            }
+
+            .erp-header p {
+                margin: 6px 0 0 0;
+                opacity: .92;
+            }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+        }
+
+        .erp-card-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .erp-card-body {
+            padding: 20px;
+        }
+
+        .erp-title {
+            font-weight: 800;
+            color: var(--erp-blue-dark);
+            margin: 0;
+        }
+
+        .erp-muted {
+            color: #687789;
+            font-size: .88rem;
+        }
+
+        .erp-label {
+            font-weight: 700;
+            color: #33465f;
+            font-size: .86rem;
+            margin-bottom: 6px;
+        }
+
+        .erp-input,
+        .erp-select,
+        .erp-textarea {
+            border-radius: 12px;
+            border: 1px solid var(--erp-border);
+            padding: 10px 12px;
+        }
+
+            .erp-input:focus,
+            .erp-select:focus,
+            .erp-textarea:focus {
+                border-color: var(--erp-blue);
+                box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .13);
+            }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border-color: var(--erp-blue);
+            color: white;
+            font-weight: 700;
+            border-radius: 12px;
+            padding: 10px 16px;
+        }
+
+            .btn-erp-primary:hover {
+                background: var(--erp-blue-dark);
+                border-color: var(--erp-blue-dark);
+                color: white;
+            }
+
+        .btn-erp-light {
+            background: #fff;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+            font-weight: 700;
+            border-radius: 12px;
+        }
+
+        .btn-erp-danger {
+            background: #fff;
+            border: 1px solid #f2b8b5;
+            color: #b42318;
+            font-weight: 700;
+            border-radius: 12px;
+        }
+
+        .renglon-card {
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            overflow: hidden;
+            margin-bottom: 18px;
+            background: #fff;
+        }
+
+        .renglon-header {
+            background: #eef3fb;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .renglon-body {
+            padding: 18px;
+        }
+
+        .badge-renglon {
+            background: var(--erp-blue);
+            color: white;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-weight: 800;
+        }
+
+        .section-title {
+            font-size: .9rem;
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin: 18px 0 12px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #edf1f6;
+        }
+
+        .asignacion-box {
+            background: #f8fafc;
+            border: 1px dashed #cdd8e7;
+            border-radius: 14px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 0;
+            background: rgba(243, 245, 248, .92);
+            backdrop-filter: blur(10px);
+            padding: 14px 0;
+            z-index: 20;
+        }
+
+        .small-help {
+            font-size: .78rem;
+            color: #758397;
+        }
+
+        @@media (max-width: 768px) {
+            .erp-shell {
+                padding: 16px;
+            }
+
+            .erp-header {
+                padding: 20px;
+            }
+
+                .erp-header h1 {
+                    font-size: 1.25rem;
+                }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="erp-shell">
+
+        <div class="erp-header">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h1>
+                        <i class="fa-solid fa-clipboard-list me-2"></i>
+                        Nueva OF / Planeación
+                    </h1>
+                    <p>
+                        Captura la OF recibida por Dirección. Los datos técnicos se autollenan por parte, pero quedan editables.
+                    </p>
+                </div>
+
+                <div>
+                    <a asp-controller="Planeacion" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-arrow-left me-1"></i>
+                        Volver
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <form asp-controller="Planeacion" asp-action="Crear" method="post" id="formCrearOF">
+            @Html.AntiForgeryToken()
+
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+            <div class="erp-card">
+                <div class="erp-card-header">
+                    <div>
+                        <h2 class="erp-title h5">
+                            <i class="fa-solid fa-file-signature me-2"></i>
+                            Encabezado de OF
+                        </h2>
+                        <div class="erp-muted">
+                            Datos generales de la orden enviada por Dirección.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="erp-card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="erp-label">Folio interno</label>
+                            <input asp-for="FolioSolicitud" class="form-control erp-input" readonly placeholder="Se asignará al guardar" />
+                            <div class="small-help">El folio se genera al guardar.</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="erp-label">OF recibida de Dirección</label>
+                            <input asp-for="NumeroOFRecibida" class="form-control erp-input" placeholder="Ej. OF-2026-001" />
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="erp-label">Fecha solicitud</label>
+                            <input asp-for="FechaSolicitud" type="date" class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="erp-label">Fecha requerida</label>
+                            <input asp-for="FechaRequerida" type="date" class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="erp-label">Cliente</label>
+                            <select asp-for="ClienteID" class="form-select erp-select" id="ClienteID">
+                                <option value="">-- Selecciona cliente --</option>
+                                @foreach (var c in Model.Clientes)
+                                {
+                                    <option value="@c.Value">@c.Text</option>
+                                }
+                            </select>
+                            <input asp-for="ClienteNombre" type="hidden" id="ClienteNombre" />
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="erp-label">Inicio planeado</label>
+                            <input asp-for="FechaInicioPlaneada" type="datetime-local" class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="erp-label">Fin planeado</label>
+                            <input asp-for="FechaFinPlaneada" type="datetime-local" class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Prioridad</label>
+                            <select asp-for="Prioridad" class="form-select erp-select">
+                                <option value="Normal">Normal</option>
+                                <option value="Media">Media</option>
+                                <option value="Alta">Alta</option>
+                                <option value="Urgente">Urgente</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="erp-label">Notas generales</label>
+                            <textarea asp-for="NotasGenerales" class="form-control erp-textarea" rows="2" placeholder="Comentarios generales de Planeación..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card">
+                <div class="erp-card-header">
+                    <div>
+                        <h2 class="erp-title h5">
+                            <i class="fa-solid fa-layer-group me-2"></i>
+                            Renglones de producción
+                        </h2>
+                        <div class="erp-muted">
+                            Selecciona la parte para autollenar referencia, datos técnicos, material y embalaje.
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-erp-primary" onclick="agregarRenglon()">
+                        <i class="fa-solid fa-plus me-1"></i>
+                        Agregar renglón
+                    </button>
+                </div>
+
+                <div class="erp-card-body">
+                    <div id="contenedorRenglones">
+                        @for (var i = 0; i < Model.Detalles.Count; i++)
+                        {
+                            <div class="renglon-card renglon-item" data-index="@i">
+                                <div class="renglon-header">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge-renglon">Renglón <span class="numero-renglon">@(i + 1)</span></span>
+                                        <span class="erp-muted">Producto / parte</span>
+                                    </div>
+
+                                    <button type="button" class="btn btn-sm btn-erp-danger" onclick="eliminarRenglon(this)">
+                                        <i class="fa-regular fa-trash-can me-1"></i>
+                                        Quitar
+                                    </button>
+                                </div>
+
+                                <div class="renglon-body">
+                                    <input type="hidden" name="Detalles[@i].Renglon" value="@(i + 1)" class="input-renglon" />
+
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="erp-label">Parte</label>
+                                            <select name="Detalles[@i].ParteID" class="form-select erp-select parte-select">
+                                                <option value="">-- Selecciona parte --</option>
+                                                @foreach (var p in Model.Partes)
+                                                {
+                                                    <option value="@p.Value">@p.Text</option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="erp-label">Referencia SAP</label>
+                                            <input name="Detalles[@i].ReferenciaSAP" class="form-control erp-input referencia-input" />
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="erp-label">Cantidad piezas</label>
+                                            <input name="Detalles[@i].CantidadPiezas" type="number" min="0" class="form-control erp-input cantidad-input" />
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="erp-label">Designación / descripción SAP</label>
+                                            <input name="Detalles[@i].DesignacionDescripcionSAP" class="form-control erp-input designacion-input" />
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="erp-label">Horas planeadas</label>
+                                            <input name="Detalles[@i].HorasPlaneadas" type="number" step="0.01" min="0" class="form-control erp-input horas-input" />
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="erp-label">Molde</label>
+                                            <select name="Detalles[@i].MoldeID" class="form-select erp-select molde-select">
+                                                <option value="">-- Selecciona molde --</option>
+                                                @foreach (var m in Model.Moldes)
+                                                {
+                                                    <option value="@m.Value">@m.Text</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="section-title">
+                                        Datos técnicos autollenados
+                                    </div>
+
+                                    <div class="row g-3">
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Color</label>
+                                            <input name="Detalles[@i].Color" class="form-control erp-input color-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Cavidades</label>
+                                            <input name="Detalles[@i].Cavidades" type="number" min="0" class="form-control erp-input cavidades-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Objetivo/hora</label>
+                                            <input name="Detalles[@i].ObjetivoHora" type="number" min="0" class="form-control erp-input objetivo-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Piezas/caja</label>
+                                            <input name="Detalles[@i].PiezasPorCaja" type="number" min="0" class="form-control erp-input piezas-caja-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Ciclo</label>
+                                            <input name="Detalles[@i].Ciclo" class="form-control erp-input ciclo-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Tipo secado</label>
+                                            <input name="Detalles[@i].TipoSecado" list="listaTipoSecado" class="form-control erp-input tipo-secado-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Horas secado</label>
+                                            <input name="Detalles[@i].HorasSecado" type="number" step="0.01" min="0" class="form-control erp-input horas-secado-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Peso bruto pieza</label>
+                                            <input name="Detalles[@i].PesoBrutoPieza" type="number" step="0.000001" min="0" class="form-control erp-input peso-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Piezas embalaje</label>
+                                            <input name="Detalles[@i].PiezasPorEmbalaje" type="number" step="0.0001" min="0" class="form-control erp-input piezas-embalaje-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Cantidad embalajes</label>
+                                            <input name="Detalles[@i].CantidadEmbalajes" type="number" step="0.0001" min="0" class="form-control erp-input cantidad-embalajes-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Cantidad MP kg</label>
+                                            <input name="Detalles[@i].CantidadMpKg" type="number" step="0.0001" min="0" class="form-control erp-input cantidad-mp-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Cambio</label>
+                                            <input name="Detalles[@i].Cambio" type="time" class="form-control erp-input" />
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="erp-label">Material código</label>
+                                            <input name="Detalles[@i].MaterialCodigo" class="form-control erp-input material-codigo-input" />
+                                        </div>
+
+                                        <div class="col-md-5">
+                                            <label class="erp-label">Material descripción</label>
+                                            <input name="Detalles[@i].MaterialDescripcion" class="form-control erp-input material-desc-input" />
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="erp-label">Arranque</label>
+                                            <input name="Detalles[@i].Arranque" type="time" class="form-control erp-input" />
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="erp-label">Embalaje código</label>
+                                            <input name="Detalles[@i].EmbalajeCodigo" class="form-control erp-input embalaje-codigo-input" />
+                                        </div>
+
+                                        <div class="col-md-9">
+                                            <label class="erp-label">Embalaje descripción</label>
+                                            <input name="Detalles[@i].EmbalajeDescripcion" class="form-control erp-input embalaje-desc-input" />
+                                        </div>
+                                    </div>
+
+                                    <div class="section-title">
+                                        Asignación de máquina
+                                    </div>
+
+                                    <div class="asignacion-box">
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <label class="erp-label">Máquina</label>
+                                                <select name="Detalles[@i].AsignacionesMaquina[0].MaquinaID" class="form-select erp-select maquina-select">
+                                                    <option value="">-- Selecciona máquina --</option>
+                                                    @foreach (var maq in Model.Maquinas)
+                                                    {
+                                                        <option value="@maq.Value">@maq.Text</option>
+                                                    }
+                                                </select>
+                                            </div>
+
+                                            <div class="col-md-2">
+                                                <label class="erp-label">Cantidad asignada</label>
+                                                <input name="Detalles[@i].AsignacionesMaquina[0].CantidadAsignada" type="number" min="0" class="form-control erp-input cantidad-asignada-input" />
+                                            </div>
+
+                                            <div class="col-md-2">
+                                                <label class="erp-label">Horas estimadas</label>
+                                                <input name="Detalles[@i].AsignacionesMaquina[0].HorasEstimadas" type="number" step="0.01" min="0" class="form-control erp-input" />
+                                            </div>
+
+                                            <div class="col-md-2">
+                                                <label class="erp-label">Condición</label>
+                                                <select name="Detalles[@i].AsignacionesMaquina[0].CondicionProduccion" class="form-select erp-select">
+                                                    <option value="">-- Selecciona --</option>
+                                                    <option value="T.P">T.P</option>
+                                                    <option value="I.P">I.P</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="col-md-2">
+                                                <label class="erp-label">Fecha tentativa</label>
+                                                <input name="Detalles[@i].AsignacionesMaquina[0].FechaProgramadaTentativa" type="date" class="form-control erp-input" />
+                                            </div>
+
+                                            <input type="hidden" name="Detalles[@i].AsignacionesMaquina[0].Secuencia" value="1" />
+
+                                            <div class="col-md-2">
+                                                <label class="erp-label">Hora inicio</label>
+                                                <input name="Detalles[@i].AsignacionesMaquina[0].HoraInicioTentativa" type="time" class="form-control erp-input" />
+                                            </div>
+
+                                            <div class="col-md-2">
+                                                <label class="erp-label">Hora fin</label>
+                                                <input name="Detalles[@i].AsignacionesMaquina[0].HoraFinTentativa" type="time" class="form-control erp-input" />
+                                            </div>
+
+                                            <div class="col-md-8">
+                                                <label class="erp-label">Observaciones máquina</label>
+                                                <input name="Detalles[@i].AsignacionesMaquina[0].Observaciones" class="form-control erp-input" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3">
+                                        <label class="erp-label">Notas del renglón</label>
+                                        <textarea name="Detalles[@i].Notas" class="form-control erp-textarea" rows="2"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <button type="button" class="btn btn-erp-light" onclick="agregarRenglon()">
+                        <i class="fa-solid fa-plus me-1"></i>
+                        Agregar otro renglón
+                    </button>
+                </div>
+            </div>
+
+            <div class="sticky-actions">
+                <div class="d-flex justify-content-end gap-2">
+                    <a asp-controller="Planeacion" asp-action="Index" class="btn btn-erp-light">
+                        Cancelar
+                    </a>
+
+                    <button type="submit" class="btn btn-erp-primary">
+                        <i class="fa-solid fa-floppy-disk me-1"></i>
+                        Guardar OF
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <datalist id="listaTipoSecado">
+        <option value="SECADOR"></option>
+        <option value="DESHUMIFICADOR"></option>
+        <option value="NO APLICA"></option>
+    </datalist>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+                const clientesData = @Html.Raw(clientesJson);
+                const partesData = @Html.Raw(partesJson);
+                const moldesData = @Html.Raw(moldesJson);
+                const maquinasData = @Html.Raw(maquinasJson);
+
+                const urlParteInfo = '@Url.Action("ObtenerParteInfo", "Planeacion")';
+                const urlCalcular = '@Url.Action("CalcularDatosOF", "Planeacion")';
+
+                function escapeHtml(value) {
+                    return String(value ?? '')
+                        .replaceAll('&', '&amp;')
+                        .replaceAll('<', '&lt;')
+                        .replaceAll('>', '&gt;')
+                        .replaceAll('"', '&quot;')
+                        .replaceAll("'", '&#039;')
+                        .replaceAll('`', '&#096;');
+                }
+
+                function crearOptions(data, placeholder) {
+                    let html = `<option value="">${escapeHtml(placeholder)}</option>`;
+
+                    data.forEach(x => {
+                        html += `<option value="${escapeHtml(x.value)}">${escapeHtml(x.text)}</option>`;
+                    });
+
+                    return html;
+                }
+
+                const partesOptions = crearOptions(partesData, '-- Selecciona parte --');
+                const moldesOptions = crearOptions(moldesData, '-- Selecciona molde --');
+                const maquinasOptions = crearOptions(maquinasData, '-- Selecciona máquina --');
+
+                function agregarRenglon() {
+                    const contenedor = document.getElementById('contenedorRenglones');
+                    const index = contenedor.querySelectorAll('.renglon-item').length;
+
+                    const html = crearHtmlRenglon(index);
+                    contenedor.insertAdjacentHTML('beforeend', html);
+                    renumerarRenglones();
+                }
+
+                function crearHtmlRenglon(i) {
+                    return `
+        <div class="renglon-card renglon-item" data-index="${i}">
+            <div class="renglon-header">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge-renglon">Renglón <span class="numero-renglon">${i + 1}</span></span>
+                    <span class="erp-muted">Producto / parte</span>
+                </div>
+
+                <button type="button" class="btn btn-sm btn-erp-danger" onclick="eliminarRenglon(this)">
+                    <i class="fa-regular fa-trash-can me-1"></i>
+                    Quitar
+                </button>
+            </div>
+
+            <div class="renglon-body">
+                <input type="hidden" name="Detalles[${i}].Renglon" value="${i + 1}" class="input-renglon" />
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="erp-label">Parte</label>
+                        <select name="Detalles[${i}].ParteID" class="form-select erp-select parte-select">
+                            ${partesOptions}
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="erp-label">Referencia SAP</label>
+                        <input name="Detalles[${i}].ReferenciaSAP" class="form-control erp-input referencia-input" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="erp-label">Cantidad piezas</label>
+                        <input name="Detalles[${i}].CantidadPiezas" type="number" min="0" class="form-control erp-input cantidad-input" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="erp-label">Designación / descripción SAP</label>
+                        <input name="Detalles[${i}].DesignacionDescripcionSAP" class="form-control erp-input designacion-input" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="erp-label">Horas planeadas</label>
+                        <input name="Detalles[${i}].HorasPlaneadas" type="number" step="0.01" min="0" class="form-control erp-input horas-input" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="erp-label">Molde</label>
+                        <select name="Detalles[${i}].MoldeID" class="form-select erp-select molde-select">
+                            ${moldesOptions}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="section-title">Datos técnicos autollenados</div>
+
+                <div class="row g-3">
+                    <div class="col-md-2">
+                        <label class="erp-label">Color</label>
+                        <input name="Detalles[${i}].Color" class="form-control erp-input color-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Cavidades</label>
+                        <input name="Detalles[${i}].Cavidades" type="number" min="0" class="form-control erp-input cavidades-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Objetivo/hora</label>
+                        <input name="Detalles[${i}].ObjetivoHora" type="number" min="0" class="form-control erp-input objetivo-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Piezas/caja</label>
+                        <input name="Detalles[${i}].PiezasPorCaja" type="number" min="0" class="form-control erp-input piezas-caja-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Ciclo</label>
+                        <input name="Detalles[${i}].Ciclo" class="form-control erp-input ciclo-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Tipo secado</label>
+                        <input name="Detalles[${i}].TipoSecado" list="listaTipoSecado" class="form-control erp-input tipo-secado-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Horas secado</label>
+                        <input name="Detalles[${i}].HorasSecado" type="number" step="0.01" min="0" class="form-control erp-input horas-secado-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Peso bruto pieza</label>
+                        <input name="Detalles[${i}].PesoBrutoPieza" type="number" step="0.000001" min="0" class="form-control erp-input peso-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Piezas embalaje</label>
+                        <input name="Detalles[${i}].PiezasPorEmbalaje" type="number" step="0.0001" min="0" class="form-control erp-input piezas-embalaje-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Cantidad embalajes</label>
+                        <input name="Detalles[${i}].CantidadEmbalajes" type="number" step="0.0001" min="0" class="form-control erp-input cantidad-embalajes-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Cantidad MP kg</label>
+                        <input name="Detalles[${i}].CantidadMpKg" type="number" step="0.0001" min="0" class="form-control erp-input cantidad-mp-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Cambio</label>
+                        <input name="Detalles[${i}].Cambio" type="time" class="form-control erp-input" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="erp-label">Material código</label>
+                        <input name="Detalles[${i}].MaterialCodigo" class="form-control erp-input material-codigo-input" />
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="erp-label">Material descripción</label>
+                        <input name="Detalles[${i}].MaterialDescripcion" class="form-control erp-input material-desc-input" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="erp-label">Arranque</label>
+                        <input name="Detalles[${i}].Arranque" type="time" class="form-control erp-input" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="erp-label">Embalaje código</label>
+                        <input name="Detalles[${i}].EmbalajeCodigo" class="form-control erp-input embalaje-codigo-input" />
+                    </div>
+
+                    <div class="col-md-9">
+                        <label class="erp-label">Embalaje descripción</label>
+                        <input name="Detalles[${i}].EmbalajeDescripcion" class="form-control erp-input embalaje-desc-input" />
+                    </div>
+                </div>
+
+                <div class="section-title">Asignación de máquina</div>
+
+                <div class="asignacion-box">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="erp-label">Máquina</label>
+                            <select name="Detalles[${i}].AsignacionesMaquina[0].MaquinaID" class="form-select erp-select maquina-select">
+                                ${maquinasOptions}
+                            </select>
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Cantidad asignada</label>
+                            <input name="Detalles[${i}].AsignacionesMaquina[0].CantidadAsignada" type="number" min="0" class="form-control erp-input cantidad-asignada-input" />
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Horas estimadas</label>
+                            <input name="Detalles[${i}].AsignacionesMaquina[0].HorasEstimadas" type="number" step="0.01" min="0" class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Condición</label>
+                            <select name="Detalles[${i}].AsignacionesMaquina[0].CondicionProduccion" class="form-select erp-select">
+                                <option value="">-- Selecciona --</option>
+                                <option value="T.P">T.P</option>
+                                <option value="I.P">I.P</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Fecha tentativa</label>
+                            <input name="Detalles[${i}].AsignacionesMaquina[0].FechaProgramadaTentativa" type="date" class="form-control erp-input" />
+                        </div>
+
+                        <input type="hidden" name="Detalles[${i}].AsignacionesMaquina[0].Secuencia" value="1" />
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Hora inicio</label>
+                            <input name="Detalles[${i}].AsignacionesMaquina[0].HoraInicioTentativa" type="time" class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Hora fin</label>
+                            <input name="Detalles[${i}].AsignacionesMaquina[0].HoraFinTentativa" type="time" class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-8">
+                            <label class="erp-label">Observaciones máquina</label>
+                            <input name="Detalles[${i}].AsignacionesMaquina[0].Observaciones" class="form-control erp-input" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <label class="erp-label">Notas del renglón</label>
+                    <textarea name="Detalles[${i}].Notas" class="form-control erp-textarea" rows="2"></textarea>
+                </div>
+            </div>
+        </div>`;
+                }
+
+                function eliminarRenglon(btn) {
+                    const contenedor = document.getElementById('contenedorRenglones');
+                    const total = contenedor.querySelectorAll('.renglon-item').length;
+
+                    if (total <= 1) {
+                        alert('Debe quedar al menos un renglón.');
+                        return;
+                    }
+
+                    btn.closest('.renglon-item').remove();
+                    renumerarRenglones();
+                }
+
+                function renumerarRenglones() {
+                    const renglones = document.querySelectorAll('.renglon-item');
+
+                    renglones.forEach((card, index) => {
+                        card.dataset.index = index;
+
+                        const numero = card.querySelector('.numero-renglon');
+                        if (numero) numero.innerText = index + 1;
+
+                        const inputRenglon = card.querySelector('.input-renglon');
+                        if (inputRenglon) inputRenglon.value = index + 1;
+
+                        card.querySelectorAll('[name]').forEach(el => {
+                            el.name = el.name.replace(/Detalles\[\d+\]/g, `Detalles[${index}]`);
+                        });
+                    });
+                }
+
+                document.addEventListener('change', async function (e) {
+                    if (e.target.classList.contains('parte-select')) {
+                        await cargarInfoParte(e.target);
+                    }
+                });
+
+                document.addEventListener('input', function (e) {
+                    if (
+                        e.target.classList.contains('cantidad-input') ||
+                        e.target.classList.contains('horas-input') ||
+                        e.target.classList.contains('objetivo-input') ||
+                        e.target.classList.contains('piezas-embalaje-input') ||
+                        e.target.classList.contains('peso-input')
+                    ) {
+                        calcularRenglon(e.target.closest('.renglon-item'));
+                    }
+
+                    if (e.target.classList.contains('cantidad-input')) {
+                        const card = e.target.closest('.renglon-item');
+                        const asignada = card.querySelector('.cantidad-asignada-input');
+
+                        if (asignada && (!asignada.value || Number(asignada.value) === 0)) {
+                            asignada.value = e.target.value;
+                        }
+                    }
+                });
+
+                async function cargarInfoParte(select) {
+                    const parteId = select.value;
+                    const card = select.closest('.renglon-item');
+
+                    if (!parteId) return;
+
+                    try {
+                        const resp = await fetch(`${urlParteInfo}?parteId=${encodeURIComponent(parteId)}`);
+                        const data = await resp.json();
+
+                        if (!data.ok) {
+                            alert(data.mensaje || 'No se encontró la información de la parte.');
+                            return;
+                        }
+
+                        setValue(card, '.referencia-input', data.referenciaSAP);
+                        setValue(card, '.designacion-input', data.designacionDescripcionSAP);
+                        setValue(card, '.color-input', data.color);
+                        setValue(card, '.cavidades-input', data.cavidades);
+                        setValue(card, '.objetivo-input', data.objetivoHora);
+                        setValue(card, '.piezas-caja-input', data.piezasPorCaja);
+                        setValue(card, '.ciclo-input', data.ciclo);
+                        setValue(card, '.tipo-secado-input', data.tipoSecado);
+                        setValue(card, '.horas-secado-input', data.horasSecado);
+                        setValue(card, '.peso-input', data.pesoBrutoPieza);
+                        setValue(card, '.piezas-embalaje-input', data.piezasPorEmbalaje);
+                        setValue(card, '.material-codigo-input', data.materialCodigo);
+                        setValue(card, '.material-desc-input', data.materialDescripcion);
+                        setValue(card, '.embalaje-codigo-input', data.embalajeCodigo);
+                        setValue(card, '.embalaje-desc-input', data.embalajeDescripcion);
+
+                        const moldeSelect = card.querySelector('.molde-select');
+                        if (moldeSelect && data.moldeID) {
+                            moldeSelect.value = data.moldeID;
+                        }
+
+                        const maquinaSelect = card.querySelector('.maquina-select');
+                        if (maquinaSelect && data.maquinaPrincipalID) {
+                            maquinaSelect.value = data.maquinaPrincipalID;
+                        }
+
+                        const clienteSelect = document.getElementById('ClienteID');
+                        const clienteNombre = document.getElementById('ClienteNombre');
+
+                        if (clienteSelect && data.clienteID) {
+                            clienteSelect.value = data.clienteID;
+                        }
+
+                        if (clienteNombre && data.clienteNombre) {
+                            clienteNombre.value = data.clienteNombre;
+                        }
+
+                        calcularRenglon(card);
+                    } catch (err) {
+                        console.error(err);
+                        alert('No se pudo cargar la información técnica de la parte.');
+                    }
+                }
+
+                function setValue(card, selector, value) {
+                    const input = card.querySelector(selector);
+                    if (!input) return;
+
+                    input.value = value ?? '';
+                }
+
+                async function calcularRenglon(card) {
+                    if (!card) return;
+
+                    const cantidad = getValue(card, '.cantidad-input');
+                    const horas = getValue(card, '.horas-input');
+                    const objetivo = getValue(card, '.objetivo-input');
+                    const piezasEmbalaje = getValue(card, '.piezas-embalaje-input');
+                    const peso = getValue(card, '.peso-input');
+
+                    const qs = new URLSearchParams({
+                        cantidadPiezas: cantidad || '',
+                        horasPlaneadas: horas || '',
+                        objetivoHora: objetivo || '',
+                        piezasPorEmbalaje: piezasEmbalaje || '',
+                        pesoBrutoPieza: peso || ''
+                    });
+
+                    try {
+                        const resp = await fetch(`${urlCalcular}?${qs.toString()}`);
+                        const data = await resp.json();
+
+                        if (!data.ok) return;
+
+                        const cantidadInput = card.querySelector('.cantidad-input');
+                        const cantidadAsignadaInput = card.querySelector('.cantidad-asignada-input');
+                        const embalajesInput = card.querySelector('.cantidad-embalajes-input');
+                        const mpInput = card.querySelector('.cantidad-mp-input');
+
+                        if (cantidadInput && (!cantidadInput.value || Number(cantidadInput.value) <= 0)) {
+                            cantidadInput.value = data.cantidadPiezas ?? '';
+                        }
+
+                        if (cantidadAsignadaInput && (!cantidadAsignadaInput.value || Number(cantidadAsignadaInput.value) <= 0)) {
+                            cantidadAsignadaInput.value = cantidadInput?.value || data.cantidadPiezas || '';
+                        }
+
+                        if (embalajesInput) {
+                            embalajesInput.value = data.cantidadEmbalajes ?? '';
+                        }
+
+                        if (mpInput) {
+                            mpInput.value = data.cantidadMpKg ?? '';
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+
+                function getValue(card, selector) {
+                    const input = card.querySelector(selector);
+                    return input ? input.value : '';
+                }
+
+                const clienteSelect = document.getElementById('ClienteID');
+                const clienteNombre = document.getElementById('ClienteNombre');
+
+                if (clienteSelect && clienteNombre) {
+                    clienteSelect.addEventListener('change', function () {
+                        const selected = this.options[this.selectedIndex];
+                        clienteNombre.value = selected ? selected.text : '';
+                    });
+                }
+    </script>
+</body>
+</html>

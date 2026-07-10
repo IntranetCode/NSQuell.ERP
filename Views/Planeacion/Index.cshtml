@@ -1,0 +1,485 @@
+﻿@model List<ERP.NSQuell.Models.PlaneacionOFIndexVm>
+
+@{
+    Layout = null;
+    var success = TempData["Success"] as string;
+    var error = TempData["Error"] as string;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Planeación OF | ERP QUELL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --erp-blue: #004AAD;
+            --erp-blue-dark: #00347a;
+            --erp-gray: #f3f5f8;
+            --erp-border: #d9e1ec;
+            --erp-text: #263238;
+        }
+
+        body {
+            background: var(--erp-gray);
+            color: var(--erp-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .erp-shell {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .erp-header {
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+            color: white;
+            border-radius: 20px;
+            padding: 26px 30px;
+            box-shadow: 0 14px 34px rgba(0, 74, 173, .22);
+            margin-bottom: 22px;
+        }
+
+            .erp-header h1 {
+                font-size: 1.55rem;
+                margin: 0;
+                font-weight: 800;
+                letter-spacing: .2px;
+            }
+
+            .erp-header p {
+                margin: 6px 0 0 0;
+                opacity: .92;
+            }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+        }
+
+        .erp-card-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .erp-card-title {
+            font-weight: 800;
+            color: var(--erp-blue-dark);
+            margin: 0;
+        }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border-color: var(--erp-blue);
+            color: white;
+            font-weight: 700;
+            border-radius: 12px;
+            padding: 10px 16px;
+        }
+
+            .btn-erp-primary:hover {
+                background: var(--erp-blue-dark);
+                border-color: var(--erp-blue-dark);
+                color: white;
+            }
+
+        .btn-erp-light {
+            background: #fff;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+            font-weight: 700;
+            border-radius: 12px;
+        }
+
+        .erp-table {
+            margin: 0;
+        }
+
+            .erp-table thead th {
+                background: #eef3fb;
+                color: #30445f;
+                font-size: .82rem;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                border-bottom: 1px solid var(--erp-border);
+                white-space: nowrap;
+            }
+
+            .erp-table td {
+                vertical-align: middle;
+                border-color: #edf1f6;
+            }
+
+        .erp-folio {
+            font-weight: 800;
+            color: var(--erp-blue-dark);
+        }
+
+        .erp-muted {
+            color: #687789;
+            font-size: .88rem;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 6px 11px;
+            font-size: .78rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .status-1 {
+            background: #e8f1ff;
+            color: #004AAD;
+        }
+
+        .status-2 {
+            background: #fff4de;
+            color: #a76700;
+        }
+
+        .status-3,
+        .status-4,
+        .status-5 {
+            background: #fff0f0;
+            color: #b42318;
+        }
+
+        .status-6,
+        .status-7,
+        .status-8 {
+            background: #eafaf0;
+            color: #157347;
+        }
+
+        .status-9 {
+            background: #ede7ff;
+            color: #5b35b1;
+        }
+
+        .status-10 {
+            background: #e8f8f3;
+            color: #08785f;
+        }
+
+        .status-11 {
+            background: #f1f1f1;
+            color: #6c757d;
+        }
+
+        .erp-stat {
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.25);
+            border-radius: 16px;
+            padding: 14px 16px;
+            min-width: 150px;
+        }
+
+        .erp-stat-value {
+            font-size: 1.25rem;
+            font-weight: 900;
+        }
+
+        .erp-stat-label {
+            font-size: .78rem;
+            opacity: .9;
+        }
+
+        .search-box {
+            border-radius: 13px;
+            border: 1px solid var(--erp-border);
+            padding: 10px 14px;
+            min-width: 280px;
+        }
+
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: #6b7a90;
+        }
+
+            .empty-state i {
+                font-size: 3rem;
+                color: #b5c3d6;
+                margin-bottom: 15px;
+            }
+
+        @@media (max-width: 768px) {
+            .erp-shell {
+                padding: 16px;
+            }
+
+            .erp-header {
+                padding: 20px;
+            }
+
+                .erp-header h1 {
+                    font-size: 1.25rem;
+                }
+
+            .search-box {
+                width: 100%;
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="erp-shell">
+
+        <div class="erp-header">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h1>
+                        <i class="fa-solid fa-calendar-check me-2"></i>
+                        Planeación / Captura de OF
+                    </h1>
+                    <p>
+                        Captura de órdenes recibidas por Dirección, autollenado técnico por parte y seguimiento de planeación.
+                    </p>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <div class="erp-stat">
+                        <div class="erp-stat-value">@Model.Count</div>
+                        <div class="erp-stat-label">OF capturadas</div>
+                    </div>
+
+                    <div class="erp-stat">
+                        <div class="erp-stat-value">@Model.Sum(x => x.TotalPiezas).ToString("N0")</div>
+                        <div class="erp-stat-label">Piezas totales</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(success))
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fa-solid fa-circle-check me-2"></i>
+                @success
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                @error
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        <div class="erp-card">
+            <div class="erp-card-header">
+                <div>
+                    <h2 class="erp-card-title h5">
+                        <i class="fa-solid fa-list-check me-2"></i>
+                        Bandeja de Planeación
+                    </h2>
+                    <div class="erp-muted">
+                        Consulta las OF capturadas y su avance.
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <input id="txtBuscar" class="search-box" type="text" placeholder="Buscar folio, cliente, OF..." />
+
+                    <a asp-controller="Planeacion" asp-action="Crear" class="btn btn-erp-primary">
+                        <i class="fa-solid fa-plus me-1"></i>
+                        Nueva OF
+                    </a>
+                </div>
+            </div>
+
+            @if (Model == null || !Model.Any())
+            {
+                <div class="empty-state">
+                    <i class="fa-regular fa-folder-open"></i>
+                    <h5 class="fw-bold">Aún no hay OF capturadas</h5>
+                    <p class="mb-3">Comienza capturando la primera orden recibida por Dirección.</p>
+
+                    <a asp-controller="Planeacion" asp-action="Crear" class="btn btn-erp-primary">
+                        <i class="fa-solid fa-plus me-1"></i>
+                        Capturar primera OF
+                    </a>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table erp-table align-middle" id="tablaOF">
+                        <thead>
+                            <tr>
+                                <th>Folio</th>
+                                <th>OF Dirección</th>
+                                <th>Cliente</th>
+                                <th>Fechas</th>
+                                <th>Planeación</th>
+                                <th>Renglones</th>
+                                <th>Piezas</th>
+                                <th>Prioridad</th>
+                                <th>Estatus</th>
+                                <th>Responsable</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var item in Model)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="erp-folio">
+                                            @(string.IsNullOrWhiteSpace(item.FolioSolicitud) ? "Sin folio" : item.FolioSolicitud)
+                                        </div>
+                                        <div class="erp-muted">
+                                            ID @item.SolicitudProduccionID
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(item.NumeroOFRecibida))
+                                        {
+                                            <span class="fw-semibold">@item.NumeroOFRecibida</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="erp-muted">No capturada</span>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        <div class="fw-semibold">
+                                            @(string.IsNullOrWhiteSpace(item.Cliente) ? "Sin cliente" : item.Cliente)
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div>
+                                            <span class="erp-muted">Solicitud:</span>
+                                            @item.FechaSolicitud.ToString("dd/MM/yyyy")
+                                        </div>
+
+                                        <div>
+                                            <span class="erp-muted">Requerida:</span>
+                                            @(item.FechaRequerida.HasValue? item.FechaRequerida.Value.ToString("dd/MM/yyyy") : "Sin fecha")
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div>
+                                            <span class="erp-muted">Inicio:</span>
+                                            @(item.FechaInicioPlaneada.HasValue? item.FechaInicioPlaneada.Value.ToString("dd/MM/yyyy HH:mm") : "Sin definir")
+                                        </div>
+
+                                        <div>
+                                            <span class="erp-muted">Fin:</span>
+                                            @(item.FechaFinPlaneada.HasValue? item.FechaFinPlaneada.Value.ToString("dd/MM/yyyy HH:mm") : "Sin definir")
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="badge rounded-pill text-bg-light border">
+                                            @item.TotalRenglones
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <span class="fw-bold">
+                                            @item.TotalPiezas.ToString("N0")
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        @switch ((item.Prioridad ?? "").ToUpperInvariant())
+                                        {
+                                            case "URGENTE":
+                                            case "ALTA":
+                                                <span class="badge text-bg-danger">@item.Prioridad</span>
+                                                break;
+
+                                            case "MEDIA":
+                                                <span class="badge text-bg-warning">@item.Prioridad</span>
+                                                break;
+
+                                            default:
+                                                <span class="badge text-bg-secondary">@item.Prioridad</span>
+                                                break;
+                                        }
+                                    </td>
+
+                                    <td>
+                                        <span class="status-pill status-@item.EstatusID">
+                                            <i class="fa-solid fa-circle"></i>
+                                            @item.EstatusNombre
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(item.ResponsablePlaneacionNombre))
+                                        {
+                                            <span>@item.ResponsablePlaneacionNombre</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="erp-muted">Sin responsable</span>
+                                        }
+                                    </td>
+
+                                    <td class="text-end">
+                                        <a asp-controller="Planeacion"
+                                           asp-action="Detalle"
+                                           asp-route-id="@item.SolicitudProduccionID"
+                                           class="btn btn-sm btn-erp-light">
+                                            <i class="fa-regular fa-eye me-1"></i>
+                                            Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const txtBuscar = document.getElementById('txtBuscar');
+        const tabla = document.getElementById('tablaOF');
+
+        if (txtBuscar && tabla) {
+            txtBuscar.addEventListener('input', function () {
+                const filtro = this.value.toLowerCase().trim();
+                const filas = tabla.querySelectorAll('tbody tr');
+
+                filas.forEach(fila => {
+                    const texto = fila.innerText.toLowerCase();
+                    fila.style.display = texto.includes(filtro) ? '' : 'none';
+                });
+            });
+        }
+    </script>
+</body>
+</html>

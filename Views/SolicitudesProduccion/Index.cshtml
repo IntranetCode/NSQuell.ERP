@@ -1,0 +1,566 @@
+﻿@model List<ERP.NSQuell.Models.ERP.SolicitudProduccionIndexVm>
+
+@{
+    Layout = null;
+    ViewData["Title"] = "Solicitudes de Producción";
+
+    var solicitudes = Model ?? new List<ERP.NSQuell.Models.ERP.SolicitudProduccionIndexVm>();
+}
+
+<!DOCTYPE html>
+<html lang="es-mx">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ERP NS Quell</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --erp-azul: #0B5CAD;
+            --erp-azul-oscuro: #084985;
+            --erp-azul-claro: #EAF3FF;
+            --erp-gris-fondo: #F4F6F9;
+            --erp-gris-borde: #D9E2EC;
+            --erp-gris-texto: #4A5568;
+            --erp-blanco: #FFFFFF;
+            --erp-rojo: #B91C1C;
+            --erp-verde: #047857;
+            --erp-amarillo: #B45309;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: var(--erp-gris-fondo);
+            color: #1E293B;
+        }
+
+        .erp-page {
+            background: var(--erp-gris-fondo);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .erp-header-card {
+            background: linear-gradient(135deg, #ffffff 0%, #eef6ff 100%);
+            border: 1px solid var(--erp-gris-borde);
+            border-left: 6px solid var(--erp-azul);
+            border-radius: 16px;
+            padding: 22px 26px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+            margin-bottom: 22px;
+        }
+
+        .erp-title {
+            color: #1F2937;
+            font-weight: 800;
+            margin: 0;
+            font-size: 1.55rem;
+            letter-spacing: -0.02em;
+        }
+
+        .erp-subtitle {
+            color: var(--erp-gris-texto);
+            margin-top: 6px;
+            margin-bottom: 0;
+            font-size: .95rem;
+        }
+
+        .erp-btn-primary {
+            background: var(--erp-azul);
+            border-color: var(--erp-azul);
+            color: white;
+            border-radius: 10px;
+            font-weight: 700;
+            padding: 10px 16px;
+            box-shadow: 0 4px 12px rgba(11, 92, 173, .18);
+        }
+
+            .erp-btn-primary:hover {
+                background: var(--erp-azul-oscuro);
+                border-color: var(--erp-azul-oscuro);
+                color: white;
+            }
+
+        .erp-card {
+            background: var(--erp-blanco);
+            border: 1px solid var(--erp-gris-borde);
+            border-radius: 16px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+            overflow: hidden;
+        }
+
+        .erp-toolbar {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--erp-gris-borde);
+            background: #FFFFFF;
+        }
+
+        .erp-search {
+            border-radius: 10px;
+            border: 1px solid var(--erp-gris-borde);
+            padding: 10px 12px;
+            font-size: .95rem;
+        }
+
+            .erp-search:focus {
+                border-color: var(--erp-azul);
+                box-shadow: 0 0 0 .2rem rgba(11, 92, 173, .12);
+            }
+
+        .erp-table {
+            margin: 0;
+        }
+
+            .erp-table thead th {
+                background: #F8FAFC;
+                color: #334155;
+                font-size: .78rem;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                border-bottom: 1px solid var(--erp-gris-borde);
+                padding: 14px 12px;
+                white-space: nowrap;
+            }
+
+            .erp-table tbody td {
+                padding: 14px 12px;
+                vertical-align: middle;
+                color: #334155;
+                border-bottom: 1px solid #EEF2F7;
+                font-size: .92rem;
+            }
+
+            .erp-table tbody tr:hover {
+                background: var(--erp-azul-claro);
+            }
+
+        .erp-folio {
+            font-weight: 800;
+            color: var(--erp-azul-oscuro);
+        }
+
+        .erp-muted {
+            color: #64748B;
+            font-size: .86rem;
+        }
+
+        .erp-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: .78rem;
+            font-weight: 800;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .erp-badge-azul {
+            background: #EAF3FF;
+            color: #0B5CAD;
+            border-color: #BBD8FF;
+        }
+
+        .erp-badge-gris {
+            background: #F1F5F9;
+            color: #475569;
+            border-color: #CBD5E1;
+        }
+
+        .erp-badge-verde {
+            background: #ECFDF5;
+            color: var(--erp-verde);
+            border-color: #A7F3D0;
+        }
+
+        .erp-badge-amarillo {
+            background: #FFFBEB;
+            color: var(--erp-amarillo);
+            border-color: #FDE68A;
+        }
+
+        .erp-badge-rojo {
+            background: #FEF2F2;
+            color: var(--erp-rojo);
+            border-color: #FECACA;
+        }
+
+        .erp-action-btn {
+            border-radius: 9px;
+            padding: 7px 11px;
+            font-size: .85rem;
+            font-weight: 700;
+        }
+
+        .erp-empty {
+            padding: 46px 20px;
+            text-align: center;
+            color: #64748B;
+        }
+
+        .erp-empty-icon {
+            width: 62px;
+            height: 62px;
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #F1F5F9;
+            color: #94A3B8;
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+
+        .erp-kpi {
+            background: #FFFFFF;
+            border: 1px solid var(--erp-gris-borde);
+            border-radius: 14px;
+            padding: 16px;
+            height: 100%;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+        }
+
+        .erp-kpi-label {
+            color: #64748B;
+            font-size: .78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .erp-kpi-value {
+            color: #1E293B;
+            font-weight: 900;
+            font-size: 1.55rem;
+            margin-top: 4px;
+        }
+
+        .erp-kpi-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--erp-azul-claro);
+            color: var(--erp-azul);
+        }
+
+        .erp-topbar {
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+
+        @@media (max-width: 768px) {
+            .erp-page {
+                padding: 14px;
+            }
+
+            .erp-header-card {
+                padding: 18px;
+            }
+
+            .erp-title {
+                font-size: 1.25rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="erp-page">
+        <div class="erp-topbar">
+
+            <div class="erp-header-card">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                    <div>
+                        <h1 class="erp-title">
+                            <i class="fa-solid fa-file-signature me-2 text-primary"></i>
+                            Solicitudes de Producción
+                        </h1>
+                        <p class="erp-subtitle">
+                            Bandeja de OF capturadas por Gestión Comercial, con detalle de piezas y asignación inicial de máquinas.
+                        </p>
+                    </div>
+
+                    <div>
+                        <a href="/SolicitudesProduccion/Crear" class="btn erp-btn-primary">
+                            <i class="fa-solid fa-plus me-1"></i>
+                            Nueva solicitud / OF
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            @if (TempData["Success"] != null)
+            {
+                <div class="alert alert-success border-0 shadow-sm rounded-3">
+                    <i class="fa-solid fa-circle-check me-2"></i>
+                    @TempData["Success"]
+                </div>
+            }
+
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger border-0 shadow-sm rounded-3">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                    @TempData["Error"]
+                </div>
+            }
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="erp-kpi">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="erp-kpi-label">Total solicitudes</div>
+                                <div class="erp-kpi-value">@solicitudes.Count</div>
+                            </div>
+                            <div class="erp-kpi-icon">
+                                <i class="fa-solid fa-folder-open"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="erp-kpi">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="erp-kpi-label">Capturadas</div>
+                                <div class="erp-kpi-value">
+                                    @solicitudes.Count(x => x.EstatusID == ERP.NSQuell.Models.ERP.SolicitudProduccionEstatus.Capturada)
+                                </div>
+                            </div>
+                            <div class="erp-kpi-icon">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="erp-kpi">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="erp-kpi-label">En revisión</div>
+                                <div class="erp-kpi-value">
+                                    @solicitudes.Count(x => x.EstatusID == ERP.NSQuell.Models.ERP.SolicitudProduccionEstatus.EnRevisionPlaneacion)
+                                </div>
+                            </div>
+                            <div class="erp-kpi-icon">
+                                <i class="fa-solid fa-magnifying-glass-chart"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="erp-kpi">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="erp-kpi-label">Total piezas</div>
+                                <div class="erp-kpi-value">@solicitudes.Sum(x => x.TotalPiezas).ToString("N0")</div>
+                            </div>
+                            <div class="erp-kpi-icon">
+                                <i class="fa-solid fa-cubes"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card">
+                <div class="erp-toolbar">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-8">
+                            <input type="text"
+                                   id="busquedaSolicitudes"
+                                   class="form-control erp-search"
+                                   placeholder="Buscar por folio, OF, cliente, prioridad o estatus..." />
+                        </div>
+
+                        <div class="col-md-4 text-md-end">
+                            <span class="erp-muted">
+                                <i class="fa-solid fa-circle-info me-1"></i>
+                                Mostrando @solicitudes.Count registro(s)
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                @if (!solicitudes.Any())
+                {
+                    <div class="erp-empty">
+                        <div class="erp-empty-icon">
+                            <i class="fa-regular fa-folder-open"></i>
+                        </div>
+
+                        <h5 class="fw-bold text-dark mb-2">No hay solicitudes capturadas</h5>
+                        <p class="mb-3">Comienza creando la primera solicitud de producción.</p>
+
+                        <a href="/SolicitudesProduccion/Crear" class="btn erp-btn-primary">
+                            <i class="fa-solid fa-plus me-1"></i>
+                            Crear solicitud
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table erp-table align-middle" id="tablaSolicitudes">
+                            <thead>
+                                <tr>
+                                    <th>Folio</th>
+                                    <th>OF recibida</th>
+                                    <th>Cliente</th>
+                                    <th>Fecha solicitud</th>
+                                    <th>Fecha requerida</th>
+                                    <th>Prioridad</th>
+                                    <th>Estatus</th>
+                                    <th class="text-end">Renglones</th>
+                                    <th class="text-end">Piezas</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var item in solicitudes)
+                                {
+                                    var prioridadClase = item.Prioridad?.ToUpper() switch
+                                    {
+                                        "URGENTE" => "erp-badge-rojo",
+                                        "ALTA" => "erp-badge-amarillo",
+                                        _ => "erp-badge-gris"
+                                    };
+
+                                    var estatusClase = item.EstatusID switch
+                                    {
+                                        1 => "erp-badge-azul",
+                                        2 => "erp-badge-amarillo",
+                                        3 => "erp-badge-amarillo",
+                                        4 => "erp-badge-rojo",
+                                        5 => "erp-badge-amarillo",
+                                        6 => "erp-badge-azul",
+                                        7 => "erp-badge-verde",
+                                        8 => "erp-badge-verde",
+                                        9 => "erp-badge-azul",
+                                        10 => "erp-badge-verde",
+                                        11 => "erp-badge-rojo",
+                                        _ => "erp-badge-gris"
+                                    };
+
+                                    <tr>
+                                        <td>
+                                            <div class="erp-folio">
+                                                @(string.IsNullOrWhiteSpace(item.FolioSolicitud) ? "Sin folio" : item.FolioSolicitud)
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(item.NumeroOFRecibida))
+                                            {
+                                                <span>@item.NumeroOFRecibida</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="erp-muted">Sin OF</span>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(item.Cliente))
+                                            {
+                                                <span>@item.Cliente</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="erp-muted">Sin cliente</span>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            @item.FechaSolicitud.ToString("dd/MM/yyyy")
+                                        </td>
+
+                                        <td>
+                                            @if (item.FechaRequerida.HasValue)
+                                            {
+                                                @item.FechaRequerida.Value.ToString("dd/MM/yyyy")
+                                            }
+                                            else
+                                            {
+                                                <span class="erp-muted">No definida</span>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            <span class="erp-badge @prioridadClase">
+                                                @(string.IsNullOrWhiteSpace(item.Prioridad) ? "Normal" : item.Prioridad)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="erp-badge @estatusClase">
+                                                @item.EstatusNombre
+                                            </span>
+                                        </td>
+
+                                        <td class="text-end">
+                                            @item.TotalRenglones
+                                        </td>
+
+                                        <td class="text-end">
+                                            @item.TotalPiezas.ToString("N0")
+                                        </td>
+
+                                        <td class="text-end">
+                                            <a href="/SolicitudesProduccion/Detalle/@item.SolicitudProduccionID"
+                                               class="btn btn-outline-primary btn-sm erp-action-btn">
+                                                <i class="fa-solid fa-eye me-1"></i>
+                                                Ver
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const input = document.getElementById("busquedaSolicitudes");
+            const tabla = document.getElementById("tablaSolicitudes");
+
+            if (!input || !tabla) {
+                return;
+            }
+
+            input.addEventListener("keyup", function () {
+                const filtro = input.value.toLowerCase().trim();
+                const filas = tabla.querySelectorAll("tbody tr");
+
+                filas.forEach(function (fila) {
+                    const texto = fila.innerText.toLowerCase();
+                    fila.style.display = texto.includes(filtro) ? "" : "none";
+                });
+            });
+        });
+    </script>
+</body>
+</html>

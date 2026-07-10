@@ -1,0 +1,740 @@
+﻿@model ERP.NSQuell.Models.ERP.SolicitudProduccionDetalleVistaVm
+
+@{
+    Layout = null;
+    ViewData["Title"] = "Detalle Solicitud de Producción";
+
+    var detalles = Model.Detalles ?? new List<ERP.NSQuell.Models.ERP.SolicitudProduccionDetalleVistaRenglonVm>();
+    var historial = Model.Historial ?? new List<ERP.NSQuell.Models.ERP.SolicitudProduccionHistorialVistaVm>();
+
+    string EstatusClase(int estatusId)
+    {
+        return estatusId switch
+        {
+            1 => "erp-badge-azul",
+            2 => "erp-badge-amarillo",
+            3 => "erp-badge-amarillo",
+            4 => "erp-badge-rojo",
+            5 => "erp-badge-amarillo",
+            6 => "erp-badge-azul",
+            7 => "erp-badge-verde",
+            8 => "erp-badge-verde",
+            9 => "erp-badge-azul",
+            10 => "erp-badge-verde",
+            11 => "erp-badge-rojo",
+            _ => "erp-badge-gris"
+        };
+    }
+
+    string CondicionNombre(string? condicion)
+    {
+        return condicion switch
+        {
+            "T.P" => "T.P - Terminar producción",
+            "I.P" => "I.P - Interrumpir producción",
+            _ => "Sin condición"
+        };
+    }
+}
+
+<!DOCTYPE html>
+<html lang="es-mx">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ERP NS Quell</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --erp-azul: #0B5CAD;
+            --erp-azul-oscuro: #084985;
+            --erp-azul-claro: #EAF3FF;
+            --erp-gris-fondo: #F4F6F9;
+            --erp-gris-borde: #D9E2EC;
+            --erp-gris-texto: #4A5568;
+            --erp-blanco: #FFFFFF;
+            --erp-rojo: #B91C1C;
+            --erp-verde: #047857;
+            --erp-amarillo: #B45309;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: var(--erp-gris-fondo);
+            color: #1E293B;
+        }
+
+        .erp-page {
+            background: var(--erp-gris-fondo);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .erp-container {
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+
+        .erp-header-card {
+            background: linear-gradient(135deg, #ffffff 0%, #eef6ff 100%);
+            border: 1px solid var(--erp-gris-borde);
+            border-left: 6px solid var(--erp-azul);
+            border-radius: 16px;
+            padding: 22px 26px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+            margin-bottom: 22px;
+        }
+
+        .erp-title {
+            color: #1F2937;
+            font-weight: 800;
+            margin: 0;
+            font-size: 1.55rem;
+            letter-spacing: -0.02em;
+        }
+
+        .erp-subtitle {
+            color: var(--erp-gris-texto);
+            margin-top: 6px;
+            margin-bottom: 0;
+            font-size: .95rem;
+        }
+
+        .erp-card {
+            background: var(--erp-blanco);
+            border: 1px solid var(--erp-gris-borde);
+            border-radius: 16px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+            margin-bottom: 18px;
+            overflow: hidden;
+        }
+
+        .erp-card-header {
+            background: #F8FAFC;
+            border-bottom: 1px solid var(--erp-gris-borde);
+            padding: 15px 18px;
+            font-weight: 800;
+            color: #1E293B;
+        }
+
+        .erp-card-body {
+            padding: 20px;
+        }
+
+        .erp-info-label {
+            color: #64748B;
+            font-size: .78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 4px;
+        }
+
+        .erp-info-value {
+            color: #1E293B;
+            font-size: .98rem;
+            font-weight: 700;
+        }
+
+        .erp-muted {
+            color: #64748B;
+            font-size: .86rem;
+        }
+
+        .erp-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: .78rem;
+            font-weight: 800;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .erp-badge-azul {
+            background: #EAF3FF;
+            color: #0B5CAD;
+            border-color: #BBD8FF;
+        }
+
+        .erp-badge-gris {
+            background: #F1F5F9;
+            color: #475569;
+            border-color: #CBD5E1;
+        }
+
+        .erp-badge-verde {
+            background: #ECFDF5;
+            color: var(--erp-verde);
+            border-color: #A7F3D0;
+        }
+
+        .erp-badge-amarillo {
+            background: #FFFBEB;
+            color: var(--erp-amarillo);
+            border-color: #FDE68A;
+        }
+
+        .erp-badge-rojo {
+            background: #FEF2F2;
+            color: var(--erp-rojo);
+            border-color: #FECACA;
+        }
+
+        .erp-btn-primary {
+            background: var(--erp-azul);
+            border-color: var(--erp-azul);
+            color: white;
+            border-radius: 10px;
+            font-weight: 700;
+            padding: 10px 16px;
+            box-shadow: 0 4px 12px rgba(11, 92, 173, .18);
+        }
+
+            .erp-btn-primary:hover {
+                background: var(--erp-azul-oscuro);
+                border-color: var(--erp-azul-oscuro);
+                color: white;
+            }
+
+        .erp-table {
+            margin: 0;
+        }
+
+            .erp-table thead th {
+                background: #F8FAFC;
+                color: #334155;
+                font-size: .78rem;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                border-bottom: 1px solid var(--erp-gris-borde);
+                padding: 13px 12px;
+                white-space: nowrap;
+            }
+
+            .erp-table tbody td {
+                padding: 13px 12px;
+                vertical-align: middle;
+                color: #334155;
+                border-bottom: 1px solid #EEF2F7;
+                font-size: .92rem;
+            }
+
+        .erp-renglon {
+            border: 1px solid var(--erp-gris-borde);
+            border-radius: 16px;
+            background: #FFFFFF;
+            margin-bottom: 18px;
+            overflow: hidden;
+        }
+
+        .erp-renglon-header {
+            background: #F8FAFC;
+            border-bottom: 1px solid var(--erp-gris-borde);
+            padding: 14px 16px;
+        }
+
+        .erp-renglon-title {
+            font-weight: 900;
+            color: #1E293B;
+        }
+
+        .erp-asignacion-card {
+            border: 1px dashed #BBD8FF;
+            background: #FAFCFF;
+            border-radius: 14px;
+            padding: 14px;
+            height: 100%;
+        }
+
+        .erp-kpi {
+            background: #FFFFFF;
+            border: 1px solid var(--erp-gris-borde);
+            border-radius: 14px;
+            padding: 16px;
+            height: 100%;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+        }
+
+        .erp-kpi-label {
+            color: #64748B;
+            font-size: .78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .erp-kpi-value {
+            color: #1E293B;
+            font-weight: 900;
+            font-size: 1.45rem;
+            margin-top: 4px;
+        }
+
+        .erp-timeline {
+            position: relative;
+            padding-left: 22px;
+        }
+
+            .erp-timeline::before {
+                content: "";
+                position: absolute;
+                left: 7px;
+                top: 4px;
+                bottom: 4px;
+                width: 2px;
+                background: #D9E2EC;
+            }
+
+        .erp-timeline-item {
+            position: relative;
+            margin-bottom: 16px;
+            padding-bottom: 2px;
+        }
+
+            .erp-timeline-item::before {
+                content: "";
+                position: absolute;
+                left: -20px;
+                top: 5px;
+                width: 12px;
+                height: 12px;
+                border-radius: 999px;
+                background: var(--erp-azul);
+                border: 2px solid #FFFFFF;
+                box-shadow: 0 0 0 2px #BBD8FF;
+            }
+
+        .erp-modal-label {
+            font-size: .86rem;
+            font-weight: 800;
+            color: #334155;
+            margin-bottom: 6px;
+        }
+
+        @@media (max-width: 768px) {
+            .erp-page {
+                padding: 14px;
+            }
+
+            .erp-header-card {
+                padding: 18px;
+            }
+
+            .erp-title {
+                font-size: 1.25rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="erp-page">
+        <div class="erp-container">
+
+            <div class="erp-header-card">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                    <div>
+                        <h1 class="erp-title">
+                            <i class="fa-solid fa-file-circle-check me-2 text-primary"></i>
+                            Detalle de solicitud de producción
+                        </h1>
+                        <p class="erp-subtitle">
+                            Consulta general de la OF, referencias capturadas, asignación inicial de máquinas e historial.
+                        </p>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="/SolicitudesProduccion/Index" class="btn btn-outline-secondary rounded-3">
+                            <i class="fa-solid fa-arrow-left me-1"></i>
+                            Volver
+                        </a>
+
+                        @if (Model.EstatusID < ERP.NSQuell.Models.ERP.SolicitudProduccionEstatus.EnProduccion &&
+                                                Model.EstatusID != ERP.NSQuell.Models.ERP.SolicitudProduccionEstatus.Cancelada)
+                        {
+                            <button type="button" class="btn btn-outline-danger rounded-3" data-bs-toggle="modal" data-bs-target="#modalCancelar">
+                                <i class="fa-solid fa-ban me-1"></i>
+                                Cancelar
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @if (TempData["Success"] != null)
+            {
+                <div class="alert alert-success border-0 shadow-sm rounded-3">
+                    <i class="fa-solid fa-circle-check me-2"></i>
+                    @TempData["Success"]
+                </div>
+            }
+
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger border-0 shadow-sm rounded-3">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                    @TempData["Error"]
+                </div>
+            }
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="erp-kpi">
+                        <div class="erp-kpi-label">Folio interno</div>
+                        <div class="erp-kpi-value">@(string.IsNullOrWhiteSpace(Model.FolioSolicitud) ? "Sin folio" : Model.FolioSolicitud)</div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="erp-kpi">
+                        <div class="erp-kpi-label">OF recibida</div>
+                        <div class="erp-kpi-value">@(string.IsNullOrWhiteSpace(Model.NumeroOFRecibida) ? "Sin OF" : Model.NumeroOFRecibida)</div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="erp-kpi">
+                        <div class="erp-kpi-label">Total renglones</div>
+                        <div class="erp-kpi-value">@detalles.Count</div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="erp-kpi">
+                        <div class="erp-kpi-label">Total piezas</div>
+                        <div class="erp-kpi-value">@detalles.Sum(x => x.CantidadPiezas).ToString("N0")</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card">
+                <div class="erp-card-header">
+                    <i class="fa-solid fa-circle-info me-2 text-primary"></i>
+                    Información general
+                </div>
+
+                <div class="erp-card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="erp-info-label">Cliente</div>
+                            <div class="erp-info-value">@(string.IsNullOrWhiteSpace(Model.Cliente) ? "Sin cliente" : Model.Cliente)</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="erp-info-label">Fecha solicitud</div>
+                            <div class="erp-info-value">@Model.FechaSolicitud.ToString("dd/MM/yyyy")</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="erp-info-label">Fecha requerida</div>
+                            <div class="erp-info-value">
+                                @(Model.FechaRequerida.HasValue? Model.FechaRequerida.Value.ToString("dd/MM/yyyy") : "No definida")
+                            </div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="erp-info-label">Prioridad</div>
+                            <div class="erp-info-value">@Model.Prioridad</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="erp-info-label">Estatus</div>
+                            <span class="erp-badge @EstatusClase(Model.EstatusID)">
+                                @Model.EstatusNombre
+                            </span>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="erp-info-label">Notas generales</div>
+                            <div class="erp-info-value">
+                                @(string.IsNullOrWhiteSpace(Model.NotasGenerales) ? "Sin notas generales." : Model.NotasGenerales)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card">
+                <div class="erp-card-header">
+                    <i class="fa-solid fa-list-check me-2 text-primary"></i>
+                    Renglones y asignación de máquinas
+                </div>
+
+                <div class="erp-card-body">
+                    @if (!detalles.Any())
+                    {
+                        <div class="text-center py-5 text-muted">
+                            <i class="fa-regular fa-folder-open fa-2x mb-2"></i>
+                            <h5 class="fw-bold">Sin renglones capturados</h5>
+                            <p class="mb-0">Esta solicitud no tiene referencias registradas.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var d in detalles)
+                        {
+                            <div class="erp-renglon">
+                                <div class="erp-renglon-header">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+                                        <div>
+                                            <div class="erp-renglon-title">
+                                                Renglón @d.Renglon
+                                            </div>
+                                            <div class="erp-muted">
+                                                @d.ReferenciaSAP - @d.DesignacionDescripcionSAP
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <span class="erp-badge erp-badge-azul">
+                                                @d.CantidadPiezas.ToString("N0") piezas
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="p-3">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-3">
+                                            <div class="erp-info-label">Referencia SAP</div>
+                                            <div class="erp-info-value">@d.ReferenciaSAP</div>
+                                        </div>
+
+                                        <div class="col-md-5">
+                                            <div class="erp-info-label">Designación / descripción</div>
+                                            <div class="erp-info-value">@d.DesignacionDescripcionSAP</div>
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <div class="erp-info-label">Molde</div>
+                                            <div class="erp-info-value">@(string.IsNullOrWhiteSpace(d.Molde) ? "Sin molde" : d.Molde)</div>
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <div class="erp-info-label">Color</div>
+                                            <div class="erp-info-value">@(string.IsNullOrWhiteSpace(d.Color) ? "N/A" : d.Color)</div>
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <div class="erp-info-label">Cavidades</div>
+                                            <div class="erp-info-value">@(d.Cavidades.HasValue? d.Cavidades.Value.ToString() : "N/A")</div>
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <div class="erp-info-label">Objetivo hora</div>
+                                            <div class="erp-info-value">@(d.ObjetivoHora.HasValue? d.ObjetivoHora.Value.ToString("N0") : "N/A")</div>
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <div class="erp-info-label">Piezas por caja</div>
+                                            <div class="erp-info-value">@(d.PiezasPorCaja.HasValue? d.PiezasPorCaja.Value.ToString("N0") : "N/A")</div>
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <div class="erp-info-label">Notas</div>
+                                            <div class="erp-info-value">@(string.IsNullOrWhiteSpace(d.Notas) ? "Sin notas." : d.Notas)</div>
+                                        </div>
+                                    </div>
+
+                                    <hr />
+
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <div class="fw-bold text-primary">
+                                            <i class="fa-solid fa-industry me-1"></i>
+                                            Máquinas asignadas
+                                        </div>
+
+                                        <div class="erp-muted">
+                                            Total asignado:
+                                            <strong>@d.AsignacionesMaquina.Sum(x => x.CantidadAsignada).ToString("N0")</strong>
+                                            /
+                                            <strong>@d.CantidadPiezas.ToString("N0")</strong>
+                                        </div>
+                                    </div>
+
+                                    @if (d.AsignacionesMaquina == null || !d.AsignacionesMaquina.Any())
+                                    {
+                                        <div class="alert alert-warning rounded-3 mb-0">
+                                            <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                                            Este renglón no tiene máquinas asignadas.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="row g-3">
+                                            @foreach (var a in d.AsignacionesMaquina)
+                                            {
+                                                <div class="col-md-6 col-xl-4">
+                                                    <div class="erp-asignacion-card">
+                                                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                                            <div>
+                                                                <div class="erp-info-label">Máquina</div>
+                                                                <div class="erp-info-value">@a.Maquina</div>
+                                                            </div>
+
+                                                            <span class="erp-badge erp-badge-gris">
+                                                                Sec. @a.Secuencia
+                                                            </span>
+                                                        </div>
+
+                                                        <div class="row g-2">
+                                                            <div class="col-6">
+                                                                <div class="erp-info-label">Cantidad</div>
+                                                                <div class="erp-info-value">@a.CantidadAsignada.ToString("N0")</div>
+                                                            </div>
+
+                                                            <div class="col-6">
+                                                                <div class="erp-info-label">Horas</div>
+                                                                <div class="erp-info-value">@(a.HorasEstimadas.HasValue? a.HorasEstimadas.Value.ToString("N2") : "N/A")</div>
+                                                            </div>
+
+                                                            <div class="col-6">
+                                                                <div class="erp-info-label">Molde</div>
+                                                                <div class="erp-info-value">@(string.IsNullOrWhiteSpace(a.Molde) ? "N/A" : a.Molde)</div>
+                                                            </div>
+
+                                                            <div class="col-6">
+                                                                <div class="erp-info-label">Condición</div>
+                                                                <div class="erp-info-value">@CondicionNombre(a.CondicionProduccion)</div>
+                                                            </div>
+
+                                                            <div class="col-6">
+                                                                <div class="erp-info-label">Fecha tentativa</div>
+                                                                <div class="erp-info-value">@(a.FechaProgramadaTentativa.HasValue? a.FechaProgramadaTentativa.Value.ToString("dd/MM/yyyy") : "N/A")</div>
+                                                            </div>
+
+                                                            <div class="col-6">
+                                                                <div class="erp-info-label">Horario</div>
+                                                                <div class="erp-info-value">
+                                                                    @if (a.HoraInicioTentativa.HasValue || a.HoraFinTentativa.HasValue)
+                                                                    {
+                                                                        <span>
+                                                                            @(a.HoraInicioTentativa.HasValue? a.HoraInicioTentativa.Value.ToString(@"hh\:mm") : "--:--")
+                                                                            -
+                                                                            @(a.HoraFinTentativa.HasValue? a.HoraFinTentativa.Value.ToString(@"hh\:mm") : "--:--")
+                                                                        </span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span>N/A</span>
+                                                                    }
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="col-12">
+                                                                <div class="erp-info-label">Observaciones</div>
+                                                                <div class="erp-info-value">@(string.IsNullOrWhiteSpace(a.Observaciones) ? "Sin observaciones." : a.Observaciones)</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="erp-card">
+                <div class="erp-card-header">
+                    <i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>
+                    Historial
+                </div>
+
+                <div class="erp-card-body">
+                    @if (!historial.Any())
+                    {
+                        <div class="text-center py-4 text-muted">
+                            <i class="fa-regular fa-clock fa-2x mb-2"></i>
+                            <h5 class="fw-bold">Sin historial</h5>
+                            <p class="mb-0">Todavía no hay movimientos registrados.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="erp-timeline">
+                            @foreach (var h in historial)
+                            {
+                                <div class="erp-timeline-item">
+                                    <div class="fw-bold">@h.Movimiento</div>
+                                    <div class="erp-muted">
+                                        @h.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")
+                                        · Usuario: @h.Usuario
+                                    </div>
+
+                                    <div class="mt-1">
+                                        <span class="erp-badge erp-badge-gris">
+                                            @(h.EstatusAnteriorID.HasValue? h.EstatusAnteriorID.Value.ToString() : "-")
+                                            →
+                                            @h.EstatusNuevoID
+                                        </span>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(h.Comentario))
+                                    {
+                                        <div class="mt-2">
+                                            @h.Comentario
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalCancelar" tabindex="-1" aria-labelledby="modalCancelarLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4">
+                <form action="/SolicitudesProduccion/Cancelar" method="post">
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden" name="id" value="@Model.SolicitudProduccionID" />
+
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold" id="modalCancelarLabel">
+                            <i class="fa-solid fa-ban text-danger me-2"></i>
+                            Cancelar solicitud
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <p class="mb-3">
+                            ¿Seguro que deseas cancelar esta solicitud?
+                        </p>
+
+                        <label class="erp-modal-label">Motivo / comentario</label>
+                        <textarea name="comentario" class="form-control" rows="4" placeholder="Escribe el motivo de cancelación..."></textarea>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary rounded-3" data-bs-dismiss="modal">
+                            Cerrar
+                        </button>
+
+                        <button type="submit" class="btn btn-danger rounded-3">
+                            <i class="fa-solid fa-ban me-1"></i>
+                            Confirmar cancelación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
