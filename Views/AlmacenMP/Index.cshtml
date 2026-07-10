@@ -1,0 +1,134 @@
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPIndexVm
+@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Inventario MP"; }
+
+<section class="alm-hero">
+    <div>
+        <small>MATERIA PRIMA</small>
+        <h1>Inventario MP</h1>
+        <p>Existencias calculadas por movimientos. Las salidas, consumos y scrap descuentan stock; entradas, retornos y ajustes positivos lo incrementan.</p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn" asp-action="Movimiento" asp-route-tipo="Entrada"><i class="fa-solid fa-arrow-down"></i>Registrar entrada</a>
+        <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="Salida">Registrar salida</a>
+        <a class="alm-btn secondary" asp-action="Materiales">Catálogo</a>
+    </div>
+</section>
+
+@if (!Model.Configurado)
+{
+    <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
+}
+
+<section class="alm-grid">
+    <div class="alm-kpi"><small>Materiales</small><strong>@Model.TotalMateriales</strong></div>
+    <div class="alm-kpi"><small>Crítico</small><strong>@Model.Criticos</strong></div>
+    <div class="alm-kpi"><small>Aviso</small><strong>@Model.Advertencias</strong></div>
+    <div class="alm-kpi"><small>Disponible</small><strong>@Model.Disponibles</strong></div>
+    <div class="alm-kpi"><small>Saldo total mixto</small><strong>@Model.SaldoTotal.ToString("0.###")</strong></div>
+</section>
+
+<section class="alm-card">
+    <header>
+        <span>Existencias MP</span>
+        <span>Máximo 500 registros</span>
+    </header>
+
+    <form method="get" class="alm-filter">
+        <input class="alm-input" name="q" value="@Model.Busqueda" placeholder="Código o material" />
+        <select class="alm-select" name="estado">
+            <option value="">Todos los niveles de stock</option>
+            <option value="ROJO">Crítico</option>
+            <option value="AMARILLO">Aviso</option>
+            <option value="VERDE">Disponible</option>
+        </select>
+        <button class="alm-btn">Filtrar</button>
+    </form>
+
+    <div class="alm-table-wrap alm-table-wrap-fit">
+        <table class="alm-table alm-table-fit alm-table-mp">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Material</th>
+                    <th>Tipo</th>
+                    <th>Entradas</th>
+                    <th>Salidas</th>
+                    <th>Stock disponible</th>
+                    <th>Último movimiento</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var x in Model.Existencias)
+                {
+                    <tr>
+                        <td><strong>@x.Codigo</strong></td>
+                        <td>@x.Nombre</td>
+                        <td>@x.TipoMaterial</td>
+                        <td class="alm-number">@x.Entradas.ToString("0.###")</td>
+                        <td class="alm-number">@x.Salidas.ToString("0.###")</td>
+                        <td class="alm-stock-cell @x.Semaforo">
+                            <strong>@x.Saldo.ToString("0.###") @x.Unidad</strong>
+                            <small>@(x.Semaforo == "ROJO" ? "Crítico" : x.Semaforo == "AMARILLO" ? "Aviso" : "Disponible")</small>
+                        </td>
+                        <td>@(x.UltimoMovimiento?.ToString("dd/MM/yyyy HH:mm") ?? "Sin movimientos")</td>
+                        <td>
+                            <a class="alm-btn secondary small" asp-action="Movimiento" asp-route-materialId="@x.MaterialID" title="Registrar movimiento">
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                                <span>Mov.</span>
+                            </a>
+                        </td>
+                    </tr>
+                }
+
+                @if (!Model.Existencias.Any())
+                {
+                    <tr><td colspan="8" class="alm-empty">No hay existencias para mostrar.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="alm-card">
+    <header>
+        <span>Movimientos recientes</span>
+        <span>@Model.Movimientos.Count registros</span>
+    </header>
+    <div class="alm-table-wrap">
+        <table class="alm-table alm-table-movements">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Material</th>
+                    <th>Tipo</th>
+                    <th>Cantidad</th>
+                    <th>Lote</th>
+                    <th>Ubicación</th>
+                    <th>OF</th>
+                    <th>Responsable</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var x in Model.Movimientos)
+                {
+                    <tr>
+                        <td>@x.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@x.Codigo · @x.Material</td>
+                        <td>@x.TipoMovimiento</td>
+                        <td>@x.Cantidad.ToString("0.###") @x.Unidad</td>
+                        <td>@x.Lote</td>
+                        <td>@x.Ubicacion</td>
+                        <td>@x.NumeroOF</td>
+                        <td>@x.Responsable</td>
+                    </tr>
+                }
+
+                @if (!Model.Movimientos.Any())
+                {
+                    <tr><td colspan="8" class="alm-empty">No hay movimientos registrados.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
