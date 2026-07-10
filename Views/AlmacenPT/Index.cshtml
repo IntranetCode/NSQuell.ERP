@@ -1,0 +1,143 @@
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTIndexVm
+@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Inventario PT"; }
+
+<section class="alm-hero">
+    <div>
+        <small>PRODUCTO TERMINADO</small>
+        <h1>Inventario PT</h1>
+        <p>
+            Inventario por número de parte. La existencia total representa las piezas físicamente registradas;
+            las piezas retenidas están bloqueadas por calidad y el stock disponible es la cantidad utilizable.
+        </p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn" asp-action="Entrada"><i class="fa-solid fa-box"></i>Entrada PT</a>
+        <a class="alm-btn secondary" asp-action="Movimiento">Movimiento</a>
+    </div>
+</section>
+
+@if (!Model.Configurado)
+{
+    <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
+}
+
+<section class="alm-grid">
+    <div class="alm-kpi"><small>Números de parte</small><strong>@Model.TotalPartes</strong></div>
+    <div class="alm-kpi"><small>Existencia total</small><strong>@Model.PiezasFisicas</strong></div>
+    <div class="alm-kpi"><small>Retenido por calidad</small><strong>@Model.PiezasRetenidas</strong></div>
+    <div class="alm-kpi"><small>Stock disponible</small><strong>@Model.PiezasDisponibles</strong></div>
+    <div class="alm-kpi"><small>Crítico / aviso</small><strong>@Model.Criticos / @Model.Advertencias</strong></div>
+</section>
+
+<section class="alm-card">
+    <header>
+        <span>Existencias PT</span>
+        <span>Catálogo base: ERP_Partes</span>
+    </header>
+
+    <form method="get" class="alm-filter">
+        <input class="alm-input" name="q" value="@Model.Busqueda" placeholder="Número de parte, descripción o cliente" />
+        <select class="alm-select" name="estado">
+            <option value="">Todos los niveles de stock</option>
+            <option value="ROJO">Crítico</option>
+            <option value="AMARILLO">Aviso</option>
+            <option value="VERDE">Disponible</option>
+        </select>
+        <button class="alm-btn">Filtrar</button>
+    </form>
+
+    <div class="alm-table-wrap alm-table-wrap-fit">
+        <table class="alm-table alm-table-fit alm-table-pt">
+            <thead>
+                <tr>
+                    <th>Número de parte</th>
+                    <th>Descripción</th>
+                    <th>Cliente</th>
+                    <th title="Piezas físicamente registradas después de entradas y salidas.">Existencia total</th>
+                    <th title="Piezas bloqueadas por calidad, GP12 o cuarentena.">Retenido calidad</th>
+                    <th title="Existencia total menos piezas retenidas.">Stock disponible</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var x in Model.Existencias)
+                {
+                    <tr>
+                        <td>
+                            <strong>@x.NumeroParte</strong>
+                            <small class="alm-subtext">@x.Cajas caja(s) registrada(s)</small>
+                        </td>
+                        <td>@x.Descripcion</td>
+                        <td>@x.Cliente</td>
+                        <td class="alm-number">@x.SaldoFisico</td>
+                        <td class="alm-number">@x.Retenido</td>
+                        <td class="alm-stock-cell @x.Semaforo">
+                            <strong>@x.Disponible</strong>
+                            <small>@(x.Semaforo == "ROJO" ? "Crítico" : x.Semaforo == "AMARILLO" ? "Aviso" : "Disponible")</small>
+                        </td>
+                        <td>
+                            <div class="alm-actions cell-actions">
+                                <a class="alm-btn secondary small" asp-action="Movimiento" asp-route-parteId="@x.ParteID" title="Registrar movimiento">
+                                    <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                                    <span>Mov.</span>
+                                </a>
+                                <a class="alm-btn secondary small" asp-action="Configurar" asp-route-id="@x.ParteID" title="Configurar niveles de stock">
+                                    <i class="fa-solid fa-sliders"></i>
+                                    <span>Niveles</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+
+                @if (!Model.Existencias.Any())
+                {
+                    <tr><td colspan="7" class="alm-empty">No hay existencias PT registradas.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="alm-card">
+    <header>
+        <span>Movimientos recientes PT</span>
+        <span>@Model.Movimientos.Count registros</span>
+    </header>
+    <div class="alm-table-wrap">
+        <table class="alm-table alm-table-movements">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Parte</th>
+                    <th>Etiqueta</th>
+                    <th>Tipo</th>
+                    <th>Cantidad</th>
+                    <th>Calidad</th>
+                    <th>Ubicación</th>
+                    <th>OF</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var x in Model.Movimientos)
+                {
+                    <tr>
+                        <td>@x.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@x.NumeroParte · @x.Descripcion</td>
+                        <td>@x.Etiqueta</td>
+                        <td>@x.TipoMovimiento</td>
+                        <td>@x.Cantidad</td>
+                        <td>@x.EstadoCalidad</td>
+                        <td>@x.Ubicacion</td>
+                        <td>@x.NumeroOF</td>
+                    </tr>
+                }
+
+                @if (!Model.Movimientos.Any())
+                {
+                    <tr><td colspan="8" class="alm-empty">No hay movimientos PT.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
