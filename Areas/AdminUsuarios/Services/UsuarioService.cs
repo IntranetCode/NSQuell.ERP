@@ -127,12 +127,8 @@ namespace ERP.NSQuell.Areas.AdminUsuarios.Services
                 SubMenuIDs = subMenusEfectivos,
                 HistorialDeCambios = historial,
 
-                NumeroEmpleado = usuario.Persona.NumeroEmpleado,
-                ClaveEmpleadoNomina = usuario.Persona.ClaveEmpleadoNomina,
                 FechaIngreso = usuario.Persona.FechaIngreso,
                 Puesto = usuario.Persona.Puesto,
-                FechaNacimiento = usuario.Persona.FechaNacimiento,
-                JefeInmediatoPersonaID = usuario.Persona.JefeInmediatoPersonaID,
                 DepartamentoID = departamentoId
             };
         }
@@ -209,32 +205,24 @@ namespace ERP.NSQuell.Areas.AdminUsuarios.Services
                 subMenusParam,
 
                 new SqlParameter("@FechaIngreso", SqlDbType.Date) { Value = (object?)nuevoUsuario.FechaIngreso ?? DBNull.Value },
-                new SqlParameter("@JefeInmediatoPersonaID", (object?)nuevoUsuario.JefeInmediatoPersonaID ?? DBNull.Value),
-                new SqlParameter("@NumeroEmpleado", (object?)nuevoUsuario.NumeroEmpleado ?? DBNull.Value),
                 new SqlParameter("@Puesto", (object?)nuevoUsuario.Puesto ?? DBNull.Value),
-                new SqlParameter("@FechaNacimiento", SqlDbType.Date) { Value = (object?)nuevoUsuario.FechaNacimiento ?? DBNull.Value },
-                new SqlParameter("@ClaveEmpleadoNomina", (object?)nuevoUsuario.ClaveEmpleadoNomina ?? DBNull.Value),
                 new SqlParameter("@DepartamentoID", (object?)nuevoUsuario.DepartamentoID ?? DBNull.Value)
             };
 
             await _context.Database.ExecuteSqlRawAsync(
                 @"EXEC dbo.sp_RegistrarUsuario 
-                    @Nombre,
-                    @ApellidoPaterno,
-                    @Correo,
-                    @Username,
-                    @ContrasenaHash,
-                    @RolID,
-                    @ApellidoMaterno,
-                    @Telefono,
-                    @SubMenuIDs,
-                    @FechaIngreso,
-                    @JefeInmediatoPersonaID,
-                    @NumeroEmpleado,
-                    @Puesto,
-                    @FechaNacimiento,
-                    @ClaveEmpleadoNomina,
-                    @DepartamentoID",
+                    @Nombre = @Nombre,
+                    @ApellidoPaterno = @ApellidoPaterno,
+                    @Correo = @Correo,
+                    @Username = @Username,
+                    @ContrasenaHash = @ContrasenaHash,
+                    @RolID = @RolID,
+                    @ApellidoMaterno = @ApellidoMaterno,
+                    @Telefono = @Telefono,
+                    @SubMenuIDs = @SubMenuIDs,
+                    @FechaIngreso = @FechaIngreso,
+                    @Puesto = @Puesto,
+                    @DepartamentoID = @DepartamentoID",
                 parameters
             );
         }
@@ -273,11 +261,7 @@ namespace ERP.NSQuell.Areas.AdminUsuarios.Services
                 subMenusParam,
 
                 new SqlParameter("@FechaIngreso", SqlDbType.Date) { Value = (object?)usuario.FechaIngreso ?? DBNull.Value },
-                new SqlParameter("@JefeInmediatoPersonaID", (object?)usuario.JefeInmediatoPersonaID ?? DBNull.Value),
-                new SqlParameter("@NumeroEmpleado", (object?)usuario.NumeroEmpleado ?? DBNull.Value),
                 new SqlParameter("@Puesto", (object?)usuario.Puesto ?? DBNull.Value),
-                new SqlParameter("@FechaNacimiento", SqlDbType.Date) { Value = (object?)usuario.FechaNacimiento ?? DBNull.Value },
-                new SqlParameter("@ClaveEmpleadoNomina", (object?)usuario.ClaveEmpleadoNomina ?? DBNull.Value),
                 new SqlParameter("@DepartamentoID", (object?)usuario.DepartamentoID ?? DBNull.Value)
             };
 
@@ -293,11 +277,7 @@ namespace ERP.NSQuell.Areas.AdminUsuarios.Services
                     @Telefono,
                     @SubMenuIDs,
                     @FechaIngreso,
-                    @JefeInmediatoPersonaID,
-                    @NumeroEmpleado,
                     @Puesto,
-                    @FechaNacimiento,
-                    @ClaveEmpleadoNomina,
                     @DepartamentoID",
                 parameters
             );
@@ -469,16 +449,6 @@ namespace ERP.NSQuell.Areas.AdminUsuarios.Services
                     pU.ParameterName = "@UsuarioID";
                     pU.Value = usuarioId;
                     cmd.Parameters.Add(pU);
-
-                    /*
-                        ERP de una sola empresa:
-                        Se mantiene @EmpresaID = NULL solo por compatibilidad con el SP existente.
-                        Si ya eliminaste @EmpresaID del SP, borra este parámetro.
-                    */
-                    var pE = cmd.CreateParameter();
-                    pE.ParameterName = "@EmpresaID";
-                    pE.Value = DBNull.Value;
-                    cmd.Parameters.Add(pE);
 
                     var pS = cmd.CreateParameter();
                     pS.ParameterName = "@SubMenuID";

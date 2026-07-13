@@ -1,0 +1,466 @@
+@using Microsoft.AspNetCore.Http
+@{
+    Layout = null;
+
+    var pageTitle = ViewData["Title"]?.ToString();
+    if (string.IsNullOrWhiteSpace(pageTitle))
+    {
+        pageTitle = "Altas de Maquinaria";
+    }
+
+    var estadoVistaActual = Context.Request.Query["estadoVista"].ToString();
+    estadoVistaActual = string.IsNullOrWhiteSpace(estadoVistaActual) ? "Todos" : estadoVistaActual;
+
+    bool EsActivo(string clave)
+    {
+        if (string.Equals(clave, "Todos", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Equals(estadoVistaActual, "Todos", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(estadoVistaActual, clave, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@pageTitle - ERP NSQuell</title>
+
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('nsq-theme') || 'dark';
+            const theme = savedTheme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-nsq-theme', theme);
+        })();
+    </script>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <style>
+        :root {
+            --maq-primary: #f47b20;
+            --maq-primary-dark: #c2410c;
+            --maq-bg: #070b12;
+            --maq-bg-2: #0b1220;
+            --maq-surface: rgba(15, 23, 42, .88);
+            --maq-border: rgba(255, 255, 255, .12);
+            --maq-text: #f8fafc;
+            --maq-muted: #cbd5e1;
+            --maq-muted-2: #94a3b8;
+            --maq-shadow: 0 22px 62px rgba(0, 0, 0, .34);
+        }
+
+        html,
+        body {
+            min-height: 100%;
+            margin: 0;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(244, 123, 32, .16), transparent 30%),
+                radial-gradient(circle at 100% 9%, rgba(56, 189, 248, .10), transparent 30%),
+                linear-gradient(135deg, #070b12 0%, #0b1220 55%, #101827 100%);
+            color: var(--maq-text);
+        }
+
+        body {
+            overflow-x: hidden;
+            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .maq-app-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(244, 123, 32, .16), transparent 30%),
+                radial-gradient(circle at 100% 9%, rgba(56, 189, 248, .10), transparent 30%),
+                linear-gradient(135deg, #070b12 0%, #0b1220 55%, #101827 100%);
+        }
+
+        .maq-sidebar {
+            position: sticky;
+            top: 0;
+            align-self: flex-start;
+            width: 270px;
+            flex: 0 0 270px;
+            min-height: 100vh;
+            padding: 1.05rem .85rem;
+            background: linear-gradient(180deg, rgba(15, 23, 42, .96), rgba(7, 11, 18, .98));
+            border-right: 1px solid var(--maq-border);
+            box-shadow: 18px 0 45px rgba(0, 0, 0, .30);
+            overflow-y: auto;
+            z-index: 2500;
+        }
+
+        .maq-sidebar-brand {
+            min-height: 78px;
+            padding: .82rem .9rem;
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            color: #fff;
+            background: rgba(255, 255, 255, .075);
+            border: 1px solid var(--maq-border);
+            box-shadow: 0 15px 34px rgba(0, 0, 0, .22);
+            margin-bottom: .85rem;
+        }
+
+        .maq-sidebar-brand-icon,
+        .maq-back-icon {
+            width: 46px;
+            height: 46px;
+            flex: 0 0 46px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            background: linear-gradient(135deg, var(--maq-primary), var(--maq-primary-dark));
+            box-shadow: 0 14px 30px rgba(244, 123, 32, .28);
+        }
+
+        .maq-sidebar-brand-name {
+            margin: 0;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            line-height: 1.05;
+        }
+
+        .maq-sidebar-brand-sub {
+            margin: .22rem 0 0;
+            color: #ffb86b;
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        .maq-back-link {
+            width: 100%;
+            min-height: 62px;
+            padding: .78rem .9rem;
+            border-radius: 22px;
+            color: var(--maq-text);
+            background: rgba(255, 255, 255, .075);
+            border: 1px solid var(--maq-border);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, .22);
+            display: flex;
+            align-items: center;
+            gap: .78rem;
+            text-decoration: none;
+            font-weight: 950;
+            line-height: 1.15;
+            margin-bottom: 1.4rem;
+            transition: transform .18s ease, background .18s ease, border-color .18s ease;
+        }
+
+        .maq-back-link:hover {
+            color: #fff;
+            background: rgba(244, 123, 32, .18);
+            border-color: rgba(244, 123, 32, .42);
+            transform: translateY(-2px);
+        }
+
+        .maq-back-icon {
+            width: 40px;
+            height: 40px;
+            flex-basis: 40px;
+            background: rgba(244, 123, 32, .16);
+            border: 1px solid rgba(244, 123, 32, .34);
+            color: #ffb86b;
+            box-shadow: none;
+        }
+
+        .maq-sidebar-section-title {
+            margin: 1.2rem .45rem .55rem;
+            color: var(--maq-muted-2);
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+        }
+
+        .maq-nav {
+            display: grid;
+            gap: .4rem;
+        }
+
+        .maq-nav-link {
+            min-height: 48px;
+            padding: .75rem .82rem;
+            border-radius: 17px;
+            display: flex;
+            align-items: center;
+            gap: .68rem;
+            color: var(--maq-muted);
+            text-decoration: none;
+            font-weight: 900;
+            transition: background .18s ease, color .18s ease, transform .18s ease;
+        }
+
+        .maq-nav-link i {
+            width: 20px;
+            text-align: center;
+            color: #ffb86b;
+        }
+
+        .maq-nav-link:hover,
+        .maq-nav-link.is-active {
+            color: #fff;
+            background: rgba(244, 123, 32, .16);
+            transform: translateX(2px);
+        }
+
+        .maq-nav-link.is-active {
+            border: 1px solid rgba(244, 123, 32, .34);
+        }
+
+        .maq-sidebar-footer {
+            margin-top: 1.2rem;
+            padding: .9rem;
+            border-radius: 18px;
+            color: var(--maq-muted-2);
+            background: rgba(255, 255, 255, .045);
+            border: 1px solid rgba(255, 255, 255, .08);
+            font-size: .75rem;
+            font-weight: 800;
+            line-height: 1.42;
+        }
+
+        .maq-sidebar-footer strong {
+            color: #ffb86b;
+        }
+
+        .maq-content {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 100vh;
+        }
+
+        .maq-content-inner {
+            width: 100%;
+            min-height: 100vh;
+            padding: clamp(1rem, 1.6vw, 1.55rem);
+            background: transparent;
+        }
+
+        .maq-content-inner > .top-navbar {
+            margin: 0 auto 1.1rem !important;
+            width: min(100%, 1500px) !important;
+        }
+
+        .maq-mobile-header {
+            display: none;
+            width: min(100%, 1500px);
+            margin: 0 auto 1rem;
+        }
+
+        .maq-mobile-toggle {
+            width: 100%;
+            min-height: 54px;
+            border: 1px solid var(--maq-border);
+            border-radius: 18px;
+            color: #fff;
+            background: rgba(255, 255, 255, .08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: .7rem .9rem;
+            font-weight: 950;
+        }
+
+        .maq-mobile-title {
+            display: flex;
+            align-items: center;
+            gap: .65rem;
+        }
+
+        html[data-nsq-theme="light"],
+        html[data-nsq-theme="light"] body {
+            background:
+                radial-gradient(circle at 0% 0%, rgba(255, 130, 0, .13), transparent 30%),
+                radial-gradient(circle at 100% 10%, rgba(0, 83, 155, .13), transparent 32%),
+                linear-gradient(135deg, #f4f6f9 0%, #eef4fa 55%, #e8f0fb 100%) !important;
+            color: #0d1929 !important;
+        }
+
+        html[data-nsq-theme="light"] .maq-app-container {
+            background:
+                radial-gradient(circle at 0% 0%, rgba(255, 130, 0, .13), transparent 30%),
+                radial-gradient(circle at 100% 10%, rgba(0, 83, 155, .12), transparent 32%),
+                linear-gradient(135deg, #f4f6f9 0%, #eef4fa 55%, #e8f0fb 100%) !important;
+        }
+
+        html[data-nsq-theme="light"] .maq-sidebar {
+            background: rgba(255, 255, 255, .92) !important;
+            border-color: rgba(41, 67, 95, .15) !important;
+            box-shadow: 18px 0 45px rgba(41, 67, 95, .14) !important;
+        }
+
+        html[data-nsq-theme="light"] .maq-sidebar-brand,
+        html[data-nsq-theme="light"] .maq-back-link,
+        html[data-nsq-theme="light"] .maq-mobile-toggle,
+        html[data-nsq-theme="light"] .maq-sidebar-footer {
+            color: #0d1929 !important;
+            background: rgba(255, 255, 255, .88) !important;
+            border-color: rgba(41, 67, 95, .14) !important;
+            box-shadow: 0 12px 28px rgba(41, 67, 95, .10) !important;
+        }
+
+        html[data-nsq-theme="light"] .maq-sidebar-brand-name,
+        html[data-nsq-theme="light"] .maq-back-link span,
+        html[data-nsq-theme="light"] .maq-nav-link {
+            color: #0d1929 !important;
+        }
+
+        html[data-nsq-theme="light"] .maq-sidebar-brand-sub,
+        html[data-nsq-theme="light"] .maq-sidebar-footer strong,
+        html[data-nsq-theme="light"] .maq-nav-link i,
+        html[data-nsq-theme="light"] .maq-back-icon {
+            color: #ff8200 !important;
+        }
+
+        html[data-nsq-theme="light"] .maq-nav-link:hover,
+        html[data-nsq-theme="light"] .maq-nav-link.is-active {
+            color: #0d1929 !important;
+            background: #fff4e8 !important;
+            border-color: rgba(255, 130, 0, .28) !important;
+        }
+
+        html[data-nsq-theme="light"] .maq-sidebar-section-title {
+            color: #64748b !important;
+        }
+
+        @@media (max-width: 991.98px) {
+            .maq-app-container {
+                display: block;
+            }
+
+            .maq-sidebar {
+                position: relative;
+                top: auto;
+                width: 100%;
+                min-height: auto;
+                flex: none;
+                display: none;
+                border-right: 0;
+                border-bottom: 1px solid var(--maq-border);
+            }
+
+            .maq-sidebar.is-open {
+                display: block;
+            }
+
+            .maq-content-inner {
+                min-height: auto;
+                padding: .9rem;
+            }
+
+            .maq-mobile-header {
+                display: block;
+            }
+        }
+    </style>
+
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="nsq-theme-dark">
+    <div class="maq-app-container">
+        <aside class="maq-sidebar" id="maqSidebar" aria-label="Navegación de maquinaria">
+            <div class="maq-sidebar-brand" aria-label="NS Group ERP Suite">
+                <div class="maq-sidebar-brand-icon" aria-hidden="true">
+                    <i class="fas fa-building"></i>
+                </div>
+                <div>
+                    <p class="maq-sidebar-brand-name">NS Group</p>
+                    <p class="maq-sidebar-brand-sub">ERP Suite</p>
+                </div>
+            </div>
+
+            <a class="maq-back-link" href="@Url.Action("Grupo", "Menu", new { id = 8 })">
+                <span class="maq-back-icon"><i class="fas fa-arrow-left"></i></span>
+                <span>Volver a Altas</span>
+            </a>
+
+            <div class="maq-sidebar-section-title">Altas - Maquinaria</div>
+            <nav class="maq-nav">
+                <a class="maq-nav-link @(EsActivo("Todos") ? "is-active" : "")"
+                   href="@Url.Action("Maquinaria", "Usuarios")">
+                    <i class="fas fa-industry"></i>
+                    <span>Catálogo de maquinaria</span>
+                </a>
+
+                <a class="maq-nav-link @(EsActivo("Activas") ? "is-active" : "")"
+                   href="@Url.Action("Maquinaria", "Usuarios", new { estadoVista = "Activas" })">
+                    <i class="fas fa-circle-check"></i>
+                    <span>Máquinas activas</span>
+                </a>
+
+                <a class="maq-nav-link @(EsActivo("Operativas") ? "is-active" : "")"
+                   href="@Url.Action("Maquinaria", "Usuarios", new { estadoVista = "Operativas" })">
+                    <i class="fas fa-gears"></i>
+                    <span>Máquinas operativas</span>
+                </a>
+
+                <a class="maq-nav-link @(EsActivo("Inactivas") ? "is-active" : "")"
+                   href="@Url.Action("Maquinaria", "Usuarios", new { estadoVista = "Inactivas" })">
+                    <i class="fas fa-circle-xmark"></i>
+                    <span>Máquinas inactivas</span>
+                </a>
+            </nav>
+
+            <div class="maq-sidebar-footer">
+                <strong>Identificación:</strong><br />
+                Código, nombre, área y estado operativo.
+            </div>
+        </aside>
+
+        <main class="maq-content" id="main-content" role="main">
+            <div class="maq-content-inner">
+                @await Html.PartialAsync("_TopNavbar")
+
+                <div class="maq-mobile-header">
+                    <button type="button" class="maq-mobile-toggle" id="maqSidebarToggle">
+                        <span class="maq-mobile-title">
+                            <i class="fas fa-industry"></i>
+                            Altas - Maquinaria
+                        </span>
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+
+                @RenderBody()
+            </div>
+        </main>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const toggle = document.getElementById('maqSidebarToggle');
+            const sidebar = document.getElementById('maqSidebar');
+
+            if (toggle && sidebar && toggle.dataset.maqSidebarInit !== '1') {
+                toggle.dataset.maqSidebarInit = '1';
+                toggle.addEventListener('click', function () {
+                    sidebar.classList.toggle('is-open');
+                });
+            }
+        });
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
