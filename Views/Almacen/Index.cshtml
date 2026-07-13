@@ -1,0 +1,57 @@
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Almacenes";
+}
+
+<section class="alm-hero">
+    <div>
+        <small>MÓDULO DE ALMACÉN</small>
+        <h1>Listado de almacenes</h1>
+        <p>Acceso central a materia prima, producto terminado y ubicaciones físicas.</p>
+    </div>
+</section>
+
+<section class="alm-module-list">
+    <article class="alm-module-card">
+        <div class="alm-module-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+        <div>
+            <small>ALMACÉN MP</small>
+            <h2>Materia prima</h2>
+            <p>Catálogo de materiales, entradas, salidas, consumos, lotes y niveles de stock.</p>
+        </div>
+        <div class="alm-actions">
+            <a class="alm-btn" href="/AlmacenMP/Index">Abrir inventario</a>
+            <a class="alm-btn secondary" href="/AlmacenMP/Materiales">Catálogo MP</a>
+            <a class="alm-btn secondary" href="/AlmacenMP/NivelesStock">Niveles de stock</a>
+            <a class="alm-btn secondary" href="/AlmacenMP/Historial">Historial MP</a>
+        </div>
+    </article>
+
+    <article class="alm-module-card">
+        <div class="alm-module-icon"><i class="fa-solid fa-box"></i></div>
+        <div>
+            <small>ALMACÉN PT</small>
+            <h2>Producto terminado</h2>
+            <p>Entradas por caja, existencias, retenciones de calidad, movimientos y niveles de stock.</p>
+        </div>
+        <div class="alm-actions">
+            <a class="alm-btn" href="/AlmacenPT/Index">Abrir inventario</a>
+            <a class="alm-btn secondary" href="/AlmacenPT/Entrada">Registrar entrada</a>
+            <a class="alm-btn secondary" href="/AlmacenPT/NivelesStock">Niveles de stock</a>
+            <a class="alm-btn secondary" href="/AlmacenPT/Historial">Historial PT</a>
+        </div>
+    </article>
+
+    <article class="alm-module-card">
+        <div class="alm-module-icon"><i class="fa-solid fa-location-dot"></i></div>
+        <div>
+            <small>CATÁLOGO ERP_UBICACIONES</small>
+            <h2>Ubicaciones de almacén</h2>
+            <p>Listado de almacenes, racks, niveles, posiciones, cuarentena y scrap.</p>
+        </div>
+        <div class="alm-actions">
+            <a class="alm-btn" href="/AlmacenUbicaciones/Index">Ver listado</a>
+            <a class="alm-btn secondary" href="/AlmacenUbicaciones/Editar">Nueva ubicación</a>
+        </div>
+    </article>
+</section>

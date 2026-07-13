@@ -1,24 +1,107 @@
 @{
     var nombre = Context.Session.GetString("NombreMostrar") ?? Context.Session.GetString("Username") ?? "Usuario";
     var titulo = ViewData["Title"]?.ToString() ?? "Almacén";
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+    var esInicioAlmacen = controller.Equals("Almacen", StringComparison.OrdinalIgnoreCase)
+        && action.Equals("Index", StringComparison.OrdinalIgnoreCase);
+
+    var regresoPredeterminado = controller switch
+    {
+        "Almacen" => "/Menu/Grupo/1",
+        "AlmacenMP" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+        "AlmacenMP" => "/AlmacenMP/Index",
+        "AlmacenPT" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+        "AlmacenPT" => "/AlmacenPT/Index",
+        "AlmacenUbicaciones" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+        "AlmacenUbicaciones" => "/AlmacenUbicaciones/Index",
+        _ => "/Menu/Grupo/1"
+    };
 }
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>@titulo - NS Quell</title>
-<link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-<link rel="stylesheet" href="~/css/pages/almacen.css" asp-append-version="true" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@titulo - NS Quell</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/pages/almacen.css" asp-append-version="true" />
 </head>
 <body>
-<header class="alm-top"><a href="/Menu/Index" class="alm-brand"><span><i class="fa-solid fa-warehouse"></i></span>NS QUELL · ALMACÉN</a><nav><a href="/AlmacenMP/Index">MP</a><a href="/AlmacenPT/Index">PT</a><a href="/AlmacenUbicaciones/Index">Ubicaciones</a><span>@nombre</span><a href="/Menu/Index">Menú</a></nav></header>
-<main class="alm-main">
-@if (TempData["AlmacenMensaje"] != null){<div class="alm-alert @TempData["AlmacenMensajeTipo"]">@TempData["AlmacenMensaje"]</div>}
-@RenderBody()
-</main>
-<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-@await RenderSectionAsync("Scripts", required: false)
+    <header class="alm-top">
+        <a href="/Almacen/Index" class="alm-brand">
+            <span><i class="fa-solid fa-warehouse"></i></span>NS QUELL · ALMACÉN
+        </a>
+        <nav>
+            <a href="/Almacen/Index">Almacenes</a>
+            <a href="/AlmacenMP/Index">MP</a>
+            <a href="/AlmacenPT/Index">PT</a>
+            <a href="/AlmacenUbicaciones/Index">Ubicaciones</a>
+            <span>@nombre</span>
+            <a href="/Menu/Index">Menú</a>
+        </nav>
+    </header>
+    <main class="alm-main">
+        <nav class="alm-routebar" aria-label="Ruta de navegación">
+            <button type="button"
+                    class="alm-routebar__back"
+                    id="almacenBackButton"
+                    data-fallback-url="@regresoPredeterminado">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                <span>Regresar</span>
+            </button>
+
+            <ol class="alm-routebar__trail">
+                <li class="alm-routebar__item">
+                    <a href="/Menu/Index">Inicio</a>
+                </li>
+                <li class="alm-routebar__separator" aria-hidden="true">›</li>
+
+                @if (esInicioAlmacen)
+                {
+                    <li class="alm-routebar__item alm-routebar__item--current" aria-current="page">Almacén</li>
+                }
+                else
+                {
+                    <li class="alm-routebar__item">
+                        <a href="/Almacen/Index">Almacén</a>
+                    </li>
+                    <li class="alm-routebar__separator" aria-hidden="true">›</li>
+                    <li class="alm-routebar__item alm-routebar__item--current" aria-current="page">@titulo</li>
+                }
+            </ol>
+        </nav>
+
+        @if (TempData["AlmacenMensaje"] != null)
+        {
+            <div class="alm-alert @TempData["AlmacenMensajeTipo"]">@TempData["AlmacenMensaje"]</div>
+        }
+        @RenderBody()
+    </main>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (() => {
+            const button = document.getElementById('almacenBackButton');
+            if (!button) return;
+
+            button.addEventListener('click', () => {
+                const fallback = button.dataset.fallbackUrl || '/Menu/Grupo/1';
+
+                // Se desplaza una posición real en el historial del navegador.
+                // No se navega al document.referrer porque eso agrega una ruta nueva
+                // y provoca el ciclo A -> B -> A -> B.
+                if (window.history.length > 1) {
+                    window.history.back();
+                    return;
+                }
+
+                // Si la pantalla se abrió directamente y no existe una ruta anterior,
+                // se reemplaza la entrada actual para no crear otro ciclo.
+                window.location.replace(fallback);
+            });
+        })();
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

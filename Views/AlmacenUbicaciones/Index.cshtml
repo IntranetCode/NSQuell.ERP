@@ -1,3 +1,73 @@
 @model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenUbicacionesIndexVm
-@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Ubicaciones"; }
-<section class="alm-hero"><div><small>ERP_UBICACIONES</small><h1>Ubicaciones de almacén</h1><p>Catálogo compartido para MP, PT, cuarentena, scrap y ubicaciones generales.</p></div><a class="alm-btn" asp-action="Editar">Nueva ubicación</a></section><section class="alm-card"><div class="alm-table-wrap"><table class="alm-table"><thead><tr><th>Almacén</th><th>Rack</th><th>Nivel</th><th>Posición</th><th>Activo</th><th></th></tr></thead><tbody>@foreach(var x in Model.Ubicaciones){<tr><td>@x.Almacen</td><td>@x.Rack</td><td>@x.Nivel</td><td>@x.Posicion</td><td>@(x.Activo?"Sí":"No")</td><td><a class="alm-btn secondary" asp-action="Editar" asp-route-id="@x.UbicacionID">Editar</a></td></tr>}</tbody></table></div></section>
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Ubicaciones";
+    var almacenes = Model.Ubicaciones
+        .GroupBy(x => x.Almacen)
+        .OrderBy(x => x.Key)
+        .ToList();
+}
+
+<section class="alm-hero">
+    <div>
+        <small>ERP_UBICACIONES</small>
+        <h1>Listado de almacenes y ubicaciones</h1>
+        <p>Catálogo compartido para MP, PT, ubicaciones generales, cuarentena y scrap.</p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn" asp-action="Editar">Nueva ubicación</a>
+    </div>
+</section>
+
+<section class="alm-grid alm-grid-auto">
+    @foreach (var almacen in almacenes)
+    {
+        <div class="alm-kpi">
+            <small>@almacen.Key</small>
+            <strong>@almacen.Count(x => x.Activo)</strong>
+            <span class="alm-kpi-note">ubicaciones activas</span>
+        </div>
+    }
+    @if (!almacenes.Any())
+    {
+        <div class="alm-alert warning">No hay almacenes ni ubicaciones registrados.</div>
+    }
+</section>
+
+<section class="alm-card">
+    <header>
+        <span>Detalle de ubicaciones</span>
+        <span>@Model.Ubicaciones.Count registros</span>
+    </header>
+    <div class="alm-table-wrap">
+        <table class="alm-table">
+            <thead>
+                <tr>
+                    <th>Almacén</th>
+                    <th>Rack</th>
+                    <th>Nivel</th>
+                    <th>Posición</th>
+                    <th>Activo</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var x in Model.Ubicaciones)
+                {
+                    <tr>
+                        <td><strong>@x.Almacen</strong></td>
+                        <td>@x.Rack</td>
+                        <td>@x.Nivel</td>
+                        <td>@x.Posicion</td>
+                        <td>@(x.Activo ? "Sí" : "No")</td>
+                        <td><a class="alm-btn secondary small" asp-action="Editar" asp-route-id="@x.UbicacionID">Editar</a></td>
+                    </tr>
+                }
+                @if (!Model.Ubicaciones.Any())
+                {
+                    <tr><td colspan="6" class="alm-empty">No hay ubicaciones registradas.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

@@ -1,3 +1,51 @@
 @model IEnumerable<ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMaterialFormVm>
-@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Catálogo MP"; }
-<section class="alm-hero"><div><small>CATÁLOGO ERP_MATERIALES</small><h1>Materiales MP</h1><p>Catálogo maestro con unidad, proveedor y niveles particulares para el semáforo.</p></div><div class="alm-actions"><a class="alm-btn" asp-action="Material">Nuevo material</a><a class="alm-btn secondary" asp-action="Index">Inventario</a></div></section><section class="alm-card"><div class="alm-table-wrap"><table class="alm-table"><thead><tr><th>Código</th><th>Material</th><th>Tipo</th><th>Unidad</th><th>Mínimo</th><th>Aviso</th><th>Activo</th><th></th></tr></thead><tbody>@foreach(var x in Model){<tr><td>@x.Codigo</td><td>@x.Nombre</td><td>@x.TipoMaterial</td><td>@x.UnidadDefault</td><td>@x.StockMinimo</td><td>@x.StockAviso</td><td>@(x.Activo?"Sí":"No")</td><td><a class="alm-btn secondary" asp-action="Material" asp-route-id="@x.MaterialID">Editar</a></td></tr>}</tbody></table></div></section>
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Catálogo MP";
+}
+
+<section class="alm-hero">
+    <div>
+        <small>CATÁLOGO ERP_MATERIALES</small>
+        <h1>Materiales MP</h1>
+        <p>Catálogo maestro con unidad, proveedor y niveles particulares para el semáforo.</p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn" asp-action="Material">Nuevo material</a>
+        <a class="alm-btn secondary" asp-action="NivelesStock">Niveles de stock</a>
+    </div>
+</section>
+
+<section class="alm-card">
+    <div class="alm-table-wrap">
+        <table class="alm-table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Material</th>
+                    <th>Tipo</th>
+                    <th>Unidad</th>
+                    <th>Mínimo</th>
+                    <th>Aviso</th>
+                    <th>Activo</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var x in Model)
+                {
+                    <tr>
+                        <td><a class="alm-trace-link" asp-action="Historial" asp-route-material="@x.Codigo"><strong>@x.Codigo</strong></a></td>
+                        <td><a class="alm-trace-link" asp-action="Historial" asp-route-material="@x.Codigo">@x.Nombre</a></td>
+                        <td>@x.TipoMaterial</td>
+                        <td>@x.UnidadDefault</td>
+                        <td>@x.StockMinimo</td>
+                        <td>@x.StockAviso</td>
+                        <td>@(x.Activo ? "Sí" : "No")</td>
+                        <td><a class="alm-btn secondary small" asp-action="Material" asp-route-id="@x.MaterialID">Editar</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

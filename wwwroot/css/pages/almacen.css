@@ -42,3 +42,197 @@
     .alm-table-wrap-fit{overflow-x:auto}
     .alm-table-fit{min-width:760px}
 }
+
+/* Configuración masiva de niveles e integración de Almacén hasta 13/07/2026. */
+
+.alm-grid-6{grid-template-columns:repeat(6,minmax(135px,1fr))}
+.alm-filter-stock{grid-template-columns:minmax(260px,2fr) minmax(230px,1fr) auto auto}
+.alm-grid-3{grid-template-columns:repeat(3,minmax(180px,1fr))}
+.alm-check{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:700;padding:0 6px}
+.alm-check input{width:18px;height:18px;accent-color:var(--orange)}
+.alm-table-stock-config th,.alm-table-stock-config td{white-space:normal;vertical-align:middle}
+.alm-table-stock-config th:nth-child(1){width:14%}
+.alm-table-stock-config th:nth-child(2){width:31%}
+.alm-table-stock-config th:nth-child(3){width:15%}
+.alm-table-stock-config th:nth-child(4),.alm-table-stock-config th:nth-child(5){width:14%}
+.alm-table-stock-config th:nth-child(6){width:12%}
+.alm-number-input{min-width:110px;text-align:right}
+.alm-form-actions{display:flex;justify-content:flex-end;padding:16px 18px;border-top:1px solid var(--line)}
+.alm-validation{padding:0 18px}
+.alm-field-error{display:block;color:#ff9aa5;font-size:.78rem;margin-top:4px}
+.alm-state{display:inline-flex;align-items:center;justify-content:center;min-width:96px;padding:6px 9px;border-radius:999px;font-weight:800;font-size:.76rem}
+.alm-state.SIN_CONFIGURAR,.sem.SIN_CONFIGURAR{background:#263247;color:#cbd5e1}
+.alm-state.ROJO{background:#3e1420;color:#ff9aa5}
+.alm-state.AMARILLO{background:#443916;color:#ffe287}
+.alm-state.VERDE{background:#103b2d;color:#7ff0bd}
+.alm-stock-cell.SIN_CONFIGURAR{background:#263247;color:#d9e2ef}
+@media(max-width:1200px){.alm-grid-6{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1000px){.alm-grid-3{grid-template-columns:repeat(2,1fr)}.alm-filter-stock{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.alm-grid-3,.alm-grid-6,.alm-filter-stock{grid-template-columns:1fr}.alm-form-actions{justify-content:stretch}.alm-form-actions .alm-btn{width:100%;justify-content:center}}
+
+/* Listado central de almacenes y resumen de ubicaciones. */
+.alm-module-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-bottom:18px}
+.alm-module-card{display:flex;flex-direction:column;gap:16px;min-height:330px;padding:22px;background:linear-gradient(145deg,#111c31,#0d1728);border:1px solid var(--line);border-radius:22px}
+.alm-module-card h2{margin:4px 0 8px;font-size:1.45rem}
+.alm-module-card p{color:var(--muted);line-height:1.55}
+.alm-module-card .alm-actions{margin-top:auto}
+.alm-module-icon{display:grid;place-items:center;width:58px;height:58px;border-radius:18px;background:#f47b2026;color:var(--orange);font-size:1.55rem;border:1px solid #f47b2055}
+.alm-grid-auto{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.alm-kpi-note{display:block;margin-top:5px;color:var(--muted);font-size:.78rem}
+@media(max-width:1050px){.alm-module-list{grid-template-columns:1fr}}
+
+/* Navegación superior de Almacén: misma posición visual que Menu/Grupo/1. */
+.alm-routebar{
+    position:relative;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:14px;
+    min-height:72px;
+    margin:0 0 18px;
+    padding:14px 18px;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:22px;
+    background:linear-gradient(135deg,rgba(15,23,42,.88),rgba(17,24,39,.66));
+    box-shadow:0 18px 55px rgba(0,0,0,.28);
+    backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px)
+}
+.alm-routebar::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:radial-gradient(circle at 8% 0%,rgba(244,123,32,.22),transparent 25%),linear-gradient(90deg,rgba(255,255,255,.06),transparent 48%)
+}
+.alm-routebar>*{position:relative;z-index:1}
+.alm-routebar__back{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-height:42px;
+    padding:10px 15px;
+    border:1px solid rgba(255,255,255,.16);
+    border-radius:999px;
+    background:rgba(255,255,255,.10);
+    box-shadow:0 10px 24px rgba(0,0,0,.18);
+    color:#fff;
+    text-decoration:none;
+    font-weight:900;
+    white-space:nowrap;
+    transition:transform .18s ease,background .18s ease,border-color .18s ease
+}
+.alm-routebar__back:hover{
+    color:#fff;
+    background:rgba(244,123,32,.22);
+    border-color:rgba(244,123,32,.52);
+    transform:translateY(-2px)
+}
+.alm-routebar__trail{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:0;
+    margin:0;
+    padding:0;
+    list-style:none;
+    color:var(--muted);
+    font-weight:800
+}
+.alm-routebar__item{min-width:0}
+.alm-routebar__item a{
+    color:#dbe5f4;
+    text-decoration:none
+}
+.alm-routebar__item a:hover{color:#fff}
+.alm-routebar__item--current{
+    overflow:hidden;
+    color:#fff;
+    text-overflow:ellipsis;
+    white-space:nowrap
+}
+.alm-routebar__separator{color:#71809a;font-size:1.15rem}
+@media(max-width:700px){
+    .alm-routebar{align-items:flex-start;flex-direction:column;gap:10px;padding:13px 14px}
+    .alm-routebar__trail{width:100%;font-size:.86rem}
+}
+
+/* Cierre funcional de Almacén al 14/07/2026: historial, auditoría y exportación. */
+.alm-header-link{display:inline-flex;align-items:center;gap:7px;color:#dbe5f4;text-decoration:none;font-size:.82rem;font-weight:800}
+.alm-header-link:hover{color:#fff}
+.alm-filter-history{grid-template-columns:repeat(4,minmax(180px,1fr));align-items:end}
+.alm-filter-history .alm-field{min-width:0}
+.alm-filter-actions{display:flex;align-items:center;gap:8px;min-height:43px}
+.alm-table-history{min-width:1420px}
+.alm-table-history-pt{min-width:1640px}
+.alm-table-history th,.alm-table-history td{white-space:normal;vertical-align:top}
+.alm-table-history th{position:sticky;top:0;z-index:2;background:#111c31}
+.alm-table-history td:nth-child(1){min-width:132px}
+.alm-table-history td:nth-child(2){min-width:190px}
+.alm-table-history td:nth-child(8),.alm-table-history td:nth-child(9){min-width:150px}
+.alm-history-note{min-width:230px;max-width:360px;line-height:1.4;color:#c7d4e7}
+.alm-movement-type{display:inline-flex;align-items:center;justify-content:center;min-width:110px;padding:6px 9px;border-radius:999px;font-size:.72rem;font-weight:900;text-transform:uppercase;letter-spacing:.025em}
+.alm-movement-type.entrada{background:#103b2d;color:#8bf3c4}
+.alm-movement-type.salida{background:#3e1420;color:#ffb0b8}
+.alm-pager{display:flex;align-items:center;justify-content:center;gap:16px;padding:16px 18px;border-top:1px solid var(--line);color:var(--muted)}
+.alm-btn.disabled{pointer-events:none;opacity:.45}
+@media(max-width:1150px){.alm-filter-history{grid-template-columns:repeat(2,minmax(180px,1fr))}}
+@media(max-width:700px){.alm-filter-history{grid-template-columns:1fr}.alm-filter-actions{flex-direction:column;align-items:stretch}.alm-filter-actions .alm-btn{justify-content:center}.alm-pager{gap:8px;justify-content:space-between}.alm-pager span{font-size:.8rem;text-align:center}}
+
+/* Trazabilidad por material/parte y filtros con selección escribible. */
+.alm-trace-link{
+    display:inline-block;
+    color:#f5f7fb;
+    text-decoration:none;
+    border-radius:8px;
+    transition:color .16s ease,background .16s ease,box-shadow .16s ease
+}
+.alm-trace-link:hover{
+    color:#ffb86b;
+    text-decoration:underline;
+    text-underline-offset:3px
+}
+.alm-trace-link:focus-visible{
+    outline:2px solid var(--orange);
+    outline-offset:3px
+}
+.alm-trace-link .alm-subtext{color:var(--muted)}
+.alm-trace-link:hover .alm-subtext{color:#dbe5f4}
+.alm-focus-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    margin-top:10px;
+    padding:7px 11px;
+    border:1px solid rgba(244,123,32,.48);
+    border-radius:999px;
+    background:rgba(244,123,32,.14);
+    color:#ffd0a6;
+    font-size:.78rem;
+    font-weight:900
+}
+.alm-filter-hint{
+    display:block;
+    margin-top:6px;
+    color:var(--muted);
+    font-size:.72rem;
+    line-height:1.35
+}
+.alm-input[list]{
+    padding-right:34px
+}
+
+/* El botón Regresar utiliza el origen real de navegación y conserva el estilo del breadcrumb. */
+button.alm-routebar__back{
+    margin:0;
+    font:inherit;
+    cursor:pointer;
+    appearance:none;
+    -webkit-appearance:none
+}
+button.alm-routebar__back:focus-visible{
+    outline:2px solid var(--orange);
+    outline-offset:3px
+}

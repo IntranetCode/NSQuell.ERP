@@ -11,6 +11,10 @@
         <a class="alm-btn" asp-action="Movimiento" asp-route-tipo="Entrada"><i class="fa-solid fa-arrow-down"></i>Registrar entrada</a>
         <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="Salida">Registrar salida</a>
         <a class="alm-btn secondary" asp-action="Materiales">Catálogo</a>
+        <a class="alm-btn secondary" asp-action="NivelesStock"><i class="fa-solid fa-sliders"></i>Niveles de stock</a>
+        <a class="alm-btn secondary" asp-action="Historial"><i class="fa-solid fa-clock-rotate-left"></i>Historial</a>
+        <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="AjustePositivo">Ajuste +</a>
+        <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="AjusteNegativo">Ajuste −</a>
     </div>
 </section>
 
@@ -19,11 +23,12 @@
     <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
 }
 
-<section class="alm-grid">
+<section class="alm-grid alm-grid-6">
     <div class="alm-kpi"><small>Materiales</small><strong>@Model.TotalMateriales</strong></div>
     <div class="alm-kpi"><small>Crítico</small><strong>@Model.Criticos</strong></div>
     <div class="alm-kpi"><small>Aviso</small><strong>@Model.Advertencias</strong></div>
     <div class="alm-kpi"><small>Disponible</small><strong>@Model.Disponibles</strong></div>
+    <div class="alm-kpi"><small>Sin configurar</small><strong>@Model.PendientesConfiguracion</strong></div>
     <div class="alm-kpi"><small>Saldo total mixto</small><strong>@Model.SaldoTotal.ToString("0.###")</strong></div>
 </section>
 
@@ -34,12 +39,23 @@
     </header>
 
     <form method="get" class="alm-filter">
-        <input class="alm-input" name="q" value="@Model.Busqueda" placeholder="Código o material" />
+        <div class="alm-field">
+            <label for="q">Material MP</label>
+            <input id="q" class="alm-input" type="search" name="q" value="@Model.Busqueda"
+                   list="inventario-mp-opciones" placeholder="Escribe o selecciona un material" autocomplete="off" />
+            <datalist id="inventario-mp-opciones">
+                @foreach (var item in Model.Existencias)
+                {
+                    <option value="@item.Codigo">@item.Codigo · @item.Nombre</option>
+                }
+            </datalist>
+        </div>
         <select class="alm-select" name="estado">
             <option value="">Todos los niveles de stock</option>
             <option value="ROJO">Crítico</option>
             <option value="AMARILLO">Aviso</option>
             <option value="VERDE">Disponible</option>
+            <option value="SIN_CONFIGURAR">Sin configurar</option>
         </select>
         <button class="alm-btn">Filtrar</button>
     </form>
@@ -62,14 +78,20 @@
                 @foreach (var x in Model.Existencias)
                 {
                     <tr>
-                        <td><strong>@x.Codigo</strong></td>
-                        <td>@x.Nombre</td>
+                        <td>
+                            <a class="alm-trace-link" asp-action="Historial" asp-route-material="@x.Codigo" title="Ver trazabilidad de @x.Codigo">
+                                <strong>@x.Codigo</strong>
+                            </a>
+                        </td>
+                        <td>
+                            <a class="alm-trace-link" asp-action="Historial" asp-route-material="@x.Codigo" title="Ver trazabilidad de @x.Codigo">@x.Nombre</a>
+                        </td>
                         <td>@x.TipoMaterial</td>
                         <td class="alm-number">@x.Entradas.ToString("0.###")</td>
                         <td class="alm-number">@x.Salidas.ToString("0.###")</td>
                         <td class="alm-stock-cell @x.Semaforo">
                             <strong>@x.Saldo.ToString("0.###") @x.Unidad</strong>
-                            <small>@(x.Semaforo == "ROJO" ? "Crítico" : x.Semaforo == "AMARILLO" ? "Aviso" : "Disponible")</small>
+                            <small>@(x.Semaforo == "SIN_CONFIGURAR" ? "Sin configurar" : x.Semaforo == "ROJO" ? "Crítico" : x.Semaforo == "AMARILLO" ? "Aviso" : "Disponible")</small>
                         </td>
                         <td>@(x.UltimoMovimiento?.ToString("dd/MM/yyyy HH:mm") ?? "Sin movimientos")</td>
                         <td>
@@ -93,7 +115,7 @@
 <section class="alm-card">
     <header>
         <span>Movimientos recientes</span>
-        <span>@Model.Movimientos.Count registros</span>
+        <a class="alm-header-link" asp-action="Historial">Ver historial completo <i class="fa-solid fa-arrow-right"></i></a>
     </header>
     <div class="alm-table-wrap">
         <table class="alm-table alm-table-movements">
@@ -114,7 +136,7 @@
                 {
                     <tr>
                         <td>@x.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
-                        <td>@x.Codigo · @x.Material</td>
+                        <td><a class="alm-trace-link" asp-action="Historial" asp-route-material="@x.Codigo">@x.Codigo · @x.Material</a></td>
                         <td>@x.TipoMovimiento</td>
                         <td>@x.Cantidad.ToString("0.###") @x.Unidad</td>
                         <td>@x.Lote</td>
