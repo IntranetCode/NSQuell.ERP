@@ -21,6 +21,12 @@ namespace ERP.NSQuell.Models
         public DbSet<Persona> Personas { get; set; }
         public DbSet<Rol> Roles { get; set; }
         public DbSet<ERPMaquina> ERPMaquinas { get; set; } = null!;
+        public DbSet<ERPParte> ERPPartes { get; set; } = null!;
+        public DbSet<ERPCliente> ERPClientes { get; set; } = null!;
+        public DbSet<ERPMolde> ERPMoldes { get; set; } = null!;
+        public bool TieneDatosTecnicos { get; set; }
+        public DbSet<ERPParteDatoTecnico> ERPParteDatosTecnicos { get; set; } = null!;
+
       
 
         public DbSet<AuditoriaUsuario> AuditoriasUsuarios { get; set; }
