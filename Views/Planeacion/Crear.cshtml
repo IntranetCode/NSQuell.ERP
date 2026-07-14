@@ -201,6 +201,44 @@
             margin-top: 12px;
         }
 
+        .almacen-status-box {
+            border: 1px solid #d9e1ec;
+            border-radius: 14px;
+            padding: 14px;
+            margin-top: 14px;
+            background: #f8fafc;
+            display: none;
+        }
+
+            .almacen-status-box.visible {
+                display: block;
+            }
+
+            .almacen-status-box.pt {
+                border-color: #9fd8b6;
+                background: #ecfff3;
+            }
+
+            .almacen-status-box.mp {
+                border-color: #9dc4ff;
+                background: #eef6ff;
+            }
+
+            .almacen-status-box.error {
+                border-color: #f0aaa6;
+                background: #fff3f2;
+            }
+
+        .almacen-status-title {
+            font-weight: 900;
+            margin-bottom: 4px;
+        }
+
+        .almacen-status-detail {
+            font-size: .86rem;
+            color: #536579;
+        }
+
         .sticky-actions {
             position: sticky;
             bottom: 0;
@@ -276,14 +314,13 @@
                 <div class="erp-card-body">
                     <div class="row g-3">
                         <div class="col-md-3">
-                            <label class="erp-label">Folio interno</label>
-                            <input asp-for="FolioSolicitud" class="form-control erp-input" readonly placeholder="Se asignará al guardar" />
-                            <div class="small-help">El folio se genera al guardar.</div>
+                            <input asp-for="FolioSolicitud" type="hidden" />
                         </div>
 
                         <div class="col-md-3">
                             <label class="erp-label">OF recibida de Dirección</label>
-                            <input asp-for="NumeroOFRecibida" class="form-control erp-input" placeholder="Ej. OF-2026-001" />
+                            <input asp-for="NumeroOFRecibida" class="form-control erp-input" placeholder="Ej. OF-0001/26" />
+                            <div class="small-help">Se sugiere automáticamente, pero puedes modificarlo antes de guardar.</div>
                         </div>
 
                         <div class="col-md-3">
@@ -306,26 +343,17 @@
                                 }
                             </select>
                             <input asp-for="ClienteNombre" type="hidden" id="ClienteNombre" />
+                            <div class="small-help">Al seleccionar cliente se cargarán solo sus partes.</div>
                         </div>
 
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="erp-label">Inicio planeado</label>
                             <input asp-for="FechaInicioPlaneada" type="datetime-local" class="form-control erp-input" />
                         </div>
 
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="erp-label">Fin planeado</label>
                             <input asp-for="FechaFinPlaneada" type="datetime-local" class="form-control erp-input" />
-                        </div>
-
-                        <div class="col-md-2">
-                            <label class="erp-label">Prioridad</label>
-                            <select asp-for="Prioridad" class="form-select erp-select">
-                                <option value="Normal">Normal</option>
-                                <option value="Media">Media</option>
-                                <option value="Alta">Alta</option>
-                                <option value="Urgente">Urgente</option>
-                            </select>
                         </div>
 
                         <div class="col-12">
@@ -344,7 +372,7 @@
                             Renglones de producción
                         </h2>
                         <div class="erp-muted">
-                            Selecciona la parte para autollenar referencia, datos técnicos, material y embalaje.
+                            Selecciona cliente y parte. Los datos técnicos se autollenan desde BD.
                         </div>
                     </div>
 
@@ -373,16 +401,25 @@
 
                                 <div class="renglon-body">
                                     <input type="hidden" name="Detalles[@i].Renglon" value="@(i + 1)" class="input-renglon" />
+                                    <input type="hidden" name="Detalles[@i].MaterialID" class="material-id-input" />
+                                    <input type="hidden" name="Detalles[@i].OrigenSurtido" class="origen-surtido-input" />
+                                    <input type="hidden" name="Detalles[@i].PTDisponibleAlCrear" class="pt-disponible-input" />
+                                    <input type="hidden" name="Detalles[@i].MPDisponibleKgAlCrear" class="mp-disponible-input" />
+                                    <input type="hidden" name="Detalles[@i].AlmacenValidado" class="almacen-validado-input" value="false" />
+                                    <input type="hidden" name="Detalles[@i].MensajeAlmacen" class="mensaje-almacen-input" />
 
                                     <div class="row g-3">
                                         <div class="col-md-6">
+
+                                            @*
+                                            <label class="erp-label">Buscar parte</label>
+                                            <input type="text"
+                                                   class="form-control erp-input mb-2 buscador-parte-input"
+                                                   placeholder="Buscar número de parte, referencia o descripción..." /> *@
+
                                             <label class="erp-label">Parte</label>
                                             <select name="Detalles[@i].ParteID" class="form-select erp-select parte-select">
-                                                <option value="">-- Selecciona parte --</option>
-                                                @foreach (var p in Model.Partes)
-                                                {
-                                                    <option value="@p.Value">@p.Text</option>
-                                                }
+                                                <option value="">-- Selecciona cliente primero --</option>
                                             </select>
                                         </div>
 
@@ -418,9 +455,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="section-title">
-                                        Datos técnicos autollenados
-                                    </div>
+                                    <div class="section-title">Datos técnicos autollenados</div>
 
                                     <div class="row g-3">
                                         <div class="col-md-2">
@@ -450,7 +485,7 @@
 
                                         <div class="col-md-2">
                                             <label class="erp-label">Tipo secado</label>
-                                            <input name="Detalles[@i].TipoSecado" list="listaTipoSecado" class="form-control erp-input tipo-secado-input" />
+                                            <input name="Detalles[@i].TipoSecado" class="form-control erp-input tipo-secado-input" />
                                         </div>
 
                                         <div class="col-md-2">
@@ -498,6 +533,18 @@
                                             <input name="Detalles[@i].Arranque" type="time" class="form-control erp-input" />
                                         </div>
 
+                                        <div class="col-12">
+                                            <div class="almacen-status-box almacen-status">
+                                                <div class="almacen-status-title">
+                                                    <i class="fa-solid fa-boxes-stacked me-1"></i>
+                                                    Validación de almacén
+                                                </div>
+                                                <div class="almacen-status-detail almacen-status-text">
+                                                    Pendiente de validar.
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <div class="col-md-3">
                                             <label class="erp-label">Embalaje código</label>
                                             <input name="Detalles[@i].EmbalajeCodigo" class="form-control erp-input embalaje-codigo-input" />
@@ -509,9 +556,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="section-title">
-                                        Asignación de máquina
-                                    </div>
+                                    <div class="section-title">Asignación de máquina</div>
 
                                     <div class="asignacion-box">
                                         <div class="row g-3">
@@ -600,11 +645,29 @@
         </form>
     </div>
 
-    <datalist id="listaTipoSecado">
-        <option value="SECADOR"></option>
-        <option value="DESHUMIFICADOR"></option>
-        <option value="NO APLICA"></option>
-    </datalist>
+    <div class="modal fade" id="modalAlmacen" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content rounded-4">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i id="modalAlmacenIcon" class="fa-solid fa-boxes-stacked me-2"></i>
+                        <span id="modalAlmacenTitle">Validación de almacén</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body" id="modalAlmacenBody">
+                    Validando almacén...
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-erp-primary" data-bs-dismiss="modal">
+                        Entendido
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -614,8 +677,12 @@
                 const moldesData = @Html.Raw(moldesJson);
                 const maquinasData = @Html.Raw(maquinasJson);
 
+                let partesFiltradasData = [];
+
                 const urlParteInfo = '@Url.Action("ObtenerParteInfo", "Planeacion")';
                 const urlCalcular = '@Url.Action("CalcularDatosOF", "Planeacion")';
+                const urlValidarAlmacen = '@Url.Action("ValidarDisponibilidadAlmacen", "Planeacion")';
+                const urlPartesPorCliente = '@Url.Action("ObtenerPartesPorCliente", "Planeacion")';
 
                 function escapeHtml(value) {
                     return String(value ?? '')
@@ -637,7 +704,6 @@
                     return html;
                 }
 
-                const partesOptions = crearOptions(partesData, '-- Selecciona parte --');
                 const moldesOptions = crearOptions(moldesData, '-- Selecciona molde --');
                 const maquinasOptions = crearOptions(maquinasData, '-- Selecciona máquina --');
 
@@ -645,9 +711,17 @@
                     const contenedor = document.getElementById('contenedorRenglones');
                     const index = contenedor.querySelectorAll('.renglon-item').length;
 
-                    const html = crearHtmlRenglon(index);
-                    contenedor.insertAdjacentHTML('beforeend', html);
+                    contenedor.insertAdjacentHTML('beforeend', crearHtmlRenglon(index));
                     renumerarRenglones();
+
+                    const clienteId = document.getElementById('ClienteID')?.value;
+                    if (clienteId && partesFiltradasData.length) {
+                        const nuevo = contenedor.querySelector('.renglon-item:last-child');
+                        const select = nuevo.querySelector('.parte-select');
+                        if (select) {
+                            select.innerHTML = crearOptions(partesFiltradasData, '-- Selecciona parte --');
+                        }
+                    }
                 }
 
                 function crearHtmlRenglon(i) {
@@ -667,12 +741,23 @@
 
             <div class="renglon-body">
                 <input type="hidden" name="Detalles[${i}].Renglon" value="${i + 1}" class="input-renglon" />
+                <input type="hidden" name="Detalles[${i}].MaterialID" class="material-id-input" />
+                <input type="hidden" name="Detalles[${i}].OrigenSurtido" class="origen-surtido-input" />
+                <input type="hidden" name="Detalles[${i}].PTDisponibleAlCrear" class="pt-disponible-input" />
+                <input type="hidden" name="Detalles[${i}].MPDisponibleKgAlCrear" class="mp-disponible-input" />
+                <input type="hidden" name="Detalles[${i}].AlmacenValidado" class="almacen-validado-input" value="false" />
+                <input type="hidden" name="Detalles[${i}].MensajeAlmacen" class="mensaje-almacen-input" />
 
                 <div class="row g-3">
                     <div class="col-md-6">
+                        <label class="erp-label">Buscar parte</label>
+                        <input type="text"
+                               class="form-control erp-input mb-2 buscador-parte-input"
+                               placeholder="Buscar número de parte, referencia o descripción..." />
+
                         <label class="erp-label">Parte</label>
                         <select name="Detalles[${i}].ParteID" class="form-select erp-select parte-select">
-                            ${partesOptions}
+                            <option value="">-- Selecciona cliente primero --</option>
                         </select>
                     </div>
 
@@ -734,7 +819,7 @@
 
                     <div class="col-md-2">
                         <label class="erp-label">Tipo secado</label>
-                        <input name="Detalles[${i}].TipoSecado" list="listaTipoSecado" class="form-control erp-input tipo-secado-input" />
+                        <input name="Detalles[${i}].TipoSecado" class="form-control erp-input tipo-secado-input" />
                     </div>
 
                     <div class="col-md-2">
@@ -780,6 +865,18 @@
                     <div class="col-md-2">
                         <label class="erp-label">Arranque</label>
                         <input name="Detalles[${i}].Arranque" type="time" class="form-control erp-input" />
+                    </div>
+
+                    <div class="col-12">
+                        <div class="almacen-status-box almacen-status">
+                            <div class="almacen-status-title">
+                                <i class="fa-solid fa-boxes-stacked me-1"></i>
+                                Validación de almacén
+                            </div>
+                            <div class="almacen-status-detail almacen-status-text">
+                                Pendiente de validar.
+                            </div>
+                        </div>
                     </div>
 
                     <div class="col-md-3">
@@ -893,6 +990,11 @@
                 });
 
                 document.addEventListener('input', function (e) {
+                    if (e.target.classList.contains('buscador-parte-input')) {
+                        filtrarPartesEnRenglon(e.target);
+                        return;
+                    }
+
                     if (
                         e.target.classList.contains('cantidad-input') ||
                         e.target.classList.contains('horas-input') ||
@@ -900,24 +1002,29 @@
                         e.target.classList.contains('piezas-embalaje-input') ||
                         e.target.classList.contains('peso-input')
                     ) {
-                        calcularRenglon(e.target.closest('.renglon-item'));
-                    }
-
-                    if (e.target.classList.contains('cantidad-input')) {
                         const card = e.target.closest('.renglon-item');
-                        const asignada = card.querySelector('.cantidad-asignada-input');
-
-                        if (asignada && (!asignada.value || Number(asignada.value) === 0)) {
-                            asignada.value = e.target.value;
-                        }
+                        calcularRenglon(card);
+                        limpiarValidacionAlmacen(card);
                     }
+
+                           if (e.target.classList.contains('cantidad-input')) {
+            const card = e.target.closest('.renglon-item');
+            const asignada = card.querySelector('.cantidad-asignada-input');
+
+            if (asignada && e.target.value && Number(e.target.value) > 0) {
+                asignada.value = e.target.value;
+            }
+        }
                 });
 
                 async function cargarInfoParte(select) {
                     const parteId = select.value;
                     const card = select.closest('.renglon-item');
 
-                    if (!parteId) return;
+                    if (!parteId) {
+                        limpiarDatosParte(card);
+                        return;
+                    }
 
                     try {
                         const resp = await fetch(`${urlParteInfo}?parteId=${encodeURIComponent(parteId)}`);
@@ -941,8 +1048,11 @@
                         setValue(card, '.piezas-embalaje-input', data.piezasPorEmbalaje);
                         setValue(card, '.material-codigo-input', data.materialCodigo);
                         setValue(card, '.material-desc-input', data.materialDescripcion);
+                        setValue(card, '.material-id-input', data.materialID);
                         setValue(card, '.embalaje-codigo-input', data.embalajeCodigo);
                         setValue(card, '.embalaje-desc-input', data.embalajeDescripcion);
+
+                        limpiarValidacionAlmacen(card);
 
                         const moldeSelect = card.querySelector('.molde-select');
                         if (moldeSelect && data.moldeID) {
@@ -957,7 +1067,7 @@
                         const clienteSelect = document.getElementById('ClienteID');
                         const clienteNombre = document.getElementById('ClienteNombre');
 
-                        if (clienteSelect && data.clienteID) {
+                        if (clienteSelect && !clienteSelect.value && data.clienteID) {
                             clienteSelect.value = data.clienteID;
                         }
 
@@ -965,18 +1075,12 @@
                             clienteNombre.value = data.clienteNombre;
                         }
 
-                        calcularRenglon(card);
+                        await calcularRenglon(card);
+                        await validarAlmacenRenglon(card, false);
                     } catch (err) {
                         console.error(err);
                         alert('No se pudo cargar la información técnica de la parte.');
                     }
-                }
-
-                function setValue(card, selector, value) {
-                    const input = card.querySelector(selector);
-                    if (!input) return;
-
-                    input.value = value ?? '';
                 }
 
                 async function calcularRenglon(card) {
@@ -1002,29 +1106,284 @@
 
                         if (!data.ok) return;
 
-                        const cantidadInput = card.querySelector('.cantidad-input');
-                        const cantidadAsignadaInput = card.querySelector('.cantidad-asignada-input');
-                        const embalajesInput = card.querySelector('.cantidad-embalajes-input');
-                        const mpInput = card.querySelector('.cantidad-mp-input');
+                                        const cantidadInput = card.querySelector('.cantidad-input');
+        const cantidadAsignadaInput = card.querySelector('.cantidad-asignada-input');
+        const horasInput = card.querySelector('.horas-input');
+        const embalajesInput = card.querySelector('.cantidad-embalajes-input');
+        const mpInput = card.querySelector('.cantidad-mp-input');
 
-                        if (cantidadInput && (!cantidadInput.value || Number(cantidadInput.value) <= 0)) {
-                            cantidadInput.value = data.cantidadPiezas ?? '';
-                        }
+               if (cantidadAsignadaInput && cantidadInput?.value && Number(cantidadInput.value) > 0) {
+            cantidadAsignadaInput.value = cantidadInput.value;
+        }
 
-                        if (cantidadAsignadaInput && (!cantidadAsignadaInput.value || Number(cantidadAsignadaInput.value) <= 0)) {
-                            cantidadAsignadaInput.value = cantidadInput?.value || data.cantidadPiezas || '';
-                        }
+        if (horasInput && data.horasPlaneadas !== null && data.horasPlaneadas !== undefined) {
+            horasInput.value = data.horasPlaneadas;
+        }
 
-                        if (embalajesInput) {
-                            embalajesInput.value = data.cantidadEmbalajes ?? '';
-                        }
+        if (embalajesInput) {
+            embalajesInput.value = data.cantidadEmbalajes ?? '';
+        }
 
-                        if (mpInput) {
-                            mpInput.value = data.cantidadMpKg ?? '';
-                        }
+        if (mpInput) {
+            mpInput.value = data.cantidadMpKg ?? '';
+        }
                     } catch (err) {
                         console.error(err);
                     }
+                }
+
+                async function cargarPartesPorCliente(clienteId) {
+                    try {
+                        const resp = await fetch(`${urlPartesPorCliente}?clienteId=${encodeURIComponent(clienteId)}`);
+                        const data = await resp.json();
+
+                        if (!data.ok) {
+                            alert(data.mensaje || 'No se pudieron cargar las partes del cliente.');
+                            return;
+                        }
+
+                        partesFiltradasData = data.partes || [];
+
+                        const options = crearOptions(partesFiltradasData, '-- Selecciona parte --');
+
+                        document.querySelectorAll('.parte-select').forEach(select => {
+                            select.innerHTML = options;
+                            select.value = '';
+                        });
+
+                        limpiarDatosParteDeTodosLosRenglones();
+
+                    } catch (err) {
+                        console.error(err);
+                        alert('Error al cargar partes del cliente.');
+                    }
+                }
+
+                function filtrarPartesEnRenglon(input) {
+                    const card = input.closest('.renglon-item');
+                    const select = card.querySelector('.parte-select');
+
+                    if (!select) return;
+
+                    const filtro = input.value.toLowerCase().trim();
+
+                    const base = partesFiltradasData && partesFiltradasData.length
+                        ? partesFiltradasData
+                        : [];
+
+                    const filtradas = !filtro
+                        ? base
+                        : base.filter(x => String(x.text).toLowerCase().includes(filtro));
+
+                    select.innerHTML = crearOptions(filtradas, '-- Selecciona parte --');
+                }
+
+                function limpiarPartesDeTodosLosRenglones() {
+                    partesFiltradasData = [];
+
+                    document.querySelectorAll('.parte-select').forEach(select => {
+                        select.innerHTML = '<option value="">-- Selecciona cliente primero --</option>';
+                        select.value = '';
+                    });
+
+                    limpiarDatosParteDeTodosLosRenglones();
+                }
+
+                function limpiarDatosParteDeTodosLosRenglones() {
+                    document.querySelectorAll('.renglon-item').forEach(card => limpiarDatosParte(card));
+                }
+
+                function limpiarDatosParte(card) {
+                    if (!card) return;
+
+                    setValue(card, '.referencia-input', '');
+                    setValue(card, '.designacion-input', '');
+                    setValue(card, '.color-input', '');
+                    setValue(card, '.cavidades-input', '');
+                    setValue(card, '.objetivo-input', '');
+                    setValue(card, '.piezas-caja-input', '');
+                    setValue(card, '.ciclo-input', '');
+                    setValue(card, '.tipo-secado-input', '');
+                    setValue(card, '.horas-secado-input', '');
+                    setValue(card, '.peso-input', '');
+                    setValue(card, '.piezas-embalaje-input', '');
+                    setValue(card, '.cantidad-embalajes-input', '');
+                    setValue(card, '.cantidad-mp-input', '');
+                    setValue(card, '.material-codigo-input', '');
+                    setValue(card, '.material-desc-input', '');
+                    setValue(card, '.material-id-input', '');
+                    setValue(card, '.embalaje-codigo-input', '');
+                    setValue(card, '.embalaje-desc-input', '');
+                    limpiarValidacionAlmacen(card);
+                }
+
+                async function validarAlmacenRenglon(card, mostrarModal) {
+                    if (!card) return false;
+
+                    const parteId = getValue(card, '.parte-select');
+                    const cantidad = getValue(card, '.cantidad-input');
+
+                    if (!parteId || Number(parteId) <= 0) {
+                        return false;
+                    }
+
+                    if (!cantidad || Number(cantidad) <= 0) {
+                        return false;
+                    }
+
+                    const qs = new URLSearchParams({
+                        parteId: parteId,
+                        cantidadPiezas: cantidad
+                    });
+
+                    try {
+                        const resp = await fetch(`${urlValidarAlmacen}?${qs.toString()}`);
+                        const data = await resp.json();
+
+                        if (!data.ok) {
+                            alert(data.mensaje || 'No se pudo validar almacén.');
+                            return false;
+                        }
+
+                        aplicarResultadoAlmacen(card, data);
+
+                        if (mostrarModal || data.bloquear) {
+                            mostrarModalAlmacen(data);
+                        }
+
+                        if (data.bloquear) {
+                            return false;
+                        }
+
+                        return true;
+                    } catch (err) {
+                        console.error(err);
+                        alert('No se pudo validar la disponibilidad de almacén.');
+                        return false;
+                    }
+                }
+
+                function aplicarResultadoAlmacen(card, data) {
+                    setValue(card, '.origen-surtido-input', data.decision);
+                    setValue(card, '.pt-disponible-input', data.pt?.disponible ?? 0);
+                    setValue(card, '.mp-disponible-input', data.mp?.disponibleKg ?? 0);
+                    setValue(card, '.mensaje-almacen-input', data.mensaje);
+                    setValue(card, '.almacen-validado-input', 'true');
+
+                    if (data.mp?.materialId) {
+                        setValue(card, '.material-id-input', data.mp.materialId);
+                    }
+
+                    const box = card.querySelector('.almacen-status');
+                    const text = card.querySelector('.almacen-status-text');
+
+                    if (!box || !text) return;
+
+                    box.classList.remove('pt', 'mp', 'error', 'visible');
+
+                    let clase = 'error';
+
+                    if (data.decision === 'PT') {
+                        clase = 'pt';
+                    } else if (data.decision === 'MP') {
+                        clase = 'mp';
+                    }
+
+                    box.classList.add(clase, 'visible');
+                    text.innerHTML = construirResumenAlmacen(data);
+                }
+
+                function limpiarValidacionAlmacen(card) {
+                    if (!card) return;
+
+                    setValue(card, '.origen-surtido-input', '');
+                    setValue(card, '.pt-disponible-input', '');
+                    setValue(card, '.mp-disponible-input', '');
+                    setValue(card, '.mensaje-almacen-input', '');
+                    setValue(card, '.almacen-validado-input', 'false');
+
+                    const box = card.querySelector('.almacen-status');
+                    const text = card.querySelector('.almacen-status-text');
+
+                    if (box) {
+                        box.classList.remove('pt', 'mp', 'error', 'visible');
+                    }
+
+                    if (text) {
+                        text.innerHTML = 'Pendiente de validar.';
+                    }
+                }
+
+                function construirResumenAlmacen(data) {
+                    const pt = data.pt || {};
+                    const mp = data.mp || {};
+
+                    let html = `<div>${escapeHtml(data.mensaje)}</div>`;
+
+                    html += `
+                        <div class="mt-2">
+                            <strong>PT:</strong>
+                            Disponible ${escapeHtml(pt.disponible ?? 0)} /
+                            Requerido ${escapeHtml(pt.requerido ?? 0)}
+                        </div>
+                    `;
+
+                    if (data.decision !== 'PT') {
+                        html += `
+                            <div>
+                                <strong>MP:</strong>
+                                ${escapeHtml(mp.codigo ?? '')} - ${escapeHtml(mp.material ?? '')}
+                                <br />
+                                Disponible ${escapeHtml(mp.disponibleKg ?? 0)} ${escapeHtml(mp.unidad ?? '')} /
+                                Requerido ${escapeHtml(mp.requeridoKg ?? 0)} kg
+                            </div>
+                        `;
+                    }
+
+                    html += `
+                        <div class="mt-1">
+                            <strong>Decisión:</strong> ${escapeHtml(data.decision)}
+                        </div>
+                    `;
+
+                    return html;
+                }
+
+                function mostrarModalAlmacen(data) {
+                    const modalTitle = document.getElementById('modalAlmacenTitle');
+                    const modalBody = document.getElementById('modalAlmacenBody');
+                    const modalIcon = document.getElementById('modalAlmacenIcon');
+
+                    if (!modalTitle || !modalBody || !modalIcon) {
+                        alert(data.mensaje || 'Validación de almacén realizada.');
+                        return;
+                    }
+
+                    modalIcon.className = 'fa-solid me-2';
+
+                    if (data.decision === 'PT') {
+                        modalIcon.classList.add('fa-boxes-stacked', 'text-success');
+                        modalTitle.innerText = 'Producto terminado disponible';
+                    } else if (data.decision === 'MP') {
+                        modalIcon.classList.add('fa-industry', 'text-primary');
+                        modalTitle.innerText = 'Materia prima suficiente';
+                    } else {
+                        modalIcon.classList.add('fa-triangle-exclamation', 'text-danger');
+                        modalTitle.innerText = 'Validación de almacén';
+                    }
+
+                    modalBody.innerHTML = construirResumenAlmacen(data);
+
+                    const modalElement = document.getElementById('modalAlmacen');
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                }
+
+                function setValue(card, selector, value) {
+                    const input = card.querySelector(selector);
+                    if (!input) return;
+
+                    input.value = value ?? '';
                 }
 
                 function getValue(card, selector) {
@@ -1036,11 +1395,71 @@
                 const clienteNombre = document.getElementById('ClienteNombre');
 
                 if (clienteSelect && clienteNombre) {
-                    clienteSelect.addEventListener('change', function () {
+                    clienteSelect.addEventListener('change', async function () {
                         const selected = this.options[this.selectedIndex];
                         clienteNombre.value = selected ? selected.text : '';
+
+                        const clienteId = this.value;
+
+                        if (!clienteId) {
+                            limpiarPartesDeTodosLosRenglones();
+                            return;
+                        }
+
+                        await cargarPartesPorCliente(clienteId);
                     });
                 }
+
+                const formCrearOF = document.getElementById('formCrearOF');
+
+                if (formCrearOF) {
+                    formCrearOF.addEventListener('submit', async function (e) {
+                        e.preventDefault();
+
+                        const renglones = document.querySelectorAll('.renglon-item');
+
+                        if (!renglones.length) {
+                            alert('Debes capturar al menos un renglón.');
+                            return;
+                        }
+
+                        for (const card of renglones) {
+                            const parteId = getValue(card, '.parte-select');
+                            const cantidad = getValue(card, '.cantidad-input');
+
+                            if (!parteId || Number(parteId) <= 0) {
+                                alert('Todos los renglones deben tener una parte seleccionada.');
+                                return;
+                            }
+
+                            if (!cantidad || Number(cantidad) <= 0) {
+                                alert('Todos los renglones deben tener cantidad mayor a cero.');
+                                return;
+                            }
+
+                            const validado = getValue(card, '.almacen-validado-input');
+
+                            if (validado !== 'true') {
+                                const resultado = await validarAlmacenRenglon(card, true);
+
+                                if (!resultado) {
+                                    return;
+                                }
+                            }
+
+                            const origen = getValue(card, '.origen-surtido-input');
+
+                            if (!origen) {
+                                alert('No se pudo determinar el origen de surtido del renglón. Vuelve a validar almacén.');
+                                return;
+                            }
+                        }
+
+                        this.submit();
+                    });
+                }
+
+                limpiarPartesDeTodosLosRenglones();
     </script>
 </body>
 </html>

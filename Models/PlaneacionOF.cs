@@ -101,6 +101,15 @@ namespace ERP.NSQuell.Models
 
         public string? Notas { get; set; }
 
+
+        public int? MaterialID { get; set; }
+        public int? PTDisponibleAlCrear { get; set; }
+        public decimal? MPDisponibleKgAlCrear { get; set; }
+        public string? OrigenSurtido { get; set; }
+        public bool AlmacenValidado { get; set; }
+        public string? MensajeAlmacen { get; set; }
+
+
         public List<PlaneacionOFAsignacionMaquinaCrearVm> AsignacionesMaquina { get; set; } = new();
     }
 
@@ -236,9 +245,7 @@ namespace ERP.NSQuell.Models
         public string Usuario { get; set; } = string.Empty;
     }
 
-    // ============================================================
-    // RESPUESTA AJAX PARA AUTOLLENADO
-    // ============================================================
+    //Respuesta de ajacx para autollenado
     public class PlaneacionOFParteInfoVm
     {
         public int ParteID { get; set; }
@@ -278,9 +285,16 @@ namespace ERP.NSQuell.Models
         public string? EmbalajeDescripcion { get; set; }
 
         public decimal? PiezasPorEmbalaje { get; set; }
+
+        public int? MaterialID { get; set; }
+        public int? PTDisponible { get; set; }
+        public decimal? MPDisponibleKg { get; set; }
+        public string? OrigenSurtido { get; set; }
+        public string? MensajeAlmacen { get; set; }
+
     }
 
-    // ============================================================
+
     // HELPERS
     
     public static class PlaneacionOFEstatus

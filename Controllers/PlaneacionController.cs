@@ -19,9 +19,7 @@ namespace ERP.NSQuell.Controllers
             _configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("No se encontró la cadena de conexión DefaultConnection.");
 
-        // ============================================================
-        // INDEX
-        // ============================================================
+        // Index
         [HttpGet]
         public async Task<IActionResult> Index()
         {
@@ -96,15 +94,14 @@ ORDER BY s.FechaCreacion DESC;";
             return View(lista);
         }
 
-        // ============================================================
-        // CREAR GET
-        // ============================================================
+        // crearr get
         [HttpGet]
         public async Task<IActionResult> Crear()
         {
             var vm = new PlaneacionOFCrearVm
             {
                 FolioSolicitud = null,
+                NumeroOFRecibida = await ObtenerNumeroOFSugeridoAsync(),
                 FechaSolicitud = DateTime.Today,
                 OrigenSolicitud = "Dirección",
                 Prioridad = "Normal"
@@ -114,12 +111,12 @@ ORDER BY s.FechaCreacion DESC;";
             {
                 Renglon = 1,
                 AsignacionesMaquina = new List<PlaneacionOFAsignacionMaquinaCrearVm>
-                {
-                    new PlaneacionOFAsignacionMaquinaCrearVm
-                    {
-                        Secuencia = 1
-                    }
-                }
+        {
+            new PlaneacionOFAsignacionMaquinaCrearVm
+            {
+                Secuencia = 1
+            }
+        }
             });
 
             await CargarCatalogosAsync(vm);
@@ -127,9 +124,7 @@ ORDER BY s.FechaCreacion DESC;";
             return View(vm);
         }
 
-        // ============================================================
-        // CREAR POST
-        // ============================================================
+        //crear post
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Crear(PlaneacionOFCrearVm vm)
@@ -418,9 +413,7 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID;";
             }
         }
 
-        // ============================================================
-        // AJAX: OBTENER INFO DE PARTE
-        // ============================================================
+        // Obtener info de la parte
         [HttpGet]
         public async Task<IActionResult> ObtenerParteInfo(int parteId)
         {
@@ -444,15 +437,18 @@ SELECT
     mol.CodigoMolde AS MoldeCodigo,
     p.MaquinaPrincipalID,
     p.MaquinaSustitutaID,
-    t.Ciclo,
-    t.TipoSecado,
-    t.HorasSecado,
-    t.PesoBrutoPieza,
-    t.MaterialCodigo,
-    t.MaterialDescripcion,
-    t.EmbalajeCodigo,
-    t.EmbalajeDescripcion,
-    t.PiezasPorEmbalaje
+
+    COALESCE(p.MaterialID, t.MaterialID) AS MaterialID,
+    COALESCE(NULLIF(p.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
+    COALESCE(NULLIF(p.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
+
+    COALESCE(t.Ciclo, NULL) AS Ciclo,
+    COALESCE(t.TipoSecado, p.TipoSecado) AS TipoSecado,
+    COALESCE(t.HorasSecado, p.HorasSecado) AS HorasSecado,
+    COALESCE(t.PesoBrutoPieza, p.PesoBrutoPieza) AS PesoBrutoPieza,
+    COALESCE(NULLIF(t.EmbalajeCodigo, ''), p.EmbalajeCodigo) AS EmbalajeCodigo,
+    COALESCE(NULLIF(t.EmbalajeDescripcion, ''), p.EmbalajeDescripcion) AS EmbalajeDescripcion,
+    COALESCE(t.PiezasPorEmbalaje, p.PiezasPorEmbalaje) AS PiezasPorEmbalaje
 FROM dbo.ERP_Partes p
 LEFT JOIN dbo.ERP_Clientes c
     ON c.ClienteID = p.ClienteID
@@ -472,6 +468,7 @@ WHERE p.ParteID = @ParteID
             if (!await rd.ReadAsync())
             {
                 return Json(new { ok = false, mensaje = "No se encontró la parte." });
+
             }
 
             var numeroParte = rd["NumeroParte"] as string ?? "";
@@ -507,41 +504,47 @@ WHERE p.ParteID = @ParteID
                 horasSecado = rd["HorasSecado"] == DBNull.Value ? null : rd["HorasSecado"],
                 pesoBrutoPieza = rd["PesoBrutoPieza"] == DBNull.Value ? null : rd["PesoBrutoPieza"],
 
+                materialID = rd["MaterialID"] == DBNull.Value ? null : rd["MaterialID"],
                 materialCodigo = rd["MaterialCodigo"] == DBNull.Value ? null : rd["MaterialCodigo"],
                 materialDescripcion = rd["MaterialDescripcion"] == DBNull.Value ? null : rd["MaterialDescripcion"],
 
                 embalajeCodigo = rd["EmbalajeCodigo"] == DBNull.Value ? null : rd["EmbalajeCodigo"],
                 embalajeDescripcion = rd["EmbalajeDescripcion"] == DBNull.Value ? null : rd["EmbalajeDescripcion"],
                 piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? null : rd["PiezasPorEmbalaje"]
+
+              
+
             });
         }
 
-        // ============================================================
-        // AJAX: CALCULAR DATOS
-        // ============================================================
+        // calcular datos
         [HttpGet]
         public IActionResult CalcularDatosOF(
-            int? cantidadPiezas,
-            decimal? horasPlaneadas,
-            int? objetivoHora,
-            decimal? piezasPorEmbalaje,
-            decimal? pesoBrutoPieza)
+    int? cantidadPiezas,
+    decimal? horasPlaneadas,
+    int? objetivoHora,
+    decimal? piezasPorEmbalaje,
+    decimal? pesoBrutoPieza)
         {
             var cantidad = cantidadPiezas ?? 0;
 
-            if (cantidad <= 0 && horasPlaneadas.HasValue && objetivoHora.HasValue)
-            {
-                cantidad = Convert.ToInt32(Math.Ceiling(horasPlaneadas.Value * objetivoHora.Value));
-            }
-
+            decimal? horasCalculadas = null;
             decimal? cantidadEmbalajes = null;
             decimal? cantidadMpKg = null;
 
+            // Horas planeadas = Cantidad de piezas / Objetivo por hora
+            if (cantidad > 0 && objetivoHora.HasValue && objetivoHora.Value > 0)
+            {
+                horasCalculadas = Math.Round(cantidad / (decimal)objetivoHora.Value, 2);
+            }
+
+            // Cantidad de embalajes = Cantidad de piezas / Piezas por embalaje
             if (cantidad > 0 && piezasPorEmbalaje.HasValue && piezasPorEmbalaje.Value > 0)
             {
                 cantidadEmbalajes = Math.Ceiling(cantidad / piezasPorEmbalaje.Value);
             }
 
+            // Cantidad MP kg = Peso bruto pieza * Cantidad de piezas
             if (cantidad > 0 && pesoBrutoPieza.HasValue && pesoBrutoPieza.Value > 0)
             {
                 cantidadMpKg = Math.Round(cantidad * pesoBrutoPieza.Value, 4);
@@ -551,14 +554,281 @@ WHERE p.ParteID = @ParteID
             {
                 ok = true,
                 cantidadPiezas = cantidad,
+                horasPlaneadas = horasCalculadas,
                 cantidadEmbalajes,
                 cantidadMpKg
             });
         }
 
-        // ============================================================
-        // INSERTS
-        // ============================================================
+
+
+        [HttpGet]
+        public async Task<IActionResult> ValidarDisponibilidadAlmacen(
+    int parteId,
+    int cantidadPiezas,
+    CancellationToken cancellationToken = default)
+        {
+            if (parteId <= 0)
+            {
+                return BadRequest(new { ok = false, mensaje = "La parte es obligatoria." });
+            }
+
+            if (cantidadPiezas <= 0)
+            {
+                return BadRequest(new { ok = false, mensaje = "La cantidad de piezas debe ser mayor a cero." });
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync(cancellationToken);
+
+            const string sqlParte = @"
+SELECT
+    p.ParteID,
+    p.NumeroParte,
+    COALESCE(NULLIF(p.Designacion, ''), p.Descripcion) AS Descripcion,
+    COALESCE(p.MaterialID, t.MaterialID) AS MaterialID,
+    COALESCE(NULLIF(p.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
+    COALESCE(NULLIF(p.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
+    COALESCE(t.PesoBrutoPieza, p.PesoBrutoPieza) AS PesoBrutoPieza
+FROM dbo.ERP_Partes p
+LEFT JOIN dbo.ERP_ParteDatosTecnicos t
+    ON t.ParteID = p.ParteID
+   AND t.Activo = 1
+WHERE p.ParteID = @ParteID
+  AND p.Activo = 1;";
+
+            int? materialId = null;
+            string numeroParte = "";
+            string descripcionParte = "";
+            string materialCodigo = "";
+            string materialDescripcion = "";
+            decimal pesoBrutoPieza = 0m;
+
+            await using (var cmd = new SqlCommand(sqlParte, cn))
+            {
+                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
+
+                await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+                if (!await rd.ReadAsync(cancellationToken))
+                {
+                    return NotFound(new { ok = false, mensaje = "No se encontró la parte seleccionada." });
+                }
+
+                numeroParte = rd["NumeroParte"] as string ?? "";
+                descripcionParte = rd["Descripcion"] as string ?? "";
+
+                if (rd["MaterialID"] != DBNull.Value)
+                    materialId = Convert.ToInt32(rd["MaterialID"]);
+
+                materialCodigo = rd["MaterialCodigo"] as string ?? "";
+                materialDescripcion = rd["MaterialDescripcion"] as string ?? "";
+
+                if (rd["PesoBrutoPieza"] != DBNull.Value)
+                    pesoBrutoPieza = Convert.ToDecimal(rd["PesoBrutoPieza"]);
+            }
+
+            var ptDisponible = 0;
+            var ptRetenido = 0;
+            var ptSemaforo = "";
+
+            const string sqlPT = @"
+SELECT TOP 1
+    ISNULL(Disponible, 0) AS Disponible,
+    ISNULL(Retenido, 0) AS Retenido,
+    ISNULL(Semaforo, '') AS Semaforo
+FROM dbo.vw_AlmacenPTInventario
+WHERE ParteID = @ParteID;";
+
+            await using (var cmd = new SqlCommand(sqlPT, cn))
+            {
+                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
+
+                await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+                if (await rd.ReadAsync(cancellationToken))
+                {
+                    ptDisponible = rd["Disponible"] == DBNull.Value ? 0 : Convert.ToInt32(rd["Disponible"]);
+                    ptRetenido = rd["Retenido"] == DBNull.Value ? 0 : Convert.ToInt32(rd["Retenido"]);
+                    ptSemaforo = rd["Semaforo"] as string ?? "";
+                }
+            }
+
+            var ptSuficiente = ptDisponible >= cantidadPiezas;
+
+            var mpRequeridaKg = 0m;
+            var mpDisponibleKg = 0m;
+            var mpUnidad = "";
+            var mpSemaforo = "";
+            var mpSuficiente = false;
+
+            if (!ptSuficiente)
+            {
+                mpRequeridaKg = Math.Round(cantidadPiezas * pesoBrutoPieza, 4);
+
+                if (pesoBrutoPieza <= 0)
+                {
+                    return Json(new
+                    {
+                        ok = true,
+                        parteId,
+                        numeroParte,
+                        descripcionParte,
+                        cantidadPiezas,
+
+                        pt = new
+                        {
+                            disponible = ptDisponible,
+                            retenido = ptRetenido,
+                            requerido = cantidadPiezas,
+                            suficiente = false,
+                            semaforo = ptSemaforo
+                        },
+
+                        mp = new
+                        {
+                            materialId,
+                            codigo = materialCodigo,
+                            material = materialDescripcion,
+                            requeridoKg = 0,
+                            disponibleKg = 0,
+                            unidad = "",
+                            suficiente = false,
+                            semaforo = ""
+                        },
+
+                        decision = "SIN_PESO_BRUTO",
+                        bloquear = true,
+                        mensaje = "No hay PT suficiente y la parte no tiene PesoBrutoPieza configurado. No se puede calcular la MP requerida."
+                    });
+                }
+
+                if (!materialId.HasValue)
+                {
+                    return Json(new
+                    {
+                        ok = true,
+                        parteId,
+                        numeroParte,
+                        descripcionParte,
+                        cantidadPiezas,
+
+                        pt = new
+                        {
+                            disponible = ptDisponible,
+                            retenido = ptRetenido,
+                            requerido = cantidadPiezas,
+                            suficiente = false,
+                            semaforo = ptSemaforo
+                        },
+
+                        mp = new
+                        {
+                            materialId = (int?)null,
+                            codigo = materialCodigo,
+                            material = materialDescripcion,
+                            requeridoKg = mpRequeridaKg,
+                            disponibleKg = 0,
+                            unidad = "",
+                            suficiente = false,
+                            semaforo = ""
+                        },
+
+                        decision = "SIN_MATERIAL",
+                        bloquear = true,
+                        mensaje = "No hay PT suficiente y la parte no tiene MaterialID relacionado. Revisa el catálogo de partes/materiales."
+                    });
+                }
+
+                const string sqlMP = @"
+SELECT TOP 1
+    MaterialID,
+    Codigo,
+    Nombre,
+    Unidad,
+    ISNULL(Saldo, 0) AS Saldo,
+    ISNULL(Semaforo, '') AS Semaforo
+FROM dbo.vw_AlmacenMPInventario
+WHERE MaterialID = @MaterialID;";
+
+                await using var cmd = new SqlCommand(sqlMP, cn);
+                cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value = materialId.Value;
+
+                await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+                if (await rd.ReadAsync(cancellationToken))
+                {
+                    materialCodigo = rd["Codigo"] as string ?? materialCodigo;
+                    materialDescripcion = rd["Nombre"] as string ?? materialDescripcion;
+                    mpUnidad = rd["Unidad"] as string ?? "";
+                    mpDisponibleKg = rd["Saldo"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["Saldo"]);
+                    mpSemaforo = rd["Semaforo"] as string ?? "";
+                }
+
+                mpSuficiente = mpDisponibleKg >= mpRequeridaKg;
+            }
+
+            string decision;
+            bool bloquear;
+            string mensaje;
+
+            if (ptSuficiente)
+            {
+                decision = "PT";
+                bloquear = false;
+                mensaje = "Hay producto terminado suficiente. Puedes surtir desde PT o continuar con planeación.";
+            }
+            else if (mpSuficiente)
+            {
+                decision = "MP";
+                bloquear = false;
+                mensaje = "No hay PT suficiente, pero sí hay MP suficiente para producir.";
+            }
+            else
+            {
+                decision = "SIN_EXISTENCIA";
+                bloquear = true;
+                mensaje = "No hay PT suficiente y tampoco hay MP suficiente. Revisar con Almacén o Compras.";
+            }
+
+            return Json(new
+            {
+                ok = true,
+                parteId,
+                numeroParte,
+                descripcionParte,
+                cantidadPiezas,
+
+                pt = new
+                {
+                    disponible = ptDisponible,
+                    retenido = ptRetenido,
+                    requerido = cantidadPiezas,
+                    suficiente = ptSuficiente,
+                    semaforo = ptSemaforo
+                },
+
+                mp = new
+                {
+                    materialId,
+                    codigo = materialCodigo,
+                    material = materialDescripcion,
+                    requeridoKg = mpRequeridaKg,
+                    disponibleKg = mpDisponibleKg,
+                    unidad = mpUnidad,
+                    suficiente = mpSuficiente,
+                    semaforo = mpSemaforo
+                },
+
+                decision,
+                bloquear,
+                mensaje
+            });
+        }
+
+
+
+        //Inserts
         private async Task<int> InsertarEncabezadoAsync(
             PlaneacionOFCrearVm vm,
             string? clienteNombre,
@@ -660,6 +930,12 @@ INSERT INTO dbo.SolicitudesProduccionDetalle
     PesoBrutoPieza,
     MaterialCodigo,
     MaterialDescripcion,
+MaterialID,
+OrigenSurtido,
+PTDisponibleAlCrear,
+MPDisponibleKgAlCrear,
+AlmacenValidado,
+MensajeAlmacen,
     EmbalajeCodigo,
     EmbalajeDescripcion,
     PiezasPorEmbalaje,
@@ -694,6 +970,12 @@ VALUES
     @PesoBrutoPieza,
     @MaterialCodigo,
     @MaterialDescripcion,
+@MaterialID,
+@OrigenSurtido,
+@PTDisponibleAlCrear,
+@MPDisponibleKgAlCrear,
+@AlmacenValidado,
+@MensajeAlmacen,
     @EmbalajeCodigo,
     @EmbalajeDescripcion,
     @PiezasPorEmbalaje,
@@ -729,6 +1011,12 @@ VALUES
             AddDecimal(cmd, "@PesoBrutoPieza", d.PesoBrutoPieza, 18, 6);
             cmd.Parameters.Add("@MaterialCodigo", SqlDbType.NVarChar, 100).Value = (object?)d.MaterialCodigo ?? DBNull.Value;
             cmd.Parameters.Add("@MaterialDescripcion", SqlDbType.NVarChar, 250).Value = (object?)d.MaterialDescripcion ?? DBNull.Value;
+            cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value = (object?)d.MaterialID ?? DBNull.Value;
+            cmd.Parameters.Add("@OrigenSurtido", SqlDbType.NVarChar, 30).Value = (object?)d.OrigenSurtido ?? DBNull.Value;
+            cmd.Parameters.Add("@PTDisponibleAlCrear", SqlDbType.Int).Value = (object?)d.PTDisponibleAlCrear ?? DBNull.Value;
+            AddDecimal(cmd, "@MPDisponibleKgAlCrear", d.MPDisponibleKgAlCrear, 18, 4);
+            cmd.Parameters.Add("@AlmacenValidado", SqlDbType.Bit).Value = d.AlmacenValidado;
+            cmd.Parameters.Add("@MensajeAlmacen", SqlDbType.NVarChar, 500).Value = (object?)d.MensajeAlmacen ?? DBNull.Value;
             cmd.Parameters.Add("@EmbalajeCodigo", SqlDbType.NVarChar, 100).Value = (object?)d.EmbalajeCodigo ?? DBNull.Value;
             cmd.Parameters.Add("@EmbalajeDescripcion", SqlDbType.NVarChar, 250).Value = (object?)d.EmbalajeDescripcion ?? DBNull.Value;
             AddDecimal(cmd, "@PiezasPorEmbalaje", d.PiezasPorEmbalaje, 18, 4);
@@ -849,9 +1137,7 @@ VALUES
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // ============================================================
-        // CONSULTAS
-        // ============================================================
+        // consultas
         private async Task CargarCatalogosAsync(PlaneacionOFCrearVm vm)
         {
             await using var cn = new SqlConnection(ConnectionString);
@@ -946,15 +1232,19 @@ SELECT
     p.ObjetivoHora,
     p.PiezasPorCaja,
     p.MoldePrincipalID,
+
+    COALESCE(p.MaterialID, t.MaterialID) AS MaterialID,
+    COALESCE(NULLIF(p.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
+    COALESCE(NULLIF(p.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
+
     t.Ciclo,
-    t.TipoSecado,
-    t.HorasSecado,
-    t.PesoBrutoPieza,
-    t.MaterialCodigo,
-    t.MaterialDescripcion,
-    t.EmbalajeCodigo,
-    t.EmbalajeDescripcion,
-    t.PiezasPorEmbalaje
+    COALESCE(t.TipoSecado, p.TipoSecado) AS TipoSecado,
+    COALESCE(t.HorasSecado, p.HorasSecado) AS HorasSecado,
+    COALESCE(t.PesoBrutoPieza, p.PesoBrutoPieza) AS PesoBrutoPieza,
+
+    COALESCE(NULLIF(t.EmbalajeCodigo, ''), p.EmbalajeCodigo) AS EmbalajeCodigo,
+    COALESCE(NULLIF(t.EmbalajeDescripcion, ''), p.EmbalajeDescripcion) AS EmbalajeDescripcion,
+    COALESCE(t.PiezasPorEmbalaje, p.PiezasPorEmbalaje) AS PiezasPorEmbalaje
 FROM dbo.ERP_Partes p
 LEFT JOIN dbo.ERP_ParteDatosTecnicos t
     ON t.ParteID = p.ParteID
@@ -1007,6 +1297,9 @@ WHERE p.ParteID = @ParteID;";
             if (!d.PesoBrutoPieza.HasValue && rd["PesoBrutoPieza"] != DBNull.Value)
                 d.PesoBrutoPieza = Convert.ToDecimal(rd["PesoBrutoPieza"]);
 
+            if (!d.MaterialID.HasValue && rd["MaterialID"] != DBNull.Value)
+                d.MaterialID = Convert.ToInt32(rd["MaterialID"]);
+
             if (string.IsNullOrWhiteSpace(d.MaterialCodigo) && rd["MaterialCodigo"] != DBNull.Value)
                 d.MaterialCodigo = rd["MaterialCodigo"].ToString();
 
@@ -1025,16 +1318,19 @@ WHERE p.ParteID = @ParteID;";
 
         private static void CalcularDatosTecnicos(PlaneacionOFDetalleCrearVm d)
         {
-            if (d.CantidadPiezas <= 0 && d.HorasPlaneadas.HasValue && d.ObjetivoHora.HasValue)
+            // Horas planeadas = Cantidad de piezas / Objetivo por hora
+            if (d.CantidadPiezas > 0 && d.ObjetivoHora.HasValue && d.ObjetivoHora.Value > 0)
             {
-                d.CantidadPiezas = Convert.ToInt32(Math.Ceiling(d.HorasPlaneadas.Value * d.ObjetivoHora.Value));
+                d.HorasPlaneadas = Math.Round(d.CantidadPiezas / (decimal)d.ObjetivoHora.Value, 2);
             }
 
+            // Cantidad de embalajes = Cantidad de piezas / Piezas por embalaje
             if (d.CantidadPiezas > 0 && d.PiezasPorEmbalaje.HasValue && d.PiezasPorEmbalaje.Value > 0)
             {
                 d.CantidadEmbalajes = Math.Ceiling(d.CantidadPiezas / d.PiezasPorEmbalaje.Value);
             }
 
+            // Cantidad MP kg = Peso bruto pieza * Cantidad de piezas
             if (d.CantidadPiezas > 0 && d.PesoBrutoPieza.HasValue && d.PesoBrutoPieza.Value > 0)
             {
                 d.CantidadMpKg = Math.Round(d.CantidadPiezas * d.PesoBrutoPieza.Value, 4);
@@ -1208,20 +1504,97 @@ ORDER BY h.FechaMovimiento DESC;";
             return lista;
         }
 
-        // ============================================================
-        // HELPERS GENERALES
-        // ============================================================
+        [HttpGet]
+        public async Task<IActionResult> ObtenerPartesPorCliente(int clienteId)
+        {
+            if (clienteId <= 0)
+            {
+                return Json(new { ok = false, mensaje = "Cliente inválido." });
+            }
+
+            var partes = new List<object>();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            const string sql = @"
+SELECT
+    ParteID,
+    NumeroParte,
+    ISNULL(NULLIF(ReferenciaSAP, ''), NumeroParte) AS ReferenciaSAP,
+    ISNULL(NULLIF(Designacion, ''), Descripcion) AS Descripcion
+FROM dbo.ERP_Partes
+WHERE Activo = 1
+  AND ClienteID = @ClienteID
+ORDER BY NumeroParte;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = clienteId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                partes.Add(new
+                {
+                    value = rd["ParteID"].ToString(),
+                    text = $"{rd["NumeroParte"]} | {rd["ReferenciaSAP"]} | {rd["Descripcion"]}"
+                });
+            }
+
+            return Json(new
+            {
+                ok = true,
+                partes
+            });
+        }
+
+
+        // helpesr generales
         private async Task<string> GenerarFolioOFAsync(SqlConnection cn, SqlTransaction tx)
         {
-            const string sql = "SELECT NEXT VALUE FOR dbo.SEQ_SolicitudesProduccion;";
+            var yy = DateTime.Now.ToString("yy");
+            var prefijo = $"OF-";
+            var sufijo = $"/{yy}";
+
+            const string sql = @"
+SELECT
+    ISNULL(MAX(TRY_CONVERT(INT, SUBSTRING(FolioSolicitud, 4, 4))), 0) + 1
+FROM dbo.SolicitudesProduccion WITH (UPDLOCK, HOLDLOCK)
+WHERE Activo = 1
+  AND FolioSolicitud LIKE @Patron;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
-            var consecutivo = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+            cmd.Parameters.Add("@Patron", SqlDbType.NVarChar, 30).Value = $"{prefijo}____{sufijo}";
+
+            var siguiente = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+
+            return $"OF-{siguiente:0000}/{yy}";
+        }
+
+
+        private async Task<string> ObtenerNumeroOFSugeridoAsync()
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
 
             var yy = DateTime.Now.ToString("yy");
 
-            return $"OF-{consecutivo:00000}/{yy}";
+            const string sql = @"
+SELECT
+    ISNULL(MAX(TRY_CONVERT(INT, SUBSTRING(NumeroOFRecibida, 4, 4))), 0) + 1
+FROM dbo.SolicitudesProduccion
+WHERE Activo = 1
+  AND NumeroOFRecibida LIKE @Patron;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@Patron", SqlDbType.NVarChar, 30).Value = $"OF-____/{yy}";
+
+            var siguiente = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+
+            return $"OF-{siguiente:0000}/{yy}";
         }
+
 
         private int ObtenerUsuarioID()
         {
