@@ -53,6 +53,26 @@ public abstract class AlmacenBaseController : Controller
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) == 1;
     }
 
+    protected static async Task<bool> ExisteColumnaAsync(
+        SqlConnection connection,
+        string objeto,
+        string columna,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT CASE WHEN EXISTS
+(
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(@Objeto)
+      AND name = @Columna
+) THEN 1 ELSE 0 END;";
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@Objeto", SqlDbType.NVarChar, 256).Value = objeto;
+        command.Parameters.Add("@Columna", SqlDbType.NVarChar, 128).Value = columna;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) == 1;
+    }
+
     protected static string Texto(SqlDataReader reader, string columna)
     {
         var ordinal = reader.GetOrdinal(columna);
@@ -81,6 +101,15 @@ public abstract class AlmacenBaseController : Controller
     {
         var ordinal = reader.GetOrdinal(columna);
         return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
+    }
+
+    protected static string Csv(string? valor)
+    {
+        var texto = valor ?? string.Empty;
+        if (texto.Length > 0 && texto[0] is '=' or '+' or '-' or '@')
+            texto = "'" + texto;
+
+        return $"\"{texto.Replace("\"", "\"\"")}\"";
     }
 
     protected void Mensaje(string tipo, string texto)

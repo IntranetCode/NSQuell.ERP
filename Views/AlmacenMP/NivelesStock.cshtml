@@ -1,0 +1,113 @@
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenStockNivelesVm
+@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Niveles de stock MP"; }
+
+<section class="alm-hero">
+    <div>
+        <small>CONFIGURACIÓN DE INVENTARIO</small>
+        <h1>Niveles de stock MP</h1>
+        <p>Configura el mínimo y el nivel de aviso de cada material. El stock disponible se calcula por movimientos; estos campos únicamente controlan el color del semáforo.</p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn" asp-action="Movimiento" asp-route-tipo="Entrada">Cargar stock MP</a>
+    </div>
+</section>
+
+<section class="alm-grid alm-grid-3">
+    <div class="alm-kpi"><small>Registros visibles</small><strong>@Model.Total</strong></div>
+    <div class="alm-kpi"><small>Configurados</small><strong>@Model.Configurados</strong></div>
+    <div class="alm-kpi"><small>Pendientes</small><strong>@Model.Pendientes</strong></div>
+</section>
+
+<section class="alm-card">
+    <form method="get" class="alm-filter alm-filter-stock">
+        <div class="alm-field">
+            <label for="q">Material MP</label>
+            <input id="q" class="alm-input" type="search" name="q" value="@Model.Busqueda"
+                   list="niveles-mp-opciones" placeholder="Escribe o selecciona un material" autocomplete="off" />
+            <datalist id="niveles-mp-opciones">
+                @foreach (var item in Model.Items)
+                {
+                    <option value="@item.Codigo">@item.Codigo · @item.Descripcion</option>
+                }
+            </datalist>
+        </div>
+        <label class="alm-check">
+            <input asp-for="SoloSinConfigurar" name="soloSinConfigurar" />
+            Solo pendientes de configurar
+        </label>
+        <button class="alm-btn">Filtrar</button>
+        <a class="alm-btn secondary" asp-action="NivelesStock">Limpiar</a>
+    </form>
+</section>
+
+<form asp-action="NivelesStock" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Modulo" />
+    <input type="hidden" asp-for="Busqueda" />
+    <input type="hidden" asp-for="SoloSinConfigurar" />
+
+    <section class="alm-card">
+        <header>
+            <span>Configuración masiva MP</span>
+            <span>El aviso debe ser igual o mayor al mínimo.</span>
+        </header>
+        <div asp-validation-summary="ModelOnly" class="alm-validation"></div>
+        <div class="alm-table-wrap alm-table-wrap-fit">
+            <table class="alm-table alm-table-fit alm-table-stock-config">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Material</th>
+                        <th>Stock disponible</th>
+                        <th>Stock mínimo</th>
+                        <th>Stock de aviso</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < Model.Items.Count; i++)
+                    {
+                        var x = Model.Items[i];
+                        var estado = !x.Configurado ? "SIN_CONFIGURAR" : x.Disponible <= x.StockMinimo ? "ROJO" : x.Disponible <= x.StockAviso ? "AMARILLO" : "VERDE";
+                        <tr>
+                            <td>
+                                <a class="alm-trace-link" asp-action="Historial" asp-route-material="@x.Codigo" title="Ver trazabilidad de @x.Codigo"><strong>@x.Codigo</strong></a>
+                                <input type="hidden" asp-for="Items[i].CatalogoID" />
+                                <input type="hidden" asp-for="Items[i].Codigo" />
+                                <input type="hidden" asp-for="Items[i].Descripcion" />
+                                <input type="hidden" asp-for="Items[i].Unidad" />
+                                <input type="hidden" asp-for="Items[i].Disponible" />
+                                <input type="hidden" asp-for="Items[i].Configurado" />
+                            </td>
+                            <td><a class="alm-trace-link" asp-action="Historial" asp-route-material="@x.Codigo">@x.Descripcion</a></td>
+                            <td class="alm-stock-cell @estado"><strong>@x.Disponible.ToString("0.###") @x.Unidad</strong></td>
+                            <td>
+                                <input class="alm-input alm-number-input" asp-for="Items[i].StockMinimo" step="0.001" min="0" />
+                                <span asp-validation-for="Items[i].StockMinimo" class="alm-field-error"></span>
+                            </td>
+                            <td>
+                                <input class="alm-input alm-number-input" asp-for="Items[i].StockAviso" step="0.001" min="0" />
+                                <span asp-validation-for="Items[i].StockAviso" class="alm-field-error"></span>
+                            </td>
+                            <td><span class="alm-state @estado">@(x.Configurado ? "Configurado" : "Pendiente")</span></td>
+                        </tr>
+                    }
+                    @if (!Model.Items.Any())
+                    {
+                        <tr><td colspan="6" class="alm-empty">No hay materiales con los filtros seleccionados.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.Items.Any())
+        {
+            <div class="alm-form-actions">
+                <button class="alm-btn" type="submit"><i class="fa-solid fa-floppy-disk"></i>Guardar niveles MP</button>
+            </div>
+        }
+    </section>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
