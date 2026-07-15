@@ -1,0 +1,517 @@
+@using Microsoft.AspNetCore.Http
+@{
+    var title = ViewData["Title"] as string ?? "Altas - Clientes";
+    var userName = Context.Session.GetString("NombreMostrar")
+        ?? Context.Session.GetString("NombreUsuario")
+        ?? User?.Identity?.Name
+        ?? "Usuario";
+
+    var userRole = Context.Session.GetString("NombreRol")
+        ?? Context.Session.GetString("Rol")
+        ?? "ERP Suite";
+}
+
+<!DOCTYPE html>
+<html lang="es" data-nsq-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@title - NSQuell ERP</title>
+
+    <script>
+        (function () {
+            const theme = localStorage.getItem('nsq-theme') === 'dark' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-nsq-theme', theme);
+        })();
+    </script>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/ERP.NSQuell.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+    <style>
+        :root {
+            --clientes-bg: #F3F7FC;
+            --clientes-card: #FFFFFF;
+            --clientes-soft: #F8FAFC;
+            --clientes-text: #0D1929;
+            --clientes-muted: #64748B;
+            --clientes-line: rgba(41, 67, 95, .12);
+            --clientes-orange: #FF8200;
+            --clientes-red: #DA291C;
+            --clientes-blue: #003A70;
+            --clientes-shadow: 0 24px 70px rgba(41, 67, 95, .14);
+        }
+
+        html[data-nsq-theme="dark"] {
+            --clientes-bg: #050B12;
+            --clientes-card: #0D1929;
+            --clientes-soft: #101D2F;
+            --clientes-text: #FFFFFF;
+            --clientes-muted: #CBD5E1;
+            --clientes-line: rgba(255, 255, 255, .10);
+            --clientes-shadow: 0 24px 70px rgba(0, 0, 0, .38);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--clientes-text);
+            background:
+                radial-gradient(circle at 85% 8%, rgba(255, 130, 0, .08), transparent 24rem),
+                linear-gradient(135deg, #EEF4FA, var(--clientes-bg));
+            overflow-x: hidden;
+        }
+
+        html[data-nsq-theme="dark"] body {
+            background:
+                radial-gradient(circle at 85% 8%, rgba(255, 130, 0, .10), transparent 24rem),
+                linear-gradient(135deg, #050B12, #0D1929);
+        }
+
+        .clientes-shell {
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr);
+        }
+
+        .clientes-sidebar {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            padding: 1.25rem 1rem;
+            background: rgba(255, 255, 255, .86);
+            border-right: 1px solid var(--clientes-line);
+            backdrop-filter: blur(14px);
+            overflow-y: auto;
+            z-index: 20;
+        }
+
+        html[data-nsq-theme="dark"] .clientes-sidebar {
+            background: rgba(13, 25, 41, .90);
+        }
+
+        .clientes-brand-card,
+        .clientes-back-card,
+        .clientes-help-card {
+            display: flex;
+            align-items: center;
+            gap: .85rem;
+            border-radius: 20px;
+            background: var(--clientes-card);
+            border: 1px solid var(--clientes-line);
+            box-shadow: 0 16px 36px rgba(41, 67, 95, .08);
+        }
+
+        .clientes-brand-card {
+            min-height: 82px;
+            padding: .95rem;
+            margin-bottom: 1rem;
+        }
+
+        .clientes-brand-logo {
+            width: 52px;
+            height: 52px;
+            flex: 0 0 52px;
+            display: grid;
+            place-items: center;
+            border-radius: 18px;
+            color: #fff;
+            background: linear-gradient(135deg, var(--clientes-orange), var(--clientes-red));
+            box-shadow: 0 14px 28px rgba(255, 130, 0, .25);
+        }
+
+        .clientes-brand-card strong {
+            display: block;
+            color: var(--clientes-text);
+            font-size: .94rem;
+            line-height: 1.05;
+            font-weight: 950;
+            letter-spacing: .02em;
+        }
+
+        .clientes-brand-card span {
+            display: block;
+            margin-top: .2rem;
+            color: var(--clientes-orange);
+            font-size: .68rem;
+            font-weight: 950;
+            letter-spacing: .10em;
+            text-transform: uppercase;
+        }
+
+        .clientes-back-card {
+            min-height: 64px;
+            padding: .8rem .9rem;
+            color: var(--clientes-text);
+            text-decoration: none;
+            font-weight: 950;
+            margin-bottom: 1.35rem;
+            transition: .2s ease;
+        }
+
+        .clientes-back-card:hover {
+            color: var(--clientes-text);
+            transform: translateY(-1px);
+            box-shadow: 0 18px 42px rgba(41, 67, 95, .12);
+        }
+
+        .clientes-back-icon {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 13px;
+            color: var(--clientes-orange);
+            background: #FFF4E8;
+            border: 1px solid rgba(255, 130, 0, .20);
+        }
+
+        .clientes-sidebar-title {
+            display: block;
+            margin: 0 0 .7rem .25rem;
+            color: var(--clientes-muted);
+            font-size: .68rem;
+            font-weight: 950;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+
+        .clientes-nav {
+            display: grid;
+            gap: .45rem;
+        }
+
+        .clientes-nav-link {
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            padding: .78rem .9rem;
+            border-radius: 16px;
+            color: #29435F;
+            text-decoration: none;
+            font-size: .88rem;
+            font-weight: 950;
+            transition: .2s ease;
+        }
+
+        html[data-nsq-theme="dark"] .clientes-nav-link { color: #E2E8F0; }
+
+        .clientes-nav-link i {
+            width: 20px;
+            color: var(--clientes-orange);
+            text-align: center;
+        }
+
+        .clientes-nav-link:hover {
+            color: var(--clientes-text);
+            background: rgba(255, 130, 0, .08);
+            transform: translateX(2px);
+        }
+
+        .clientes-nav-link.is-primary {
+            color: var(--clientes-text);
+            background: #FFF4E8;
+            border: 1px solid rgba(255, 130, 0, .26);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-nav-link.is-primary {
+            background: rgba(255, 130, 0, .12);
+        }
+
+        .clientes-help-card {
+            display: block;
+            margin-top: 1.35rem;
+            padding: .95rem;
+        }
+
+        .clientes-help-card strong {
+            display: block;
+            color: var(--clientes-orange);
+            font-size: .76rem;
+            font-weight: 950;
+        }
+
+        .clientes-help-card span {
+            display: block;
+            margin-top: .25rem;
+            color: var(--clientes-text);
+            font-size: .78rem;
+            line-height: 1.35;
+            font-weight: 850;
+        }
+
+        .clientes-main {
+            min-width: 0;
+            padding: 1.7rem 1.8rem 3rem;
+        }
+
+        .clientes-topbar {
+            min-height: 86px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 0 auto 1.8rem;
+            padding: 1rem 1.25rem;
+            width: min(100%, 1480px);
+            border-radius: 24px;
+            background: rgba(255, 255, 255, .92);
+            border: 1px solid var(--clientes-line);
+            box-shadow: 0 18px 50px rgba(41, 67, 95, .10);
+            backdrop-filter: blur(14px);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-topbar { background: rgba(13, 25, 41, .90); }
+
+        .clientes-topbar-brand {
+            display: flex;
+            align-items: center;
+            gap: .85rem;
+            min-width: 0;
+        }
+
+        .clientes-topbar-logo {
+            width: 50px;
+            height: 50px;
+            flex: 0 0 50px;
+            display: grid;
+            place-items: center;
+            border-radius: 17px;
+            color: #fff;
+            background: linear-gradient(135deg, var(--clientes-orange), var(--clientes-red));
+            box-shadow: 0 14px 28px rgba(255, 130, 0, .20);
+        }
+
+        .clientes-topbar-brand strong {
+            color: var(--clientes-text);
+            font-size: 1rem;
+            font-weight: 950;
+            letter-spacing: .03em;
+        }
+
+        .clientes-topbar-brand span {
+            margin-left: .35rem;
+            color: var(--clientes-orange);
+            font-size: .68rem;
+            font-weight: 950;
+            letter-spacing: .10em;
+            text-transform: uppercase;
+        }
+
+        .clientes-topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: .65rem;
+            flex: 0 0 auto;
+        }
+
+        .clientes-theme-btn,
+        .clientes-notification-btn,
+        .clientes-user-chip {
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            border-radius: 999px;
+            border: 1px solid var(--clientes-line);
+            background: var(--clientes-card);
+            color: var(--clientes-text);
+            font-weight: 950;
+            box-shadow: 0 10px 28px rgba(41, 67, 95, .08);
+        }
+
+        .clientes-theme-btn,
+        .clientes-notification-btn {
+            padding: 0 .9rem;
+        }
+
+        .clientes-user-chip {
+            padding: .55rem .85rem;
+        }
+
+        .clientes-user-avatar {
+            width: 36px;
+            height: 36px;
+            flex: 0 0 36px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            color: #29435F;
+            background: #E8F0FB;
+            font-weight: 950;
+        }
+
+        .clientes-user-chip strong {
+            display: block;
+            max-width: 190px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--clientes-text);
+            font-size: .86rem;
+            line-height: 1.05;
+        }
+
+        .clientes-user-chip span {
+            display: block;
+            margin-top: .15rem;
+            color: var(--clientes-orange);
+            font-size: .68rem;
+            font-weight: 950;
+        }
+
+        .clientes-content {
+            width: min(100%, 1480px);
+            margin: 0 auto;
+            min-width: 0;
+        }
+
+        @@media (max-width: 1120px) {
+            .clientes-shell { grid-template-columns: 1fr; }
+            .clientes-sidebar { position: relative; height: auto; }
+            .clientes-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .clientes-main { padding: 1rem; }
+        }
+
+        @@media (max-width: 720px) {
+            .clientes-nav { grid-template-columns: 1fr; }
+            .clientes-topbar { flex-direction: column; align-items: stretch; }
+            .clientes-topbar-actions { justify-content: space-between; }
+            .clientes-user-chip { flex: 1; justify-content: flex-start; }
+        }
+    </style>
+
+    @RenderSection("Styles", required: false)
+</head>
+<body>
+    <div class="clientes-shell">
+        <aside class="clientes-sidebar">
+            <div class="clientes-brand-card">
+                <div class="clientes-brand-logo">
+                    <i class="fas fa-handshake"></i>
+                </div>
+                <div>
+                    <strong>NS GROUP</strong>
+                    <span>ERP Suite</span>
+                </div>
+            </div>
+
+            <a asp-controller="Menu"
+               asp-action="Grupo"
+               asp-route-id="8"
+               class="clientes-back-card">
+                <span class="clientes-back-icon"><i class="fas fa-arrow-left"></i></span>
+                <span>Volver a Altas</span>
+            </a>
+
+            <span class="clientes-sidebar-title">Altas - Clientes</span>
+
+            <nav class="clientes-nav">
+                <a href="/Clientes/Index" class="clientes-nav-link is-primary">
+                    <i class="fas fa-address-book"></i>
+                    Catálogo de clientes
+                </a>
+
+                <a href="/Clientes/Index?estadoFiltro=activos" class="clientes-nav-link">
+                    <i class="fas fa-check-circle"></i>
+                    Clientes activos
+                </a>
+
+                <a href="/Clientes/Index?estadoFiltro=inactivos" class="clientes-nav-link">
+                    <i class="fas fa-ban"></i>
+                    Clientes inactivos
+                </a>
+            </nav>
+
+            <div class="clientes-help-card">
+                <strong>Identificación:</strong>
+                <span>Código, nombre, RFC, contacto y estado del cliente.</span>
+            </div>
+        </aside>
+
+        <main class="clientes-main">
+            <header class="clientes-topbar">
+                <div class="clientes-topbar-brand">
+                    <div class="clientes-topbar-logo">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div>
+                        <strong>NS GROUP</strong>
+                        <span>ERP Suite</span>
+                    </div>
+                </div>
+
+                <div class="clientes-topbar-actions">
+                    <button type="button" class="clientes-theme-btn" id="clientesThemeToggle" title="Cambiar tema">
+                        <i class="fas fa-moon"></i>
+                        <span id="clientesThemeText">Oscuro</span>
+                    </button>
+
+                    <button type="button" class="clientes-notification-btn" title="Notificaciones">
+                        <i class="fas fa-bell"></i>
+                    </button>
+
+                    <div class="clientes-user-chip">
+                        <div class="clientes-user-avatar">
+                            @(string.IsNullOrWhiteSpace(userName) ? "U" : userName.Substring(0, 1).ToUpperInvariant())
+                        </div>
+                        <div>
+                            <strong>@userName</strong>
+                            <span>@userRole</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <section class="clientes-content">
+                @RenderBody()
+            </section>
+        </main>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script>
+        (function () {
+            const btn = document.getElementById('clientesThemeToggle');
+            const txt = document.getElementById('clientesThemeText');
+
+            function applyTheme(theme) {
+                const selectedTheme = theme === 'dark' ? 'dark' : 'light';
+
+                document.documentElement.setAttribute('data-nsq-theme', selectedTheme);
+                document.body.classList.remove('nsq-theme-light', 'nsq-theme-dark');
+                document.body.classList.add(selectedTheme === 'dark' ? 'nsq-theme-dark' : 'nsq-theme-light');
+                localStorage.setItem('nsq-theme', selectedTheme);
+
+                if (btn) {
+                    btn.innerHTML = selectedTheme === 'dark'
+                        ? '<i class="fas fa-sun"></i><span id="clientesThemeText">Claro</span>'
+                        : '<i class="fas fa-moon"></i><span id="clientesThemeText">Oscuro</span>';
+                }
+            }
+
+            const currentTheme = localStorage.getItem('nsq-theme') === 'dark' ? 'dark' : 'light';
+            applyTheme(currentTheme);
+
+            if (btn) {
+                btn.addEventListener('click', function () {
+                    const actual = document.documentElement.getAttribute('data-nsq-theme') === 'dark' ? 'dark' : 'light';
+                    applyTheme(actual === 'dark' ? 'light' : 'dark');
+                });
+            }
+        })();
+    </script>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

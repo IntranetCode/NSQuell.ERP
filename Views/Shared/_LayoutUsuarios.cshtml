@@ -1,0 +1,929 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Http
+@inject ERP.NSQuell.Areas.AdminUsuarios.Interfaces.IUsuarioService UsuarioService
+
+@{
+    var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+    int.TryParse(userIdString, out int currentUserId);
+
+    if (currentUserId <= 0)
+    {
+        currentUserId = Context.Session.GetInt32("UsuarioID") ?? 0;
+    }
+
+    var nombreUsuario = Context.Session.GetString("NombreMostrar")
+        ?? Context.Session.GetString("Username")
+        ?? User?.Identity?.Name
+        ?? "Usuario";
+
+    var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NS Group";
+    var logoEmpresa = Context.Session.GetString("EmpresaLogo") ?? "default-logo.png";
+    var inicialUsuario = string.IsNullOrWhiteSpace(nombreUsuario)
+        ? "U"
+        : nombreUsuario.Trim().Substring(0, 1).ToUpper();
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ERP NSQuell</title>
+
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('nsq-theme') || 'dark';
+            const selectedTheme = savedTheme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-nsq-theme', selectedTheme);
+        })();
+    </script>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/usuarios/panel.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/usuarios-styles.css" asp-append-version="true" />
+
+    <style>
+        :root {
+            --erp-bg-0: #070b12;
+            --erp-bg-1: #0b1220;
+            --erp-bg-2: #101827;
+            --erp-panel: rgba(15, 23, 42, .90);
+            --erp-panel-soft: rgba(255, 255, 255, .075);
+            --erp-panel-hover: rgba(255, 255, 255, .11);
+            --erp-border: rgba(255, 255, 255, .13);
+            --erp-border-soft: rgba(255, 255, 255, .08);
+            --erp-text: #f8fafc;
+            --erp-muted: #cbd5e1;
+            --erp-muted-2: #94a3b8;
+            --erp-orange: #f47b20;
+            --erp-orange-dark: #c2410c;
+            --erp-orange-soft: rgba(244, 123, 32, .16);
+            --erp-orange-border: rgba(244, 123, 32, .36);
+            --erp-shadow: 0 26px 80px rgba(0, 0, 0, .42);
+            --erp-shadow-soft: 0 16px 38px rgba(0, 0, 0, .28);
+            --erp-sidebar-width: 320px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            min-height: 100%;
+        }
+
+        body {
+            margin: 0;
+            color: var(--erp-text);
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            background:
+                radial-gradient(circle at 7% 6%, rgba(244, 123, 32, .24), transparent 28%),
+                radial-gradient(circle at 93% 12%, rgba(56, 189, 248, .12), transparent 28%),
+                radial-gradient(circle at 78% 92%, rgba(244, 123, 32, .10), transparent 32%),
+                linear-gradient(135deg, var(--erp-bg-0) 0%, var(--erp-bg-1) 48%, var(--erp-bg-2) 100%) !important;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: stretch;
+            background: transparent !important;
+        }
+
+        .app-sidebar {
+            width: var(--erp-sidebar-width) !important;
+            min-width: var(--erp-sidebar-width) !important;
+            min-height: 100vh;
+            position: sticky;
+            top: 0;
+            align-self: flex-start;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background:
+                radial-gradient(circle at 18% 7%, rgba(244, 123, 32, .18), transparent 30%),
+                linear-gradient(180deg, rgba(11, 18, 32, .98) 0%, rgba(7, 11, 18, .98) 100%) !important;
+            border-right: 1px solid rgba(255, 255, 255, .10);
+            box-shadow: 18px 0 60px rgba(0, 0, 0, .34);
+            z-index: 50;
+        }
+
+        .app-sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .app-sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, .03);
+        }
+
+        .app-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(244, 123, 32, .35);
+            border-radius: 999px;
+        }
+
+        .sidebar-header {
+            padding: 18px 16px 16px;
+            display: grid;
+            gap: 14px;
+        }
+
+        .sidebar-brand-card {
+            min-height: 84px;
+            padding: 16px 18px;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.045));
+            border: 1px solid var(--erp-border);
+            box-shadow: var(--erp-shadow-soft);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sidebar-brand-card::after {
+            content: "";
+            position: absolute;
+            right: -46px;
+            top: -46px;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255,255,255,.055);
+            pointer-events: none;
+        }
+
+        .sidebar-brand-icon,
+        .sidebar-brand-logo {
+            width: 54px;
+            height: 54px;
+            flex: 0 0 54px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            background: linear-gradient(135deg, var(--erp-orange), var(--erp-orange-dark));
+            box-shadow: 0 16px 32px rgba(244,123,32,.30);
+            font-size: 1.15rem;
+            object-fit: contain;
+            padding: 7px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .sidebar-brand-logo {
+            background: rgba(255,255,255,.10);
+            border: 1px solid rgba(255,255,255,.13);
+        }
+
+        .sidebar-brand-text {
+            min-width: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .sidebar-brand-name {
+            color: #fff;
+            font-weight: 950;
+            font-size: 1.05rem;
+            line-height: 1.05;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            word-break: break-word;
+        }
+
+        .sidebar-brand-sub {
+            margin-top: 5px;
+            color: #ffb86b;
+            font-weight: 950;
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: .12em;
+        }
+
+        /* Botón único de regreso: sin iconos/cuadritos internos */
+        .sidebar-return-btn {
+            width: 100%;
+            min-height: 66px;
+            padding: 14px 18px;
+            border-radius: 24px;
+            color: #fff !important;
+            text-decoration: none !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            background: rgba(255,255,255,.075);
+            border: 1px solid var(--erp-border);
+            box-shadow: 0 14px 30px rgba(0,0,0,.22);
+            transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+        }
+
+        .sidebar-return-btn:hover {
+            color: #fff !important;
+            background: rgba(244,123,32,.18);
+            border-color: rgba(244,123,32,.42);
+            transform: translateY(-2px);
+            box-shadow: 0 18px 36px rgba(0,0,0,.28);
+        }
+
+        .sidebar-return-text {
+            display: block;
+            width: 100%;
+            color: #fff;
+            font-weight: 950;
+            font-size: 1rem;
+            line-height: 1.15;
+            white-space: normal;
+        }
+
+        .sidebar-nav {
+            padding: 10px 16px 24px;
+        }
+
+        .sidebar-section-label {
+            margin: 10px 12px 10px;
+            color: #94a3b8;
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+
+        .sidebar-nav .nav,
+        .sidebar-nav ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .sidebar-nav .nav-item {
+            margin-bottom: 8px;
+        }
+
+        .sidebar-main-link {
+            min-height: 48px;
+            padding: 12px 14px;
+            border-radius: 18px;
+            color: #fff !important;
+            text-decoration: none !important;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 950;
+            background: rgba(244, 123, 32, .13);
+            border: 1px solid rgba(244, 123, 32, .20);
+        }
+
+        .sidebar-main-link i {
+            color: #ffb86b;
+            width: 22px;
+            text-align: center;
+        }
+
+        .sidebar-submenu {
+            margin: 10px 0 0 0 !important;
+            padding: 0 0 0 12px !important;
+        }
+
+        .sidebar-submenu li {
+            margin: 3px 0;
+        }
+
+        .sidebar-submenu .nav-link {
+            min-height: 34px;
+            padding: 7px 10px !important;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #cbd5e1 !important;
+            border-radius: 12px;
+            font-size: .86rem;
+            font-weight: 800;
+            text-decoration: none;
+            transition: background .18s ease, color .18s ease, transform .18s ease;
+        }
+
+        .sidebar-submenu .nav-link:hover {
+            color: #fff !important;
+            background: rgba(255,255,255,.075);
+            transform: translateX(2px);
+        }
+
+        .sub-item-line {
+            width: 5px;
+            height: 5px;
+            flex: 0 0 5px;
+            border-radius: 50%;
+            background: var(--erp-orange);
+            box-shadow: 0 0 10px rgba(244,123,32,.65);
+        }
+
+        .app-content {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 100vh;
+            background: transparent !important;
+        }
+
+        .app-content > .container-fluid {
+            max-width: none;
+            min-height: 100vh;
+            padding: 0 !important;
+        }
+
+        #success-alert {
+            border-radius: 18px !important;
+            border: 1px solid rgba(34, 197, 94, .25) !important;
+            background: rgba(22, 163, 74, .12) !important;
+            color: #dcfce7 !important;
+            backdrop-filter: blur(12px);
+        }
+
+        .panel-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 4000 !important;
+            display: none;
+            background: rgba(0, 0, 0, .45);
+            backdrop-filter: blur(5px);
+        }
+
+        .panel-overlay.is-open,
+        .panel-overlay.open,
+        .panel-overlay.active {
+            display: block;
+        }
+
+        .slide-out-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: min(100%, 980px);
+            height: 100vh;
+            z-index: 4010 !important;
+            transform: translateX(100%);
+            transition: transform .28s ease;
+            background: #0f172a;
+            box-shadow: -24px 0 70px rgba(0,0,0,.45);
+        }
+
+        .slide-out-panel.is-open,
+        .slide-out-panel.open,
+        .slide-out-panel.active {
+            transform: translateX(0);
+        }
+
+
+        /* ============================================================
+           Navbar global del ERP dentro del layout
+           ============================================================ */
+        .layout-top-navbar-host {
+            width: 100%;
+            padding: clamp(1rem, 1.6vw, 1.35rem) clamp(1rem, 2vw, 1.65rem) 0;
+            background: transparent;
+        }
+
+        .layout-render-host {
+            width: 100%;
+            min-height: calc(100vh - 96px);
+            background: transparent;
+        }
+
+        .layout-render-host > .erp-page,
+        .layout-render-host > .page-container,
+        .layout-render-host > .usuarios-shell {
+            margin-top: 0;
+        }
+
+        /* ============================================================
+           Compatibilidad del layout con el tema claro del TopNavbar
+           ============================================================ */
+        html[data-nsq-theme="light"] body {
+            color: #0d1929;
+            background:
+                radial-gradient(circle at 7% 6%, rgba(255, 130, 0, .16), transparent 28%),
+                radial-gradient(circle at 93% 12%, rgba(0, 83, 155, .12), transparent 28%),
+                linear-gradient(135deg, #f4f6f9 0%, #eef4fa 48%, #e8f0fb 100%) !important;
+        }
+
+        html[data-nsq-theme="light"] .app-container,
+        html[data-nsq-theme="light"] .app-content,
+        html[data-nsq-theme="light"] .app-content > .container-fluid,
+        html[data-nsq-theme="light"] .layout-top-navbar-host,
+        html[data-nsq-theme="light"] .layout-render-host {
+            background: transparent !important;
+            color: #0d1929 !important;
+        }
+
+        html[data-nsq-theme="light"] .app-sidebar {
+            background:
+                radial-gradient(circle at 18% 7%, rgba(255, 130, 0, .12), transparent 30%),
+                linear-gradient(180deg, rgba(255, 255, 255, .96) 0%, rgba(240, 245, 251, .96) 100%) !important;
+            border-right-color: rgba(41, 67, 95, .14);
+            box-shadow: 18px 0 48px rgba(41, 67, 95, .14);
+        }
+
+        html[data-nsq-theme="light"] .sidebar-brand-card,
+        html[data-nsq-theme="light"] .sidebar-return-btn {
+            background: rgba(255, 255, 255, .82);
+            border-color: rgba(41, 67, 95, .14);
+            box-shadow: 0 16px 35px rgba(41, 67, 95, .12);
+        }
+
+        html[data-nsq-theme="light"] .sidebar-brand-name,
+        html[data-nsq-theme="light"] .sidebar-return-text {
+            color: #0d1929 !important;
+        }
+
+        html[data-nsq-theme="light"] .sidebar-brand-sub {
+            color: #f47b20;
+        }
+
+        html[data-nsq-theme="light"] .sidebar-section-label {
+            color: #29435f;
+        }
+
+        html[data-nsq-theme="light"] .sidebar-main-link {
+            color: #0d1929 !important;
+            background: #fff4e8;
+            border-color: rgba(244, 123, 32, .26);
+        }
+
+        html[data-nsq-theme="light"] .sidebar-submenu .nav-link {
+            color: #2c3e55 !important;
+        }
+
+        html[data-nsq-theme="light"] .sidebar-submenu .nav-link:hover {
+            color: #0d1929 !important;
+            background: rgba(244, 123, 32, .10);
+        }
+
+        html[data-nsq-theme="light"] #success-alert {
+            background: rgba(220, 252, 231, .96) !important;
+            color: #14532d !important;
+            border-color: rgba(34, 197, 94, .28) !important;
+        }
+
+        @@media (max-width: 1100px) {
+            :root {
+                --erp-sidebar-width: 290px;
+            }
+        }
+
+        @@media (max-width: 900px) {
+            .app-container {
+                flex-direction: column;
+            }
+
+            .app-sidebar {
+                width: 100% !important;
+                min-width: 0 !important;
+                height: auto;
+                min-height: auto;
+                position: relative;
+                border-right: 0;
+                border-bottom: 1px solid rgba(255,255,255,.10);
+            }
+
+            .sidebar-header {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar-brand-card,
+            .sidebar-return-btn {
+                max-width: 100%;
+            }
+
+            .sidebar-nav {
+                padding-bottom: 14px;
+            }
+
+            .app-content {
+                min-height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="app-sidebar" aria-label="Menú de administración de usuarios">
+            <div class="sidebar-header">
+                <div class="sidebar-brand-card" aria-label="Marca ERP">
+                    @if (!string.IsNullOrWhiteSpace(logoEmpresa) && logoEmpresa != "default-logo.png")
+                    {
+                        <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="sidebar-brand-logo" />
+                    }
+                    else
+                    {
+                        <div class="sidebar-brand-icon" aria-hidden="true">
+                            <i class="fas fa-building"></i>
+                        </div>
+                    }
+
+                    <div class="sidebar-brand-text">
+                        <div class="sidebar-brand-name">@nombreEmpresa</div>
+                        <div class="sidebar-brand-sub">ERP Suite</div>
+                    </div>
+                </div>
+
+                <a class="sidebar-return-btn" href="@Url.Action("Grupo", "Menu", new { id = 8 })">
+                    <span class="sidebar-return-text">Volver a Altas</span>
+                </a>
+
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="sidebar-section-label">Administración</div>
+
+                <ul class="nav flex-column">
+                    @{
+                        var puedeVerUsuariosActivos = currentUserId > 0 && await UsuarioService.VerificarPermisoAsync(currentUserId, 1);
+                        var puedeVerUsuariosInactivos = currentUserId > 0 && await UsuarioService.VerificarPermisoAsync(currentUserId, 2);
+                        var puedeVerTodos = currentUserId > 0 && await UsuarioService.VerificarPermisoAsync(currentUserId, 3);
+
+                        // Temporal: se conserva el permiso 2 porque así se venía probando Enviar accesos.
+                        var puedeEnviarAccesos = currentUserId > 0 && await UsuarioService.VerificarPermisoAsync(currentUserId, 2);
+
+                        var mostrarMenuUsuarios = puedeVerUsuariosActivos
+                                               || puedeVerUsuariosInactivos
+                                               || puedeVerTodos
+                                               || puedeEnviarAccesos;
+                    }
+
+                    @if (mostrarMenuUsuarios)
+                    {
+                        <li class="nav-item">
+                            <a href="#usuarios-submenu"
+                               data-bs-toggle="collapse"
+                               role="button"
+                               aria-expanded="true"
+                               class="sidebar-main-link">
+                                <i class="fas fa-users-gear" aria-hidden="true"></i>
+                                <span>Usuarios</span>
+                            </a>
+
+                            <ul id="usuarios-submenu" class="collapse show sidebar-submenu">
+                                @if (puedeVerUsuariosActivos)
+                                {
+                                    <li>
+                                        <a asp-controller="Usuarios"
+                                           asp-action="Index"
+                                           asp-route-activos="true"
+                                           class="nav-link">
+                                            <span class="sub-item-line"></span>
+                                            Usuarios activos
+                                        </a>
+                                    </li>
+                                }
+
+                                @if (puedeVerUsuariosInactivos)
+                                {
+                                    <li>
+                                        <a asp-controller="Usuarios"
+                                           asp-action="Index"
+                                           asp-route-activos="false"
+                                           class="nav-link">
+                                            <span class="sub-item-line"></span>
+                                            Usuarios inactivos
+                                        </a>
+                                    </li>
+                                }
+
+                                @if (puedeVerTodos)
+                                {
+                                    <li>
+                                        <a asp-controller="Usuarios"
+                                           asp-action="Index"
+                                           class="nav-link">
+                                            <span class="sub-item-line"></span>
+                                            Todos los usuarios
+                                        </a>
+                                    </li>
+                                }
+
+                                @if (puedeEnviarAccesos)
+                                {
+                                    <li>
+                                        <a asp-controller="Usuarios"
+                                           asp-action="Accesos"
+                                           class="nav-link">
+                                            <span class="sub-item-line"></span>
+                                            Enviar accesos
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        </aside>
+
+        <main id="main-content" class="app-content">
+            <div class="container-fluid h-100">
+                <div class="layout-top-navbar-host">
+                    @await Html.PartialAsync("_TopNavbar")
+                </div>
+
+                <div class="layout-render-host">
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div id="success-alert"
+                             class="alert alert-success d-flex align-items-center shadow-sm"
+                             role="alert"
+                             style="position: fixed; top: 20px; right: 20px; z-index: 1060; min-width: 300px; border-left: 5px solid #22c55e;">
+                            <i class="fas fa-check-circle fa-lg me-2"></i>
+                            <div>@TempData["SuccessMessage"]</div>
+                            <button type="button"
+                                    class="btn-close ms-auto"
+                                    data-bs-dismiss="alert"
+                                    aria-label="Close">
+                            </button>
+                        </div>
+                    }
+
+                    @RenderBody()
+                    <style>
+                        /* ============================================================
+                        FIX MODO CLARO - ALTAS / USUARIOS / MAQUINARIA
+                        Debe ir después de @RenderBody() para ganarle al CSS del Index
+                        ============================================================ */
+
+                        html[data-nsq-theme="light"],
+                        html[data-nsq-theme="light"] body {
+                            background:
+                                radial-gradient(circle at 7% 6%, rgba(244, 123, 32, .10), transparent 28%),
+                                radial-gradient(circle at 93% 12%, rgba(0, 83, 155, .10), transparent 30%),
+                                linear-gradient(135deg, #F4F6F9 0%, #EAEDF2 48%, #EEF4FA 100%) !important;
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .app-container,
+                        html[data-nsq-theme="light"] .app-content,
+                        html[data-nsq-theme="light"] #main-content,
+                        html[data-nsq-theme="light"] .container-fluid,
+                        html[data-nsq-theme="light"] .page-container {
+                            background: transparent !important;
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .app-sidebar {
+                            background:
+                                radial-gradient(circle at 18% 7%, rgba(244, 123, 32, .10), transparent 30%),
+                                linear-gradient(180deg, rgba(255,255,255,.94), rgba(244,246,249,.96)) !important;
+                            border-right: 1px solid rgba(41, 67, 95, .12) !important;
+                            box-shadow: 18px 0 45px rgba(41, 67, 95, .14) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .sidebar-brand-card,
+                        html[data-nsq-theme="light"] .sidebar-return-btn,
+                        html[data-nsq-theme="light"] .sidebar-user-card,
+                        html[data-nsq-theme="light"] .maq-back-link {
+                            background: rgba(255,255,255,.86) !important;
+                            border-color: rgba(41, 67, 95, .14) !important;
+                            box-shadow: 0 14px 30px rgba(41, 67, 95, .10) !important;
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .sidebar-brand-name,
+                        html[data-nsq-theme="light"] .sidebar-user-name,
+                        html[data-nsq-theme="light"] .sidebar-return-text,
+                        html[data-nsq-theme="light"] .sidebar-main-link,
+                        html[data-nsq-theme="light"] .sidebar-main-link span {
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .sidebar-brand-sub,
+                        html[data-nsq-theme="light"] .sidebar-user-role,
+                        html[data-nsq-theme="light"] .sidebar-section-label {
+                            color: #F47B20 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .sidebar-main-link,
+                        html[data-nsq-theme="light"] .sidebar-nav .nav-link {
+                            background: transparent !important;
+                            color: #2C3E55 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .sidebar-main-link {
+                            background: #FFF4E8 !important;
+                            border-color: rgba(244, 123, 32, .25) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .sidebar-nav .nav-link:hover,
+                        html[data-nsq-theme="light"] .sidebar-main-link:hover {
+                            background: #FFF4E8 !important;
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-hero,
+                        html[data-nsq-theme="light"] .usuarios-list-card,
+                        html[data-nsq-theme="light"] .maq-hero,
+                        html[data-nsq-theme="light"] .maq-list-card {
+                            background:
+                                linear-gradient(145deg, rgba(255,255,255,.92), rgba(240,245,251,.84)) !important;
+                            border-color: rgba(41, 67, 95, .14) !important;
+                            box-shadow: 0 22px 55px rgba(41, 67, 95, .14) !important;
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-hero-side,
+                        html[data-nsq-theme="light"] .maq-hero-side {
+                            background:
+                                linear-gradient(135deg, #0D1929, #1A2A40) !important;
+                            color: #FFFFFF !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-title,
+                        html[data-nsq-theme="light"] .usuarios-hero-side *,
+                        html[data-nsq-theme="light"] .maq-title,
+                        html[data-nsq-theme="light"] .maq-hero-side * {
+                            color: #FFFFFF !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-subtitle,
+                        html[data-nsq-theme="light"] .maq-subtitle {
+                            color: #DCE8F5 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-hero-main,
+                        html[data-nsq-theme="light"] .maq-hero-main {
+                            background: transparent !important;
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-search-group,
+                        html[data-nsq-theme="light"] .maq-search-group {
+                            background: rgba(255,255,255,.88) !important;
+                            border-color: rgba(41, 67, 95, .16) !important;
+                            box-shadow: 0 18px 42px rgba(41, 67, 95, .12) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-search-group .form-select,
+                        html[data-nsq-theme="light"] .usuarios-search-group .form-control,
+                        html[data-nsq-theme="light"] .maq-search-group .form-select,
+                        html[data-nsq-theme="light"] .maq-search-group .form-control {
+                            background: rgba(255,255,255,.95) !important;
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-search-group .form-control::placeholder,
+                        html[data-nsq-theme="light"] .maq-search-group .form-control::placeholder {
+                            color: #64748B !important;
+                        }
+
+                        html[data-nsq-theme="light"] .stat-card,
+                        html[data-nsq-theme="light"] .maq-stat-card {
+                            background: rgba(255,255,255,.88) !important;
+                            border-color: rgba(41, 67, 95, .14) !important;
+                            box-shadow: 0 14px 30px rgba(41, 67, 95, .10) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .stat-value,
+                        html[data-nsq-theme="light"] .maq-stat-value {
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .stat-label,
+                        html[data-nsq-theme="light"] .maq-stat-label {
+                            color: #29435F !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-list-header,
+                        html[data-nsq-theme="light"] .maq-list-header {
+                            background: rgba(255,255,255,.88) !important;
+                            border-bottom-color: rgba(41, 67, 95, .12) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-list-title,
+                        html[data-nsq-theme="light"] .usuarios-list-count,
+                        html[data-nsq-theme="light"] .maq-list-title,
+                        html[data-nsq-theme="light"] .maq-list-count {
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-table,
+                        html[data-nsq-theme="light"] .maq-table {
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-table thead th,
+                        html[data-nsq-theme="light"] .maq-table thead th {
+                            background: #0D1929 !important;
+                            color: #FFFFFF !important;
+                            border-bottom-color: rgba(244, 123, 32, .35) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-table tbody tr,
+                        html[data-nsq-theme="light"] .usuarios-table tbody td,
+                        html[data-nsq-theme="light"] .maq-table tbody tr,
+                        html[data-nsq-theme="light"] .maq-table tbody td {
+                            background: rgba(255,255,255,.78) !important;
+                            color: #0D1929 !important;
+                            border-top-color: rgba(41, 67, 95, .12) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuarios-table tbody tr:hover > *,
+                        html[data-nsq-theme="light"] .maq-table tbody tr:hover > * {
+                            background: #FFF4E8 !important;
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .user-name-main,
+                        html[data-nsq-theme="light"] .usuario-mobile-name,
+                        html[data-nsq-theme="light"] .usuarios-table strong,
+                        html[data-nsq-theme="light"] .maq-table strong,
+                        html[data-nsq-theme="light"] .maq-code-main,
+                        html[data-nsq-theme="light"] .maq-name-main {
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .user-name-sub,
+                        html[data-nsq-theme="light"] .usuario-mobile-user,
+                        html[data-nsq-theme="light"] .maq-code-sub {
+                            color: #F47B20 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .correo-muted,
+                        html[data-nsq-theme="light"] .usuario-mobile-detail,
+                        html[data-nsq-theme="light"] .maq-muted,
+                        html[data-nsq-theme="light"] .maq-description {
+                            color: #2C3E55 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .role-pill,
+                        html[data-nsq-theme="light"] .area-pill {
+                            background: #E8F0FB !important;
+                            color: #003A70 !important;
+                            border-color: rgba(0, 58, 112, .18) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .badge-estado.activo,
+                        html[data-nsq-theme="light"] .estado-pill.operativa,
+                        html[data-nsq-theme="light"] .maq-status.operativa {
+                            background: rgba(34, 197, 94, .12) !important;
+                            color: #15803D !important;
+                            border-color: rgba(34, 197, 94, .28) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .badge-estado.inactivo,
+                        html[data-nsq-theme="light"] .estado-pill.inactiva,
+                        html[data-nsq-theme="light"] .maq-status.inactiva {
+                            background: rgba(239, 68, 68, .10) !important;
+                            color: #B91C1C !important;
+                            border-color: rgba(239, 68, 68, .25) !important;
+                        }
+
+                        html[data-nsq-theme="light"] .empty-title {
+                            color: #0D1929 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .empty-text {
+                            color: #2C3E55 !important;
+                        }
+
+                        html[data-nsq-theme="light"] .usuario-mobile-card {
+                            background: rgba(255,255,255,.88) !important;
+                            border-color: rgba(41, 67, 95, .14) !important;
+                            color: #0D1929 !important;
+                        }
+                    </style>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="panel-overlay" class="panel-overlay"></div>
+
+    <div id="slide-out-panel" class="slide-out-panel">
+        <div id="panel-content" class="d-flex flex-column h-100"></div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var successAlert = document.getElementById('success-alert');
+
+            if (successAlert) {
+                setTimeout(function () {
+                    var instance = bootstrap.Alert.getOrCreateInstance(successAlert);
+                    instance.close();
+                }, 5000);
+            }
+        });
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

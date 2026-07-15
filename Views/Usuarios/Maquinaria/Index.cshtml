@@ -1,0 +1,1004 @@
+@using Microsoft.Data.SqlClient
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Http
+@using System
+@using System.Linq
+@using System.Collections.Generic
+@inject ERP.NSQuell.Models.ApplicationDbContext DbContext
+
+@{
+    Layout = "_LayoutMaquinaria";
+    ViewData["Title"] = "Altas de Maquinaria";
+
+    var busquedaActual = Context.Request.Query["busqueda"].ToString().Trim();
+    var filtroCampoActual = Context.Request.Query["filtroCampo"].ToString().Trim();
+    filtroCampoActual = string.IsNullOrWhiteSpace(filtroCampoActual) ? "Todos" : filtroCampoActual;
+
+    var estadoVistaActual = Context.Request.Query["estadoVista"].ToString().Trim();
+    estadoVistaActual = string.IsNullOrWhiteSpace(estadoVistaActual) ? "Todos" : estadoVistaActual;
+
+    var maquinas = new List<MaquinaVistaVm>();
+    var mensajeError = "";
+
+    string Safe(string? texto) => string.IsNullOrWhiteSpace(texto) ? "" : texto.Trim();
+    string EstadoTexto(string? estado) => string.IsNullOrWhiteSpace(estado) ? "Sin estado" : estado.Trim();
+    string? Selected(string value, string current) => string.Equals(value, current, StringComparison.OrdinalIgnoreCase) ? "selected" : null;
+
+    string EstadoFiltroLabel()
+    {
+        if (string.Equals(estadoVistaActual, "Activas", StringComparison.OrdinalIgnoreCase)) return "Máquinas activas";
+        if (string.Equals(estadoVistaActual, "Inactivas", StringComparison.OrdinalIgnoreCase)) return "Máquinas inactivas";
+        if (string.Equals(estadoVistaActual, "Operativas", StringComparison.OrdinalIgnoreCase)) return "Máquinas operativas";
+        return "Todas las máquinas";
+    }
+
+    string CodigoCorto(string? codigo)
+    {
+        codigo = Safe(codigo);
+        return string.IsNullOrWhiteSpace(codigo) ? "S/C" : codigo;
+    }
+
+    string InicialCodigo(string? codigo)
+    {
+        codigo = CodigoCorto(codigo);
+        return codigo.Length > 5 ? codigo.Substring(0, 5) : codigo;
+    }
+
+    try
+    {
+        var cnn = DbContext.Database.GetConnectionString();
+
+        if (string.IsNullOrWhiteSpace(cnn))
+        {
+            mensajeError = "No se encontró la cadena de conexión para consultar la maquinaria.";
+        }
+        else
+        {
+            await using var conn = new SqlConnection(cnn);
+            await conn.OpenAsync();
+
+            const string sql = @"
+                SELECT
+                    MaquinaID,
+                    Codigo,
+                    Nombre,
+                    Area,
+                    EstadoOperativo,
+                    Descripcion,
+                    Activo,
+                    FechaCreacion,
+                    FechaModificacion
+                FROM dbo.ERP_Maquinas
+                WHERE
+                    (
+                        @Busqueda = ''
+                        OR (@FiltroCampo = 'Todos' AND (
+                            Codigo LIKE @Like
+                            OR Nombre LIKE @Like
+                            OR Area LIKE @Like
+                            OR EstadoOperativo LIKE @Like
+                            OR ISNULL(Descripcion, '') LIKE @Like
+                        ))
+                        OR (@FiltroCampo = 'Codigo' AND Codigo LIKE @Like)
+                        OR (@FiltroCampo = 'Nombre' AND Nombre LIKE @Like)
+                        OR (@FiltroCampo = 'Area' AND Area LIKE @Like)
+                        OR (@FiltroCampo = 'EstadoOperativo' AND EstadoOperativo LIKE @Like)
+                    )
+                    AND (
+                        @EstadoVista = 'Todos'
+                        OR (@EstadoVista = 'Activas' AND Activo = 1)
+                        OR (@EstadoVista = 'Inactivas' AND Activo = 0)
+                        OR (@EstadoVista = 'Operativas' AND EstadoOperativo = 'Operativa')
+                    )
+                ORDER BY
+                    Area,
+                    CASE
+                        WHEN PATINDEX('%[^0-9]%', Codigo + 'X') > 1
+                        THEN TRY_CONVERT(INT, LEFT(Codigo, PATINDEX('%[^0-9]%', Codigo + 'X') - 1))
+                        ELSE NULL
+                    END,
+                    Codigo,
+                    Nombre;";
+
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Busqueda", busquedaActual);
+            cmd.Parameters.AddWithValue("@Like", $"%{busquedaActual}%");
+            cmd.Parameters.AddWithValue("@FiltroCampo", filtroCampoActual);
+            cmd.Parameters.AddWithValue("@EstadoVista", estadoVistaActual);
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                maquinas.Add(new MaquinaVistaVm
+                {
+                    MaquinaID = rd["MaquinaID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["MaquinaID"]),
+                    Codigo = rd["Codigo"]?.ToString() ?? "",
+                    Nombre = rd["Nombre"]?.ToString() ?? "",
+                    Area = rd["Area"]?.ToString() ?? "",
+                    EstadoOperativo = rd["EstadoOperativo"]?.ToString() ?? "",
+                    Descripcion = rd["Descripcion"]?.ToString() ?? "",
+                    Activo = rd["Activo"] != DBNull.Value && Convert.ToBoolean(rd["Activo"]),
+                    FechaCreacion = rd["FechaCreacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaCreacion"]),
+                    FechaModificacion = rd["FechaModificacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaModificacion"])
+                });
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        mensajeError = "No se pudo cargar la información de maquinaria: " + ex.Message;
+    }
+
+    var totalMaquinas = maquinas.Count;
+    var totalOperativas = maquinas.Count(x => string.Equals(Safe(x.EstadoOperativo), "Operativa", StringComparison.OrdinalIgnoreCase));
+    var totalActivas = maquinas.Count(x => x.Activo);
+    var totalInactivas = maquinas.Count(x => !x.Activo);
+}
+
+<style>
+    :root {
+        --maq-primary: #f47b20;
+        --maq-primary-dark: #c2410c;
+        --maq-dark: #0d1929;
+        --maq-dark-2: #111827;
+        --maq-muted: #64748b;
+        --maq-soft: #f4f6f9;
+        --maq-border-light: rgba(41, 67, 95, .12);
+        --maq-shadow-light: 0 22px 55px rgba(41, 67, 95, .14);
+        --maq-shadow-strong: 0 22px 62px rgba(0, 0, 0, .34);
+    }
+
+    .maquinaria-page {
+        width: min(100%, 1500px);
+        margin: 0 auto;
+        padding: clamp(.4rem, .9vw, .75rem) 0 clamp(1rem, 1.6vw, 1.5rem);
+    }
+
+    .maq-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 30px;
+        background:
+            linear-gradient(145deg, rgba(255,255,255,.92), rgba(240,245,251,.82)),
+            radial-gradient(circle at 78% 22%, rgba(244, 123, 32, .10), transparent 30%) !important;
+        border: 1px solid rgba(41, 67, 95, .13);
+        box-shadow: var(--maq-shadow-light);
+        backdrop-filter: blur(18px);
+        margin-bottom: 1rem;
+    }
+
+    .maq-hero::after {
+        content: "ALTAS";
+        position: absolute;
+        right: 2.1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: clamp(3rem, 8vw, 6.5rem);
+        line-height: 1;
+        font-weight: 950;
+        letter-spacing: -.08em;
+        color: rgba(13, 25, 41, .045);
+        pointer-events: none;
+    }
+
+    .maq-hero-grid {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(310px, 410px) 1fr;
+        min-height: 318px;
+    }
+
+    .maq-hero-side {
+        position: relative;
+        color: #fff;
+        background:
+            linear-gradient(135deg, rgba(15,23,42,.98), rgba(17,24,39,.90)),
+            radial-gradient(circle at 10% 20%, rgba(244, 123, 32, .24), transparent 32%) !important;
+        padding: clamp(1.45rem, 2.2vw, 2.1rem);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 1rem;
+        border-right: 1px solid rgba(255,255,255,.10);
+    }
+
+    .maq-icon-box {
+        width: 58px;
+        height: 58px;
+        border-radius: 19px;
+        background: linear-gradient(135deg, var(--maq-primary), var(--maq-primary-dark));
+        display: grid;
+        place-items: center;
+        font-size: 1.25rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 16px 32px rgba(244, 123, 32, .32);
+    }
+
+    .maq-title {
+        margin: 0;
+        color: #fff;
+        font-weight: 950;
+        font-size: clamp(2.15rem, 4vw, 3.2rem);
+        line-height: .98;
+        letter-spacing: -.065em;
+    }
+
+    .maq-subtitle {
+        margin: .85rem 0 1.05rem;
+        color: #dce8f5;
+        font-size: .95rem;
+        line-height: 1.6;
+        font-weight: 700;
+        max-width: 365px;
+    }
+
+    .maq-main-action {
+        width: fit-content;
+        min-height: 50px;
+        border-radius: 999px;
+        padding: .78rem 1.15rem;
+        display: inline-flex;
+        align-items: center;
+        gap: .55rem;
+        text-decoration: none;
+        color: #fff;
+        font-weight: 950;
+        background: linear-gradient(135deg, var(--maq-primary), var(--maq-primary-dark));
+        border: 1px solid rgba(255,255,255,.12);
+        box-shadow: 0 16px 32px rgba(244, 123, 32, .30);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    .maq-main-action:hover {
+        color: #fff;
+        transform: translateY(-2px);
+        box-shadow: 0 20px 38px rgba(244, 123, 32, .38);
+    }
+
+    .maq-filter-note {
+        width: fit-content;
+        max-width: 100%;
+        padding: .48rem .72rem;
+        border-radius: 999px;
+        background: rgba(244, 123, 32, .13);
+        border: 1px solid rgba(244, 123, 32, .30);
+        font-size: .76rem;
+        color: #ffb86b;
+        font-weight: 950;
+        letter-spacing: .04em;
+    }
+
+    .maq-hero-main {
+        padding: clamp(1.25rem, 2vw, 1.8rem);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    .maq-search-form {
+        width: 100%;
+        max-width: 900px;
+        margin-left: auto;
+    }
+
+    .maq-search-group {
+        min-height: 54px;
+        border: 1px solid rgba(41, 67, 95, .13);
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(255,255,255,.90);
+        box-shadow: 0 18px 42px rgba(41, 67, 95, .12);
+        backdrop-filter: blur(16px);
+    }
+
+    .maq-search-group .form-select,
+    .maq-search-group .form-control,
+    .maq-search-group .btn {
+        min-height: 54px;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .maq-search-group .form-select {
+        max-width: 205px;
+        color: #0d1929;
+        background-color: rgba(255,255,255,.96);
+        border-right: 1px solid rgba(41, 67, 95, .12) !important;
+        font-weight: 850;
+    }
+
+    .maq-search-group .form-control {
+        min-width: 180px;
+        color: #0d1929;
+        background: rgba(255,255,255,.96);
+        font-weight: 800;
+    }
+
+    .maq-search-group .form-control::placeholder {
+        color: #64748b;
+    }
+
+    .maq-search-group .btn-search {
+        min-width: 58px;
+        background: linear-gradient(135deg, var(--maq-primary), var(--maq-primary-dark)) !important;
+        color: #fff;
+        font-size: 1rem;
+    }
+
+    .maq-search-group .btn-clear {
+        color: #dc2626;
+        background: rgba(239, 68, 68, .10);
+        border-left: 1px solid rgba(41, 67, 95, .12) !important;
+    }
+
+    .maq-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(145px, 1fr));
+        gap: .8rem;
+    }
+
+    .maq-stat-card {
+        border: 1px solid rgba(41, 67, 95, .12);
+        background: rgba(255,255,255,.88);
+        border-radius: 20px;
+        padding: .85rem .9rem;
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        min-width: 0;
+        box-shadow: 0 14px 30px rgba(41, 67, 95, .10);
+        backdrop-filter: blur(14px);
+    }
+
+    .maq-stat-icon {
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
+        border-radius: 15px;
+        display: grid;
+        place-items: center;
+        color: #ffffff;
+        background: linear-gradient(135deg, #64748b, #334155);
+        font-size: 1rem;
+    }
+
+    .maq-stat-icon.success { background: linear-gradient(135deg, #22c55e, #15803d); }
+    .maq-stat-icon.warning { background: linear-gradient(135deg, var(--maq-primary), var(--maq-primary-dark)); }
+    .maq-stat-icon.danger { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+
+    .maq-stat-value {
+        margin: 0;
+        color: #0d1929;
+        font-weight: 950;
+        font-size: 1.25rem;
+        line-height: 1;
+    }
+
+    .maq-stat-label {
+        margin: .18rem 0 0;
+        color: #29435f;
+        font-size: .68rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .maq-list-card {
+        border: 1px solid rgba(41, 67, 95, .12);
+        border-radius: 28px;
+        overflow: hidden;
+        background: rgba(255,255,255,.96);
+        box-shadow: var(--maq-shadow-light);
+        backdrop-filter: blur(18px);
+    }
+
+    .maq-list-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.1rem 1.25rem;
+        border-bottom: 1px solid rgba(41, 67, 95, .10);
+        background: rgba(255,255,255,.72);
+    }
+
+    .maq-list-title {
+        margin: 0;
+        color: #0d1929;
+        font-weight: 950;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+    }
+
+    .maq-list-title i { color: var(--maq-primary); }
+
+    .maq-list-count {
+        color: #0d1929;
+        font-size: .85rem;
+        font-weight: 950;
+    }
+
+    .maq-table {
+        margin: 0;
+        vertical-align: middle;
+    }
+
+    .maq-table thead th {
+        background: #0d1929 !important;
+        color: #ffffff;
+        text-transform: uppercase;
+        font-size: .72rem;
+        font-weight: 950;
+        letter-spacing: .08em;
+        border: 0 !important;
+        border-bottom: 1px solid rgba(244, 123, 32, .35) !important;
+        padding: 1rem 1rem;
+        white-space: nowrap;
+    }
+
+    .maq-table tbody td {
+        border-top: 1px solid rgba(41, 67, 95, .10);
+        color: #0d1929;
+        padding: 1rem;
+        font-weight: 800;
+        background: rgba(255,255,255,.96);
+    }
+
+    .maq-table tbody tr:hover td {
+        color: #0d1929 !important;
+        background-color: #fff4e8 !important;
+    }
+
+    .maq-code-cell {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        min-width: 170px;
+    }
+
+    .maq-avatar {
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--maq-primary), var(--maq-primary-dark));
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 950;
+        font-size: .72rem;
+        box-shadow: 0 12px 24px rgba(244, 123, 32, .24);
+    }
+
+    .maq-code-main,
+    .maq-name-main {
+        color: #0d1929;
+        font-weight: 950;
+        line-height: 1.2;
+    }
+
+    .maq-code-sub {
+        color: var(--maq-primary);
+        font-size: .78rem;
+        font-weight: 950;
+        margin-top: .15rem;
+    }
+
+    .maq-pill {
+        border-radius: 999px;
+        padding: .42rem .75rem;
+        display: inline-flex;
+        align-items: center;
+        gap: .42rem;
+        font-weight: 950;
+        font-size: .78rem;
+        white-space: nowrap;
+    }
+
+    .maq-pill.area {
+        color: #003a70;
+        background: #e8f0fb;
+        border: 1px solid rgba(0, 58, 112, .18);
+    }
+
+    .maq-pill.estado-ok,
+    .maq-pill.activo {
+        color: #15803d;
+        background: #dcfce7;
+        border: 1px solid rgba(21, 128, 61, .28);
+    }
+
+    .maq-pill.estado-alerta,
+    .maq-pill.inactivo {
+        color: #b91c1c;
+        background: #fee2e2;
+        border: 1px solid rgba(185, 28, 28, .25);
+    }
+
+    .maq-action-btn {
+        min-height: 38px;
+        border-radius: 999px;
+        padding: .5rem .82rem;
+        border: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: .42rem;
+        color: #fff;
+        background: linear-gradient(135deg, var(--maq-primary), var(--maq-primary-dark));
+        font-size: .78rem;
+        font-weight: 950;
+        text-decoration: none;
+        box-shadow: 0 10px 22px rgba(244, 123, 32, .22);
+    }
+
+    .maq-action-btn:hover {
+        color: #fff;
+        filter: brightness(1.04);
+    }
+
+    .maq-mobile-list {
+        display: none;
+        padding: 1rem;
+        gap: .85rem;
+    }
+
+    .maq-mobile-card {
+        border: 1px solid rgba(41, 67, 95, .12);
+        border-radius: 20px;
+        padding: 1rem;
+        background: rgba(255,255,255,.96);
+        box-shadow: 0 14px 30px rgba(41, 67, 95, .10);
+    }
+
+    .maq-mobile-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .8rem;
+        margin-bottom: .85rem;
+    }
+
+    .maq-mobile-title {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        min-width: 0;
+    }
+
+    .maq-mobile-detail {
+        display: grid;
+        gap: .55rem;
+        color: #29435f;
+        font-size: .9rem;
+    }
+
+    .maq-mobile-detail div {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .maq-mobile-detail i {
+        color: var(--maq-primary);
+        width: 18px;
+        text-align: center;
+    }
+
+    .empty-state {
+        padding: clamp(2rem, 5vw, 4rem) 1rem;
+        text-align: center;
+        background: rgba(255,255,255,.96);
+    }
+
+    .empty-icon {
+        width: 78px;
+        height: 78px;
+        margin: 0 auto 1rem;
+        border-radius: 24px;
+        background: rgba(244, 123, 32, .14);
+        border: 1px solid rgba(244, 123, 32, .30);
+        color: var(--maq-primary);
+        display: grid;
+        place-items: center;
+        font-size: 1.8rem;
+    }
+
+    .empty-title {
+        margin: 0;
+        font-weight: 950;
+        color: #0d1929;
+        font-size: 1.15rem;
+    }
+
+    .empty-text {
+        margin: .45rem auto 0;
+        max-width: 440px;
+        color: #29435f;
+    }
+
+    html[data-nsq-theme="dark"] .maq-hero {
+        background:
+            linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.045)),
+            radial-gradient(circle at 78% 22%, rgba(244, 123, 32, .18), transparent 30%) !important;
+        border-color: rgba(255,255,255,.12);
+        box-shadow: var(--maq-shadow-strong);
+    }
+
+    html[data-nsq-theme="dark"] .maq-hero::after {
+        color: rgba(255,255,255,.035);
+    }
+
+    html[data-nsq-theme="dark"] .maq-search-group,
+    html[data-nsq-theme="dark"] .maq-stat-card,
+    html[data-nsq-theme="dark"] .maq-list-card,
+    html[data-nsq-theme="dark"] .maq-mobile-card {
+        background: rgba(15,23,42,.82);
+        border-color: rgba(255,255,255,.12);
+        box-shadow: var(--maq-shadow-strong);
+    }
+
+    html[data-nsq-theme="dark"] .maq-search-group .form-select {
+        color: #fff;
+        background-color: rgba(15,23,42,.88);
+        border-right-color: rgba(255,255,255,.10) !important;
+    }
+
+    html[data-nsq-theme="dark"] .maq-search-group select option {
+        background: #111827;
+        color: #fff;
+    }
+
+    html[data-nsq-theme="dark"] .maq-search-group .form-control {
+        color: #fff;
+        background: rgba(255,255,255,.04);
+    }
+
+    html[data-nsq-theme="dark"] .maq-search-group .form-control::placeholder {
+        color: rgba(226, 232, 240, .62);
+    }
+
+    html[data-nsq-theme="dark"] .maq-stat-value,
+    html[data-nsq-theme="dark"] .maq-list-title,
+    html[data-nsq-theme="dark"] .maq-list-count,
+    html[data-nsq-theme="dark"] .maq-code-main,
+    html[data-nsq-theme="dark"] .maq-name-main,
+    html[data-nsq-theme="dark"] .empty-title {
+        color: #fff;
+    }
+
+    html[data-nsq-theme="dark"] .maq-stat-label,
+    html[data-nsq-theme="dark"] .maq-mobile-detail,
+    html[data-nsq-theme="dark"] .empty-text {
+        color: #cbd5e1;
+    }
+
+    html[data-nsq-theme="dark"] .maq-table tbody td {
+        background: rgba(15,23,42,.78);
+        border-top-color: rgba(255,255,255,.07);
+        color: #cbd5e1;
+    }
+
+    html[data-nsq-theme="dark"] .maq-table tbody tr:hover td {
+        color: #fff !important;
+        background-color: rgba(244,123,32,.075) !important;
+    }
+
+    html[data-nsq-theme="dark"] .empty-state {
+        background: transparent;
+    }
+
+    @@media (max-width: 1199.98px) {
+        .maq-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @@media (max-width: 991.98px) {
+        .maq-hero-grid { grid-template-columns: 1fr; min-height: auto; }
+        .maq-hero-side { min-height: 245px; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.10); }
+        .maq-search-form { width: 100%; max-width: none; margin-left: 0; }
+    }
+
+    @@media (max-width: 767.98px) {
+        .maquinaria-page { padding: .85rem; }
+        .maq-hero, .maq-list-card { border-radius: 22px; }
+        .maq-hero-side, .maq-hero-main { padding: 1.1rem; }
+        .maq-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+        .maq-search-group { display: grid; grid-template-columns: 1fr auto auto; border-radius: 18px; }
+        .maq-search-group .form-select { grid-column: 1 / -1; max-width: none; width: 100%; border-right: 0 !important; border-bottom: 1px solid rgba(41,67,95,.10) !important; }
+        .maq-table-wrap { display: none; }
+        .maq-mobile-list { display: grid; }
+        .maq-list-header { padding: 1rem; align-items: flex-start; flex-direction: column; gap: .3rem; }
+    }
+
+    @@media (max-width: 420px) {
+        .maq-stats-grid { grid-template-columns: 1fr; }
+        .maq-search-group { grid-template-columns: 1fr auto; }
+        .maq-search-group .form-control { grid-column: 1 / 2; min-width: 0; }
+        .maq-search-group .btn-clear { grid-column: 1 / -1; border-left: 0 !important; border-top: 1px solid rgba(41,67,95,.10) !important; }
+    }
+</style>
+
+<div class="maquinaria-page">
+    <section class="maq-hero">
+        <div class="maq-hero-grid">
+            <aside class="maq-hero-side">
+                <div>
+                    <div class="maq-icon-box">
+                        <i class="fas fa-industry"></i>
+                    </div>
+
+                    <h1 class="maq-title">Administración de Maquinaria</h1>
+                    <p class="maq-subtitle">
+                        Gestiona el catálogo de máquinas, su área, estado operativo y disponibilidad.
+                    </p>
+
+                    <a href="@Url.Action("CrearMaquinaria", "Usuarios")" class="maq-main-action">
+                        <i class="fas fa-plus"></i>
+                        Agregar máquina
+                    </a>
+                </div>
+
+                <div class="maq-filter-note">
+                    <i class="fas fa-filter me-1"></i>@EstadoFiltroLabel()
+                </div>
+            </aside>
+
+            <main class="maq-hero-main">
+                <form method="get" class="maq-search-form">
+                    <div class="input-group maq-search-group">
+                        <select name="filtroCampo" class="form-select flex-grow-0" aria-label="Campo de búsqueda">
+                            <option value="Todos" selected="@Selected("Todos", filtroCampoActual)">Todos los campos</option>
+                            <option value="Codigo" selected="@Selected("Codigo", filtroCampoActual)">Código</option>
+                            <option value="Nombre" selected="@Selected("Nombre", filtroCampoActual)">Nombre</option>
+                            <option value="Area" selected="@Selected("Area", filtroCampoActual)">Área</option>
+                            <option value="EstadoOperativo" selected="@Selected("EstadoOperativo", filtroCampoActual)">Estado operativo</option>
+                        </select>
+
+                        <select name="estadoVista" class="form-select flex-grow-0" aria-label="Filtro de estado">
+                            <option value="Todos" selected="@Selected("Todos", estadoVistaActual)">Todas</option>
+                            <option value="Activas" selected="@Selected("Activas", estadoVistaActual)">Activas</option>
+                            <option value="Inactivas" selected="@Selected("Inactivas", estadoVistaActual)">Inactivas</option>
+                            <option value="Operativas" selected="@Selected("Operativas", estadoVistaActual)">Operativas</option>
+                        </select>
+
+                        <input type="text"
+                               name="busqueda"
+                               class="form-control"
+                               placeholder="Buscar máquina..."
+                               value="@busquedaActual"
+                               aria-label="Buscar maquinaria" />
+
+                        <button class="btn btn-search" type="submit" title="Buscar">
+                            <i class="fas fa-search"></i>
+                        </button>
+
+                        @if (!string.IsNullOrWhiteSpace(busquedaActual) || filtroCampoActual != "Todos" || estadoVistaActual != "Todos")
+                        {
+                            <a href="@Url.Action("Maquinaria", "Usuarios")"
+                               class="btn btn-clear"
+                               title="Limpiar filtros">
+                                <i class="fas fa-times"></i>
+                            </a>
+                        }
+                    </div>
+                </form>
+
+                <div class="maq-stats-grid">
+                    <div class="maq-stat-card">
+                        <div class="maq-stat-icon"><i class="fas fa-cogs"></i></div>
+                        <div>
+                            <p class="maq-stat-value">@totalMaquinas</p>
+                            <p class="maq-stat-label">Mostradas</p>
+                        </div>
+                    </div>
+
+                    <div class="maq-stat-card">
+                        <div class="maq-stat-icon success"><i class="fas fa-check-circle"></i></div>
+                        <div>
+                            <p class="maq-stat-value">@totalOperativas</p>
+                            <p class="maq-stat-label">Operativas</p>
+                        </div>
+                    </div>
+
+                    <div class="maq-stat-card">
+                        <div class="maq-stat-icon warning"><i class="fas fa-power-off"></i></div>
+                        <div>
+                            <p class="maq-stat-value">@totalActivas</p>
+                            <p class="maq-stat-label">Activas</p>
+                        </div>
+                    </div>
+
+                    <div class="maq-stat-card">
+                        <div class="maq-stat-icon danger"><i class="fas fa-ban"></i></div>
+                        <div>
+                            <p class="maq-stat-value">@totalInactivas</p>
+                            <p class="maq-stat-label">Inactivas</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(mensajeError))
+    {
+        <div class="alert alert-danger fw-bold">
+            <i class="fas fa-exclamation-circle me-1"></i>@mensajeError
+        </div>
+    }
+
+    <section class="maq-list-card">
+        <div class="maq-list-header">
+            <h2 class="maq-list-title">
+                <i class="fas fa-clipboard-list"></i>
+                Catálogo de maquinaria
+            </h2>
+            <div class="maq-list-count">
+                @totalMaquinas @(totalMaquinas == 1 ? "registro encontrado" : "registros encontrados")
+            </div>
+        </div>
+
+        @if (maquinas.Any())
+        {
+            <div class="table-responsive maq-table-wrap">
+                <table class="table maq-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Área</th>
+                            <th>Estado operativo</th>
+                            <th>Estado</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in maquinas)
+                        {
+                            var codigo = CodigoCorto(item.Codigo);
+                            var nombre = Safe(item.Nombre);
+                            var area = Safe(item.Area);
+                            var estado = EstadoTexto(item.EstadoOperativo);
+                            var esOperativa = string.Equals(estado, "Operativa", StringComparison.OrdinalIgnoreCase);
+
+                            <tr>
+                                <td>
+                                    <div class="maq-code-cell">
+                                        <span class="maq-avatar">@InicialCodigo(codigo)</span>
+                                        <div>
+                                            <div class="maq-code-main">@codigo</div>
+                                            <div class="maq-code-sub">ID @item.MaquinaID</div>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="maq-name-main">@(string.IsNullOrWhiteSpace(nombre) ? codigo : nombre)</div>
+                                    @if (!string.IsNullOrWhiteSpace(item.Descripcion))
+                                    {
+                                        <div class="maq-code-sub">@item.Descripcion</div>
+                                    }
+                                </td>
+
+                                <td>
+                                    <span class="maq-pill area">
+                                        <i class="fas fa-industry"></i>
+                                        @(string.IsNullOrWhiteSpace(area) ? "Sin área" : area)
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="maq-pill @(esOperativa ? "estado-ok" : "estado-alerta")">
+                                        <i class="@(esOperativa ? "fas fa-circle-check" : "fas fa-triangle-exclamation")"></i>
+                                        @estado
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="maq-pill @(item.Activo ? "activo" : "inactivo")">
+                                        <i class="@(item.Activo ? "fas fa-check-circle" : "fas fa-circle-xmark")"></i>
+                                        @(item.Activo ? "Activo" : "Inactivo")
+                                    </span>
+                                </td>
+
+                                <td class="text-end">
+                                    <a class="maq-action-btn"
+                                       href="@Url.Action("EditarMaquinaria", "Usuarios", new { id = item.MaquinaID })">
+                                        <i class="fas fa-pencil-alt"></i>
+                                        Editar
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="maq-mobile-list">
+                @foreach (var item in maquinas)
+                {
+                    var codigo = CodigoCorto(item.Codigo);
+                    var nombre = Safe(item.Nombre);
+                    var area = Safe(item.Area);
+                    var estado = EstadoTexto(item.EstadoOperativo);
+                    var esOperativa = string.Equals(estado, "Operativa", StringComparison.OrdinalIgnoreCase);
+
+                    <article class="maq-mobile-card">
+                        <div class="maq-mobile-head">
+                            <div class="maq-mobile-title">
+                                <span class="maq-avatar">@InicialCodigo(codigo)</span>
+                                <div>
+                                    <div class="maq-code-main">@codigo</div>
+                                    <div class="maq-code-sub">ID @item.MaquinaID</div>
+                                </div>
+                            </div>
+
+                            <span class="maq-pill @(item.Activo ? "activo" : "inactivo")">
+                                <i class="@(item.Activo ? "fas fa-check-circle" : "fas fa-circle-xmark")"></i>
+                                @(item.Activo ? "Activo" : "Inactivo")
+                            </span>
+                        </div>
+
+                        <div class="maq-mobile-detail">
+                            <div>
+                                <i class="fas fa-cog"></i>
+                                <span><strong>Nombre:</strong> @(string.IsNullOrWhiteSpace(nombre) ? codigo : nombre)</span>
+                            </div>
+                            <div>
+                                <i class="fas fa-industry"></i>
+                                <span><strong>Área:</strong> @(string.IsNullOrWhiteSpace(area) ? "Sin área" : area)</span>
+                            </div>
+                            <div>
+                                <i class="fas fa-gauge-high"></i>
+                                <span><strong>Estado operativo:</strong> @estado</span>
+                            </div>
+                            <div class="mt-2">
+                                <a class="maq-action-btn"
+                                   href="@Url.Action("EditarMaquinaria", "Usuarios", new { id = item.MaquinaID })">
+                                    <i class="fas fa-pencil-alt"></i>
+                                    Editar
+                                </a>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <h3 class="empty-title">No hay maquinaria para mostrar</h3>
+                <p class="empty-text">
+                    Ajusta el filtro de búsqueda o verifica que existan registros en dbo.ERP_Maquinas.
+                </p>
+            </div>
+        }
+    </section>
+</div>
+
+@functions {
+    public class MaquinaVistaVm
+    {
+        public int MaquinaID { get; set; }
+        public string Codigo { get; set; } = "";
+        public string Nombre { get; set; } = "";
+        public string Area { get; set; } = "";
+        public string EstadoOperativo { get; set; } = "";
+        public string Descripcion { get; set; } = "";
+        public bool Activo { get; set; }
+        public DateTime? FechaCreacion { get; set; }
+        public DateTime? FechaModificacion { get; set; }
+    }
+}

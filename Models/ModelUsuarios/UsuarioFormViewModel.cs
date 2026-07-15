@@ -53,7 +53,6 @@ namespace ERP.NSQuell.Models.ModelUsuarios
         public bool Activo { get; set; }
 
         [Required(ErrorMessage = "Debe seleccionar al menos una empresa.")]
-        public List<int> EmpresasIDs { get; set; } = new List<int>();
 
         public bool EsModoCrear { get; set; }
 
@@ -63,16 +62,16 @@ namespace ERP.NSQuell.Models.ModelUsuarios
         public List<MenuViewModel> MenusDisponibles { get; set; } = new List<MenuViewModel>();
 
         // Campos nuevos para solicitar en el form
-        public string? NumeroEmpleado { get; set; }
-        public string? ClaveEmpleadoNomina { get; set; }
+
+
         public DateTime? FechaIngreso { get; set; }
         public string? Puesto { get; set; }
-        public DateTime? FechaNacimiento { get; set; }
-        // En UsuarioFormViewModel.cs
-        public int? JefeInmediatoPersonaID { get; set; }
+
+
+
 
         [ValidateNever]
-        public string? JefeInmediatoNombreCompleto { get; set; }
+
 
        
         public int? DepartamentoID { get; set; }

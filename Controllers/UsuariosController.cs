@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using ERP.NSQuell.Models.ViewModels;
 
 namespace ERP.NSQuell.Controllers
 {
@@ -103,6 +104,198 @@ namespace ERP.NSQuell.Controllers
                 .ToList();
 
             return View("Index", usuarios);
+        }
+
+
+        // GET: /Usuarios/Maquinaria
+        // GET: /Usuarios/Maquinaria/Index
+        [HttpGet]
+        [Route("Usuarios/Maquinaria")]
+        [Route("Usuarios/Maquinaria/Index")]
+        [AutorizarAccion("Ver Usuarios", "Ver")]
+        public IActionResult Maquinaria()
+        {
+            ViewData["Title"] = "Altas de Maquinaria";
+
+            return View("~/Views/Usuarios/Maquinaria/Index.cshtml");
+        }
+
+        [HttpGet]
+        [Route("Usuarios/Maquinaria/Crear")]
+        [AutorizarAccion("Ver Usuarios", "Ver")]
+        public IActionResult CrearMaquinaria()
+        {
+            ViewData["Title"] = "Agregar máquina";
+
+            var model = new MaquinariaFormViewModel
+            {
+                Activo = true,
+                Area = "Inyección",
+                EstadoOperativo = "Operativa"
+            };
+
+            return View("~/Views/Usuarios/Maquinaria/Crear.cshtml", model);
+        }
+
+        // POST: /Usuarios/Maquinaria/Crear
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Route("Usuarios/Maquinaria/Crear")]
+        [AutorizarAccion("Ver Usuarios", "Ver")]
+        public async Task<IActionResult> CrearMaquinaria(MaquinariaFormViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                ViewData["Title"] = "Agregar máquina";
+                return View("~/Views/Usuarios/Maquinaria/Crear.cshtml", model);
+            }
+
+            var codigo = model.Codigo.Trim();
+
+            var existeCodigo = await _context.ERPMaquinas
+                .AsNoTracking()
+                .AnyAsync(x => x.Codigo != null && x.Codigo.Trim() == codigo);
+
+            if (existeCodigo)
+            {
+                ModelState.AddModelError(nameof(model.Codigo), "Ya existe una máquina registrada con este código.");
+                ViewData["Title"] = "Agregar máquina";
+                return View("~/Views/Usuarios/Maquinaria/Crear.cshtml", model);
+            }
+
+            var maquina = new ERPMaquina
+            {
+                Codigo = codigo,
+                Nombre = model.Nombre.Trim(),
+                Area = model.Area.Trim(),
+                EstadoOperativo = model.EstadoOperativo.Trim(),
+                Descripcion = string.IsNullOrWhiteSpace(model.Descripcion) ? null : model.Descripcion.Trim(),
+                Activo = model.Activo,
+                FechaCreacion = DateTime.Now,
+                FechaModificacion = null
+            };
+
+            _context.ERPMaquinas.Add(maquina);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "La máquina fue registrada correctamente.";
+            return RedirectToAction(nameof(Maquinaria));
+        }
+
+        // GET: /Usuarios/Maquinaria/Editar/5
+        [HttpGet]
+        [Route("Usuarios/Maquinaria/Editar/{id:int}")]
+        [AutorizarAccion("Ver Usuarios", "Ver")]
+        public async Task<IActionResult> EditarMaquinaria(int id)
+        {
+            var maquina = await _context.ERPMaquinas
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.MaquinaID == id);
+
+            if (maquina == null)
+                return NotFound();
+
+            var model = new MaquinariaFormViewModel
+            {
+                MaquinaID = maquina.MaquinaID,
+                Codigo = maquina.Codigo ?? string.Empty,
+                Nombre = maquina.Nombre ?? string.Empty,
+                Area = maquina.Area ?? string.Empty,
+                EstadoOperativo = maquina.EstadoOperativo ?? "Operativa",
+                Descripcion = maquina.Descripcion,
+                Activo = maquina.Activo,
+                FechaCreacion = maquina.FechaCreacion,
+                FechaModificacion = maquina.FechaModificacion
+            };
+
+            ViewData["Title"] = "Editar máquina";
+            return View("~/Views/Usuarios/Maquinaria/Editar.cshtml", model);
+        }
+
+        // POST: /Usuarios/Maquinaria/Editar/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Route("Usuarios/Maquinaria/Editar/{id:int}")]
+        [AutorizarAccion("Ver Usuarios", "Ver")]
+        public async Task<IActionResult> EditarMaquinaria(int id, MaquinariaFormViewModel model)
+        {
+            if (!model.MaquinaID.HasValue || id != model.MaquinaID.Value)
+                return BadRequest();
+
+            if (!ModelState.IsValid)
+            {
+                ViewData["Title"] = "Editar máquina";
+                return View("~/Views/Usuarios/Maquinaria/Editar.cshtml", model);
+            }
+
+            var maquina = await _context.ERPMaquinas
+                .FirstOrDefaultAsync(x => x.MaquinaID == id);
+
+            if (maquina == null)
+                return NotFound();
+
+            var codigo = model.Codigo.Trim();
+
+            var existeCodigo = await _context.ERPMaquinas
+                .AsNoTracking()
+                .AnyAsync(x => x.MaquinaID != id && x.Codigo != null && x.Codigo.Trim() == codigo);
+
+            if (existeCodigo)
+            {
+                ModelState.AddModelError(nameof(model.Codigo), "Ya existe otra máquina registrada con este código.");
+                ViewData["Title"] = "Editar máquina";
+                return View("~/Views/Usuarios/Maquinaria/Editar.cshtml", model);
+            }
+
+            maquina.Codigo = codigo;
+            maquina.Nombre = model.Nombre.Trim();
+            maquina.Area = model.Area.Trim();
+            maquina.EstadoOperativo = model.EstadoOperativo.Trim();
+            maquina.Descripcion = string.IsNullOrWhiteSpace(model.Descripcion) ? null : model.Descripcion.Trim();
+            maquina.Activo = model.Activo;
+            maquina.FechaModificacion = DateTime.Now;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "La máquina fue actualizada correctamente.";
+            return RedirectToAction(nameof(Maquinaria));
+        }
+
+        // POST: /Usuarios/Maquinaria/CambiarEstado/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Route("Usuarios/Maquinaria/CambiarEstado/{id:int}")]
+        [AutorizarAccion("Ver Usuarios", "Ver")]
+        public async Task<IActionResult> CambiarEstadoMaquinaria(int id, bool activo)
+        {
+            var maquina = await _context.ERPMaquinas.FirstOrDefaultAsync(x => x.MaquinaID == id);
+
+            if (maquina == null)
+                return NotFound();
+
+            maquina.Activo = activo;
+            maquina.FechaModificacion = DateTime.Now;
+
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = activo
+                ? "La máquina fue activada correctamente."
+                : "La máquina fue inactivada correctamente.";
+
+            return RedirectToAction(nameof(Maquinaria));
+        }
+
+        // GET: /Usuarios/Operadores
+        // GET: /Usuarios/Operadores/Index
+        [HttpGet]
+        [Route("Usuarios/Operadores")]
+        [Route("Usuarios/Operadores/Index")]
+        [AutorizarAccion("Ver Usuarios", "Ver")]
+        public IActionResult Operadores()
+        {
+            ViewData["Title"] = "Altas de Operadores";
+
+            return View("~/Views/Usuarios/Operadores/Index.cshtml");
         }
 
         // POST: /Usuarios/EnviarAccesosPorCorreo
@@ -240,7 +433,7 @@ namespace ERP.NSQuell.Controllers
         }
 
         // GET: /Usuarios/Crear
-        [AutorizarAccion("Crear Usuario", "Crear")]
+        [AutorizarAccion("Crear Usuarios", "Crear")]
         public async Task<IActionResult> Crear()
         {
           
@@ -290,7 +483,7 @@ namespace ERP.NSQuell.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [AutorizarAccion("Crear Usuario", "Crear")]
+        [AutorizarAccion("Crear Usuarios", "Crear")]
         public async Task<IActionResult> Crear(UsuarioFormViewModel viewModel)
         {
             if (ModelState.IsValid)
@@ -307,12 +500,8 @@ namespace ERP.NSQuell.Controllers
                     RolID = viewModel.RolID,
                     SubMenuIDs = viewModel.SubMenuIDs ?? new List<int>(),
 
-                    NumeroEmpleado = viewModel.NumeroEmpleado,
-                    ClaveEmpleadoNomina = viewModel.ClaveEmpleadoNomina,
                     FechaIngreso = viewModel.FechaIngreso,
                     Puesto = viewModel.Puesto,
-                    FechaNacimiento = viewModel.FechaNacimiento,
-                    JefeInmediatoPersonaID = viewModel.JefeInmediatoPersonaID,
                     // AGREGAR ESTA LÍNEA:
                     DepartamentoID = viewModel.DepartamentoID
                 };
@@ -330,11 +519,6 @@ namespace ERP.NSQuell.Controllers
                 if (usuarioCreado != null)
                 {
                     await MarcarCambioPasswordObligatorioAsync(usuarioCreado.UsuarioID);
-
-                    await ActualizarClaveEmpleadoNominaDirectaAsync(
-                        usuarioCreado.UsuarioID,
-                        viewModel.ClaveEmpleadoNomina
-                    );
 
                     await GuardarDepartamentoUsuarioAsync(
                         usuarioCreado.UsuarioID,
@@ -376,7 +560,7 @@ namespace ERP.NSQuell.Controllers
         }
 
         // GET: /Usuarios/Editar/5
-        [AutorizarAccion("Editar Usuario", "Editar")]
+        [AutorizarAccion("Editar Usuarios", "Editar")]
         public async Task<IActionResult> Editar(int id)
         {
             var usuarioDto = await _usuarioService.ObtenerParaEditarAsync(id);
@@ -396,16 +580,7 @@ namespace ERP.NSQuell.Controllers
                 await conn.OpenAsync();
 
                 // 1. Obtener nombre del Jefe
-                if (usuarioDto.JefeInmediatoPersonaID.HasValue)
-                {
-                    var sqlJefe = @"SELECT (Nombre + ' ' + ApellidoPaterno + ' ' + ISNULL(ApellidoMaterno, '')) 
-                            FROM Persona WHERE PersonaID = @id";
-                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sqlJefe, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@id", usuarioDto.JefeInmediatoPersonaID);
-                        nombreJefe = (await cmd.ExecuteScalarAsync())?.ToString() ?? "";
-                    }
-                }
+
 
                 // 2. CARGAR LISTA COMPLETA DE DEPARTAMENTOS
                 const string sqlLista = "SELECT DepartamentoID, NombreDepartamento FROM Departamentos WHERE Activo = 1 ORDER BY NombreDepartamento";
@@ -458,13 +633,8 @@ namespace ERP.NSQuell.Controllers
                 SubMenuIDs = usuarioDto.SubMenuIDs ?? new List<int>(),
                 HistorialDeCambios = await _usuarioService.ObtenerHistorialAsync(id),
                 MenusDisponibles = await _usuarioService.ObtenerMenusConSubMenusAsync(),
-                NumeroEmpleado = usuarioDto.NumeroEmpleado,
-                ClaveEmpleadoNomina = usuarioDto.ClaveEmpleadoNomina,
                 FechaIngreso = usuarioDto.FechaIngreso,
                 Puesto = usuarioDto.Puesto,
-                FechaNacimiento = usuarioDto.FechaNacimiento,
-                JefeInmediatoPersonaID = usuarioDto.JefeInmediatoPersonaID,
-                JefeInmediatoNombreCompleto = nombreJefe,
                 DepartamentoID = departamentoIdActual,
                 NombreDepartamento = nombreDepto
             };
@@ -524,7 +694,7 @@ namespace ERP.NSQuell.Controllers
         // POST: /Usuarios/Editar/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [AutorizarAccion("Editar Usuario", "Editar")]
+        [AutorizarAccion("Editar Usuarios", "Editar")]
         public async Task<IActionResult> Editar(int id, UsuarioFormViewModel viewModel)
         {
             var routeValues = new
@@ -554,22 +724,13 @@ namespace ERP.NSQuell.Controllers
                     Activo = viewModel.Activo,
                     SubMenuIDs = viewModel.SubMenuIDs ?? new List<int>(),
 
-                    NumeroEmpleado = viewModel.NumeroEmpleado,
-                    ClaveEmpleadoNomina = viewModel.ClaveEmpleadoNomina,
                     FechaIngreso = viewModel.FechaIngreso,
                     Puesto = viewModel.Puesto,
-                    FechaNacimiento = viewModel.FechaNacimiento,
-                    JefeInmediatoPersonaID = viewModel.JefeInmediatoPersonaID,
                     // AGREGADO PARA GUARDAR:
                     DepartamentoID = viewModel.DepartamentoID
                 };
 
                 await _usuarioService.ActualizarAsync(usuarioEditadoDto);
-
-                await ActualizarClaveEmpleadoNominaDirectaAsync(
-                    viewModel.UsuarioID!.Value,
-                    viewModel.ClaveEmpleadoNomina
-                );
 
                 await GuardarDepartamentoUsuarioAsync(
                     viewModel.UsuarioID!.Value,
@@ -619,7 +780,7 @@ namespace ERP.NSQuell.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [AutorizarAccion("Editar Usuario", "Editar")]
+        [AutorizarAccion("Editar Usuarios", "Editar")]
         public async Task<IActionResult> RestablecerPassword(
             int usuarioId,
             string nuevaPassword,
@@ -754,7 +915,7 @@ namespace ERP.NSQuell.Controllers
         // POST: /Usuarios/Eliminar/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        [AutorizarAccion("Eliminar Usuario", "Eliminar")]
+        [AutorizarAccion("Eliminar Usuarios", "Eliminar")]
         public async Task<IActionResult> Eliminar(int id)
         {
             var routeValues = new
@@ -772,7 +933,7 @@ namespace ERP.NSQuell.Controllers
 
         // VALIDACIÓN REMOTA
         [AcceptVerbs("GET", "POST")]
-        [AutorizarAccion("Editar Usuario", "Editar")]
+        [AutorizarAccion("Editar Usuarios", "Editar")]
         public async Task<IActionResult> VerificarUsername(string username, int? usuarioID)
         {
             var query = _context.Usuarios.AsQueryable();
@@ -882,31 +1043,8 @@ namespace ERP.NSQuell.Controllers
 
         //Metodoo que devuelve un jason para el buscador de jefes
 
-        [HttpGet]
-        public async Task<IActionResult> BuscarPersonasJefes(string term)
-        {
-            if (string.IsNullOrWhiteSpace(term) || term.Length < 1)
-                return Json(new { results = new List<object>() });
 
-            term = term.Trim().ToLower();
-
-            var personas = await _context.Personas
-                .Where(p =>
-                    p.Nombre.ToLower().Contains(term) ||
-                    p.ApellidoPaterno.ToLower().Contains(term) ||
-                    (p.ApellidoMaterno != null && p.ApellidoMaterno.ToLower().Contains(term))
-                )
-                .Select(p => new
-                {
-                    id = p.PersonaID,
-                    text = (p.Nombre + " " + p.ApellidoPaterno +
-                           (p.ApellidoMaterno != null ? " " + p.ApellidoMaterno : "")).Trim()
-                })
-                .Take(15)
-                .ToListAsync();
-
-            return Json(new { results = personas });
-        }
+        
 
         [HttpGet]
         public async Task<IActionResult> BuscarDepartamentos(string term)
@@ -1351,17 +1489,21 @@ namespace ERP.NSQuell.Controllers
 
         private async Task<int?> ObtenerDepartamentoUsuarioAsync(int usuarioId)
         {
-            string cnn = _context.Database.GetConnectionString();
+            if (usuarioId <= 0)
+                return null;
+
+            string? cnn = _context.Database.GetConnectionString();
+
+            if (string.IsNullOrWhiteSpace(cnn))
+                return null;
 
             await using var conn = new Microsoft.Data.SqlClient.SqlConnection(cnn);
             await conn.OpenAsync();
 
             const string sql = @"
-                SELECT TOP 1 ed.DepartamentoID
-                FROM EmpleadoDepartamentos ed
-                WHERE ed.UsuarioID = @UsuarioID
-                AND ed.Activo = 1
-                ORDER BY ed.FechaAsignacion DESC, ed.EmpleadoDepartamentoID DESC";
+                SELECT TOP 1 DepartamentoID
+                FROM dbo.Usuarios
+                WHERE UsuarioID = @UsuarioID;";
 
             await using var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@UsuarioID", usuarioId);
@@ -1455,7 +1597,7 @@ namespace ERP.NSQuell.Controllers
 
         private async Task GuardarDepartamentoUsuarioAsync(int usuarioId, int? departamentoId)
         {
-            if (usuarioId <= 0 || !departamentoId.HasValue || departamentoId.Value <= 0)
+            if (usuarioId <= 0)
                 return;
 
             string? cnn = _context.Database.GetConnectionString();
@@ -1466,76 +1608,18 @@ namespace ERP.NSQuell.Controllers
             await using var conn = new Microsoft.Data.SqlClient.SqlConnection(cnn);
             await conn.OpenAsync();
 
-            await using var tran = await conn.BeginTransactionAsync();
+            const string sql = @"
+                UPDATE dbo.Usuarios
+                SET DepartamentoID = @DepartamentoID
+                WHERE UsuarioID = @UsuarioID;";
 
-            try
-            {
-                int? empleadoDepartamentoId = null;
+            await using var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@UsuarioID", usuarioId);
+            cmd.Parameters.AddWithValue("@DepartamentoID", departamentoId.HasValue && departamentoId.Value > 0
+                ? departamentoId.Value
+                : DBNull.Value);
 
-                const string sqlRegistroActivo = @"
-                    SELECT TOP 1 EmpleadoDepartamentoID
-                    FROM dbo.EmpleadoDepartamentos
-                    WHERE UsuarioID = @UsuarioID
-                      AND Activo = 1
-                    ORDER BY FechaAsignacion DESC, EmpleadoDepartamentoID DESC;";
-
-                await using (var cmdActivo = new Microsoft.Data.SqlClient.SqlCommand(
-                    sqlRegistroActivo,
-                    conn,
-                    (Microsoft.Data.SqlClient.SqlTransaction)tran))
-                {
-                    cmdActivo.Parameters.AddWithValue("@UsuarioID", usuarioId);
-
-                    var result = await cmdActivo.ExecuteScalarAsync();
-
-                    if (result != null && result != DBNull.Value)
-                        empleadoDepartamentoId = Convert.ToInt32(result);
-                }
-
-                if (empleadoDepartamentoId.HasValue)
-                {
-                    const string sqlUpdate = @"
-                        UPDATE dbo.EmpleadoDepartamentos
-                        SET DepartamentoID = @DepartamentoID,
-                            FechaAsignacion = GETDATE()
-                        WHERE EmpleadoDepartamentoID = @EmpleadoDepartamentoID;";
-
-                    await using var cmdUpdate = new Microsoft.Data.SqlClient.SqlCommand(
-                        sqlUpdate,
-                        conn,
-                        (Microsoft.Data.SqlClient.SqlTransaction)tran);
-
-                    cmdUpdate.Parameters.AddWithValue("@EmpleadoDepartamentoID", empleadoDepartamentoId.Value);
-                    cmdUpdate.Parameters.AddWithValue("@DepartamentoID", departamentoId.Value);
-
-                    await cmdUpdate.ExecuteNonQueryAsync();
-                }
-                else
-                {
-                    const string sqlInsert = @"
-                        INSERT INTO dbo.EmpleadoDepartamentos
-                            (UsuarioID, DepartamentoID, Activo, FechaAsignacion)
-                        VALUES
-                            (@UsuarioID, @DepartamentoID, 1, GETDATE());";
-
-                    await using var cmdInsert = new Microsoft.Data.SqlClient.SqlCommand(
-                        sqlInsert,
-                        conn,
-                        (Microsoft.Data.SqlClient.SqlTransaction)tran);
-
-                    cmdInsert.Parameters.AddWithValue("@UsuarioID", usuarioId);
-                    cmdInsert.Parameters.AddWithValue("@DepartamentoID", departamentoId.Value);
-
-                    await cmdInsert.ExecuteNonQueryAsync();
-                }
-
-                await tran.CommitAsync();
-            }
-            catch
-            {
-                await tran.RollbackAsync();
-                throw;
-            }
+            await cmd.ExecuteNonQueryAsync();
         }
 
         private string ResolverTipoAgregacionDefault(string? tipoCaptura, bool esLinea)
@@ -1552,33 +1636,7 @@ namespace ERP.NSQuell.Controllers
 
       
 
-        private async Task ActualizarClaveEmpleadoNominaDirectaAsync(int usuarioId, string? claveEmpleadoNomina)
-        {
-            var personaId = await _context.Usuarios
-                .AsNoTracking()
-                .Where(u => u.UsuarioID == usuarioId)
-                .Select(u => u.PersonaID)
-                .FirstOrDefaultAsync();
-
-            if (personaId <= 0)
-            {
-                return;
-            }
-
-            var persona = await _context.Personas
-                .FirstOrDefaultAsync(p => p.PersonaID == personaId);
-
-            if (persona == null)
-            {
-                return;
-            }
-
-            persona.ClaveEmpleadoNomina = string.IsNullOrWhiteSpace(claveEmpleadoNomina)
-                ? null
-                : claveEmpleadoNomina.Trim();
-
-            await _context.SaveChangesAsync();
-        }
+    
     }
     
 }

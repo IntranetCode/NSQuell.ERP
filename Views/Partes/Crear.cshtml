@@ -1,0 +1,912 @@
+@model ERP.NSQuell.Models.ViewModels.ParteFormViewModel
+
+@{
+    Layout = "_LayoutPartes";
+    ViewData["Title"] = "Crear Parte";
+}
+
+@section Styles {
+    <style>
+.partes-page,
+.partes-form-page {
+    width: min(100%, 1480px);
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    color: #0D1929;
+}
+
+/* INDEX */
+.partes-hero {
+    display: grid;
+    grid-template-columns: 390px minmax(0, 1fr);
+    min-height: 360px;
+    border-radius: 28px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 88% 22%, rgba(255,255,255,.95), transparent 34%),
+        linear-gradient(135deg, rgba(255,255,255,.96), rgba(238,244,250,.9));
+    border: 1px solid rgba(41, 67, 95, .12);
+    box-shadow: 0 26px 70px rgba(41, 67, 95, .14);
+}
+
+.partes-hero-left {
+    position: relative;
+    padding: 3rem 2rem;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(244, 123, 32, .18), transparent 26%),
+        linear-gradient(145deg, #0D1929, #1A2A40);
+    color: #fff;
+}
+
+.partes-hero-left::after {
+    content: "";
+    position: absolute;
+    right: -64px;
+    top: -64px;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    border: 1px solid rgba(244, 123, 32, .45);
+}
+
+.partes-hero-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, #FF8200, #DA291C);
+    box-shadow: 0 16px 28px rgba(244, 123, 32, .32);
+    font-size: 1.55rem;
+}
+
+.partes-hero h1 {
+    margin: 0;
+    font-size: clamp(2.2rem, 4vw, 3.9rem);
+    line-height: .96;
+    letter-spacing: -.06em;
+    font-weight: 950;
+}
+
+.partes-hero p {
+    max-width: 330px;
+    margin: 1.25rem 0 0;
+    color: #DCE8F5;
+    font-weight: 800;
+    line-height: 1.55;
+}
+
+.partes-hero-actions {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+}
+
+.btn-partes-primary,
+.btn-partes-edit,
+.btn-partes-secondary,
+.btn-partes-cancel,
+.btn-partes-save {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .55rem;
+    border: 0;
+    text-decoration: none;
+    font-weight: 950;
+    transition: .2s ease;
+}
+
+.btn-partes-primary {
+    min-height: 48px;
+    padding: .85rem 1.3rem;
+    border-radius: 999px;
+    color: #fff;
+    background: linear-gradient(135deg, #FF8200, #DA291C);
+    box-shadow: 0 14px 28px rgba(244, 123, 32, .28);
+}
+
+.btn-partes-primary:hover,
+.btn-partes-edit:hover,
+.btn-partes-save:hover {
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 18px 34px rgba(244, 123, 32, .38);
+}
+
+.partes-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .55rem .85rem;
+    border-radius: 999px;
+    background: rgba(255, 130, 0, .12);
+    border: 1px solid rgba(255, 130, 0, .35);
+    color: #FFB04A;
+    font-weight: 950;
+    font-size: .82rem;
+}
+
+.partes-hero-right {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 2.5rem 2.3rem;
+}
+
+.partes-search-form { width: 100%; }
+
+.partes-search-box {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr) 64px;
+    min-height: 56px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid rgba(41, 67, 95, .14);
+    box-shadow: 0 18px 42px rgba(41, 67, 95, .10);
+}
+
+.partes-filter-select,
+.partes-search-input {
+    border: 0;
+    outline: none;
+    font-weight: 900;
+    color: #29435F;
+    background: #fff;
+}
+
+.partes-filter-select {
+    padding: 0 .9rem;
+    border-right: 1px solid rgba(41, 67, 95, .12);
+}
+
+.partes-search-input { padding: 0 1.2rem; }
+.partes-search-input::placeholder { color: #64748B; }
+
+.partes-search-btn {
+    border: 0;
+    background: linear-gradient(135deg, #FF8200, #DA291C);
+    color: #fff;
+    font-size: 1.15rem;
+}
+
+.partes-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1.4rem;
+}
+
+.partes-stat-card {
+    min-height: 74px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 18px;
+    background: rgba(255,255,255,.9);
+    border: 1px solid rgba(41, 67, 95, .10);
+    box-shadow: 0 14px 30px rgba(41, 67, 95, .09);
+}
+
+.partes-stat-card strong {
+    display: block;
+    font-size: 1.45rem;
+    line-height: 1;
+    font-weight: 950;
+    color: #0D1929;
+}
+
+.partes-stat-card span {
+    display: block;
+    margin-top: .25rem;
+    font-size: .72rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    font-weight: 950;
+    color: #29435F;
+}
+
+.partes-stat-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+}
+.partes-stat-icon.muted { background: #29435F; }
+.partes-stat-icon.green { background: #16A34A; }
+.partes-stat-icon.red { background: #DC2626; }
+.partes-stat-icon.orange { background: #FF8200; }
+
+.partes-list-card {
+    margin-top: 1.5rem;
+    border-radius: 24px;
+    overflow: hidden;
+    background: rgba(255,255,255,.96);
+    border: 1px solid rgba(41, 67, 95, .12);
+    box-shadow: 0 24px 64px rgba(41, 67, 95, .13);
+}
+
+.partes-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.15rem 1.4rem;
+    background: rgba(255,255,255,.92);
+}
+
+.partes-list-header h2 {
+    margin: 0;
+    color: #0D1929;
+    font-size: 1.05rem;
+    font-weight: 950;
+}
+
+.partes-list-header h2 i {
+    color: #FF8200;
+    margin-right: .45rem;
+}
+
+.partes-list-header strong {
+    color: #0D1929;
+    font-weight: 950;
+    font-size: .85rem;
+}
+
+.partes-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.partes-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1120px;
+}
+
+.partes-table thead th {
+    padding: 1rem 1.15rem;
+    background: #0D1929;
+    color: #fff;
+    font-size: .76rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    font-weight: 950;
+    white-space: nowrap;
+}
+
+.partes-table tbody td {
+    padding: 1rem 1.15rem;
+    border-top: 1px solid rgba(41, 67, 95, .10);
+    color: #0D1929;
+    vertical-align: middle;
+    font-weight: 800;
+}
+
+.partes-table tbody tr:hover td { background: #FFF4E8; }
+
+.partes-code-cell {
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+}
+
+.partes-code-avatar {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 15px;
+    background: linear-gradient(135deg, #FF8200, #DA291C);
+    color: #fff;
+    font-size: .75rem;
+    font-weight: 950;
+    box-shadow: 0 12px 26px rgba(244, 123, 32, .22);
+}
+
+.partes-code-cell strong,
+.partes-description strong {
+    display: block;
+    font-weight: 950;
+    color: #0D1929;
+}
+
+.partes-code-cell span {
+    display: block;
+    color: #FF8200;
+    font-size: .75rem;
+    font-weight: 950;
+}
+
+.partes-code-cell small {
+    display: block;
+    margin-top: .1rem;
+    color: #64748B;
+    font-size: .72rem;
+    font-weight: 800;
+}
+
+.partes-description strong {
+    max-width: 330px;
+    font-weight: 900;
+    line-height: 1.35;
+}
+
+.partes-pill,
+.partes-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .45rem .75rem;
+    border-radius: 999px;
+    font-size: .77rem;
+    font-weight: 950;
+    white-space: nowrap;
+}
+
+.partes-pill.blue {
+    background: #E8F0FB;
+    color: #003A70;
+    border: 1px solid rgba(0, 58, 112, .18);
+}
+.partes-pill.gray {
+    background: #EEF4FA;
+    color: #29435F;
+    border: 1px solid rgba(41, 67, 95, .16);
+}
+.partes-pill.purple {
+    background: #F1EAFE;
+    color: #6D28D9;
+    border: 1px solid rgba(109, 40, 217, .16);
+}
+.partes-pill.orange {
+    background: #FFF4E8;
+    color: #C2410C;
+    border: 1px solid rgba(255, 130, 0, .24);
+}
+.partes-status.active {
+    background: #DCFCE7;
+    color: #15803D;
+    border: 1px solid rgba(21, 128, 61, .22);
+}
+.partes-status.inactive {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border: 1px solid rgba(185, 28, 28, .20);
+}
+
+.partes-muted {
+    color: #64748B;
+    font-weight: 800;
+}
+
+.partes-stock strong,
+.partes-stock span {
+    display: block;
+    white-space: nowrap;
+}
+.partes-stock strong { color: #0D1929; font-weight: 950; }
+.partes-stock span { color: #64748B; font-size: .78rem; margin-top: .1rem; }
+
+.btn-partes-edit {
+    min-height: 38px;
+    padding: .55rem .95rem;
+    border-radius: 999px;
+    color: #fff;
+    background: linear-gradient(135deg, #FF8200, #DA291C);
+    box-shadow: 0 12px 24px rgba(244, 123, 32, .22);
+    font-size: .82rem;
+}
+
+.partes-empty {
+    min-height: 180px;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    color: #29435F;
+    padding: 2rem;
+}
+.partes-empty i { font-size: 2rem; color: #FF8200; margin-bottom: .6rem; }
+.partes-empty strong,
+.partes-empty span { display: block; }
+.partes-empty strong { font-size: 1.1rem; font-weight: 950; color: #0D1929; }
+.partes-empty span { margin-top: .35rem; color: #64748B; font-weight: 800; }
+
+/* FORMULARIOS CREAR / EDITAR */
+.partes-form-page {
+    width: min(100%, 1320px);
+}
+
+.partes-form-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    margin-bottom: 1.4rem;
+    padding: 2rem;
+    border-radius: 28px;
+    background:
+        radial-gradient(circle at 90% 20%, rgba(244, 123, 32, .12), transparent 28%),
+        linear-gradient(135deg, #0D1929, #1A2A40);
+    color: #fff;
+    box-shadow: 0 24px 64px rgba(41, 67, 95, .20);
+}
+
+.partes-form-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .45rem .75rem;
+    border-radius: 999px;
+    background: rgba(255, 130, 0, .13);
+    border: 1px solid rgba(255, 130, 0, .32);
+    color: #FFB04A;
+    font-size: .78rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+.partes-form-hero h1 {
+    margin: .9rem 0 .4rem;
+    font-size: clamp(2rem, 4vw, 3.4rem);
+    line-height: .95;
+    font-weight: 950;
+    letter-spacing: -.05em;
+}
+
+.partes-form-hero p {
+    margin: 0;
+    max-width: 680px;
+    color: #DCE8F5;
+    font-weight: 800;
+    line-height: 1.5;
+}
+
+.partes-form-card {
+    border-radius: 28px;
+    overflow: hidden;
+    background: rgba(255,255,255,.96);
+    border: 1px solid rgba(41, 67, 95, .12);
+    box-shadow: 0 24px 64px rgba(41, 67, 95, .13);
+}
+
+.partes-form-section {
+    padding: 1.6rem 1.8rem;
+    border-bottom: 1px solid rgba(41, 67, 95, .10);
+}
+
+.partes-section-title {
+    display: flex;
+    align-items: flex-start;
+    gap: .85rem;
+    margin-bottom: 1.2rem;
+}
+
+.partes-section-title > i {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(135deg, #FF8200, #DA291C);
+    box-shadow: 0 12px 24px rgba(244, 123, 32, .22);
+}
+
+.partes-section-title h2 {
+    margin: 0;
+    color: #0D1929;
+    font-size: 1.1rem;
+    font-weight: 950;
+}
+
+.partes-section-title span {
+    display: block;
+    margin-top: .2rem;
+    color: #64748B;
+    font-size: .86rem;
+    font-weight: 800;
+}
+
+.form-label-modern {
+    display: block;
+    margin-bottom: .45rem;
+    color: #29435F;
+    font-size: .8rem;
+    font-weight: 950;
+}
+
+.form-control-modern {
+    width: 100%;
+    min-height: 48px;
+    border-radius: 14px;
+    border: 1px solid rgba(41, 67, 95, .14);
+    background: #fff;
+    color: #0D1929;
+    padding: .75rem .95rem;
+    font-weight: 850;
+    outline: none;
+    transition: .2s ease;
+}
+
+.form-control-modern:focus {
+    border-color: rgba(255, 130, 0, .55);
+    box-shadow: 0 0 0 .22rem rgba(255, 130, 0, .12);
+}
+
+.partes-switch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.partes-switch-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    min-height: 76px;
+    padding: 1rem;
+    border-radius: 18px;
+    background: #F8FAFC;
+    border: 1px solid rgba(41, 67, 95, .12);
+    cursor: pointer;
+    transition: .2s ease;
+}
+.partes-switch-card.compact { min-height: 66px; }
+.partes-switch-card:hover { background: #FFF4E8; border-color: rgba(255, 130, 0, .24); }
+.partes-switch-card input { position: absolute; opacity: 0; pointer-events: none; }
+
+.partes-switch-visual {
+    width: 48px;
+    height: 28px;
+    border-radius: 999px;
+    background: #CBD5E1;
+    position: relative;
+    flex: 0 0 auto;
+    transition: .2s ease;
+}
+.partes-switch-visual::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 4px 10px rgba(0,0,0,.20);
+    transition: .2s ease;
+}
+.partes-switch-card input:checked + .partes-switch-visual { background: linear-gradient(135deg, #16A34A, #22C55E); }
+.partes-switch-card input:checked + .partes-switch-visual::after { transform: translateX(20px); }
+.partes-switch-card strong { display: block; color: #0D1929; font-weight: 950; }
+.partes-switch-card small { display: block; margin-top: .15rem; color: #64748B; font-weight: 800; }
+
+.partes-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: .8rem;
+    padding: 1.4rem 1.8rem;
+    background: #F8FAFC;
+}
+
+.btn-partes-secondary,
+.btn-partes-cancel,
+.btn-partes-save {
+    min-height: 44px;
+    border-radius: 999px;
+    padding: .75rem 1.15rem;
+}
+
+.btn-partes-secondary,
+.btn-partes-cancel {
+    background: #fff;
+    color: #29435F;
+    border: 1px solid rgba(41, 67, 95, .16);
+}
+
+.btn-partes-save {
+    color: #fff;
+    background: linear-gradient(135deg, #FF8200, #DA291C);
+    box-shadow: 0 14px 28px rgba(244, 123, 32, .24);
+}
+
+.btn-partes-secondary:hover,
+.btn-partes-cancel:hover {
+    color: #0D1929;
+    background: #FFF4E8;
+    border-color: rgba(255, 130, 0, .28);
+}
+
+/* DARK MODE */
+html[data-nsq-theme="dark"] .partes-page,
+html[data-nsq-theme="dark"] .partes-form-page { color: #fff; }
+
+html[data-nsq-theme="dark"] .partes-hero {
+    background:
+        radial-gradient(circle at 88% 22%, rgba(105, 183, 255, .10), transparent 34%),
+        linear-gradient(135deg, rgba(13,25,41,.96), rgba(2,8,16,.92));
+    border-color: rgba(255,255,255,.08);
+}
+
+html[data-nsq-theme="dark"] .partes-list-card,
+html[data-nsq-theme="dark"] .partes-list-header,
+html[data-nsq-theme="dark"] .partes-stat-card,
+html[data-nsq-theme="dark"] .partes-form-card {
+    background: rgba(13,25,41,.92);
+    border-color: rgba(255,255,255,.08);
+}
+
+html[data-nsq-theme="dark"] .partes-search-box,
+html[data-nsq-theme="dark"] .partes-filter-select,
+html[data-nsq-theme="dark"] .partes-search-input,
+html[data-nsq-theme="dark"] .form-control-modern {
+    background: #0D1929;
+    color: #fff;
+    border-color: rgba(255,255,255,.10);
+}
+
+html[data-nsq-theme="dark"] .partes-stat-card strong,
+html[data-nsq-theme="dark"] .partes-list-header h2,
+html[data-nsq-theme="dark"] .partes-list-header strong,
+html[data-nsq-theme="dark"] .partes-table tbody td,
+html[data-nsq-theme="dark"] .partes-code-cell strong,
+html[data-nsq-theme="dark"] .partes-description strong,
+html[data-nsq-theme="dark"] .partes-stock strong,
+html[data-nsq-theme="dark"] .partes-section-title h2,
+html[data-nsq-theme="dark"] .partes-switch-card strong {
+    color: #fff;
+}
+
+html[data-nsq-theme="dark"] .form-label-modern { color: #DCE8F5; }
+html[data-nsq-theme="dark"] .partes-table tbody td,
+html[data-nsq-theme="dark"] .partes-form-section { border-top-color: rgba(255,255,255,.08); border-bottom-color: rgba(255,255,255,.08); }
+html[data-nsq-theme="dark"] .partes-table tbody tr:hover td { background: rgba(255,130,0,.08); }
+html[data-nsq-theme="dark"] .partes-switch-card,
+html[data-nsq-theme="dark"] .partes-form-footer { background: rgba(2,8,16,.72); border-color: rgba(255,255,255,.08); }
+
+@@media (max-width: 1100px) {
+    .partes-hero { grid-template-columns: 1fr; }
+    .partes-hero-left { min-height: 320px; }
+    .partes-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@@media (max-width: 900px) {
+    .partes-form-hero { align-items: flex-start; flex-direction: column; }
+    .partes-switch-grid { grid-template-columns: 1fr; }
+}
+
+@@media (max-width: 720px) {
+    .partes-page,
+    .partes-form-page { padding: 1rem .75rem 3rem; }
+    .partes-search-box { grid-template-columns: 1fr; }
+    .partes-filter-select { min-height: 48px; border-right: 0; border-bottom: 1px solid rgba(41, 67, 95, .12); }
+    .partes-search-input,
+    .partes-search-btn { min-height: 52px; }
+    .partes-stats-grid { grid-template-columns: 1fr; }
+}
+
+@@media (max-width: 640px) {
+    .partes-form-section { padding: 1.25rem; }
+    .partes-form-footer { flex-direction: column-reverse; }
+    .btn-partes-cancel,
+    .btn-partes-save { width: 100%; }
+}
+
+    </style>
+}
+
+<div class="partes-form-page">
+    <section class="partes-form-hero">
+        <div>
+            <span class="partes-form-kicker"><i class="fas fa-cubes"></i> Alta de partes</span>
+            <h1>Crear nueva parte</h1>
+            <p>Registra la información general de la parte, cliente relacionado, máquina, molde, requisitos de producción y configuración de stock.</p>
+        </div>
+
+        <div class="partes-form-actions-top">
+            <a asp-controller="Partes" asp-action="Index" class="btn-partes-secondary">
+                <i class="fas fa-arrow-left"></i> Volver al catálogo
+            </a>
+        </div>
+    </section>
+
+    <form asp-controller="Partes" asp-action="Crear" method="post" class="partes-form-card">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <section class="partes-form-section">
+            <div class="partes-section-title">
+                <i class="fas fa-clipboard-list"></i>
+                <div><h2>Datos generales</h2><span>Información principal para identificar la parte.</span></div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="ClienteID" class="form-label-modern">Cliente</label>
+                    <select asp-for="ClienteID" asp-items="Model.Clientes" class="form-control-modern">
+                        <option value="">-- Seleccione un cliente --</option>
+                    </select>
+                    <span asp-validation-for="ClienteID" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="NumeroParte" class="form-label-modern">Número de parte</label>
+                    <input asp-for="NumeroParte" class="form-control-modern" placeholder="Ej. 02-10-061-03" />
+                    <span asp-validation-for="NumeroParte" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="ReferenciaSAP" class="form-label-modern">Referencia SAP</label>
+                    <input asp-for="ReferenciaSAP" class="form-control-modern" placeholder="Referencia SAP" />
+                    <span asp-validation-for="ReferenciaSAP" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-12">
+                    <label asp-for="Descripcion" class="form-label-modern">Descripción</label>
+                    <input asp-for="Descripcion" class="form-control-modern" placeholder="Descripción de la parte" />
+                    <span asp-validation-for="Descripcion" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-8">
+                    <label asp-for="Designacion" class="form-label-modern">Designación</label>
+                    <input asp-for="Designacion" class="form-control-modern" placeholder="Designación comercial o interna" />
+                    <span asp-validation-for="Designacion" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="Color" class="form-label-modern">Color</label>
+                    <input asp-for="Color" class="form-control-modern" placeholder="Ej. Negro, Azul, Natural" />
+                    <span asp-validation-for="Color" class="text-danger small"></span>
+                </div>
+            </div>
+        </section>
+
+        <section class="partes-form-section">
+            <div class="partes-section-title">
+                <i class="fas fa-industry"></i>
+                <div><h2>Producción</h2><span>Datos operativos usados para fabricar la parte.</span></div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="Cavidades" class="form-label-modern">Cavidades</label>
+                    <input asp-for="Cavidades" type="number" min="0" class="form-control-modern" placeholder="0" />
+                    <span asp-validation-for="Cavidades" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="ObjetivoHora" class="form-label-modern">Objetivo por hora</label>
+                    <input asp-for="ObjetivoHora" type="number" min="0" class="form-control-modern" placeholder="0" />
+                    <span asp-validation-for="ObjetivoHora" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="PiezasPorCaja" class="form-label-modern">Piezas por caja</label>
+                    <input asp-for="PiezasPorCaja" type="number" min="0" class="form-control-modern" placeholder="0" />
+                    <span asp-validation-for="PiezasPorCaja" class="text-danger small"></span>
+                </div>
+            </div>
+        </section>
+
+        <section class="partes-form-section">
+            <div class="partes-section-title">
+                <i class="fas fa-gears"></i>
+                <div><h2>Máquina y molde</h2><span>Relación operativa de la parte con maquinaria y moldes.</span></div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="MaquinaPrincipalID" class="form-label-modern">Máquina principal</label>
+                    <select asp-for="MaquinaPrincipalID" asp-items="Model.Maquinas" class="form-control-modern">
+                        <option value="">-- Sin máquina principal --</option>
+                    </select>
+                    <span asp-validation-for="MaquinaPrincipalID" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="MaquinaSustitutaID" class="form-label-modern">Máquina sustituta</label>
+                    <select asp-for="MaquinaSustitutaID" asp-items="Model.Maquinas" class="form-control-modern">
+                        <option value="">-- Sin máquina sustituta --</option>
+                    </select>
+                    <span asp-validation-for="MaquinaSustitutaID" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="MoldePrincipalID" class="form-label-modern">Molde principal</label>
+                    <select asp-for="MoldePrincipalID" asp-items="Model.Moldes" class="form-control-modern">
+                        <option value="">-- Sin molde principal --</option>
+                    </select>
+                    <span asp-validation-for="MoldePrincipalID" class="text-danger small"></span>
+                </div>
+            </div>
+        </section>
+
+        <section class="partes-form-section">
+            <div class="partes-section-title">
+                <i class="fas fa-shield-halved"></i>
+                <div><h2>Requisitos</h2><span>Condiciones adicionales que puede requerir la parte.</span></div>
+            </div>
+
+            <div class="partes-switch-grid">
+                <label class="partes-switch-card">
+                    <input asp-for="RequiereGP12" type="checkbox" />
+                    <span class="partes-switch-visual"></span>
+                    <div><strong>Requiere GP12</strong><small>Marca si la parte necesita control GP12.</small></div>
+                </label>
+
+                <label class="partes-switch-card">
+                    <input asp-for="RequiereCertificado" type="checkbox" />
+                    <span class="partes-switch-visual"></span>
+                    <div><strong>Requiere certificado</strong><small>Marca si la parte requiere certificado.</small></div>
+                </label>
+            </div>
+        </section>
+
+        <section class="partes-form-section">
+            <div class="partes-section-title">
+                <i class="fas fa-boxes-stacked"></i>
+                <div><h2>Stock</h2><span>Configuración básica de inventario para la parte.</span></div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="StockMinimo" class="form-label-modern">Stock mínimo</label>
+                    <input asp-for="StockMinimo" type="number" min="0" class="form-control-modern" placeholder="0" />
+                    <span asp-validation-for="StockMinimo" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="StockAviso" class="form-label-modern">Stock aviso</label>
+                    <input asp-for="StockAviso" type="number" min="0" class="form-control-modern" placeholder="0" />
+                    <span asp-validation-for="StockAviso" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4 d-flex align-items-end">
+                    <label class="partes-switch-card compact w-100">
+                        <input asp-for="StockConfigurado" type="checkbox" />
+                        <span class="partes-switch-visual"></span>
+                        <div><strong>Stock configurado</strong><small>Activar control de stock.</small></div>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <section class="partes-form-section">
+            <div class="partes-section-title">
+                <i class="fas fa-toggle-on"></i>
+                <div><h2>Estado</h2><span>Define si la parte estará disponible en el catálogo.</span></div>
+            </div>
+
+            <label class="partes-switch-card compact">
+                <input asp-for="Activo" type="checkbox" />
+                <span class="partes-switch-visual"></span>
+                <div><strong>Parte activa</strong><small>Disponible para consulta y operación.</small></div>
+            </label>
+        </section>
+
+        <div class="partes-form-footer">
+            <a asp-controller="Partes" asp-action="Index" class="btn-partes-cancel">
+                <i class="fas fa-times"></i> Cancelar
+            </a>
+
+            <button type="submit" class="btn-partes-save">
+                <i class="fas fa-save"></i> Guardar parte
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,1206 @@
+@model ERP.NSQuell.Models.ViewModels.ParteIndexViewModel
+
+@{
+    Layout = "_LayoutPartes";
+    ViewData["Title"] = "Alta de Partes";
+
+    var partes = Model.Partes ?? new List<ERP.NSQuell.Models.ViewModels.ParteListadoItemViewModel>();
+    var estadoFiltro = (Model.EstadoFiltro ?? "").ToLowerInvariant();
+
+    string etiquetaFiltro = estadoFiltro switch
+    {
+        "activas" => "Partes activas",
+        "inactivas" => "Partes inactivas",
+        "stock" => "Stock configurado",
+        _ => "Todas las partes"
+    };
+}
+
+@section Styles {
+    <style>
+        .partes-page {
+            width: min(100%, 1480px);
+            margin: 0 auto;
+            padding: 1.5rem 1.1rem 4rem;
+            color: #0D1929;
+        }
+
+        .partes-hero {
+            display: grid;
+            grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
+            min-height: 320px;
+            border-radius: 28px;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(238,244,250,.9));
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 26px 70px rgba(41, 67, 95, .14);
+        }
+
+        .partes-hero-left {
+            position: relative;
+            padding: 2.4rem 1.65rem;
+            background: linear-gradient(145deg, #0D1929, #1A2A40);
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .partes-hero-left::after {
+            content: "";
+            position: absolute;
+            right: -62px;
+            top: -62px;
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            border: 1px solid rgba(244, 123, 32, .45);
+        }
+
+        .partes-hero-icon {
+            width: 62px;
+            height: 62px;
+            border-radius: 20px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 1.25rem;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 16px 28px rgba(244, 123, 32, .32);
+            font-size: 1.45rem;
+        }
+
+        .partes-hero h1 {
+            margin: 0;
+            font-size: clamp(2.15rem, 4vw, 3.35rem);
+            line-height: 1;
+            letter-spacing: -.06em;
+            font-weight: 950;
+        }
+
+        .partes-hero p {
+            max-width: 330px;
+            margin: 1.1rem 0 0;
+            color: #DCE8F5;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+
+        .partes-hero-actions {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            flex-wrap: wrap;
+            margin-top: 1.7rem;
+        }
+
+        .btn-partes-primary,
+        .btn-partes-edit,
+        .btn-partes-tech,
+        .btn-partes-save,
+        .btn-partes-cancel {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            border: 0;
+            text-decoration: none;
+            font-weight: 950;
+            transition: .2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-partes-primary {
+            min-height: 46px;
+            padding: .82rem 1.2rem;
+            border-radius: 999px;
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 14px 28px rgba(244, 123, 32, .28);
+        }
+
+        .btn-partes-primary:hover,
+        .btn-partes-edit:hover,
+        .btn-partes-save:hover {
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .partes-filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .55rem .85rem;
+            border-radius: 999px;
+            background: rgba(255, 130, 0, .12);
+            border: 1px solid rgba(255, 130, 0, .35);
+            color: #FFB04A;
+            font-weight: 950;
+            font-size: .8rem;
+        }
+
+        .partes-hero-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 2rem 1.7rem;
+            min-width: 0;
+        }
+
+        .partes-search-box {
+            display: grid;
+            grid-template-columns: 150px minmax(0, 1fr) 60px;
+            min-height: 56px;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid rgba(41, 67, 95, .14);
+            box-shadow: 0 18px 42px rgba(41, 67, 95, .10);
+        }
+
+        .partes-filter-select,
+        .partes-search-input {
+            min-width: 0;
+            border: 0;
+            outline: none;
+            font-weight: 900;
+            color: #29435F;
+            background: #fff;
+        }
+
+        .partes-filter-select {
+            padding: 0 .8rem;
+            border-right: 1px solid rgba(41, 67, 95, .12);
+        }
+
+        .partes-search-input {
+            padding: 0 1rem;
+        }
+
+        .partes-search-btn {
+            border: 0;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            color: #fff;
+            font-size: 1.1rem;
+        }
+
+        .partes-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .9rem;
+            margin-top: 1.25rem;
+        }
+
+        .partes-stat-card {
+            min-height: 72px;
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            padding: .85rem;
+            border-radius: 18px;
+            background: rgba(255,255,255,.9);
+            border: 1px solid rgba(41, 67, 95, .10);
+            box-shadow: 0 14px 30px rgba(41, 67, 95, .09);
+            min-width: 0;
+        }
+
+        .partes-stat-card strong {
+            display: block;
+            font-size: 1.35rem;
+            line-height: 1;
+            font-weight: 950;
+            color: #0D1929;
+        }
+
+        .partes-stat-card span {
+            display: block;
+            margin-top: .25rem;
+            font-size: .68rem;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            font-weight: 950;
+            color: #29435F;
+        }
+
+        .partes-stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            flex: 0 0 auto;
+        }
+
+        .partes-stat-icon.muted { background: #29435F; }
+        .partes-stat-icon.green { background: #16A34A; }
+        .partes-stat-icon.red { background: #DC2626; }
+        .partes-stat-icon.orange { background: #FF8200; }
+
+        .partes-list-card {
+            margin-top: 1.35rem;
+            border-radius: 24px;
+            overflow: hidden;
+            background: rgba(255,255,255,.96);
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 24px 64px rgba(41, 67, 95, .13);
+        }
+
+        .partes-list-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.05rem 1.25rem;
+            background: rgba(255,255,255,.92);
+        }
+
+        .partes-list-header h2 {
+            margin: 0;
+            color: #0D1929;
+            font-size: 1rem;
+            font-weight: 950;
+        }
+
+        .partes-list-header h2 i {
+            color: #FF8200;
+            margin-right: .45rem;
+        }
+
+        .partes-list-header strong {
+            color: #0D1929;
+            font-weight: 950;
+            font-size: .82rem;
+            white-space: nowrap;
+        }
+
+        .partes-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .partes-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .partes-table thead th {
+            padding: .95rem 1rem;
+            background: #0D1929;
+            color: #fff;
+            font-size: .72rem;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .partes-table tbody td {
+            padding: 1rem;
+            border-top: 1px solid rgba(41, 67, 95, .10);
+            color: #0D1929;
+            vertical-align: middle;
+            font-weight: 800;
+        }
+
+        .partes-table tbody tr:hover td {
+            background: #FFF4E8;
+        }
+
+        .col-parte { width: 22%; }
+        .col-info { width: 44%; }
+        .col-control { width: 20%; }
+        .col-actions { width: 14%; }
+
+        .partes-code-cell {
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            min-width: 0;
+        }
+
+        .partes-code-avatar {
+            width: 48px;
+            height: 48px;
+            flex: 0 0 48px;
+            display: grid;
+            place-items: center;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            color: #fff;
+            font-size: .72rem;
+            font-weight: 950;
+            box-shadow: 0 12px 26px rgba(244, 123, 32, .22);
+            overflow: hidden;
+        }
+
+        .partes-code-text,
+        .partes-info-main,
+        .partes-info-lines {
+            min-width: 0;
+        }
+
+        .partes-code-cell strong,
+        .partes-info-title {
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .partes-code-cell span,
+        .partes-code-cell small {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .partes-code-cell span {
+            color: #FF8200;
+            font-size: .74rem;
+            font-weight: 950;
+        }
+
+        .partes-code-cell small {
+            color: #64748B;
+            font-size: .7rem;
+            font-weight: 800;
+        }
+
+        .partes-info-title {
+            font-size: .95rem;
+            margin-bottom: .55rem;
+        }
+
+        .partes-info-lines {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .45rem .65rem;
+        }
+
+        .partes-info-line {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            color: #29435F;
+            font-size: .77rem;
+            font-weight: 850;
+        }
+
+        .partes-info-line i {
+            color: #FF8200;
+            width: 14px;
+            flex: 0 0 14px;
+            text-align: center;
+        }
+
+        .partes-info-label {
+            color: #64748B;
+            font-weight: 950;
+            flex: 0 0 auto;
+        }
+
+        .partes-info-value {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .partes-control-stack {
+            display: grid;
+            gap: .48rem;
+            justify-items: start;
+        }
+
+        .partes-control-item {
+            max-width: 100%;
+            display: flex;
+            align-items: center;
+            gap: .45rem;
+            min-width: 0;
+        }
+
+        .partes-control-label {
+            min-width: 45px;
+            color: #64748B;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+
+        .partes-pill,
+        .partes-status,
+        .partes-tech-status {
+            max-width: 100%;
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .35rem;
+            padding: .38rem .64rem;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: 950;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .partes-pill span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .partes-pill.blue { background: #E8F0FB; color: #003A70; border: 1px solid rgba(0, 58, 112, .18); }
+        .partes-pill.gray { background: #EEF4FA; color: #29435F; border: 1px solid rgba(41, 67, 95, .16); }
+        .partes-pill.purple { background: #F1EAFE; color: #6D28D9; border: 1px solid rgba(109, 40, 217, .16); }
+        .partes-pill.orange { background: #FFF4E8; color: #C2410C; border: 1px solid rgba(255, 130, 0, .24); }
+
+        .partes-status.active { background: #DCFCE7; color: #15803D; border: 1px solid rgba(21, 128, 61, .22); }
+        .partes-status.inactive { background: #FEE2E2; color: #B91C1C; border: 1px solid rgba(185, 28, 28, .20); }
+
+        .partes-tech-status.configured {
+            color: #15803D;
+            background: #DCFCE7;
+            border: 1px solid rgba(21, 128, 61, .22);
+        }
+
+        .partes-tech-status.pending {
+            color: #9A3412;
+            background: #FFEDD5;
+            border: 1px solid rgba(234, 88, 12, .22);
+        }
+
+        .partes-stock strong,
+        .partes-stock span {
+            display: block;
+            white-space: nowrap;
+        }
+
+        .partes-stock strong { color: #0D1929; font-weight: 950; font-size: .78rem; }
+        .partes-stock span { color: #64748B; font-size: .72rem; margin-top: .05rem; }
+
+        .partes-actions-inline {
+            display: grid;
+            justify-content: end;
+            gap: .5rem;
+        }
+
+        .btn-partes-edit,
+        .btn-partes-tech {
+            min-height: 36px;
+            width: 132px;
+            padding: .5rem .82rem;
+            border-radius: 999px;
+            font-size: .75rem;
+        }
+
+        .btn-partes-edit {
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 12px 24px rgba(244, 123, 32, .20);
+        }
+
+        .btn-partes-tech {
+            border: 1px solid rgba(0, 58, 112, .18);
+            background: #E8F0FB;
+            color: #003A70;
+        }
+
+        .btn-partes-tech:hover {
+            background: #DCEBFA;
+            color: #003A70;
+            transform: translateY(-1px);
+        }
+
+        .btn-partes-tech.has-tech {
+            background: #DCFCE7;
+            color: #15803D;
+            border-color: rgba(21, 128, 61, .24);
+        }
+
+        .partes-empty {
+            min-height: 160px;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            color: #29435F;
+            padding: 2rem;
+        }
+
+        .partes-empty i {
+            display: block;
+            font-size: 2rem;
+            color: #FF8200;
+            margin-bottom: .7rem;
+        }
+
+        .partes-empty strong,
+        .partes-empty span {
+            display: block;
+        }
+
+        .partes-tech-modal {
+            border: 0;
+            border-radius: 26px;
+            overflow: hidden;
+            box-shadow: 0 30px 90px rgba(13, 25, 41, .35);
+        }
+
+        .partes-tech-header {
+            align-items: flex-start;
+            padding: 1.4rem 1.6rem;
+            background: linear-gradient(135deg, #0D1929, #1A2A40);
+            color: #fff;
+        }
+
+        .partes-tech-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .35rem .65rem;
+            border-radius: 999px;
+            background: rgba(255, 130, 0, .14);
+            border: 1px solid rgba(255, 130, 0, .30);
+            color: #FFB04A;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .partes-tech-header h5 {
+            margin: .65rem 0 .25rem;
+            font-weight: 950;
+            font-size: 1.5rem;
+        }
+
+        .partes-tech-header p {
+            margin: 0;
+            color: #DCE8F5;
+            font-weight: 800;
+        }
+
+        .partes-tech-footer {
+            background: #F8FAFC;
+            border-top: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .form-label-modern {
+            display: block;
+            margin-bottom: .45rem;
+            color: #29435F;
+            font-size: .8rem;
+            font-weight: 950;
+        }
+
+        .form-control-modern {
+            width: 100%;
+            min-height: 48px;
+            border-radius: 14px;
+            border: 1px solid rgba(41, 67, 95, .14);
+            background: #fff;
+            color: #0D1929;
+            padding: .75rem .95rem;
+            font-weight: 850;
+            outline: none;
+        }
+
+        .partes-switch-card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: .9rem;
+            min-height: 66px;
+            padding: 1rem;
+            border-radius: 18px;
+            background: #F8FAFC;
+            border: 1px solid rgba(41, 67, 95, .12);
+            cursor: pointer;
+        }
+
+        .partes-switch-card input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .partes-switch-visual {
+            width: 48px;
+            height: 28px;
+            border-radius: 999px;
+            background: #CBD5E1;
+            position: relative;
+            flex: 0 0 auto;
+            transition: .2s ease;
+        }
+
+        .partes-switch-visual::after {
+            content: "";
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,.20);
+            transition: .2s ease;
+        }
+
+        .partes-switch-card input:checked + .partes-switch-visual { background: linear-gradient(135deg, #16A34A, #22C55E); }
+        .partes-switch-card input:checked + .partes-switch-visual::after { transform: translateX(20px); }
+
+        .partes-switch-card strong { display: block; color: #0D1929; font-weight: 950; }
+        .partes-switch-card small { display: block; color: #64748B; font-weight: 800; }
+
+        .btn-partes-cancel,
+        .btn-partes-save {
+            min-height: 42px;
+            padding: .7rem 1.05rem;
+            border-radius: 999px;
+        }
+
+        .btn-partes-cancel {
+            background: #fff;
+            color: #29435F;
+            border: 1px solid rgba(41, 67, 95, .16);
+        }
+
+        .btn-partes-save {
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 14px 28px rgba(244, 123, 32, .24);
+        }
+
+        html[data-nsq-theme="dark"] .partes-hero { background: linear-gradient(135deg, rgba(13,25,41,.96), rgba(2,8,16,.92)); border-color: rgba(255,255,255,.08); }
+        html[data-nsq-theme="dark"] .partes-list-card,
+        html[data-nsq-theme="dark"] .partes-list-header,
+        html[data-nsq-theme="dark"] .partes-stat-card,
+        html[data-nsq-theme="dark"] .partes-tech-modal { background: rgba(13,25,41,.92); border-color: rgba(255,255,255,.08); }
+        html[data-nsq-theme="dark"] .partes-table tbody td,
+        html[data-nsq-theme="dark"] .partes-code-cell strong,
+        html[data-nsq-theme="dark"] .partes-info-title,
+        html[data-nsq-theme="dark"] .partes-list-header h2,
+        html[data-nsq-theme="dark"] .partes-list-header strong,
+        html[data-nsq-theme="dark"] .partes-stat-card strong,
+        html[data-nsq-theme="dark"] .partes-stock strong { color: #fff; }
+        html[data-nsq-theme="dark"] .partes-table tbody td { border-top-color: rgba(255,255,255,.08); }
+        html[data-nsq-theme="dark"] .partes-table tbody tr:hover td { background: rgba(255,130,0,.08); }
+        html[data-nsq-theme="dark"] .form-control-modern { background: #0D1929; color: #fff; border-color: rgba(255,255,255,.10); }
+        html[data-nsq-theme="dark"] .partes-info-line,
+        html[data-nsq-theme="dark"] .partes-info-label,
+        html[data-nsq-theme="dark"] .partes-code-cell small,
+        html[data-nsq-theme="dark"] .partes-stock span { color: #CBD5E1; }
+
+        @@media (max-width: 1180px) {
+            .partes-hero { grid-template-columns: 1fr; }
+            .partes-hero-left { min-height: 290px; }
+            .partes-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .partes-table { min-width: 980px; }
+        }
+
+        @@media (max-width: 820px) {
+            .partes-page { padding: 1rem .75rem 3rem; }
+            .partes-search-box { grid-template-columns: 1fr; }
+            .partes-filter-select { min-height: 48px; border-right: 0; border-bottom: 1px solid rgba(41, 67, 95, .12); }
+            .partes-search-input, .partes-search-btn { min-height: 52px; }
+            .partes-stats-grid { grid-template-columns: 1fr; }
+            .partes-table { min-width: 940px; }
+            .partes-info-lines { grid-template-columns: 1fr; }
+        }
+    </style>
+}
+
+<div class="partes-page">
+    <section class="partes-hero">
+        <div class="partes-hero-left">
+            <div class="partes-hero-icon">
+                <i class="fas fa-cubes"></i>
+            </div>
+
+            <h1>Administración de Partes</h1>
+
+            <p>
+                Gestiona el catálogo de partes, clientes relacionados, producción,
+                stock y estado general dentro del módulo de altas.
+            </p>
+
+            <div class="partes-hero-actions">
+                <a asp-controller="Partes" asp-action="Crear" class="btn-partes-primary">
+                    <i class="fas fa-plus"></i>
+                    Agregar parte
+                </a>
+
+                <span class="partes-filter-chip">
+                    <i class="fas fa-filter"></i>
+                    @etiquetaFiltro
+                </span>
+            </div>
+        </div>
+
+        <div class="partes-hero-right">
+            <form asp-controller="Partes" asp-action="Index" method="get" class="partes-search-form">
+                <div class="partes-search-box">
+                    <select name="estadoFiltro" class="partes-filter-select">
+                        <option value="" selected="@(string.IsNullOrWhiteSpace(estadoFiltro))">Todas</option>
+                        <option value="activas" selected="@(estadoFiltro == "activas")">Activas</option>
+                        <option value="inactivas" selected="@(estadoFiltro == "inactivas")">Inactivas</option>
+                        <option value="stock" selected="@(estadoFiltro == "stock")">Stock configurado</option>
+                    </select>
+
+                    <input type="text"
+                           name="busqueda"
+                           value="@Model.Busqueda"
+                           class="partes-search-input"
+                           placeholder="Buscar por número, descripción, SAP, designación o color..." />
+
+                    <button type="submit" class="partes-search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+
+            <div class="partes-stats-grid">
+                <div class="partes-stat-card">
+                    <div class="partes-stat-icon muted"><i class="fas fa-layer-group"></i></div>
+                    <div><strong>@Model.TotalMostradas</strong><span>Mostradas</span></div>
+                </div>
+
+                <div class="partes-stat-card">
+                    <div class="partes-stat-icon green"><i class="fas fa-check-circle"></i></div>
+                    <div><strong>@Model.TotalActivas</strong><span>Activas</span></div>
+                </div>
+
+                <div class="partes-stat-card">
+                    <div class="partes-stat-icon red"><i class="fas fa-ban"></i></div>
+                    <div><strong>@Model.TotalInactivas</strong><span>Inactivas</span></div>
+                </div>
+
+                <div class="partes-stat-card">
+                    <div class="partes-stat-icon orange"><i class="fas fa-boxes-stacked"></i></div>
+                    <div><strong>@Model.TotalStockConfigurado</strong><span>Con stock</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="partes-list-card">
+        <div class="partes-list-header">
+            <h2><i class="fas fa-clipboard-list"></i> Catálogo de partes</h2>
+            <strong>@partes.Count registro@(partes.Count == 1 ? "" : "s") encontrado@(partes.Count == 1 ? "" : "s")</strong>
+        </div>
+
+        <div class="partes-table-wrap">
+            <table class="partes-table">
+                <thead>
+                    <tr>
+                        <th class="col-parte">Parte</th>
+                        <th class="col-info">Información de producción</th>
+                        <th class="col-control">Control</th>
+                        <th class="col-actions text-end">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (!partes.Any())
+                    {
+                        <tr>
+                            <td colspan="4">
+                                <div class="partes-empty">
+                                    <div>
+                                        <i class="fas fa-folder-open"></i>
+                                        <strong>No se encontraron partes.</strong>
+                                        <span>Registra una nueva parte o ajusta los filtros de búsqueda.</span>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var item in partes)
+                        {
+                            var avatarText = string.IsNullOrWhiteSpace(item.NumeroParte)
+                                ? "P"
+                                : item.NumeroParte.Length > 4
+                                    ? item.NumeroParte.Substring(0, 4)
+                                    : item.NumeroParte;
+
+                            <tr>
+                                <td>
+                                    <div class="partes-code-cell">
+                                        <div class="partes-code-avatar" title="@item.NumeroParte">@avatarText</div>
+                                        <div class="partes-code-text">
+                                            <strong title="@item.NumeroParte">@item.NumeroParte</strong>
+                                            <span>ID @item.ParteID</span>
+                                            @if (!string.IsNullOrWhiteSpace(item.ReferenciaSAP))
+                                            {
+                                                <small title="SAP: @item.ReferenciaSAP">SAP: @item.ReferenciaSAP</small>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="partes-info-main">
+                                        <strong class="partes-info-title" title="@item.Descripcion">@item.Descripcion</strong>
+
+                                        <div class="partes-info-lines">
+                                            <div class="partes-info-line" title="@(item.ClienteNombre ?? "Sin cliente")">
+                                                <i class="fas fa-building"></i>
+                                                <span class="partes-info-label">Cliente:</span>
+                                                <span class="partes-info-value">@(item.ClienteNombre ?? "Sin cliente")</span>
+                                            </div>
+
+                                            <div class="partes-info-line" title="@(item.MaquinaPrincipal ?? "Sin máquina")">
+                                                <i class="fas fa-industry"></i>
+                                                <span class="partes-info-label">Máquina:</span>
+                                                <span class="partes-info-value">@(item.MaquinaPrincipal ?? "Sin máquina")</span>
+                                            </div>
+
+                                            <div class="partes-info-line" title="@(item.MoldePrincipal ?? "Sin molde")">
+                                                <i class="fas fa-cube"></i>
+                                                <span class="partes-info-label">Molde:</span>
+                                                <span class="partes-info-value">@(item.MoldePrincipal ?? "Sin molde")</span>
+                                            </div>
+
+                                            <div class="partes-info-line">
+                                                <i class="fas fa-circle-info"></i>
+                                                <span class="partes-info-label">Estado base:</span>
+                                                <span class="partes-info-value">@(item.Activo ? "Disponible en catálogo" : "Fuera de catálogo")</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="partes-control-stack">
+                                        <div class="partes-control-item">
+                                            <span class="partes-control-label">Stock</span>
+                                            @if (item.StockConfigurado)
+                                            {
+                                                <div class="partes-stock">
+                                                    <strong>Mín: @item.StockMinimo</strong>
+                                                    <span>Aviso: @item.StockAviso</span>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="partes-pill orange">
+                                                    <i class="fas fa-triangle-exclamation"></i>
+                                                    <span>Sin configurar</span>
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <div class="partes-control-item">
+                                            <span class="partes-control-label">Ficha</span>
+                                            @if (item.TieneDatosTecnicos)
+                                            {
+                                                <span class="partes-tech-status configured" data-parte-id="@item.ParteID">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    Configurado
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="partes-tech-status pending" data-parte-id="@item.ParteID">
+                                                    <i class="fas fa-clock"></i>
+                                                    Pendiente
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <div class="partes-control-item">
+                                            <span class="partes-control-label">Estado</span>
+                                            @if (item.Activo)
+                                            {
+                                                <span class="partes-status active"><i class="fas fa-check-circle"></i> Activa</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="partes-status inactive"><i class="fas fa-ban"></i> Inactiva</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="partes-actions-inline">
+                                        <button type="button"
+                                                class="btn-partes-tech @(item.TieneDatosTecnicos ? "has-tech" : "")"
+                                                data-parte-id="@item.ParteID">
+                                            <i class="fas fa-microscope"></i>
+                                            @(item.TieneDatosTecnicos ? "Ficha técnica" : "Asignar datos")
+                                        </button>
+
+                                        <a asp-controller="Partes"
+                                           asp-action="Editar"
+                                           asp-route-id="@item.ParteID"
+                                           class="btn-partes-edit">
+                                            <i class="fas fa-pencil-alt"></i>
+                                            Editar
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="modal fade" id="modalDatosTecnicos" tabindex="-1" aria-labelledby="modalDatosTecnicosLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content partes-tech-modal">
+                <form id="formDatosTecnicos">
+                    @Html.AntiForgeryToken()
+
+                    <div class="modal-header partes-tech-header">
+                        <div>
+                            <span class="partes-tech-kicker">
+                                <i class="fas fa-microscope"></i>
+                                Ficha técnica
+                            </span>
+                            <h5 class="modal-title" id="modalDatosTecnicosLabel">Datos técnicos de parte</h5>
+                            <p id="dtParteResumen">Cargando información...</p>
+                        </div>
+
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <input type="hidden" id="dtParteDatoTecnicoID" name="ParteDatoTecnicoID" />
+                        <input type="hidden" id="dtParteID" name="ParteID" />
+                        <input type="hidden" id="dtMaterialID" name="MaterialID" />
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Ciclo</label>
+                                <input type="text" id="dtCiclo" name="Ciclo" class="form-control-modern" placeholder="Ej. 34 seg" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Tipo de secado</label>
+                                <input type="text" id="dtTipoSecado" name="TipoSecado" class="form-control-modern" placeholder="SECADOR / DESHUMIFICADOR" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Horas de secado</label>
+                                <input type="number" step="0.01" id="dtHorasSecado" name="HorasSecado" class="form-control-modern" placeholder="0.00" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Peso bruto pieza</label>
+                                <input type="number" step="0.000001" id="dtPesoBrutoPieza" name="PesoBrutoPieza" class="form-control-modern" placeholder="0.000000" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Código de embalaje</label>
+                                <input type="text" id="dtEmbalajeCodigo" name="EmbalajeCodigo" class="form-control-modern" placeholder="Código" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Piezas por embalaje</label>
+                                <input type="number" step="0.0001" id="dtPiezasPorEmbalaje" name="PiezasPorEmbalaje" class="form-control-modern" placeholder="0.0000" />
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label-modern">Descripción de embalaje</label>
+                                <input type="text" id="dtEmbalajeDescripcion" name="EmbalajeDescripcion" class="form-control-modern" placeholder="Descripción del embalaje" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Código de material</label>
+                                <input type="text" id="dtMaterialCodigo" name="MaterialCodigo" class="form-control-modern" placeholder="Código material" />
+                            </div>
+
+                            <div class="col-md-8">
+                                <label class="form-label-modern">Descripción de material</label>
+                                <input type="text" id="dtMaterialDescripcion" name="MaterialDescripcion" class="form-control-modern" placeholder="Descripción del material" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="partes-switch-card w-100">
+                                    <input type="checkbox" id="dtActivo" name="Activo" checked />
+                                    <span class="partes-switch-visual"></span>
+                                    <div>
+                                        <strong>Ficha activa</strong>
+                                        <small>Disponible para consulta.</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="dtAlert" class="alert mt-3 d-none"></div>
+                    </div>
+
+                    <div class="modal-footer partes-tech-footer">
+                        <button type="button" class="btn-partes-cancel" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i>
+                            Cancelar
+                        </button>
+
+                        <button type="submit" class="btn-partes-save" id="btnGuardarDatosTecnicos">
+                            <i class="fas fa-save"></i>
+                            Guardar datos técnicos
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalElement = document.getElementById('modalDatosTecnicos');
+            const modal = new bootstrap.Modal(modalElement);
+            const form = document.getElementById('formDatosTecnicos');
+            const alertBox = document.getElementById('dtAlert');
+            const resumen = document.getElementById('dtParteResumen');
+            const btnGuardar = document.getElementById('btnGuardarDatosTecnicos');
+
+            function setValue(id, value) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = value ?? '';
+                }
+            }
+
+            function setChecked(id, value) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.checked = value === true || value === 'true';
+                }
+            }
+
+            function showAlert(type, message) {
+                alertBox.className = 'alert mt-3 alert-' + type;
+                alertBox.textContent = message;
+                alertBox.classList.remove('d-none');
+            }
+
+            function clearAlert() {
+                alertBox.className = 'alert mt-3 d-none';
+                alertBox.textContent = '';
+            }
+
+            async function cargarDatosTecnicos(parteId) {
+                clearAlert();
+                form.reset();
+                resumen.textContent = 'Cargando información...';
+
+                try {
+                    const response = await fetch(`/Partes/ObtenerDatosTecnicos/${parteId}`, {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (!result.success) {
+                        modal.show();
+                        showAlert('danger', result.message || 'No se pudo cargar la ficha técnica.');
+                        return;
+                    }
+
+                    const data = result.data;
+
+                    resumen.textContent = `${data.numeroParte} - ${data.descripcionParte}`;
+
+                    setValue('dtParteDatoTecnicoID', data.parteDatoTecnicoID);
+                    setValue('dtParteID', data.parteID);
+                    setValue('dtCiclo', data.ciclo);
+                    setValue('dtTipoSecado', data.tipoSecado);
+                    setValue('dtHorasSecado', data.horasSecado);
+                    setValue('dtPesoBrutoPieza', data.pesoBrutoPieza);
+                    setValue('dtEmbalajeCodigo', data.embalajeCodigo);
+                    setValue('dtEmbalajeDescripcion', data.embalajeDescripcion);
+                    setValue('dtPiezasPorEmbalaje', data.piezasPorEmbalaje);
+                    setValue('dtMaterialCodigo', data.materialCodigo);
+                    setValue('dtMaterialDescripcion', data.materialDescripcion);
+                    setValue('dtMaterialID', data.materialID);
+                    setChecked('dtActivo', data.activo);
+
+                    modal.show();
+                } catch (error) {
+                    modal.show();
+                    showAlert('danger', 'Ocurrió un error al cargar la ficha técnica.');
+                }
+            }
+
+            document.querySelectorAll('.btn-partes-tech').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const parteId = this.getAttribute('data-parte-id');
+                    cargarDatosTecnicos(parteId);
+                });
+            });
+
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault();
+                clearAlert();
+
+                btnGuardar.disabled = true;
+                btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+                try {
+                    const formData = new FormData(form);
+                    formData.set('Activo', document.getElementById('dtActivo').checked ? 'true' : 'false');
+
+                    const response = await fetch('/Partes/GuardarDatosTecnicos', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (!result.success) {
+                        showAlert('danger', result.message || 'No se pudieron guardar los datos técnicos.');
+                        return;
+                    }
+
+                    showAlert('success', result.message || 'Datos técnicos guardados correctamente.');
+
+                    const parteId = document.getElementById('dtParteID').value;
+                    const botonDatosTecnicos = document.querySelector(`.btn-partes-tech[data-parte-id="${parteId}"]`);
+
+                    if (botonDatosTecnicos) {
+                        botonDatosTecnicos.classList.add('has-tech');
+                        botonDatosTecnicos.innerHTML = '<i class="fas fa-microscope"></i> Ficha técnica';
+                    }
+
+                    const badgeDatosTecnicos = document.querySelector(`.partes-tech-status[data-parte-id="${parteId}"]`);
+
+                    if (badgeDatosTecnicos) {
+                        badgeDatosTecnicos.classList.remove('pending');
+                        badgeDatosTecnicos.classList.add('configured');
+                        badgeDatosTecnicos.innerHTML = '<i class="fas fa-check-circle"></i> Configurado';
+                    }
+
+                    setTimeout(function () {
+                        modal.hide();
+                    }, 700);
+                } catch (error) {
+                    showAlert('danger', 'Ocurrió un error al guardar los datos técnicos.');
+                } finally {
+                    btnGuardar.disabled = false;
+                    btnGuardar.innerHTML = '<i class="fas fa-save"></i> Guardar datos técnicos';
+                }
+            });
+        });
+    </script>
+}

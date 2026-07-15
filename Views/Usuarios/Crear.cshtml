@@ -49,18 +49,9 @@
                             <input asp-for="Telefono" class="form-control" />
                             <span asp-validation-for="Telefono" class="text-danger"></span>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label asp-for="FechaNacimiento" class="form-label"></label>
-                            <input asp-for="FechaNacimiento" type="date" class="form-control" />
-                            <span asp-validation-for="FechaNacimiento" class="text-danger"></span>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="Direccion" class="form-label"></label>
-                        <input asp-for="Direccion" class="form-control" />
-                        <span asp-validation-for="Direccion" class="text-danger"></span>
-                    </div>
 
+                    </div>
+  
                     <h5 class="mt-4 text-primary"><i class="fas fa-key"></i> Datos de la Cuenta</h5>
                     <hr class="mt-2 mb-4" />
 
@@ -87,12 +78,6 @@
                             <label asp-for="RolID" class="form-label"></label>
                             <input asp-for="RolID" type="number" class="form-control" />
                             <span asp-validation-for="RolID" class="text-danger"></span>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label asp-for="EmpresasIDs" class="form-label">Empresa(s)</label>
-                            <select asp-for="EmpresasIDs" asp-items="@ViewBag.Empresas" class="form-control" multiple>
-                            </select>
-                            <span asp-validation-for="EmpresasIDs" class="text-danger"></span>
                         </div>
                     </div>
 

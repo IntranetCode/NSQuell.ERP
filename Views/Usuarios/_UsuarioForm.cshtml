@@ -751,14 +751,6 @@
                         </div>
                         <div class="row g-3">
                             <div class="col-md-4">
-                                <label asp-for="NumeroEmpleado" class="form-label-modern">Número de Empleado</label>
-                                <input asp-for="NumeroEmpleado" class="form-control form-control-modern" placeholder="Ej: 00123" />
-                            </div>
-                            <div class="col-md-4">
-                                <label asp-for="ClaveEmpleadoNomina" class="form-label-modern">Clave Nómina</label>
-                                <input asp-for="ClaveEmpleadoNomina" type="text" class="form-control form-control-modern" placeholder="Ej: NSE00033" autocomplete="off" />
-                            </div>
-                            <div class="col-md-4">
                                 <label asp-for="FechaIngreso" class="form-label-modern">Fecha de Ingreso</label>
                                 <input asp-for="FechaIngreso" type="date" class="form-control form-control-modern" />
                             </div>
@@ -766,10 +758,7 @@
                                 <label asp-for="Puesto" class="form-label-modern">Puesto</label>
                                 <input asp-for="Puesto" class="form-control form-control-modern" placeholder="Cargo del colaborador" />
                             </div>
-                            <div class="col-md-6">
-                                <label asp-for="FechaNacimiento" class="form-label-modern">Fecha de Nacimiento</label>
-                                <input asp-for="FechaNacimiento" type="date" class="form-control form-control-modern" />
-                            </div>
+
 
 
                             @{
@@ -810,22 +799,7 @@
                                 <span asp-validation-for="DepartamentoID" class="text-danger small"></span>
                             </div>
 
-                            <div class="col-md-12 mb-3">
-                                <label class="form-label-modern">Jefe Directo</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-white"><i class="fas fa-user-tie text-primary"></i></span>
-                                    <select asp-for="JefeInmediatoPersonaID" id="selectJefe" class="form-select">
-                                        @if (Model.JefeInmediatoPersonaID > 0)
-                                        {
-                                            <option value="@Model.JefeInmediatoPersonaID" selected>@Model.JefeInmediatoNombreCompleto</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="">-- Buscar Jefe --</option>
-                                        }
-                                    </select>
-                                </div>
-                            </div>
+                            
 
                         
                             @*    @if (!Model.EsModoCrear)
@@ -889,12 +863,7 @@
                                 </select>
                                 <span asp-validation-for="RolID" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-6">
-                                <label asp-for="EmpresasIDs" class="form-label-modern"></label>
-                                <select asp-for="EmpresasIDs" asp-items="@ViewBag.Empresas" class="form-select form-control-modern" multiple size="4"></select>
-                                <span asp-validation-for="EmpresasIDs" class="text-danger small"></span>
-                                <small class="text-muted d-block mt-1">Mantén Ctrl para seleccionar varias</small>
-                            </div>
+
 
                             @if (!Model.EsModoCrear)
                             {
@@ -1903,13 +1872,7 @@
 
     
 
-        @if (Model.JefeInmediatoPersonaID > 0)
-        {
-                        <text>
-                                var optJefe = new Option('@Model.JefeInmediatoNombreCompleto', '@Model.JefeInmediatoPersonaID', true, true);
-                                $('#selectJefe').append(optJefe).trigger('change');
-                        </text>
-        }
+        
     });
     }
 
