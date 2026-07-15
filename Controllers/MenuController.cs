@@ -171,6 +171,40 @@ ORDER BY m.Orden, m.Nombre;";
         }
     }
 
+    /*
+        /Menu/Grupo/1 es el menú real de Almacén.
+        Mientras los permisos nuevos terminan de sincronizarse, Embalajes
+        hereda la visibilidad de MP. No se duplica si ya viene de la base.
+    */
+    if (id == 1)
+    {
+        var tieneMp = menus.Any(m =>
+            string.Equals(m.Nombre?.Trim(), "MP", StringComparison.OrdinalIgnoreCase)
+            || (m.Url?.StartsWith("/AlmacenMP", StringComparison.OrdinalIgnoreCase) ?? false));
+
+        var tieneEmbalajes = menus.Any(m =>
+            (m.Nombre?.Contains("EMBALAJE", StringComparison.OrdinalIgnoreCase) ?? false)
+            || (m.Url?.StartsWith("/AlmacenEmbalajes", StringComparison.OrdinalIgnoreCase) ?? false));
+
+        if (tieneMp && !tieneEmbalajes)
+        {
+            menus.Add(new MenuModel
+            {
+                MenuID = menus.Count == 0 ? 3 : menus.Max(m => m.MenuID) + 1,
+                Nombre = "EMBALAJES",
+                Url = "/AlmacenEmbalajes/Index",
+                Icono = "fa-solid fa-box-open",
+                Descripcion = "Gestión de materiales de empaque.",
+                Orden = menus.Count == 0 ? 3 : menus.Max(m => m.Orden) + 1
+            });
+        }
+
+        menus = menus
+            .OrderBy(m => m.Orden)
+            .ThenBy(m => m.Nombre)
+            .ToList();
+    }
+
     ViewBag.MenuGrupoID = id;
     ViewBag.NombreGrupo = await ObtenerNombreGrupo(conn, id);
 

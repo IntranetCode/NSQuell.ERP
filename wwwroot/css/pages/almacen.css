@@ -1,4 +1,4 @@
-:root{--bg:#07101d;--panel:#101a2d;--line:#2a3852;--text:#f5f7fb;--muted:#9fb0c9;--orange:#f47b20;--green:#23c483;--yellow:#f7c948;--red:#ff5d6c}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 0 0,#2b1c14 0,transparent 25%),linear-gradient(135deg,#07101d,#0b1526);color:var(--text);font-family:Inter,Segoe UI,sans-serif}.alm-top{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:14px 24px;background:#0c1528e8;border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}.alm-brand{color:#fff;text-decoration:none;font-weight:900}.alm-brand span{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:14px;background:var(--orange);margin-right:10px}.alm-top nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.alm-top nav a,.alm-top nav span{color:#dbe5f4;text-decoration:none;padding:9px 13px;border:1px solid var(--line);border-radius:999px}.alm-main{max-width:1500px;margin:auto;padding:24px}.alm-hero,.alm-card,.alm-kpi{background:linear-gradient(145deg,#111c31,#0d1728);border:1px solid var(--line);border-radius:22px}.alm-hero{padding:28px;margin-bottom:18px;display:flex;justify-content:space-between;gap:20px;align-items:center}.alm-hero h1{font-size:clamp(2rem,5vw,4rem);margin:0}.alm-hero p{color:var(--muted);max-width:900px}.alm-actions{display:flex;gap:10px;flex-wrap:wrap}.alm-btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:12px;padding:11px 15px;background:var(--orange);color:#fff;text-decoration:none;font-weight:800;cursor:pointer}.alm-btn.secondary{background:#18243a;border:1px solid var(--line)}.alm-grid{display:grid;grid-template-columns:repeat(5,minmax(160px,1fr));gap:14px;margin-bottom:18px}.alm-kpi{padding:18px}.alm-kpi small{color:var(--muted);text-transform:uppercase;font-weight:800}.alm-kpi strong{display:block;font-size:2rem;margin-top:7px}.alm-card{overflow:hidden;margin-bottom:18px}.alm-card header{padding:16px 18px;border-bottom:1px solid var(--line);font-weight:900;display:flex;justify-content:space-between}.alm-filter{display:grid;grid-template-columns:2fr 1fr auto;gap:10px;padding:16px}.alm-input,.alm-select,.alm-textarea{width:100%;background:#0a1323;color:#fff;border:1px solid var(--line);border-radius:11px;padding:11px}.alm-textarea{min-height:100px}.alm-table-wrap{overflow:auto}.alm-table{width:100%;border-collapse:collapse}.alm-table th,.alm-table td{padding:12px 14px;border-bottom:1px solid #22314a;white-space:nowrap}.alm-table th{color:#a9bdd9;font-size:.78rem;text-transform:uppercase}.sem{display:inline-block;min-width:84px;text-align:center;padding:7px 10px;border-radius:999px;font-weight:900}.sem.ROJO{background:#3e1420;color:#ff9aa5}.sem.AMARILLO{background:#443916;color:#ffe287}.sem.VERDE{background:#103b2d;color:#7ff0bd}.alm-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:20px}.alm-field label{display:block;margin-bottom:6px;color:#b9c9df;font-weight:800}.alm-field.full{grid-column:1/-1}.validation-summary-errors,.field-validation-error{color:#ff9aa5}.alm-alert{padding:14px 16px;border-radius:14px;margin-bottom:16px;background:#17263d;border:1px solid #3a5277}.alm-alert.success{border-color:#1f8e65}.alm-alert.warning{border-color:#c98924}.alm-empty{text-align:center;padding:32px;color:var(--muted)}@media(max-width:1000px){.alm-grid{grid-template-columns:repeat(2,1fr)}.alm-hero{align-items:flex-start;flex-direction:column}}@media(max-width:700px){.alm-main{padding:12px}.alm-top{align-items:flex-start;flex-direction:column}.alm-grid,.alm-form,.alm-filter{grid-template-columns:1fr}.alm-field.full{grid-column:auto}}
+﻿:root{--bg:#07101d;--panel:#101a2d;--line:#2a3852;--text:#f5f7fb;--muted:#9fb0c9;--orange:#f47b20;--green:#23c483;--yellow:#f7c948;--red:#ff5d6c}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 0 0,#2b1c14 0,transparent 25%),linear-gradient(135deg,#07101d,#0b1526);color:var(--text);font-family:Inter,Segoe UI,sans-serif}.alm-top{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:14px 24px;background:#0c1528e8;border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}.alm-brand{color:#fff;text-decoration:none;font-weight:900}.alm-brand span{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:14px;background:var(--orange);margin-right:10px}.alm-top nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.alm-top nav a,.alm-top nav span{color:#dbe5f4;text-decoration:none;padding:9px 13px;border:1px solid var(--line);border-radius:999px}.alm-main{max-width:1500px;margin:auto;padding:24px}.alm-hero,.alm-card,.alm-kpi{background:linear-gradient(145deg,#111c31,#0d1728);border:1px solid var(--line);border-radius:22px}.alm-hero{padding:28px;margin-bottom:18px;display:flex;justify-content:space-between;gap:20px;align-items:center}.alm-hero h1{font-size:clamp(2rem,5vw,4rem);margin:0}.alm-hero p{color:var(--muted);max-width:900px}.alm-actions{display:flex;gap:10px;flex-wrap:wrap}.alm-btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:12px;padding:11px 15px;background:var(--orange);color:#fff;text-decoration:none;font-weight:800;cursor:pointer}.alm-btn.secondary{background:#18243a;border:1px solid var(--line)}.alm-grid{display:grid;grid-template-columns:repeat(5,minmax(160px,1fr));gap:14px;margin-bottom:18px}.alm-kpi{padding:18px}.alm-kpi small{color:var(--muted);text-transform:uppercase;font-weight:800}.alm-kpi strong{display:block;font-size:2rem;margin-top:7px}.alm-card{overflow:hidden;margin-bottom:18px}.alm-card header{padding:16px 18px;border-bottom:1px solid var(--line);font-weight:900;display:flex;justify-content:space-between}.alm-filter{display:grid;grid-template-columns:2fr 1fr auto;gap:10px;padding:16px}.alm-input,.alm-select,.alm-textarea{width:100%;background:#0a1323;color:#fff;border:1px solid var(--line);border-radius:11px;padding:11px}.alm-textarea{min-height:100px}.alm-table-wrap{overflow:auto}.alm-table{width:100%;border-collapse:collapse}.alm-table th,.alm-table td{padding:12px 14px;border-bottom:1px solid #22314a;white-space:nowrap}.alm-table th{color:#a9bdd9;font-size:.78rem;text-transform:uppercase}.sem{display:inline-block;min-width:84px;text-align:center;padding:7px 10px;border-radius:999px;font-weight:900}.sem.ROJO{background:#3e1420;color:#ff9aa5}.sem.AMARILLO{background:#443916;color:#ffe287}.sem.VERDE{background:#103b2d;color:#7ff0bd}.alm-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:20px}.alm-field label{display:block;margin-bottom:6px;color:#b9c9df;font-weight:800}.alm-field.full{grid-column:1/-1}.validation-summary-errors,.field-validation-error{color:#ff9aa5}.alm-alert{padding:14px 16px;border-radius:14px;margin-bottom:16px;background:#17263d;border:1px solid #3a5277}.alm-alert.success{border-color:#1f8e65}.alm-alert.warning{border-color:#c98924}.alm-empty{text-align:center;padding:32px;color:var(--muted)}@media(max-width:1000px){.alm-grid{grid-template-columns:repeat(2,1fr)}.alm-hero{align-items:flex-start;flex-direction:column}}@media(max-width:700px){.alm-main{padding:12px}.alm-top{align-items:flex-start;flex-direction:column}.alm-grid,.alm-form,.alm-filter{grid-template-columns:1fr}.alm-field.full{grid-column:auto}}
 
 /* Ajuste de inventarios: el semáforo se representa directamente sobre el stock disponible. */
 .alm-table-wrap-fit{overflow-x:hidden}
@@ -235,4 +235,314 @@ button.alm-routebar__back{
 button.alm-routebar__back:focus-visible{
     outline:2px solid var(--orange);
     outline-offset:3px
+}
+
+/* PT compacto con precio de venta - 15/07/2026 */
+.alm-table-pt th,.alm-table-pt td{
+    padding:6px 8px;
+    line-height:1.08;
+    vertical-align:middle
+}
+.alm-table-pt th{font-size:.7rem}
+.alm-table-pt td{font-size:.8rem}
+.alm-table-pt th:nth-child(1),.alm-table-pt td:nth-child(1){width:14%}
+.alm-table-pt th:nth-child(2),.alm-table-pt td:nth-child(2){width:22%}
+.alm-table-pt th:nth-child(3),.alm-table-pt td:nth-child(3){width:12%}
+.alm-table-pt th:nth-child(4),.alm-table-pt td:nth-child(4){width:10%}
+.alm-table-pt th:nth-child(5),.alm-table-pt td:nth-child(5){width:10%}
+.alm-table-pt th:nth-child(6),.alm-table-pt td:nth-child(6){width:11%}
+.alm-table-pt th:nth-child(7),.alm-table-pt td:nth-child(7){width:14%}
+.alm-table-pt th:nth-child(8),.alm-table-pt td:nth-child(8){width:7%;text-align:center}
+.alm-table-pt .alm-subtext-inline{
+    display:inline;
+    margin:0 0 0 6px;
+    font-size:.66rem
+}
+.alm-table-pt .cell-actions{
+    flex-direction:row;
+    justify-content:center;
+    flex-wrap:nowrap
+}
+.alm-table-pt .cell-actions .alm-btn{
+    padding:5px 6px;
+    min-width:30px
+}
+.alm-price-cell{white-space:nowrap!important}
+.alm-price-compact{
+    display:inline;
+    font-size:.82rem;
+    font-variant-numeric:tabular-nums
+}
+.alm-no-value{color:var(--muted)}
+
+/* ============================================================
+   INVENTARIO PT COMPACTO DEFINITIVO
+   Reemplaza visualmente los ajustes anteriores sin afectar MP.
+   ============================================================ */
+
+.alm-table-pt-final{
+    width:100%;
+    table-layout:fixed;
+    font-size:.78rem
+}
+
+.alm-table-pt-final .pt-col-part{width:15%}
+.alm-table-pt-final .pt-col-description{width:24%}
+.alm-table-pt-final .pt-col-client{width:17%}
+.alm-table-pt-final .pt-col-number{width:8%}
+.alm-table-pt-final .pt-col-stock{width:11%}
+.alm-table-pt-final .pt-col-price{width:10%}
+.alm-table-pt-final .pt-col-actions{width:7%}
+
+.alm-table-pt-final th,
+.alm-table-pt-final td{
+    height:48px!important;
+    padding:5px 8px!important;
+    line-height:1.1!important;
+    vertical-align:middle!important;
+    white-space:normal!important
+}
+
+.alm-table-pt-final th{
+    height:34px!important;
+    padding-top:5px!important;
+    padding-bottom:5px!important;
+    color:#a9bdd9;
+    font-size:.68rem!important;
+    letter-spacing:.01em
+}
+
+.alm-table-pt-final tbody tr:hover{
+    background:rgba(255,255,255,.025)
+}
+
+.pt-part-link{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    min-width:0;
+    color:#fff;
+    text-decoration:none;
+    white-space:nowrap
+}
+
+.pt-part-link strong{
+    overflow:hidden;
+    color:#fff;
+    font-size:.78rem;
+    text-overflow:ellipsis
+}
+
+.pt-part-link small{
+    flex:none;
+    color:var(--muted);
+    font-size:.62rem;
+    font-weight:700
+}
+
+.pt-truncate-link,
+.pt-truncate{
+    display:block;
+    overflow:hidden;
+    color:#fff;
+    text-decoration:none;
+    text-overflow:ellipsis;
+    white-space:nowrap
+}
+
+.pt-truncate-link:hover{
+    color:#ffd0a6
+}
+
+.pt-number{
+    text-align:center;
+    font-size:.8rem;
+    font-variant-numeric:tabular-nums
+}
+
+.pt-stock{
+    text-align:center
+}
+
+.pt-stock-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    min-width:76px;
+    min-height:30px;
+    padding:4px 7px;
+    border-radius:8px;
+    font-variant-numeric:tabular-nums
+}
+
+.pt-stock-badge strong{
+    font-size:.82rem;
+    line-height:1
+}
+
+.pt-stock-badge small{
+    font-size:.56rem;
+    font-weight:900;
+    line-height:1;
+    text-transform:uppercase
+}
+
+.pt-stock-badge.ROJO{
+    background:#3e1420;
+    color:#ffb0b8
+}
+
+.pt-stock-badge.AMARILLO{
+    background:#443916;
+    color:#ffe287
+}
+
+.pt-stock-badge.VERDE{
+    background:#103b2d;
+    color:#8bf3c4
+}
+
+.pt-stock-badge.SIN_CONFIGURAR{
+    background:#263247;
+    color:#d9e2ef
+}
+
+.pt-price{
+    text-align:right;
+    white-space:nowrap!important;
+    font-variant-numeric:tabular-nums
+}
+
+.pt-price strong{
+    display:block;
+    overflow:hidden;
+    font-size:.78rem;
+    line-height:1;
+    text-overflow:ellipsis
+}
+
+.pt-price small{
+    display:block;
+    margin-top:3px;
+    overflow:hidden;
+    color:var(--muted);
+    font-size:.58rem;
+    line-height:1;
+    text-overflow:ellipsis;
+    white-space:nowrap
+}
+
+.pt-empty-value{
+    color:var(--muted);
+    font-size:1rem
+}
+
+.pt-actions{
+    display:flex!important;
+    flex-direction:row!important;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+    flex-wrap:nowrap!important
+}
+
+.pt-action{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:29px;
+    height:29px;
+    padding:0!important;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:#18243a;
+    color:#fff;
+    text-decoration:none
+}
+
+.pt-action:hover{
+    border-color:rgba(244,123,32,.65);
+    background:rgba(244,123,32,.18);
+    color:#fff
+}
+
+.pt-action i{
+    font-size:.72rem
+}
+
+@media(max-width:1200px){
+    .alm-table-wrap-fit{
+        overflow-x:auto!important
+    }
+
+    .alm-table-pt-final{
+        min-width:1050px
+    }
+}
+
+
+/* ============================================================
+   INVENTARIO PT V2 - SEMÁFORO DENTRO DE EXISTENCIA
+   ============================================================ */
+
+.alm-table-pt-final-v2{
+    width:100%;
+    table-layout:fixed;
+    font-size:.78rem
+}
+
+.alm-table-pt-final-v2 .pt2-col-part{width:16%}
+.alm-table-pt-final-v2 .pt2-col-description{width:26%}
+.alm-table-pt-final-v2 .pt2-col-client{width:18%}
+.alm-table-pt-final-v2 .pt2-col-stock{width:12%}
+.alm-table-pt-final-v2 .pt2-col-retained{width:9%}
+.alm-table-pt-final-v2 .pt2-col-price{width:11%}
+.alm-table-pt-final-v2 .pt2-col-actions{width:8%}
+
+.alm-table-pt-final-v2 th,
+.alm-table-pt-final-v2 td{
+    height:48px!important;
+    padding:5px 8px!important;
+    line-height:1.1!important;
+    vertical-align:middle!important;
+    white-space:normal!important
+}
+
+.alm-table-pt-final-v2 th{
+    height:34px!important;
+    padding-top:5px!important;
+    padding-bottom:5px!important;
+    color:#a9bdd9;
+    font-size:.68rem!important;
+    letter-spacing:.01em
+}
+
+.alm-table-pt-final-v2 tbody tr:hover{
+    background:rgba(255,255,255,.025)
+}
+
+.alm-table-pt-final-v2 .pt-stock-badge{
+    min-width:82px
+}
+
+@media(max-width:1200px){
+    .alm-table-pt-final-v2{
+        min-width:1000px
+    }
+}
+
+
+/* PT V3 - SOLO CANTIDAD Y COLOR */
+.alm-table-pt-final-v2 .pt-stock-badge{
+    min-width:58px;
+    min-height:28px;
+    padding:4px 8px
+}
+
+.alm-table-pt-final-v2 .pt-stock-badge strong{
+    display:block;
+    margin:0;
+    font-size:.84rem;
+    line-height:1
 }

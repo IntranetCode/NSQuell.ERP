@@ -17,7 +17,7 @@ public sealed class AlmacenMPController : AlmacenBaseController
     public AlmacenMPController(IConfiguration configuration) : base(configuration) { }
 
     [HttpGet]
-    public async Task<IActionResult> Index(string? q, string? estado, string? tipo, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(string? q, string? estado, CancellationToken cancellationToken)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
@@ -25,13 +25,13 @@ public sealed class AlmacenMPController : AlmacenBaseController
         var vm = new AlmacenMPIndexVm
         {
             Busqueda = q?.Trim(),
-            Estado = estado?.Trim().ToUpperInvariant(),
-            Tipo = tipo?.Trim()
+            Estado = estado?.Trim().ToUpperInvariant()
         };
 
         await using var connection = await AbrirConexionAsync(cancellationToken);
         if (!await ExisteObjetoAsync(connection, "dbo.vw_AlmacenMPInventario", "V", cancellationToken)
             || !await ExisteColumnaAsync(connection, "dbo.vw_AlmacenMPInventario", "StockConfigurado", cancellationToken)
+            || !await ExisteColumnaAsync(connection, "dbo.vw_AlmacenMPInventario", "CostoUnitario", cancellationToken)
             || !await ExisteColumnaAsync(connection, "dbo.AlmacenMP_Movimientos", "ReferenciaOperacion", cancellationToken))
         {
             vm.Configurado = false;
@@ -41,13 +41,15 @@ public sealed class AlmacenMPController : AlmacenBaseController
 
         const string sql = @"
 SELECT TOP (500)
-    MaterialID, Codigo, Nombre, TipoMaterial, Unidad,
+    MaterialID, Codigo, Nombre, Unidad,
     Entradas, Salidas, Saldo, StockMinimo, StockAviso,
-    StockConfigurado, Semaforo, UltimoMovimiento
+    StockConfigurado,
+    CASE WHEN CostoUnitario IS NULL THEN 0 ELSE 1 END AS TieneCosto,
+    CostoUnitario, MonedaCosto, UnidadCosto, FuenteCosto, FechaCosto,
+    Semaforo, UltimoMovimiento
 FROM dbo.vw_AlmacenMPInventario
 WHERE (@Q IS NULL OR Codigo LIKE '%' + @Q + '%' OR Nombre LIKE '%' + @Q + '%')
   AND (@Estado IS NULL OR Semaforo = @Estado)
-  AND (@Tipo IS NULL OR TipoMaterial = @Tipo)
 ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMARILLO' THEN 2 ELSE 3 END,
          Nombre;";
 
@@ -55,7 +57,6 @@ ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMA
         {
             command.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(vm.Busqueda) ? DBNull.Value : vm.Busqueda;
             command.Parameters.Add("@Estado", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(vm.Estado) ? DBNull.Value : vm.Estado;
-            command.Parameters.Add("@Tipo", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(vm.Tipo) ? DBNull.Value : vm.Tipo;
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
@@ -65,7 +66,6 @@ ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMA
                     MaterialID = Entero(reader, "MaterialID"),
                     Codigo = Texto(reader, "Codigo"),
                     Nombre = Texto(reader, "Nombre"),
-                    TipoMaterial = Texto(reader, "TipoMaterial"),
                     Unidad = Texto(reader, "Unidad"),
                     Entradas = DecimalValor(reader, "Entradas"),
                     Salidas = DecimalValor(reader, "Salidas"),
@@ -74,6 +74,12 @@ ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMA
                     StockAviso = DecimalValor(reader, "StockAviso"),
                     Semaforo = Texto(reader, "Semaforo"),
                     StockConfigurado = Convert.ToBoolean(reader["StockConfigurado"]),
+                    TieneCosto = Convert.ToBoolean(reader["TieneCosto"]),
+                    CostoUnitario = DecimalValor(reader, "CostoUnitario"),
+                    MonedaCosto = Texto(reader, "MonedaCosto"),
+                    UnidadCosto = Texto(reader, "UnidadCosto"),
+                    FuenteCosto = Texto(reader, "FuenteCosto"),
+                    FechaCosto = Fecha(reader, "FechaCosto"),
                     UltimoMovimiento = Fecha(reader, "UltimoMovimiento")
                 });
             }
@@ -460,10 +466,10 @@ ORDER BY Valor;";
         }
 
         const string sql = @"
-SELECT MaterialID, Codigo, Nombre, TipoMaterial, UnidadDefault, Proveedor,
+SELECT MaterialID, Codigo, Nombre, UnidadDefault, Proveedor,
        RequiereLote, StockMinimo, StockAviso, Activo
 FROM dbo.ERP_Materiales
-ORDER BY Activo DESC, TipoMaterial, Codigo;";
+ORDER BY Activo DESC, Codigo;";
         await using var command = new SqlCommand(sql, connection);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -473,7 +479,6 @@ ORDER BY Activo DESC, TipoMaterial, Codigo;";
                 MaterialID = Entero(reader, "MaterialID"),
                 Codigo = Texto(reader, "Codigo"),
                 Nombre = Texto(reader, "Nombre"),
-                TipoMaterial = Texto(reader, "TipoMaterial"),
                 UnidadDefault = Texto(reader, "UnidadDefault"),
                 Proveedor = Texto(reader, "Proveedor"),
                 RequiereLote = Convert.ToBoolean(reader["RequiereLote"]),
@@ -494,7 +499,7 @@ ORDER BY Activo DESC, TipoMaterial, Codigo;";
 
         await using var connection = await AbrirConexionAsync(cancellationToken);
         const string sql = @"
-SELECT MaterialID, Codigo, Nombre, TipoMaterial, UnidadDefault, Proveedor,
+SELECT MaterialID, Codigo, Nombre, UnidadDefault, Proveedor,
        RequiereLote, StockMinimo, StockAviso, Activo
 FROM dbo.ERP_Materiales WHERE MaterialID = @Id;";
         await using var command = new SqlCommand(sql, connection);
@@ -507,7 +512,6 @@ FROM dbo.ERP_Materiales WHERE MaterialID = @Id;";
             MaterialID = Entero(reader, "MaterialID"),
             Codigo = Texto(reader, "Codigo"),
             Nombre = Texto(reader, "Nombre"),
-            TipoMaterial = Texto(reader, "TipoMaterial"),
             UnidadDefault = Texto(reader, "UnidadDefault"),
             Proveedor = Texto(reader, "Proveedor"),
             RequiereLote = Convert.ToBoolean(reader["RequiereLote"]),
@@ -527,7 +531,6 @@ FROM dbo.ERP_Materiales WHERE MaterialID = @Id;";
         model.Codigo = model.Codigo?.Trim() ?? string.Empty;
         model.Nombre = model.Nombre?.Trim() ?? string.Empty;
         model.UnidadDefault = model.UnidadDefault?.Trim().ToUpperInvariant() ?? string.Empty;
-        model.TipoMaterial = model.TipoMaterial?.Trim().ToUpperInvariant();
         if (model.StockAviso < model.StockMinimo)
             ModelState.AddModelError(nameof(model.StockAviso), "El nivel de aviso debe ser igual o mayor al stock mínimo.");
 
@@ -535,36 +538,38 @@ FROM dbo.ERP_Materiales WHERE MaterialID = @Id;";
 
         await using var connection = await AbrirConexionAsync(cancellationToken);
         const string duplicateSql = @"
-SELECT COUNT(*) FROM dbo.ERP_Materiales
-WHERE UPPER(Codigo) = UPPER(@Codigo) AND (@Id IS NULL OR MaterialID <> @Id);";
+SELECT
+    (SELECT COUNT(*) FROM dbo.ERP_Materiales
+     WHERE UPPER(Codigo)=UPPER(@Codigo) AND (@Id IS NULL OR MaterialID<>@Id))
+  + (SELECT COUNT(*) FROM dbo.ERP_Embalajes
+     WHERE UPPER(Codigo)=UPPER(@Codigo));";
         await using (var duplicate = new SqlCommand(duplicateSql, connection))
         {
             duplicate.Parameters.Add("@Codigo", SqlDbType.NVarChar, 80).Value = model.Codigo;
             duplicate.Parameters.Add("@Id", SqlDbType.Int).Value = model.MaterialID.HasValue ? model.MaterialID.Value : DBNull.Value;
             if (Convert.ToInt32(await duplicate.ExecuteScalarAsync(cancellationToken)) > 0)
             {
-                ModelState.AddModelError(nameof(model.Codigo), "Ya existe un material con ese código.");
+                ModelState.AddModelError(nameof(model.Codigo), "El código ya existe en MP o en Embalajes.");
                 return View(model);
             }
         }
 
         var sql = model.MaterialID.HasValue
             ? @"UPDATE dbo.ERP_Materiales
-SET Codigo=@Codigo, Nombre=@Nombre, TipoMaterial=@Tipo, UnidadDefault=@Unidad,
+SET Codigo=@Codigo, Nombre=@Nombre, UnidadDefault=@Unidad,
     Proveedor=@Proveedor, RequiereLote=@RequiereLote, StockMinimo=@Minimo,
     StockAviso=@Aviso, StockConfigurado=1, Activo=@Activo, FechaModificacion=SYSUTCDATETIME(),
     ActualizadoPor=@Usuario
 WHERE MaterialID=@Id;"
             : @"INSERT dbo.ERP_Materiales
-(Codigo, Nombre, TipoMaterial, UnidadDefault, Proveedor, RequiereLote,
+(Codigo, Nombre, UnidadDefault, Proveedor, RequiereLote,
  StockMinimo, StockAviso, StockConfigurado, FechaCreacion, CreadoPor, Activo)
-VALUES (@Codigo,@Nombre,@Tipo,@Unidad,@Proveedor,@RequiereLote,
+VALUES (@Codigo,@Nombre,@Unidad,@Proveedor,@RequiereLote,
         @Minimo,@Aviso,1,SYSUTCDATETIME(),@Usuario,@Activo);";
 
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.Add("@Codigo", SqlDbType.NVarChar, 80).Value = model.Codigo;
         command.Parameters.Add("@Nombre", SqlDbType.NVarChar, 250).Value = model.Nombre;
-        command.Parameters.Add("@Tipo", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(model.TipoMaterial) ? DBNull.Value : model.TipoMaterial;
         command.Parameters.Add("@Unidad", SqlDbType.NVarChar, 20).Value = model.UnidadDefault;
         command.Parameters.Add("@Proveedor", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(model.Proveedor) ? DBNull.Value : model.Proveedor.Trim();
         command.Parameters.Add("@RequiereLote", SqlDbType.Bit).Value = model.RequiereLote;
@@ -822,7 +827,7 @@ VALUES
         const string materialesSql = @"
 SELECT MaterialID, Codigo, Nombre, UnidadDefault
 FROM dbo.ERP_Materiales WHERE Activo=1
-ORDER BY TipoMaterial, Codigo;";
+ORDER BY Codigo;";
         await using (var command = new SqlCommand(materialesSql, connection))
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {

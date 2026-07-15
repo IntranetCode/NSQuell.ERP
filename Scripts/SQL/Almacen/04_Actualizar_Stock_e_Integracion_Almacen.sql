@@ -140,7 +140,6 @@ WITH Mov AS
         m.MaterialID,
         m.Codigo,
         m.Nombre,
-        ISNULL(m.TipoMaterial,N'') AS TipoMaterial,
         m.UnidadDefault AS Unidad,
         ISNULL(v.Entradas,0) AS Entradas,
         ISNULL(v.Salidas,0) AS Salidas,
@@ -154,7 +153,7 @@ WITH Mov AS
     WHERE m.Activo=1
 )
 SELECT
-    MaterialID,Codigo,Nombre,TipoMaterial,Unidad,Entradas,Salidas,Saldo,
+    MaterialID,Codigo,Nombre,Unidad,Entradas,Salidas,Saldo,
     StockMinimo,StockAviso,StockConfigurado,
     CASE
         WHEN StockConfigurado=0 THEN N'SIN_CONFIGURAR'

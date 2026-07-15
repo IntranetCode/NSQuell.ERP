@@ -8,7 +8,6 @@ public sealed class AlmacenMPIndexVm
     public string? MensajeConfiguracion { get; set; }
     public string? Busqueda { get; set; }
     public string? Estado { get; set; }
-    public string? Tipo { get; set; }
     public int TotalMateriales { get; set; }
     public int Criticos { get; set; }
     public int Advertencias { get; set; }
@@ -24,7 +23,6 @@ public sealed class AlmacenMPExistenciaVm
     public int MaterialID { get; set; }
     public string Codigo { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
-    public string TipoMaterial { get; set; } = string.Empty;
     public string Unidad { get; set; } = string.Empty;
     public decimal Entradas { get; set; }
     public decimal Salidas { get; set; }
@@ -33,6 +31,12 @@ public sealed class AlmacenMPExistenciaVm
     public decimal StockAviso { get; set; }
     public string Semaforo { get; set; } = "SIN_CONFIGURAR";
     public bool StockConfigurado { get; set; }
+    public bool TieneCosto { get; set; }
+    public decimal CostoUnitario { get; set; }
+    public string MonedaCosto { get; set; } = string.Empty;
+    public string UnidadCosto { get; set; } = string.Empty;
+    public string FuenteCosto { get; set; } = string.Empty;
+    public DateTime? FechaCosto { get; set; }
     public DateTime? UltimoMovimiento { get; set; }
 }
 
@@ -67,10 +71,6 @@ public sealed class AlmacenMaterialFormVm
     [StringLength(250)]
     [Display(Name = "Material")]
     public string Nombre { get; set; } = string.Empty;
-
-    [StringLength(80)]
-    [Display(Name = "Tipo de material")]
-    public string? TipoMaterial { get; set; }
 
     [Required(ErrorMessage = "La unidad es obligatoria.")]
     [StringLength(20)]
@@ -163,6 +163,12 @@ public sealed class AlmacenPTExistenciaVm
     public int StockAviso { get; set; }
     public string Semaforo { get; set; } = "SIN_CONFIGURAR";
     public bool StockConfigurado { get; set; }
+    public bool TienePrecioVenta { get; set; }
+    public decimal PrecioVentaUnitario { get; set; }
+    public string MonedaPrecioVenta { get; set; } = string.Empty;
+    public string UnidadPrecioVenta { get; set; } = string.Empty;
+    public string FuentePrecioVenta { get; set; } = string.Empty;
+    public DateTime? FechaPrecioVenta { get; set; }
     public DateTime? UltimoMovimiento { get; set; }
 }
 

@@ -36,6 +36,7 @@ public sealed class AlmacenPTController : AlmacenBaseController
         await using var connection = await AbrirConexionAsync(cancellationToken);
         if (!await ExisteObjetoAsync(connection, "dbo.vw_AlmacenPTInventario", "V", cancellationToken)
             || !await ExisteColumnaAsync(connection, "dbo.vw_AlmacenPTInventario", "StockConfigurado", cancellationToken)
+            || !await ExisteColumnaAsync(connection, "dbo.vw_AlmacenPTInventario", "PrecioVentaUnitario", cancellationToken)
             || !await ExisteColumnaAsync(connection, "dbo.AlmacenPT_Movimientos", "ReferenciaOperacion", cancellationToken))
         {
             vm.Configurado = false;
@@ -47,7 +48,10 @@ public sealed class AlmacenPTController : AlmacenBaseController
 SELECT TOP (500)
     ParteID, NumeroParte, Descripcion, Cliente, Cajas,
     Entradas, Salidas, SaldoFisico, Retenido, Disponible,
-    StockMinimo, StockAviso, StockConfigurado, Semaforo, UltimoMovimiento
+    StockMinimo, StockAviso, StockConfigurado,
+    CASE WHEN PrecioVentaUnitario IS NULL THEN 0 ELSE 1 END AS TienePrecioVenta,
+    PrecioVentaUnitario, MonedaPrecioVenta, UnidadPrecioVenta, FuentePrecioVenta, FechaPrecioVenta,
+    Semaforo, UltimoMovimiento
 FROM dbo.vw_AlmacenPTInventario
 WHERE (@Q IS NULL OR NumeroParte LIKE '%' + @Q + '%' OR Descripcion LIKE '%' + @Q + '%' OR Cliente LIKE '%' + @Q + '%')
   AND (@Estado IS NULL OR Semaforo = @Estado)
@@ -77,6 +81,12 @@ ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMA
                     StockAviso = Entero(reader, "StockAviso"),
                     Semaforo = Texto(reader, "Semaforo"),
                     StockConfigurado = Convert.ToBoolean(reader["StockConfigurado"]),
+                    TienePrecioVenta = Convert.ToBoolean(reader["TienePrecioVenta"]),
+                    PrecioVentaUnitario = DecimalValor(reader, "PrecioVentaUnitario"),
+                    MonedaPrecioVenta = Texto(reader, "MonedaPrecioVenta"),
+                    UnidadPrecioVenta = Texto(reader, "UnidadPrecioVenta"),
+                    FuentePrecioVenta = Texto(reader, "FuentePrecioVenta"),
+                    FechaPrecioVenta = Fecha(reader, "FechaPrecioVenta"),
                     UltimoMovimiento = Fecha(reader, "UltimoMovimiento")
                 });
             }

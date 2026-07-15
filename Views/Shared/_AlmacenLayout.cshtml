@@ -11,6 +11,8 @@
         "Almacen" => "/Menu/Grupo/1",
         "AlmacenMP" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
         "AlmacenMP" => "/AlmacenMP/Index",
+        "AlmacenEmbalajes" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+        "AlmacenEmbalajes" => "/AlmacenEmbalajes/Index",
         "AlmacenPT" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
         "AlmacenPT" => "/AlmacenPT/Index",
         "AlmacenUbicaciones" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
@@ -36,6 +38,7 @@
         <nav>
             <a href="/Almacen/Index">Almacenes</a>
             <a href="/AlmacenMP/Index">MP</a>
+            <a href="/AlmacenEmbalajes/Index">Embalajes</a>
             <a href="/AlmacenPT/Index">PT</a>
             <a href="/AlmacenUbicaciones/Index">Ubicaciones</a>
             <span>@nombre</span>

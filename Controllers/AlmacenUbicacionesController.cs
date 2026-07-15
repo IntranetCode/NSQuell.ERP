@@ -78,7 +78,7 @@ ORDER BY Activo DESC, Almacen, Rack, Nivel, Posicion;";
         model.Rack = model.Rack?.Trim().ToUpperInvariant() ?? string.Empty;
         model.Nivel = model.Nivel?.Trim().ToUpperInvariant();
         model.Posicion = model.Posicion?.Trim().ToUpperInvariant();
-        if (!new[] { "MP", "PT", "GENERAL", "CUARENTENA", "SCRAP" }.Contains(model.Almacen))
+        if (!new[] { "MP", "EMBALAJES", "PT", "GENERAL", "CUARENTENA", "SCRAP" }.Contains(model.Almacen))
             ModelState.AddModelError(nameof(model.Almacen), "Almacén inválido.");
         if (!ModelState.IsValid) return View(model);
 
