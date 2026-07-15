@@ -215,6 +215,8 @@ ORDER BY s.FechaCreacion DESC;";
                     await CompletarDetalleDesdeParteAsync(d, cn, (SqlTransaction)tx);
                     CalcularDatosTecnicos(d);
 
+                    await CalcularCostosDetalleAsync(d, cn, (SqlTransaction)tx);
+
                     var detalleId = await InsertarDetalleAsync(
                         solicitudId,
                         renglon,
@@ -237,6 +239,13 @@ ORDER BY s.FechaCreacion DESC;";
 
                     renglon++;
                 }
+
+                await ActualizarTotalesCostosOFAsync(
+    solicitudId,
+    vm.Detalles,
+    cn,
+    (SqlTransaction)tx
+);
 
                 await InsertarHistorialAsync(
                     solicitudId,
@@ -264,9 +273,7 @@ ORDER BY s.FechaCreacion DESC;";
             }
         }
 
-        // ============================================================
-        // DETALLE
-        // ============================================================
+        // detalle
         [HttpGet]
         public async Task<IActionResult> Detalle(int id)
         {
@@ -341,9 +348,7 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
             return View(vm);
         }
 
-        // ============================================================
-        // CANCELAR
-        // ============================================================
+        // cancelar
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Cancelar(int id, string? comentario)
@@ -561,12 +566,11 @@ WHERE p.ParteID = @ParteID
         }
 
 
-
         [HttpGet]
         public async Task<IActionResult> ValidarDisponibilidadAlmacen(
-    int parteId,
-    int cantidadPiezas,
-    CancellationToken cancellationToken = default)
+            int parteId,
+            int cantidadPiezas,
+            CancellationToken cancellationToken = default)
         {
             if (parteId <= 0)
             {
@@ -586,10 +590,15 @@ SELECT
     p.ParteID,
     p.NumeroParte,
     COALESCE(NULLIF(p.Designacion, ''), p.Descripcion) AS Descripcion,
+
     COALESCE(p.MaterialID, t.MaterialID) AS MaterialID,
     COALESCE(NULLIF(p.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
     COALESCE(NULLIF(p.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
-    COALESCE(t.PesoBrutoPieza, p.PesoBrutoPieza) AS PesoBrutoPieza
+    COALESCE(t.PesoBrutoPieza, p.PesoBrutoPieza) AS PesoBrutoPieza,
+
+    COALESCE(NULLIF(t.EmbalajeCodigo, ''), p.EmbalajeCodigo) AS EmbalajeCodigo,
+    COALESCE(NULLIF(t.EmbalajeDescripcion, ''), p.EmbalajeDescripcion) AS EmbalajeDescripcion,
+    COALESCE(t.PiezasPorEmbalaje, p.PiezasPorEmbalaje) AS PiezasPorEmbalaje
 FROM dbo.ERP_Partes p
 LEFT JOIN dbo.ERP_ParteDatosTecnicos t
     ON t.ParteID = p.ParteID
@@ -603,6 +612,10 @@ WHERE p.ParteID = @ParteID
             string materialCodigo = "";
             string materialDescripcion = "";
             decimal pesoBrutoPieza = 0m;
+
+            string embalajeCodigo = "";
+            string embalajeDescripcion = "";
+            decimal piezasPorEmbalaje = 0m;
 
             await using (var cmd = new SqlCommand(sqlParte, cn))
             {
@@ -626,7 +639,22 @@ WHERE p.ParteID = @ParteID
 
                 if (rd["PesoBrutoPieza"] != DBNull.Value)
                     pesoBrutoPieza = Convert.ToDecimal(rd["PesoBrutoPieza"]);
+
+                embalajeCodigo = rd["EmbalajeCodigo"] as string ?? "";
+                embalajeDescripcion = rd["EmbalajeDescripcion"] as string ?? "";
+
+                if (rd["PiezasPorEmbalaje"] != DBNull.Value)
+                    piezasPorEmbalaje = Convert.ToDecimal(rd["PiezasPorEmbalaje"]);
             }
+
+            var embalaje = await ValidarEmbalajeAsync(
+                cn,
+                embalajeCodigo,
+                embalajeDescripcion,
+                piezasPorEmbalaje,
+                cantidadPiezas,
+                cancellationToken
+            );
 
             var ptDisponible = 0;
             var ptRetenido = 0;
@@ -697,6 +725,8 @@ WHERE ParteID = @ParteID;";
                             semaforo = ""
                         },
 
+                        embalaje,
+
                         decision = "SIN_PESO_BRUTO",
                         bloquear = true,
                         mensaje = "No hay PT suficiente y la parte no tiene PesoBrutoPieza configurado. No se puede calcular la MP requerida."
@@ -733,6 +763,8 @@ WHERE ParteID = @ParteID;";
                             suficiente = false,
                             semaforo = ""
                         },
+
+                        embalaje,
 
                         decision = "SIN_MATERIAL",
                         bloquear = true,
@@ -820,12 +852,318 @@ WHERE MaterialID = @MaterialID;";
                     semaforo = mpSemaforo
                 },
 
+                embalaje,
+
                 decision,
                 bloquear,
                 mensaje
             });
         }
 
+
+        private async Task<object> ValidarEmbalajeAsync(
+    SqlConnection cn,
+    string? embalajeCodigo,
+    string? embalajeDescripcion,
+    decimal piezasPorEmbalaje,
+    int cantidadPiezas,
+    CancellationToken cancellationToken)
+        {
+            decimal requerido = 0m;
+
+            if (cantidadPiezas > 0 && piezasPorEmbalaje > 0)
+            {
+                requerido = Math.Ceiling(cantidadPiezas / piezasPorEmbalaje);
+            }
+
+            if (string.IsNullOrWhiteSpace(embalajeCodigo))
+            {
+                return new
+                {
+                    embalajeId = (int?)null,
+                    codigo = "",
+                    nombre = embalajeDescripcion ?? "",
+                    requerido,
+                    disponible = 0m,
+                    unidad = "",
+                    suficiente = false,
+                    semaforo = "SIN_CODIGO",
+                    bloquear = false,
+                    mensaje = "La parte no tiene código de embalaje configurado. Revisar catálogo maestro."
+                };
+            }
+
+            if (requerido <= 0)
+            {
+                return new
+                {
+                    embalajeId = (int?)null,
+                    codigo = embalajeCodigo,
+                    nombre = embalajeDescripcion ?? "",
+                    requerido,
+                    disponible = 0m,
+                    unidad = "",
+                    suficiente = false,
+                    semaforo = "SIN_CALCULO",
+                    bloquear = false,
+                    mensaje = "La parte no tiene piezas por embalaje configurado. No se puede calcular embalaje requerido."
+                };
+            }
+
+            const string sql = @"
+SELECT TOP 1
+    EmbalajeID,
+    Codigo,
+    Nombre,
+    Unidad,
+    ISNULL(Saldo, 0) AS Saldo,
+    ISNULL(Semaforo, '') AS Semaforo
+FROM dbo.vw_AlmacenEmbalajesInventario
+WHERE Codigo = @Codigo;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@Codigo", SqlDbType.NVarChar, 100).Value = embalajeCodigo;
+
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            if (!await rd.ReadAsync(cancellationToken))
+            {
+                return new
+                {
+                    embalajeId = (int?)null,
+                    codigo = embalajeCodigo,
+                    nombre = embalajeDescripcion ?? "",
+                    requerido,
+                    disponible = 0m,
+                    unidad = "",
+                    suficiente = false,
+                    semaforo = "NO_EXISTE",
+                    bloquear = false,
+                    mensaje = "El embalaje no existe en ERP_Embalajes. Revisar catálogo de embalajes."
+                };
+            }
+
+            var embalajeId = Convert.ToInt32(rd["EmbalajeID"]);
+            var codigo = rd["Codigo"] as string ?? embalajeCodigo;
+            var nombre = rd["Nombre"] as string ?? embalajeDescripcion ?? "";
+            var unidad = rd["Unidad"] as string ?? "";
+            var disponible = rd["Saldo"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["Saldo"]);
+            var semaforo = rd["Semaforo"] as string ?? "";
+
+            var suficiente = disponible >= requerido;
+
+            string mensaje;
+
+            if (suficiente)
+            {
+                mensaje = "Embalaje suficiente para esta OF.";
+            }
+            else if (semaforo == "SIN_CONFIGURAR")
+            {
+                mensaje = "El embalaje existe, pero no tiene stock configurado. Almacén debe revisar la configuración.";
+            }
+            else
+            {
+                mensaje = "Embalaje insuficiente. Almacén debe revisar existencias antes del surtido.";
+            }
+
+            return new
+            {
+                embalajeId,
+                codigo,
+                nombre,
+                requerido,
+                disponible,
+                unidad,
+                suficiente,
+                semaforo,
+                bloquear = false,
+                mensaje
+            };
+        }
+
+        private async Task CalcularCostosDetalleAsync(
+    PlaneacionOFDetalleCrearVm d,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            d.CostoMPUnitario = null;
+            d.CostoMPTotal = null;
+            d.MonedaCostoMP = null;
+            d.UnidadCostoMP = null;
+
+            d.CostoEmbalajeUnitario = null;
+            d.CostoEmbalajeTotal = null;
+            d.MonedaCostoEmbalaje = null;
+            d.UnidadCostoEmbalaje = null;
+
+            d.CostoTotalRenglon = null;
+            d.PrecioVentaUnitario = null;
+            d.VentaTotalRenglon = null;
+            d.UtilidadEstimadaRenglon = null;
+
+            if (d.MaterialID.HasValue)
+            {
+                const string sqlMaterial = @"
+SELECT TOP 1
+    CostoUnitario,
+    MonedaCosto,
+    UnidadCosto
+FROM dbo.ERP_Materiales
+WHERE MaterialID = @MaterialID
+  AND Activo = 1;";
+
+                await using var cmd = new SqlCommand(sqlMaterial, cn, tx);
+                cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value = d.MaterialID.Value;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (await rd.ReadAsync())
+                {
+                    if (rd["CostoUnitario"] != DBNull.Value)
+                        d.CostoMPUnitario = Convert.ToDecimal(rd["CostoUnitario"]);
+
+                    d.MonedaCostoMP = rd["MonedaCosto"] as string;
+                    d.UnidadCostoMP = rd["UnidadCosto"] as string;
+                }
+            }
+
+            if (d.CostoMPUnitario.HasValue && d.CantidadMpKg.HasValue)
+            {
+                d.CostoMPTotal = Math.Round(d.CantidadMpKg.Value * d.CostoMPUnitario.Value, 4);
+            }
+
+            if (!string.IsNullOrWhiteSpace(d.EmbalajeCodigo))
+            {
+                const string sqlEmbalaje = @"
+SELECT TOP 1
+    CostoUnitario,
+    MonedaCosto,
+    UnidadCosto
+FROM dbo.ERP_Embalajes
+WHERE Codigo = @Codigo
+  AND Activo = 1;";
+
+                await using var cmd = new SqlCommand(sqlEmbalaje, cn, tx);
+                cmd.Parameters.Add("@Codigo", SqlDbType.NVarChar, 100).Value = d.EmbalajeCodigo;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (await rd.ReadAsync())
+                {
+                    if (rd["CostoUnitario"] != DBNull.Value)
+                        d.CostoEmbalajeUnitario = Convert.ToDecimal(rd["CostoUnitario"]);
+
+                    d.MonedaCostoEmbalaje = rd["MonedaCosto"] as string;
+                    d.UnidadCostoEmbalaje = rd["UnidadCosto"] as string;
+                }
+            }
+
+            if (d.CostoEmbalajeUnitario.HasValue && d.CantidadEmbalajes.HasValue)
+            {
+                d.CostoEmbalajeTotal = Math.Round(d.CantidadEmbalajes.Value * d.CostoEmbalajeUnitario.Value, 4);
+            }
+
+            if (d.CostoMPTotal.HasValue || d.CostoEmbalajeTotal.HasValue)
+            {
+                d.CostoTotalRenglon = Math.Round(
+                    (d.CostoMPTotal ?? 0m) + (d.CostoEmbalajeTotal ?? 0m),
+                    4
+                );
+            }
+
+            if (d.ParteID.HasValue)
+            {
+                const string sqlPrecioVenta = @"
+SELECT TOP 1
+    PrecioVentaUnitario
+FROM dbo.ERP_Partes
+WHERE ParteID = @ParteID
+  AND Activo = 1;";
+
+                await using var cmd = new SqlCommand(sqlPrecioVenta, cn, tx);
+                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = d.ParteID.Value;
+
+                var result = await cmd.ExecuteScalarAsync();
+
+                if (result != null && result != DBNull.Value)
+                {
+                    d.PrecioVentaUnitario = Convert.ToDecimal(result);
+                }
+            }
+
+            if (d.PrecioVentaUnitario.HasValue && d.CantidadPiezas > 0)
+            {
+                d.VentaTotalRenglon = Math.Round(d.PrecioVentaUnitario.Value * d.CantidadPiezas, 4);
+            }
+
+            if (d.VentaTotalRenglon.HasValue && d.CostoTotalRenglon.HasValue)
+            {
+                d.UtilidadEstimadaRenglon = Math.Round(
+                    d.VentaTotalRenglon.Value - d.CostoTotalRenglon.Value,
+                    4
+                );
+            }
+        }
+
+
+        private async Task ActualizarTotalesCostosOFAsync(
+    int solicitudId,
+    List<PlaneacionOFDetalleCrearVm> detalles,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            decimal? Sumar(Func<PlaneacionOFDetalleCrearVm, decimal?> selector)
+            {
+                var valores = detalles
+                    .Select(selector)
+                    .Where(x => x.HasValue)
+                    .Select(x => x!.Value)
+                    .ToList();
+
+                if (!valores.Any())
+                    return null;
+
+                return Math.Round(valores.Sum(), 4);
+            }
+
+            var costoMpTotal = Sumar(x => x.CostoMPTotal);
+            var costoEmbalajeTotal = Sumar(x => x.CostoEmbalajeTotal);
+            var costoTotalOF = Sumar(x => x.CostoTotalRenglon);
+            var ventaTotalOF = Sumar(x => x.VentaTotalRenglon);
+            var utilidadEstimadaOF = Sumar(x => x.UtilidadEstimadaRenglon);
+
+            var monedaCosto =
+                detalles.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.MonedaCostoMP))?.MonedaCostoMP
+                ?? detalles.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.MonedaCostoEmbalaje))?.MonedaCostoEmbalaje;
+
+            const string sql = @"
+UPDATE dbo.SolicitudesProduccion
+SET
+    CostoMPTotal = @CostoMPTotal,
+    CostoEmbalajeTotal = @CostoEmbalajeTotal,
+    CostoTotalOF = @CostoTotalOF,
+    VentaTotalOF = @VentaTotalOF,
+    UtilidadEstimadaOF = @UtilidadEstimadaOF,
+    MonedaCosto = @MonedaCosto,
+    FechaModificacion = GETDATE()
+WHERE SolicitudProduccionID = @SolicitudProduccionID;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+
+            AddDecimal(cmd, "@CostoMPTotal", costoMpTotal, 18, 4);
+            AddDecimal(cmd, "@CostoEmbalajeTotal", costoEmbalajeTotal, 18, 4);
+            AddDecimal(cmd, "@CostoTotalOF", costoTotalOF, 18, 4);
+            AddDecimal(cmd, "@VentaTotalOF", ventaTotalOF, 18, 4);
+            AddDecimal(cmd, "@UtilidadEstimadaOF", utilidadEstimadaOF, 18, 4);
+
+            cmd.Parameters.Add("@MonedaCosto", SqlDbType.NVarChar, 20).Value =
+                (object?)monedaCosto ?? DBNull.Value;
+
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudId;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
 
 
         //Inserts
@@ -941,6 +1279,18 @@ MensajeAlmacen,
     PiezasPorEmbalaje,
     CantidadEmbalajes,
     CantidadMpKg,
+CostoMPUnitario,
+CostoMPTotal,
+MonedaCostoMP,
+UnidadCostoMP,
+CostoEmbalajeUnitario,
+CostoEmbalajeTotal,
+MonedaCostoEmbalaje,
+UnidadCostoEmbalaje,
+CostoTotalRenglon,
+PrecioVentaUnitario,
+VentaTotalRenglon,
+UtilidadEstimadaRenglon,
     Cambio,
     Arranque,
     Notas,
@@ -981,6 +1331,18 @@ VALUES
     @PiezasPorEmbalaje,
     @CantidadEmbalajes,
     @CantidadMpKg,
+@CostoMPUnitario,
+@CostoMPTotal,
+@MonedaCostoMP,
+@UnidadCostoMP,
+@CostoEmbalajeUnitario,
+@CostoEmbalajeTotal,
+@MonedaCostoEmbalaje,
+@UnidadCostoEmbalaje,
+@CostoTotalRenglon,
+@PrecioVentaUnitario,
+@VentaTotalRenglon,
+@UtilidadEstimadaRenglon,
     @Cambio,
     @Arranque,
     @Notas,
@@ -1022,6 +1384,28 @@ VALUES
             AddDecimal(cmd, "@PiezasPorEmbalaje", d.PiezasPorEmbalaje, 18, 4);
             AddDecimal(cmd, "@CantidadEmbalajes", d.CantidadEmbalajes, 18, 4);
             AddDecimal(cmd, "@CantidadMpKg", d.CantidadMpKg, 18, 4);
+            AddDecimal(cmd, "@CostoMPUnitario", d.CostoMPUnitario, 18, 6);
+            AddDecimal(cmd, "@CostoMPTotal", d.CostoMPTotal, 18, 4);
+
+            cmd.Parameters.Add("@MonedaCostoMP", SqlDbType.NVarChar, 20).Value =
+                (object?)d.MonedaCostoMP ?? DBNull.Value;
+
+            cmd.Parameters.Add("@UnidadCostoMP", SqlDbType.NVarChar, 30).Value =
+                (object?)d.UnidadCostoMP ?? DBNull.Value;
+
+            AddDecimal(cmd, "@CostoEmbalajeUnitario", d.CostoEmbalajeUnitario, 18, 6);
+            AddDecimal(cmd, "@CostoEmbalajeTotal", d.CostoEmbalajeTotal, 18, 4);
+
+            cmd.Parameters.Add("@MonedaCostoEmbalaje", SqlDbType.NVarChar, 20).Value =
+                (object?)d.MonedaCostoEmbalaje ?? DBNull.Value;
+
+            cmd.Parameters.Add("@UnidadCostoEmbalaje", SqlDbType.NVarChar, 30).Value =
+                (object?)d.UnidadCostoEmbalaje ?? DBNull.Value;
+
+            AddDecimal(cmd, "@CostoTotalRenglon", d.CostoTotalRenglon, 18, 4);
+            AddDecimal(cmd, "@PrecioVentaUnitario", d.PrecioVentaUnitario, 18, 6);
+            AddDecimal(cmd, "@VentaTotalRenglon", d.VentaTotalRenglon, 18, 4);
+            AddDecimal(cmd, "@UtilidadEstimadaRenglon", d.UtilidadEstimadaRenglon, 18, 4);
             cmd.Parameters.Add("@Cambio", SqlDbType.Time).Value = (object?)d.Cambio ?? DBNull.Value;
             cmd.Parameters.Add("@Arranque", SqlDbType.Time).Value = (object?)d.Arranque ?? DBNull.Value;
             cmd.Parameters.Add("@Notas", SqlDbType.NVarChar, 500).Value = (object?)d.Notas ?? DBNull.Value;

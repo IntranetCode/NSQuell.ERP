@@ -1,0 +1,1608 @@
+﻿@model ERP.NSQuell.Models.PlaneacionOFDetalleVm
+
+@{
+    Layout = null;
+
+    string Valor(string? valor)
+    {
+        return string.IsNullOrWhiteSpace(valor) ? "-" : valor;
+    }
+
+    string Fecha(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy") : "-";
+    }
+
+    string FechaHora(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    string Decimal2(decimal? valor)
+    {
+        return valor.HasValue ? valor.Value.ToString("N2") : "-";
+    }
+
+    string Decimal4(decimal? valor)
+    {
+        return valor.HasValue ? valor.Value.ToString("N4") : "-";
+    }
+
+    string Decimal6(decimal? valor)
+    {
+        return valor.HasValue ? valor.Value.ToString("N6") : "-";
+    }
+
+    string Moneda(decimal? valor, string? moneda = null)
+    {
+        if (!valor.HasValue)
+            return "-";
+
+        var textoMoneda = string.IsNullOrWhiteSpace(moneda) ? "" : $" {moneda}";
+        return $"${valor.Value:N2}{textoMoneda}";
+    }
+
+    string Entero(int? valor)
+    {
+        return valor.HasValue ? valor.Value.ToString("N0") : "-";
+    }
+
+    string Hora(TimeSpan? hora)
+    {
+        return hora.HasValue ? hora.Value.ToString(@"hh\:mm") : "-";
+    }
+
+    string EstatusClase(int estatusId)
+    {
+        return estatusId switch
+        {
+            1 => "badge-capturada",
+            2 => "badge-planeada",
+            3 => "badge-produccion",
+            9 => "badge-cerrada",
+            99 => "badge-cancelada",
+            _ => "badge-default"
+        };
+    }
+
+    string NombreEstatus(int? estatusId)
+    {
+        if (!estatusId.HasValue)
+            return "-";
+
+        return ERP.NSQuell.Models.PlaneacionOFEstatus.Nombre(estatusId.Value);
+    }
+
+    var totalPiezas = Model.Detalles?.Sum(x => x.CantidadPiezas) ?? 0;
+    var totalHoras = Model.Detalles?.Where(x => x.HorasPlaneadas.HasValue).Sum(x => x.HorasPlaneadas!.Value) ?? 0;
+    var totalMp = Model.Detalles?.Where(x => x.CantidadMpKg.HasValue).Sum(x => x.CantidadMpKg!.Value) ?? 0;
+    var totalEmbalajes = Model.Detalles?.Where(x => x.CantidadEmbalajes.HasValue).Sum(x => x.CantidadEmbalajes!.Value) ?? 0;
+    var totalRenglones = Model.Detalles?.Count ?? 0;
+    var monedaCosto = Model.MonedaCosto ?? "MXN";
+    var totalCostoMP = Model.CostoMPTotal;
+    var totalCostoEmbalaje = Model.CostoEmbalajeTotal;
+    var totalCostoOF = Model.CostoTotalOF;
+    var totalVentaOF = Model.VentaTotalOF;
+    var totalUtilidadOF = Model.UtilidadEstimadaOF;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Detalle OF | Planeación</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --erp-blue: #004AAD;
+            --erp-blue-dark: #00347a;
+            --erp-gray: #f3f5f8;
+            --erp-border: #d9e1ec;
+            --erp-text: #263238;
+            --erp-muted: #667085;
+            --erp-green: #107c41;
+            --erp-red: #b42318;
+            --erp-orange: #b54708;
+            --erp-purple: #6941c6;
+        }
+
+        body {
+            background: var(--erp-gray);
+            color: var(--erp-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .erp-shell {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .erp-header {
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+            color: white;
+            border-radius: 22px;
+            padding: 28px 32px;
+            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+            margin-bottom: 22px;
+        }
+
+            .erp-header h1 {
+                font-size: 1.65rem;
+                margin: 0;
+                font-weight: 900;
+            }
+
+            .erp-header p {
+                margin: 7px 0 0 0;
+                opacity: .9;
+            }
+
+        .header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: rgba(255,255,255,.16);
+            color: white;
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: .82rem;
+            font-weight: 800;
+            margin-top: 12px;
+            margin-right: 6px;
+        }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 20px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .erp-card-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            background: #fff;
+        }
+
+        .erp-card-body {
+            padding: 22px;
+        }
+
+        .erp-title {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            margin: 0;
+        }
+
+        .erp-muted {
+            color: var(--erp-muted);
+            font-size: .88rem;
+        }
+
+        .erp-label {
+            font-weight: 800;
+            color: #33465f;
+            font-size: .78rem;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+            margin-bottom: 4px;
+        }
+
+        .erp-value {
+            color: #263238;
+            font-weight: 650;
+            min-height: 24px;
+        }
+
+        .metric-card {
+            background: #f8fafc;
+            border: 1px solid #e3eaf5;
+            border-radius: 18px;
+            padding: 18px;
+            height: 100%;
+        }
+
+        .metric-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eaf2ff;
+            color: var(--erp-blue);
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .metric-label {
+            color: var(--erp-muted);
+            font-size: .78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .metric-value {
+            font-size: 1.35rem;
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            line-height: 1.15;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: .78rem;
+            font-weight: 900;
+            border: 1px solid transparent;
+        }
+
+        .badge-capturada {
+            background: #eef6ff;
+            color: #175cd3;
+            border-color: #b2ddff;
+        }
+
+        .badge-planeada {
+            background: #f4f3ff;
+            color: #5925dc;
+            border-color: #d9d6fe;
+        }
+
+        .badge-produccion {
+            background: #fff7ed;
+            color: #b54708;
+            border-color: #fed7aa;
+        }
+
+        .badge-cerrada {
+            background: #ecfdf3;
+            color: #027a48;
+            border-color: #abefc6;
+        }
+
+        .badge-cancelada {
+            background: #fef3f2;
+            color: #b42318;
+            border-color: #fecdca;
+        }
+
+        .badge-default {
+            background: #f2f4f7;
+            color: #344054;
+            border-color: #d0d5dd;
+        }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border-color: var(--erp-blue);
+            color: white;
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+            .btn-erp-primary:hover {
+                background: var(--erp-blue-dark);
+                border-color: var(--erp-blue-dark);
+                color: white;
+            }
+
+        .btn-erp-light {
+            background: white;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+        .btn-erp-danger {
+            background: white;
+            border: 1px solid #f2b8b5;
+            color: var(--erp-red);
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+        .nav-tabs {
+            border-bottom: 1px solid var(--erp-border);
+            gap: 6px;
+            padding: 0 18px;
+        }
+
+            .nav-tabs .nav-link {
+                border: none;
+                color: #526477;
+                font-weight: 850;
+                border-radius: 12px 12px 0 0;
+                padding: 12px 16px;
+            }
+
+                .nav-tabs .nav-link.active {
+                    background: #eef3fb;
+                    color: var(--erp-blue-dark);
+                    border: 1px solid var(--erp-border);
+                    border-bottom-color: #eef3fb;
+                }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+            .table thead th {
+                background: #eef3fb;
+                color: #00347a;
+                font-size: .78rem;
+                white-space: nowrap;
+                text-transform: uppercase;
+                letter-spacing: .03em;
+                vertical-align: middle;
+            }
+
+            .table td {
+                font-size: .86rem;
+                vertical-align: middle;
+            }
+
+        .renglon-box {
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            overflow: hidden;
+            margin-bottom: 18px;
+            background: white;
+        }
+
+        .renglon-head {
+            background: #eef3fb;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .renglon-title {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+        }
+
+        .renglon-body {
+            padding: 18px;
+        }
+
+        .section-title {
+            font-size: .82rem;
+            font-weight: 950;
+            color: var(--erp-blue-dark);
+            text-transform: uppercase;
+            letter-spacing: .045em;
+            margin: 18px 0 12px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #edf1f6;
+        }
+
+        .info-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 5px 10px;
+            background: #f2f4f7;
+            color: #344054;
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 28px;
+        }
+
+            .timeline:before {
+                content: "";
+                position: absolute;
+                left: 9px;
+                top: 6px;
+                bottom: 6px;
+                width: 2px;
+                background: #d9e1ec;
+            }
+
+        .timeline-item {
+            position: relative;
+            background: #fff;
+            border: 1px solid var(--erp-border);
+            border-radius: 16px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+
+            .timeline-item:before {
+                content: "";
+                position: absolute;
+                left: -25px;
+                top: 18px;
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: var(--erp-blue);
+                box-shadow: 0 0 0 4px #eaf2ff;
+            }
+
+        .timeline-date {
+            font-size: .78rem;
+            color: var(--erp-muted);
+            font-weight: 800;
+        }
+
+        .timeline-title {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 38px 18px;
+            color: var(--erp-muted);
+        }
+
+            .empty-state i {
+                font-size: 2rem;
+                color: #98a2b3;
+                margin-bottom: 10px;
+            }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 0;
+            background: rgba(243, 245, 248, .92);
+            backdrop-filter: blur(10px);
+            padding: 14px 0;
+            z-index: 20;
+        }
+
+        .print-area {
+            display: none;
+        }
+
+        .print-sheet {
+            background: #fff;
+            color: #111827;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .print-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #004AAD;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        .print-brand {
+            font-weight: 900;
+            font-size: 18px;
+            color: #004AAD;
+        }
+
+        .print-subtitle {
+            font-size: 10px;
+            color: #667085;
+            margin-top: 2px;
+        }
+
+        .print-title {
+            text-align: right;
+            font-weight: 900;
+            font-size: 15px;
+            color: #00347a;
+        }
+
+        .print-folio {
+            text-align: right;
+            font-size: 10px;
+            color: #344054;
+            margin-top: 3px;
+        }
+
+        .print-section-title {
+            background: #eef3fb;
+            color: #00347a;
+            border: 1px solid #cfd8e6;
+            font-weight: 900;
+            font-size: 10px;
+            padding: 5px 7px;
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+
+        .print-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            border-left: 1px solid #d9e1ec;
+            border-top: 1px solid #d9e1ec;
+        }
+
+        .print-cell {
+            border-right: 1px solid #d9e1ec;
+            border-bottom: 1px solid #d9e1ec;
+            padding: 5px 7px;
+            min-height: 34px;
+        }
+
+        .print-label {
+            font-size: 8px;
+            color: #667085;
+            text-transform: uppercase;
+            font-weight: 800;
+            letter-spacing: .03em;
+        }
+
+        .print-value {
+            font-size: 10px;
+            font-weight: 700;
+            color: #111827;
+            margin-top: 1px;
+        }
+
+        .print-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .print-metric {
+            border: 1px solid #d9e1ec;
+            border-radius: 8px;
+            padding: 6px 8px;
+            background: #f8fafc;
+        }
+
+        .print-metric-label {
+            font-size: 8px;
+            color: #667085;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+
+        .print-metric-value {
+            font-size: 14px;
+            color: #00347a;
+            font-weight: 900;
+            line-height: 1.15;
+        }
+
+        .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+            table-layout: fixed;
+        }
+
+            .print-table th {
+                background: #eef3fb;
+                color: #00347a;
+                border: 1px solid #cfd8e6;
+                font-size: 8px;
+                padding: 4px;
+                text-transform: uppercase;
+            }
+
+            .print-table td {
+                border: 1px solid #d9e1ec;
+                font-size: 8px;
+                padding: 4px;
+                vertical-align: top;
+                word-wrap: break-word;
+            }
+
+        .print-notes {
+            border: 1px solid #d9e1ec;
+            padding: 6px 8px;
+            font-size: 9px;
+            min-height: 35px;
+        }
+
+        .print-footer {
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            color: #667085;
+            font-size: 8px;
+        }
+
+        @@media (max-width: 768px) {
+            .erp-shell {
+                padding: 16px;
+            }
+
+            .erp-header {
+                padding: 22px;
+            }
+
+                .erp-header h1 {
+                    font-size: 1.32rem;
+                }
+
+            .erp-card-body {
+                padding: 16px;
+            }
+        }
+
+        @@media print {
+            @@page {
+                size: letter landscape;
+                margin: 8mm;
+            }
+
+            html,
+            body {
+                background: white !important;
+                width: 100%;
+                height: auto;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .screen-area,
+            .no-print,
+            .modal,
+            .modal-backdrop {
+                display: none !important;
+            }
+
+            .print-area {
+                display: block !important;
+            }
+
+            .print-sheet {
+                display: block !important;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+
+            .print-section-title {
+                page-break-after: avoid;
+            }
+
+            .print-table {
+                page-break-inside: auto;
+            }
+
+                .print-table tr {
+                    page-break-inside: avoid;
+                    page-break-after: auto;
+                }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="screen-area">
+        <div class="erp-shell">
+
+            <div class="erp-header">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                        <h1>
+                            <i class="fa-solid fa-clipboard-list me-2"></i>
+                            Detalle de OF
+                        </h1>
+                        <p>
+                            Consulta general de la orden de fabricación, datos técnicos, asignación de máquina e historial.
+                        </p>
+
+                        <div>
+                            <span class="header-badge">
+                                <i class="fa-solid fa-hashtag"></i>
+                                Folio interno: @(Model.FolioSolicitud ?? "Sin folio")
+                            </span>
+
+                            <span class="header-badge">
+                                <i class="fa-solid fa-file-signature"></i>
+                                OF Dirección: @(Model.NumeroOFRecibida ?? "Sin OF")
+                            </span>
+
+                            <span class="header-badge">
+                                <i class="fa-solid fa-circle-info"></i>
+                                @Model.EstatusNombre
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a asp-controller="Planeacion" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+                            <i class="fa-solid fa-arrow-left me-1"></i>
+                            Volver
+                        </a>
+
+                        <button type="button" class="btn btn-light fw-bold rounded-3" onclick="imprimirOF()">
+                            <i class="fa-solid fa-print me-1"></i>
+                            Imprimir OF
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            @if (TempData["Success"] != null)
+            {
+                <div class="alert alert-success rounded-4 fw-semibold">
+                    <i class="fa-solid fa-circle-check me-2"></i>
+                    @TempData["Success"]
+                </div>
+            }
+
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger rounded-4 fw-semibold">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                    @TempData["Error"]
+                </div>
+            }
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </div>
+                        <div class="metric-label">Renglones</div>
+                        <div class="metric-value">@totalRenglones</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-cubes"></i>
+                        </div>
+                        <div class="metric-label">Total piezas</div>
+                        <div class="metric-value">@totalPiezas.ToString("N0")</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-clock"></i>
+                        </div>
+                        <div class="metric-label">Horas planeadas</div>
+                        <div class="metric-value">@totalHoras.ToString("N2")</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-weight-hanging"></i>
+                        </div>
+                        <div class="metric-label">MP requerida kg</div>
+                        <div class="metric-value">@totalMp.ToString("N4")</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-2">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-industry"></i>
+                        </div>
+                        <div class="metric-label">Costo MP</div>
+                        <div class="metric-value">@Moneda(totalCostoMP, monedaCosto)</div>
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-box-open"></i>
+                        </div>
+                        <div class="metric-label">Costo embalaje</div>
+                        <div class="metric-value">@Moneda(totalCostoEmbalaje, monedaCosto)</div>
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-coins"></i>
+                        </div>
+                        <div class="metric-label">Costo total OF</div>
+                        <div class="metric-value">@Moneda(totalCostoOF, monedaCosto)</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-file-invoice-dollar"></i>
+                        </div>
+                        <div class="metric-label">Venta estimada</div>
+                        <div class="metric-value">@Moneda(totalVentaOF, monedaCosto)</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fa-solid fa-chart-line"></i>
+                        </div>
+                        <div class="metric-label">Utilidad estimada</div>
+                        <div class="metric-value">@Moneda(totalUtilidadOF, monedaCosto)</div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="erp-card">
+                <div class="erp-card-header">
+                    <div>
+                        <h2 class="erp-title h5">
+                            <i class="fa-solid fa-file-lines me-2"></i>
+                            Encabezado
+                        </h2>
+                        <div class="erp-muted">
+                            Información general recibida de Dirección y registrada por Planeación.
+                        </div>
+                    </div>
+
+                    <span class="badge-status @EstatusClase(Model.EstatusID)">
+                        <i class="fa-solid fa-circle me-2" style="font-size:.45rem;"></i>
+                        @Model.EstatusNombre
+                    </span>
+                </div>
+
+                <div class="erp-card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="erp-label">Folio interno</div>
+                            <div class="erp-value">@Valor(Model.FolioSolicitud)</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="erp-label">OF recibida Dirección</div>
+                            <div class="erp-value">@Valor(Model.NumeroOFRecibida)</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="erp-label">Cliente</div>
+                            <div class="erp-value">@Valor(Model.Cliente)</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="erp-label">Responsable</div>
+                            <div class="erp-value">@Valor(Model.ResponsablePlaneacionNombre)</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="erp-label">Fecha solicitud</div>
+                            <div class="erp-value">@Model.FechaSolicitud.ToString("dd/MM/yyyy")</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="erp-label">Fecha requerida</div>
+                            <div class="erp-value">@Fecha(Model.FechaRequerida)</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="erp-label">Inicio planeado</div>
+                            <div class="erp-value">@FechaHora(Model.FechaInicioPlaneada)</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="erp-label">Fin planeado</div>
+                            <div class="erp-value">@FechaHora(Model.FechaFinPlaneada)</div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="erp-label">Notas generales</div>
+                            <div class="erp-value">@Valor(Model.NotasGenerales)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card">
+                <ul class="nav nav-tabs pt-3" id="tabsDetalle" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tab-renglones" data-bs-toggle="tab" data-bs-target="#pane-renglones" type="button" role="tab">
+                            <i class="fa-solid fa-layer-group me-1"></i>
+                            Renglones
+                        </button>
+                    </li>
+
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-resumen" data-bs-toggle="tab" data-bs-target="#pane-resumen" type="button" role="tab">
+                            <i class="fa-solid fa-table-list me-1"></i>
+                            Resumen técnico
+                        </button>
+                    </li>
+
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tab-historial" data-bs-toggle="tab" data-bs-target="#pane-historial" type="button" role="tab">
+                            <i class="fa-solid fa-clock-rotate-left me-1"></i>
+                            Historial
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="pane-renglones" role="tabpanel" aria-labelledby="tab-renglones">
+                        <div class="erp-card-body">
+                            @if (Model.Detalles != null && Model.Detalles.Any())
+                            {
+                                foreach (var d in Model.Detalles)
+                                {
+                                    <div class="renglon-box">
+                                        <div class="renglon-head">
+                                            <div>
+                                                <div class="renglon-title">
+                                                    <i class="fa-solid fa-cube me-2"></i>
+                                                    Renglón @d.Renglon
+                                                </div>
+                                                <div class="erp-muted">
+                                                    @Valor(d.ReferenciaSAP) | @Valor(d.DesignacionDescripcionSAP)
+                                                </div>
+                                            </div>
+
+                                            <div class="d-flex gap-2 flex-wrap">
+                                                <span class="info-pill">
+                                                    <i class="fa-solid fa-cubes"></i>
+                                                    @d.CantidadPiezas.ToString("N0") piezas
+                                                </span>
+
+                                                <span class="info-pill">
+                                                    <i class="fa-solid fa-clock"></i>
+                                                    @Decimal2(d.HorasPlaneadas) hrs
+                                                </span>
+
+                                                <span class="info-pill">
+                                                    <i class="fa-solid fa-weight-hanging"></i>
+                                                    @Decimal4(d.CantidadMpKg) kg MP
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div class="renglon-body">
+                                            <div class="section-title">Datos de parte</div>
+
+                                            <div class="row g-3">
+                                                <div class="col-md-3">
+                                                    <div class="erp-label">Referencia SAP</div>
+                                                    <div class="erp-value">@Valor(d.ReferenciaSAP)</div>
+                                                </div>
+
+                                                <div class="col-md-5">
+                                                    <div class="erp-label">Designación / descripción SAP</div>
+                                                    <div class="erp-value">@Valor(d.DesignacionDescripcionSAP)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Cantidad piezas</div>
+                                                    <div class="erp-value">@d.CantidadPiezas.ToString("N0")</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Horas planeadas</div>
+                                                    <div class="erp-value">@Decimal2(d.HorasPlaneadas)</div>
+                                                </div>
+
+                                                <div class="col-md-3">
+                                                    <div class="erp-label">Molde</div>
+                                                    <div class="erp-value">@Valor(d.Molde)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Color</div>
+                                                    <div class="erp-value">@Valor(d.Color)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Cavidades</div>
+                                                    <div class="erp-value">@Entero(d.Cavidades)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Objetivo/hora</div>
+                                                    <div class="erp-value">@Entero(d.ObjetivoHora)</div>
+                                                </div>
+
+                                                <div class="col-md-3">
+                                                    <div class="erp-label">Piezas/caja</div>
+                                                    <div class="erp-value">@Entero(d.PiezasPorCaja)</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="section-title">Datos técnicos congelados en la OF</div>
+
+                                            <div class="row g-3">
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Ciclo</div>
+                                                    <div class="erp-value">@Valor(d.Ciclo)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Tipo secado</div>
+                                                    <div class="erp-value">@Valor(d.TipoSecado)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Horas secado</div>
+                                                    <div class="erp-value">@Decimal2(d.HorasSecado)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Peso bruto pieza</div>
+                                                    <div class="erp-value">@Decimal6(d.PesoBrutoPieza)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Cambio</div>
+                                                    <div class="erp-value">@Hora(d.Cambio)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Arranque</div>
+                                                    <div class="erp-value">@Hora(d.Arranque)</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="section-title">Material y embalaje</div>
+
+                                            <div class="row g-3">
+                                                <div class="col-md-3">
+                                                    <div class="erp-label">Material código</div>
+                                                    <div class="erp-value">@Valor(d.MaterialCodigo)</div>
+                                                </div>
+
+                                                <div class="col-md-5">
+                                                    <div class="erp-label">Material descripción</div>
+                                                    <div class="erp-value">@Valor(d.MaterialDescripcion)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Cantidad MP kg</div>
+                                                    <div class="erp-value">@Decimal4(d.CantidadMpKg)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Piezas embalaje</div>
+                                                    <div class="erp-value">@Decimal4(d.PiezasPorEmbalaje)</div>
+                                                </div>
+
+                                                <div class="col-md-3">
+                                                    <div class="erp-label">Embalaje código</div>
+                                                    <div class="erp-value">@Valor(d.EmbalajeCodigo)</div>
+                                                </div>
+
+                                                <div class="col-md-5">
+                                                    <div class="erp-label">Embalaje descripción</div>
+                                                    <div class="erp-value">@Valor(d.EmbalajeDescripcion)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Cantidad embalajes</div>
+                                                    <div class="erp-value">@Decimal4(d.CantidadEmbalajes)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Notas</div>
+                                                    <div class="erp-value">@Valor(d.Notas)</div>
+                                                </div>
+                                            </div>
+
+
+                                            <div class="section-title">Costos estimados</div>
+
+                                            <div class="row g-3">
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Costo MP unitario</div>
+                                                    <div class="erp-value">
+                                                        @Moneda(d.CostoMPUnitario, d.MonedaCostoMP)
+                                                        <div class="erp-muted">@Valor(d.UnidadCostoMP)</div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Costo MP total</div>
+                                                    <div class="erp-value">@Moneda(d.CostoMPTotal, d.MonedaCostoMP)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Costo emb. unitario</div>
+                                                    <div class="erp-value">
+                                                        @Moneda(d.CostoEmbalajeUnitario, d.MonedaCostoEmbalaje)
+                                                        <div class="erp-muted">@Valor(d.UnidadCostoEmbalaje)</div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Costo emb. total</div>
+                                                    <div class="erp-value">@Moneda(d.CostoEmbalajeTotal, d.MonedaCostoEmbalaje)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Costo total renglón</div>
+                                                    <div class="erp-value">@Moneda(d.CostoTotalRenglon, monedaCosto)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Precio venta unit.</div>
+                                                    <div class="erp-value">@Moneda(d.PrecioVentaUnitario, monedaCosto)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Venta total</div>
+                                                    <div class="erp-value">@Moneda(d.VentaTotalRenglon, monedaCosto)</div>
+                                                </div>
+
+                                                <div class="col-md-2">
+                                                    <div class="erp-label">Utilidad estimada</div>
+                                                    <div class="erp-value">@Moneda(d.UtilidadEstimadaRenglon, monedaCosto)</div>
+                                                </div>
+                                            </div>
+
+
+                                            <div class="section-title">Asignación de máquina</div>
+
+                                            @if (d.AsignacionesMaquina != null && d.AsignacionesMaquina.Any())
+                                            {
+                                                <div class="table-responsive">
+                                                    <table class="table table-bordered table-hover align-middle">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Máquina</th>
+                                                                <th>Molde</th>
+                                                                <th>Cantidad asignada</th>
+                                                                <th>Horas estimadas</th>
+                                                                <th>Secuencia</th>
+                                                                <th>Condición</th>
+                                                                <th>Fecha tentativa</th>
+                                                                <th>Hora inicio</th>
+                                                                <th>Hora fin</th>
+                                                                <th>Observaciones</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var a in d.AsignacionesMaquina)
+                                                            {
+                                                                <tr>
+                                                                    <td>@Valor(a.Maquina)</td>
+                                                                    <td>@Valor(a.Molde)</td>
+                                                                    <td>@a.CantidadAsignada.ToString("N0")</td>
+                                                                    <td>@Decimal2(a.HorasEstimadas)</td>
+                                                                    <td>@a.Secuencia</td>
+                                                                    <td>@Valor(a.CondicionProduccion)</td>
+                                                                    <td>@Fecha(a.FechaProgramadaTentativa)</td>
+                                                                    <td>@Hora(a.HoraInicioTentativa)</td>
+                                                                    <td>@Hora(a.HoraFinTentativa)</td>
+                                                                    <td>@Valor(a.Observaciones)</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="alert alert-warning rounded-4 mb-0">
+                                                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                                                    Este renglón no tiene asignación de máquina registrada.
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <i class="fa-regular fa-folder-open"></i>
+                                    <div class="fw-bold">No hay renglones registrados.</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="pane-resumen" role="tabpanel" aria-labelledby="tab-resumen">
+                        <div class="erp-card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Renglón</th>
+                                            <th>Referencia</th>
+                                            <th>Descripción</th>
+                                            <th>Cantidad</th>
+                                            <th>Horas</th>
+                                            <th>Objetivo/hora</th>
+                                            <th>Peso bruto</th>
+                                            <th>MP kg</th>
+                                            <th>Material</th>
+                                            <th>Piezas embalaje</th>
+                                            <th>Cant. embalajes</th>
+                                            <th>Embalaje</th>
+                                            <th>Costo MP</th>
+                                            <th>Costo embalaje</th>
+                                            <th>Costo total</th>
+                                            <th>Venta</th>
+                                            <th>Utilidad</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (Model.Detalles != null && Model.Detalles.Any())
+                                        {
+                                            foreach (var d in Model.Detalles)
+                                            {
+                                                <tr>
+                                                    <td>@d.Renglon</td>
+                                                    <td>@Valor(d.ReferenciaSAP)</td>
+                                                    <td>@Valor(d.DesignacionDescripcionSAP)</td>
+                                                    <td>@d.CantidadPiezas.ToString("N0")</td>
+                                                    <td>@Decimal2(d.HorasPlaneadas)</td>
+                                                    <td>@Entero(d.ObjetivoHora)</td>
+                                                    <td>@Decimal6(d.PesoBrutoPieza)</td>
+                                                    <td>@Decimal4(d.CantidadMpKg)</td>
+                                                    <td>
+                                                        <strong>@Valor(d.MaterialCodigo)</strong><br />
+                                                        <span class="text-muted">@Valor(d.MaterialDescripcion)</span>
+                                                    </td>
+                                                    <td>@Decimal4(d.PiezasPorEmbalaje)</td>
+                                                    <td>@Decimal4(d.CantidadEmbalajes)</td>
+                                                    <td>
+                                                        <strong>@Valor(d.EmbalajeCodigo)</strong><br />
+                                                        <span class="text-muted">@Valor(d.EmbalajeDescripcion)</span>
+                                                    </td>
+                                                    <td>@Moneda(d.CostoMPTotal, d.MonedaCostoMP)</td>
+                                                    <td>@Moneda(d.CostoEmbalajeTotal, d.MonedaCostoEmbalaje)</td>
+                                                    <td>@Moneda(d.CostoTotalRenglon, monedaCosto)</td>
+                                                    <td>@Moneda(d.VentaTotalRenglon, monedaCosto)</td>
+                                                    <td>@Moneda(d.UtilidadEstimadaRenglon, monedaCosto)</td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="17" class="text-center text-muted">
+                                                    No hay información técnica registrada.
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="fw-bold">
+                                            <td colspan="3" class="text-end">Totales</td>
+                                            <td>@totalPiezas.ToString("N0")</td>
+                                            <td>@totalHoras.ToString("N2")</td>
+                                            <td></td>
+                                            <td></td>
+                                            <td>@totalMp.ToString("N4")</td>
+                                            <td></td>
+                                            <td></td>
+                                            <td>@totalEmbalajes.ToString("N4")</td>
+                                            <td></td>
+                                            <td>@Moneda(totalCostoMP, monedaCosto)</td>
+                                            <td>@Moneda(totalCostoEmbalaje, monedaCosto)</td>
+                                            <td>@Moneda(totalCostoOF, monedaCosto)</td>
+                                            <td>@Moneda(totalVentaOF, monedaCosto)</td>
+                                            <td>@Moneda(totalUtilidadOF, monedaCosto)</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="pane-historial" role="tabpanel" aria-labelledby="tab-historial">
+                        <div class="erp-card-body">
+                            @if (Model.Historial != null && Model.Historial.Any())
+                            {
+                                <div class="timeline">
+                                    @foreach (var h in Model.Historial)
+                                    {
+                                        <div class="timeline-item">
+                                            <div class="d-flex justify-content-between gap-3 flex-wrap">
+                                                <div>
+                                                    <div class="timeline-title">
+                                                        @Valor(h.Movimiento)
+                                                    </div>
+                                                    <div class="timeline-date">
+                                                        <i class="fa-regular fa-clock me-1"></i>
+                                                        @h.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <span class="info-pill">
+                                                        @NombreEstatus(h.EstatusAnteriorID)
+                                                        <i class="fa-solid fa-arrow-right mx-1"></i>
+                                                        @NombreEstatus(h.EstatusNuevoID)
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div class="row g-3 mt-2">
+                                                <div class="col-md-3">
+                                                    <div class="erp-label">Usuario</div>
+                                                    <div class="erp-value">@Valor(h.Usuario)</div>
+                                                </div>
+
+                                                <div class="col-md-9">
+                                                    <div class="erp-label">Comentario</div>
+                                                    <div class="erp-value">@Valor(h.Comentario)</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                    <div class="fw-bold">No hay historial registrado.</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sticky-actions no-print">
+                <div class="d-flex justify-content-between gap-2 flex-wrap">
+                    <a asp-controller="Planeacion" asp-action="Index" class="btn btn-erp-light">
+                        <i class="fa-solid fa-arrow-left me-1"></i>
+                        Volver a Planeación
+                    </a>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-erp-light" onclick="imprimirOF()">
+                            <i class="fa-solid fa-print me-1"></i>
+                            Imprimir OF
+                        </button>
+
+                        @if (Model.EstatusID < ERP.NSQuell.Models.PlaneacionOFEstatus.EnProduccion)
+                        {
+                            <button type="button" class="btn btn-erp-danger" data-bs-toggle="modal" data-bs-target="#modalCancelarOF">
+                                <i class="fa-regular fa-circle-xmark me-1"></i>
+                                Cancelar OF
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade no-print" id="modalCancelarOF" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content rounded-4">
+                    <form asp-controller="Planeacion" asp-action="Cancelar" method="post">
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden" name="id" value="@Model.SolicitudProduccionID" />
+
+                        <div class="modal-header">
+                            <h5 class="modal-title fw-bold text-danger">
+                                <i class="fa-regular fa-circle-xmark me-2"></i>
+                                Cancelar OF
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <div class="modal-body">
+                            <div class="alert alert-warning rounded-4">
+                                Esta acción cambiará el estatus de la OF a cancelada. No elimina la información registrada.
+                            </div>
+
+                            <label class="erp-label">Motivo / comentario</label>
+                            <textarea name="comentario" class="form-control" rows="3" placeholder="Escribe el motivo de cancelación..."></textarea>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-erp-light" data-bs-dismiss="modal">
+                                Cerrar
+                            </button>
+
+                            <button type="submit" class="btn btn-erp-danger">
+                                <i class="fa-regular fa-circle-xmark me-1"></i>
+                                Confirmar cancelación
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="print-area">
+        <div class="print-sheet">
+            <div class="print-top">
+                <div>
+                    <div class="print-brand">ERP QUELL</div>
+                    <div class="print-subtitle">Planeación / Orden de Fabricación</div>
+                </div>
+
+                <div>
+                    <div class="print-title">ORDEN DE FABRICACIÓN</div>
+                    <div class="print-folio">
+                        Folio interno: @Valor(Model.FolioSolicitud)<br />
+                        OF Dirección: @Valor(Model.NumeroOFRecibida)
+                    </div>
+                </div>
+            </div>
+
+            <div class="print-section-title">Encabezado</div>
+            <div class="print-grid">
+                <div class="print-cell">
+                    <div class="print-label">Cliente</div>
+                    <div class="print-value">@Valor(Model.Cliente)</div>
+                </div>
+
+                <div class="print-cell">
+                    <div class="print-label">Estatus</div>
+                    <div class="print-value">@Valor(Model.EstatusNombre)</div>
+                </div>
+
+                <div class="print-cell">
+                    <div class="print-label">Responsable</div>
+                    <div class="print-value">@Valor(Model.ResponsablePlaneacionNombre)</div>
+                </div>
+
+                <div class="print-cell">
+                    <div class="print-label">Fecha solicitud</div>
+                    <div class="print-value">@Model.FechaSolicitud.ToString("dd/MM/yyyy")</div>
+                </div>
+
+                <div class="print-cell">
+                    <div class="print-label">Fecha requerida</div>
+                    <div class="print-value">@Fecha(Model.FechaRequerida)</div>
+                </div>
+
+                <div class="print-cell">
+                    <div class="print-label">Inicio planeado</div>
+                    <div class="print-value">@FechaHora(Model.FechaInicioPlaneada)</div>
+                </div>
+
+                <div class="print-cell">
+                    <div class="print-label">Fin planeado</div>
+                    <div class="print-value">@FechaHora(Model.FechaFinPlaneada)</div>
+                </div>
+
+                <div class="print-cell">
+                    <div class="print-label">Fecha impresión</div>
+                    <div class="print-value">@DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+            </div>
+
+            <div class="print-metrics">
+                <div class="print-metric">
+                    <div class="print-metric-label">Renglones</div>
+                    <div class="print-metric-value">@totalRenglones</div>
+                </div>
+
+                <div class="print-metric">
+                    <div class="print-metric-label">Total piezas</div>
+                    <div class="print-metric-value">@totalPiezas.ToString("N0")</div>
+                </div>
+
+                <div class="print-metric">
+                    <div class="print-metric-label">Horas planeadas</div>
+                    <div class="print-metric-value">@totalHoras.ToString("N2")</div>
+                </div>
+
+                <div class="print-metric">
+                    <div class="print-metric-label">MP requerida kg</div>
+                    <div class="print-metric-value">@totalMp.ToString("N4")</div>
+                </div>
+            </div>
+
+            <div class="print-section-title">Detalle de producción</div>
+            <table class="print-table">
+                <thead>
+                    <tr>
+                        <th style="width:4%;">Ren.</th>
+                        <th style="width:10%;">Referencia</th>
+                        <th style="width:19%;">Descripción</th>
+                        <th style="width:7%;">Cantidad</th>
+                        <th style="width:7%;">Horas</th>
+                        <th style="width:9%;">Máquina</th>
+                        <th style="width:8%;">Molde</th>
+                        <th style="width:7%;">Color</th>
+                        <th style="width:11%;">Material</th>
+                        <th style="width:7%;">MP kg</th>
+                        <th style="width:8%;">Emb.</th>
+                        <th style="width:7%;">Cant. emb.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Detalles != null && Model.Detalles.Any())
+                    {
+                        foreach (var d in Model.Detalles)
+                        {
+                            var asignacion = d.AsignacionesMaquina?.FirstOrDefault();
+
+                            <tr>
+                                <td>@d.Renglon</td>
+                                <td>@Valor(d.ReferenciaSAP)</td>
+                                <td>@Valor(d.DesignacionDescripcionSAP)</td>
+                                <td>@d.CantidadPiezas.ToString("N0")</td>
+                                <td>@Decimal2(d.HorasPlaneadas)</td>
+                                <td>@Valor(asignacion?.Maquina)</td>
+                                <td>@Valor(d.Molde ?? asignacion?.Molde)</td>
+                                <td>@Valor(d.Color)</td>
+                                <td>
+                                    <strong>@Valor(d.MaterialCodigo)</strong><br />
+                                    @Valor(d.MaterialDescripcion)
+                                </td>
+                                <td>@Decimal4(d.CantidadMpKg)</td>
+                                <td>
+                                    <strong>@Valor(d.EmbalajeCodigo)</strong><br />
+                                    @Valor(d.EmbalajeDescripcion)
+                                </td>
+
+                                <td>@Decimal4(d.CantidadEmbalajes)</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="12">No hay renglones registrados.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="print-section-title">Notas generales</div>
+            <div class="print-notes">
+                @Valor(Model.NotasGenerales)
+            </div>
+
+            <div class="print-footer">
+                <div>
+                    Documento generado desde ERP QUELL.
+                </div>
+                <div>
+                    Impreso: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        function imprimirOF() {
+            window.print();
+        }
+    </script>
+</body>
+</html>

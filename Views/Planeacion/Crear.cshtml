@@ -280,7 +280,7 @@
                         Nueva OF / Planeación
                     </h1>
                     <p>
-                        Captura la OF recibida por Dirección. Los datos técnicos se autollenan por parte, pero quedan editables.
+                        Captura la OF recibida por Dirección. Los datos técnicos se autollenan desde catálogo maestro y quedan protegidos.
                     </p>
                 </div>
 
@@ -312,30 +312,39 @@
                 </div>
 
                 <div class="erp-card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <input asp-for="FolioSolicitud" type="hidden" />
-                        </div>
 
-                        <div class="col-md-3">
+                    <input asp-for="FolioSolicitud" type="hidden" />
+
+                    <div class="row g-3 align-items-start">
+                        <div class="col-md-4">
                             <label class="erp-label">OF recibida de Dirección</label>
-                            <input asp-for="NumeroOFRecibida" class="form-control erp-input" placeholder="Ej. OF-0001/26" />
-                            <div class="small-help">Se sugiere automáticamente, pero puedes modificarlo antes de guardar.</div>
+                            <input asp-for="NumeroOFRecibida"
+                                   class="form-control erp-input"
+                                   placeholder="Ej. OF-0001/26" />
+                            <div class="small-help">
+                                Se sugiere automáticamente, pero puedes modificarlo antes de guardar.
+                            </div>
                         </div>
 
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="erp-label">Fecha solicitud</label>
-                            <input asp-for="FechaSolicitud" type="date" class="form-control erp-input" />
+                            <input asp-for="FechaSolicitud"
+                                   type="date"
+                                   class="form-control erp-input" />
                         </div>
 
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="erp-label">Fecha requerida</label>
-                            <input asp-for="FechaRequerida" type="date" class="form-control erp-input" />
+                            <input asp-for="FechaRequerida"
+                                   type="date"
+                                   class="form-control erp-input" />
                         </div>
 
                         <div class="col-md-4">
                             <label class="erp-label">Cliente</label>
-                            <select asp-for="ClienteID" class="form-select erp-select" id="ClienteID">
+                            <select asp-for="ClienteID"
+                                    class="form-select erp-select"
+                                    id="ClienteID">
                                 <option value="">-- Selecciona cliente --</option>
                                 @foreach (var c in Model.Clientes)
                                 {
@@ -343,22 +352,31 @@
                                 }
                             </select>
                             <input asp-for="ClienteNombre" type="hidden" id="ClienteNombre" />
-                            <div class="small-help">Al seleccionar cliente se cargarán solo sus partes.</div>
+                            <div class="small-help">
+                                Al seleccionar cliente se cargarán solo sus partes.
+                            </div>
                         </div>
 
                         <div class="col-md-4">
                             <label class="erp-label">Inicio planeado</label>
-                            <input asp-for="FechaInicioPlaneada" type="datetime-local" class="form-control erp-input" />
+                            <input asp-for="FechaInicioPlaneada"
+                                   type="datetime-local"
+                                   class="form-control erp-input" />
                         </div>
 
                         <div class="col-md-4">
                             <label class="erp-label">Fin planeado</label>
-                            <input asp-for="FechaFinPlaneada" type="datetime-local" class="form-control erp-input" />
+                            <input asp-for="FechaFinPlaneada"
+                                   type="datetime-local"
+                                   class="form-control erp-input" />
                         </div>
 
                         <div class="col-12">
                             <label class="erp-label">Notas generales</label>
-                            <textarea asp-for="NotasGenerales" class="form-control erp-textarea" rows="2" placeholder="Comentarios generales de Planeación..."></textarea>
+                            <textarea asp-for="NotasGenerales"
+                                      class="form-control erp-textarea"
+                                      rows="2"
+                                      placeholder="Comentarios generales de Planeación..."></textarea>
                         </div>
                     </div>
                 </div>
@@ -591,7 +609,7 @@
                                             </div>
 
                                             <div class="col-md-2">
-                                                <label class="erp-label">Fecha tentativa</label>
+                                                <label class="erp-label">Fecha </label>
                                                 <input name="Detalles[@i].AsignacionesMaquina[0].FechaProgramadaTentativa" type="date" class="form-control erp-input" />
                                             </div>
 
@@ -989,33 +1007,65 @@
                     }
                 });
 
-                document.addEventListener('input', function (e) {
-                    if (e.target.classList.contains('buscador-parte-input')) {
-                        filtrarPartesEnRenglon(e.target);
-                        return;
-                    }
+                        const timersValidacionAlmacen = new WeakMap();
 
-                    if (
-                        e.target.classList.contains('cantidad-input') ||
-                        e.target.classList.contains('horas-input') ||
-                        e.target.classList.contains('objetivo-input') ||
-                        e.target.classList.contains('piezas-embalaje-input') ||
-                        e.target.classList.contains('peso-input')
-                    ) {
-                        const card = e.target.closest('.renglon-item');
-                        calcularRenglon(card);
-                        limpiarValidacionAlmacen(card);
-                    }
-
-                           if (e.target.classList.contains('cantidad-input')) {
-            const card = e.target.closest('.renglon-item');
-            const asignada = card.querySelector('.cantidad-asignada-input');
-
-            if (asignada && e.target.value && Number(e.target.value) > 0) {
-                asignada.value = e.target.value;
+        document.addEventListener('input', function (e) {
+            if (e.target.classList.contains('buscador-parte-input')) {
+                filtrarPartesEnRenglon(e.target);
+                return;
             }
+
+            if (
+                e.target.classList.contains('cantidad-input') ||
+                e.target.classList.contains('horas-input') ||
+                e.target.classList.contains('objetivo-input') ||
+                e.target.classList.contains('piezas-embalaje-input') ||
+                e.target.classList.contains('peso-input')
+            ) {
+                const card = e.target.closest('.renglon-item');
+
+                calcularRenglon(card);
+                limpiarValidacionAlmacen(card);
+
+                if (e.target.classList.contains('cantidad-input')) {
+                    const asignada = card.querySelector('.cantidad-asignada-input');
+
+                    if (asignada && e.target.value && Number(e.target.value) > 0) {
+                        asignada.value = e.target.value;
+                    }
+                }
+
+                programarValidacionAutomatica(card);
+            }
+        });
+
+        function programarValidacionAutomatica(card) {
+            if (!card) return;
+
+            const parteId = getValue(card, '.parte-select');
+            const cantidad = getValue(card, '.cantidad-input');
+
+            if (!parteId || Number(parteId) <= 0) {
+                return;
+            }
+
+            if (!cantidad || Number(cantidad) <= 0) {
+                return;
+            }
+
+            const timerAnterior = timersValidacionAlmacen.get(card);
+
+            if (timerAnterior) {
+                clearTimeout(timerAnterior);
+            }
+
+            const nuevoTimer = setTimeout(async function () {
+                        const yaTeniaValidacion = getValue(card, '.almacen-validado-input') === 'true';
+        await validarAlmacenRenglon(card, !yaTeniaValidacion);
+            }, 650);
+
+            timersValidacionAlmacen.set(card, nuevoTimer);
         }
-                });
 
                 async function cargarInfoParte(select) {
                     const parteId = select.value;
@@ -1076,7 +1126,7 @@
                         }
 
                         await calcularRenglon(card);
-                        await validarAlmacenRenglon(card, false);
+                        await validarAlmacenRenglon(card, true);
                     } catch (err) {
                         console.error(err);
                         alert('No se pudo cargar la información técnica de la parte.');
@@ -1263,35 +1313,50 @@
                     }
                 }
 
-                function aplicarResultadoAlmacen(card, data) {
-                    setValue(card, '.origen-surtido-input', data.decision);
-                    setValue(card, '.pt-disponible-input', data.pt?.disponible ?? 0);
-                    setValue(card, '.mp-disponible-input', data.mp?.disponibleKg ?? 0);
-                    setValue(card, '.mensaje-almacen-input', data.mensaje);
-                    setValue(card, '.almacen-validado-input', 'true');
+                        function aplicarResultadoAlmacen(card, data) {
+            setValue(card, '.origen-surtido-input', data.decision);
+            setValue(card, '.pt-disponible-input', data.pt?.disponible ?? 0);
+            setValue(card, '.mp-disponible-input', data.mp?.disponibleKg ?? 0);
+            setValue(card, '.mensaje-almacen-input', data.mensaje);
+            setValue(card, '.almacen-validado-input', 'true');
 
-                    if (data.mp?.materialId) {
-                        setValue(card, '.material-id-input', data.mp.materialId);
-                    }
+            if (data.mp?.materialId) {
+                setValue(card, '.material-id-input', data.mp.materialId);
+            }
 
-                    const box = card.querySelector('.almacen-status');
-                    const text = card.querySelector('.almacen-status-text');
+            card.dataset.origenSurtido = data.decision || '';
 
-                    if (!box || !text) return;
+            const box = card.querySelector('.almacen-status');
+            const text = card.querySelector('.almacen-status-text');
 
-                    box.classList.remove('pt', 'mp', 'error', 'visible');
+            if (!box || !text) return;
 
-                    let clase = 'error';
+            box.classList.remove('pt', 'mp', 'error', 'visible');
 
-                    if (data.decision === 'PT') {
-                        clase = 'pt';
-                    } else if (data.decision === 'MP') {
-                        clase = 'mp';
-                    }
+            let clase = 'error';
 
-                    box.classList.add(clase, 'visible');
-                    text.innerHTML = construirResumenAlmacen(data);
-                }
+            if (data.decision === 'PT') {
+                clase = 'pt';
+                desactivarControlesMP(card, true);
+            } else if (data.decision === 'MP') {
+                clase = 'mp';
+                desactivarControlesMP(card, false);
+            } else {
+                clase = 'error';
+                desactivarControlesMP(card, true);
+            }
+
+            box.classList.add(clase, 'visible');
+            text.innerHTML = construirResumenAlmacen(data);
+        }
+
+        function desactivarControlesMP(card, desactivar) {
+            if (!card) return;
+
+            card.querySelectorAll('.mp-only').forEach(function (el) {
+                el.disabled = desactivar;
+            });
+        }
 
                 function limpiarValidacionAlmacen(card) {
                     if (!card) return;
@@ -1314,40 +1379,131 @@
                     }
                 }
 
-                function construirResumenAlmacen(data) {
-                    const pt = data.pt || {};
-                    const mp = data.mp || {};
+                        function construirResumenAlmacen(data) {
+            const pt = data.pt || {};
+            const mp = data.mp || {};
+            const embalaje = data.embalaje || {};
 
-                    let html = `<div>${escapeHtml(data.mensaje)}</div>`;
+            let html = `<div class="fw-bold mb-2">${escapeHtml(data.mensaje)}</div>`;
 
-                    html += `
-                        <div class="mt-2">
-                            <strong>PT:</strong>
-                            Disponible ${escapeHtml(pt.disponible ?? 0)} /
-                            Requerido ${escapeHtml(pt.requerido ?? 0)}
+            if (data.decision === 'PT') {
+                html += `
+                    <div class="alert alert-success rounded-4 mb-2">
+                        <div class="fw-bold">
+                            <i class="fa-solid fa-boxes-stacked me-1"></i>
+                            Hay producto terminado disponible
                         </div>
-                    `;
-
-                    if (data.decision !== 'PT') {
-                        html += `
-                            <div>
-                                <strong>MP:</strong>
-                                ${escapeHtml(mp.codigo ?? '')} - ${escapeHtml(mp.material ?? '')}
-                                <br />
-                                Disponible ${escapeHtml(mp.disponibleKg ?? 0)} ${escapeHtml(mp.unidad ?? '')} /
-                                Requerido ${escapeHtml(mp.requeridoKg ?? 0)} kg
-                            </div>
-                        `;
-                    }
-
-                    html += `
+                        <div>
+                            Disponible: <strong>${escapeHtml(pt.disponible ?? 0)}</strong>
+                            /
+                            Requerido: <strong>${escapeHtml(pt.requerido ?? 0)}</strong>
+                        </div>
                         <div class="mt-1">
-                            <strong>Decisión:</strong> ${escapeHtml(data.decision)}
+                            Se puede surtir desde Producto Terminado. No es necesario validar Materia Prima para este renglón.
                         </div>
-                    `;
+                    </div>
+                `;
+            } else if (data.decision === 'MP') {
+                html += `
+                    <div class="alert alert-primary rounded-4 mb-2">
+                        <div class="fw-bold">
+                            <i class="fa-solid fa-industry me-1"></i>
+                            No hay PT suficiente, pero sí hay Materia Prima
+                        </div>
+                        <div>
+                            PT disponible: <strong>${escapeHtml(pt.disponible ?? 0)}</strong>
+                            /
+                            PT requerido: <strong>${escapeHtml(pt.requerido ?? 0)}</strong>
+                        </div>
+                        <hr />
+                        <div>
+                            <strong>MP:</strong>
+                            ${escapeHtml(mp.codigo ?? '')} - ${escapeHtml(mp.material ?? '')}
+                            <br />
+                            Disponible:
+                            <strong>${escapeHtml(mp.disponibleKg ?? 0)} ${escapeHtml(mp.unidad ?? '')}</strong>
+                            /
+                            Requerido:
+                            <strong>${escapeHtml(mp.requeridoKg ?? 0)} kg</strong>
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="alert alert-danger rounded-4 mb-2">
+                        <div class="fw-bold">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                            No hay existencia suficiente
+                        </div>
+                        <div>
+                            PT disponible: <strong>${escapeHtml(pt.disponible ?? 0)}</strong>
+                            /
+                            PT requerido: <strong>${escapeHtml(pt.requerido ?? 0)}</strong>
+                        </div>
+                        <hr />
+                        <div>
+                            <strong>MP:</strong>
+                            ${escapeHtml(mp.codigo ?? '')} - ${escapeHtml(mp.material ?? '')}
+                            <br />
+                            Disponible:
+                            <strong>${escapeHtml(mp.disponibleKg ?? 0)} ${escapeHtml(mp.unidad ?? '')}</strong>
+                            /
+                            Requerido:
+                            <strong>${escapeHtml(mp.requeridoKg ?? 0)} kg</strong>
+                        </div>
+                        <div class="mt-2">
+                            No se debe guardar la OF hasta revisar con Almacén o Compras.
+                        </div>
+                    </div>
+                `;
+            }
 
-                    return html;
-                }
+                    let claseEmbalaje = 'alert-secondary';
+        let tituloEmbalaje = 'Validación de embalaje';
+
+        if (embalaje.semaforo === 'VERDE' || embalaje.suficiente === true) {
+            claseEmbalaje = 'alert-success';
+            tituloEmbalaje = 'Embalaje suficiente';
+        } else if (embalaje.semaforo === 'AMARILLO') {
+            claseEmbalaje = 'alert-warning';
+            tituloEmbalaje = 'Embalaje en nivel de aviso';
+        } else {
+            claseEmbalaje = 'alert-danger';
+            tituloEmbalaje = 'Embalaje por revisar';
+        }
+
+        html += `
+            <div class="alert ${claseEmbalaje} rounded-4 mb-2">
+                <div class="fw-bold">
+                    <i class="fa-solid fa-box-open me-1"></i>
+                    ${escapeHtml(tituloEmbalaje)}
+                </div>
+                <div>
+                    <strong>${escapeHtml(embalaje.codigo ?? '')}</strong>
+                    ${escapeHtml(embalaje.nombre ?? '')}
+                </div>
+                <div>
+                    Disponible:
+                    <strong>${escapeHtml(embalaje.disponible ?? 0)} ${escapeHtml(embalaje.unidad ?? '')}</strong>
+                    /
+                    Requerido:
+                    <strong>${escapeHtml(embalaje.requerido ?? 0)} ${escapeHtml(embalaje.unidad ?? '')}</strong>
+                </div>
+                <div class="mt-1">
+                    ${escapeHtml(embalaje.mensaje ?? 'Validación de embalaje pendiente.')}
+                </div>
+            </div>
+        `;
+
+            html += `
+                <div class="mt-2">
+                    <strong>Decisión del sistema:</strong> ${escapeHtml(data.decision)}
+                </div>
+            `;
+
+            return html;
+        }
+
 
                 function mostrarModalAlmacen(data) {
                     const modalTitle = document.getElementById('modalAlmacenTitle');

@@ -110,6 +110,22 @@ namespace ERP.NSQuell.Models
         public string? MensajeAlmacen { get; set; }
 
 
+        public decimal? CostoMPUnitario { get; set; }
+        public decimal? CostoMPTotal { get; set; }
+        public string? MonedaCostoMP { get; set; }
+        public string? UnidadCostoMP { get; set; }
+
+        public decimal? CostoEmbalajeUnitario { get; set; }
+        public decimal? CostoEmbalajeTotal { get; set; }
+        public string? MonedaCostoEmbalaje { get; set; }
+        public string? UnidadCostoEmbalaje { get; set; }
+
+        public decimal? CostoTotalRenglon { get; set; }
+
+        public decimal? PrecioVentaUnitario { get; set; }
+        public decimal? VentaTotalRenglon { get; set; }
+        public decimal? UtilidadEstimadaRenglon { get; set; }
+
         public List<PlaneacionOFAsignacionMaquinaCrearVm> AsignacionesMaquina { get; set; } = new();
     }
 
@@ -161,6 +177,13 @@ namespace ERP.NSQuell.Models
 
         public string? ResponsablePlaneacionNombre { get; set; }
 
+        public decimal? CostoMPTotal { get; set; }
+        public decimal? CostoEmbalajeTotal { get; set; }
+        public decimal? CostoTotalOF { get; set; }
+        public decimal? VentaTotalOF { get; set; }
+        public decimal? UtilidadEstimadaOF { get; set; }
+        public string? MonedaCosto { get; set; }
+
         public List<PlaneacionOFDetalleRenglonVm> Detalles { get; set; } = new();
         public List<PlaneacionOFHistorialVm> Historial { get; set; } = new();
     }
@@ -206,6 +229,23 @@ namespace ERP.NSQuell.Models
         public TimeSpan? Arranque { get; set; }
 
         public string? Notas { get; set; }
+
+
+        public decimal? CostoMPUnitario { get; set; }
+        public decimal? CostoMPTotal { get; set; }
+        public string? MonedaCostoMP { get; set; }
+        public string? UnidadCostoMP { get; set; }
+
+        public decimal? CostoEmbalajeUnitario { get; set; }
+        public decimal? CostoEmbalajeTotal { get; set; }
+        public string? MonedaCostoEmbalaje { get; set; }
+        public string? UnidadCostoEmbalaje { get; set; }
+
+        public decimal? CostoTotalRenglon { get; set; }
+
+        public decimal? PrecioVentaUnitario { get; set; }
+        public decimal? VentaTotalRenglon { get; set; }
+        public decimal? UtilidadEstimadaRenglon { get; set; }
 
         public List<PlaneacionOFAsignacionMaquinaVm> AsignacionesMaquina { get; set; } = new();
     }
