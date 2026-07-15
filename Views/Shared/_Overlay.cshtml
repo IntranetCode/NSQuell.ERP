@@ -1,9 +1,11 @@
 ﻿@* Overlay global *@
 <div id="app-overlay" class="app-overlay is-hidden" aria-hidden="true" aria-live="polite">
-    <img src="@Url.Content("~/Imagenes/overlay.gif")" alt="Cargando…" />
-    <p>Cargando…</p>
+    <div class="app-overlay-content">
+        <img src="@Url.Content("~/Imagenes/new_overlay.gif")?v=2" alt="Cargando módulo" />
+        <p>Cargando módulo...</p>
+        <span>Preparando información del sistema</span>
+    </div>
 </div>
-
 
 <style>
     .app-overlay {
@@ -11,70 +13,116 @@
         inset: 0;
         width: 100%;
         height: 100%;
-        background: rgba(255,255,255,0.9);
+        background: rgba(255, 255, 255, 0.92);
+        display: grid;
+        place-items: center;
+        z-index: 9999;
+        transition: opacity .25s ease, visibility .25s ease;
+    }
+
+    .app-overlay.is-hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    .app-overlay-content {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        z-index: 9999;
-        transition: opacity .25s ease;
+
+        width: auto;
+        min-width: 210px;
+        max-width: 280px;
+
+        padding: 1.35rem 1.65rem;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(41, 67, 95, 0.12);
+        box-shadow: 0 18px 50px rgba(41, 67, 95, 0.16);
+        backdrop-filter: blur(10px);
+        text-align: center;
+
+        transform: translateY(-8px);
     }
 
-        .app-overlay.is-hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
+    .app-overlay img {
+        width: 115px;
+        height: 115px;
+        max-width: 115px;
+        max-height: 115px;
+        object-fit: contain;
+        display: block;
+    }
 
-        .app-overlay img {
-            max-width: 150px;
-            max-height: 150px;
-            object-fit: contain;
-            image-rendering: crisp-edges;
-        }
+    .app-overlay p {
+        margin: 10px 0 0;
+        font-size: .96rem;
+        font-weight: 800;
+        color: #0D1929;
+        line-height: 1.2;
+    }
 
-        .app-overlay p {
-            margin-top: 12px;
-            font-size: 1.05rem;
-            font-weight: 500;
-            color: #2c3e50;
-        }
+    .app-overlay span {
+        display: block;
+        margin-top: 3px;
+        font-size: .74rem;
+        font-weight: 700;
+        color: #64748B;
+        line-height: 1.25;
+    }
 
+    html[data-nsq-theme="dark"] .app-overlay {
+        background: rgba(13, 25, 41, 0.88);
+    }
+
+    html[data-nsq-theme="dark"] .app-overlay-content {
+        background: rgba(13, 25, 41, 0.82);
+        border-color: rgba(255, 255, 255, 0.10);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+    }
+
+    html[data-nsq-theme="dark"] .app-overlay p {
+        color: #FFFFFF;
+    }
+
+    html[data-nsq-theme="dark"] .app-overlay span {
+        color: #CBD5E1;
+    }
 </style>
 
 <script>
-                (function () {
-      const overlay = document.getElementById('app-overlay');
-      if (!overlay) return;
+    (function () {
+        const overlay = document.getElementById('app-overlay');
 
-      const show = () => overlay.classList.remove('is-hidden');
-      const hide = () => overlay.classList.add('is-hidden');
+        if (!overlay) return;
 
-      // Exponer por si quieres usarlo manualmente
-      window.AppOverlay = { show, hide };
+        const show = () => overlay.classList.remove('is-hidden');
+        const hide = () => overlay.classList.add('is-hidden');
 
-      // Mostrar overlay al hacer clic en:
-      //  - tarjetas tipo .action-card[data-href]
-      //  - cualquier elemento con [data-overlay-trigger]
-      document.addEventListener('click', function (e) {
-        const trigger = e.target.closest('.action-card[data-href], [data-overlay-trigger]');
-        if (!trigger) return;
+        window.AppOverlay = { show, hide };
 
-        // Ignorar nuevas pestañas/descargas/modificadores
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-        if (trigger.tagName && trigger.tagName.toLowerCase() === 'a') {
-          if (trigger.target === '_blank' || trigger.hasAttribute('download')) return;
-          const href = trigger.getAttribute('href');
-          if (!href || href.startsWith('#')) return;
-        }
+        document.addEventListener('click', function (e) {
+            const trigger = e.target.closest('.action-card[data-href], [data-overlay-trigger]');
 
-        show();
-      }, true);
+            if (!trigger) return;
 
-      // Si la página vuelve desde el BFCache, ocultar overlay
-      window.addEventListener('pageshow', (evt) => { if (evt.persisted) hide(); });
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+
+            if (trigger.tagName && trigger.tagName.toLowerCase() === 'a') {
+                if (trigger.target === '_blank' || trigger.hasAttribute('download')) return;
+
+                const href = trigger.getAttribute('href');
+
+                if (!href || href.startsWith('#')) return;
+            }
+
+            show();
+        }, true);
+
+        window.addEventListener('pageshow', function (evt) {
+            if (evt.persisted) hide();
+        });
     })();
-
 </script>
-
-
-

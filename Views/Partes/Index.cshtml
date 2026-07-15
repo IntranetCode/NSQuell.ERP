@@ -283,7 +283,7 @@
         }
 
         .partes-table thead th {
-            padding: .9rem .85rem;
+            padding: .95rem 1rem;
             background: #0D1929;
             color: #fff;
             font-size: .72rem;
@@ -294,7 +294,7 @@
         }
 
         .partes-table tbody td {
-            padding: .85rem;
+            padding: 1rem;
             border-top: 1px solid rgba(41, 67, 95, .10);
             color: #0D1929;
             vertical-align: middle;
@@ -305,29 +305,25 @@
             background: #FFF4E8;
         }
 
-        .col-parte { width: 18%; }
-        .col-cliente { width: 17%; }
-        .col-desc { width: 23%; }
-        .col-maq { width: 12%; }
-        .col-molde { width: 13%; }
-        .col-stock { width: 8%; }
-        .col-estado { width: 8%; }
-        .col-actions { width: 15%; }
+        .col-parte { width: 22%; }
+        .col-info { width: 44%; }
+        .col-control { width: 20%; }
+        .col-actions { width: 14%; }
 
         .partes-code-cell {
             display: flex;
             align-items: center;
-            gap: .7rem;
+            gap: .8rem;
             min-width: 0;
         }
 
         .partes-code-avatar {
-            width: 46px;
-            height: 46px;
-            flex: 0 0 46px;
+            width: 48px;
+            height: 48px;
+            flex: 0 0 48px;
             display: grid;
             place-items: center;
-            border-radius: 15px;
+            border-radius: 16px;
             background: linear-gradient(135deg, #FF8200, #DA291C);
             color: #fff;
             font-size: .72rem;
@@ -337,14 +333,13 @@
         }
 
         .partes-code-text,
-        .partes-description,
-        .partes-text-ellipsis,
-        .partes-pill {
+        .partes-info-main,
+        .partes-info-lines {
             min-width: 0;
         }
 
         .partes-code-cell strong,
-        .partes-description strong {
+        .partes-info-title {
             display: block;
             color: #0D1929;
             font-weight: 950;
@@ -373,15 +368,82 @@
             font-weight: 800;
         }
 
-        .partes-pill,
-        .partes-status {
+        .partes-info-title {
+            font-size: .95rem;
+            margin-bottom: .55rem;
+        }
+
+        .partes-info-lines {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .45rem .65rem;
+        }
+
+        .partes-info-line {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            color: #29435F;
+            font-size: .77rem;
+            font-weight: 850;
+        }
+
+        .partes-info-line i {
+            color: #FF8200;
+            width: 14px;
+            flex: 0 0 14px;
+            text-align: center;
+        }
+
+        .partes-info-label {
+            color: #64748B;
+            font-weight: 950;
+            flex: 0 0 auto;
+        }
+
+        .partes-info-value {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .partes-control-stack {
+            display: grid;
+            gap: .48rem;
+            justify-items: start;
+        }
+
+        .partes-control-item {
             max-width: 100%;
+            display: flex;
+            align-items: center;
+            gap: .45rem;
+            min-width: 0;
+        }
+
+        .partes-control-label {
+            min-width: 45px;
+            color: #64748B;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+
+        .partes-pill,
+        .partes-status,
+        .partes-tech-status {
+            max-width: 100%;
+            min-height: 32px;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: .35rem;
-            padding: .42rem .68rem;
+            padding: .38rem .64rem;
             border-radius: 999px;
-            font-size: .74rem;
+            font-size: .72rem;
             font-weight: 950;
             white-space: nowrap;
             overflow: hidden;
@@ -402,10 +464,16 @@
         .partes-status.active { background: #DCFCE7; color: #15803D; border: 1px solid rgba(21, 128, 61, .22); }
         .partes-status.inactive { background: #FEE2E2; color: #B91C1C; border: 1px solid rgba(185, 28, 28, .20); }
 
-        .partes-muted {
-            color: #64748B;
-            font-weight: 800;
-            font-size: .78rem;
+        .partes-tech-status.configured {
+            color: #15803D;
+            background: #DCFCE7;
+            border: 1px solid rgba(21, 128, 61, .22);
+        }
+
+        .partes-tech-status.pending {
+            color: #9A3412;
+            background: #FFEDD5;
+            border: 1px solid rgba(234, 88, 12, .22);
         }
 
         .partes-stock strong,
@@ -414,20 +482,19 @@
             white-space: nowrap;
         }
 
-        .partes-stock strong { color: #0D1929; font-weight: 950; }
-        .partes-stock span { color: #64748B; font-size: .76rem; margin-top: .1rem; }
+        .partes-stock strong { color: #0D1929; font-weight: 950; font-size: .78rem; }
+        .partes-stock span { color: #64748B; font-size: .72rem; margin-top: .05rem; }
 
         .partes-actions-inline {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: .45rem;
-            flex-wrap: wrap;
+            display: grid;
+            justify-content: end;
+            gap: .5rem;
         }
 
         .btn-partes-edit,
         .btn-partes-tech {
             min-height: 36px;
+            width: 132px;
             padding: .5rem .82rem;
             border-radius: 999px;
             font-size: .75rem;
@@ -464,6 +531,18 @@
             text-align: center;
             color: #29435F;
             padding: 2rem;
+        }
+
+        .partes-empty i {
+            display: block;
+            font-size: 2rem;
+            color: #FF8200;
+            margin-bottom: .7rem;
+        }
+
+        .partes-empty strong,
+        .partes-empty span {
+            display: block;
         }
 
         .partes-tech-modal {
@@ -606,7 +685,7 @@
         html[data-nsq-theme="dark"] .partes-tech-modal { background: rgba(13,25,41,.92); border-color: rgba(255,255,255,.08); }
         html[data-nsq-theme="dark"] .partes-table tbody td,
         html[data-nsq-theme="dark"] .partes-code-cell strong,
-        html[data-nsq-theme="dark"] .partes-description strong,
+        html[data-nsq-theme="dark"] .partes-info-title,
         html[data-nsq-theme="dark"] .partes-list-header h2,
         html[data-nsq-theme="dark"] .partes-list-header strong,
         html[data-nsq-theme="dark"] .partes-stat-card strong,
@@ -614,11 +693,16 @@
         html[data-nsq-theme="dark"] .partes-table tbody td { border-top-color: rgba(255,255,255,.08); }
         html[data-nsq-theme="dark"] .partes-table tbody tr:hover td { background: rgba(255,130,0,.08); }
         html[data-nsq-theme="dark"] .form-control-modern { background: #0D1929; color: #fff; border-color: rgba(255,255,255,.10); }
+        html[data-nsq-theme="dark"] .partes-info-line,
+        html[data-nsq-theme="dark"] .partes-info-label,
+        html[data-nsq-theme="dark"] .partes-code-cell small,
+        html[data-nsq-theme="dark"] .partes-stock span { color: #CBD5E1; }
 
         @@media (max-width: 1180px) {
             .partes-hero { grid-template-columns: 1fr; }
             .partes-hero-left { min-height: 290px; }
             .partes-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .partes-table { min-width: 980px; }
         }
 
         @@media (max-width: 820px) {
@@ -627,7 +711,8 @@
             .partes-filter-select { min-height: 48px; border-right: 0; border-bottom: 1px solid rgba(41, 67, 95, .12); }
             .partes-search-input, .partes-search-btn { min-height: 52px; }
             .partes-stats-grid { grid-template-columns: 1fr; }
-            .partes-table { min-width: 1120px; }
+            .partes-table { min-width: 940px; }
+            .partes-info-lines { grid-template-columns: 1fr; }
         }
     </style>
 }
@@ -715,13 +800,9 @@
             <table class="partes-table">
                 <thead>
                     <tr>
-                        <th class="col-parte">Número de parte</th>
-                        <th class="col-cliente">Cliente</th>
-                        <th class="col-desc">Descripción</th>
-                        <th class="col-maq">Máquina</th>
-                        <th class="col-molde">Molde</th>
-                        <th class="col-stock">Stock</th>
-                        <th class="col-estado">Estado</th>
+                        <th class="col-parte">Parte</th>
+                        <th class="col-info">Información de producción</th>
+                        <th class="col-control">Control</th>
                         <th class="col-actions text-end">Acciones</th>
                     </tr>
                 </thead>
@@ -730,7 +811,7 @@
                     @if (!partes.Any())
                     {
                         <tr>
-                            <td colspan="8">
+                            <td colspan="4">
                                 <div class="partes-empty">
                                     <div>
                                         <i class="fas fa-folder-open"></i>
@@ -767,72 +848,87 @@
                                 </td>
 
                                 <td>
-                                    <span class="partes-pill blue" title="@(item.ClienteNombre ?? "Sin cliente")">
-                                        <i class="fas fa-building"></i>
-                                        <span>@(item.ClienteNombre ?? "Sin cliente")</span>
-                                    </span>
-                                </td>
+                                    <div class="partes-info-main">
+                                        <strong class="partes-info-title" title="@item.Descripcion">@item.Descripcion</strong>
 
-                                <td>
-                                    <div class="partes-description">
-                                        <strong title="@item.Descripcion">@item.Descripcion</strong>
+                                        <div class="partes-info-lines">
+                                            <div class="partes-info-line" title="@(item.ClienteNombre ?? "Sin cliente")">
+                                                <i class="fas fa-building"></i>
+                                                <span class="partes-info-label">Cliente:</span>
+                                                <span class="partes-info-value">@(item.ClienteNombre ?? "Sin cliente")</span>
+                                            </div>
+
+                                            <div class="partes-info-line" title="@(item.MaquinaPrincipal ?? "Sin máquina")">
+                                                <i class="fas fa-industry"></i>
+                                                <span class="partes-info-label">Máquina:</span>
+                                                <span class="partes-info-value">@(item.MaquinaPrincipal ?? "Sin máquina")</span>
+                                            </div>
+
+                                            <div class="partes-info-line" title="@(item.MoldePrincipal ?? "Sin molde")">
+                                                <i class="fas fa-cube"></i>
+                                                <span class="partes-info-label">Molde:</span>
+                                                <span class="partes-info-value">@(item.MoldePrincipal ?? "Sin molde")</span>
+                                            </div>
+
+                                            <div class="partes-info-line">
+                                                <i class="fas fa-circle-info"></i>
+                                                <span class="partes-info-label">Estado base:</span>
+                                                <span class="partes-info-value">@(item.Activo ? "Disponible en catálogo" : "Fuera de catálogo")</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </td>
 
                                 <td>
-                                    @if (!string.IsNullOrWhiteSpace(item.MaquinaPrincipal))
-                                    {
-                                        <span class="partes-pill gray" title="@item.MaquinaPrincipal">
-                                            <i class="fas fa-industry"></i>
-                                            <span>@item.MaquinaPrincipal</span>
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="partes-muted">Sin máquina</span>
-                                    }
-                                </td>
-
-                                <td>
-                                    @if (!string.IsNullOrWhiteSpace(item.MoldePrincipal))
-                                    {
-                                        <span class="partes-pill purple" title="@item.MoldePrincipal">
-                                            <i class="fas fa-cube"></i>
-                                            <span>@item.MoldePrincipal</span>
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="partes-muted">Sin molde</span>
-                                    }
-                                </td>
-
-                                <td>
-                                    @if (item.StockConfigurado)
-                                    {
-                                        <div class="partes-stock">
-                                            <strong>Mín: @item.StockMinimo</strong>
-                                            <span>Aviso: @item.StockAviso</span>
+                                    <div class="partes-control-stack">
+                                        <div class="partes-control-item">
+                                            <span class="partes-control-label">Stock</span>
+                                            @if (item.StockConfigurado)
+                                            {
+                                                <div class="partes-stock">
+                                                    <strong>Mín: @item.StockMinimo</strong>
+                                                    <span>Aviso: @item.StockAviso</span>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="partes-pill orange">
+                                                    <i class="fas fa-triangle-exclamation"></i>
+                                                    <span>Sin configurar</span>
+                                                </span>
+                                            }
                                         </div>
-                                    }
-                                    else
-                                    {
-                                        <span class="partes-pill orange">
-                                            <i class="fas fa-triangle-exclamation"></i>
-                                            <span>Sin configurar</span>
-                                        </span>
-                                    }
-                                </td>
 
-                                <td>
-                                    @if (item.Activo)
-                                    {
-                                        <span class="partes-status active"><i class="fas fa-check-circle"></i> Activa</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="partes-status inactive"><i class="fas fa-ban"></i> Inactiva</span>
-                                    }
+                                        <div class="partes-control-item">
+                                            <span class="partes-control-label">Ficha</span>
+                                            @if (item.TieneDatosTecnicos)
+                                            {
+                                                <span class="partes-tech-status configured" data-parte-id="@item.ParteID">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    Configurado
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="partes-tech-status pending" data-parte-id="@item.ParteID">
+                                                    <i class="fas fa-clock"></i>
+                                                    Pendiente
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <div class="partes-control-item">
+                                            <span class="partes-control-label">Estado</span>
+                                            @if (item.Activo)
+                                            {
+                                                <span class="partes-status active"><i class="fas fa-check-circle"></i> Activa</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="partes-status inactive"><i class="fas fa-ban"></i> Inactiva</span>
+                                            }
+                                        </div>
+                                    </div>
                                 </td>
 
                                 <td class="text-end">
@@ -1079,10 +1175,25 @@
 
                     showAlert('success', result.message || 'Datos técnicos guardados correctamente.');
 
+                    const parteId = document.getElementById('dtParteID').value;
+                    const botonDatosTecnicos = document.querySelector(`.btn-partes-tech[data-parte-id="${parteId}"]`);
+
+                    if (botonDatosTecnicos) {
+                        botonDatosTecnicos.classList.add('has-tech');
+                        botonDatosTecnicos.innerHTML = '<i class="fas fa-microscope"></i> Ficha técnica';
+                    }
+
+                    const badgeDatosTecnicos = document.querySelector(`.partes-tech-status[data-parte-id="${parteId}"]`);
+
+                    if (badgeDatosTecnicos) {
+                        badgeDatosTecnicos.classList.remove('pending');
+                        badgeDatosTecnicos.classList.add('configured');
+                        badgeDatosTecnicos.innerHTML = '<i class="fas fa-check-circle"></i> Configurado';
+                    }
+
                     setTimeout(function () {
                         modal.hide();
-                        window.location.reload();
-                    }, 750);
+                    }, 700);
                 } catch (error) {
                     showAlert('danger', 'Ocurrió un error al guardar los datos técnicos.');
                 } finally {

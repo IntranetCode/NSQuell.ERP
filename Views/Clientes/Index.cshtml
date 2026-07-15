@@ -1,0 +1,1183 @@
+@model ERP.NSQuell.Models.ViewModels.ClienteIndexViewModel
+
+@{
+    Layout = "_LayoutClientes";
+    ViewData["Title"] = "Alta de Clientes";
+
+    var clientes = Model.Clientes ?? new List<ERP.NSQuell.Models.ViewModels.ClienteListadoItemViewModel>();
+    var estadoFiltro = (Model.EstadoFiltro ?? "").ToLowerInvariant();
+
+    string etiquetaFiltro = estadoFiltro switch
+    {
+        "activos" => "Clientes activos",
+        "inactivos" => "Clientes inactivos",
+        _ => "Todos los clientes"
+    };
+}
+
+@section Styles {
+    <style>
+        .clientes-page {
+            width: min(100%, 1480px);
+            margin: 0 auto;
+            padding: 1.5rem 1.1rem 4rem;
+            color: #0D1929;
+        }
+
+        .clientes-hero {
+            display: grid;
+            grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
+            min-height: 320px;
+            border-radius: 28px;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(238,244,250,.9));
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 26px 70px rgba(41, 67, 95, .14);
+        }
+
+        .clientes-hero-left {
+            position: relative;
+            padding: 2.4rem 1.65rem;
+            background: linear-gradient(145deg, #0D1929, #1A2A40);
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .clientes-hero-left::after {
+            content: "";
+            position: absolute;
+            right: -62px;
+            top: -62px;
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            border: 1px solid rgba(244, 123, 32, .45);
+        }
+
+        .clientes-hero-icon {
+            width: 62px;
+            height: 62px;
+            border-radius: 20px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 1.25rem;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 16px 28px rgba(244, 123, 32, .32);
+            font-size: 1.45rem;
+        }
+
+        .clientes-hero h1 {
+            margin: 0;
+            font-size: clamp(2.15rem, 4vw, 3.35rem);
+            line-height: 1;
+            letter-spacing: -.06em;
+            font-weight: 950;
+        }
+
+        .clientes-hero p {
+            max-width: 350px;
+            margin: 1.1rem 0 0;
+            color: #DCE8F5;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+
+        .clientes-hero-actions {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            flex-wrap: wrap;
+            margin-top: 1.7rem;
+        }
+
+        .btn-clientes-primary,
+        .btn-clientes-edit,
+        .btn-clientes-state,
+        .btn-clientes-modal-cancel,
+        .btn-clientes-modal-confirm {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            border: 0;
+            text-decoration: none;
+            font-weight: 950;
+            transition: .2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-clientes-primary {
+            min-height: 46px;
+            padding: .82rem 1.2rem;
+            border-radius: 999px;
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 14px 28px rgba(244, 123, 32, .28);
+        }
+
+        .btn-clientes-primary:hover,
+        .btn-clientes-edit:hover,
+        .btn-clientes-modal-confirm:hover {
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .clientes-filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .55rem .85rem;
+            border-radius: 999px;
+            background: rgba(255, 130, 0, .12);
+            border: 1px solid rgba(255, 130, 0, .35);
+            color: #FFB04A;
+            font-weight: 950;
+            font-size: .8rem;
+        }
+
+        .clientes-hero-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 2rem 1.7rem;
+            min-width: 0;
+        }
+
+        .clientes-search-box {
+            display: grid;
+            grid-template-columns: 150px minmax(0, 1fr) 60px;
+            min-height: 56px;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid rgba(41, 67, 95, .14);
+            box-shadow: 0 18px 42px rgba(41, 67, 95, .10);
+        }
+
+        .clientes-filter-select,
+        .clientes-search-input {
+            min-width: 0;
+            border: 0;
+            outline: none;
+            font-weight: 900;
+            color: #29435F;
+            background: #fff;
+        }
+
+        .clientes-filter-select {
+            padding: 0 .8rem;
+            border-right: 1px solid rgba(41, 67, 95, .12);
+        }
+
+        .clientes-search-input {
+            padding: 0 1rem;
+        }
+
+        .clientes-search-btn {
+            border: 0;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            color: #fff;
+            font-size: 1.1rem;
+        }
+
+        .clientes-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: .9rem;
+            margin-top: 1.25rem;
+        }
+
+        .clientes-stat-card {
+            min-height: 72px;
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            padding: .85rem;
+            border-radius: 18px;
+            background: rgba(255,255,255,.9);
+            border: 1px solid rgba(41, 67, 95, .10);
+            box-shadow: 0 14px 30px rgba(41, 67, 95, .09);
+            min-width: 0;
+        }
+
+        .clientes-stat-card strong {
+            display: block;
+            font-size: 1.35rem;
+            line-height: 1;
+            font-weight: 950;
+            color: #0D1929;
+        }
+
+        .clientes-stat-card span {
+            display: block;
+            margin-top: .25rem;
+            font-size: .68rem;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            font-weight: 950;
+            color: #29435F;
+        }
+
+        .clientes-stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            flex: 0 0 auto;
+        }
+
+        .clientes-stat-icon.muted { background: #29435F; }
+        .clientes-stat-icon.green { background: #16A34A; }
+        .clientes-stat-icon.red { background: #DC2626; }
+
+        .clientes-alert {
+            margin-top: 1.25rem;
+            border: 0;
+            border-radius: 18px;
+            padding: .95rem 1.1rem;
+            font-weight: 850;
+            box-shadow: 0 12px 28px rgba(41, 67, 95, .10);
+        }
+
+        .clientes-list-card {
+            margin-top: 1.35rem;
+            border-radius: 24px;
+            overflow: hidden;
+            background: rgba(255,255,255,.96);
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 24px 64px rgba(41, 67, 95, .13);
+        }
+
+        .clientes-list-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.05rem 1.25rem;
+            background: rgba(255,255,255,.92);
+        }
+
+        .clientes-list-header h2 {
+            margin: 0;
+            color: #0D1929;
+            font-size: 1rem;
+            font-weight: 950;
+        }
+
+        .clientes-list-header h2 i {
+            color: #FF8200;
+            margin-right: .45rem;
+        }
+
+        .clientes-list-header strong {
+            color: #0D1929;
+            font-weight: 950;
+            font-size: .82rem;
+            white-space: nowrap;
+        }
+
+        .clientes-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .clientes-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .clientes-table thead th {
+            padding: .9rem .85rem;
+            background: #0D1929;
+            color: #fff;
+            font-size: .72rem;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .clientes-table tbody td {
+            padding: 1rem .85rem;
+            border-top: 1px solid rgba(41, 67, 95, .10);
+            color: #0D1929;
+            vertical-align: middle;
+            font-weight: 800;
+        }
+
+        .clientes-table tbody tr:hover td {
+            background: #FFF4E8;
+        }
+
+        .col-cliente { width: 22%; }
+        .col-info { width: 40%; }
+        .col-control { width: 23%; }
+        .col-actions { width: 15%; }
+
+        .clientes-code-cell {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            min-width: 0;
+        }
+
+        .clientes-code-avatar {
+            width: 46px;
+            height: 46px;
+            flex: 0 0 46px;
+            display: grid;
+            place-items: center;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            color: #fff;
+            font-size: .72rem;
+            font-weight: 950;
+            box-shadow: 0 12px 26px rgba(244, 123, 32, .22);
+            overflow: hidden;
+        }
+
+        .clientes-code-text {
+            min-width: 0;
+        }
+
+        .clientes-code-text strong {
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .clientes-code-text span,
+        .clientes-code-text small {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .clientes-code-text span {
+            color: #FF8200;
+            font-size: .74rem;
+            font-weight: 950;
+        }
+
+        .clientes-code-text small {
+            color: #64748B;
+            font-size: .7rem;
+            font-weight: 800;
+        }
+
+        .clientes-info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: .45rem .9rem;
+            min-width: 0;
+        }
+
+        .clientes-info-title {
+            grid-column: 1 / -1;
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .clientes-mini-line {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            min-width: 0;
+            color: #29435F;
+            font-size: .78rem;
+            font-weight: 850;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .clientes-mini-line i {
+            color: #FF8200;
+            width: 14px;
+            flex: 0 0 auto;
+            text-align: center;
+        }
+
+        .clientes-control-grid {
+            display: grid;
+            gap: .5rem;
+        }
+
+        .clientes-control-row {
+            display: grid;
+            grid-template-columns: 58px minmax(0, 1fr);
+            align-items: center;
+            gap: .55rem;
+        }
+
+        .clientes-control-label {
+            color: #29435F;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .clientes-pill,
+        .clientes-status {
+            max-width: 100%;
+            min-height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .4rem;
+            padding: .42rem .7rem;
+            border-radius: 999px;
+            font-size: .74rem;
+            font-weight: 950;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .clientes-pill span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .clientes-pill.blue {
+            background: #E8F0FB;
+            color: #003A70;
+            border: 1px solid rgba(0, 58, 112, .18);
+        }
+
+        .clientes-pill.gray {
+            background: #EEF4FA;
+            color: #29435F;
+            border: 1px solid rgba(41, 67, 95, .16);
+        }
+
+        .clientes-pill.orange {
+            background: #FFF4E8;
+            color: #C2410C;
+            border: 1px solid rgba(255, 130, 0, .24);
+        }
+
+        .clientes-status.active {
+            background: #DCFCE7;
+            color: #15803D;
+            border: 1px solid rgba(21, 128, 61, .22);
+        }
+
+        .clientes-status.inactive {
+            background: #FEE2E2;
+            color: #B91C1C;
+            border: 1px solid rgba(185, 28, 28, .20);
+        }
+
+        .clientes-muted {
+            color: #64748B;
+            font-weight: 800;
+            font-size: .78rem;
+        }
+
+        .clientes-actions-inline {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: .5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-clientes-edit,
+        .btn-clientes-state {
+            min-height: 36px;
+            padding: .5rem .82rem;
+            border-radius: 999px;
+            font-size: .75rem;
+        }
+
+        .btn-clientes-edit {
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 12px 24px rgba(244, 123, 32, .20);
+        }
+
+        .btn-clientes-state {
+            border: 1px solid rgba(41, 67, 95, .16);
+            background: #fff;
+            color: #29435F;
+        }
+
+        .btn-clientes-state:hover {
+            transform: translateY(-1px);
+            background: #EEF4FA;
+            color: #0D1929;
+        }
+
+        .btn-clientes-state.activate {
+            color: #15803D;
+            border-color: rgba(21, 128, 61, .22);
+            background: #DCFCE7;
+        }
+
+        .btn-clientes-state.deactivate {
+            color: #B91C1C;
+            border-color: rgba(185, 28, 28, .20);
+            background: #FEE2E2;
+        }
+
+        .clientes-empty {
+            min-height: 160px;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            color: #29435F;
+            padding: 2rem;
+        }
+
+        .clientes-empty i {
+            display: block;
+            margin-bottom: .7rem;
+            color: #FF8200;
+            font-size: 2.2rem;
+        }
+
+        .clientes-empty strong {
+            display: block;
+            font-weight: 950;
+            color: #0D1929;
+        }
+
+        .clientes-empty span {
+            display: block;
+            margin-top: .25rem;
+            color: #64748B;
+            font-weight: 800;
+        }
+
+        .clientes-confirm-modal {
+            border: 0;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 30px 90px rgba(13, 25, 41, .35);
+        }
+
+        .clientes-confirm-header {
+            align-items: flex-start;
+            padding: 1.35rem 1.5rem;
+            background:
+                radial-gradient(circle at 92% 18%, rgba(255, 130, 0, .18), transparent 28%),
+                linear-gradient(135deg, #0D1929, #1A2A40);
+            color: #fff;
+        }
+
+        .clientes-confirm-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .35rem .65rem;
+            border-radius: 999px;
+            background: rgba(255, 130, 0, .14);
+            border: 1px solid rgba(255, 130, 0, .30);
+            color: #FFB04A;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .clientes-confirm-header h5 {
+            margin: .65rem 0 0;
+            font-weight: 950;
+            font-size: 1.35rem;
+        }
+
+        .clientes-confirm-body {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            padding: 1.5rem;
+        }
+
+        .clientes-confirm-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            flex: 0 0 auto;
+            font-size: 1.15rem;
+        }
+
+        .clientes-confirm-icon.warning {
+            color: #B91C1C;
+            background: #FEE2E2;
+            border: 1px solid rgba(185, 28, 28, .18);
+        }
+
+        .clientes-confirm-icon.success {
+            color: #15803D;
+            background: #DCFCE7;
+            border: 1px solid rgba(21, 128, 61, .22);
+        }
+
+        .clientes-confirm-body h6 {
+            margin: 0;
+            color: #0D1929;
+            font-weight: 950;
+            font-size: 1rem;
+        }
+
+        .clientes-confirm-body p {
+            margin: .35rem 0 0;
+            color: #64748B;
+            font-weight: 800;
+            line-height: 1.45;
+        }
+
+        .clientes-confirm-footer {
+            padding: 1rem 1.5rem;
+            background: #F8FAFC;
+            border-top: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .btn-clientes-modal-cancel,
+        .btn-clientes-modal-confirm {
+            min-height: 42px;
+            padding: .7rem 1.05rem;
+            border-radius: 999px;
+        }
+
+        .btn-clientes-modal-cancel {
+            background: #fff;
+            color: #29435F;
+            border: 1px solid rgba(41, 67, 95, .16);
+        }
+
+        .btn-clientes-modal-cancel:hover {
+            background: #EEF4FA;
+            color: #0D1929;
+        }
+
+        .btn-clientes-modal-confirm {
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 14px 28px rgba(244, 123, 32, .24);
+        }
+
+        .btn-clientes-modal-confirm.success {
+            background: linear-gradient(135deg, #16A34A, #22C55E);
+            box-shadow: 0 14px 28px rgba(22, 163, 74, .22);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-hero {
+            background: linear-gradient(135deg, rgba(13,25,41,.96), rgba(2,8,16,.92));
+            border-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-list-card,
+        html[data-nsq-theme="dark"] .clientes-list-header,
+        html[data-nsq-theme="dark"] .clientes-stat-card,
+        html[data-nsq-theme="dark"] .clientes-confirm-modal {
+            background: rgba(13,25,41,.92);
+            border-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-table tbody td,
+        html[data-nsq-theme="dark"] .clientes-code-text strong,
+        html[data-nsq-theme="dark"] .clientes-info-title,
+        html[data-nsq-theme="dark"] .clientes-list-header h2,
+        html[data-nsq-theme="dark"] .clientes-list-header strong,
+        html[data-nsq-theme="dark"] .clientes-stat-card strong,
+        html[data-nsq-theme="dark"] .clientes-empty strong,
+        html[data-nsq-theme="dark"] .clientes-confirm-body h6 {
+            color: #fff;
+        }
+
+        html[data-nsq-theme="dark"] .clientes-table tbody td {
+            border-top-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-table tbody tr:hover td {
+            background: rgba(255,130,0,.08);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-filter-select,
+        html[data-nsq-theme="dark"] .clientes-search-input {
+            background: #0D1929;
+            color: #fff;
+        }
+
+        html[data-nsq-theme="dark"] .clientes-search-box {
+            background: #0D1929;
+            border-color: rgba(255,255,255,.10);
+        }
+
+        html[data-nsq-theme="dark"] .btn-clientes-state,
+        html[data-nsq-theme="dark"] .btn-clientes-modal-cancel {
+            background: #101D2F;
+            color: #CBD5E1;
+            border-color: rgba(255,255,255,.10);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-confirm-body p {
+            color: #CBD5E1;
+        }
+
+        html[data-nsq-theme="dark"] .clientes-confirm-footer {
+            background: #101D2F;
+            border-top-color: rgba(255,255,255,.08);
+        }
+
+        @@media (max-width: 1180px) {
+            .clientes-hero {
+                grid-template-columns: 1fr;
+            }
+
+            .clientes-hero-left {
+                min-height: 290px;
+            }
+
+            .clientes-table {
+                min-width: 1120px;
+            }
+        }
+
+        @@media (max-width: 820px) {
+            .clientes-page {
+                padding: 1rem .75rem 3rem;
+            }
+
+            .clientes-search-box {
+                grid-template-columns: 1fr;
+            }
+
+            .clientes-filter-select {
+                min-height: 48px;
+                border-right: 0;
+                border-bottom: 1px solid rgba(41, 67, 95, .12);
+            }
+
+            .clientes-search-input,
+            .clientes-search-btn {
+                min-height: 52px;
+            }
+
+            .clientes-stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+}
+
+<div class="clientes-page">
+    <section class="clientes-hero">
+        <div class="clientes-hero-left">
+            <div class="clientes-hero-icon">
+                <i class="fas fa-handshake"></i>
+            </div>
+
+            <h1>Administración de Clientes</h1>
+
+            <p>
+                Gestiona el catálogo de clientes utilizado para relacionar partes,
+                órdenes y procesos comerciales dentro del sistema.
+            </p>
+
+            <div class="clientes-hero-actions">
+                <a asp-controller="Clientes"
+                   asp-action="Crear"
+                   class="btn-clientes-primary">
+                    <i class="fas fa-plus"></i>
+                    Agregar cliente
+                </a>
+
+                <span class="clientes-filter-chip">
+                    <i class="fas fa-filter"></i>
+                    @etiquetaFiltro
+                </span>
+            </div>
+        </div>
+
+        <div class="clientes-hero-right">
+            <form asp-controller="Clientes" asp-action="Index" method="get" class="clientes-search-form">
+                <div class="clientes-search-box">
+                    <select name="estadoFiltro" class="clientes-filter-select">
+                        <option value="" selected="@(string.IsNullOrWhiteSpace(estadoFiltro) ? "selected" : null)">Todos</option>
+                        <option value="activos" selected="@(estadoFiltro == "activos" ? "selected" : null)">Activos</option>
+                        <option value="inactivos" selected="@(estadoFiltro == "inactivos" ? "selected" : null)">Inactivos</option>
+                    </select>
+
+                    <input type="text"
+                           name="busqueda"
+                           value="@Model.Busqueda"
+                           class="clientes-search-input"
+                           placeholder="Buscar por código, nombre, RFC o contacto..." />
+
+                    <button type="submit" class="clientes-search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+
+            <div class="clientes-stats-grid">
+                <div class="clientes-stat-card">
+                    <div class="clientes-stat-icon muted">
+                        <i class="fas fa-address-book"></i>
+                    </div>
+                    <div>
+                        <strong>@Model.TotalMostrados</strong>
+                        <span>Mostrados</span>
+                    </div>
+                </div>
+
+                <div class="clientes-stat-card">
+                    <div class="clientes-stat-icon green">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div>
+                        <strong>@Model.TotalActivos</strong>
+                        <span>Activos</span>
+                    </div>
+                </div>
+
+                <div class="clientes-stat-card">
+                    <div class="clientes-stat-icon red">
+                        <i class="fas fa-ban"></i>
+                    </div>
+                    <div>
+                        <strong>@Model.TotalInactivos</strong>
+                        <span>Inactivos</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success clientes-alert">
+            <i class="fas fa-check-circle me-2"></i>
+            @TempData["SuccessMessage"]
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger clientes-alert">
+            <i class="fas fa-triangle-exclamation me-2"></i>
+            @TempData["ErrorMessage"]
+        </div>
+    }
+
+    <section class="clientes-list-card">
+        <div class="clientes-list-header">
+            <h2>
+                <i class="fas fa-clipboard-list"></i>
+                Catálogo de clientes
+            </h2>
+
+            <strong>
+                @clientes.Count registro@(clientes.Count == 1 ? "" : "s") encontrado@(clientes.Count == 1 ? "" : "s")
+            </strong>
+        </div>
+
+        <div class="clientes-table-wrap">
+            <table class="clientes-table">
+                <thead>
+                    <tr>
+                        <th class="col-cliente">Cliente</th>
+                        <th class="col-info">Información comercial</th>
+                        <th class="col-control">Control</th>
+                        <th class="col-actions text-end">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (!clientes.Any())
+                    {
+                        <tr>
+                            <td colspan="4">
+                                <div class="clientes-empty">
+                                    <div>
+                                        <i class="fas fa-folder-open"></i>
+                                        <strong>No se encontraron clientes.</strong>
+                                        <span>Registra un nuevo cliente o ajusta los filtros de búsqueda.</span>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var item in clientes)
+                        {
+                            var avatarText = string.IsNullOrWhiteSpace(item.Codigo)
+                                ? "CL"
+                                : item.Codigo.Length > 4
+                                    ? item.Codigo.Substring(0, 4)
+                                    : item.Codigo;
+
+                            <tr>
+                                <td>
+                                    <div class="clientes-code-cell">
+                                        <div class="clientes-code-avatar" title="@item.Codigo">
+                                            @avatarText
+                                        </div>
+
+                                        <div class="clientes-code-text">
+                                            <strong title="@item.Codigo">@item.Codigo</strong>
+                                            <span>ID @item.ClienteID</span>
+
+                                            @if (!string.IsNullOrWhiteSpace(item.Nombre))
+                                            {
+                                                <small title="@item.Nombre">@item.Nombre</small>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="clientes-info-grid">
+                                        <strong class="clientes-info-title" title="@item.Nombre">
+                                            @item.Nombre
+                                        </strong>
+
+                                        @if (!string.IsNullOrWhiteSpace(item.RFC))
+                                        {
+                                            <span class="clientes-mini-line" title="@item.RFC">
+                                                <i class="fas fa-file-invoice"></i>
+                                                RFC: @item.RFC
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="clientes-mini-line">
+                                                <i class="fas fa-file-invoice"></i>
+                                                Sin RFC
+                                            </span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(item.Contacto))
+                                        {
+                                            <span class="clientes-mini-line" title="@item.Contacto">
+                                                <i class="fas fa-user-tie"></i>
+                                                Contacto: @item.Contacto
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="clientes-mini-line">
+                                                <i class="fas fa-user-tie"></i>
+                                                Sin contacto
+                                            </span>
+                                        }
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="clientes-control-grid">
+                                        <div class="clientes-control-row">
+                                            <span class="clientes-control-label">Estado</span>
+
+                                            @if (item.Activo)
+                                            {
+                                                <span class="clientes-status active">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    Activo
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="clientes-status inactive">
+                                                    <i class="fas fa-ban"></i>
+                                                    Inactivo
+                                                </span>
+                                            }
+                                        </div>
+
+                                        <div class="clientes-control-row">
+                                            <span class="clientes-control-label">RFC</span>
+
+                                            @if (!string.IsNullOrWhiteSpace(item.RFC))
+                                            {
+                                                <span class="clientes-pill blue">
+                                                    <i class="fas fa-check"></i>
+                                                    Registrado
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="clientes-pill orange">
+                                                    <i class="fas fa-triangle-exclamation"></i>
+                                                    Pendiente
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="clientes-actions-inline">
+                                        <a asp-controller="Clientes"
+                                           asp-action="Editar"
+                                           asp-route-id="@item.ClienteID"
+                                           class="btn-clientes-edit">
+                                            <i class="fas fa-pencil-alt"></i>
+                                            Editar
+                                        </a>
+
+                                        <form asp-controller="Clientes"
+                                              asp-action="CambiarEstado"
+                                              asp-route-id="@item.ClienteID"
+                                              method="post"
+                                              class="d-inline clientes-state-form"
+                                              data-cliente="@item.Nombre"
+                                              data-activo="@item.Activo.ToString().ToLowerInvariant()">
+                                            @Html.AntiForgeryToken()
+
+                                            <button type="submit"
+                                                    class="btn-clientes-state @(item.Activo ? "deactivate" : "activate")">
+                                                @if (item.Activo)
+                                                {
+                                                    <i class="fas fa-ban"></i>
+                                                    <span>Desactivar</span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="fas fa-rotate-left"></i>
+                                                    <span>Reactivar</span>
+                                                }
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="modal fade" id="modalCambiarEstadoCliente" tabindex="-1" aria-labelledby="modalCambiarEstadoClienteLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content clientes-confirm-modal">
+                <div class="modal-header clientes-confirm-header">
+                    <div>
+                        <span class="clientes-confirm-kicker">
+                            <i class="fas fa-shield-alt"></i>
+                            Confirmación
+                        </span>
+
+                        <h5 class="modal-title" id="modalCambiarEstadoClienteLabel">
+                            Cambiar estado del cliente
+                        </h5>
+                    </div>
+
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body clientes-confirm-body">
+                    <div class="clientes-confirm-icon" id="clienteConfirmIcon">
+                        <i class="fas fa-question"></i>
+                    </div>
+
+                    <div>
+                        <h6 id="clienteConfirmTitulo">Confirmar acción</h6>
+                        <p id="clienteConfirmTexto">
+                            ¿Seguro que deseas cambiar el estado de este cliente?
+                        </p>
+                    </div>
+                </div>
+
+                <div class="modal-footer clientes-confirm-footer">
+                    <button type="button" class="btn-clientes-modal-cancel" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i>
+                        Cancelar
+                    </button>
+
+                    <button type="button" class="btn-clientes-modal-confirm" id="btnConfirmarCambioEstadoCliente">
+                        <i class="fas fa-check"></i>
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalElement = document.getElementById('modalCambiarEstadoCliente');
+            const btnConfirmar = document.getElementById('btnConfirmarCambioEstadoCliente');
+            const titulo = document.getElementById('clienteConfirmTitulo');
+            const texto = document.getElementById('clienteConfirmTexto');
+            const icono = document.getElementById('clienteConfirmIcon');
+
+            let formularioPendiente = null;
+
+            if (!modalElement || !btnConfirmar || !titulo || !texto || !icono) {
+                return;
+            }
+
+            const modal = new bootstrap.Modal(modalElement);
+
+            document.querySelectorAll('.clientes-state-form').forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    event.preventDefault();
+
+                    formularioPendiente = form;
+
+                    const nombre = form.getAttribute('data-cliente') || 'este cliente';
+                    const activo = form.getAttribute('data-activo') === 'true';
+
+                    icono.classList.remove('warning', 'success');
+                    btnConfirmar.classList.remove('success');
+
+                    if (activo) {
+                        titulo.textContent = 'Desactivar cliente';
+                        texto.textContent = `¿Seguro que deseas desactivar el cliente "${nombre}"? El cliente ya no aparecerá como disponible para nuevos procesos.`;
+                        icono.classList.add('warning');
+                        icono.innerHTML = '<i class="fas fa-ban"></i>';
+                        btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Sí, desactivar';
+                    } else {
+                        titulo.textContent = 'Reactivar cliente';
+                        texto.textContent = `¿Seguro que deseas reactivar el cliente "${nombre}"? El cliente volverá a estar disponible dentro del catálogo.`;
+                        icono.classList.add('success');
+                        icono.innerHTML = '<i class="fas fa-rotate-left"></i>';
+                        btnConfirmar.classList.add('success');
+                        btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Sí, reactivar';
+                    }
+
+                    modal.show();
+                });
+            });
+
+            btnConfirmar.addEventListener('click', function () {
+                if (!formularioPendiente) {
+                    return;
+                }
+
+                btnConfirmar.disabled = true;
+                btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+
+                HTMLFormElement.prototype.submit.call(formularioPendiente);
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                formularioPendiente = null;
+                btnConfirmar.disabled = false;
+            });
+        });
+    </script>
+}

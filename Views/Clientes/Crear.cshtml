@@ -1,0 +1,592 @@
+@model ERP.NSQuell.Models.ViewModels.ClienteFormViewModel
+
+@{
+    Layout = "_LayoutClientes";
+    ViewData["Title"] = "Crear Cliente";
+}
+
+@section Styles {
+    <style>
+        .clientes-form-page {
+            width: min(100%, 1180px);
+            margin: 0 auto;
+            padding: 1.5rem 1.1rem 4rem;
+            color: #0D1929;
+        }
+
+        .clientes-form-hero {
+            display: grid;
+            grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+            min-height: 280px;
+            border-radius: 28px;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(238,244,250,.9));
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 26px 70px rgba(41, 67, 95, .14);
+            margin-bottom: 1.35rem;
+        }
+
+        .clientes-form-hero-left {
+            position: relative;
+            padding: 2.35rem 1.65rem;
+            background: linear-gradient(145deg, #0D1929, #1A2A40);
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .clientes-form-hero-left::after {
+            content: "";
+            position: absolute;
+            right: -64px;
+            top: -64px;
+            width: 170px;
+            height: 170px;
+            border-radius: 50%;
+            border: 1px solid rgba(244, 123, 32, .45);
+        }
+
+        .clientes-form-icon {
+            width: 62px;
+            height: 62px;
+            border-radius: 20px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 1.25rem;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 16px 28px rgba(244, 123, 32, .32);
+            font-size: 1.45rem;
+        }
+
+        .clientes-form-hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1;
+            letter-spacing: -.06em;
+            font-weight: 950;
+        }
+
+        .clientes-form-hero p {
+            max-width: 330px;
+            margin: 1.1rem 0 0;
+            color: #DCE8F5;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+
+        .clientes-form-hero-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 2rem 1.8rem;
+        }
+
+        .clientes-form-summary {
+            display: grid;
+            gap: .9rem;
+        }
+
+        .clientes-summary-card {
+            display: flex;
+            align-items: center;
+            gap: .85rem;
+            padding: 1rem;
+            border-radius: 18px;
+            background: rgba(255,255,255,.9);
+            border: 1px solid rgba(41, 67, 95, .10);
+            box-shadow: 0 14px 30px rgba(41, 67, 95, .09);
+        }
+
+        .clientes-summary-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            background: #29435F;
+            flex: 0 0 auto;
+        }
+
+        .clientes-summary-card strong {
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+            font-size: .95rem;
+        }
+
+        .clientes-summary-card span {
+            display: block;
+            margin-top: .15rem;
+            color: #64748B;
+            font-weight: 800;
+            font-size: .82rem;
+        }
+
+        .clientes-form-card {
+            border-radius: 26px;
+            overflow: hidden;
+            background: rgba(255,255,255,.96);
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 24px 64px rgba(41, 67, 95, .13);
+        }
+
+        .clientes-form-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.15rem 1.35rem;
+            background: rgba(255,255,255,.92);
+            border-bottom: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .clientes-form-header h2 {
+            margin: 0;
+            color: #0D1929;
+            font-size: 1.05rem;
+            font-weight: 950;
+        }
+
+        .clientes-form-header h2 i {
+            color: #FF8200;
+            margin-right: .45rem;
+        }
+
+        .clientes-form-header span {
+            color: #64748B;
+            font-size: .82rem;
+            font-weight: 850;
+        }
+
+        .clientes-form-body {
+            padding: 1.45rem;
+        }
+
+        .clientes-form-section {
+            padding: 1.2rem;
+            border-radius: 22px;
+            background: #F8FAFC;
+            border: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .clientes-section-title {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            margin-bottom: 1rem;
+            color: #0D1929;
+            font-size: .95rem;
+            font-weight: 950;
+        }
+
+        .clientes-section-title i {
+            color: #FF8200;
+        }
+
+        .form-label-modern {
+            display: block;
+            margin-bottom: .45rem;
+            color: #29435F;
+            font-size: .8rem;
+            font-weight: 950;
+        }
+
+        .form-control-modern {
+            width: 100%;
+            min-height: 48px;
+            border-radius: 14px;
+            border: 1px solid rgba(41, 67, 95, .14);
+            background: #fff;
+            color: #0D1929;
+            padding: .75rem .95rem;
+            font-weight: 850;
+            outline: none;
+            transition: .2s ease;
+        }
+
+        .form-control-modern:focus {
+            border-color: rgba(255, 130, 0, .55);
+            box-shadow: 0 0 0 4px rgba(255, 130, 0, .12);
+        }
+
+        .form-control-modern::placeholder {
+            color: #94A3B8;
+            font-weight: 750;
+        }
+
+        .clientes-field-hint {
+            display: block;
+            margin-top: .35rem;
+            color: #64748B;
+            font-size: .76rem;
+            font-weight: 750;
+        }
+
+        .text-danger {
+            display: block;
+            margin-top: .35rem;
+            font-size: .76rem;
+            font-weight: 850;
+        }
+
+        .clientes-switch-card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: .9rem;
+            min-height: 76px;
+            padding: 1rem;
+            border-radius: 18px;
+            background: #fff;
+            border: 1px solid rgba(41, 67, 95, .12);
+            cursor: pointer;
+        }
+
+        .clientes-switch-card input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .clientes-switch-visual {
+            width: 50px;
+            height: 30px;
+            border-radius: 999px;
+            background: #CBD5E1;
+            position: relative;
+            flex: 0 0 auto;
+            transition: .2s ease;
+        }
+
+        .clientes-switch-visual::after {
+            content: "";
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,.20);
+            transition: .2s ease;
+        }
+
+        .clientes-switch-card input:checked + .clientes-switch-visual {
+            background: linear-gradient(135deg, #16A34A, #22C55E);
+        }
+
+        .clientes-switch-card input:checked + .clientes-switch-visual::after {
+            transform: translateX(20px);
+        }
+
+        .clientes-switch-card strong {
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+        }
+
+        .clientes-switch-card small {
+            display: block;
+            margin-top: .1rem;
+            color: #64748B;
+            font-weight: 800;
+        }
+
+        .clientes-form-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            padding: 1.2rem 1.45rem;
+            background: #F8FAFC;
+            border-top: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .btn-clientes-save,
+        .btn-clientes-cancel {
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            padding: .72rem 1.12rem;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 950;
+            border: 0;
+            transition: .2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-clientes-save {
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 14px 28px rgba(244, 123, 32, .24);
+        }
+
+        .btn-clientes-save:hover {
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .btn-clientes-cancel {
+            background: #fff;
+            color: #29435F;
+            border: 1px solid rgba(41, 67, 95, .16);
+        }
+
+        .btn-clientes-cancel:hover {
+            color: #0D1929;
+            background: #EEF4FA;
+            transform: translateY(-1px);
+        }
+
+        .clientes-validation-summary {
+            border: 0;
+            border-radius: 18px;
+            padding: .95rem 1.1rem;
+            font-weight: 850;
+            margin-bottom: 1rem;
+        }
+
+        html[data-nsq-theme="dark"] .clientes-form-hero {
+            background: linear-gradient(135deg, rgba(13,25,41,.96), rgba(2,8,16,.92));
+            border-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-form-card,
+        html[data-nsq-theme="dark"] .clientes-form-header,
+        html[data-nsq-theme="dark"] .clientes-summary-card {
+            background: rgba(13,25,41,.92);
+            border-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-form-section,
+        html[data-nsq-theme="dark"] .clientes-form-footer {
+            background: rgba(16,29,47,.92);
+            border-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .clientes-form-header h2,
+        html[data-nsq-theme="dark"] .clientes-section-title,
+        html[data-nsq-theme="dark"] .clientes-summary-card strong,
+        html[data-nsq-theme="dark"] .clientes-switch-card strong {
+            color: #fff;
+        }
+
+        html[data-nsq-theme="dark"] .clientes-summary-card span,
+        html[data-nsq-theme="dark"] .clientes-form-header span,
+        html[data-nsq-theme="dark"] .clientes-field-hint,
+        html[data-nsq-theme="dark"] .clientes-switch-card small,
+        html[data-nsq-theme="dark"] .form-label-modern {
+            color: #CBD5E1;
+        }
+
+        html[data-nsq-theme="dark"] .form-control-modern,
+        html[data-nsq-theme="dark"] .clientes-switch-card,
+        html[data-nsq-theme="dark"] .btn-clientes-cancel {
+            background: #0D1929;
+            color: #fff;
+            border-color: rgba(255,255,255,.10);
+        }
+
+        @@media (max-width: 980px) {
+            .clientes-form-hero {
+                grid-template-columns: 1fr;
+            }
+
+            .clientes-form-hero-left {
+                min-height: 260px;
+            }
+        }
+
+        @@media (max-width: 680px) {
+            .clientes-form-page {
+                padding: 1rem .75rem 3rem;
+            }
+
+            .clientes-form-body,
+            .clientes-form-footer {
+                padding: 1rem;
+            }
+
+            .clientes-form-footer {
+                flex-direction: column-reverse;
+                align-items: stretch;
+            }
+
+            .btn-clientes-save,
+            .btn-clientes-cancel {
+                width: 100%;
+            }
+        }
+    </style>
+}
+
+<div class="clientes-form-page">
+    <section class="clientes-form-hero">
+        <div class="clientes-form-hero-left">
+            <div class="clientes-form-icon">
+                <i class="fas fa-user-plus"></i>
+            </div>
+
+            <h1>Nuevo Cliente</h1>
+
+            <p>
+                Registra clientes para relacionarlos posteriormente con partes,
+                procesos productivos y movimientos comerciales del ERP.
+            </p>
+        </div>
+
+        <div class="clientes-form-hero-right">
+            <div class="clientes-form-summary">
+                <div class="clientes-summary-card">
+                    <div class="clientes-summary-icon">
+                        <i class="fas fa-code"></i>
+                    </div>
+                    <div>
+                        <strong>Código único</strong>
+                        <span>Identificador interno del cliente.</span>
+                    </div>
+                </div>
+
+                <div class="clientes-summary-card">
+                    <div class="clientes-summary-icon">
+                        <i class="fas fa-handshake"></i>
+                    </div>
+                    <div>
+                        <strong>Información comercial</strong>
+                        <span>Nombre, RFC y contacto principal.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <form asp-controller="Clientes"
+          asp-action="Crear"
+          method="post"
+          autocomplete="off"
+          class="clientes-form-card">
+
+        @Html.AntiForgeryToken()
+
+        <div class="clientes-form-header">
+            <div>
+                <h2>
+                    <i class="fas fa-clipboard-list"></i>
+                    Datos del cliente
+                </h2>
+                <span>Los campos marcados como obligatorios deben completarse.</span>
+            </div>
+        </div>
+
+        <div class="clientes-form-body">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger clientes-validation-summary"></div>
+
+            <div class="clientes-form-section">
+                <div class="clientes-section-title">
+                    <i class="fas fa-id-card"></i>
+                    Información general
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label asp-for="Codigo" class="form-label-modern">
+                            Código <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="Codigo"
+                               class="form-control-modern"
+                               placeholder="Ej. HUF, GOLDE, NORMA" />
+                        <span class="clientes-field-hint">
+                            Debe ser único para identificar al cliente.
+                        </span>
+                        <span asp-validation-for="Codigo" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-8">
+                        <label asp-for="Nombre" class="form-label-modern">
+                            Nombre <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="Nombre"
+                               class="form-control-modern"
+                               placeholder="Nombre comercial del cliente" />
+                        <span class="clientes-field-hint">
+                            Nombre completo o razón social del cliente.
+                        </span>
+                        <span asp-validation-for="Nombre" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="RFC" class="form-label-modern">
+                            RFC
+                        </label>
+                        <input asp-for="RFC"
+                               class="form-control-modern"
+                               placeholder="RFC del cliente" />
+                        <span class="clientes-field-hint">
+                            Campo opcional.
+                        </span>
+                        <span asp-validation-for="RFC" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-8">
+                        <label asp-for="Contacto" class="form-label-modern">
+                            Contacto
+                        </label>
+                        <input asp-for="Contacto"
+                               class="form-control-modern"
+                               placeholder="Nombre, correo o teléfono de contacto" />
+                        <span class="clientes-field-hint">
+                            Puedes registrar el contacto principal o referencia interna.
+                        </span>
+                        <span asp-validation-for="Contacto" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="clientes-switch-card w-100">
+                            <input asp-for="Activo" checked />
+                            <span class="clientes-switch-visual"></span>
+
+                            <div>
+                                <strong>Cliente activo</strong>
+                                <small>Disponible para relacionarse con partes y procesos.</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="clientes-form-footer">
+            <a asp-controller="Clientes"
+               asp-action="Index"
+               class="btn-clientes-cancel">
+                <i class="fas fa-arrow-left"></i>
+                Volver al catálogo
+            </a>
+
+            <button type="submit" class="btn-clientes-save">
+                <i class="fas fa-save"></i>
+                Guardar cliente
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const codigoInput = document.querySelector('[name="Codigo"]');
+
+            if (codigoInput) {
+                codigoInput.addEventListener('input', function () {
+                    this.value = this.value.toUpperCase();
+                });
+            }
+        });
+    </script>
+}
