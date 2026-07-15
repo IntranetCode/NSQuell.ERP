@@ -270,6 +270,9 @@
             </div>
         </div>
 
+
+
+
         @if (!string.IsNullOrWhiteSpace(success))
         {
             <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -302,6 +305,11 @@
 
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <input id="txtBuscar" class="search-box" type="text" placeholder="Buscar folio, cliente, OF..." />
+
+                    <a href="/Menu/Grupo/3" class="btn btn-erp-light">
+                        <i class="fa-solid fa-arrow-left me-1"></i>
+                        Volver
+                    </a>
 
                     <a asp-controller="Planeacion" asp-action="Crear" class="btn btn-erp-primary">
                         <i class="fa-solid fa-plus me-1"></i>
@@ -336,7 +344,7 @@
                                 <th>Planeación</th>
                                 <th>Renglones</th>
                                 <th>Piezas</th>
-                                <th>Prioridad</th>
+                            
                                 <th>Estatus</th>
                                 <th>Responsable</th>
                                 <th class="text-end">Acciones</th>
@@ -409,23 +417,7 @@
                                         </span>
                                     </td>
 
-                                    <td>
-                                        @switch ((item.Prioridad ?? "").ToUpperInvariant())
-                                        {
-                                            case "URGENTE":
-                                            case "ALTA":
-                                                <span class="badge text-bg-danger">@item.Prioridad</span>
-                                                break;
-
-                                            case "MEDIA":
-                                                <span class="badge text-bg-warning">@item.Prioridad</span>
-                                                break;
-
-                                            default:
-                                                <span class="badge text-bg-secondary">@item.Prioridad</span>
-                                                break;
-                                        }
-                                    </td>
+                                   
 
                                     <td>
                                         <span class="status-pill status-@item.EstatusID">
