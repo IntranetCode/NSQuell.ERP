@@ -1,10 +1,28 @@
-@{
-    var nombre = Context.Session.GetString("NombreMostrar") ?? Context.Session.GetString("Username") ?? "Usuario";
+﻿@{
+    var nombre = Context.Session.GetString("NombreMostrar")
+        ?? Context.Session.GetString("Username")
+        ?? "Usuario";
+
+    var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NS QUELL";
+    var logoEmpresa = Context.Session.GetString("EmpresaLogo") ?? "default-logo.png";
+    var rolUsuario = Context.Session.GetString("RolNombre") ?? "Colaborador";
+    var inicialUsuario = string.IsNullOrWhiteSpace(nombre)
+        ? "U"
+        : nombre.Trim().Substring(0, 1).ToUpperInvariant();
+
     var titulo = ViewData["Title"]?.ToString() ?? "Almacén";
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
     var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
-    var esInicioAlmacen = controller.Equals("Almacen", StringComparison.OrdinalIgnoreCase)
-        && action.Equals("Index", StringComparison.OrdinalIgnoreCase);
+
+    var seccionActual = controller switch
+    {
+        "AlmacenMP" => "MP",
+        "AlmacenEmbalajes" => "Embalajes",
+        "AlmacenOF" => "OF",
+        "AlmacenPT" => "PT",
+        "AlmacenUbicaciones" => "Ubicaciones",
+        _ => "Almacenes"
+    };
 
     var regresoPredeterminado = controller switch
     {
@@ -13,6 +31,8 @@
         "AlmacenMP" => "/AlmacenMP/Index",
         "AlmacenEmbalajes" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
         "AlmacenEmbalajes" => "/AlmacenEmbalajes/Index",
+        "AlmacenOF" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+        "AlmacenOF" => "/AlmacenOF/Index",
         "AlmacenPT" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
         "AlmacenPT" => "/AlmacenPT/Index",
         "AlmacenUbicaciones" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
@@ -31,20 +51,87 @@
     <link rel="stylesheet" href="~/css/pages/almacen.css" asp-append-version="true" />
 </head>
 <body>
-    <header class="alm-top">
-        <a href="/Almacen/Index" class="alm-brand">
-            <span><i class="fa-solid fa-warehouse"></i></span>NS QUELL · ALMACÉN
-        </a>
-        <nav>
-            <a href="/Almacen/Index">Almacenes</a>
-            <a href="/AlmacenMP/Index">MP</a>
-            <a href="/AlmacenEmbalajes/Index">Embalajes</a>
-            <a href="/AlmacenPT/Index">PT</a>
-            <a href="/AlmacenUbicaciones/Index">Ubicaciones</a>
-            <span>@nombre</span>
-            <a href="/Menu/Index">Menú</a>
-        </nav>
+    <header class="alm-shell-header">
+        <div class="alm-shell-navbar">
+            <a href="/Menu/Index" class="alm-shell-brand" aria-label="Ir al menú principal">
+                @if (!string.IsNullOrWhiteSpace(logoEmpresa) && logoEmpresa != "default-logo.png")
+                {
+                    <img src="~/imagenes/@logoEmpresa"
+                         alt="Logo de NS QUELL"
+                         class="alm-shell-brand__logo" />
+                }
+                else
+                {
+                    <span class="alm-shell-brand__icon" aria-hidden="true">
+                        <i class="fa-solid fa-warehouse"></i>
+                    </span>
+                }
+
+                <span class="alm-shell-brand__copy">
+                    <strong>NS QUELL</strong>
+                    <small>· ALMACÉN</small>
+                </span>
+            </a>
+
+            <div class="alm-shell-right">
+                <nav class="alm-shell-shortcuts" aria-label="Accesos rápidos de Almacén">
+                    <a href="/Menu/Grupo/1"
+                       class="alm-shell-shortcut @(seccionActual == "Almacenes" ? "active" : string.Empty)"
+                       aria-current="@(seccionActual == "Almacenes" ? "page" : null)">
+                        Almacenes
+                    </a>
+                    <a href="/AlmacenMP/Index"
+                       class="alm-shell-shortcut @(seccionActual == "MP" ? "active" : string.Empty)"
+                       aria-current="@(seccionActual == "MP" ? "page" : null)">
+                        MP
+                    </a>
+                    <a href="/AlmacenEmbalajes/Index"
+                       class="alm-shell-shortcut @(seccionActual == "Embalajes" ? "active" : string.Empty)"
+                       aria-current="@(seccionActual == "Embalajes" ? "page" : null)">
+                        Embalajes
+                    </a>
+                    <a href="/AlmacenOF/Index"
+                       class="alm-shell-shortcut @(seccionActual == "OF" ? "active" : string.Empty)"
+                       aria-current="@(seccionActual == "OF" ? "page" : null)">
+                        OF
+                    </a>
+                    <a href="/AlmacenPT/Index"
+                       class="alm-shell-shortcut @(seccionActual == "PT" ? "active" : string.Empty)"
+                       aria-current="@(seccionActual == "PT" ? "page" : null)">
+                        PT
+                    </a>
+                    <a href="/AlmacenUbicaciones/Index"
+                       class="alm-shell-shortcut @(seccionActual == "Ubicaciones" ? "active" : string.Empty)"
+                       aria-current="@(seccionActual == "Ubicaciones" ? "page" : null)">
+                        Ubicaciones
+                    </a>
+                </nav>
+
+                <details class="alm-shell-user">
+                    <summary aria-label="Menú de usuario">
+                        <span class="alm-shell-user__avatar" aria-hidden="true">@inicialUsuario</span>
+                        <span class="alm-shell-user__info">
+                            <strong>@nombre</strong>
+                            <small>@rolUsuario</small>
+                        </span>
+                        <i class="fa-solid fa-chevron-down alm-shell-user__chevron" aria-hidden="true"></i>
+                    </summary>
+
+                    <div class="alm-shell-user__menu">
+                        <a href="/Menu/Index">
+                            <i class="fa-solid fa-grip"></i>
+                            Menú principal
+                        </a>
+                        <a href="/Login/Logout">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            Cerrar sesión
+                        </a>
+                    </div>
+                </details>
+            </div>
+        </div>
     </header>
+
     <main class="alm-main">
         <nav class="alm-routebar" aria-label="Ruta de navegación">
             <button type="button"
@@ -60,28 +147,26 @@
                     <a href="/Menu/Index">Inicio</a>
                 </li>
                 <li class="alm-routebar__separator" aria-hidden="true">›</li>
-
-                @if (esInicioAlmacen)
-                {
-                    <li class="alm-routebar__item alm-routebar__item--current" aria-current="page">Almacén</li>
-                }
-                else
-                {
-                    <li class="alm-routebar__item">
-                        <a href="/Almacen/Index">Almacén</a>
-                    </li>
-                    <li class="alm-routebar__separator" aria-hidden="true">›</li>
-                    <li class="alm-routebar__item alm-routebar__item--current" aria-current="page">@titulo</li>
-                }
+                <li class="alm-routebar__item">
+                    <a href="/Menu/Grupo/1">Almacén</a>
+                </li>
+                <li class="alm-routebar__separator" aria-hidden="true">›</li>
+                <li class="alm-routebar__item alm-routebar__item--current" aria-current="page">
+                    @titulo
+                </li>
             </ol>
         </nav>
 
         @if (TempData["AlmacenMensaje"] != null)
         {
-            <div class="alm-alert @TempData["AlmacenMensajeTipo"]">@TempData["AlmacenMensaje"]</div>
+            <div class="alm-alert @TempData["AlmacenMensajeTipo"]">
+                @TempData["AlmacenMensaje"]
+            </div>
         }
+
         @RenderBody()
     </main>
+
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         (() => {
@@ -91,20 +176,164 @@
             button.addEventListener('click', () => {
                 const fallback = button.dataset.fallbackUrl || '/Menu/Grupo/1';
 
-                // Se desplaza una posición real en el historial del navegador.
-                // No se navega al document.referrer porque eso agrega una ruta nueva
-                // y provoca el ciclo A -> B -> A -> B.
                 if (window.history.length > 1) {
                     window.history.back();
                     return;
                 }
 
-                // Si la pantalla se abrió directamente y no existe una ruta anterior,
-                // se reemplaza la entrada actual para no crear otro ciclo.
                 window.location.replace(fallback);
             });
         })();
     </script>
     @await RenderSectionAsync("Scripts", required: false)
+    <script>
+        // MARCA_ALMACEN_RUNTIME
+        document.addEventListener("DOMContentLoaded", function () {
+            const root = document.querySelector("header") || document.querySelector("nav");
+            if (!root) return;
+
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+
+            while (walker.nextNode()) {
+                nodes.push(walker.currentNode);
+            }
+
+            nodes.forEach(function (node) {
+                node.nodeValue = node.nodeValue
+                    .replace(/NS\s+GROUP/gi, "NS QUELL")
+                    .replace(/ERP\s+SUITE/gi, "ALMACÉN");
+            });
+        });
+    </script>
+<!-- ALMACEN_REVISION_V8_START -->
+<script>
+(() => {
+    const adjustmentTypes = new Set(["AjustePositivo", "AjusteNegativo"]);
+
+    function normalizeText(value) {
+        return (value || "").replace(/\s+/g, " ").trim();
+    }
+
+    function applyTableLabels(root) {
+        const scope = root && root.querySelectorAll ? root : document;
+
+        scope.querySelectorAll(".alm-table").forEach(table => {
+            const headers = Array.from(table.querySelectorAll("thead th"))
+                .map(th => normalizeText(th.textContent));
+
+            table.querySelectorAll("tbody tr").forEach(row => {
+                Array.from(row.children).forEach((cell, index) => {
+                    if (cell.tagName !== "TD" || cell.hasAttribute("colspan")) return;
+                    if (!cell.dataset.label && headers[index]) {
+                        cell.dataset.label = headers[index];
+                    }
+                });
+            });
+        });
+    }
+
+    function configureMovementForm(form) {
+        const typeField = form.querySelector('[name="TipoMovimiento"]');
+        const observations = form.querySelector('[name="Observaciones"]');
+
+        if (!typeField || !observations) return;
+
+        if (!observations.dataset.baseRequired) {
+            observations.dataset.baseRequired = observations.required ? "true" : "false";
+        }
+
+        const label = observations.id
+            ? form.querySelector(`label[for="${observations.id}"]`)
+            : null;
+
+        if (label && !label.dataset.originalText) {
+            label.dataset.originalText = normalizeText(label.textContent) || "Observaciones";
+        }
+
+        let hint = form.querySelector("[data-adjustment-hint]");
+        if (!hint) {
+            hint = document.createElement("small");
+            hint.dataset.adjustmentHint = "true";
+            hint.className = "alm-filter-hint";
+            hint.textContent = "En ajustes positivos y negativos debes indicar el motivo.";
+            hint.hidden = true;
+            observations.insertAdjacentElement("afterend", hint);
+        }
+
+        const refresh = () => {
+            const isAdjustment = adjustmentTypes.has(typeField.value);
+            const baseRequired = observations.dataset.baseRequired === "true";
+
+            observations.required = baseRequired || isAdjustment;
+            hint.hidden = !isAdjustment;
+
+            if (label) {
+                label.textContent = isAdjustment
+                    ? "Motivo del ajuste *"
+                    : label.dataset.originalText;
+            }
+        };
+
+        typeField.addEventListener("change", refresh);
+        refresh();
+    }
+
+    function configureSubmitLock(form) {
+        if (form.dataset.submitLockReady === "true") return;
+        form.dataset.submitLockReady = "true";
+
+        form.addEventListener("submit", event => {
+            if (event.defaultPrevented || !form.checkValidity()) return;
+
+            const buttons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+            buttons.forEach(button => {
+                button.disabled = true;
+                button.setAttribute("aria-disabled", "true");
+
+                if (button.tagName === "BUTTON") {
+                    button.dataset.originalHtml = button.innerHTML;
+                    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Guardando...';
+                }
+                else {
+                    button.dataset.originalValue = button.value;
+                    button.value = "Guardando...";
+                }
+            });
+        });
+    }
+
+    function initialize(root) {
+        applyTableLabels(root);
+
+        const scope = root && root.querySelectorAll ? root : document;
+        scope.querySelectorAll("form").forEach(form => {
+            configureMovementForm(form);
+            configureSubmitLock(form);
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => initialize(document));
+
+    const observer = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    initialize(node);
+                }
+            }
+        }
+    });
+
+    observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true
+    });
+})();
+</script>
+<!-- ALMACEN_REVISION_V8_END -->
 </body>
 </html>
+
+
+

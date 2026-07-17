@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models.ViewModels.Almacen;
+﻿using ERP.NSQuell.Models.ViewModels.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
@@ -480,11 +480,31 @@ ORDER BY Valor;";
     };
 
     [HttpGet]
-    public async Task<IActionResult> Entrada(int? parteId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Entrada(
+        int? parteId,
+        string? numeroOF,
+        int? cantidad,
+        bool entregaOF = false,
+        CancellationToken cancellationToken = default)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
-        var vm = new AlmacenPTEntradaFormVm { ParteID = parteId.GetValueOrDefault() };
+
+        var vm = new AlmacenPTEntradaFormVm
+        {
+            ParteID = parteId.GetValueOrDefault(),
+            NumeroOF = numeroOF?.Trim(),
+            Cantidad = cantidad.GetValueOrDefault(),
+            TipoMovimiento = "Entrada",
+            Unidad = "PZS",
+            EsEntregaOF = entregaOF,
+            FechaMovimiento = DateTime.Now,
+            EstadoCalidad = "Liberado",
+            Observaciones = entregaOF && !string.IsNullOrWhiteSpace(numeroOF)
+                ? $"Entrega de producto terminado para {numeroOF.Trim()}."
+                : null
+        };
+
         await CargarEntradaAsync(vm, cancellationToken);
         return View(vm);
     }
@@ -498,6 +518,21 @@ ORDER BY Valor;";
         model.Etiqueta = model.Etiqueta?.Trim() ?? string.Empty;
         model.LoteEtiqueta = model.LoteEtiqueta?.Trim();
         model.NumeroOF = model.NumeroOF?.Trim();
+        model.TipoMovimiento = "Entrada";
+        model.Unidad = "PZS";
+        model.FechaMovimiento = DateTime.Now;
+
+        if (model.EsEntregaOF)
+        {
+            if (model.ParteID <= 0)
+                ModelState.AddModelError(nameof(model.ParteID), "El número de parte es obligatorio.");
+            if (string.IsNullOrWhiteSpace(model.NumeroOF))
+                ModelState.AddModelError(nameof(model.NumeroOF), "La orden de fabricación es obligatoria.");
+            if (!model.UbicacionID.HasValue)
+                ModelState.AddModelError(nameof(model.UbicacionID), "La ubicación es obligatoria.");
+            if (string.IsNullOrWhiteSpace(model.Observaciones))
+                ModelState.AddModelError(nameof(model.Observaciones), "Las observaciones son obligatorias.");
+        }
 
         if (!EstadosCalidad.Contains(model.EstadoCalidad))
             ModelState.AddModelError(nameof(model.EstadoCalidad), "Estado de calidad inválido.");
@@ -615,8 +650,13 @@ VALUES
             throw;
         }
 
-        Mensaje("success", "Entrada de producto terminado registrada.");
-        return RedirectToAction(nameof(Index));
+        Mensaje("success", model.EsEntregaOF
+            ? "Entrega de producto terminado registrada para la OF."
+            : "Entrada de producto terminado registrada.");
+
+        return model.EsEntregaOF
+            ? RedirectToAction("Index", "AlmacenOF")
+            : RedirectToAction(nameof(Index));
     }
 
     [HttpGet]
@@ -641,6 +681,17 @@ VALUES
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
         model.NumeroOF = model.NumeroOF?.Trim();
+        model.Observaciones = model.Observaciones?.Trim();
+
+        // REVISION_ALMACEN_V8_AJUSTES_PT
+        if ((model.TipoMovimiento == "AjustePositivo" || model.TipoMovimiento == "AjusteNegativo")
+            && string.IsNullOrWhiteSpace(model.Observaciones))
+        {
+            ModelState.AddModelError(
+                nameof(model.Observaciones),
+                "El motivo del ajuste es obligatorio.");
+        }
+
         if (!TiposPermitidos.Contains(model.TipoMovimiento))
             ModelState.AddModelError(nameof(model.TipoMovimiento), "Tipo de movimiento inválido.");
         if (!string.IsNullOrWhiteSpace(model.EstadoCalidad) && !EstadosCalidad.Contains(model.EstadoCalidad))
@@ -996,3 +1047,5 @@ ORDER BY Almacen,Rack,Nivel,Posicion;";
         return rows;
     }
 }
+
+

@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models.ViewModels.Almacen;
+﻿using ERP.NSQuell.Models.ViewModels.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
@@ -703,15 +703,35 @@ WHERE MaterialID=@Id AND Activo=1;";
     }
 
     [HttpGet]
-    public async Task<IActionResult> Movimiento(int? materialId, string? tipo, CancellationToken cancellationToken)
+    public async Task<IActionResult> Movimiento(
+        int? materialId,
+        string? tipo,
+        string? numeroOF,
+        decimal? cantidad,
+        string? unidad,
+        bool entregaOF = false,
+        CancellationToken cancellationToken = default)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
+
         var vm = new AlmacenMPMovimientoFormVm
         {
             MaterialID = materialId.GetValueOrDefault(),
-            TipoMovimiento = TiposPermitidos.Contains(tipo ?? string.Empty) ? tipo! : "Entrada"
+            TipoMovimiento = entregaOF
+                ? "Salida"
+                : TiposPermitidos.Contains(tipo ?? string.Empty) ? tipo! : "Entrada",
+            NumeroOF = numeroOF?.Trim(),
+            Cantidad = cantidad.GetValueOrDefault(),
+            Unidad = unidad?.Trim().ToUpperInvariant() ?? string.Empty,
+            EsEntregaOF = entregaOF,
+            FechaMovimiento = DateTime.Now,
+            Lote = "S/L",
+            Observaciones = entregaOF && !string.IsNullOrWhiteSpace(numeroOF)
+                ? $"Entrega de materia prima para {numeroOF.Trim()}."
+                : null
         };
+
         await CargarMovimientoAsync(vm, cancellationToken);
         return View(vm);
     }
@@ -725,6 +745,34 @@ WHERE MaterialID=@Id AND Activo=1;";
         model.Lote = string.IsNullOrWhiteSpace(model.Lote) ? "S/L" : model.Lote.Trim();
         model.Unidad = model.Unidad?.Trim().ToUpperInvariant() ?? string.Empty;
         model.NumeroOF = model.NumeroOF?.Trim();
+        model.Observaciones = model.Observaciones?.Trim();
+        model.FechaMovimiento = DateTime.Now;
+
+        if (model.EsEntregaOF)
+        {
+            model.TipoMovimiento = "Salida";
+            model.Lote = "S/L";
+            model.UbicacionID = null;
+            ModelState.Remove(nameof(model.TipoMovimiento));
+            ModelState.Remove(nameof(model.Lote));
+            ModelState.Remove(nameof(model.UbicacionID));
+
+            if (model.MaterialID <= 0)
+                ModelState.AddModelError(nameof(model.MaterialID), "El material es obligatorio.");
+            if (string.IsNullOrWhiteSpace(model.NumeroOF))
+                ModelState.AddModelError(nameof(model.NumeroOF), "La orden de fabricación es obligatoria.");
+            if (string.IsNullOrWhiteSpace(model.Observaciones))
+                ModelState.AddModelError(nameof(model.Observaciones), "Las observaciones son obligatorias.");
+        }
+
+        // REVISION_ALMACEN_V8_AJUSTES_MP
+        if ((model.TipoMovimiento == "AjustePositivo" || model.TipoMovimiento == "AjusteNegativo")
+            && string.IsNullOrWhiteSpace(model.Observaciones))
+        {
+            ModelState.AddModelError(
+                nameof(model.Observaciones),
+                "El motivo del ajuste es obligatorio.");
+        }
 
         if (!TiposPermitidos.Contains(model.TipoMovimiento))
             ModelState.AddModelError(nameof(model.TipoMovimiento), "Tipo de movimiento inválido.");
@@ -757,10 +805,11 @@ WHERE MaterialID=@Id AND Activo=1;";
                 }
                 codigo = Texto(reader, "Codigo");
                 requiereLote = Convert.ToBoolean(reader["RequiereLote"]);
-                if (string.IsNullOrWhiteSpace(model.Unidad)) model.Unidad = Texto(reader, "UnidadDefault");
+                // La unidad siempre se toma del catálogo; no se confía en el valor enviado por el navegador.
+                model.Unidad = Texto(reader, "UnidadDefault").Trim().ToUpperInvariant();
             }
 
-            if (requiereLote && model.Lote == "S/L")
+            if (!model.EsEntregaOF && requiereLote && model.Lote == "S/L")
             {
                 ModelState.AddModelError(nameof(model.Lote), "Este material requiere lote.");
                 await transaction.RollbackAsync(cancellationToken);
@@ -800,7 +849,10 @@ VALUES
             insert.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
             insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value = model.TipoMovimiento;
             insert.Parameters.Add("@Lote", SqlDbType.NVarChar, 120).Value = model.Lote;
-            insert.Parameters.Add("@Cantidad", SqlDbType.Decimal).Value = model.Cantidad;
+            var cantidadParametro = insert.Parameters.Add("@Cantidad", SqlDbType.Decimal);
+            cantidadParametro.Precision = 18;
+            cantidadParametro.Scale = 3;
+            cantidadParametro.Value = model.Cantidad;
             insert.Parameters.Add("@Unidad", SqlDbType.NVarChar, 20).Value = model.Unidad;
             insert.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = model.UbicacionID.HasValue ? model.UbicacionID.Value : DBNull.Value;
             insert.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(model.NumeroOF) ? DBNull.Value : model.NumeroOF;
@@ -817,8 +869,13 @@ VALUES
             throw;
         }
 
-        Mensaje("success", "Movimiento de Almacén MP registrado correctamente.");
-        return RedirectToAction(nameof(Index));
+        Mensaje("success", model.EsEntregaOF
+            ? "Entrega de materia prima registrada para la OF."
+            : "Movimiento de Almacén MP registrado correctamente.");
+
+        return model.EsEntregaOF
+            ? RedirectToAction("Index", "AlmacenOF")
+            : RedirectToAction(nameof(Index));
     }
 
     private async Task CargarMovimientoAsync(AlmacenMPMovimientoFormVm vm, CancellationToken cancellationToken)
@@ -841,9 +898,10 @@ ORDER BY Codigo;";
                 });
             }
         }
-        vm.Ubicaciones = await CargarUbicacionesAsync(connection, "MP", cancellationToken);
+        if (!vm.EsEntregaOF)
+            vm.Ubicaciones = await CargarUbicacionesAsync(connection, "MP", cancellationToken);
         vm.TiposMovimiento = TiposPermitidos.Select((x, i) => new AlmacenSelectVm { Id = i + 1, Texto = x, Extra = x }).ToList();
-        if (vm.MaterialID > 0 && string.IsNullOrWhiteSpace(vm.Unidad))
+        if (vm.MaterialID > 0 && (vm.EsEntregaOF || string.IsNullOrWhiteSpace(vm.Unidad)))
             vm.Unidad = vm.Materiales.FirstOrDefault(x => x.Id == vm.MaterialID)?.Extra ?? "KG";
     }
 
@@ -869,3 +927,5 @@ ORDER BY Almacen, Rack, Nivel, Posicion;";
         return rows;
     }
 }
+
+
