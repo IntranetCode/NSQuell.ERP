@@ -1,0 +1,347 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Órdenes de fabricación";
+}
+
+<style>
+    .of-kpi-grid{grid-template-columns:repeat(5,minmax(135px,1fr))}
+    .of-filter{display:grid;grid-template-columns:minmax(280px,2fr) minmax(190px,1fr) minmax(190px,1fr) 150px 150px auto;gap:10px;padding:16px;align-items:end}
+    .of-filter .alm-field label{font-size:.72rem;text-transform:uppercase}
+    .of-table-wrap{overflow:auto}
+    .of-table{width:100%;min-width:1120px;table-layout:fixed;border-collapse:collapse;font-size:.76rem}
+    .of-table th,.of-table td{height:58px;padding:7px 9px;border-bottom:1px solid #22314a;vertical-align:middle}
+    .of-table th{height:36px;color:#a9bdd9;font-size:.66rem;text-transform:uppercase;letter-spacing:.02em}
+    .of-table tbody tr:hover{background:rgba(255,255,255,.025)}
+    .of-col-of{width:13%}.of-col-client{width:14%}.of-col-date{width:10%}
+    .of-col-flow{width:17%}.of-col-status{width:9%}.of-col-actions{width:5%}
+    .of-link{display:block;color:#fff;text-decoration:none;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .of-link:hover{color:#ffd0a6}
+    .of-sub{display:block;margin-top:4px;color:var(--muted);font-size:.62rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .of-center{text-align:center;font-variant-numeric:tabular-nums}
+    .of-pieces{font-size:.95rem;font-weight:900}
+    .of-deliverable{display:block;margin-bottom:5px;color:#dce7f7;font-size:.64rem;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .of-delivery-list{display:grid;gap:7px}
+    .of-delivery-item{display:block;padding:6px 7px;border:1px solid rgba(255,255,255,.08);border-radius:9px;background:rgba(255,255,255,.025);color:#fff;text-decoration:none}
+    .of-delivery-item:hover{border-color:rgba(244,123,32,.5);background:rgba(244,123,32,.08);color:#fff}
+    .of-delivery-item.disabled{pointer-events:none;opacity:.55}
+    .of-delivery-name{display:block;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dce7f7;font-size:.62rem;font-weight:850}
+    .of-flow{display:block;color:#fff;text-decoration:none}
+    .of-flow:hover{color:#fff}
+    .of-flow-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+    .of-flow-top strong{font-size:.78rem;font-variant-numeric:tabular-nums}
+    .of-state{padding:3px 6px;border-radius:999px;font-size:.56rem;font-weight:950;text-transform:uppercase;white-space:nowrap}
+    .of-state.completo{background:#103b2d;color:#8bf3c4}
+    .of-state.parcial{background:#443916;color:#ffe287}
+    .of-state.pendiente{background:#3e1420;color:#ffb0b8}
+    .of-state.na{background:#263247;color:#cbd5e1}
+    .of-progress{display:block;height:5px;margin-top:6px;border-radius:999px;background:#263247;overflow:hidden}
+    .of-progress i{display:block;height:100%;border-radius:999px;background:#23c483}
+    .of-flow.parcial .of-progress i{background:#f7c948}
+    .of-flow.pendiente .of-progress i{background:#ff5d6c}
+    .of-flow.na .of-progress i{width:0!important}
+    .of-status{display:inline-flex;align-items:center;justify-content:center;max-width:100%;padding:5px 8px;border-radius:999px;background:#263247;color:#dbe5f4;font-size:.62rem;font-weight:900;text-align:center}
+    .of-priority{display:block;margin-top:5px;font-size:.58rem;font-weight:900;text-transform:uppercase}
+    .of-priority.urgente{color:#ff8b97}.of-priority.alta{color:#ffd16f}.of-priority.normal{color:#9fb0c9}.of-priority.baja{color:#8bf3c4}
+    .of-actions{display:flex;align-items:center;justify-content:center;gap:5px}
+    .of-action{display:inline-flex;align-items:center;justify-content:center;width:31px;height:31px;border:1px solid var(--line);border-radius:8px;background:#18243a;color:#fff;text-decoration:none}
+    .of-action:hover{border-color:rgba(244,123,32,.65);background:rgba(244,123,32,.18);color:#fff}
+    .of-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-top:1px solid var(--line)}
+    .of-pagination__actions{display:flex;gap:7px}
+    .of-pagination .alm-btn.disabled{pointer-events:none;opacity:.45}
+    @@media(max-width:1250px){.of-kpi-grid{grid-template-columns:repeat(3,1fr)}.of-filter{grid-template-columns:1fr 1fr 1fr}}
+    @@media(max-width:760px){.of-kpi-grid,.of-filter{grid-template-columns:1fr}}
+</style>
+
+<section class="alm-hero">
+    <div>
+        <small>ALMACÉN · CONTROL DE OF</small>
+        <h1>Órdenes de fabricación</h1>
+        <p>
+            Consulta rápida de las OF creadas por Planeación y del avance registrado por Almacén
+            para la entrega de materia prima y embalajes.
+        </p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn secondary" asp-controller="AlmacenMP" asp-action="Index">
+            <i class="fa-solid fa-flask"></i> MP
+        </a>
+        <a class="alm-btn secondary" asp-controller="AlmacenEmbalajes" asp-action="Index">
+            <i class="fa-solid fa-box-open"></i> Embalajes
+        </a>
+        <a class="alm-btn secondary" asp-controller="AlmacenPT" asp-action="Index">
+            <i class="fa-solid fa-box"></i> PT
+        </a>
+    </div>
+</section>
+
+@if (!Model.Configurado)
+{
+    <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
+}
+else
+{
+    <section class="alm-grid of-kpi-grid">
+        <div class="alm-kpi"><small>OF visibles</small><strong>@Model.TotalRegistros</strong></div>
+        <div class="alm-kpi"><small>Piezas planeadas</small><strong>@Model.TotalPiezas.ToString("N0")</strong></div>
+        <div class="alm-kpi"><small>MP pendiente</small><strong>@Model.PendientesMP</strong></div>
+        <div class="alm-kpi"><small>Embalaje pendiente</small><strong>@Model.PendientesEmbalaje</strong></div>
+        <div class="alm-kpi"><small>Con movimientos</small><strong>@Model.OFConMovimientos</strong></div>
+    </section>
+
+    <section class="alm-card">
+        <header>
+            <span>OF creadas</span>
+            <span>Página @Model.Pagina de @Model.TotalPaginas</span>
+        </header>
+
+        <form method="get" class="of-filter">
+            <div class="alm-field">
+                <label for="q">Buscar OF, cliente, parte, MP o embalaje</label>
+                <input id="q"
+                       class="alm-input"
+                       type="search"
+                       name="q"
+                       value="@Model.Busqueda"
+                       placeholder="Folio, OF, cliente, número de parte, material..." />
+            </div>
+
+            <div class="alm-field">
+                <label for="estatus">Estatus de OF</label>
+                <select id="estatus" class="alm-select" name="estatus">
+                    <option value="">Todos</option>
+                    @foreach (var estado in Model.EstatusDisponibles)
+                    {
+                        if (Model.EstatusID == estado.EstatusID)
+                        {
+                            <option value="@estado.EstatusID" selected>@estado.Nombre</option>
+                        }
+                        else
+                        {
+                            <option value="@estado.EstatusID">@estado.Nombre</option>
+                        }
+                    }
+                </select>
+            </div>
+
+            <div class="alm-field">
+                <label for="area">Atención de Almacén</label>
+                <select id="area" class="alm-select" name="area">
+                    <option value="">Todas</option>
+                    <option value="PENDIENTES" selected="@(Model.Area == "PENDIENTES")">Con pendientes</option>
+                    <option value="CON_MOVIMIENTOS" selected="@(Model.Area == "CON_MOVIMIENTOS")">Con movimientos</option>
+                    <option value="MP" selected="@(Model.Area == "MP")">Requiere MP</option>
+                    <option value="EMBALAJE" selected="@(Model.Area == "EMBALAJE")">Requiere embalaje</option>
+                </select>
+            </div>
+
+            <div class="alm-field">
+                <label for="desde">Desde</label>
+                <input id="desde" class="alm-input" type="date" name="desde" value="@Model.Desde?.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <div class="alm-field">
+                <label for="hasta">Hasta</label>
+                <input id="hasta" class="alm-input" type="date" name="hasta" value="@Model.Hasta?.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <button class="alm-btn" type="submit">
+                <i class="fa-solid fa-filter"></i>
+                Filtrar
+            </button>
+        </form>
+
+        <div class="of-table-wrap">
+            <table class="of-table">
+                <colgroup>
+                    <col class="of-col-of" />
+                    <col class="of-col-client" />
+                    <col class="of-col-date" />
+                    <col class="of-col-flow" />
+                    <col class="of-col-flow" />
+                    <col class="of-col-status" />
+                    <col class="of-col-actions" />
+                </colgroup>
+
+                <thead>
+                    <tr>
+                        <th>OF</th>
+                        <th>Cliente</th>
+                        <th>Fechas</th>
+                        <th>MP a entregar</th>
+                        <th>Embalaje a entregar</th>
+                        <th>Estatus</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var x in Model.Ordenes)
+                    {
+                        <tr>
+                            <td>
+                                <a class="of-link"
+                                   asp-controller="Planeacion"
+                                   asp-action="Detalle"
+                                   asp-route-id="@x.SolicitudProduccionID"
+                                   title="Abrir detalle de la OF">
+                                    @x.NumeroOFClave
+                                </a>
+                                <small class="of-sub">
+                                    @(string.IsNullOrWhiteSpace(x.FolioSolicitud)
+                                        ? $"ID {x.SolicitudProduccionID}"
+                                        : x.FolioSolicitud)
+                                </small>
+                            </td>
+
+                            <td>
+                                <span class="of-link" title="@x.Cliente">
+                                    @(string.IsNullOrWhiteSpace(x.Cliente) ? "Sin cliente" : x.Cliente)
+                                </span>
+                                <small class="of-sub">
+                                    @x.TotalRenglones renglón(es)
+                                </small>
+                            </td>
+
+                            <td>
+                                <strong>@x.FechaSolicitud.ToString("dd/MM/yyyy")</strong>
+                                <small class="of-sub">
+                                    Requerida:
+                                    @(x.FechaRequerida?.ToString("dd/MM/yyyy") ?? "Sin fecha")
+                                </small>
+                            </td>
+                            <td>
+                                <div class="of-delivery-list">
+                                    @foreach (var item in x.MaterialesEntrega)
+                                    {
+                                        var url = item.PuedeEntregar
+                                            ? Url.Action("Movimiento", "AlmacenMP", new
+                                            {
+                                                materialId = item.CatalogoID,
+                                                tipo = "Salida",
+                                                numeroOF = x.NumeroOFClave,
+                                                cantidad = item.Pendiente,
+                                                unidad = item.Unidad,
+                                                entregaOF = true
+                                            })
+                                            : null;
+
+                                        <a class="of-delivery-item @(!item.PuedeEntregar ? "disabled" : "")"
+                                           href="@url"
+                                           title="@(item.PuedeEntregar ? "Registrar entrega de MP" : item.CatalogoID <= 0 ? "Material no localizado en ERP_Materiales" : "Entrega completa")">
+                                            <span class="of-delivery-name">@item.Codigo · @item.Descripcion</span>
+                                            <span class="of-flow @item.Clase">
+                                                <span class="of-flow-top">
+                                                    <strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong>
+                                                    <span class="of-state @item.Clase">@item.Estado</span>
+                                                </span>
+                                                <span class="of-progress"><i style="width:@item.Porcentaje%"></i></span>
+                                            </span>
+                                        </a>
+                                    }
+                                    @if (!x.MaterialesEntrega.Any())
+                                    {
+                                        <span class="of-sub">Sin MP registrada</span>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                <div class="of-delivery-list">
+                                    @foreach (var item in x.EmbalajesEntrega)
+                                    {
+                                        var url = item.PuedeEntregar
+                                            ? Url.Action("Movimiento", "AlmacenEmbalajes", new
+                                            {
+                                                embalajeId = item.CatalogoID,
+                                                tipo = "Salida",
+                                                numeroOF = x.NumeroOFClave,
+                                                cantidad = item.Pendiente,
+                                                unidad = item.Unidad,
+                                                entregaOF = true
+                                            })
+                                            : null;
+
+                                        <a class="of-delivery-item @(!item.PuedeEntregar ? "disabled" : "")"
+                                           href="@url"
+                                           title="@(item.PuedeEntregar ? "Registrar entrega de embalaje" : item.CatalogoID <= 0 ? "Embalaje no localizado en ERP_Embalajes" : "Entrega completa")">
+                                            <span class="of-delivery-name">@item.Codigo · @item.Descripcion</span>
+                                            <span class="of-flow @item.Clase">
+                                                <span class="of-flow-top">
+                                                    <strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong>
+                                                    <span class="of-state @item.Clase">@item.Estado</span>
+                                                </span>
+                                                <span class="of-progress"><i style="width:@item.Porcentaje%"></i></span>
+                                            </span>
+                                        </a>
+                                    }
+                                    @if (!x.EmbalajesEntrega.Any())
+                                    {
+                                        <span class="of-sub">Sin embalaje registrado</span>
+                                    }
+                                </div>
+                            </td>
+
+                            <td class="of-center">
+                                <span class="of-status">@x.EstatusNombre</span>
+                                <span class="of-priority @x.PrioridadClase">@x.Prioridad</span>
+                            </td>
+
+                            <td>
+                                <div class="of-actions">
+                                    <a class="of-action"
+                                       asp-controller="Planeacion"
+                                       asp-action="Detalle"
+                                       asp-route-id="@x.SolicitudProduccionID"
+                                       title="Ver detalle de la OF"
+                                       aria-label="Ver detalle de la OF">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+
+                    @if (!Model.Ordenes.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="alm-empty">
+                                No hay órdenes de fabricación que coincidan con los filtros.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="of-pagination">
+            <span>
+                @Model.TotalRegistros registro(s) · máximo @Model.TamanoPagina por página
+            </span>
+
+            <div class="of-pagination__actions">
+                <a class="alm-btn secondary small @(Model.Pagina <= 1 ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-q="@Model.Busqueda"
+                   asp-route-estatus="@Model.EstatusID"
+                   asp-route-area="@Model.Area"
+                   asp-route-desde="@Model.Desde?.ToString("yyyy-MM-dd")"
+                   asp-route-hasta="@Model.Hasta?.ToString("yyyy-MM-dd")"
+                   asp-route-pagina="@(Model.Pagina - 1)">
+                    Anterior
+                </a>
+
+                <a class="alm-btn secondary small @(Model.Pagina >= Model.TotalPaginas ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-q="@Model.Busqueda"
+                   asp-route-estatus="@Model.EstatusID"
+                   asp-route-area="@Model.Area"
+                   asp-route-desde="@Model.Desde?.ToString("yyyy-MM-dd")"
+                   asp-route-hasta="@Model.Hasta?.ToString("yyyy-MM-dd")"
+                   asp-route-pagina="@(Model.Pagina + 1)">
+                    Siguiente
+                </a>
+            </div>
+        </div>
+    </section>
+}
+

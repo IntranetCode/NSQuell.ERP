@@ -1,3 +1,126 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTEntradaFormVm
-@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Entrada PT"; }
-<section class="alm-hero"><div><small>PRODUCTO TERMINADO</small><h1>Entrada de producto</h1><p>Registra la caja física y genera simultáneamente el movimiento de entrada.</p></div></section><section class="alm-card"><form method="post" class="alm-form"><div asp-validation-summary="ModelOnly" class="alm-field full"></div><div class="alm-field full"><label asp-for="ParteID"></label><select asp-for="ParteID" class="alm-select"><option value="">Selecciona</option>@foreach(var x in Model.Partes){<option value="@x.Id">@x.Texto</option>}</select></div><div class="alm-field"><label asp-for="Etiqueta"></label><input asp-for="Etiqueta" class="alm-input"/></div><div class="alm-field"><label asp-for="NumeroCaja"></label><input asp-for="NumeroCaja" class="alm-input"/></div><div class="alm-field"><label asp-for="Cantidad"></label><input asp-for="Cantidad" class="alm-input"/></div><div class="alm-field"><label asp-for="LoteEtiqueta"></label><input asp-for="LoteEtiqueta" class="alm-input"/></div><div class="alm-field"><label asp-for="NumeroOF"></label><input asp-for="NumeroOF" class="alm-input"/></div><div class="alm-field"><label asp-for="EstadoCalidad"></label><select asp-for="EstadoCalidad" class="alm-select">@foreach(var x in Model.EstadosCalidad){<option value="@x.Extra">@x.Texto</option>}</select></div><div class="alm-field full"><label asp-for="UbicacionID"></label><select asp-for="UbicacionID" class="alm-select"><option value="">Sin ubicación</option>@foreach(var x in Model.Ubicaciones){<option value="@x.Id">@x.Texto</option>}</select></div><div class="alm-field full"><label asp-for="Observaciones"></label><textarea asp-for="Observaciones" class="alm-textarea"></textarea></div><div class="alm-field full"><button class="alm-btn">Registrar entrada PT</button></div></form></section>
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTEntradaFormVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = Model.EsEntregaOF ? "Entrega de PT a almacén" : "Entrada PT";
+    var seleccionado = Model.Partes.FirstOrDefault(x => x.Id == Model.ParteID)?.Texto ?? "Número de parte no encontrado";
+}
+
+<section class="alm-hero">
+    <div>
+        <small>PRODUCTO TERMINADO</small>
+        <h1>@(Model.EsEntregaOF ? "Entregar producto terminado" : "Entrada de producto")</h1>
+        <p>@(Model.EsEntregaOF
+            ? "La parte, la OF, la unidad, el tipo y la fecha se asignan automáticamente. Registra la caja física entregada al almacén."
+            : "Registra la caja física y genera simultáneamente el movimiento de entrada.")</p>
+    </div>
+</section>
+
+<section class="alm-card">
+    <form method="post" class="alm-form">
+        <div asp-validation-summary="ModelOnly" class="alm-field full"></div>
+        <input asp-for="EsEntregaOF" type="hidden" />
+        <input asp-for="TipoMovimiento" type="hidden" />
+        <input asp-for="Unidad" type="hidden" />
+
+        @if (Model.EsEntregaOF)
+        {
+            <input asp-for="ParteID" type="hidden" />
+            <input asp-for="NumeroOF" type="hidden" />
+
+            <div class="alm-field full">
+                <label>Número de parte</label>
+                <input class="alm-input" value="@seleccionado" readonly />
+                <span asp-validation-for="ParteID"></span>
+            </div>
+            <div class="alm-field">
+                <label>Tipo de movimiento</label>
+                <input class="alm-input" value="Entrada · Entrega de PT" readonly />
+            </div>
+            <div class="alm-field">
+                <label asp-for="FechaMovimiento"></label>
+                <input class="alm-input" value="@Model.FechaMovimiento.ToString("dd/MM/yyyy HH:mm:ss")" readonly />
+            </div>
+            <div class="alm-field">
+                <label asp-for="NumeroOF"></label>
+                <input class="alm-input" value="@Model.NumeroOF" readonly />
+                <span asp-validation-for="NumeroOF"></span>
+            </div>
+            <div class="alm-field">
+                <label asp-for="Unidad"></label>
+                <input class="alm-input" value="PZS" readonly />
+            </div>
+        }
+        else
+        {
+            <div class="alm-field full">
+                <label asp-for="ParteID"></label>
+                <select asp-for="ParteID" class="alm-select">
+                    <option value="">Selecciona</option>
+                    @foreach (var x in Model.Partes)
+                    {
+                        <option value="@x.Id">@x.Texto</option>
+                    }
+                </select>
+                <span asp-validation-for="ParteID"></span>
+            </div>
+            <div class="alm-field">
+                <label asp-for="NumeroOF"></label>
+                <input asp-for="NumeroOF" class="alm-input" />
+            </div>
+        }
+
+        <div class="alm-field">
+            <label asp-for="Etiqueta"></label>
+            <input asp-for="Etiqueta" class="alm-input" required />
+            <span asp-validation-for="Etiqueta"></span>
+        </div>
+        <div class="alm-field">
+            <label asp-for="NumeroCaja"></label>
+            <input asp-for="NumeroCaja" class="alm-input" required min="1" />
+            <span asp-validation-for="NumeroCaja"></span>
+        </div>
+        <div class="alm-field">
+            <label asp-for="Cantidad"></label>
+            <input asp-for="Cantidad" class="alm-input" required min="1" />
+            <span asp-validation-for="Cantidad"></span>
+        </div>
+        <div class="alm-field">
+            <label asp-for="LoteEtiqueta">Lote (opcional)</label>
+            <input asp-for="LoteEtiqueta" class="alm-input" placeholder="Opcional" />
+            <span asp-validation-for="LoteEtiqueta"></span>
+        </div>
+        <div class="alm-field">
+            <label asp-for="EstadoCalidad"></label>
+            <select asp-for="EstadoCalidad" class="alm-select" required>
+                @foreach (var x in Model.EstadosCalidad)
+                {
+                    <option value="@x.Extra">@x.Texto</option>
+                }
+            </select>
+            <span asp-validation-for="EstadoCalidad"></span>
+        </div>
+        <div class="alm-field">
+            <label asp-for="UbicacionID"></label>
+            <select asp-for="UbicacionID" class="alm-select" required="@(Model.EsEntregaOF ? "required" : null)">
+                <option value="">Selecciona una ubicación</option>
+                @foreach (var x in Model.Ubicaciones)
+                {
+                    <option value="@x.Id">@x.Texto</option>
+                }
+            </select>
+            <span asp-validation-for="UbicacionID"></span>
+        </div>
+        <div class="alm-field full">
+            <label asp-for="Observaciones"></label>
+            <textarea asp-for="Observaciones" class="alm-textarea" required="@(Model.EsEntregaOF ? "required" : null)"></textarea>
+            <span asp-validation-for="Observaciones"></span>
+        </div>
+        <div class="alm-field full">
+            <button class="alm-btn" type="submit">
+                <i class="fa-solid fa-box"></i>
+                @(Model.EsEntregaOF ? "Registrar entrega de PT" : "Registrar entrada PT")
+            </button>
+        </div>
+    </form>
+</section>
+

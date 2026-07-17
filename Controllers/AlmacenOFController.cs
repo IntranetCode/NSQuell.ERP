@@ -1,0 +1,635 @@
+﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models.ViewModels.Almacen;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using System.Data;
+
+namespace ERP.NSQuell.Controllers;
+
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public sealed class AlmacenOFController : AlmacenBaseController
+{
+    private static readonly string[] AreasPermitidas =
+    {
+        "MP", "EMBALAJE", "PENDIENTES", "CON_MOVIMIENTOS"
+    };
+
+    public AlmacenOFController(IConfiguration configuration) : base(configuration) { }
+
+    [HttpGet]
+    public async Task<IActionResult> Index(
+        string? q,
+        int? estatus,
+        string? area,
+        DateTime? desde,
+        DateTime? hasta,
+        int pagina = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var sesion = ValidarSesion();
+        if (sesion != null) return sesion;
+
+        if (desde.HasValue && hasta.HasValue && hasta.Value.Date < desde.Value.Date)
+            (desde, hasta) = (hasta, desde);
+
+        var areaNormalizada = area?.Trim().ToUpperInvariant();
+
+        var vm = new AlmacenOFIndexVm
+        {
+            Busqueda = q?.Trim(),
+            EstatusID = estatus is > 0 and <= 11 ? estatus : null,
+            Area = AreasPermitidas.Contains(areaNormalizada ?? string.Empty)
+                ? areaNormalizada
+                : null,
+            Desde = desde?.Date,
+            Hasta = hasta?.Date,
+            Pagina = Math.Max(1, pagina),
+            TamanoPagina = 50
+        };
+
+        vm.EstatusDisponibles = Enumerable.Range(1, 11)
+            .Select(id => new AlmacenOFEstatusFiltroVm
+            {
+                EstatusID = id,
+                Nombre = PlaneacionOFEstatus.Nombre(id)
+            })
+            .ToList();
+
+        await using var connection = await AbrirConexionAsync(cancellationToken);
+
+        var objetosRequeridos = new (string Nombre, string Tipo)[]
+        {
+            ("dbo.SolicitudesProduccion", "U"),
+            ("dbo.SolicitudesProduccionDetalle", "U"),
+            ("dbo.AlmacenMP_Movimientos", "U"),
+            ("dbo.AlmacenEmbalajes_Movimientos", "U")
+        };
+
+        foreach (var objeto in objetosRequeridos)
+        {
+            if (!await ExisteObjetoAsync(
+                    connection,
+                    objeto.Nombre,
+                    objeto.Tipo,
+                    cancellationToken))
+            {
+                vm.Configurado = false;
+                vm.MensajeConfiguracion =
+                    $"No está disponible {objeto.Nombre}. Verifica la instalación de Planeación y Almacén.";
+                return View(vm);
+            }
+        }
+
+        const string sql = @"
+WITH Detalle AS
+(
+    SELECT
+        d.SolicitudProduccionID,
+        COUNT_BIG(1) AS TotalRenglones,
+        SUM(ISNULL(d.CantidadPiezas, 0)) AS TotalPiezas,
+        SUM(ISNULL(d.CantidadMpKg, 0)) AS MpRequerida,
+        SUM(ISNULL(d.CantidadEmbalajes, 0)) AS EmbalajeRequerido
+    FROM dbo.SolicitudesProduccionDetalle d
+    WHERE d.Activo = 1
+    GROUP BY d.SolicitudProduccionID
+),
+Base AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        s.FolioSolicitud,
+        s.NumeroOFRecibida,
+        COALESCE
+        (
+            NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), ''),
+            NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), ''),
+            CONCAT('OF-ID-', s.SolicitudProduccionID)
+        ) AS NumeroOFClave,
+        s.FechaSolicitud,
+        s.FechaRequerida,
+        s.FechaInicioPlaneada,
+        s.FechaFinPlaneada,
+        s.FechaCreacion,
+        ISNULL(NULLIF(LTRIM(RTRIM(c.Nombre)), ''), s.ClienteNombre) AS Cliente,
+        ISNULL(NULLIF(LTRIM(RTRIM(s.Prioridad)), ''), 'Normal') AS Prioridad,
+        s.EstatusID,
+        ISNULL(NULLIF(LTRIM(RTRIM(s.ResponsablePlaneacionNombre)), ''), '') AS ResponsablePlaneacionNombre,
+
+        CONVERT(INT, ISNULL(d.TotalRenglones, 0)) AS TotalRenglones,
+        CONVERT(INT, ISNULL(d.TotalPiezas, 0)) AS TotalPiezas,
+        ISNULL(resumen.MaterialResumen, N'') AS MaterialResumen,
+        ISNULL(resumen.EmbalajeResumen, N'') AS EmbalajeResumen,
+        CONVERT(DECIMAL(18,4), ISNULL(d.MpRequerida, 0)) AS MpRequerida,
+        CONVERT(DECIMAL(18,4), ISNULL(d.EmbalajeRequerido, 0)) AS EmbalajeRequerido,
+
+        CONVERT
+        (
+            DECIMAL(18,4),
+            CASE
+                WHEN ISNULL(mp.MpEntregada, 0) < 0 THEN 0
+                ELSE ISNULL(mp.MpEntregada, 0)
+            END
+        ) AS MpEntregada,
+
+        CONVERT
+        (
+            DECIMAL(18,4),
+            CASE
+                WHEN ISNULL(em.EmbalajeEntregado, 0) < 0 THEN 0
+                ELSE ISNULL(em.EmbalajeEntregado, 0)
+            END
+        ) AS EmbalajeEntregado,
+
+        CONVERT(BIGINT, ISNULL(mp.MovimientosMP, 0)) AS MovimientosMP,
+        CONVERT(BIGINT, ISNULL(em.MovimientosEmbalaje, 0)) AS MovimientosEmbalaje
+    FROM dbo.SolicitudesProduccion s
+    LEFT JOIN dbo.ERP_Clientes c
+        ON c.ClienteID = s.ClienteID
+    LEFT JOIN Detalle d
+        ON d.SolicitudProduccionID = s.SolicitudProduccionID
+
+    OUTER APPLY
+    (
+        SELECT
+            MaterialResumen =
+                STUFF
+                (
+                    (
+                        SELECT DISTINCT
+                            N' | '
+                            + COALESCE
+                              (
+                                  NULLIF(LTRIM(RTRIM(dx.MaterialCodigo)), N''),
+                                  N'Sin código'
+                              )
+                            + CASE
+                                  WHEN NULLIF(LTRIM(RTRIM(dx.MaterialDescripcion)), N'') IS NULL
+                                      THEN N''
+                                  ELSE N' · ' + LTRIM(RTRIM(dx.MaterialDescripcion))
+                              END
+                        FROM dbo.SolicitudesProduccionDetalle dx
+                        WHERE dx.SolicitudProduccionID = s.SolicitudProduccionID
+                          AND dx.Activo = 1
+                          AND
+                          (
+                              NULLIF(LTRIM(RTRIM(dx.MaterialCodigo)), N'') IS NOT NULL
+                              OR NULLIF(LTRIM(RTRIM(dx.MaterialDescripcion)), N'') IS NOT NULL
+                          )
+                        FOR XML PATH(N''), TYPE
+                    ).value(N'.', N'nvarchar(max)'),
+                    1,
+                    3,
+                    N''
+                ),
+
+            EmbalajeResumen =
+                STUFF
+                (
+                    (
+                        SELECT DISTINCT
+                            N' | '
+                            + COALESCE
+                              (
+                                  NULLIF(LTRIM(RTRIM(dx.EmbalajeCodigo)), N''),
+                                  N'Sin código'
+                              )
+                            + CASE
+                                  WHEN NULLIF(LTRIM(RTRIM(dx.EmbalajeDescripcion)), N'') IS NULL
+                                      THEN N''
+                                  ELSE N' · ' + LTRIM(RTRIM(dx.EmbalajeDescripcion))
+                              END
+                        FROM dbo.SolicitudesProduccionDetalle dx
+                        WHERE dx.SolicitudProduccionID = s.SolicitudProduccionID
+                          AND dx.Activo = 1
+                          AND
+                          (
+                              NULLIF(LTRIM(RTRIM(dx.EmbalajeCodigo)), N'') IS NOT NULL
+                              OR NULLIF(LTRIM(RTRIM(dx.EmbalajeDescripcion)), N'') IS NOT NULL
+                          )
+                        FOR XML PATH(N''), TYPE
+                    ).value(N'.', N'nvarchar(max)'),
+                    1,
+                    3,
+                    N''
+                )
+    ) resumen
+
+    OUTER APPLY
+    (
+        SELECT
+            SUM
+            (
+                CASE
+                    WHEN mm.TipoMovimiento IN (N'Salida', N'Consumo')
+                        THEN mm.Cantidad
+                    WHEN mm.TipoMovimiento = N'Retorno'
+                        THEN -mm.Cantidad
+                    ELSE 0
+                END
+            ) AS MpEntregada,
+            COUNT_BIG(1) AS MovimientosMP
+        FROM dbo.AlmacenMP_Movimientos mm
+        WHERE mm.Activo = 1
+          AND
+          (
+              (
+                  NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), '') IS NOT NULL
+                  AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(s.FolioSolicitud))
+              )
+              OR
+              (
+                  NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), '') IS NOT NULL
+                  AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(s.NumeroOFRecibida))
+              )
+          )
+    ) mp
+
+    OUTER APPLY
+    (
+        SELECT
+            SUM
+            (
+                CASE
+                    WHEN me.TipoMovimiento IN (N'Salida', N'Consumo')
+                        THEN me.Cantidad
+                    WHEN me.TipoMovimiento = N'Retorno'
+                        THEN -me.Cantidad
+                    ELSE 0
+                END
+            ) AS EmbalajeEntregado,
+            COUNT_BIG(1) AS MovimientosEmbalaje
+        FROM dbo.AlmacenEmbalajes_Movimientos me
+        WHERE me.Activo = 1
+          AND
+          (
+              (
+                  NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), '') IS NOT NULL
+                  AND LTRIM(RTRIM(me.NumeroOF)) = LTRIM(RTRIM(s.FolioSolicitud))
+              )
+              OR
+              (
+                  NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), '') IS NOT NULL
+                  AND LTRIM(RTRIM(me.NumeroOF)) = LTRIM(RTRIM(s.NumeroOFRecibida))
+              )
+          )
+    ) em
+
+
+    WHERE s.Activo = 1
+      AND (@EstatusID IS NULL OR s.EstatusID = @EstatusID)
+      AND (@Desde IS NULL OR s.FechaSolicitud >= @Desde)
+      AND (@Hasta IS NULL OR s.FechaSolicitud < DATEADD(DAY, 1, @Hasta))
+      AND
+      (
+          @Q IS NULL
+          OR s.FolioSolicitud LIKE '%' + @Q + '%'
+          OR s.NumeroOFRecibida LIKE '%' + @Q + '%'
+          OR ISNULL(c.Nombre, s.ClienteNombre) LIKE '%' + @Q + '%'
+          OR EXISTS
+          (
+              SELECT 1
+              FROM dbo.SolicitudesProduccionDetalle dx
+              WHERE dx.SolicitudProduccionID = s.SolicitudProduccionID
+                AND dx.Activo = 1
+                AND
+                (
+                    dx.ReferenciaSAP LIKE '%' + @Q + '%'
+                    OR dx.DesignacionDescripcionSAP LIKE '%' + @Q + '%'
+                    OR dx.MaterialCodigo LIKE '%' + @Q + '%'
+                    OR dx.MaterialDescripcion LIKE '%' + @Q + '%'
+                    OR dx.EmbalajeCodigo LIKE '%' + @Q + '%'
+                    OR dx.EmbalajeDescripcion LIKE '%' + @Q + '%'
+                )
+          )
+      )
+),
+Filtrada AS
+(
+    SELECT *
+    FROM Base
+    WHERE
+        @Area IS NULL
+        OR (@Area = N'MP' AND MpRequerida > 0)
+        OR (@Area = N'EMBALAJE' AND EmbalajeRequerido > 0)
+        OR
+        (
+            @Area = N'CON_MOVIMIENTOS'
+            AND (MovimientosMP + MovimientosEmbalaje) > 0
+        )
+        OR
+        (
+            @Area = N'PENDIENTES'
+            AND
+            (
+                (MpRequerida > 0 AND MpEntregada + 0.0005 < MpRequerida)
+                OR
+                (
+                    EmbalajeRequerido > 0
+                    AND EmbalajeEntregado + 0.0005 < EmbalajeRequerido
+                )
+
+            )
+        )
+)
+SELECT
+    *,
+    COUNT_BIG(1) OVER() AS TotalRegistros,
+    SUM(CONVERT(BIGINT, TotalPiezas)) OVER() AS TotalPiezasFiltradas,
+
+    SUM
+    (
+        CASE
+            WHEN MpRequerida > 0
+             AND MpEntregada + 0.0005 < MpRequerida
+            THEN 1 ELSE 0
+        END
+    ) OVER() AS PendientesMP,
+
+    SUM
+    (
+        CASE
+            WHEN EmbalajeRequerido > 0
+             AND EmbalajeEntregado + 0.0005 < EmbalajeRequerido
+            THEN 1 ELSE 0
+        END
+    ) OVER() AS PendientesEmbalaje,
+
+
+    SUM
+    (
+        CASE
+            WHEN (MovimientosMP + MovimientosEmbalaje) > 0
+            THEN 1 ELSE 0
+        END
+    ) OVER() AS OFConMovimientos
+FROM Filtrada
+ORDER BY FechaCreacion DESC, SolicitudProduccionID DESC
+OFFSET @Offset ROWS
+FETCH NEXT @TamanoPagina ROWS ONLY;";
+
+        await using var command = new SqlCommand(sql, connection);
+
+        command.Parameters.Add("@Q", SqlDbType.NVarChar, 300).Value =
+            string.IsNullOrWhiteSpace(vm.Busqueda)
+                ? DBNull.Value
+                : vm.Busqueda;
+
+        command.Parameters.Add("@EstatusID", SqlDbType.Int).Value =
+            vm.EstatusID.HasValue
+                ? vm.EstatusID.Value
+                : DBNull.Value;
+
+        command.Parameters.Add("@Area", SqlDbType.NVarChar, 30).Value =
+            string.IsNullOrWhiteSpace(vm.Area)
+                ? DBNull.Value
+                : vm.Area;
+
+        command.Parameters.Add("@Desde", SqlDbType.Date).Value =
+            vm.Desde.HasValue
+                ? vm.Desde.Value
+                : DBNull.Value;
+
+        command.Parameters.Add("@Hasta", SqlDbType.Date).Value =
+            vm.Hasta.HasValue
+                ? vm.Hasta.Value
+                : DBNull.Value;
+
+        command.Parameters.Add("@Offset", SqlDbType.Int).Value =
+            (vm.Pagina - 1) * vm.TamanoPagina;
+
+        command.Parameters.Add("@TamanoPagina", SqlDbType.Int).Value =
+            vm.TamanoPagina;
+
+        var primeraFila = true;
+
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var estatusId = Entero(reader, "EstatusID");
+
+                var item = new AlmacenOFItemVm
+                {
+                    SolicitudProduccionID = Entero(reader, "SolicitudProduccionID"),
+                    FolioSolicitud = Texto(reader, "FolioSolicitud"),
+                    NumeroOFRecibida = Texto(reader, "NumeroOFRecibida"),
+                    NumeroOFClave = Texto(reader, "NumeroOFClave"),
+                    FechaSolicitud = Fecha(reader, "FechaSolicitud") ?? DateTime.MinValue,
+                    FechaRequerida = Fecha(reader, "FechaRequerida"),
+                    FechaInicioPlaneada = Fecha(reader, "FechaInicioPlaneada"),
+                    FechaFinPlaneada = Fecha(reader, "FechaFinPlaneada"),
+                    Cliente = Texto(reader, "Cliente"),
+                    Prioridad = Texto(reader, "Prioridad"),
+                    EstatusID = estatusId,
+                    EstatusNombre = PlaneacionOFEstatus.Nombre(estatusId),
+                    ResponsablePlaneacionNombre = Texto(reader, "ResponsablePlaneacionNombre"),
+                    TotalRenglones = Entero(reader, "TotalRenglones"),
+                    TotalPiezas = Entero(reader, "TotalPiezas"),
+                    MaterialResumen = Texto(reader, "MaterialResumen"),
+                    EmbalajeResumen = Texto(reader, "EmbalajeResumen"),
+                    MpRequerida = DecimalValor(reader, "MpRequerida"),
+                    MpEntregada = DecimalValor(reader, "MpEntregada"),
+                    EmbalajeRequerido = DecimalValor(reader, "EmbalajeRequerido"),
+                    EmbalajeEntregado = DecimalValor(reader, "EmbalajeEntregado"),
+                    MovimientosMP = EnteroLargo(reader, "MovimientosMP"),
+                    MovimientosEmbalaje = EnteroLargo(reader, "MovimientosEmbalaje")
+                };
+
+                vm.Ordenes.Add(item);
+
+                if (primeraFila)
+                {
+                    vm.TotalRegistros = Convert.ToInt32(
+                        Math.Min(int.MaxValue, EnteroLargo(reader, "TotalRegistros")));
+
+                    vm.TotalPiezas = EnteroLargo(reader, "TotalPiezasFiltradas");
+                    vm.PendientesMP = Entero(reader, "PendientesMP");
+                    vm.PendientesEmbalaje = Entero(reader, "PendientesEmbalaje");
+                    vm.OFConMovimientos = Entero(reader, "OFConMovimientos");
+                    primeraFila = false;
+                }
+            }
+        }
+
+        await CargarEntregablesAsync(connection, vm.Ordenes, cancellationToken);
+        return View(vm);
+    }
+
+    private static async Task CargarEntregablesAsync(
+        SqlConnection connection,
+        List<AlmacenOFItemVm> ordenes,
+        CancellationToken cancellationToken)
+    {
+        if (ordenes.Count == 0) return;
+
+        var parametros = ordenes
+            .Select((x, i) => new { x.SolicitudProduccionID, Nombre = $"@Of{i}" })
+            .ToList();
+
+        var inSql = string.Join(",", parametros.Select(x => x.Nombre));
+        var sql = $@"
+WITH Materiales AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        ISNULL(m.MaterialID, 0) AS CatalogoID,
+        COALESCE(NULLIF(LTRIM(RTRIM(d.MaterialCodigo)), ''), 'SIN-CODIGO') AS Codigo,
+        MAX(ISNULL(d.MaterialDescripcion, '')) AS Descripcion,
+        COALESCE(NULLIF(LTRIM(RTRIM(m.UnidadDefault)), ''), 'KG') AS Unidad,
+        SUM(CONVERT(DECIMAL(18,4), ISNULL(d.CantidadMpKg, 0))) AS Requerido,
+        MIN(d.Renglon) AS Orden
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle d
+        ON d.SolicitudProduccionID = s.SolicitudProduccionID
+       AND d.Activo = 1
+    LEFT JOIN dbo.ERP_Materiales m
+        ON UPPER(LTRIM(RTRIM(m.Codigo))) = UPPER(LTRIM(RTRIM(d.MaterialCodigo)))
+       AND m.Activo = 1
+    WHERE s.SolicitudProduccionID IN ({inSql})
+      AND s.Activo = 1
+      AND
+      (
+          NULLIF(LTRIM(RTRIM(d.MaterialCodigo)), '') IS NOT NULL
+          OR NULLIF(LTRIM(RTRIM(d.MaterialDescripcion)), '') IS NOT NULL
+      )
+    GROUP BY s.SolicitudProduccionID, m.MaterialID, d.MaterialCodigo, m.UnidadDefault
+)
+SELECT
+    x.SolicitudProduccionID, x.CatalogoID, x.Codigo, x.Descripcion, x.Unidad, x.Requerido,
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            (
+                SELECT SUM
+                (
+                    CASE
+                        WHEN mm.TipoMovimiento IN (N'Salida', N'Consumo') THEN mm.Cantidad
+                        WHEN mm.TipoMovimiento = N'Retorno' THEN -mm.Cantidad
+                        ELSE 0
+                    END
+                )
+                FROM dbo.AlmacenMP_Movimientos mm
+                INNER JOIN dbo.SolicitudesProduccion so
+                    ON so.SolicitudProduccionID = x.SolicitudProduccionID
+                WHERE mm.Activo = 1
+                  AND mm.MaterialID = x.CatalogoID
+                  AND
+                  (
+                      (NULLIF(LTRIM(RTRIM(so.FolioSolicitud)), '') IS NOT NULL
+                       AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.FolioSolicitud)))
+                      OR
+                      (NULLIF(LTRIM(RTRIM(so.NumeroOFRecibida)), '') IS NOT NULL
+                       AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.NumeroOFRecibida)))
+                  )
+            ),
+            0
+        )
+    ) AS Entregado
+FROM Materiales x
+ORDER BY x.SolicitudProduccionID, x.Orden;
+
+WITH Embalajes AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        ISNULL(e.EmbalajeID, 0) AS CatalogoID,
+        COALESCE(NULLIF(LTRIM(RTRIM(d.EmbalajeCodigo)), ''), 'SIN-CODIGO') AS Codigo,
+        MAX(ISNULL(d.EmbalajeDescripcion, '')) AS Descripcion,
+        COALESCE(NULLIF(LTRIM(RTRIM(e.UnidadDefault)), ''), 'PZS') AS Unidad,
+        SUM(CONVERT(DECIMAL(18,4), ISNULL(d.CantidadEmbalajes, 0))) AS Requerido,
+        MIN(d.Renglon) AS Orden
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle d
+        ON d.SolicitudProduccionID = s.SolicitudProduccionID
+       AND d.Activo = 1
+    LEFT JOIN dbo.ERP_Embalajes e
+        ON UPPER(LTRIM(RTRIM(e.Codigo))) = UPPER(LTRIM(RTRIM(d.EmbalajeCodigo)))
+       AND e.Activo = 1
+    WHERE s.SolicitudProduccionID IN ({inSql})
+      AND s.Activo = 1
+      AND
+      (
+          NULLIF(LTRIM(RTRIM(d.EmbalajeCodigo)), '') IS NOT NULL
+          OR NULLIF(LTRIM(RTRIM(d.EmbalajeDescripcion)), '') IS NOT NULL
+      )
+    GROUP BY s.SolicitudProduccionID, e.EmbalajeID, d.EmbalajeCodigo, e.UnidadDefault
+)
+SELECT
+    x.SolicitudProduccionID, x.CatalogoID, x.Codigo, x.Descripcion, x.Unidad, x.Requerido,
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            (
+                SELECT SUM
+                (
+                    CASE
+                        WHEN mm.TipoMovimiento IN (N'Salida', N'Consumo') THEN mm.Cantidad
+                        WHEN mm.TipoMovimiento = N'Retorno' THEN -mm.Cantidad
+                        ELSE 0
+                    END
+                )
+                FROM dbo.AlmacenEmbalajes_Movimientos mm
+                INNER JOIN dbo.SolicitudesProduccion so
+                    ON so.SolicitudProduccionID = x.SolicitudProduccionID
+                WHERE mm.Activo = 1
+                  AND mm.EmbalajeID = x.CatalogoID
+                  AND
+                  (
+                      (NULLIF(LTRIM(RTRIM(so.FolioSolicitud)), '') IS NOT NULL
+                       AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.FolioSolicitud)))
+                      OR
+                      (NULLIF(LTRIM(RTRIM(so.NumeroOFRecibida)), '') IS NOT NULL
+                       AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.NumeroOFRecibida)))
+                  )
+            ),
+            0
+        )
+    ) AS Entregado
+FROM Embalajes x
+ORDER BY x.SolicitudProduccionID, x.Orden;
+;";
+
+        await using var command = new SqlCommand(sql, connection);
+        foreach (var parametro in parametros)
+            command.Parameters.Add(parametro.Nombre, SqlDbType.Int).Value = parametro.SolicitudProduccionID;
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        await LeerEntregablesAsync(reader, ordenes, tipo: "MP", cancellationToken);
+
+        if (await reader.NextResultAsync(cancellationToken))
+            await LeerEntregablesAsync(reader, ordenes, tipo: "EMBALAJE", cancellationToken);
+    }
+
+    private static async Task LeerEntregablesAsync(
+        SqlDataReader reader,
+        List<AlmacenOFItemVm> ordenes,
+        string tipo,
+        CancellationToken cancellationToken)
+    {
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var solicitudID = Entero(reader, "SolicitudProduccionID");
+            var orden = ordenes.FirstOrDefault(x => x.SolicitudProduccionID == solicitudID);
+            if (orden == null) continue;
+
+            var item = new AlmacenOFEntregableVm
+            {
+                SolicitudProduccionID = solicitudID,
+                CatalogoID = Entero(reader, "CatalogoID"),
+                Codigo = Texto(reader, "Codigo"),
+                Descripcion = Texto(reader, "Descripcion"),
+                Unidad = Texto(reader, "Unidad"),
+                Requerido = DecimalValor(reader, "Requerido"),
+                Entregado = DecimalValor(reader, "Entregado")
+            };
+
+            if (tipo == "MP") orden.MaterialesEntrega.Add(item);
+            else orden.EmbalajesEntrega.Add(item);
+        }
+    }
+}
+

@@ -36,6 +36,19 @@
     var enlacesEmbarques = "https://forms.office.com/r/MRjsPtpUrv";
 
     var currentUrl = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.Path}";
+
+    var esGrupoAlmacen =
+        (ViewBag.MenuGrupoID is int menuGrupoID && menuGrupoID == 1)
+        || string.Equals(
+            ViewBag.NombreGrupo?.ToString()?.Trim(),
+            "Almacén",
+            StringComparison.OrdinalIgnoreCase);
+
+    var nombreMarca = esGrupoAlmacen ? "NS QUELL" : nombreEmpresa;
+    var contextoMarca = esGrupoAlmacen ? "ALMACÉN" : "ERP SUITE";
+    var enlaceMarca = esGrupoAlmacen
+        ? Url.Action("Grupo", "Menu", new { id = 1 }) ?? "/Menu/Grupo/1"
+        : "#";
 }
 <!DOCTYPE html>
 <html lang="es">
@@ -190,13 +203,14 @@
             letter-spacing: .08em;
         }
 
-        .navbar-title::after {
-            content: " · ERP SUITE";
+        .navbar-context {
             color: var(--erp-orange-2);
             font-size: .72rem;
             font-weight: 950;
             letter-spacing: .12em;
             margin-left: .5rem;
+            text-transform: uppercase;
+            white-space: nowrap;
         }
 
         .user-toggle {
@@ -1037,7 +1051,7 @@
                 border-radius: 26px !important;
             }
 
-            .navbar-title::after {
+            .navbar-context {
                 display: none;
             }
 
@@ -1113,8 +1127,12 @@
         <nav class="top-navbar" role="navigation" aria-label="Navegación principal">
             <div class="navbar-content">
                 <div class="navbar-left">
-                    <a href="#" class="navbar-brand">
-                        @if (!string.IsNullOrEmpty(logoEmpresa) && logoEmpresa != "default-logo.png")
+                    <a href="@enlaceMarca" class="navbar-brand">
+                        @if (esGrupoAlmacen)
+                        {
+                            <i class="fas fa-warehouse" aria-hidden="true"></i>
+                        }
+                        else if (!string.IsNullOrEmpty(logoEmpresa) && logoEmpresa != "default-logo.png")
                         {
                             <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="navbar-logo" loading="lazy" />
                         }
@@ -1123,7 +1141,8 @@
                             <i class="fas fa-building" aria-hidden="true"></i>
                         }
 
-                        <span class="navbar-title">@nombreEmpresa</span>
+                        <span class="navbar-title">@nombreMarca</span>
+                        <span class="navbar-context">· @contextoMarca</span>
                     </a>
                 </div>
 

@@ -198,6 +198,23 @@ ORDER BY m.Orden, m.Nombre;";
                 Orden = menus.Count == 0 ? 3 : menus.Max(m => m.Orden) + 1
             });
         }
+        var tieneOrdenesFabricacion = menus.Any(m =>
+            (m.Nombre?.Contains("ORDENES DE FABRICACION", StringComparison.OrdinalIgnoreCase) ?? false)
+            || (m.Nombre?.Contains("ÓRDENES DE FABRICACIÓN", StringComparison.OrdinalIgnoreCase) ?? false)
+            || (m.Url?.StartsWith("/AlmacenOF", StringComparison.OrdinalIgnoreCase) ?? false));
+
+        if (tieneMp && !tieneOrdenesFabricacion)
+        {
+            menus.Add(new MenuModel
+            {
+                MenuID = menus.Count == 0 ? 4 : menus.Max(m => m.MenuID) + 1,
+                Nombre = "OF",
+                Url = "/AlmacenOF/Index",
+                Icono = "fa-solid fa-clipboard-list",
+                Descripcion = "Órdenes de fabricación: consulta rápida de MP, embalajes y PT entregado al almacén.",
+                Orden = menus.Count == 0 ? 4 : menus.Max(m => m.Orden) + 1
+            });
+        }
 
         menus = menus
             .OrderBy(m => m.Orden)
@@ -229,3 +246,4 @@ WHERE MenuGrupoID = @Id;";
         
     }
 }
+

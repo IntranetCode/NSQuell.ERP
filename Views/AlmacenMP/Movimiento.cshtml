@@ -1,4 +1,143 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPMovimientoFormVm
-@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Movimiento MP"; }
-<section class="alm-hero"><div><small>ALMACÉN MP</small><h1>Registrar movimiento</h1><p>Las cantidades siempre se capturan positivas; el tipo de movimiento determina si suma o resta inventario.</p></div></section>
-<section class="alm-card"><form method="post" class="alm-form"><div asp-validation-summary="ModelOnly" class="alm-field full"></div><div class="alm-field full"><label asp-for="MaterialID"></label><select asp-for="MaterialID" class="alm-select"><option value="">Selecciona</option>@foreach(var x in Model.Materiales){<option value="@x.Id" data-unidad="@x.Extra">@x.Texto</option>}</select><span asp-validation-for="MaterialID"></span></div><div class="alm-field"><label asp-for="TipoMovimiento"></label><select asp-for="TipoMovimiento" class="alm-select">@foreach(var x in Model.TiposMovimiento){<option value="@x.Extra">@x.Texto</option>}</select></div><div class="alm-field"><label asp-for="Cantidad"></label><input asp-for="Cantidad" class="alm-input" /></div><div class="alm-field"><label asp-for="Unidad"></label><input asp-for="Unidad" class="alm-input" /></div><div class="alm-field"><label asp-for="Lote"></label><input asp-for="Lote" class="alm-input" /></div><div class="alm-field"><label asp-for="UbicacionID"></label><select asp-for="UbicacionID" class="alm-select"><option value="">Sin ubicación</option>@foreach(var x in Model.Ubicaciones){<option value="@x.Id">@x.Texto</option>}</select></div><div class="alm-field"><label asp-for="NumeroOF"></label><input asp-for="NumeroOF" class="alm-input" placeholder="Preparado para conexión futura"/></div><div class="alm-field full"><label asp-for="Observaciones"></label><textarea asp-for="Observaciones" class="alm-textarea"></textarea></div><div class="alm-field full"><button class="alm-btn" type="submit">Guardar movimiento</button></div></form></section>
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPMovimientoFormVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = Model.EsEntregaOF ? "Entrega de MP a OF" : "Movimiento MP";
+    var seleccionado = Model.Materiales.FirstOrDefault(x => x.Id == Model.MaterialID)?.Texto ?? "Material no encontrado";
+}
+
+<section class="alm-hero">
+    <div>
+        <small>ALMACÉN MP</small>
+        <h1>@(Model.EsEntregaOF ? "Entregar materia prima" : "Registrar movimiento")</h1>
+        <p>@(Model.EsEntregaOF
+            ? "El material, la OF, la unidad, el tipo y la fecha se asignan automáticamente. Para esta entrega no se solicita lote ni ubicación."
+            : "Las cantidades siempre se capturan positivas; el tipo de movimiento determina si suma o resta inventario.")</p>
+    </div>
+</section>
+
+<section class="alm-card">
+    <form method="post" class="alm-form">
+        <div asp-validation-summary="ModelOnly" class="alm-field full"></div>
+        <input asp-for="EsEntregaOF" type="hidden" />
+
+        @if (Model.EsEntregaOF)
+        {
+            <input asp-for="MaterialID" type="hidden" />
+            <input asp-for="TipoMovimiento" type="hidden" />
+            <input asp-for="Unidad" type="hidden" />
+            <input asp-for="NumeroOF" type="hidden" />
+
+            <div class="alm-field full">
+                <label>Material MP</label>
+                <input class="alm-input" value="@seleccionado" readonly />
+                <span asp-validation-for="MaterialID"></span>
+            </div>
+            <div class="alm-field">
+                <label>Tipo de movimiento</label>
+                <input class="alm-input" value="Salida · Entrega a OF" readonly />
+            </div>
+            <div class="alm-field">
+                <label asp-for="FechaMovimiento"></label>
+                <input class="alm-input" value="@Model.FechaMovimiento.ToString("dd/MM/yyyy HH:mm:ss")" readonly />
+            </div>
+            <div class="alm-field">
+                <label asp-for="NumeroOF"></label>
+                <input class="alm-input" value="@Model.NumeroOF" readonly />
+                <span asp-validation-for="NumeroOF"></span>
+            </div>
+        }
+        else
+        {
+            <div class="alm-field full">
+                <label asp-for="MaterialID"></label>
+                <select asp-for="MaterialID" class="alm-select">
+                    <option value="">Selecciona</option>
+                    @foreach (var x in Model.Materiales)
+                    {
+                        <option value="@x.Id" data-unidad="@x.Extra">@x.Texto</option>
+                    }
+                </select>
+                <span asp-validation-for="MaterialID"></span>
+            </div>
+            <div class="alm-field">
+                <label asp-for="TipoMovimiento"></label>
+                <select asp-for="TipoMovimiento" class="alm-select">
+                    @foreach (var x in Model.TiposMovimiento)
+                    {
+                        <option value="@x.Extra">@x.Texto</option>
+                    }
+                </select>
+            </div>
+            <div class="alm-field">
+                <label asp-for="Unidad"></label>
+                <input asp-for="Unidad" class="alm-input" />
+            </div>
+            <div class="alm-field">
+                <label asp-for="NumeroOF"></label>
+                <input asp-for="NumeroOF" class="alm-input" />
+            </div>
+        }
+
+                <div class="alm-field">
+            <label asp-for="Cantidad">
+                @(Model.EsEntregaOF ? $"Cantidad ({Model.Unidad})" : "Cantidad")
+            </label>
+
+            @if (Model.EsEntregaOF)
+            {
+                <div class="alm-unit-input">
+                    <input asp-for="Cantidad"
+                           class="alm-input"
+                           required
+                           min="0.001"
+                           step="0.001"
+                           placeholder="Cantidad en @Model.Unidad" />
+                    <span class="alm-unit-input__suffix">@Model.Unidad</span>
+                </div>
+            }
+            else
+            {
+                <input asp-for="Cantidad" class="alm-input" required min="0.001" step="0.001" />
+            }
+
+            <span asp-validation-for="Cantidad"></span>
+        </div>
+        @if (Model.EsEntregaOF)
+        {
+            <input asp-for="Lote" type="hidden" value="S/L" />
+            <input asp-for="UbicacionID" type="hidden" />
+        }
+        else
+        {
+            <div class="alm-field">
+                <label asp-for="Lote">Lote</label>
+                <input asp-for="Lote" class="alm-input" />
+                <span asp-validation-for="Lote"></span>
+            </div>
+            <div class="alm-field full">
+                <label asp-for="UbicacionID"></label>
+                <select asp-for="UbicacionID" class="alm-select">
+                    <option value="">Sin ubicación</option>
+                    @foreach (var x in Model.Ubicaciones)
+                    {
+                        <option value="@x.Id">@x.Texto</option>
+                    }
+                </select>
+                <span asp-validation-for="UbicacionID"></span>
+            </div>
+        }
+        <div class="alm-field full">
+            <label asp-for="Observaciones"></label>
+            <textarea asp-for="Observaciones" class="alm-textarea" required="@(Model.EsEntregaOF ? "required" : null)"></textarea>
+            <span asp-validation-for="Observaciones"></span>
+        </div>
+        <div class="alm-field full">
+            <button class="alm-btn" type="submit">
+                <i class="fa-solid fa-truck-ramp-box"></i>
+                @(Model.EsEntregaOF ? "Registrar entrega de MP" : "Guardar movimiento")
+            </button>
+        </div>
+    </form>
+</section>
+
+

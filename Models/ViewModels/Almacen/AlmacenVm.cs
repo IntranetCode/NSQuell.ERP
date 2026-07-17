@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace ERP.NSQuell.Models.ViewModels.Almacen;
 
@@ -124,6 +124,11 @@ public sealed class AlmacenMPMovimientoFormVm
     [StringLength(800)]
     public string? Observaciones { get; set; }
 
+    [Display(Name = "Fecha y hora del movimiento")]
+    public DateTime FechaMovimiento { get; set; } = DateTime.Now;
+
+    public bool EsEntregaOF { get; set; }
+
     public List<AlmacenSelectVm> Materiales { get; set; } = new();
     public List<AlmacenSelectVm> Ubicaciones { get; set; } = new();
     public List<AlmacenSelectVm> TiposMovimiento { get; set; } = new();
@@ -227,6 +232,17 @@ public sealed class AlmacenPTEntradaFormVm
 
     [StringLength(800)]
     public string? Observaciones { get; set; }
+
+    [Display(Name = "Tipo de movimiento")]
+    public string TipoMovimiento { get; set; } = "Entrada";
+
+    [Display(Name = "Unidad")]
+    public string Unidad { get; set; } = "PZS";
+
+    [Display(Name = "Fecha y hora del movimiento")]
+    public DateTime FechaMovimiento { get; set; } = DateTime.Now;
+
+    public bool EsEntregaOF { get; set; }
 
     public List<AlmacenSelectVm> Partes { get; set; } = new();
     public List<AlmacenSelectVm> Ubicaciones { get; set; } = new();
@@ -451,3 +467,4 @@ public sealed class AlmacenPTHistorialVm
     public List<string> EtiquetasLotesFiltro { get; set; } = new();
     public List<AlmacenPTMovimientoListaVm> Movimientos { get; set; } = new();
 }
+
