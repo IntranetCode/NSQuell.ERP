@@ -128,10 +128,14 @@ else
                 <label for="area">Atención de Almacén</label>
                 <select id="area" class="alm-select" name="area">
                     <option value="">Todas</option>
-                    <option value="PENDIENTES" selected="@(Model.Area == "PENDIENTES")">Con pendientes</option>
-                    <option value="CON_MOVIMIENTOS" selected="@(Model.Area == "CON_MOVIMIENTOS")">Con movimientos</option>
-                    <option value="MP" selected="@(Model.Area == "MP")">Requiere MP</option>
-                    <option value="EMBALAJE" selected="@(Model.Area == "EMBALAJE")">Requiere embalaje</option>
+                    @if (Model.Area == "PENDIENTES") { <option value="PENDIENTES" selected>Con pendientes</option> }
+                    else { <option value="PENDIENTES">Con pendientes</option> }
+                    @if (Model.Area == "CON_MOVIMIENTOS") { <option value="CON_MOVIMIENTOS" selected>Con movimientos</option> }
+                    else { <option value="CON_MOVIMIENTOS">Con movimientos</option> }
+                    @if (Model.Area == "MP") { <option value="MP" selected>Requiere MP</option> }
+                    else { <option value="MP">Requiere MP</option> }
+                    @if (Model.Area == "EMBALAJE") { <option value="EMBALAJE" selected>Requiere embalaje</option> }
+                    else { <option value="EMBALAJE">Requiere embalaje</option> }
                 </select>
             </div>
 
@@ -152,7 +156,7 @@ else
         </form>
 
         <div class="of-table-wrap">
-            <table class="of-table">
+            <table class="of-table alm-table">
                 <colgroup>
                     <col class="of-col-of" />
                     <col class="of-col-client" />
@@ -214,21 +218,19 @@ else
                                 <div class="of-delivery-list">
                                     @foreach (var item in x.MaterialesEntrega)
                                     {
-                                        var url = item.PuedeEntregar
+                                        var puedeEntregar = item.PuedeEntregar && x.TieneNumeroOF;
+                                        var url = puedeEntregar
                                             ? Url.Action("Movimiento", "AlmacenMP", new
                                             {
                                                 materialId = item.CatalogoID,
-                                                tipo = "Salida",
-                                                numeroOF = x.NumeroOFClave,
-                                                cantidad = item.Pendiente,
-                                                unidad = item.Unidad,
+                                                solicitudProduccionId = x.SolicitudProduccionID,
                                                 entregaOF = true
                                             })
                                             : null;
 
-                                        <a class="of-delivery-item @(!item.PuedeEntregar ? "disabled" : "")"
+                                        <a class="of-delivery-item @(!puedeEntregar ? "disabled" : "")"
                                            href="@url"
-                                           title="@(item.PuedeEntregar ? "Registrar entrega de MP" : item.CatalogoID <= 0 ? "Material no localizado en ERP_Materiales" : "Entrega completa")">
+                                           title="@(puedeEntregar ? "Registrar entrega de MP" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : item.CatalogoID <= 0 ? "Material no localizado en ERP_Materiales" : "Entrega completa")" aria-disabled="@(!puedeEntregar)">
                                             <span class="of-delivery-name">@item.Codigo · @item.Descripcion</span>
                                             <span class="of-flow @item.Clase">
                                                 <span class="of-flow-top">
@@ -249,21 +251,19 @@ else
                                 <div class="of-delivery-list">
                                     @foreach (var item in x.EmbalajesEntrega)
                                     {
-                                        var url = item.PuedeEntregar
+                                        var puedeEntregar = item.PuedeEntregar && x.TieneNumeroOF;
+                                        var url = puedeEntregar
                                             ? Url.Action("Movimiento", "AlmacenEmbalajes", new
                                             {
                                                 embalajeId = item.CatalogoID,
-                                                tipo = "Salida",
-                                                numeroOF = x.NumeroOFClave,
-                                                cantidad = item.Pendiente,
-                                                unidad = item.Unidad,
+                                                solicitudProduccionId = x.SolicitudProduccionID,
                                                 entregaOF = true
                                             })
                                             : null;
 
-                                        <a class="of-delivery-item @(!item.PuedeEntregar ? "disabled" : "")"
+                                        <a class="of-delivery-item @(!puedeEntregar ? "disabled" : "")"
                                            href="@url"
-                                           title="@(item.PuedeEntregar ? "Registrar entrega de embalaje" : item.CatalogoID <= 0 ? "Embalaje no localizado en ERP_Embalajes" : "Entrega completa")">
+                                           title="@(puedeEntregar ? "Registrar entrega de embalaje" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : item.CatalogoID <= 0 ? "Embalaje no localizado en ERP_Embalajes" : "Entrega completa")" aria-disabled="@(!puedeEntregar)">
                                             <span class="of-delivery-name">@item.Codigo · @item.Descripcion</span>
                                             <span class="of-flow @item.Clase">
                                                 <span class="of-flow-top">
@@ -344,4 +344,5 @@ else
         </div>
     </section>
 }
+
 

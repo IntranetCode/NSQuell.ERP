@@ -211,7 +211,7 @@ ORDER BY m.Orden, m.Nombre;";
                 Nombre = "OF",
                 Url = "/AlmacenOF/Index",
                 Icono = "fa-solid fa-clipboard-list",
-                Descripcion = "Órdenes de fabricación: consulta rápida de MP, embalajes y PT entregado al almacén.",
+                Descripcion = "Órdenes de fabricación: consulta y entrega controlada de MP y embalajes.",
                 Orden = menus.Count == 0 ? 4 : menus.Max(m => m.Orden) + 1
             });
         }
@@ -246,4 +246,5 @@ WHERE MenuGrupoID = @Id;";
         
     }
 }
+
 

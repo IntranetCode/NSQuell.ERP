@@ -129,6 +129,16 @@ public sealed class AlmacenMPMovimientoFormVm
 
     public bool EsEntregaOF { get; set; }
 
+    [Display(Name = "Solicitud de producción")]
+    public int? SolicitudProduccionID { get; set; }
+
+    [Display(Name = "Cantidad pendiente de la OF")]
+    public decimal CantidadPendienteOF { get; set; }
+
+    [Required(ErrorMessage = "La operación no tiene un identificador válido.")]
+    [StringLength(32, MinimumLength = 32)]
+    public string OperacionToken { get; set; } = System.Guid.NewGuid().ToString("N");
+
     public List<AlmacenSelectVm> Materiales { get; set; } = new();
     public List<AlmacenSelectVm> Ubicaciones { get; set; } = new();
     public List<AlmacenSelectVm> TiposMovimiento { get; set; } = new();
@@ -243,6 +253,16 @@ public sealed class AlmacenPTEntradaFormVm
     public DateTime FechaMovimiento { get; set; } = DateTime.Now;
 
     public bool EsEntregaOF { get; set; }
+
+    [Display(Name = "Solicitud de producción")]
+    public int? SolicitudProduccionID { get; set; }
+
+    [Display(Name = "Cantidad pendiente de la OF")]
+    public decimal CantidadPendienteOF { get; set; }
+
+    [Required(ErrorMessage = "La operación no tiene un identificador válido.")]
+    [StringLength(32, MinimumLength = 32)]
+    public string OperacionToken { get; set; } = System.Guid.NewGuid().ToString("N");
 
     public List<AlmacenSelectVm> Partes { get; set; } = new();
     public List<AlmacenSelectVm> Ubicaciones { get; set; } = new();
@@ -467,4 +487,5 @@ public sealed class AlmacenPTHistorialVm
     public List<string> EtiquetasLotesFiltro { get; set; } = new();
     public List<AlmacenPTMovimientoListaVm> Movimientos { get; set; } = new();
 }
+
 

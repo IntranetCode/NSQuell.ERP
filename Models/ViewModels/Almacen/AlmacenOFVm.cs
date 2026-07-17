@@ -66,6 +66,10 @@ public sealed class AlmacenOFItemVm
     public long MovimientosMP { get; set; }
     public long MovimientosEmbalaje { get; set; }
 
+    public bool TieneNumeroOF =>
+        !string.IsNullOrWhiteSpace(NumeroOFRecibida)
+        || !string.IsNullOrWhiteSpace(FolioSolicitud);
+
     public List<AlmacenOFEntregableVm> MaterialesEntrega { get; set; } = new();
     public List<AlmacenOFEntregableVm> EmbalajesEntrega { get; set; } = new();
 
@@ -176,4 +180,5 @@ public sealed class AlmacenOFEntregableVm
 
     public bool PuedeEntregar => CatalogoID > 0 && Pendiente > 0;
 }
+
 

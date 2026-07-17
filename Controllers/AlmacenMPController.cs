@@ -1,4 +1,5 @@
 ﻿using ERP.NSQuell.Models.ViewModels.Almacen;
+using ERP.NSQuell.Servicios.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
@@ -709,6 +710,7 @@ WHERE MaterialID=@Id AND Activo=1;";
         string? numeroOF,
         decimal? cantidad,
         string? unidad,
+        int? solicitudProduccionId,
         bool entregaOF = false,
         CancellationToken cancellationToken = default)
     {
@@ -718,19 +720,53 @@ WHERE MaterialID=@Id AND Activo=1;";
         var vm = new AlmacenMPMovimientoFormVm
         {
             MaterialID = materialId.GetValueOrDefault(),
-            TipoMovimiento = entregaOF
-                ? "Salida"
-                : TiposPermitidos.Contains(tipo ?? string.Empty) ? tipo! : "Entrada",
-            NumeroOF = numeroOF?.Trim(),
-            Cantidad = cantidad.GetValueOrDefault(),
-            Unidad = unidad?.Trim().ToUpperInvariant() ?? string.Empty,
+            TipoMovimiento = entregaOF ? "Salida" : TiposPermitidos.Contains(tipo ?? string.Empty) ? tipo! : "Entrada",
+            NumeroOF = entregaOF ? null : numeroOF?.Trim(),
+            Cantidad = entregaOF ? 0m : cantidad.GetValueOrDefault(),
+            Unidad = entregaOF ? string.Empty : unidad?.Trim().ToUpperInvariant() ?? string.Empty,
             EsEntregaOF = entregaOF,
+            SolicitudProduccionID = solicitudProduccionId,
             FechaMovimiento = DateTime.Now,
             Lote = "S/L",
-            Observaciones = entregaOF && !string.IsNullOrWhiteSpace(numeroOF)
-                ? $"Entrega de materia prima para {numeroOF.Trim()}."
-                : null
+            OperacionToken = AlmacenOFEntregaService.CrearToken()
         };
+
+        if (entregaOF)
+        {
+            if (!solicitudProduccionId.HasValue || solicitudProduccionId.Value <= 0 || vm.MaterialID <= 0)
+            {
+                Mensaje("warning", "No se recibió una OF y un material válidos.");
+                return RedirectToAction("Index", "AlmacenOF");
+            }
+
+            await using var connection = await AbrirConexionAsync(cancellationToken);
+            var contexto = await AlmacenOFEntregaService.CargarMateriaPrimaAsync(
+                connection, null, solicitudProduccionId.Value, vm.MaterialID, cancellationToken);
+
+            if (contexto == null)
+            {
+                Mensaje("warning", "El material no pertenece a la OF seleccionada.");
+                return RedirectToAction("Index", "AlmacenOF");
+            }
+
+            if (string.IsNullOrWhiteSpace(contexto.NumeroOF))
+            {
+                Mensaje("warning", "Planeación todavía no asigna un número de OF válido.");
+                return RedirectToAction("Index", "AlmacenOF");
+            }
+
+            if (contexto.Pendiente <= 0.0005m)
+            {
+                Mensaje("warning", "La materia prima seleccionada ya fue entregada completamente.");
+                return RedirectToAction("Index", "AlmacenOF");
+            }
+
+            vm.NumeroOF = contexto.NumeroOF;
+            vm.Unidad = contexto.Unidad;
+            vm.CantidadPendienteOF = contexto.Pendiente;
+            vm.Cantidad = contexto.Pendiente;
+            vm.Observaciones = $"Entrega de materia prima para {contexto.NumeroOF}.";
+        }
 
         await CargarMovimientoAsync(vm, cancellationToken);
         return View(vm);
@@ -742,40 +778,45 @@ WHERE MaterialID=@Id AND Activo=1;";
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
+
         model.Lote = string.IsNullOrWhiteSpace(model.Lote) ? "S/L" : model.Lote.Trim();
-        model.Unidad = model.Unidad?.Trim().ToUpperInvariant() ?? string.Empty;
         model.NumeroOF = model.NumeroOF?.Trim();
         model.Observaciones = model.Observaciones?.Trim();
+        model.OperacionToken = model.OperacionToken?.Trim() ?? string.Empty;
         model.FechaMovimiento = DateTime.Now;
+        model.EsEntregaOF = model.EsEntregaOF || model.SolicitudProduccionID.HasValue;
+        ModelState.Remove(nameof(model.Unidad));
+
+        if (!AlmacenOFEntregaService.TokenValido(model.OperacionToken))
+            ModelState.AddModelError(nameof(model.OperacionToken), "La operación expiró. Regresa al formulario e inténtalo nuevamente.");
 
         if (model.EsEntregaOF)
         {
             model.TipoMovimiento = "Salida";
             model.Lote = "S/L";
             model.UbicacionID = null;
+            model.Unidad = string.Empty;
             ModelState.Remove(nameof(model.TipoMovimiento));
             ModelState.Remove(nameof(model.Lote));
             ModelState.Remove(nameof(model.UbicacionID));
+            ModelState.Remove(nameof(model.NumeroOF));
+            ModelState.Remove(nameof(model.CantidadPendienteOF));
 
+            if (!model.SolicitudProduccionID.HasValue || model.SolicitudProduccionID.Value <= 0)
+                ModelState.AddModelError(nameof(model.SolicitudProduccionID), "La orden de fabricación es obligatoria.");
             if (model.MaterialID <= 0)
                 ModelState.AddModelError(nameof(model.MaterialID), "El material es obligatorio.");
-            if (string.IsNullOrWhiteSpace(model.NumeroOF))
-                ModelState.AddModelError(nameof(model.NumeroOF), "La orden de fabricación es obligatoria.");
             if (string.IsNullOrWhiteSpace(model.Observaciones))
                 ModelState.AddModelError(nameof(model.Observaciones), "Las observaciones son obligatorias.");
         }
 
-        // REVISION_ALMACEN_V8_AJUSTES_MP
         if ((model.TipoMovimiento == "AjustePositivo" || model.TipoMovimiento == "AjusteNegativo")
             && string.IsNullOrWhiteSpace(model.Observaciones))
-        {
-            ModelState.AddModelError(
-                nameof(model.Observaciones),
-                "El motivo del ajuste es obligatorio.");
-        }
+            ModelState.AddModelError(nameof(model.Observaciones), "El motivo del ajuste es obligatorio.");
 
         if (!TiposPermitidos.Contains(model.TipoMovimiento))
             ModelState.AddModelError(nameof(model.TipoMovimiento), "Tipo de movimiento inválido.");
+
         if (!ModelState.IsValid)
         {
             await CargarMovimientoAsync(model, cancellationToken);
@@ -784,16 +825,69 @@ WHERE MaterialID=@Id AND Activo=1;";
 
         await using var connection = await AbrirConexionAsync(cancellationToken);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var referencia = AlmacenOFEntregaService.CrearReferencia("WEB-MP", model.OperacionToken);
+
         try
         {
-            const string materialSql = @"
+            if (await AlmacenOFEntregaService.ExisteReferenciaMPAsync(connection, transaction, referencia, cancellationToken))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", "Este movimiento ya había sido registrado. No se creó un duplicado.");
+                return model.EsEntregaOF ? RedirectToAction("Index", "AlmacenOF") : RedirectToAction(nameof(Index));
+            }
+
+            string codigo;
+            var requiereLote = false;
+
+            if (model.EsEntregaOF)
+            {
+                var contexto = await AlmacenOFEntregaService.CargarMateriaPrimaAsync(
+                    connection, transaction, model.SolicitudProduccionID!.Value, model.MaterialID, cancellationToken);
+
+                if (contexto == null)
+                {
+                    ModelState.AddModelError(nameof(model.MaterialID), "El material no pertenece a la OF seleccionada.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken);
+                    return View(model);
+                }
+
+                model.NumeroOF = contexto.NumeroOF;
+                model.Unidad = contexto.Unidad;
+                model.CantidadPendienteOF = contexto.Pendiente;
+                codigo = contexto.Codigo;
+
+                if (string.IsNullOrWhiteSpace(contexto.NumeroOF))
+                {
+                    ModelState.AddModelError(nameof(model.SolicitudProduccionID), "Planeación todavía no asigna un número de OF válido.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken);
+                    return View(model);
+                }
+
+                if (contexto.Pendiente <= 0.0005m)
+                {
+                    ModelState.AddModelError(nameof(model.Cantidad), "La entrega de este material ya está completa.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken);
+                    return View(model);
+                }
+
+                if (model.Cantidad - contexto.Pendiente > 0.0005m)
+                {
+                    ModelState.AddModelError(nameof(model.Cantidad), $"La cantidad excede lo pendiente. Máximo permitido: {contexto.Pendiente:0.###} {contexto.Unidad}.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken);
+                    return View(model);
+                }
+            }
+            else
+            {
+                const string materialSql = @"
 SELECT Codigo, Nombre, UnidadDefault, RequiereLote
 FROM dbo.ERP_Materiales WITH (UPDLOCK, HOLDLOCK)
 WHERE MaterialID=@Id AND Activo=1;";
-            string codigo;
-            bool requiereLote;
-            await using (var materialCommand = new SqlCommand(materialSql, connection, transaction))
-            {
+                await using var materialCommand = new SqlCommand(materialSql, connection, transaction);
                 materialCommand.Parameters.Add("@Id", SqlDbType.Int).Value = model.MaterialID;
                 await using var reader = await materialCommand.ExecuteReaderAsync(cancellationToken);
                 if (!await reader.ReadAsync(cancellationToken))
@@ -805,7 +899,6 @@ WHERE MaterialID=@Id AND Activo=1;";
                 }
                 codigo = Texto(reader, "Codigo");
                 requiereLote = Convert.ToBoolean(reader["RequiereLote"]);
-                // La unidad siempre se toma del catálogo; no se confía en el valor enviado por el navegador.
                 model.Unidad = Texto(reader, "UnidadDefault").Trim().ToUpperInvariant();
             }
 
@@ -819,10 +912,7 @@ WHERE MaterialID=@Id AND Activo=1;";
 
             if (EsSalidaMP(model.TipoMovimiento))
             {
-                const string saldoSql = @"
-SELECT ISNULL(Saldo,0)
-FROM dbo.vw_AlmacenMPInventario
-WHERE MaterialID=@MaterialID;";
+                const string saldoSql = "SELECT ISNULL(Saldo,0) FROM dbo.vw_AlmacenMPInventario WHERE MaterialID=@MaterialID;";
                 await using var saldoCommand = new SqlCommand(saldoSql, connection, transaction);
                 saldoCommand.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
                 var saldo = Convert.ToDecimal(await saldoCommand.ExecuteScalarAsync(cancellationToken) ?? 0m);
@@ -837,14 +927,12 @@ WHERE MaterialID=@MaterialID;";
 
             const string insertSql = @"
 INSERT dbo.AlmacenMP_Movimientos
-(FechaMovimiento, MaterialID, TipoMovimiento, Lote, Cantidad, Unidad,
- UbicacionID, NumeroOF, ResponsableUsuarioID, EntregadoPorNombre,
- Seguimiento, FechaCreacion, CreadoPor, Activo,
+(FechaMovimiento, MaterialID, TipoMovimiento, Lote, Cantidad, Unidad, UbicacionID, NumeroOF,
+ ResponsableUsuarioID, EntregadoPorNombre, Seguimiento, FechaCreacion, CreadoPor, Activo,
  RequiereValidacionProduccion, ValidadoProduccion, ReferenciaOperacion)
 VALUES
-(SYSDATETIME(), @MaterialID, @Tipo, @Lote, @Cantidad, @Unidad,
- @UbicacionID, @NumeroOF, @UsuarioID, @Responsable,
- @Observaciones, SYSUTCDATETIME(), @Responsable, 1, 0, 1, @Referencia);";
+(SYSDATETIME(), @MaterialID, @Tipo, @Lote, @Cantidad, @Unidad, @UbicacionID, @NumeroOF,
+ @UsuarioID, @Responsable, @Observaciones, SYSUTCDATETIME(), @Responsable, 1, 0, 1, @Referencia);";
             await using var insert = new SqlCommand(insertSql, connection, transaction);
             insert.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
             insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value = model.TipoMovimiento;
@@ -858,10 +946,16 @@ VALUES
             insert.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(model.NumeroOF) ? DBNull.Value : model.NumeroOF;
             insert.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
             insert.Parameters.Add("@Responsable", SqlDbType.NVarChar, 180).Value = UsuarioNombre;
-            insert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value = string.IsNullOrWhiteSpace(model.Observaciones) ? DBNull.Value : model.Observaciones.Trim();
-            insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = $"MAN-MP-{Guid.NewGuid():N}";
+            insert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value = string.IsNullOrWhiteSpace(model.Observaciones) ? DBNull.Value : model.Observaciones;
+            insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = referencia;
             await insert.ExecuteNonQueryAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            Mensaje("warning", "La operación ya fue procesada. No se creó un movimiento duplicado.");
+            return model.EsEntregaOF ? RedirectToAction("Index", "AlmacenOF") : RedirectToAction(nameof(Index));
         }
         catch
         {
@@ -869,13 +963,8 @@ VALUES
             throw;
         }
 
-        Mensaje("success", model.EsEntregaOF
-            ? "Entrega de materia prima registrada para la OF."
-            : "Movimiento de Almacén MP registrado correctamente.");
-
-        return model.EsEntregaOF
-            ? RedirectToAction("Index", "AlmacenOF")
-            : RedirectToAction(nameof(Index));
+        Mensaje("success", model.EsEntregaOF ? "Entrega de materia prima registrada para la OF." : "Movimiento de Almacén MP registrado correctamente.");
+        return model.EsEntregaOF ? RedirectToAction("Index", "AlmacenOF") : RedirectToAction(nameof(Index));
     }
 
     private async Task CargarMovimientoAsync(AlmacenMPMovimientoFormVm vm, CancellationToken cancellationToken)
@@ -927,5 +1016,6 @@ ORDER BY Almacen, Rack, Nivel, Posicion;";
         return rows;
     }
 }
+
 
 
