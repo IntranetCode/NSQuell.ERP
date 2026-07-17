@@ -72,6 +72,7 @@ public sealed class AlmacenOFItemVm
 
     public List<AlmacenOFEntregableVm> MaterialesEntrega { get; set; } = new();
     public List<AlmacenOFEntregableVm> EmbalajesEntrega { get; set; } = new();
+    public List<AlmacenOFEntregableVm> PartesEntrega { get; set; } = new();
 
     public int PorcentajeMP => Porcentaje(MpRequerida, MpEntregada);
     public int PorcentajeEmbalaje => Porcentaje(EmbalajeRequerido, EmbalajeEntregado);
@@ -180,5 +181,6 @@ public sealed class AlmacenOFEntregableVm
 
     public bool PuedeEntregar => CatalogoID > 0 && Pendiente > 0;
 }
+
 
 

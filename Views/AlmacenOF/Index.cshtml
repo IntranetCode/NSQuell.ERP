@@ -5,52 +5,412 @@
 }
 
 <style>
-    .of-kpi-grid{grid-template-columns:repeat(5,minmax(135px,1fr))}
-    .of-filter{display:grid;grid-template-columns:minmax(280px,2fr) minmax(190px,1fr) minmax(190px,1fr) 150px 150px auto;gap:10px;padding:16px;align-items:end}
-    .of-filter .alm-field label{font-size:.72rem;text-transform:uppercase}
-    .of-table-wrap{overflow:auto}
-    .of-table{width:100%;min-width:1120px;table-layout:fixed;border-collapse:collapse;font-size:.76rem}
-    .of-table th,.of-table td{height:58px;padding:7px 9px;border-bottom:1px solid #22314a;vertical-align:middle}
-    .of-table th{height:36px;color:#a9bdd9;font-size:.66rem;text-transform:uppercase;letter-spacing:.02em}
-    .of-table tbody tr:hover{background:rgba(255,255,255,.025)}
-    .of-col-of{width:13%}.of-col-client{width:14%}.of-col-date{width:10%}
-    .of-col-flow{width:17%}.of-col-status{width:9%}.of-col-actions{width:5%}
-    .of-link{display:block;color:#fff;text-decoration:none;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .of-link:hover{color:#ffd0a6}
-    .of-sub{display:block;margin-top:4px;color:var(--muted);font-size:.62rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .of-center{text-align:center;font-variant-numeric:tabular-nums}
-    .of-pieces{font-size:.95rem;font-weight:900}
-    .of-deliverable{display:block;margin-bottom:5px;color:#dce7f7;font-size:.64rem;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .of-delivery-list{display:grid;gap:7px}
-    .of-delivery-item{display:block;padding:6px 7px;border:1px solid rgba(255,255,255,.08);border-radius:9px;background:rgba(255,255,255,.025);color:#fff;text-decoration:none}
-    .of-delivery-item:hover{border-color:rgba(244,123,32,.5);background:rgba(244,123,32,.08);color:#fff}
-    .of-delivery-item.disabled{pointer-events:none;opacity:.55}
-    .of-delivery-name{display:block;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dce7f7;font-size:.62rem;font-weight:850}
-    .of-flow{display:block;color:#fff;text-decoration:none}
-    .of-flow:hover{color:#fff}
-    .of-flow-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
-    .of-flow-top strong{font-size:.78rem;font-variant-numeric:tabular-nums}
-    .of-state{padding:3px 6px;border-radius:999px;font-size:.56rem;font-weight:950;text-transform:uppercase;white-space:nowrap}
-    .of-state.completo{background:#103b2d;color:#8bf3c4}
-    .of-state.parcial{background:#443916;color:#ffe287}
-    .of-state.pendiente{background:#3e1420;color:#ffb0b8}
-    .of-state.na{background:#263247;color:#cbd5e1}
-    .of-progress{display:block;height:5px;margin-top:6px;border-radius:999px;background:#263247;overflow:hidden}
-    .of-progress i{display:block;height:100%;border-radius:999px;background:#23c483}
-    .of-flow.parcial .of-progress i{background:#f7c948}
-    .of-flow.pendiente .of-progress i{background:#ff5d6c}
-    .of-flow.na .of-progress i{width:0!important}
-    .of-status{display:inline-flex;align-items:center;justify-content:center;max-width:100%;padding:5px 8px;border-radius:999px;background:#263247;color:#dbe5f4;font-size:.62rem;font-weight:900;text-align:center}
-    .of-priority{display:block;margin-top:5px;font-size:.58rem;font-weight:900;text-transform:uppercase}
-    .of-priority.urgente{color:#ff8b97}.of-priority.alta{color:#ffd16f}.of-priority.normal{color:#9fb0c9}.of-priority.baja{color:#8bf3c4}
-    .of-actions{display:flex;align-items:center;justify-content:center;gap:5px}
-    .of-action{display:inline-flex;align-items:center;justify-content:center;width:31px;height:31px;border:1px solid var(--line);border-radius:8px;background:#18243a;color:#fff;text-decoration:none}
-    .of-action:hover{border-color:rgba(244,123,32,.65);background:rgba(244,123,32,.18);color:#fff}
-    .of-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-top:1px solid var(--line)}
-    .of-pagination__actions{display:flex;gap:7px}
-    .of-pagination .alm-btn.disabled{pointer-events:none;opacity:.45}
-    @@media(max-width:1250px){.of-kpi-grid{grid-template-columns:repeat(3,1fr)}.of-filter{grid-template-columns:1fr 1fr 1fr}}
-    @@media(max-width:760px){.of-kpi-grid,.of-filter{grid-template-columns:1fr}}
+    .of-kpi-grid {
+        grid-template-columns: repeat(5, minmax(135px, 1fr));
+    }
+
+    .of-filter {
+        display: grid;
+        grid-template-columns:
+            minmax(280px, 2fr)
+            minmax(190px, 1fr)
+            minmax(190px, 1fr)
+            150px
+            150px
+            auto;
+        gap: 10px;
+        padding: 16px;
+        align-items: end;
+    }
+
+    .of-filter .alm-field label {
+        font-size: .72rem;
+        text-transform: uppercase;
+    }
+
+    .of-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: visible;
+        scrollbar-gutter: stable;
+        overscroll-behavior-inline: contain;
+    }
+
+    .of-table {
+        width: 100%;
+        min-width: 1560px;
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: .76rem;
+    }
+
+    /*
+        Anchos explícitos para impedir que MP, Embalaje y PT
+        se compriman entre sí.
+    */
+    .of-table col:nth-child(1) { width: 155px; }
+    .of-table col:nth-child(2) { width: 205px; }
+    .of-table col:nth-child(3) { width: 145px; }
+    .of-table col:nth-child(4) { width: 255px; }
+    .of-table col:nth-child(5) { width: 255px; }
+    .of-table col:nth-child(6) { width: 315px; }
+    .of-table col:nth-child(7) { width: 130px; }
+    .of-table col:nth-child(8) { width: 65px; }
+
+    .of-table th,
+    .of-table td {
+        box-sizing: border-box;
+        padding: 10px 12px;
+        border-bottom: 1px solid #22314a;
+        vertical-align: top;
+        overflow: hidden;
+    }
+
+    .of-table th {
+        height: 40px;
+        color: #a9bdd9;
+        font-size: .66rem;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    /*
+        Separadores visibles entre los tres flujos y el estatus.
+    */
+    .of-table th:nth-child(n+4),
+    .of-table td:nth-child(n+4) {
+        border-left: 1px solid rgba(148, 163, 184, .14);
+    }
+
+    .of-table th:nth-child(6),
+    .of-table td:nth-child(6) {
+        background: rgba(255, 255, 255, .012);
+    }
+
+    .of-table tbody tr:hover td {
+        background-color: rgba(255, 255, 255, .025);
+    }
+
+    .of-table tbody tr:hover td:nth-child(6) {
+        background-color: rgba(255, 255, 255, .04);
+    }
+
+    .of-link {
+        display: block;
+        min-width: 0;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 900;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .of-link:hover {
+        color: #ffd0a6;
+    }
+
+    .of-sub {
+        display: block;
+        min-width: 0;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: .62rem;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .of-center {
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+        vertical-align: middle !important;
+    }
+
+    .of-pieces {
+        font-size: .95rem;
+        font-weight: 900;
+    }
+
+    .of-deliverable {
+        display: block;
+        min-width: 0;
+        margin-bottom: 5px;
+        color: #dce7f7;
+        font-size: .64rem;
+        font-weight: 850;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .of-delivery-list {
+        display: grid;
+        min-width: 0;
+        width: 100%;
+        gap: 8px;
+    }
+
+    .of-delivery-item {
+        display: block;
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 8px 9px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, .09);
+        border-radius: 9px;
+        background: rgba(255, 255, 255, .025);
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .of-delivery-item:hover {
+        border-color: rgba(244, 123, 32, .5);
+        background: rgba(244, 123, 32, .08);
+        color: #fff;
+    }
+
+    .of-delivery-item.disabled {
+        pointer-events: none;
+        opacity: .55;
+    }
+
+    /*
+        Dos líneas como máximo. El nombre de PT ya no invade
+        la columna de estatus.
+    */
+    .of-delivery-name {
+        display: -webkit-box;
+        min-width: 0;
+        min-height: 2.35em;
+        margin-bottom: 7px;
+        overflow: hidden;
+        color: #dce7f7;
+        font-size: .64rem;
+        font-weight: 850;
+        line-height: 1.18;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .of-flow {
+        display: block;
+        min-width: 0;
+        width: 100%;
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .of-flow:hover {
+        color: #fff;
+    }
+
+    .of-flow-top {
+        display: flex;
+        min-width: 0;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .of-flow-top strong {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        font-size: .78rem;
+        font-variant-numeric: tabular-nums;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .of-state {
+        flex: 0 0 auto;
+        max-width: 92px;
+        padding: 3px 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        font-size: .56rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .of-state.completo {
+        background: #103b2d;
+        color: #8bf3c4;
+    }
+
+    .of-state.parcial {
+        background: #443916;
+        color: #ffe287;
+    }
+
+    .of-state.pendiente {
+        background: #3e1420;
+        color: #ffb0b8;
+    }
+
+    .of-state.na {
+        background: #263247;
+        color: #cbd5e1;
+    }
+
+    .of-progress {
+        display: block;
+        width: 100%;
+        height: 5px;
+        margin-top: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #263247;
+    }
+
+    .of-progress i {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: #23c483;
+    }
+
+    .of-flow.parcial .of-progress i {
+        background: #f7c948;
+    }
+
+    .of-flow.pendiente .of-progress i {
+        background: #ff5d6c;
+    }
+
+    .of-flow.na .of-progress i {
+        width: 0 !important;
+    }
+
+    .of-status {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 5px 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #263247;
+        color: #dbe5f4;
+        font-size: .62rem;
+        font-weight: 900;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .of-priority {
+        display: block;
+        margin-top: 6px;
+        font-size: .58rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+
+    .of-priority.urgente { color: #ff8b97; }
+    .of-priority.alta { color: #ffd16f; }
+    .of-priority.normal { color: #9fb0c9; }
+    .of-priority.baja { color: #8bf3c4; }
+
+    .of-actions {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }
+
+    .of-action {
+        display: inline-flex;
+        width: 31px;
+        height: 31px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #18243a;
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .of-action:hover {
+        border-color: rgba(244, 123, 32, .65);
+        background: rgba(244, 123, 32, .18);
+        color: #fff;
+    }
+
+    .of-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        border-top: 1px solid var(--line);
+    }
+
+    .of-pagination__actions {
+        display: flex;
+        gap: 7px;
+    }
+
+    .of-pagination .alm-btn.disabled {
+        pointer-events: none;
+        opacity: .45;
+    }
+
+    @@media (max-width: 1250px) {
+        .of-kpi-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .of-filter {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .of-kpi-grid,
+        .of-filter {
+            grid-template-columns: 1fr;
+        }
+
+        /*
+            La hoja general de Almacén convierte alm-table en tarjetas.
+            Se retira el ancho mínimo para que dicha conversión no herede
+            el ancho de escritorio.
+        */
+        .of-table {
+            min-width: 0 !important;
+        }
+
+        .of-table colgroup {
+            display: none;
+        }
+
+        .of-table th,
+        .of-table td {
+            border-left: 0 !important;
+        }
+
+        .of-table td:nth-child(6) {
+            background: transparent;
+        }
+
+        .of-delivery-name {
+            min-height: 0;
+            -webkit-line-clamp: 3;
+        }
+    }
 </style>
 
 <section class="alm-hero">
@@ -59,7 +419,7 @@
         <h1>Órdenes de fabricación</h1>
         <p>
             Consulta rápida de las OF creadas por Planeación y del avance registrado por Almacén
-            para la entrega de materia prima y embalajes.
+            para la entrega de materia prima, embalajes y producto terminado.
         </p>
     </div>
     <div class="alm-actions">
@@ -163,6 +523,7 @@ else
                     <col class="of-col-date" />
                     <col class="of-col-flow" />
                     <col class="of-col-flow" />
+                    <col class="of-col-flow" />
                     <col class="of-col-status" />
                     <col class="of-col-actions" />
                 </colgroup>
@@ -174,6 +535,7 @@ else
                         <th>Fechas</th>
                         <th>MP a entregar</th>
                         <th>Embalaje a entregar</th>
+                        <th>PT a entregar</th>
                         <th>Estatus</th>
                         <th></th>
                     </tr>
@@ -281,6 +643,62 @@ else
                                 </div>
                             </td>
 
+                            <td>
+                                <div class="of-delivery-list">
+                                    @foreach (var item in x.PartesEntrega)
+                                    {
+                                        var puedeEntregarPT =
+                                            item.PuedeEntregar
+                                            && x.TieneNumeroOF;
+
+                                        var urlPT = puedeEntregarPT
+                                            ? Url.Action(
+                                                "Entrada",
+                                                "AlmacenPT",
+                                                new
+                                                {
+                                                    parteId =
+                                                        item.CatalogoID,
+                                                    solicitudProduccionId =
+                                                        x.SolicitudProduccionID,
+                                                    entregaOF = true
+                                                })
+                                            : null;
+
+                                        <a class="of-delivery-item @(!puedeEntregarPT ? "disabled" : "")"
+                                           href="@urlPT"
+                                           title="@(puedeEntregarPT ? "Registrar entrega de producto terminado" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : "Entrega completa")"
+                                           aria-disabled="@(!puedeEntregarPT)">
+                                            <span class="of-delivery-name">
+                                                @item.Codigo · @item.Descripcion
+                                            </span>
+                                            <span class="of-flow @item.Clase">
+                                                <span class="of-flow-top">
+                                                    <strong>
+                                                        @item.Entregado.ToString("0")
+                                                        /
+                                                        @item.Requerido.ToString("0")
+                                                        @item.Unidad
+                                                    </strong>
+                                                    <span class="of-state @item.Clase">
+                                                        @item.Estado
+                                                    </span>
+                                                </span>
+                                                <span class="of-progress">
+                                                    <i style="width:@item.Porcentaje%"></i>
+                                                </span>
+                                            </span>
+                                        </a>
+                                    }
+
+                                    @if (!x.PartesEntrega.Any())
+                                    {
+                                        <span class="of-sub">
+                                            No aplica · Sin PT validado
+                                        </span>
+                                    }
+                                </div>
+                            </td>
                             <td class="of-center">
                                 <span class="of-status">@x.EstatusNombre</span>
                                 <span class="of-priority @x.PrioridadClase">@x.Prioridad</span>
@@ -304,7 +722,7 @@ else
                     @if (!Model.Ordenes.Any())
                     {
                         <tr>
-                            <td colspan="7" class="alm-empty">
+                            <td colspan="8" class="alm-empty">
                                 No hay órdenes de fabricación que coincidan con los filtros.
                             </td>
                         </tr>
@@ -344,5 +762,7 @@ else
         </div>
     </section>
 }
+
+
 
 

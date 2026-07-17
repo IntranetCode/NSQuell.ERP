@@ -69,7 +69,7 @@ BEGIN TRY
         (
             @MenuGrupoID,
             N'OF',
-            N'Órdenes de fabricación: consulta y entrega controlada de MP y embalajes.',
+            N'Órdenes de fabricación: entrega controlada de MP, embalajes y producto terminado.',
             N'fa-solid fa-clipboard-list',
             ISNULL
             (
@@ -90,7 +90,7 @@ BEGIN TRY
         UPDATE dbo.Menus
         SET
             Nombre = N'OF',
-            Descripcion = N'Órdenes de fabricación: consulta y entrega controlada de MP y embalajes.',
+            Descripcion = N'Órdenes de fabricación: entrega controlada de MP, embalajes y producto terminado.',
             IconoCss = N'fa-solid fa-clipboard-list',
             Activo = 1
         WHERE MenuID = @MenuOFID;
@@ -292,5 +292,6 @@ BEGIN CATCH
     THROW;
 END CATCH;
 GO
+
 
 
