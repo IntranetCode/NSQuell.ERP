@@ -56,7 +56,7 @@ BEGIN TRY
             INCLUDE(CantidadEmbalajes, EmbalajeDescripcion, Renglon);
 
     UPDATE m
-    SET Descripcion=N'Órdenes de fabricación: consulta y entrega controlada de MP y embalajes.'
+    SET Descripcion=N'Órdenes de fabricación: entrega controlada de MP, embalajes y producto terminado.'
     FROM dbo.Menus m
     WHERE EXISTS (SELECT 1 FROM dbo.SubMenus sm WHERE sm.MenuID=m.MenuID AND sm.UrlEnlace=N'/AlmacenOF/Index');
 
@@ -67,4 +67,5 @@ BEGIN CATCH
     THROW;
 END CATCH;
 GO
+
 

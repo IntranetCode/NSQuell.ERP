@@ -269,6 +269,123 @@ public sealed class AlmacenPTEntradaFormVm
     public List<AlmacenSelectVm> EstadosCalidad { get; set; } = new();
 }
 
+
+public sealed class AlmacenPTEntradaLoteVm
+{
+    [StringLength(50000)]
+    [Display(Name = "Códigos escaneados")]
+    public string CodigosEscaneados { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(30)]
+    [Display(Name = "Estado de calidad")]
+    public string EstadoCalidad { get; set; } = "Liberado";
+
+    [Display(Name = "Ubicación")]
+    public int? UbicacionID { get; set; }
+
+    [StringLength(800)]
+    public string? Observaciones { get; set; }
+
+    public bool EsEntregaOF { get; set; }
+
+    [Display(Name = "Solicitud de producción")]
+    public int? SolicitudProduccionID { get; set; }
+
+    public int? ParteIDEsperada { get; set; }
+
+    [StringLength(80)]
+    public string? NumeroOFEsperada { get; set; }
+
+    public string NumeroParteEsperada { get; set; } = string.Empty;
+
+    public string DescripcionParteEsperada { get; set; } = string.Empty;
+
+    public decimal CantidadPendienteOF { get; set; }
+
+    [Required(ErrorMessage = "La operación no tiene un identificador válido.")]
+    [StringLength(32, MinimumLength = 32)]
+    public string OperacionToken { get; set; } =
+        System.Guid.NewGuid().ToString("N");
+
+    public List<AlmacenPTCodigoBarrasVm> Resultados { get; set; } = new();
+
+    public List<AlmacenSelectVm> Ubicaciones { get; set; } = new();
+
+    public List<AlmacenSelectVm> EstadosCalidad { get; set; } = new();
+
+    public int TotalCodigos =>
+        Resultados.Count > 0
+            ? Resultados.Count
+            : CodigosEscaneados
+                .Split(
+                    new[] { "\r\n", "\n", "\r" },
+                    StringSplitOptions.RemoveEmptyEntries
+                    | StringSplitOptions.TrimEntries)
+                .Length;
+
+    public int TotalPiezas =>
+        Resultados
+            .Where(x => x.Parseado)
+            .Sum(x => x.Cantidad);
+
+    public bool PuedeRegistrar =>
+        Resultados.Count > 0
+        && Resultados.All(x => x.Valido);
+}
+
+public sealed class AlmacenPTCodigoBarrasVm
+{
+    public int Renglon { get; set; }
+
+    public string CodigoOriginal { get; set; } = string.Empty;
+
+    public string NumeroOF { get; set; } = string.Empty;
+
+    public string NumeroParte { get; set; } = string.Empty;
+
+    public string Designacion { get; set; } = string.Empty;
+
+    public int Cantidad { get; set; }
+
+    public string Lote { get; set; } = string.Empty;
+
+    public int ParteID { get; set; }
+
+    public string DescripcionCatalogo { get; set; } = string.Empty;
+
+    public string NumeroParteCatalogo { get; set; } = string.Empty;
+
+    public bool CoincidenciaNormalizada { get; set; }
+
+    public bool Parseado { get; set; }
+
+    public bool ExisteEnCatalogo { get; set; }
+
+    public bool YaRegistrado { get; set; }
+
+    public bool RepetidoEnLote { get; set; }
+
+    public bool CoincideConOF { get; set; } = true;
+
+    public bool CoincideConParte { get; set; } = true;
+
+    public string Mensaje { get; set; } = string.Empty;
+
+    public bool Valido =>
+        Parseado
+        && ExisteEnCatalogo
+        && !YaRegistrado
+        && !RepetidoEnLote
+        && CoincideConOF
+        && CoincideConParte;
+
+    public string ClaseEstado =>
+        Valido
+            ? "ok"
+            : "error";
+}
+
 public sealed class AlmacenPTMovimientoFormVm
 {
     [Required]
@@ -487,5 +604,15 @@ public sealed class AlmacenPTHistorialVm
     public List<string> EtiquetasLotesFiltro { get; set; } = new();
     public List<AlmacenPTMovimientoListaVm> Movimientos { get; set; } = new();
 }
+
+
+
+
+
+
+
+
+
+
 
 
