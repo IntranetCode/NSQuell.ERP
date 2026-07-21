@@ -1,7 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Mvc.Filters;
-using ERP.NSQuell.Servicios;
 using Microsoft.Data.SqlClient;
 using System.Data;
 
@@ -132,81 +129,5 @@ SELECT CASE WHEN EXISTS
 
     protected static bool EsSalidaPT(string tipo) =>
         tipo is "Salida" or "Embarque" or "Scrap" or "AjusteNegativo";
-
-    // REVISION_ALMACEN_V9_PERMISOS
-    public override async Task OnActionExecutionAsync(
-        ActionExecutingContext context,
-        ActionExecutionDelegate next)
-    {
-        var usuarioID = HttpContext.Session.GetInt32("UsuarioID");
-        if (!usuarioID.HasValue)
-        {
-            context.Result = RedirectToAction("Login", "Login");
-            return;
-        }
-
-        var controllerName = context.RouteData.Values["controller"]?.ToString() ?? string.Empty;
-        var urlPrincipal = controllerName switch
-        {
-            "AlmacenMP" => "/AlmacenMP/Index",
-            "AlmacenEmbalajes" => "/AlmacenEmbalajes/Index",
-            "AlmacenOF" => "/AlmacenOF/Index",
-            "AlmacenPT" => "/AlmacenPT/Index",
-            "AlmacenUbicaciones" => "/AlmacenUbicaciones/Index",
-            _ => null
-        };
-
-        if (urlPrincipal == null)
-        {
-            await next();
-            return;
-        }
-
-        await using var connection = await AbrirConexionAsync(context.HttpContext.RequestAborted);
-        const string sql = @"
-SELECT TOP (1) sm.Nombre
-FROM dbo.SubMenus sm
-WHERE sm.Activo = 1
-  AND
-  (
-      sm.UrlEnlace = @UrlPrincipal
-      OR sm.UrlEnlace = REPLACE(@UrlPrincipal, N'/Index', N'')
-      OR
-      (
-          @PermitirHerenciaMP = 1
-          AND sm.UrlEnlace IN (N'/AlmacenMP/Index', N'/AlmacenMP')
-      )
-  )
-ORDER BY
-    CASE WHEN sm.UrlEnlace = @UrlPrincipal THEN 0
-         WHEN sm.UrlEnlace = REPLACE(@UrlPrincipal, N'/Index', N'') THEN 1
-         ELSE 2 END,
-    sm.SubMenuID;";
-
-        await using var command = new SqlCommand(sql, connection);
-        command.Parameters.Add("@UrlPrincipal", SqlDbType.NVarChar, 500).Value = urlPrincipal;
-        command.Parameters.Add("@PermitirHerenciaMP", SqlDbType.Bit).Value =
-            controllerName is "AlmacenEmbalajes" or "AlmacenOF";
-
-        var subMenuNombre = (await command.ExecuteScalarAsync(context.HttpContext.RequestAborted))?.ToString();
-        if (string.IsNullOrWhiteSpace(subMenuNombre))
-        {
-            TempData["AlmacenMensajeTipo"] = "warning";
-            TempData["AlmacenMensaje"] = "El módulo no tiene un submenú de permisos configurado.";
-            context.Result = RedirectToAction("Grupo", "Menu", new { id = 1 });
-            return;
-        }
-
-        var acceso = HttpContext.RequestServices.GetRequiredService<IServicioAcceso>();
-        if (!await acceso.TienePermisoAsync(usuarioID.Value, subMenuNombre))
-        {
-            TempData["AlmacenMensajeTipo"] = "warning";
-            TempData["AlmacenMensaje"] = "No tienes permiso para acceder a este módulo de Almacén.";
-            context.Result = RedirectToAction("Grupo", "Menu", new { id = 1 });
-            return;
-        }
-
-        await next();
-    }
 }
 
