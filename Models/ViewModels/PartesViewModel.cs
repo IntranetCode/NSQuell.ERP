@@ -130,6 +130,7 @@ namespace ERP.NSQuell.Models.ViewModels
         public decimal? HorasSecado { get; set; }
 
         public decimal? PesoBrutoPieza { get; set; }
+        public decimal? PesoNetoPieza { get; set; }
 
         [StringLength(100)]
         public string? EmbalajeCodigo { get; set; }

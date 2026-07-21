@@ -1,0 +1,609 @@
+@model ERP.NSQuell.Models.ViewModels.MaterialFormViewModel
+
+@{
+    Layout = "_LayoutMaterial";
+    ViewData["Title"] = "Editar Material";
+}
+
+@section Styles {
+    <style>
+        .material-form-page {
+            width: min(100%, 1180px);
+            margin: 0 auto;
+            padding: 0 0 4rem;
+            color: #0D1929;
+        }
+
+        .material-form-hero {
+            display: grid;
+            grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+            min-height: 280px;
+            border-radius: 28px;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(238,244,250,.9));
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 26px 70px rgba(41, 67, 95, .14);
+            margin-bottom: 1.35rem;
+        }
+
+        .material-form-hero-left {
+            position: relative;
+            padding: 2.35rem 1.65rem;
+            background: linear-gradient(145deg, #0D1929, #1A2A40);
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .material-form-hero-left::after {
+            content: "";
+            position: absolute;
+            right: -64px;
+            top: -64px;
+            width: 170px;
+            height: 170px;
+            border-radius: 50%;
+            border: 1px solid rgba(244, 123, 32, .45);
+        }
+
+        .material-form-icon {
+            width: 62px;
+            height: 62px;
+            border-radius: 20px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 1.25rem;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 16px 28px rgba(244, 123, 32, .32);
+            font-size: 1.45rem;
+        }
+
+        .material-form-hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1;
+            letter-spacing: -.06em;
+            font-weight: 950;
+        }
+
+        .material-form-hero p {
+            max-width: 330px;
+            margin: 1.1rem 0 0;
+            color: #DCE8F5;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+
+        .material-form-hero-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 2rem 1.8rem;
+        }
+
+        .material-form-summary {
+            display: grid;
+            gap: .9rem;
+        }
+
+        .material-summary-card {
+            display: flex;
+            align-items: center;
+            gap: .85rem;
+            padding: 1rem;
+            border-radius: 18px;
+            background: rgba(255,255,255,.9);
+            border: 1px solid rgba(41, 67, 95, .10);
+            box-shadow: 0 14px 30px rgba(41, 67, 95, .09);
+            min-width: 0;
+        }
+
+        .material-summary-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            background: #29435F;
+            flex: 0 0 auto;
+        }
+
+        .material-summary-card strong {
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+            font-size: .95rem;
+        }
+
+        .material-summary-card span {
+            display: block;
+            margin-top: .15rem;
+            color: #64748B;
+            font-weight: 800;
+            font-size: .82rem;
+        }
+
+        .material-form-card {
+            border-radius: 26px;
+            overflow: hidden;
+            background: rgba(255,255,255,.96);
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 24px 64px rgba(41, 67, 95, .13);
+        }
+
+        .material-form-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.15rem 1.35rem;
+            background: rgba(255,255,255,.92);
+            border-bottom: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .material-form-header h2 {
+            margin: 0;
+            color: #0D1929;
+            font-size: 1.05rem;
+            font-weight: 950;
+        }
+
+        .material-form-header h2 i {
+            color: #FF8200;
+            margin-right: .45rem;
+        }
+
+        .material-form-header span {
+            color: #64748B;
+            font-size: .82rem;
+            font-weight: 850;
+        }
+
+        .material-form-body {
+            padding: 1.45rem;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .material-form-section {
+            padding: 1.2rem;
+            border-radius: 22px;
+            background: #F8FAFC;
+            border: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .material-section-title {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            margin-bottom: 1rem;
+            color: #0D1929;
+            font-size: .95rem;
+            font-weight: 950;
+        }
+
+        .material-section-title i {
+            color: #FF8200;
+        }
+
+        .form-label-modern {
+            display: block;
+            margin-bottom: .45rem;
+            color: #29435F;
+            font-size: .8rem;
+            font-weight: 950;
+        }
+
+        .form-control-modern,
+        .form-select-modern,
+        .form-textarea-modern {
+            width: 100%;
+            min-height: 48px;
+            border-radius: 14px;
+            border: 1px solid rgba(41, 67, 95, .14);
+            background: #fff;
+            color: #0D1929;
+            padding: .75rem .95rem;
+            font-weight: 850;
+            outline: none;
+            transition: .2s ease;
+        }
+
+        .form-textarea-modern {
+            min-height: 108px;
+            resize: vertical;
+        }
+
+        .form-control-modern:focus,
+        .form-select-modern:focus,
+        .form-textarea-modern:focus {
+            border-color: rgba(255, 130, 0, .55);
+            box-shadow: 0 0 0 4px rgba(255, 130, 0, .12);
+        }
+
+        .material-field-hint,
+        .text-danger {
+            display: block;
+            margin-top: .35rem;
+            font-size: .76rem;
+            font-weight: 800;
+        }
+
+        .material-field-hint { color: #64748B; }
+        .text-danger { color: #DC2626 !important; }
+
+        .material-switch-card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: .9rem;
+            min-height: 76px;
+            padding: 1rem;
+            border-radius: 18px;
+            background: #fff;
+            border: 1px solid rgba(41, 67, 95, .12);
+            cursor: pointer;
+        }
+
+        .material-switch-card input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .material-switch-visual {
+            width: 50px;
+            height: 30px;
+            border-radius: 999px;
+            background: #CBD5E1;
+            position: relative;
+            flex: 0 0 auto;
+            transition: .2s ease;
+        }
+
+        .material-switch-visual::after {
+            content: "";
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,.20);
+            transition: .2s ease;
+        }
+
+        .material-switch-card input:checked + .material-switch-visual {
+            background: linear-gradient(135deg, #16A34A, #22C55E);
+        }
+
+        .material-switch-card input:checked + .material-switch-visual::after {
+            transform: translateX(20px);
+        }
+
+        .material-switch-card strong {
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+        }
+
+        .material-switch-card small {
+            display: block;
+            margin-top: .1rem;
+            color: #64748B;
+            font-weight: 800;
+        }
+
+        .material-form-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            padding: 1.2rem 1.45rem;
+            background: #F8FAFC;
+            border-top: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .btn-material-save,
+        .btn-material-cancel {
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            padding: .72rem 1.12rem;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 950;
+            border: 0;
+            transition: .2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-material-save {
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 14px 28px rgba(244, 123, 32, .24);
+        }
+
+        .btn-material-save:hover {
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .btn-material-cancel {
+            background: #fff;
+            color: #29435F;
+            border: 1px solid rgba(41, 67, 95, .16);
+        }
+
+        .btn-material-cancel:hover {
+            color: #0D1929;
+            background: #EEF4FA;
+            transform: translateY(-1px);
+        }
+
+        .material-validation-summary {
+            border: 0;
+            border-radius: 18px;
+            padding: .95rem 1.1rem;
+            font-weight: 850;
+            margin-bottom: 1rem;
+        }
+
+        html[data-nsq-theme="dark"] .material-form-hero,
+        html[data-nsq-theme="dark"] .material-form-card,
+        html[data-nsq-theme="dark"] .material-form-header,
+        html[data-nsq-theme="dark"] .material-summary-card {
+            background: rgba(13,25,41,.92);
+            border-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .material-form-section,
+        html[data-nsq-theme="dark"] .material-form-footer {
+            background: rgba(16,29,47,.92);
+            border-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .material-form-header h2,
+        html[data-nsq-theme="dark"] .material-section-title,
+        html[data-nsq-theme="dark"] .material-summary-card strong,
+        html[data-nsq-theme="dark"] .material-switch-card strong {
+            color: #fff;
+        }
+
+        html[data-nsq-theme="dark"] .material-summary-card span,
+        html[data-nsq-theme="dark"] .material-form-header span,
+        html[data-nsq-theme="dark"] .material-field-hint,
+        html[data-nsq-theme="dark"] .material-switch-card small,
+        html[data-nsq-theme="dark"] .form-label-modern {
+            color: #CBD5E1;
+        }
+
+        html[data-nsq-theme="dark"] .form-control-modern,
+        html[data-nsq-theme="dark"] .form-select-modern,
+        html[data-nsq-theme="dark"] .form-textarea-modern,
+        html[data-nsq-theme="dark"] .material-switch-card,
+        html[data-nsq-theme="dark"] .btn-material-cancel {
+            background: #0D1929;
+            color: #fff;
+            border-color: rgba(255,255,255,.10);
+        }
+
+        @@media (max-width: 980px) {
+            .material-form-hero { grid-template-columns: 1fr; }
+            .material-form-hero-left { min-height: 260px; }
+        }
+
+        @@media (max-width: 680px) {
+            .material-form-body,
+            .material-form-footer { padding: 1rem; }
+            .material-form-footer { flex-direction: column-reverse; align-items: stretch; }
+            .btn-material-save, .btn-material-cancel { width: 100%; }
+        }
+    </style>
+}
+
+<div class="material-form-page">
+    <section class="material-form-hero">
+        <div class="material-form-hero-left">
+            <div class="material-form-icon">
+                <i class="fas fa-pen-to-square"></i>
+            </div>
+
+            <h1>Editar Material</h1>
+
+            <p>
+                Actualiza la información base, unidad, proveedor, stock, lote y costos del material seleccionado.
+            </p>
+        </div>
+
+        <div class="material-form-hero-right">
+            <div class="material-form-summary">
+                <div class="material-summary-card">
+                    <div class="material-summary-icon"><i class="fas fa-barcode"></i></div>
+                    <div><strong>@Model.Codigo</strong><span>Código actual del material.</span></div>
+                </div>
+
+                <div class="material-summary-card">
+                    <div class="material-summary-icon"><i class="fas fa-warehouse"></i></div>
+                    <div><strong>@Model.Nombre</strong><span>Material seleccionado para edición.</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <form asp-controller="Material" asp-action="Editar" asp-route-id="@Model.MaterialID" method="post" autocomplete="off" class="material-form-card">
+        @Html.AntiForgeryToken()
+        <input asp-for="MaterialID" type="hidden" />
+
+        <div class="material-form-header">
+            <div>
+                <h2><i class="fas fa-clipboard-list"></i> Datos del material</h2>
+                <span>Modifica únicamente los datos necesarios y guarda los cambios.</span>
+            </div>
+        </div>
+
+        <div class="material-form-body">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger material-validation-summary"></div>
+
+            <div class="material-form-section">
+                <div class="material-section-title"><i class="fas fa-id-card"></i> Información general</div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label asp-for="Codigo" class="form-label-modern">Código <span class="text-danger">*</span></label>
+                        <input asp-for="Codigo" class="form-control-modern" placeholder="Ej. MAT-001" />
+                        <span class="material-field-hint">Debe ser único.</span>
+                        <span asp-validation-for="Codigo" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-8">
+                        <label asp-for="Nombre" class="form-label-modern">Nombre <span class="text-danger">*</span></label>
+                        <input asp-for="Nombre" class="form-control-modern" placeholder="Nombre del material" />
+                        <span asp-validation-for="Nombre" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="TipoMaterial" class="form-label-modern">Tipo de material</label>
+                        <input asp-for="TipoMaterial" class="form-control-modern" placeholder="Resina, pigmento, empaque..." />
+                        <span asp-validation-for="TipoMaterial" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="UnidadDefault" class="form-label-modern">Unidad default <span class="text-danger">*</span></label>
+                        <input asp-for="UnidadDefault" class="form-control-modern" placeholder="KG, PZA, M, LT" />
+                        <span asp-validation-for="UnidadDefault" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="Proveedor" class="form-label-modern">Proveedor</label>
+                        <input asp-for="Proveedor" class="form-control-modern" placeholder="Proveedor principal" />
+                        <span asp-validation-for="Proveedor" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="material-switch-card w-100">
+                            <input asp-for="Activo" />
+                            <span class="material-switch-visual"></span>
+                            <div><strong>Material activo</strong><small>Disponible para nuevos procesos.</small></div>
+                        </label>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="material-switch-card w-100">
+                            <input asp-for="RequiereLote" />
+                            <span class="material-switch-visual"></span>
+                            <div><strong>Requiere lote</strong><small>Controlar trazabilidad por lote.</small></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="material-form-section">
+                <div class="material-section-title"><i class="fas fa-warehouse"></i> Stock</div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="material-switch-card w-100">
+                            <input asp-for="StockConfigurado" />
+                            <span class="material-switch-visual"></span>
+                            <div><strong>Stock configurado</strong><small>Usar mínimos y avisos.</small></div>
+                        </label>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="StockMinimo" class="form-label-modern">Stock mínimo</label>
+                        <input asp-for="StockMinimo" type="number" step="0.001" class="form-control-modern" />
+                        <span asp-validation-for="StockMinimo" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="StockAviso" class="form-label-modern">Stock aviso</label>
+                        <input asp-for="StockAviso" type="number" step="0.001" class="form-control-modern" />
+                        <span asp-validation-for="StockAviso" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="material-form-section">
+                <div class="material-section-title"><i class="fas fa-dollar-sign"></i> Costo</div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label asp-for="CostoUnitario" class="form-label-modern">Costo unitario</label>
+                        <input asp-for="CostoUnitario" type="number" step="0.000001" class="form-control-modern" />
+                        <span asp-validation-for="CostoUnitario" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="MonedaCosto" class="form-label-modern">Moneda</label>
+                        <input asp-for="MonedaCosto" class="form-control-modern" placeholder="MXN, USD" />
+                        <span asp-validation-for="MonedaCosto" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="UnidadCosto" class="form-label-modern">Unidad costo</label>
+                        <input asp-for="UnidadCosto" class="form-control-modern" placeholder="KG, PZA" />
+                        <span asp-validation-for="UnidadCosto" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="FuenteCosto" class="form-label-modern">Fuente costo</label>
+                        <input asp-for="FuenteCosto" class="form-control-modern" placeholder="Manual, SAP, proveedor..." />
+                        <span asp-validation-for="FuenteCosto" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="ClaveCostoOrigen" class="form-label-modern">Clave origen</label>
+                        <input asp-for="ClaveCostoOrigen" class="form-control-modern" />
+                        <span asp-validation-for="ClaveCostoOrigen" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="FechaCosto" class="form-label-modern">Fecha costo</label>
+                        <input asp-for="FechaCosto" type="datetime-local" class="form-control-modern" />
+                        <span asp-validation-for="FechaCosto" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-12">
+                        <label asp-for="DescripcionCostoOrigen" class="form-label-modern">Descripción origen costo</label>
+                        <textarea asp-for="DescripcionCostoOrigen" class="form-textarea-modern" placeholder="Referencia o descripción del origen del costo"></textarea>
+                        <span asp-validation-for="DescripcionCostoOrigen" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="material-form-footer">
+            <a asp-controller="Material" asp-action="Index" class="btn-material-cancel">
+                <i class="fas fa-arrow-left"></i>
+                Volver al catálogo
+            </a>
+
+            <button type="submit" class="btn-material-save">
+                <i class="fas fa-save"></i>
+                Guardar cambios
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            ['Codigo', 'UnidadDefault', 'MonedaCosto', 'UnidadCosto'].forEach(function (name) {
+                const input = document.querySelector('[name="' + name + '"]');
+                if (input) {
+                    input.addEventListener('input', function () {
+                        this.value = this.value.toUpperCase();
+                    });
+                }
+            });
+        });
+    </script>
+}

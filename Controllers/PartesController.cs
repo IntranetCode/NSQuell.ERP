@@ -40,8 +40,7 @@ namespace ERP.NSQuell.Controllers
                     p.NumeroParte.Contains(busqueda) ||
                     (p.ReferenciaSAP != null && p.ReferenciaSAP.Contains(busqueda)) ||
                     p.Descripcion.Contains(busqueda) ||
-                    (p.Designacion != null && p.Designacion.Contains(busqueda)) ||
-                    (p.Color != null && p.Color.Contains(busqueda))
+                    (p.Designacion != null && p.Designacion.Contains(busqueda))
                 );
             }
 
@@ -70,14 +69,6 @@ namespace ERP.NSQuell.Controllers
                     on p.ClienteID equals c.ClienteID into clientesJoin
                 from c in clientesJoin.DefaultIfEmpty()
 
-                join maq in _context.ERPMaquinas.AsNoTracking()
-                    on p.MaquinaPrincipalID equals maq.MaquinaID into maquinasJoin
-                from maq in maquinasJoin.DefaultIfEmpty()
-
-                join molde in _context.ERPMoldes.AsNoTracking()
-                    on p.MoldePrincipalID equals molde.MoldeID into moldesJoin
-                from molde in moldesJoin.DefaultIfEmpty()
-
                 orderby p.NumeroParte
 
                 select new ParteListadoItemViewModel
@@ -91,19 +82,16 @@ namespace ERP.NSQuell.Controllers
                         ? c.Codigo + " - " + c.Nombre
                         : "Cliente ID " + p.ClienteID,
 
-                    MaquinaPrincipal = maq != null
-                        ? maq.Codigo + " - " + maq.Nombre
-                        : null,
-
-                    MoldePrincipal = molde != null
-                        ? molde.CodigoMolde + " - " + (molde.NombreMolde ?? "Sin nombre")
-                        : null,
+                    MaquinaPrincipal = null,
+                    MoldePrincipal = null,
 
                     StockMinimo = p.StockMinimo,
                     StockAviso = p.StockAviso,
                     StockConfigurado = p.StockConfigurado,
                     Activo = p.Activo,
-                    TieneDatosTecnicos = _context.ERPParteDatosTecnicos.Any(dt => dt.ParteID == p.ParteID)
+
+                    TieneDatosTecnicos = _context.ERPParteDatosTecnicos
+                        .Any(dt => dt.ParteID == p.ParteID)
                 })
                 .ToListAsync();
 
@@ -139,9 +127,7 @@ namespace ERP.NSQuell.Controllers
                 StockMinimo = 0,
                 StockAviso = 0,
                 StockConfigurado = false,
-                Clientes = await CargarClientesAsync(),
-                Maquinas = await CargarMaquinasAsync(),
-                Moldes = await CargarMoldesAsync()
+                Clientes = await CargarClientesAsync()
             };
 
             return View(model);
@@ -158,54 +144,61 @@ namespace ERP.NSQuell.Controllers
             {
                 ModelState.AddModelError(
                     nameof(model.NumeroParte),
-                    "Ya existe una parte con este numero para el cliente seleccionado.");
+                    "Ya existe una parte con este número para el cliente seleccionado.");
             }
 
             if (!ModelState.IsValid)
             {
                 model.Clientes = await CargarClientesAsync(model.ClienteID);
-                model.Maquinas = await CargarMaquinasAsync(model.MaquinaPrincipalID);
-                model.Moldes = await CargarMoldesAsync(model.MoldePrincipalID);
-
                 return View(model);
             }
 
             var usuarioId = HttpContext.Session.GetInt32("UsuarioID");
 
-            var parte = new ERPParte
-            {
-                ClienteID = model.ClienteID,
-                NumeroParte = model.NumeroParte.Trim(),
-                ReferenciaSAP = string.IsNullOrWhiteSpace(model.ReferenciaSAP) ? null : model.ReferenciaSAP.Trim(),
-                Descripcion = model.Descripcion.Trim(),
-                Designacion = string.IsNullOrWhiteSpace(model.Designacion) ? null : model.Designacion.Trim(),
-                Color = string.IsNullOrWhiteSpace(model.Color) ? null : model.Color.Trim(),
+            var numeroParte = model.NumeroParte.Trim();
+            var referenciaSAP = string.IsNullOrWhiteSpace(model.ReferenciaSAP) ? null : model.ReferenciaSAP.Trim();
+            var descripcion = model.Descripcion.Trim();
+            var designacion = string.IsNullOrWhiteSpace(model.Designacion) ? null : model.Designacion.Trim();
+            var fechaCreacion = DateTime.Now;
 
-                Cavidades = model.Cavidades,
-                ObjetivoHora = model.ObjetivoHora,
-                PiezasPorCaja = model.PiezasPorCaja,
-
-                RequiereGP12 = model.RequiereGP12,
-                RequiereCertificado = model.RequiereCertificado,
-
-                MaquinaPrincipalID = model.MaquinaPrincipalID,
-                MaquinaSustitutaID = model.MaquinaSustitutaID,
-                MoldePrincipalID = model.MoldePrincipalID,
-
-                Activo = model.Activo,
-
-                StockMinimo = model.StockMinimo,
-                StockAviso = model.StockAviso,
-                StockConfigurado = model.StockConfigurado,
-
-                UsuarioCreacionID = usuarioId,
-                FechaCreacion = DateTime.Now,
-                UsuarioModificacionID = null,
-                FechaModificacion = null
-            };
-
-            _context.ERPPartes.Add(parte);
-            await _context.SaveChangesAsync();
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO dbo.ERP_Partes
+                (
+                    ClienteID,
+                    NumeroParte,
+                    ReferenciaSAP,
+                    Descripcion,
+                    Designacion,
+                    RequiereGP12,
+                    RequiereCertificado,
+                    Activo,
+                    UsuarioCreacionID,
+                    FechaCreacion,
+                    UsuarioModificacionID,
+                    FechaModificacion,
+                    StockMinimo,
+                    StockAviso,
+                    StockConfigurado
+                )
+                VALUES
+                (
+                    {model.ClienteID},
+                    {numeroParte},
+                    {referenciaSAP},
+                    {descripcion},
+                    {designacion},
+                    {model.RequiereGP12},
+                    {model.RequiereCertificado},
+                    {model.Activo},
+                    {usuarioId},
+                    {fechaCreacion},
+                    {null},
+                    {null},
+                    {model.StockMinimo},
+                    {model.StockAviso},
+                    {model.StockConfigurado}
+                );
+            ");
 
             TempData["SuccessMessage"] = "La parte fue registrada correctamente.";
 
@@ -220,46 +213,40 @@ namespace ERP.NSQuell.Controllers
         {
             ViewData["Title"] = "Editar Parte";
 
-            var parte = await _context.ERPPartes
-                .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.ParteID == id);
+            if (id <= 0)
+            {
+                return BadRequest();
+            }
 
-            if (parte == null)
+            var model = await _context.ERPPartes
+                .AsNoTracking()
+                .Where(p => p.ParteID == id)
+                .Select(p => new ParteFormViewModel
+                {
+                    ParteID = p.ParteID,
+                    ClienteID = p.ClienteID,
+                    NumeroParte = p.NumeroParte,
+                    ReferenciaSAP = p.ReferenciaSAP,
+                    Descripcion = p.Descripcion,
+                    Designacion = p.Designacion,
+
+                    RequiereGP12 = p.RequiereGP12,
+                    RequiereCertificado = p.RequiereCertificado,
+
+                    Activo = p.Activo,
+
+                    StockMinimo = p.StockMinimo,
+                    StockAviso = p.StockAviso,
+                    StockConfigurado = p.StockConfigurado
+                })
+                .FirstOrDefaultAsync();
+
+            if (model == null)
             {
                 return NotFound();
             }
 
-            var model = new ParteFormViewModel
-            {
-                ParteID = parte.ParteID,
-                ClienteID = parte.ClienteID,
-                NumeroParte = parte.NumeroParte,
-                ReferenciaSAP = parte.ReferenciaSAP,
-                Descripcion = parte.Descripcion,
-                Designacion = parte.Designacion,
-                Color = parte.Color,
-
-                Cavidades = parte.Cavidades,
-                ObjetivoHora = parte.ObjetivoHora,
-                PiezasPorCaja = parte.PiezasPorCaja,
-
-                RequiereGP12 = parte.RequiereGP12,
-                RequiereCertificado = parte.RequiereCertificado,
-
-                MaquinaPrincipalID = parte.MaquinaPrincipalID,
-                MaquinaSustitutaID = parte.MaquinaSustitutaID,
-                MoldePrincipalID = parte.MoldePrincipalID,
-
-                Activo = parte.Activo,
-
-                StockMinimo = parte.StockMinimo,
-                StockAviso = parte.StockAviso,
-                StockConfigurado = parte.StockConfigurado,
-
-                Clientes = await CargarClientesAsync(parte.ClienteID),
-                Maquinas = await CargarMaquinasAsync(parte.MaquinaPrincipalID),
-                Moldes = await CargarMoldesAsync(parte.MoldePrincipalID)
-            };
+            model.Clientes = await CargarClientesAsync(model.ClienteID);
 
             return View(model);
         }
@@ -271,6 +258,11 @@ namespace ERP.NSQuell.Controllers
         [AutorizarAccion("Editar Partes", "Editar")]
         public async Task<IActionResult> Editar(int id, ParteFormViewModel model)
         {
+            if (id <= 0)
+            {
+                return BadRequest();
+            }
+
             if (!model.ParteID.HasValue || id != model.ParteID.Value)
             {
                 return BadRequest();
@@ -280,56 +272,50 @@ namespace ERP.NSQuell.Controllers
             {
                 ModelState.AddModelError(
                     nameof(model.NumeroParte),
-                    "Ya existe otra parte con este numero para el cliente seleccionado.");
+                    "Ya existe otra parte con este número para el cliente seleccionado.");
             }
 
             if (!ModelState.IsValid)
             {
                 model.Clientes = await CargarClientesAsync(model.ClienteID);
-                model.Maquinas = await CargarMaquinasAsync(model.MaquinaPrincipalID);
-                model.Moldes = await CargarMoldesAsync(model.MoldePrincipalID);
-
                 return View(model);
             }
 
-            var parte = await _context.ERPPartes
-                .FirstOrDefaultAsync(p => p.ParteID == id);
+            var existeParte = await _context.ERPPartes
+                .AsNoTracking()
+                .AnyAsync(p => p.ParteID == id);
 
-            if (parte == null)
+            if (!existeParte)
             {
                 return NotFound();
             }
 
             var usuarioId = HttpContext.Session.GetInt32("UsuarioID");
 
-            parte.ClienteID = model.ClienteID;
-            parte.NumeroParte = model.NumeroParte.Trim();
-            parte.ReferenciaSAP = string.IsNullOrWhiteSpace(model.ReferenciaSAP) ? null : model.ReferenciaSAP.Trim();
-            parte.Descripcion = model.Descripcion.Trim();
-            parte.Designacion = string.IsNullOrWhiteSpace(model.Designacion) ? null : model.Designacion.Trim();
-            parte.Color = string.IsNullOrWhiteSpace(model.Color) ? null : model.Color.Trim();
+            var numeroParte = model.NumeroParte.Trim();
+            var referenciaSAP = string.IsNullOrWhiteSpace(model.ReferenciaSAP) ? null : model.ReferenciaSAP.Trim();
+            var descripcion = model.Descripcion.Trim();
+            var designacion = string.IsNullOrWhiteSpace(model.Designacion) ? null : model.Designacion.Trim();
+            var fechaModificacion = DateTime.Now;
 
-            parte.Cavidades = model.Cavidades;
-            parte.ObjetivoHora = model.ObjetivoHora;
-            parte.PiezasPorCaja = model.PiezasPorCaja;
-
-            parte.RequiereGP12 = model.RequiereGP12;
-            parte.RequiereCertificado = model.RequiereCertificado;
-
-            parte.MaquinaPrincipalID = model.MaquinaPrincipalID;
-            parte.MaquinaSustitutaID = model.MaquinaSustitutaID;
-            parte.MoldePrincipalID = model.MoldePrincipalID;
-
-            parte.Activo = model.Activo;
-
-            parte.StockMinimo = model.StockMinimo;
-            parte.StockAviso = model.StockAviso;
-            parte.StockConfigurado = model.StockConfigurado;
-
-            parte.UsuarioModificacionID = usuarioId;
-            parte.FechaModificacion = DateTime.Now;
-
-            await _context.SaveChangesAsync();
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE dbo.ERP_Partes
+                SET
+                    ClienteID = {model.ClienteID},
+                    NumeroParte = {numeroParte},
+                    ReferenciaSAP = {referenciaSAP},
+                    Descripcion = {descripcion},
+                    Designacion = {designacion},
+                    RequiereGP12 = {model.RequiereGP12},
+                    RequiereCertificado = {model.RequiereCertificado},
+                    Activo = {model.Activo},
+                    UsuarioModificacionID = {usuarioId},
+                    FechaModificacion = {fechaModificacion},
+                    StockMinimo = {model.StockMinimo},
+                    StockAviso = {model.StockAviso},
+                    StockConfigurado = {model.StockConfigurado}
+                WHERE ParteID = {id};
+            ");
 
             TempData["SuccessMessage"] = "La parte fue actualizada correctamente.";
 
@@ -344,14 +330,21 @@ namespace ERP.NSQuell.Controllers
         {
             var parte = await _context.ERPPartes
                 .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.ParteID == parteId);
+                .Where(p => p.ParteID == parteId)
+                .Select(p => new
+                {
+                    p.ParteID,
+                    p.NumeroParte,
+                    p.Descripcion
+                })
+                .FirstOrDefaultAsync();
 
             if (parte == null)
             {
                 return Json(new
                 {
                     success = false,
-                    message = "No se encontro la parte seleccionada."
+                    message = "No se encontró la parte seleccionada."
                 });
             }
 
@@ -373,6 +366,7 @@ namespace ERP.NSQuell.Controllers
                     tipoSecado = datoTecnico?.TipoSecado,
                     horasSecado = datoTecnico?.HorasSecado,
                     pesoBrutoPieza = datoTecnico?.PesoBrutoPieza,
+                    pesoNetoPieza = datoTecnico?.PesoNetoPieza,
                     embalajeCodigo = datoTecnico?.EmbalajeCodigo,
                     embalajeDescripcion = datoTecnico?.EmbalajeDescripcion,
                     piezasPorEmbalaje = datoTecnico?.PiezasPorEmbalaje,
@@ -396,19 +390,20 @@ namespace ERP.NSQuell.Controllers
                 return Json(new
                 {
                     success = false,
-                    message = "La informacion enviada no es valida."
+                    message = "La información enviada no es válida."
                 });
             }
 
-            var parte = await _context.ERPPartes
-                .FirstOrDefaultAsync(p => p.ParteID == model.ParteID);
+            var existeParte = await _context.ERPPartes
+                .AsNoTracking()
+                .AnyAsync(p => p.ParteID == model.ParteID);
 
-            if (parte == null)
+            if (!existeParte)
             {
                 return Json(new
                 {
                     success = false,
-                    message = "No se encontro la parte seleccionada."
+                    message = "No se encontró la parte seleccionada."
                 });
             }
 
@@ -434,6 +429,7 @@ namespace ERP.NSQuell.Controllers
             datoTecnico.TipoSecado = string.IsNullOrWhiteSpace(model.TipoSecado) ? null : model.TipoSecado.Trim();
             datoTecnico.HorasSecado = model.HorasSecado;
             datoTecnico.PesoBrutoPieza = model.PesoBrutoPieza;
+            datoTecnico.PesoNetoPieza = model.PesoNetoPieza;
 
             datoTecnico.EmbalajeCodigo = string.IsNullOrWhiteSpace(model.EmbalajeCodigo) ? null : model.EmbalajeCodigo.Trim();
             datoTecnico.EmbalajeDescripcion = string.IsNullOrWhiteSpace(model.EmbalajeDescripcion) ? null : model.EmbalajeDescripcion.Trim();
@@ -450,7 +446,7 @@ namespace ERP.NSQuell.Controllers
             return Json(new
             {
                 success = true,
-                message = "Los datos tecnicos fueron guardados correctamente."
+                message = "Los datos técnicos fueron guardados correctamente."
             });
         }
 
@@ -464,36 +460,6 @@ namespace ERP.NSQuell.Controllers
                     Value = c.ClienteID.ToString(),
                     Text = c.Codigo + " - " + c.Nombre,
                     Selected = seleccionadoId.HasValue && c.ClienteID == seleccionadoId.Value
-                })
-                .ToListAsync();
-        }
-
-        private async Task<List<SelectListItem>> CargarMaquinasAsync(int? seleccionadoId = null)
-        {
-            return await _context.ERPMaquinas
-                .AsNoTracking()
-                .Where(m => m.Activo)
-                .OrderBy(m => m.Codigo)
-                .Select(m => new SelectListItem
-                {
-                    Value = m.MaquinaID.ToString(),
-                    Text = m.Codigo + " - " + m.Nombre,
-                    Selected = seleccionadoId.HasValue && m.MaquinaID == seleccionadoId.Value
-                })
-                .ToListAsync();
-        }
-
-        private async Task<List<SelectListItem>> CargarMoldesAsync(int? seleccionadoId = null)
-        {
-            return await _context.ERPMoldes
-                .AsNoTracking()
-                .Where(m => m.Activo)
-                .OrderBy(m => m.CodigoMolde)
-                .Select(m => new SelectListItem
-                {
-                    Value = m.MoldeID.ToString(),
-                    Text = m.CodigoMolde + " - " + (m.NombreMolde ?? "Sin nombre"),
-                    Selected = seleccionadoId.HasValue && m.MoldeID == seleccionadoId.Value
                 })
                 .ToListAsync();
         }

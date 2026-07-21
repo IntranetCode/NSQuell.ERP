@@ -1,0 +1,1055 @@
+@model ERP.NSQuell.Models.ViewModels.MaterialIndexViewModel
+
+@{
+    Layout = "_LayoutMaterial";
+    ViewData["Title"] = "Alta de Materiales";
+
+    var materiales = Model.Materiales ?? new List<ERP.NSQuell.Models.ViewModels.MaterialListadoItemViewModel>();
+    var estadoFiltro = (Model.EstadoFiltro ?? "").ToLowerInvariant();
+
+    string etiquetaFiltro = estadoFiltro switch
+    {
+        "activos" => "Materiales activos",
+        "inactivos" => "Materiales inactivos",
+        "stock" => "Stock configurado",
+        "costo" => "Con costo",
+        "lote" => "Requiere lote",
+        _ => "Todos los materiales"
+    };
+}
+
+@section Styles {
+    <style>
+        .material-page {
+            width: min(100%, 1480px);
+            margin: 0 auto;
+            padding: 0 0 4rem;
+            color: #0D1929;
+        }
+
+        .material-hero {
+            display: grid;
+            grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
+            min-height: 320px;
+            border-radius: 28px;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(238,244,250,.9));
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 26px 70px rgba(41, 67, 95, .14);
+        }
+
+        .material-hero-left {
+            position: relative;
+            padding: 2.4rem 1.65rem;
+            background: linear-gradient(145deg, #0D1929, #1A2A40);
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .material-hero-left::after {
+            content: "";
+            position: absolute;
+            right: -62px;
+            top: -62px;
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            border: 1px solid rgba(244, 123, 32, .45);
+        }
+
+        .material-hero-icon {
+            width: 62px;
+            height: 62px;
+            border-radius: 20px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 1.25rem;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 16px 28px rgba(244, 123, 32, .32);
+            font-size: 1.45rem;
+        }
+
+        .material-hero h1 {
+            margin: 0;
+            font-size: clamp(2.15rem, 4vw, 3.35rem);
+            line-height: 1;
+            letter-spacing: -.06em;
+            font-weight: 950;
+        }
+
+        .material-hero p {
+            max-width: 350px;
+            margin: 1.1rem 0 0;
+            color: #DCE8F5;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+
+        .material-hero-actions {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            flex-wrap: wrap;
+            margin-top: 1.7rem;
+        }
+
+        .btn-material-primary,
+        .btn-material-edit,
+        .btn-material-state,
+        .btn-material-modal-cancel,
+        .btn-material-modal-confirm {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            border: 0;
+            text-decoration: none;
+            font-weight: 950;
+            transition: .2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-material-primary {
+            min-height: 46px;
+            padding: .82rem 1.2rem;
+            border-radius: 999px;
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 14px 28px rgba(244, 123, 32, .28);
+        }
+
+        .btn-material-primary:hover,
+        .btn-material-edit:hover,
+        .btn-material-modal-confirm:hover {
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .material-filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .55rem .85rem;
+            border-radius: 999px;
+            background: rgba(255, 130, 0, .12);
+            border: 1px solid rgba(255, 130, 0, .35);
+            color: #FFB04A;
+            font-weight: 950;
+            font-size: .8rem;
+        }
+
+        .material-hero-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 2rem 1.7rem;
+            min-width: 0;
+        }
+
+        .material-search-box {
+            display: grid;
+            grid-template-columns: 150px minmax(0, 1fr) 60px;
+            min-height: 56px;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid rgba(41, 67, 95, .14);
+            box-shadow: 0 18px 42px rgba(41, 67, 95, .10);
+        }
+
+        .material-filter-select,
+        .material-search-input {
+            min-width: 0;
+            border: 0;
+            outline: none;
+            font-weight: 900;
+            color: #29435F;
+            background: #fff;
+        }
+
+        .material-filter-select {
+            padding: 0 .8rem;
+            border-right: 1px solid rgba(41, 67, 95, .12);
+        }
+
+        .material-search-input {
+            padding: 0 1rem;
+        }
+
+        .material-search-btn {
+            border: 0;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            color: #fff;
+            font-size: 1.1rem;
+        }
+
+        .material-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: .8rem;
+            margin-top: 1.25rem;
+        }
+
+        .material-stat-card {
+            min-height: 72px;
+            display: flex;
+            align-items: center;
+            gap: .7rem;
+            padding: .82rem;
+            border-radius: 18px;
+            background: rgba(255,255,255,.9);
+            border: 1px solid rgba(41, 67, 95, .10);
+            box-shadow: 0 14px 30px rgba(41, 67, 95, .09);
+            min-width: 0;
+        }
+
+        .material-stat-card strong {
+            display: block;
+            font-size: 1.25rem;
+            line-height: 1;
+            font-weight: 950;
+            color: #0D1929;
+        }
+
+        .material-stat-card span {
+            display: block;
+            margin-top: .25rem;
+            font-size: .65rem;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            font-weight: 950;
+            color: #29435F;
+        }
+
+        .material-stat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            flex: 0 0 auto;
+        }
+
+        .material-stat-icon.muted { background: #29435F; }
+        .material-stat-icon.green { background: #16A34A; }
+        .material-stat-icon.red { background: #DC2626; }
+        .material-stat-icon.orange { background: #FF8200; }
+        .material-stat-icon.blue { background: #003A70; }
+
+        .material-alert {
+            margin-top: 1.25rem;
+            border: 0;
+            border-radius: 18px;
+            padding: .95rem 1.1rem;
+            font-weight: 850;
+            box-shadow: 0 12px 28px rgba(41, 67, 95, .10);
+        }
+
+        .material-list-card {
+            margin-top: 1.35rem;
+            border-radius: 24px;
+            overflow: hidden;
+            background: rgba(255,255,255,.96);
+            border: 1px solid rgba(41, 67, 95, .12);
+            box-shadow: 0 24px 64px rgba(41, 67, 95, .13);
+        }
+
+        .material-list-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.05rem 1.25rem;
+            background: rgba(255,255,255,.92);
+        }
+
+        .material-list-header h2 {
+            margin: 0;
+            color: #0D1929;
+            font-size: 1rem;
+            font-weight: 950;
+        }
+
+        .material-list-header h2 i {
+            color: #FF8200;
+            margin-right: .45rem;
+        }
+
+        .material-list-header strong {
+            color: #0D1929;
+            font-weight: 950;
+            font-size: .82rem;
+            white-space: nowrap;
+        }
+
+        .material-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .material-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .material-table thead th {
+            padding: .9rem .85rem;
+            background: #0D1929;
+            color: #fff;
+            font-size: .72rem;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .material-table tbody td {
+            padding: 1rem .85rem;
+            border-top: 1px solid rgba(41, 67, 95, .10);
+            color: #0D1929;
+            vertical-align: middle;
+            font-weight: 800;
+        }
+
+        .material-table tbody tr:hover td {
+            background: #FFF4E8;
+        }
+
+        .col-material { width: 22%; }
+        .col-info { width: 35%; }
+        .col-control { width: 28%; }
+        .col-actions { width: 15%; }
+
+        .material-code-cell {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            min-width: 0;
+        }
+
+        .material-code-avatar {
+            width: 46px;
+            height: 46px;
+            flex: 0 0 46px;
+            display: grid;
+            place-items: center;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            color: #fff;
+            font-size: .72rem;
+            font-weight: 950;
+            box-shadow: 0 12px 26px rgba(244, 123, 32, .22);
+            overflow: hidden;
+        }
+
+        .material-code-text {
+            min-width: 0;
+        }
+
+        .material-code-text strong,
+        .material-info-title {
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .material-code-text span,
+        .material-code-text small {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .material-code-text span {
+            color: #FF8200;
+            font-size: .74rem;
+            font-weight: 950;
+        }
+
+        .material-code-text small {
+            color: #64748B;
+            font-size: .7rem;
+            font-weight: 800;
+        }
+
+        .material-info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: .45rem .9rem;
+            min-width: 0;
+        }
+
+        .material-info-title {
+            grid-column: 1 / -1;
+        }
+
+        .material-mini-line {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            min-width: 0;
+            color: #29435F;
+            font-size: .78rem;
+            font-weight: 850;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .material-mini-line i {
+            color: #FF8200;
+            width: 14px;
+            flex: 0 0 auto;
+            text-align: center;
+        }
+
+        .material-control-grid {
+            display: grid;
+            gap: .5rem;
+        }
+
+        .material-control-row {
+            display: grid;
+            grid-template-columns: 66px minmax(0, 1fr);
+            align-items: center;
+            gap: .55rem;
+        }
+
+        .material-control-label {
+            color: #29435F;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .material-pill,
+        .material-status {
+            max-width: 100%;
+            min-height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .4rem;
+            padding: .42rem .7rem;
+            border-radius: 999px;
+            font-size: .74rem;
+            font-weight: 950;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .material-pill span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .material-pill.blue { background: #E8F0FB; color: #003A70; border: 1px solid rgba(0, 58, 112, .18); }
+        .material-pill.gray { background: #EEF4FA; color: #29435F; border: 1px solid rgba(41, 67, 95, .16); }
+        .material-pill.orange { background: #FFF4E8; color: #C2410C; border: 1px solid rgba(255, 130, 0, .24); }
+        .material-pill.purple { background: #F1EAFE; color: #6D28D9; border: 1px solid rgba(109, 40, 217, .16); }
+
+        .material-status.active { background: #DCFCE7; color: #15803D; border: 1px solid rgba(21, 128, 61, .22); }
+        .material-status.inactive { background: #FEE2E2; color: #B91C1C; border: 1px solid rgba(185, 28, 28, .20); }
+
+        .material-muted {
+            color: #64748B;
+            font-weight: 800;
+            font-size: .78rem;
+        }
+
+        .material-actions-inline {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: .5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-material-edit,
+        .btn-material-state {
+            min-height: 36px;
+            padding: .5rem .82rem;
+            border-radius: 999px;
+            font-size: .75rem;
+        }
+
+        .btn-material-edit {
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 12px 24px rgba(244, 123, 32, .20);
+        }
+
+        .btn-material-state {
+            border: 1px solid rgba(41, 67, 95, .16);
+            background: #fff;
+            color: #29435F;
+        }
+
+        .btn-material-state:hover {
+            transform: translateY(-1px);
+            background: #EEF4FA;
+            color: #0D1929;
+        }
+
+        .btn-material-state.activate { color: #15803D; border-color: rgba(21, 128, 61, .22); background: #DCFCE7; }
+        .btn-material-state.deactivate { color: #B91C1C; border-color: rgba(185, 28, 28, .20); background: #FEE2E2; }
+
+        .material-empty {
+            min-height: 160px;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            color: #29435F;
+            padding: 2rem;
+        }
+
+        .material-empty i {
+            display: block;
+            margin-bottom: .7rem;
+            color: #FF8200;
+            font-size: 2.2rem;
+        }
+
+        .material-empty strong {
+            display: block;
+            font-weight: 950;
+            color: #0D1929;
+        }
+
+        .material-empty span {
+            display: block;
+            margin-top: .25rem;
+            color: #64748B;
+            font-weight: 800;
+        }
+
+        .material-confirm-modal {
+            border: 0;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 30px 90px rgba(13, 25, 41, .35);
+        }
+
+        .material-confirm-header {
+            align-items: flex-start;
+            padding: 1.35rem 1.5rem;
+            background: linear-gradient(135deg, #0D1929, #1A2A40);
+            color: #fff;
+        }
+
+        .material-confirm-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .35rem .65rem;
+            border-radius: 999px;
+            background: rgba(255, 130, 0, .14);
+            border: 1px solid rgba(255, 130, 0, .30);
+            color: #FFB04A;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .material-confirm-header h5 {
+            margin: .65rem 0 0;
+            font-weight: 950;
+            font-size: 1.35rem;
+        }
+
+        .material-confirm-body {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            padding: 1.5rem;
+        }
+
+        .material-confirm-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            flex: 0 0 auto;
+            font-size: 1.15rem;
+        }
+
+        .material-confirm-icon.warning { color: #B91C1C; background: #FEE2E2; border: 1px solid rgba(185, 28, 28, .18); }
+        .material-confirm-icon.success { color: #15803D; background: #DCFCE7; border: 1px solid rgba(21, 128, 61, .22); }
+
+        .material-confirm-body h6 {
+            margin: 0;
+            color: #0D1929;
+            font-weight: 950;
+            font-size: 1rem;
+        }
+
+        .material-confirm-body p {
+            margin: .35rem 0 0;
+            color: #64748B;
+            font-weight: 800;
+            line-height: 1.45;
+        }
+
+        .material-confirm-footer {
+            padding: 1rem 1.5rem;
+            background: #F8FAFC;
+            border-top: 1px solid rgba(41, 67, 95, .10);
+        }
+
+        .btn-material-modal-cancel,
+        .btn-material-modal-confirm {
+            min-height: 42px;
+            padding: .7rem 1.05rem;
+            border-radius: 999px;
+        }
+
+        .btn-material-modal-cancel {
+            background: #fff;
+            color: #29435F;
+            border: 1px solid rgba(41, 67, 95, .16);
+        }
+
+        .btn-material-modal-confirm {
+            color: #fff;
+            background: linear-gradient(135deg, #FF8200, #DA291C);
+            box-shadow: 0 14px 28px rgba(244, 123, 32, .24);
+        }
+
+        .btn-material-modal-confirm.success {
+            background: linear-gradient(135deg, #16A34A, #22C55E);
+            box-shadow: 0 14px 28px rgba(22, 163, 74, .22);
+        }
+
+        html[data-nsq-theme="dark"] .material-hero,
+        html[data-nsq-theme="dark"] .material-list-card,
+        html[data-nsq-theme="dark"] .material-list-header,
+        html[data-nsq-theme="dark"] .material-stat-card,
+        html[data-nsq-theme="dark"] .material-confirm-modal {
+            background: rgba(13,25,41,.92);
+            border-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .material-table tbody td,
+        html[data-nsq-theme="dark"] .material-code-text strong,
+        html[data-nsq-theme="dark"] .material-info-title,
+        html[data-nsq-theme="dark"] .material-list-header h2,
+        html[data-nsq-theme="dark"] .material-list-header strong,
+        html[data-nsq-theme="dark"] .material-stat-card strong,
+        html[data-nsq-theme="dark"] .material-empty strong,
+        html[data-nsq-theme="dark"] .material-confirm-body h6 {
+            color: #fff;
+        }
+
+        html[data-nsq-theme="dark"] .material-table tbody td { border-top-color: rgba(255,255,255,.08); }
+        html[data-nsq-theme="dark"] .material-table tbody tr:hover td { background: rgba(255,130,0,.08); }
+        html[data-nsq-theme="dark"] .material-filter-select,
+        html[data-nsq-theme="dark"] .material-search-input { background: #0D1929; color: #fff; }
+        html[data-nsq-theme="dark"] .material-search-box { background: #0D1929; border-color: rgba(255,255,255,.10); }
+        html[data-nsq-theme="dark"] .btn-material-state,
+        html[data-nsq-theme="dark"] .btn-material-modal-cancel { background: #101D2F; color: #CBD5E1; border-color: rgba(255,255,255,.10); }
+        html[data-nsq-theme="dark"] .material-confirm-body p { color: #CBD5E1; }
+        html[data-nsq-theme="dark"] .material-confirm-footer { background: #101D2F; border-top-color: rgba(255,255,255,.08); }
+
+        @@media (max-width: 1280px) {
+            .material-hero { grid-template-columns: 1fr; }
+            .material-hero-left { min-height: 290px; }
+            .material-stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .material-table { min-width: 1120px; }
+        }
+
+        @@media (max-width: 820px) {
+            .material-search-box { grid-template-columns: 1fr; }
+            .material-filter-select { min-height: 48px; border-right: 0; border-bottom: 1px solid rgba(41, 67, 95, .12); }
+            .material-search-input, .material-search-btn { min-height: 52px; }
+            .material-stats-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+}
+
+<div class="material-page">
+    <section class="material-hero">
+        <div class="material-hero-left">
+            <div class="material-hero-icon">
+                <i class="fas fa-cubes-stacked"></i>
+            </div>
+
+            <h1>Administración de Materiales</h1>
+
+            <p>
+                Gestiona el catálogo de materiales, unidades, proveedores,
+                configuración de stock, lotes y costos base del ERP.
+            </p>
+
+            <div class="material-hero-actions">
+                <a asp-controller="Material" asp-action="Crear" class="btn-material-primary">
+                    <i class="fas fa-plus"></i>
+                    Agregar material
+                </a>
+
+                <span class="material-filter-chip">
+                    <i class="fas fa-filter"></i>
+                    @etiquetaFiltro
+                </span>
+            </div>
+        </div>
+
+        <div class="material-hero-right">
+            <form asp-controller="Material" asp-action="Index" method="get" class="material-search-form">
+                <div class="material-search-box">
+                    <select name="estadoFiltro" class="material-filter-select">
+                        <option value="" selected="@(string.IsNullOrWhiteSpace(estadoFiltro) ? "selected" : null)">Todos</option>
+                        <option value="activos" selected="@(estadoFiltro == "activos" ? "selected" : null)">Activos</option>
+                        <option value="inactivos" selected="@(estadoFiltro == "inactivos" ? "selected" : null)">Inactivos</option>
+                        <option value="stock" selected="@(estadoFiltro == "stock" ? "selected" : null)">Stock</option>
+                        <option value="costo" selected="@(estadoFiltro == "costo" ? "selected" : null)">Con costo</option>
+                        <option value="lote" selected="@(estadoFiltro == "lote" ? "selected" : null)">Requiere lote</option>
+                    </select>
+
+                    <input type="text"
+                           name="busqueda"
+                           value="@Model.Busqueda"
+                           class="material-search-input"
+                           placeholder="Buscar por código, nombre, tipo, unidad, proveedor o costo..." />
+
+                    <button type="submit" class="material-search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+
+            <div class="material-stats-grid">
+                <div class="material-stat-card">
+                    <div class="material-stat-icon muted"><i class="fas fa-layer-group"></i></div>
+                    <div><strong>@Model.TotalMostrados</strong><span>Mostrados</span></div>
+                </div>
+
+                <div class="material-stat-card">
+                    <div class="material-stat-icon green"><i class="fas fa-check-circle"></i></div>
+                    <div><strong>@Model.TotalActivos</strong><span>Activos</span></div>
+                </div>
+
+                <div class="material-stat-card">
+                    <div class="material-stat-icon red"><i class="fas fa-ban"></i></div>
+                    <div><strong>@Model.TotalInactivos</strong><span>Inactivos</span></div>
+                </div>
+
+                <div class="material-stat-card">
+                    <div class="material-stat-icon orange"><i class="fas fa-warehouse"></i></div>
+                    <div><strong>@Model.TotalStockConfigurado</strong><span>Con stock</span></div>
+                </div>
+
+                <div class="material-stat-card">
+                    <div class="material-stat-icon blue"><i class="fas fa-dollar-sign"></i></div>
+                    <div><strong>@Model.TotalConCosto</strong><span>Con costo</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success material-alert">
+            <i class="fas fa-check-circle me-2"></i>
+            @TempData["SuccessMessage"]
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger material-alert">
+            <i class="fas fa-triangle-exclamation me-2"></i>
+            @TempData["ErrorMessage"]
+        </div>
+    }
+
+    <section class="material-list-card">
+        <div class="material-list-header">
+            <h2><i class="fas fa-clipboard-list"></i> Catálogo de materiales</h2>
+            <strong>@materiales.Count registro@(materiales.Count == 1 ? "" : "s") encontrado@(materiales.Count == 1 ? "" : "s")</strong>
+        </div>
+
+        <div class="material-table-wrap">
+            <table class="material-table">
+                <thead>
+                    <tr>
+                        <th class="col-material">Material</th>
+                        <th class="col-info">Información del material</th>
+                        <th class="col-control">Control</th>
+                        <th class="col-actions text-end">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (!materiales.Any())
+                    {
+                        <tr>
+                            <td colspan="4">
+                                <div class="material-empty">
+                                    <div>
+                                        <i class="fas fa-folder-open"></i>
+                                        <strong>No se encontraron materiales.</strong>
+                                        <span>Registra un nuevo material o ajusta los filtros de búsqueda.</span>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var item in materiales)
+                        {
+                            var avatarText = string.IsNullOrWhiteSpace(item.Codigo)
+                                ? "MAT"
+                                : item.Codigo.Length > 4
+                                    ? item.Codigo.Substring(0, 4)
+                                    : item.Codigo;
+
+                            <tr>
+                                <td>
+                                    <div class="material-code-cell">
+                                        <div class="material-code-avatar" title="@item.Codigo">@avatarText</div>
+
+                                        <div class="material-code-text">
+                                            <strong title="@item.Codigo">@item.Codigo</strong>
+                                            <span>ID @item.MaterialID</span>
+                                            <small title="@item.Nombre">@item.Nombre</small>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="material-info-grid">
+                                        <strong class="material-info-title" title="@item.Nombre">@item.Nombre</strong>
+
+                                        <span class="material-mini-line" title="@(item.TipoMaterial ?? "Sin tipo")">
+                                            <i class="fas fa-tags"></i>
+                                            Tipo: @(item.TipoMaterial ?? "Sin tipo")
+                                        </span>
+
+                                        <span class="material-mini-line" title="@item.UnidadDefault">
+                                            <i class="fas fa-ruler"></i>
+                                            Unidad: @item.UnidadDefault
+                                        </span>
+
+                                        <span class="material-mini-line" title="@(item.Proveedor ?? "Sin proveedor")">
+                                            <i class="fas fa-truck-field"></i>
+                                            Proveedor: @(item.Proveedor ?? "Sin proveedor")
+                                        </span>
+
+                                        <span class="material-mini-line">
+                                            <i class="fas fa-barcode"></i>
+                                            Lote: @(item.RequiereLote ? "Requerido" : "No requerido")
+                                        </span>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="material-control-grid">
+                                        <div class="material-control-row">
+                                            <span class="material-control-label">Estado</span>
+                                            @if (item.Activo)
+                                            {
+                                                <span class="material-status active"><i class="fas fa-check-circle"></i> Activo</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="material-status inactive"><i class="fas fa-ban"></i> Inactivo</span>
+                                            }
+                                        </div>
+
+                                        <div class="material-control-row">
+                                            <span class="material-control-label">Stock</span>
+                                            @if (item.StockConfigurado)
+                                            {
+                                                <span class="material-pill blue">
+                                                    <i class="fas fa-warehouse"></i>
+                                                    Mín: @item.StockMinimo.ToString("N3") / Aviso: @item.StockAviso.ToString("N3")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="material-pill orange"><i class="fas fa-triangle-exclamation"></i> Sin configurar</span>
+                                            }
+                                        </div>
+
+                                        <div class="material-control-row">
+                                            <span class="material-control-label">Costo</span>
+                                            @if (item.CostoUnitario.HasValue)
+                                            {
+                                                <span class="material-pill purple">
+                                                    <i class="fas fa-dollar-sign"></i>
+                                                    @item.CostoUnitario.Value.ToString("N2") @(item.MonedaCosto ?? "") / @(item.UnidadCosto ?? item.UnidadDefault)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="material-pill orange"><i class="fas fa-triangle-exclamation"></i> Sin costo</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="material-actions-inline">
+                                        <a asp-controller="Material"
+                                           asp-action="Editar"
+                                           asp-route-id="@item.MaterialID"
+                                           class="btn-material-edit">
+                                            <i class="fas fa-pencil-alt"></i>
+                                            Editar
+                                        </a>
+
+                                        <form asp-controller="Material"
+                                              asp-action="CambiarEstado"
+                                              asp-route-id="@item.MaterialID"
+                                              method="post"
+                                              class="d-inline material-state-form"
+                                              data-material="@item.Nombre"
+                                              data-activo="@item.Activo.ToString().ToLowerInvariant()">
+                                            @Html.AntiForgeryToken()
+
+                                            <button type="submit" class="btn-material-state @(item.Activo ? "deactivate" : "activate")">
+                                                @if (item.Activo)
+                                                {
+                                                    <i class="fas fa-ban"></i>
+                                                    <span>Desactivar</span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="fas fa-rotate-left"></i>
+                                                    <span>Reactivar</span>
+                                                }
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="modal fade" id="modalCambiarEstadoMaterial" tabindex="-1" aria-labelledby="modalCambiarEstadoMaterialLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content material-confirm-modal">
+                <div class="modal-header material-confirm-header">
+                    <div>
+                        <span class="material-confirm-kicker">
+                            <i class="fas fa-shield-alt"></i>
+                            Confirmación
+                        </span>
+
+                        <h5 class="modal-title" id="modalCambiarEstadoMaterialLabel">
+                            Cambiar estado del material
+                        </h5>
+                    </div>
+
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body material-confirm-body">
+                    <div class="material-confirm-icon" id="materialConfirmIcon">
+                        <i class="fas fa-question"></i>
+                    </div>
+
+                    <div>
+                        <h6 id="materialConfirmTitulo">Confirmar acción</h6>
+                        <p id="materialConfirmTexto">¿Seguro que deseas cambiar el estado de este material?</p>
+                    </div>
+                </div>
+
+                <div class="modal-footer material-confirm-footer">
+                    <button type="button" class="btn-material-modal-cancel" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i>
+                        Cancelar
+                    </button>
+
+                    <button type="button" class="btn-material-modal-confirm" id="btnConfirmarCambioEstadoMaterial">
+                        <i class="fas fa-check"></i>
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modalElement = document.getElementById('modalCambiarEstadoMaterial');
+            const btnConfirmar = document.getElementById('btnConfirmarCambioEstadoMaterial');
+            const titulo = document.getElementById('materialConfirmTitulo');
+            const texto = document.getElementById('materialConfirmTexto');
+            const icono = document.getElementById('materialConfirmIcon');
+
+            let formularioPendiente = null;
+
+            if (!modalElement || !btnConfirmar || !titulo || !texto || !icono) {
+                return;
+            }
+
+            const modal = new bootstrap.Modal(modalElement);
+
+            document.querySelectorAll('.material-state-form').forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    event.preventDefault();
+
+                    formularioPendiente = form;
+
+                    const nombre = form.getAttribute('data-material') || 'este material';
+                    const activo = form.getAttribute('data-activo') === 'true';
+
+                    icono.classList.remove('warning', 'success');
+                    btnConfirmar.classList.remove('success');
+
+                    if (activo) {
+                        titulo.textContent = 'Desactivar material';
+                        texto.textContent = `¿Seguro que deseas desactivar el material "${nombre}"? El material ya no aparecerá como disponible para nuevos procesos.`;
+                        icono.classList.add('warning');
+                        icono.innerHTML = '<i class="fas fa-ban"></i>';
+                        btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Sí, desactivar';
+                    } else {
+                        titulo.textContent = 'Reactivar material';
+                        texto.textContent = `¿Seguro que deseas reactivar el material "${nombre}"? El material volverá a estar disponible dentro del catálogo.`;
+                        icono.classList.add('success');
+                        icono.innerHTML = '<i class="fas fa-rotate-left"></i>';
+                        btnConfirmar.classList.add('success');
+                        btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Sí, reactivar';
+                    }
+
+                    modal.show();
+                });
+            });
+
+            btnConfirmar.addEventListener('click', function () {
+                if (!formularioPendiente) {
+                    return;
+                }
+
+                btnConfirmar.disabled = true;
+                btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+
+                HTMLFormElement.prototype.submit.call(formularioPendiente);
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                formularioPendiente = null;
+                btnConfirmar.disabled = false;
+            });
+        });
+    </script>
+}

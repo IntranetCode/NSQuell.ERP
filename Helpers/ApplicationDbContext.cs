@@ -26,6 +26,7 @@ namespace ERP.NSQuell.Models
         public DbSet<ERPMolde> ERPMoldes { get; set; } = null!;
         public bool TieneDatosTecnicos { get; set; }
         public DbSet<ERPParteDatoTecnico> ERPParteDatosTecnicos { get; set; } = null!;
+        public DbSet<ERPMaterial> ERPMateriales { get; set; } = null!;
 
       
 
