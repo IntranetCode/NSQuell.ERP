@@ -1,0 +1,498 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Produccion.ProduccionIndexVm
+
+@{
+    Layout = null;
+    ViewData["Title"] = "Producción";
+}
+
+<!-- PRODUCCION_STANDALONE_V1_2 -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1" />
+
+    <title>Producción | ERP QUELL</title>
+
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+    <link rel="stylesheet"
+          href="~/css/Produccion/produccion.css"
+          asp-append-version="true" />
+</head>
+
+<body class="prod-shell">
+    <!-- PRODUCCION_NAVBAR_V1_3 -->
+    @{
+        var nombreNav =
+            Context.Session.GetString("NombreMostrar")
+            ?? Context.Session.GetString("Username")
+            ?? "Usuario";
+
+        var rolNav =
+            Context.Session.GetString("NombreRol")
+            ?? Context.Session.GetString("Rol")
+            ?? "Colaborador";
+
+        var inicialNav =
+            string.IsNullOrWhiteSpace(nombreNav)
+                ? "U"
+                : nombreNav.Trim()
+                    .Substring(0, 1)
+                    .ToUpperInvariant();
+    }
+
+    @{
+    var navNombre = Context.Session.GetString("NombreMostrar")
+        ?? Context.Session.GetString("Username")
+        ?? "Usuario";
+    var navRol = Context.Session.GetString("RolNombre")
+        ?? Context.Session.GetString("NombreRol")
+        ?? Context.Session.GetString("Rol")
+        ?? "Colaborador";
+    var navLogo = Context.Session.GetString("EmpresaLogo")
+        ?? "default-logo.png";
+    var navInicial = string.IsNullOrWhiteSpace(navNombre)
+        ? "U"
+        : navNombre.Trim().Substring(0, 1).ToUpperInvariant();
+}
+<header class="prod-shell-header">
+    <div class="prod-shell-navbar">
+        <a href="/Menu/Index"
+           class="prod-shell-brand"
+           aria-label="Ir al menú principal">
+            @if (!string.IsNullOrWhiteSpace(navLogo)
+                && navLogo != "default-logo.png")
+            {
+                <img src="~/imagenes/@navLogo"
+                     alt="Logo de NS QUELL"
+                     class="prod-shell-brand__logo" />
+            }
+            else
+            {
+                <span class="prod-shell-brand__icon">
+                    <i class="fa-solid fa-industry"></i>
+                </span>
+            }
+            <span class="prod-shell-brand__copy">
+                <strong>NS QUELL</strong>
+                <small>· PRODUCCIÓN</small>
+            </span>
+        </a>
+
+        <div class="prod-shell-right">
+            <nav class="prod-shell-shortcuts"
+                 aria-label="Accesos rápidos de Producción">
+                <a href="/Menu/Index"
+                   class="prod-shell-shortcut">Inicio</a>
+                <a href="/Planeacion/Index"
+                   class="prod-shell-shortcut">Planeación / OF</a>
+                <a href="/Produccion/Index"
+                   class="prod-shell-shortcut active"
+                   aria-current="page">Producción</a>
+            </nav>
+
+            <details class="prod-shell-user">
+                <summary>
+                    <span class="prod-shell-user__avatar">@navInicial</span>
+                    <span class="prod-shell-user__info">
+                        <strong>@navNombre</strong>
+                        <small>@navRol</small>
+                    </span>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </summary>
+                <div class="prod-shell-user__menu">
+                    <a href="/Menu/Index">
+                        <i class="fa-solid fa-grip"></i>
+                        Menú principal
+                    </a>
+                    <a href="/Login/Logout">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        Cerrar sesión
+                    </a>
+                </div>
+            </details>
+        </div>
+    </div>
+</header>
+
+<main class="prod-page">
+<nav class="prod-routebar" aria-label="Ruta de navegación">
+    <button type="button"
+            class="prod-routebar__back"
+            id="produccionBackButton"
+            data-fallback-url="/Menu/Index">
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Regresar</span>
+    </button>
+
+    <ol class="prod-routebar__trail">
+        <li class="prod-routebar__item">
+            <a href="/Menu/Index">Inicio</a>
+        </li>
+        <li class="prod-routebar__separator">›</li>
+        <li class="prod-routebar__item">
+            <a href="/Planeacion/Index">Planeación</a>
+        </li>
+        <li class="prod-routebar__separator">›</li>
+        <li class="prod-routebar__item prod-routebar__item--current">
+            Producción
+        </li>
+    </ol>
+</nav>
+    <section class="prod-hero">
+        <div>
+            <span class="prod-eyebrow">
+                PRODUCCIÓN · CONTROL OPERATIVO
+            </span>
+
+            <h1>Tablero de producción</h1>
+
+            <p>
+                Primera entrega funcional basada en
+                Planeacion_ProgramaProduccion. Esta versión es
+                de consulta y no altera la base de datos.
+            </p>
+        </div>
+
+        <div class="prod-mode">
+            <i class="fa-solid fa-eye"></i>
+            Modo lectura
+        </div>
+    </section>
+
+    <section class="prod-flow"
+             aria-label="Flujo operativo de producción">
+        <span class="prod-flow-step">Pendiente</span>
+        <i class="fa-solid fa-chevron-right"></i>
+        <span class="prod-flow-step">Preparada</span>
+        <i class="fa-solid fa-chevron-right"></i>
+        <span class="prod-flow-step">En proceso</span>
+        <i class="fa-solid fa-chevron-right"></i>
+        <span class="prod-flow-step">Pausada</span>
+        <i class="fa-solid fa-chevron-right"></i>
+        <span class="prod-flow-step">Terminada</span>
+        <i class="fa-solid fa-chevron-right"></i>
+        <span class="prod-flow-step">Cerrada</span>
+    </section>
+
+    <section class="prod-alert">
+        <i class="fa-solid fa-circle-info"></i>
+
+        <div>
+            <strong>Alcance de esta primera entrega</strong>
+            <p>
+    La identificación de OF, cliente, parte,
+    cantidad, máquina, molde y programación se
+    obtiene de las mismas tablas utilizadas por
+    Planeación. El avance se incorpora únicamente
+    cuando existe una relación válida con
+    Planeacion_ProgramaProduccion.
+</p>
+        </div>
+    </section>
+
+    <section class="prod-kpis">
+        <article class="prod-kpi">
+            <span>OF visibles</span>
+            <strong>@Model.TotalProgramas.ToString("N0")</strong>
+        </article>
+
+        <article class="prod-kpi">
+            <span>Piezas programadas</span>
+            <strong>@Model.TotalProgramado.ToString("N0")</strong>
+        </article>
+
+        <article class="prod-kpi">
+            <span>Piezas producidas</span>
+            <strong>@Model.TotalProducido.ToString("N0")</strong>
+        </article>
+
+        <article class="prod-kpi">
+            <span>Piezas pendientes</span>
+            <strong>@Model.TotalPendiente.ToString("N0")</strong>
+        </article>
+
+        <article class="prod-kpi">
+            <span>Con programación</span>
+            <strong>@Model.ConProgramacion.ToString("N0")</strong>
+        </article>
+
+        <article class="prod-kpi prod-kpi-warning">
+            <span>Datos incompletos</span>
+            <strong>@Model.Incompletos.ToString("N0")</strong>
+        </article>
+    </section>
+
+    <section class="prod-panel">
+        <header class="prod-panel-header">
+            <div>
+                <h2>Programa de producción</h2>
+                <p>
+    Fuente:
+    <code>
+        SolicitudesProduccion + Detalle + Asignación de máquina
+    </code>
+</p>
+            </div>
+        </header>
+
+        <form class="prod-filters"
+              method="get"
+              asp-controller="Produccion"
+              asp-action="Index">
+
+            <label>
+                <span>Buscar</span>
+                <input type="search"
+                       name="q"
+                       value="@Model.Busqueda"
+                       placeholder="Parte, cliente, máquina, molde..." />
+            </label>
+
+            <label>
+                <span>Estatus de la OF</span>
+                <select name="estatus">
+    <option value="">Todos</option>
+    <option value="1" selected="@(Model.EstatusID == 1)">Capturada</option>
+    <option value="2" selected="@(Model.EstatusID == 2)">En revisión de Planeación</option>
+    <option value="3" selected="@(Model.EstatusID == 3)">Pendiente de validación de MP</option>
+    <option value="4" selected="@(Model.EstatusID == 4)">MP insuficiente</option>
+    <option value="5" selected="@(Model.EstatusID == 5)">Compra en proceso</option>
+    <option value="6" selected="@(Model.EstatusID == 6)">MP recibida</option>
+    <option value="7" selected="@(Model.EstatusID == 7)">MP liberada</option>
+    <option value="8" selected="@(Model.EstatusID == 8)">Lista para producción</option>
+    <option value="9" selected="@(Model.EstatusID == 9)">En producción</option>
+    <option value="10" selected="@(Model.EstatusID == 10)">Cerrada</option>
+    <option value="11" selected="@(Model.EstatusID == 11)">Cancelada</option>
+</select>
+            </label>
+
+            <button type="submit"
+                    class="prod-btn prod-btn-primary">
+                <i class="fa-solid fa-filter"></i>
+                Filtrar
+            </button>
+
+            <a class="prod-btn prod-btn-secondary"
+               asp-controller="Produccion"
+               asp-action="Index">
+                Limpiar
+            </a>
+        </form>
+
+        @if (!Model.Programas.Any())
+        {
+            <div class="prod-empty">
+                <i class="fa-solid fa-industry"></i>
+                <h3>No hay programas con estos filtros</h3>
+                <p>
+                    La pantalla está operativa. Los registros
+                    aparecerán cuando Planeación genere o
+                    actualice el programa de producción.
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="prod-table-wrap">
+                <table class="prod-table">
+                    <thead>
+                        <tr>
+                            <th>OF</th>
+                            <th>Parte / cliente</th>
+                            <th>Máquina / molde</th>
+                            <th>Programación</th>
+                            <th>Cantidades</th>
+                            <th>Avance</th>
+                            <th>Estatus</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in Model.Programas)
+                        {
+                            <tr>
+                                <td data-label="OF">
+    <strong>
+        @item.NumeroOF
+    </strong>
+
+    @if (!string.IsNullOrWhiteSpace(
+        item.FolioSolicitud)
+        && !string.Equals(
+            item.FolioSolicitud,
+            item.NumeroOF,
+            StringComparison.OrdinalIgnoreCase))
+    {
+        <small>
+            Folio: @item.FolioSolicitud
+        </small>
+    }
+
+    @if (item.SolicitudProduccionID.HasValue)
+    {
+        <small>
+            ID interno:
+            @item.SolicitudProduccionID
+        </small>
+    }
+</td>
+
+                                <td data-label="Parte / cliente">
+                                    <strong>
+                                        @(string.IsNullOrWhiteSpace(
+                                            item.ReferenciaSAP)
+                                            ? item.NumeroParte
+                                            : item.ReferenciaSAP)
+                                    </strong>
+
+                                    <small>
+                                        @item.Designacion
+                                    </small>
+
+                                    <small>
+                                        @item.Cliente
+                                    </small>
+                                </td>
+
+                                <td data-label="Máquina / molde">
+                                    <strong>
+                                        @(string.IsNullOrWhiteSpace(
+                                            item.MaquinaCodigo)
+                                            ? "Sin máquina"
+                                            : item.MaquinaCodigo)
+                                    </strong>
+
+                                    <small>
+                                        @item.MaquinaNombre
+                                    </small>
+
+                                    <small>
+                                        Molde:
+                                        @(string.IsNullOrWhiteSpace(
+                                            item.MoldeCodigo)
+                                            ? "Sin asignar"
+                                            : item.MoldeCodigo)
+                                    </small>
+                                </td>
+
+                                <td data-label="Programación">
+                                    <strong>
+                                        @(item.FechaInicioProgramada
+                                            ?.ToString("dd/MM/yyyy HH:mm")
+                                            ?? "Sin inicio")
+                                    </strong>
+
+                                    <small>
+                                        Fin:
+                                        @(item.FechaFinProgramada
+                                            ?.ToString("dd/MM/yyyy HH:mm")
+                                            ?? "Sin definir")
+                                    </small>
+
+                                    <small>
+                                        @(
+                                            item.HorasProgramadas
+                                                ?.ToString("N2")
+                                            ?? "0.00"
+                                        )
+                                        h programadas
+                                    </small>
+                                </td>
+
+                                <td data-label="Cantidades">
+                                    <strong>
+                                        @item.CantidadProgramada.ToString("N0")
+                                        programadas
+                                    </strong>
+
+                                    <small>
+                                        @item.CantidadProducida.ToString("N0")
+                                        producidas
+                                    </small>
+
+                                    <small>
+                                        @item.CantidadPendiente.ToString("N0")
+                                        pendientes
+                                    </small>
+                                </td>
+
+                                <td data-label="Avance">
+                                    <div class="prod-progress"
+                                         aria-label="Avance @item.AvancePorcentaje%">
+                                        <span style="width:@item.AvancePorcentaje%"></span>
+                                    </div>
+
+                                    <strong>
+                                        @item.AvancePorcentaje.ToString("N1")%
+                                    </strong>
+                                </td>
+
+                                <td data-label="Estatus">
+                                    <span class="prod-status @item.EstatusClase">
+                                        @item.EstatusNombre
+                                    </span>
+
+                                    @if (!item.ProgramacionCompleta)
+                                    {
+                                        <small class="prod-text-warning">
+                                            Programación incompleta
+                                        </small>
+                                    }
+                                </td>
+
+                                <td data-label="Acción">
+                                    @if (item.SolicitudProduccionID.HasValue)
+                                    {
+                                        <a class="prod-icon-btn"
+                                           asp-controller="Planeacion"
+                                           asp-action="Detalle"
+                                           asp-route-id="@item.SolicitudProduccionID"
+                                           title="Ver OF en Planeación">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="prod-icon-btn prod-icon-disabled">
+                                            <i class="fa-solid fa-eye-slash"></i>
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</main>
+<script>
+(() => {
+    const button = document.getElementById("produccionBackButton");
+    if (!button) return;
+
+    button.addEventListener("click", () => {
+        const fallback = button.dataset.fallbackUrl || "/Menu/Index";
+
+        if (window.history.length > 1) {
+            window.history.back();
+            return;
+        }
+
+        window.location.replace(fallback);
+    });
+})();
+</script>
+</body>
+</html>
+
+
+

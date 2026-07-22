@@ -1,126 +1,471 @@
-﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTEntradaFormVm
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTEntradaLoteVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
-    ViewData["Title"] = Model.EsEntregaOF ? "Entrega de PT a almacén" : "Entrada PT";
-    var seleccionado = Model.Partes.FirstOrDefault(x => x.Id == Model.ParteID)?.Texto ?? "Número de parte no encontrado";
+    ViewData["Title"] = Model.EsEntregaOF
+        ? "Recepción PT por escáner"
+        : "Entrada PT por escáner";
 }
 
 <section class="alm-hero">
     <div>
-        <small>PRODUCTO TERMINADO</small>
-        <h1>@(Model.EsEntregaOF ? "Entregar producto terminado" : "Entrada de producto")</h1>
-        <p>@(Model.EsEntregaOF
-            ? "La parte, la OF, la unidad, el tipo y la fecha se asignan automáticamente. Registra la caja física entregada al almacén."
-            : "Registra la caja física y genera simultáneamente el movimiento de entrada.")</p>
+        <small>ALMACÉN · PRODUCTO TERMINADO</small>
+        <h1>Recepción continua por escáner</h1>
+        <p>
+            Escanea una etiqueta por caja. El lector puede enviar Enter o Tab:
+            el código se agrega a la lista y el cursor queda listo para la siguiente caja.
+        </p>
     </div>
 </section>
 
-<section class="alm-card">
-    <form method="post" class="alm-form">
-        <div asp-validation-summary="ModelOnly" class="alm-field full"></div>
-        <input asp-for="EsEntregaOF" type="hidden" />
-        <input asp-for="TipoMovimiento" type="hidden" />
-        <input asp-for="Unidad" type="hidden" />
+<form method="post"
+      id="ptScanForm"
+      class="pt-scan-layout">
+    @Html.AntiForgeryToken()
 
-        @if (Model.EsEntregaOF)
-        {
-            <input asp-for="ParteID" type="hidden" />
-            <input asp-for="NumeroOF" type="hidden" />
+    <input id="AccionEntradaPT"
+           name="accion"
+           type="hidden"
+           value="convertir" />
 
-            <div class="alm-field full">
-                <label>Número de parte</label>
-                <input class="alm-input" value="@seleccionado" readonly />
-                <span asp-validation-for="ParteID"></span>
+    <div asp-validation-summary="All"
+         class="alm-alert warning"></div>
+
+    <textarea asp-for="CodigosEscaneados"
+              id="CodigosEscaneados"
+              hidden></textarea>
+
+    <input asp-for="EsEntregaOF"
+           type="hidden" />
+    <input asp-for="SolicitudProduccionID"
+           type="hidden" />
+    <input asp-for="ParteIDEsperada"
+           type="hidden" />
+    <input asp-for="NumeroOFEsperada"
+           type="hidden" />
+    <input asp-for="CantidadPendienteOF"
+           type="hidden" />
+    <input asp-for="OperacionToken"
+           type="hidden" />
+
+    @if (Model.EsEntregaOF)
+    {
+        <section class="alm-card">
+            <header>
+                <span>Validación heredada de Planeación</span>
+            </header>
+
+            <div class="alm-form pt-context">
+                <div class="alm-field">
+                    <label>OF permitida</label>
+                    <input class="alm-input"
+                           value="@Model.NumeroOFEsperada"
+                           readonly />
+                </div>
+
+                <div class="alm-field">
+                    <label>Número de parte permitido</label>
+                    <input class="alm-input"
+                           value="@Model.NumeroParteEsperada"
+                           readonly />
+                </div>
+
+                <div class="alm-field">
+                    <label>Designación de catálogo</label>
+                    <input class="alm-input"
+                           value="@Model.DescripcionParteEsperada"
+                           readonly />
+                </div>
+
+                <div class="alm-field">
+                    <label>Pendiente máximo</label>
+                    <input class="alm-input"
+                           value="@Model.CantidadPendienteOF.ToString("N0") PZS"
+                           readonly />
+                </div>
             </div>
+        </section>
+    }
+
+    <section class="alm-card">
+        <header>
+            <span>Datos de recepción</span>
+        </header>
+
+        <div class="alm-form">
+
             <div class="alm-field">
-                <label>Tipo de movimiento</label>
-                <input class="alm-input" value="Entrada · Entrega de PT" readonly />
-            </div>
-            <div class="alm-field">
-                <label asp-for="FechaMovimiento"></label>
-                <input class="alm-input" value="@Model.FechaMovimiento.ToString("dd/MM/yyyy HH:mm:ss")" readonly />
-            </div>
-            <div class="alm-field">
-                <label asp-for="NumeroOF"></label>
-                <input class="alm-input" value="@Model.NumeroOF" readonly />
-                <span asp-validation-for="NumeroOF"></span>
-            </div>
-            <div class="alm-field">
-                <label asp-for="Unidad"></label>
-                <input class="alm-input" value="PZS" readonly />
-            </div>
-        }
-        else
-        {
-            <div class="alm-field full">
-                <label asp-for="ParteID"></label>
-                <select asp-for="ParteID" class="alm-select">
+                <label asp-for="UbicacionID"></label>
+                <select asp-for="UbicacionID"
+                        class="alm-select">
                     <option value="">Selecciona</option>
-                    @foreach (var x in Model.Partes)
+                    @foreach (var ubicacion in Model.Ubicaciones)
                     {
-                        <option value="@x.Id">@x.Texto</option>
+                        <option value="@ubicacion.Id">
+                            @ubicacion.Texto
+                        </option>
                     }
                 </select>
-                <span asp-validation-for="ParteID"></span>
+                <span asp-validation-for="UbicacionID"></span>
             </div>
-            <div class="alm-field">
-                <label asp-for="NumeroOF"></label>
-                <input asp-for="NumeroOF" class="alm-input" />
-            </div>
-        }
 
-        <div class="alm-field">
-            <label asp-for="Etiqueta"></label>
-            <input asp-for="Etiqueta" class="alm-input" required />
-            <span asp-validation-for="Etiqueta"></span>
+            <div class="alm-field full">
+                <label asp-for="Observaciones"></label>
+                <textarea asp-for="Observaciones"
+                          class="alm-textarea"></textarea>
+                <span asp-validation-for="Observaciones"></span>
+            </div>
         </div>
-        <div class="alm-field">
-            <label asp-for="NumeroCaja"></label>
-            <input asp-for="NumeroCaja" class="alm-input" required min="1" />
-            <span asp-validation-for="NumeroCaja"></span>
+    </section>
+
+    <section class="alm-card">
+        <header>
+            <span>Escaneo de cajas</span>
+            <span id="scanHeaderCount">0 código(s)</span>
+        </header>
+
+        <div class="pt-scan-zone">
+            <div class="pt-scan-zone__title">
+                <h2>Escanea sin hacer clic entre cajas</h2>
+                <small>
+                    Formato:
+                    OF-NO.PARTE-DESIGNACIÓN-PIEZAS-LOTE
+                </small>
+            </div>
+
+            <div class="pt-scan-active">
+                <i class="fa-solid fa-barcode"></i>
+                <input id="scanInput"
+                       class="alm-input"
+                       type="text"
+                       autocomplete="off"
+                       inputmode="none"
+                       autofocus
+                       placeholder="Escanea aquí la siguiente etiqueta..." />
+            </div>
+
+            <div id="scanMessage"
+                 class="pt-scan-message">
+                Cursor listo para escanear.
+            </div>
+
+            <div id="scanRows"
+                 class="pt-scan-rows"></div>
+
+            <div class="pt-scan-actions">
+                <button id="convertButton"
+                        class="alm-btn"
+                        type="button"
+                        hidden>
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    Convertir códigos
+                </button>
+
+                <button id="clearButton"
+                        class="alm-btn secondary"
+                        type="button"
+                        hidden>
+                    <i class="fa-solid fa-eraser"></i>
+                    Limpiar lista
+                </button>
+            </div>
+
+            <span asp-validation-for="CodigosEscaneados"></span>
         </div>
-        <div class="alm-field">
-            <label asp-for="Cantidad"></label>
-            <input asp-for="Cantidad" class="alm-input" required min="1" />
-            <span asp-validation-for="Cantidad"></span>
-        </div>
-        <div class="alm-field">
-            <label asp-for="LoteEtiqueta">Lote (opcional)</label>
-            <input asp-for="LoteEtiqueta" class="alm-input" placeholder="Opcional" />
-            <span asp-validation-for="LoteEtiqueta"></span>
-        </div>
-        <div class="alm-field">
-            <label asp-for="EstadoCalidad"></label>
-            <select asp-for="EstadoCalidad" class="alm-select" required>
-                @foreach (var x in Model.EstadosCalidad)
+    </section>
+
+    @if (Model.Resultados.Any())
+    {
+        <section class="alm-card"
+                 id="conversionResults">
+            @if (ViewData["MensajeConversionEntradaPT"] != null)
+            {
+                <div class="alm-alert">
+                    @ViewData["MensajeConversionEntradaPT"]
+                </div>
+            }
+            <header>
+                <span>Resultado de conversión</span>
+                <span>
+                    @Model.Resultados.Count caja(s) ·
+                    @Model.TotalPiezas.ToString("N0") pieza(s)
+                </span>
+            </header>
+
+            <div class="pt-scan-summary">
+                <div class="pt-scan-kpi">
+                    <small>Cajas leídas</small>
+                    <strong>@Model.Resultados.Count</strong>
+                </div>
+                <div class="pt-scan-kpi">
+                    <small>Piezas</small>
+                    <strong>@Model.TotalPiezas.ToString("N0")</strong>
+                </div>
+                <div class="pt-scan-kpi">
+                    <small>Listas para registrar</small>
+                    <strong>@Model.Resultados.Count(x => x.Valido)</strong>
+                </div>
+            </div>
+
+            <div class="pt-convert-table-wrap">
+                <table class="pt-convert-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Código original</th>
+                            <th>OF</th>
+                            <th>No. parte</th>
+                            <th>Designación</th>
+                            <th>Piezas</th>
+                            <th>No. caja / lote</th>
+                            <th>Validación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Resultados)
+                        {
+                            <tr>
+                                <td>@item.Renglon</td>
+                                <td class="pt-convert-code">
+                                    @item.CodigoOriginal
+                                </td>
+                                <td>@item.NumeroOF</td>
+                                <td>
+                                    @item.NumeroParte                                    @if (item.ExisteEnCatalogo)
+                                    {
+                                        @if (!string.Equals(
+                                            item.NumeroParte,
+                                            item.NumeroParteCatalogo,
+                                            StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <small class="of-sub">
+                                                Catálogo: @item.NumeroParteCatalogo
+                                            </small>
+                                        }
+
+                                        <small class="of-sub">
+                                            @item.DescripcionCatalogo
+                                        </small>
+                                    }
+                                </td>
+                                <td>@item.Designacion</td>
+                                <td>@item.Cantidad.ToString("N0")</td>
+                                <td>@item.Lote</td>
+                                <td>
+                                    <span class="pt-result @item.ClaseEstado">
+                                        @(item.Valido ? "Válido" : "Revisar")
+                                    </span>
+                                    <small class="of-sub">
+                                        @item.Mensaje
+                                    </small>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pt-scan-actions">
+                @if (Model.PuedeRegistrar)
                 {
-                    <option value="@x.Extra">@x.Texto</option>
+                    <button id="registerButton"
+                            class="alm-btn"
+                            type="button">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                        Registrar todas las entradas
+                    </button>
                 }
-            </select>
-            <span asp-validation-for="EstadoCalidad"></span>
-        </div>
-        <div class="alm-field">
-            <label asp-for="UbicacionID"></label>
-            <select asp-for="UbicacionID" class="alm-select" required="@(Model.EsEntregaOF ? "required" : null)">
-                <option value="">Selecciona una ubicación</option>
-                @foreach (var x in Model.Ubicaciones)
+                else
                 {
-                    <option value="@x.Id">@x.Texto</option>
+                    <div class="alm-alert warning">
+                        No se puede registrar hasta corregir o eliminar
+                        todos los códigos marcados para revisión.
+                    </div>
                 }
-            </select>
-            <span asp-validation-for="UbicacionID"></span>
-        </div>
-        <div class="alm-field full">
-            <label asp-for="Observaciones"></label>
-            <textarea asp-for="Observaciones" class="alm-textarea" required="@(Model.EsEntregaOF ? "required" : null)"></textarea>
-            <span asp-validation-for="Observaciones"></span>
-        </div>
-        <div class="alm-field full">
-            <button class="alm-btn" type="submit">
-                <i class="fa-solid fa-box"></i>
-                @(Model.EsEntregaOF ? "Registrar entrega de PT" : "Registrar entrada PT")
-            </button>
-        </div>
-    </form>
-</section>
+            </div>
+        </section>
+    }
+</form>
+
+@section Scripts {
+    <script>
+        (() => {
+            const form = document.getElementById("ptScanForm");
+            const hidden = document.getElementById("CodigosEscaneados");
+            const actionInput = document.getElementById("AccionEntradaPT");
+            const input = document.getElementById("scanInput");
+            const rows = document.getElementById("scanRows");
+            const message = document.getElementById("scanMessage");
+            const convertButton = document.getElementById("convertButton");
+            const clearButton = document.getElementById("clearButton");
+            const registerButton = document.getElementById("registerButton");
+            const headerCount = document.getElementById("scanHeaderCount");
+            const results = document.getElementById("conversionResults");
+
+            if (!hidden || !input || !rows) return;
+
+            let codigos = hidden.value
+                .split(/\r?\n|\r/)
+                .map(x => x.trim())
+                .filter(Boolean);
+
+            const setMessage = (text, isError = false) => {
+                message.textContent = text;
+                message.classList.toggle("error", isError);
+            };
+
+            const invalidateConversion = () => {
+                if (results) {
+                    results.hidden = true;
+                }
+            };
+
+            const sync = () => {
+                hidden.value = codigos.join("\n");
+                headerCount.textContent = `${codigos.length} código(s)`;
+                convertButton.hidden = codigos.length === 0;
+                clearButton.hidden = codigos.length === 0;
+
+                rows.innerHTML = "";
+
+                codigos.forEach((codigo, index) => {
+                    const row = document.createElement("div");
+                    row.className = "pt-scan-row";
+
+                    const number = document.createElement("span");
+                    number.className = "pt-scan-row__number";
+                    number.textContent = String(index + 1);
+
+                    const value = document.createElement("input");
+                    value.className = "alm-input";
+                    value.value = codigo;
+                    value.readOnly = true;
+                    value.tabIndex = -1;
+
+                    const remove = document.createElement("button");
+                    remove.type = "button";
+                    remove.className = "pt-scan-remove";
+                    remove.title = "Eliminar código";
+                    remove.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                    remove.addEventListener("click", () => {
+                        codigos.splice(index, 1);
+                        invalidateConversion();
+                        sync();
+                        input.focus();
+                    });
+
+                    row.append(number, value, remove);
+                    rows.appendChild(row);
+                });
+            };
+
+            const addCurrentCode = () => {
+                const code = input.value.trim();
+
+                if (!code) {
+                    setMessage("El escáner no envió contenido.", true);
+                    input.focus();
+                    return;
+                }
+
+                if (code.length > 120) {
+                    setMessage(
+                        "El código excede los 120 caracteres permitidos.",
+                        true);
+                    input.select();
+                    return;
+                }
+
+                if (codigos.some(
+                        x => x.localeCompare(
+                            code,
+                            undefined,
+                            { sensitivity: "accent" }) === 0)) {
+                    setMessage(
+                        "Este código ya está en la lista.",
+                        true);
+                    input.select();
+                    return;
+                }
+
+                codigos.push(code);
+                input.value = "";
+                invalidateConversion();
+                sync();
+                setMessage(
+                    `Caja ${codigos.length} agregada. Escanea la siguiente.`);
+                input.focus();
+            };
+
+            input.addEventListener("keydown", event => {
+                if (event.key === "Enter"
+                    || event.key === "Tab") {
+                    event.preventDefault();
+                    addCurrentCode();
+                }
+            });
+
+            clearButton.addEventListener("click", () => {
+                codigos = [];
+                input.value = "";
+                invalidateConversion();
+                sync();
+                setMessage("Lista limpia. Cursor listo para escanear.");
+                input.focus();
+            });
+            const submitAction = action => {
+                sync();
+
+                if (codigos.length === 0) {
+                    setMessage(
+                        "Escanea al menos una etiqueta.",
+                        true);
+                    input.focus();
+                    return;
+                }
+
+                actionInput.value = action;
+                form.submit();
+            };
+
+            convertButton.addEventListener("click", () => {
+                submitAction("convertir");
+            });
+
+            registerButton?.addEventListener("click", () => {
+                submitAction("registrar");
+            });
+
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+
+                if (input.value.trim()) {
+                    addCurrentCode();
+                }
+                else {
+                    submitAction("convertir");
+                }
+            });
+
+            sync();
+
+            window.setTimeout(() => {
+                if (results) {
+                    results.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start"
+                    });
+                }
+                else {
+                    input.focus();
+                }
+            }, 100);
+        })();
+    </script>
+}
+
+
+
+
+
+
 

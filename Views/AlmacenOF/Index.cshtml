@@ -4,62 +4,13 @@
     ViewData["Title"] = "Órdenes de fabricación";
 }
 
-<style>
-    .of-kpi-grid{grid-template-columns:repeat(5,minmax(135px,1fr))}
-    .of-filter{display:grid;grid-template-columns:minmax(280px,2fr) minmax(190px,1fr) minmax(190px,1fr) 150px 150px auto;gap:10px;padding:16px;align-items:end}
-    .of-filter .alm-field label{font-size:.72rem;text-transform:uppercase}
-    .of-table-wrap{overflow:auto}
-    .of-table{width:100%;min-width:1120px;table-layout:fixed;border-collapse:collapse;font-size:.76rem}
-    .of-table th,.of-table td{height:58px;padding:7px 9px;border-bottom:1px solid #22314a;vertical-align:middle}
-    .of-table th{height:36px;color:#a9bdd9;font-size:.66rem;text-transform:uppercase;letter-spacing:.02em}
-    .of-table tbody tr:hover{background:rgba(255,255,255,.025)}
-    .of-col-of{width:13%}.of-col-client{width:14%}.of-col-date{width:10%}
-    .of-col-flow{width:17%}.of-col-status{width:9%}.of-col-actions{width:5%}
-    .of-link{display:block;color:#fff;text-decoration:none;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .of-link:hover{color:#ffd0a6}
-    .of-sub{display:block;margin-top:4px;color:var(--muted);font-size:.62rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .of-center{text-align:center;font-variant-numeric:tabular-nums}
-    .of-pieces{font-size:.95rem;font-weight:900}
-    .of-deliverable{display:block;margin-bottom:5px;color:#dce7f7;font-size:.64rem;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .of-delivery-list{display:grid;gap:7px}
-    .of-delivery-item{display:block;padding:6px 7px;border:1px solid rgba(255,255,255,.08);border-radius:9px;background:rgba(255,255,255,.025);color:#fff;text-decoration:none}
-    .of-delivery-item:hover{border-color:rgba(244,123,32,.5);background:rgba(244,123,32,.08);color:#fff}
-    .of-delivery-item.disabled{pointer-events:none;opacity:.55}
-    .of-delivery-name{display:block;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dce7f7;font-size:.62rem;font-weight:850}
-    .of-flow{display:block;color:#fff;text-decoration:none}
-    .of-flow:hover{color:#fff}
-    .of-flow-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
-    .of-flow-top strong{font-size:.78rem;font-variant-numeric:tabular-nums}
-    .of-state{padding:3px 6px;border-radius:999px;font-size:.56rem;font-weight:950;text-transform:uppercase;white-space:nowrap}
-    .of-state.completo{background:#103b2d;color:#8bf3c4}
-    .of-state.parcial{background:#443916;color:#ffe287}
-    .of-state.pendiente{background:#3e1420;color:#ffb0b8}
-    .of-state.na{background:#263247;color:#cbd5e1}
-    .of-progress{display:block;height:5px;margin-top:6px;border-radius:999px;background:#263247;overflow:hidden}
-    .of-progress i{display:block;height:100%;border-radius:999px;background:#23c483}
-    .of-flow.parcial .of-progress i{background:#f7c948}
-    .of-flow.pendiente .of-progress i{background:#ff5d6c}
-    .of-flow.na .of-progress i{width:0!important}
-    .of-status{display:inline-flex;align-items:center;justify-content:center;max-width:100%;padding:5px 8px;border-radius:999px;background:#263247;color:#dbe5f4;font-size:.62rem;font-weight:900;text-align:center}
-    .of-priority{display:block;margin-top:5px;font-size:.58rem;font-weight:900;text-transform:uppercase}
-    .of-priority.urgente{color:#ff8b97}.of-priority.alta{color:#ffd16f}.of-priority.normal{color:#9fb0c9}.of-priority.baja{color:#8bf3c4}
-    .of-actions{display:flex;align-items:center;justify-content:center;gap:5px}
-    .of-action{display:inline-flex;align-items:center;justify-content:center;width:31px;height:31px;border:1px solid var(--line);border-radius:8px;background:#18243a;color:#fff;text-decoration:none}
-    .of-action:hover{border-color:rgba(244,123,32,.65);background:rgba(244,123,32,.18);color:#fff}
-    .of-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-top:1px solid var(--line)}
-    .of-pagination__actions{display:flex;gap:7px}
-    .of-pagination .alm-btn.disabled{pointer-events:none;opacity:.45}
-    @@media(max-width:1250px){.of-kpi-grid{grid-template-columns:repeat(3,1fr)}.of-filter{grid-template-columns:1fr 1fr 1fr}}
-    @@media(max-width:760px){.of-kpi-grid,.of-filter{grid-template-columns:1fr}}
-</style>
-
 <section class="alm-hero">
     <div>
         <small>ALMACÉN · CONTROL DE OF</small>
         <h1>Órdenes de fabricación</h1>
         <p>
             Consulta rápida de las OF creadas por Planeación y del avance registrado por Almacén
-            para la entrega de materia prima y embalajes.
+            para la entrega de materia prima, embalajes y producto terminado.
         </p>
     </div>
     <div class="alm-actions">
@@ -128,10 +79,14 @@ else
                 <label for="area">Atención de Almacén</label>
                 <select id="area" class="alm-select" name="area">
                     <option value="">Todas</option>
-                    <option value="PENDIENTES" selected="@(Model.Area == "PENDIENTES")">Con pendientes</option>
-                    <option value="CON_MOVIMIENTOS" selected="@(Model.Area == "CON_MOVIMIENTOS")">Con movimientos</option>
-                    <option value="MP" selected="@(Model.Area == "MP")">Requiere MP</option>
-                    <option value="EMBALAJE" selected="@(Model.Area == "EMBALAJE")">Requiere embalaje</option>
+                    @if (Model.Area == "PENDIENTES") { <option value="PENDIENTES" selected>Con pendientes</option> }
+                    else { <option value="PENDIENTES">Con pendientes</option> }
+                    @if (Model.Area == "CON_MOVIMIENTOS") { <option value="CON_MOVIMIENTOS" selected>Con movimientos</option> }
+                    else { <option value="CON_MOVIMIENTOS">Con movimientos</option> }
+                    @if (Model.Area == "MP") { <option value="MP" selected>Requiere MP</option> }
+                    else { <option value="MP">Requiere MP</option> }
+                    @if (Model.Area == "EMBALAJE") { <option value="EMBALAJE" selected>Requiere embalaje</option> }
+                    else { <option value="EMBALAJE">Requiere embalaje</option> }
                 </select>
             </div>
 
@@ -152,11 +107,12 @@ else
         </form>
 
         <div class="of-table-wrap">
-            <table class="of-table">
+            <table class="of-table alm-table">
                 <colgroup>
                     <col class="of-col-of" />
                     <col class="of-col-client" />
                     <col class="of-col-date" />
+                    <col class="of-col-flow" />
                     <col class="of-col-flow" />
                     <col class="of-col-flow" />
                     <col class="of-col-status" />
@@ -170,6 +126,7 @@ else
                         <th>Fechas</th>
                         <th>MP a entregar</th>
                         <th>Embalaje a entregar</th>
+                        <th>PT a entregar</th>
                         <th>Estatus</th>
                         <th></th>
                     </tr>
@@ -214,21 +171,19 @@ else
                                 <div class="of-delivery-list">
                                     @foreach (var item in x.MaterialesEntrega)
                                     {
-                                        var url = item.PuedeEntregar
+                                        var puedeEntregar = item.PuedeEntregar && x.TieneNumeroOF;
+                                        var url = puedeEntregar
                                             ? Url.Action("Movimiento", "AlmacenMP", new
                                             {
                                                 materialId = item.CatalogoID,
-                                                tipo = "Salida",
-                                                numeroOF = x.NumeroOFClave,
-                                                cantidad = item.Pendiente,
-                                                unidad = item.Unidad,
+                                                solicitudProduccionId = x.SolicitudProduccionID,
                                                 entregaOF = true
                                             })
                                             : null;
 
-                                        <a class="of-delivery-item @(!item.PuedeEntregar ? "disabled" : "")"
+                                        <a class="of-delivery-item @(!puedeEntregar ? "disabled" : "")"
                                            href="@url"
-                                           title="@(item.PuedeEntregar ? "Registrar entrega de MP" : item.CatalogoID <= 0 ? "Material no localizado en ERP_Materiales" : "Entrega completa")">
+                                           title="@(puedeEntregar ? "Registrar entrega de MP" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : item.CatalogoID <= 0 ? "Material no localizado en ERP_Materiales" : "Entrega completa")" aria-disabled="@(!puedeEntregar)">
                                             <span class="of-delivery-name">@item.Codigo · @item.Descripcion</span>
                                             <span class="of-flow @item.Clase">
                                                 <span class="of-flow-top">
@@ -249,21 +204,19 @@ else
                                 <div class="of-delivery-list">
                                     @foreach (var item in x.EmbalajesEntrega)
                                     {
-                                        var url = item.PuedeEntregar
+                                        var puedeEntregar = item.PuedeEntregar && x.TieneNumeroOF;
+                                        var url = puedeEntregar
                                             ? Url.Action("Movimiento", "AlmacenEmbalajes", new
                                             {
                                                 embalajeId = item.CatalogoID,
-                                                tipo = "Salida",
-                                                numeroOF = x.NumeroOFClave,
-                                                cantidad = item.Pendiente,
-                                                unidad = item.Unidad,
+                                                solicitudProduccionId = x.SolicitudProduccionID,
                                                 entregaOF = true
                                             })
                                             : null;
 
-                                        <a class="of-delivery-item @(!item.PuedeEntregar ? "disabled" : "")"
+                                        <a class="of-delivery-item @(!puedeEntregar ? "disabled" : "")"
                                            href="@url"
-                                           title="@(item.PuedeEntregar ? "Registrar entrega de embalaje" : item.CatalogoID <= 0 ? "Embalaje no localizado en ERP_Embalajes" : "Entrega completa")">
+                                           title="@(puedeEntregar ? "Registrar entrega de embalaje" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : item.CatalogoID <= 0 ? "Embalaje no localizado en ERP_Embalajes" : "Entrega completa")" aria-disabled="@(!puedeEntregar)">
                                             <span class="of-delivery-name">@item.Codigo · @item.Descripcion</span>
                                             <span class="of-flow @item.Clase">
                                                 <span class="of-flow-top">
@@ -281,6 +234,62 @@ else
                                 </div>
                             </td>
 
+                            <td>
+                                <div class="of-delivery-list">
+                                    @foreach (var item in x.PartesEntrega)
+                                    {
+                                        var puedeEntregarPT =
+                                            item.PuedeEntregar
+                                            && x.TieneNumeroOF;
+
+                                        var urlPT = puedeEntregarPT
+                                            ? Url.Action(
+                                                "Entrada",
+                                                "AlmacenPT",
+                                                new
+                                                {
+                                                    parteId =
+                                                        item.CatalogoID,
+                                                    solicitudProduccionId =
+                                                        x.SolicitudProduccionID,
+                                                    entregaOF = true
+                                                })
+                                            : null;
+
+                                        <a class="of-delivery-item @(!puedeEntregarPT ? "disabled" : "")"
+                                           href="@urlPT"
+                                           title="@(puedeEntregarPT ? "Registrar entrega de producto terminado" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : "Entrega completa")"
+                                           aria-disabled="@(!puedeEntregarPT)">
+                                            <span class="of-delivery-name">
+                                                @item.Codigo · @item.Descripcion
+                                            </span>
+                                            <span class="of-flow @item.Clase">
+                                                <span class="of-flow-top">
+                                                    <strong>
+                                                        @item.Entregado.ToString("0")
+                                                        /
+                                                        @item.Requerido.ToString("0")
+                                                        @item.Unidad
+                                                    </strong>
+                                                    <span class="of-state @item.Clase">
+                                                        @item.Estado
+                                                    </span>
+                                                </span>
+                                                <span class="of-progress">
+                                                    <i style="width:@item.Porcentaje%"></i>
+                                                </span>
+                                            </span>
+                                        </a>
+                                    }
+
+                                    @if (!x.PartesEntrega.Any())
+                                    {
+                                        <span class="of-sub">
+                                            No aplica · Sin PT validado
+                                        </span>
+                                    }
+                                </div>
+                            </td>
                             <td class="of-center">
                                 <span class="of-status">@x.EstatusNombre</span>
                                 <span class="of-priority @x.PrioridadClase">@x.Prioridad</span>
@@ -304,7 +313,7 @@ else
                     @if (!Model.Ordenes.Any())
                     {
                         <tr>
-                            <td colspan="7" class="alm-empty">
+                            <td colspan="8" class="alm-empty">
                                 No hay órdenes de fabricación que coincidan con los filtros.
                             </td>
                         </tr>
@@ -344,4 +353,5 @@ else
         </div>
     </section>
 }
+
 

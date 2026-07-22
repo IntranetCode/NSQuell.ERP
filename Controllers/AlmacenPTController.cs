@@ -1,4 +1,5 @@
 ﻿using ERP.NSQuell.Models.ViewModels.Almacen;
+using ERP.NSQuell.Servicios.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
@@ -483,180 +484,1179 @@ ORDER BY Valor;";
     public async Task<IActionResult> Entrada(
         int? parteId,
         string? numeroOF,
-        int? cantidad,
+        int? solicitudProduccionId,
         bool entregaOF = false,
         CancellationToken cancellationToken = default)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
 
-        var vm = new AlmacenPTEntradaFormVm
+        var vm = new AlmacenPTEntradaLoteVm
         {
-            ParteID = parteId.GetValueOrDefault(),
-            NumeroOF = numeroOF?.Trim(),
-            Cantidad = cantidad.GetValueOrDefault(),
-            TipoMovimiento = "Entrada",
-            Unidad = "PZS",
             EsEntregaOF = entregaOF,
-            FechaMovimiento = DateTime.Now,
+            SolicitudProduccionID = solicitudProduccionId,
+            ParteIDEsperada = parteId,
+            NumeroOFEsperada = numeroOF?.Trim(),
             EstadoCalidad = "Liberado",
-            Observaciones = entregaOF && !string.IsNullOrWhiteSpace(numeroOF)
-                ? $"Entrega de producto terminado para {numeroOF.Trim()}."
-                : null
+            Observaciones = entregaOF
+                ? "Recepción de producto terminado validado por OF."
+                : "Recepción masiva de producto terminado por escáner.",
+            OperacionToken =
+                AlmacenOFEntregaService.CrearToken()
         };
 
-        await CargarEntradaAsync(vm, cancellationToken);
+        if (entregaOF)
+        {
+            if (!solicitudProduccionId.HasValue
+                || solicitudProduccionId.Value <= 0
+                || !parteId.HasValue
+                || parteId.Value <= 0)
+            {
+                Mensaje(
+                    "warning",
+                    "No se recibió una OF y un número de parte válidos.");
+
+                return RedirectToAction(
+                    "Index",
+                    "AlmacenOF");
+            }
+
+            await using var connection =
+                await AbrirConexionAsync(cancellationToken);
+
+            var contexto =
+                await AlmacenOFEntregaService
+                    .CargarProductoTerminadoAsync(
+                        connection,
+                        transaction: null,
+                        solicitudProduccionId.Value,
+                        parteId.Value,
+                        cancellationToken);
+
+            if (contexto == null)
+            {
+                Mensaje(
+                    "warning",
+                    "El número de parte no está validado dentro de la OF.");
+
+                return RedirectToAction(
+                    "Index",
+                    "AlmacenOF");
+            }
+
+            if (string.IsNullOrWhiteSpace(contexto.NumeroOF))
+            {
+                Mensaje(
+                    "warning",
+                    "Planeación todavía no asigna un número de OF válido.");
+
+                return RedirectToAction(
+                    "Index",
+                    "AlmacenOF");
+            }
+
+            if (contexto.Pendiente < 1m)
+            {
+                Mensaje(
+                    "warning",
+                    "El producto terminado de esta OF ya fue entregado completamente.");
+
+                return RedirectToAction(
+                    "Index",
+                    "AlmacenOF");
+            }
+
+            vm.NumeroOFEsperada = contexto.NumeroOF;
+            vm.NumeroParteEsperada = contexto.Codigo;
+            vm.CantidadPendienteOF = contexto.Pendiente;
+        }
+
+        await CargarEntradaLoteAsync(
+            vm,
+            cancellationToken);
+
         return View(vm);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Entrada(AlmacenPTEntradaFormVm model, CancellationToken cancellationToken)
+    public async Task<IActionResult> Entrada(
+        AlmacenPTEntradaLoteVm model,
+        string? accion,
+        CancellationToken cancellationToken)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
-        model.Etiqueta = model.Etiqueta?.Trim() ?? string.Empty;
-        model.LoteEtiqueta = model.LoteEtiqueta?.Trim();
-        model.NumeroOF = model.NumeroOF?.Trim();
-        model.TipoMovimiento = "Entrada";
-        model.Unidad = "PZS";
-        model.FechaMovimiento = DateTime.Now;
 
-        if (model.EsEntregaOF)
+        model.CodigosEscaneados =
+            NormalizarCodigosEscaneados(
+                model.CodigosEscaneados);
+
+        model.EstadoCalidad = "Liberado";
+
+        model.Observaciones =
+            model.Observaciones?.Trim();
+
+        model.OperacionToken =
+            model.OperacionToken?.Trim()
+            ?? string.Empty;
+
+        accion =
+            string.IsNullOrWhiteSpace(accion)
+                ? "convertir"
+                : accion.Trim().ToLowerInvariant();
+
+        ViewData["AccionEntradaPT"] = accion;
+
+        if (!AlmacenOFEntregaService.TokenValido(
+                model.OperacionToken))
         {
-            if (model.ParteID <= 0)
-                ModelState.AddModelError(nameof(model.ParteID), "El número de parte es obligatorio.");
-            if (string.IsNullOrWhiteSpace(model.NumeroOF))
-                ModelState.AddModelError(nameof(model.NumeroOF), "La orden de fabricación es obligatoria.");
-            if (!model.UbicacionID.HasValue)
-                ModelState.AddModelError(nameof(model.UbicacionID), "La ubicación es obligatoria.");
-            if (string.IsNullOrWhiteSpace(model.Observaciones))
-                ModelState.AddModelError(nameof(model.Observaciones), "Las observaciones son obligatorias.");
+            ModelState.AddModelError(
+                nameof(model.OperacionToken),
+                "La operación expiró. Recarga la pantalla e inténtalo nuevamente.");
         }
 
-        if (!EstadosCalidad.Contains(model.EstadoCalidad))
-            ModelState.AddModelError(nameof(model.EstadoCalidad), "Estado de calidad inválido.");
+        var codigos =
+            SepararCodigosEscaneados(
+                model.CodigosEscaneados);
+
+        if (codigos.Count == 0)
+        {
+            ModelState.AddModelError(
+                nameof(model.CodigosEscaneados),
+                "Escanea al menos una etiqueta.");
+        }
+
+        if (model.EsEntregaOF
+            && (!model.SolicitudProduccionID.HasValue
+                || model.SolicitudProduccionID.Value <= 0
+                || !model.ParteIDEsperada.HasValue
+                || model.ParteIDEsperada.Value <= 0))
+        {
+            ModelState.AddModelError(
+                nameof(model.SolicitudProduccionID),
+                "La OF de origen no es válida.");
+        }
+
+        if (accion is not "convertir" and not "registrar")
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "Acción de entrada no válida.");
+        }
+
         if (!ModelState.IsValid)
         {
-            await CargarEntradaAsync(model, cancellationToken);
+            await CargarEntradaLoteAsync(
+                model,
+                cancellationToken);
+
             return View(model);
         }
 
-        await using var connection = await AbrirConexionAsync(cancellationToken);
-        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        if (accion == "convertir")
+        {
+            await using var connection =
+                await AbrirConexionAsync(cancellationToken);
+
+            model.Resultados =
+                await ConvertirCodigosEntradaAsync(
+                    connection,
+                    transaction: null,
+                    model,
+                    codigos,
+                    cancellationToken);
+
+            await CargarEntradaLoteAsync(
+                model,
+                cancellationToken);
+
+            ViewData["MostrarResultadosEntradaPT"] = true;
+            ViewData["MensajeConversionEntradaPT"] =
+                $"Conversión terminada: {model.Resultados.Count(x => x.Valido)} válida(s) y {model.Resultados.Count(x => !x.Valido)} por revisar.";
+
+            ModelState.Remove(nameof(model.CodigosEscaneados));
+            model.CodigosEscaneados =
+                NormalizarCodigosEscaneados(
+                    model.CodigosEscaneados);
+
+            return View(model);
+        }
+
+        if (!model.UbicacionID.HasValue
+            || model.UbicacionID.Value <= 0)
+        {
+            ModelState.AddModelError(
+                nameof(model.UbicacionID),
+                "Selecciona la ubicación donde se recibirán las cajas.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            await using var connection =
+                await AbrirConexionAsync(cancellationToken);
+
+            model.Resultados =
+                await ConvertirCodigosEntradaAsync(
+                    connection,
+                    transaction: null,
+                    model,
+                    codigos,
+                    cancellationToken);
+
+            await CargarEntradaLoteAsync(
+                model,
+                cancellationToken);
+
+            return View(model);
+        }
+
+        await using var db =
+            await AbrirConexionAsync(cancellationToken);
+
+        await using var transaction =
+            (SqlTransaction)await db.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
+
         try
         {
-            const string parteSql = "SELECT COUNT(*) FROM dbo.ERP_Partes WITH (UPDLOCK,HOLDLOCK) WHERE ParteID=@Id AND Activo=1;";
-            await using (var parteCommand = new SqlCommand(parteSql, connection, transaction))
+            model.Resultados =
+                await ConvertirCodigosEntradaAsync(
+                    db,
+                    transaction,
+                    model,
+                    codigos,
+                    cancellationToken);
+
+            if (!model.Resultados.Any()
+                || model.Resultados.Any(x => !x.Valido))
             {
-                parteCommand.Parameters.Add("@Id", SqlDbType.Int).Value = model.ParteID;
-                if (Convert.ToInt32(await parteCommand.ExecuteScalarAsync(cancellationToken)) == 0)
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                ModelState.AddModelError(
+                    string.Empty,
+                    "Hay códigos inválidos, repetidos o que no corresponden a la OF. Corrige la lista y vuelve a convertir.");
+
+                await CargarEntradaLoteAsync(
+                    model,
+                    cancellationToken);
+
+                return View(model);
+            }
+
+            var prefijoReferencia =
+                $"WEB-PT-LOTE-{model.OperacionToken.ToUpperInvariant()}";
+
+            const string batchExistsSql = @"
+SELECT CASE WHEN EXISTS
+(
+    SELECT 1
+    FROM dbo.AlmacenPT_Movimientos
+        WITH (UPDLOCK, HOLDLOCK)
+    WHERE ReferenciaOperacion LIKE @Prefijo + N'%'
+) THEN 1 ELSE 0 END;";
+
+            await using (var batchExists =
+                new SqlCommand(
+                    batchExistsSql,
+                    db,
+                    transaction))
+            {
+                batchExists.Parameters.Add(
+                    "@Prefijo",
+                    SqlDbType.NVarChar,
+                    120).Value = prefijoReferencia;
+
+                if (Convert.ToInt32(
+                        await batchExists.ExecuteScalarAsync(
+                            cancellationToken)
+                        ?? 0) == 1)
                 {
-                    ModelState.AddModelError(nameof(model.ParteID), "El número de parte no existe o está inactivo.");
-                    await transaction.RollbackAsync(cancellationToken);
-                    await CargarEntradaAsync(model, cancellationToken);
-                    return View(model);
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
+                    Mensaje(
+                        "warning",
+                        "Este lote de escaneos ya había sido registrado. No se generaron duplicados.");
+
+                    return model.EsEntregaOF
+                        ? RedirectToAction(
+                            "Index",
+                            "AlmacenOF")
+                        : RedirectToAction(nameof(Entrada));
                 }
             }
 
-            const string duplicateSql = "SELECT COUNT(*) FROM dbo.AlmacenPT_Cajas WITH (UPDLOCK,HOLDLOCK) WHERE Etiqueta=@Etiqueta;";
-            await using (var duplicate = new SqlCommand(duplicateSql, connection, transaction))
-            {
-                duplicate.Parameters.Add("@Etiqueta", SqlDbType.NVarChar, 120).Value = model.Etiqueta;
-                if (Convert.ToInt32(await duplicate.ExecuteScalarAsync(cancellationToken)) > 0)
-                {
-                    ModelState.AddModelError(nameof(model.Etiqueta), "La etiqueta ya está registrada.");
-                    await transaction.RollbackAsync(cancellationToken);
-                    await CargarEntradaAsync(model, cancellationToken);
-                    return View(model);
-                }
-            }
+            var consecutivos =
+                new Dictionary<string, int>(
+                    StringComparer.OrdinalIgnoreCase);
 
-            const string cajaSql = @"
+            var totalPiezas = 0;
+            var numeroRegistro = 0;
+
+            foreach (var item in model.Resultados)
+            {
+                numeroRegistro++;
+
+                var claveConsecutivo =
+                    $"{item.ParteID}|{item.NumeroOF}";
+
+                if (!consecutivos.TryGetValue(
+                        claveConsecutivo,
+                        out var numeroCaja))
+                {
+                    const string maxCajaSql = @"
+SELECT ISNULL(MAX(NumeroCaja), 0)
+FROM dbo.AlmacenPT_Cajas WITH (UPDLOCK, HOLDLOCK)
+WHERE ParteID = @ParteID
+  AND
+  (
+      (@NumeroOF IS NULL AND NumeroOF IS NULL)
+      OR LTRIM(RTRIM(ISNULL(NumeroOF, N''))) =
+         LTRIM(RTRIM(ISNULL(@NumeroOF, N'')))
+  );";
+
+                    await using var maxCaja =
+                        new SqlCommand(
+                            maxCajaSql,
+                            db,
+                            transaction);
+
+                    maxCaja.Parameters.Add(
+                        "@ParteID",
+                        SqlDbType.Int).Value =
+                        item.ParteID;
+
+                    maxCaja.Parameters.Add(
+                        "@NumeroOF",
+                        SqlDbType.NVarChar,
+                        80).Value =
+                        string.IsNullOrWhiteSpace(item.NumeroOF)
+                            ? DBNull.Value
+                            : item.NumeroOF;
+
+                    numeroCaja =
+                        Convert.ToInt32(
+                            await maxCaja.ExecuteScalarAsync(
+                                cancellationToken)
+                            ?? 0);
+                }
+
+                numeroCaja++;
+                consecutivos[claveConsecutivo] =
+                    numeroCaja;
+
+                const string cajaSql = @"
 INSERT dbo.AlmacenPT_Cajas
-(ParteID, NumeroOF, Etiqueta, NumeroCaja, CantidadInicial, LoteEtiqueta,
- EstadoCalidad, UbicacionID, FechaEntrada, FechaCreacion, CreadoPor, Activo)
+(
+    ParteID,
+    NumeroOF,
+    Etiqueta,
+    NumeroCaja,
+    CantidadInicial,
+    LoteEtiqueta,
+    EstadoCalidad,
+    UbicacionID,
+    FechaEntrada,
+    FechaCreacion,
+    CreadoPor,
+    Activo
+)
 OUTPUT INSERTED.CajaID
 VALUES
-(@ParteID,@NumeroOF,@Etiqueta,@NumeroCaja,@Cantidad,@Lote,@Estado,
- @UbicacionID,SYSDATETIME(),SYSUTCDATETIME(),@Usuario,1);";
-            int cajaId;
-            await using (var caja = new SqlCommand(cajaSql, connection, transaction))
-            {
-                caja.Parameters.Add("@ParteID", SqlDbType.Int).Value = model.ParteID;
-                caja.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(model.NumeroOF) ? DBNull.Value : model.NumeroOF;
-                caja.Parameters.Add("@Etiqueta", SqlDbType.NVarChar, 120).Value = model.Etiqueta;
-                caja.Parameters.Add("@NumeroCaja", SqlDbType.Int).Value = model.NumeroCaja;
-                caja.Parameters.Add("@Cantidad", SqlDbType.Int).Value = model.Cantidad;
-                caja.Parameters.Add("@Lote", SqlDbType.NVarChar, 120).Value = string.IsNullOrWhiteSpace(model.LoteEtiqueta) ? DBNull.Value : model.LoteEtiqueta;
-                caja.Parameters.Add("@Estado", SqlDbType.NVarChar, 30).Value = model.EstadoCalidad;
-                caja.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = model.UbicacionID.HasValue ? model.UbicacionID.Value : DBNull.Value;
-                caja.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
-                cajaId = Convert.ToInt32(await caja.ExecuteScalarAsync(cancellationToken));
+(
+    @ParteID,
+    @NumeroOF,
+    @Etiqueta,
+    @NumeroCaja,
+    @Cantidad,
+    @Lote,
+    @Estado,
+    @UbicacionID,
+    SYSDATETIME(),
+    SYSUTCDATETIME(),
+    @Usuario,
+    1
+);";
+
+                int cajaID;
+
+                await using (var caja =
+                    new SqlCommand(
+                        cajaSql,
+                        db,
+                        transaction))
+                {
+                    caja.Parameters.Add(
+                        "@ParteID",
+                        SqlDbType.Int).Value =
+                        item.ParteID;
+
+                    caja.Parameters.Add(
+                        "@NumeroOF",
+                        SqlDbType.NVarChar,
+                        80).Value =
+                        item.NumeroOF;
+
+                    caja.Parameters.Add(
+                        "@Etiqueta",
+                        SqlDbType.NVarChar,
+                        120).Value =
+                        item.CodigoOriginal;
+
+                    caja.Parameters.Add(
+                        "@NumeroCaja",
+                        SqlDbType.Int).Value =
+                        numeroCaja;
+
+                    caja.Parameters.Add(
+                        "@Cantidad",
+                        SqlDbType.Int).Value =
+                        item.Cantidad;
+
+                    caja.Parameters.Add(
+                        "@Lote",
+                        SqlDbType.NVarChar,
+                        120).Value =
+                        item.Lote;
+
+                    caja.Parameters.Add(
+                        "@Estado",
+                        SqlDbType.NVarChar,
+                        30).Value =
+                        model.EstadoCalidad;
+
+                    caja.Parameters.Add(
+                        "@UbicacionID",
+                        SqlDbType.Int).Value =
+                        model.UbicacionID!.Value;
+
+                    caja.Parameters.Add(
+                        "@Usuario",
+                        SqlDbType.NVarChar,
+                        120).Value =
+                        UsuarioNombre;
+
+                    cajaID =
+                        Convert.ToInt32(
+                            await caja.ExecuteScalarAsync(
+                                cancellationToken));
+                }
+
+                var observacionMovimiento =
+                    ConstruirObservacionEntradaEscaneada(
+                        model.Observaciones,
+                        item.Designacion);
+
+                var referencia =
+                    $"{prefijoReferencia}-{numeroRegistro:D4}";
+
+                await InsertarMovimientoEntradaPTAsync(
+                    db,
+                    transaction,
+                    cajaID,
+                    item,
+                    model,
+                    observacionMovimiento,
+                    referencia,
+                    tipoMovimiento: "Entrada",
+                    cancellationToken);
+
+                if (!string.Equals(
+                        model.EstadoCalidad,
+                        "Liberado",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    await InsertarMovimientoEntradaPTAsync(
+                        db,
+                        transaction,
+                        cajaID,
+                        item,
+                        model,
+                        observacionMovimiento,
+                        $"RET-PT-LOTE-{model.OperacionToken.ToUpperInvariant()}-{numeroRegistro:D4}",
+                        tipoMovimiento: "Retencion",
+                        cancellationToken);
+                }
+
+                totalPiezas += item.Cantidad;
             }
 
-            const string movimientoSql = @"
-INSERT dbo.AlmacenPT_Movimientos
-(CajaID, ParteID, NumeroOF, TipoMovimiento, Cantidad, UbicacionID,
- EstadoCalidad, ResponsableUsuarioID, Observaciones, FechaMovimiento,
- FechaCreacion, CreadoPor, Activo, ReferenciaOperacion)
-VALUES
-(@CajaID,@ParteID,@NumeroOF,'Entrada',@Cantidad,@UbicacionID,
- @Estado,@UsuarioID,@Observaciones,SYSDATETIME(),SYSUTCDATETIME(),@Usuario,1,@Referencia);";
-            await using var movimiento = new SqlCommand(movimientoSql, connection, transaction);
-            movimiento.Parameters.Add("@CajaID", SqlDbType.Int).Value = cajaId;
-            movimiento.Parameters.Add("@ParteID", SqlDbType.Int).Value = model.ParteID;
-            movimiento.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(model.NumeroOF) ? DBNull.Value : model.NumeroOF;
-            movimiento.Parameters.Add("@Cantidad", SqlDbType.Int).Value = model.Cantidad;
-            movimiento.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = model.UbicacionID.HasValue ? model.UbicacionID.Value : DBNull.Value;
-            movimiento.Parameters.Add("@Estado", SqlDbType.NVarChar, 30).Value = model.EstadoCalidad;
-            movimiento.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
-            movimiento.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value = string.IsNullOrWhiteSpace(model.Observaciones) ? DBNull.Value : model.Observaciones.Trim();
-            movimiento.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
-            movimiento.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = $"ENT-PT-{Guid.NewGuid():N}";
-            await movimiento.ExecuteNonQueryAsync(cancellationToken);
+            await transaction.CommitAsync(
+                cancellationToken);
 
-            if (!string.Equals(model.EstadoCalidad, "Liberado", StringComparison.OrdinalIgnoreCase))
-            {
-                const string retencionSql = @"
-INSERT dbo.AlmacenPT_Movimientos
-(CajaID, ParteID, NumeroOF, TipoMovimiento, Cantidad, UbicacionID,
- EstadoCalidad, ResponsableUsuarioID, Observaciones, FechaMovimiento,
- FechaCreacion, CreadoPor, Activo, ReferenciaOperacion)
-VALUES
-(@CajaID,@ParteID,@NumeroOF,'Retencion',@Cantidad,@UbicacionID,
- @Estado,@UsuarioID,@Observaciones,SYSDATETIME(),SYSUTCDATETIME(),@Usuario,1,@Referencia);";
-                await using var retencion = new SqlCommand(retencionSql, connection, transaction);
-                retencion.Parameters.Add("@CajaID", SqlDbType.Int).Value = cajaId;
-                retencion.Parameters.Add("@ParteID", SqlDbType.Int).Value = model.ParteID;
-                retencion.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(model.NumeroOF) ? DBNull.Value : model.NumeroOF;
-                retencion.Parameters.Add("@Cantidad", SqlDbType.Int).Value = model.Cantidad;
-                retencion.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = model.UbicacionID.HasValue ? model.UbicacionID.Value : DBNull.Value;
-                retencion.Parameters.Add("@Estado", SqlDbType.NVarChar, 30).Value = model.EstadoCalidad;
-                retencion.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
-                retencion.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value = string.IsNullOrWhiteSpace(model.Observaciones)
-                    ? $"Entrada bloqueada por estado de calidad: {model.EstadoCalidad}."
-                    : model.Observaciones.Trim();
-                retencion.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
-                retencion.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = $"RET-PT-{Guid.NewGuid():N}";
-                await retencion.ExecuteNonQueryAsync(cancellationToken);
-            }
+            Mensaje(
+                "success",
+                $"Se registraron {model.Resultados.Count} caja(s) y {totalPiezas:N0} pieza(s) mediante escáner.");
 
-            await transaction.CommitAsync(cancellationToken);
+            return model.EsEntregaOF
+                ? RedirectToAction(
+                    "Index",
+                    "AlmacenOF")
+                : RedirectToAction(nameof(Entrada));
+        }
+        catch (SqlException ex)
+            when (ex.Number is 2601 or 2627)
+        {
+            await transaction.RollbackAsync(
+                cancellationToken);
+
+            ModelState.AddModelError(
+                string.Empty,
+                "Una de las etiquetas o referencias ya fue registrada. No se guardó ninguna caja del lote.");
+
+            await CargarEntradaLoteAsync(
+                model,
+                cancellationToken);
+
+            return View(model);
         }
         catch
         {
-            await transaction.RollbackAsync(cancellationToken);
+            await transaction.RollbackAsync(
+                cancellationToken);
+
             throw;
         }
+    }
 
-        Mensaje("success", model.EsEntregaOF
-            ? "Entrega de producto terminado registrada para la OF."
-            : "Entrada de producto terminado registrada.");
+    private async Task<List<AlmacenPTCodigoBarrasVm>>
+        ConvertirCodigosEntradaAsync(
+            SqlConnection connection,
+            SqlTransaction? transaction,
+            AlmacenPTEntradaLoteVm model,
+            IReadOnlyList<string> codigos,
+            CancellationToken cancellationToken)
+    {
+        var resultados =
+            new List<AlmacenPTCodigoBarrasVm>();
 
-        return model.EsEntregaOF
-            ? RedirectToAction("Index", "AlmacenOF")
-            : RedirectToAction(nameof(Index));
+        var catalogoPartes =
+            await CargarCatalogoPartesNormalizadoAsync(
+                connection,
+                transaction,
+                cancellationToken);
+
+        AlmacenOFEntregaContexto? contextoOF = null;
+
+        if (model.EsEntregaOF
+            && model.SolicitudProduccionID.HasValue
+            && model.ParteIDEsperada.HasValue)
+        {
+            contextoOF =
+                await AlmacenOFEntregaService
+                    .CargarProductoTerminadoAsync(
+                        connection,
+                        transaction,
+                        model.SolicitudProduccionID.Value,
+                        model.ParteIDEsperada.Value,
+                        cancellationToken);
+
+            if (contextoOF != null)
+            {
+                model.NumeroOFEsperada =
+                    contextoOF.NumeroOF;
+                model.NumeroParteEsperada =
+                    contextoOF.Codigo;
+                model.CantidadPendienteOF =
+                    contextoOF.Pendiente;
+            }
+        }
+
+        var etiquetasDelLote =
+            new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        var totalParseado = 0;
+
+        for (var index = 0; index < codigos.Count; index++)
+        {
+            var codigo = codigos[index];
+
+            var item =
+                new AlmacenPTCodigoBarrasVm
+                {
+                    Renglon = index + 1,
+                    CodigoOriginal = codigo
+                };
+
+            if (!AlmacenPTCodigoBarrasService.TryParse(
+                    codigo,
+                    out var parseado,
+                    out var error)
+                || parseado == null)
+            {
+                item.Mensaje = error;
+                resultados.Add(item);
+                continue;
+            }
+
+            item.Parseado = true;
+            item.NumeroOF = parseado.NumeroOF;
+            item.NumeroParte = parseado.NumeroParte;
+            item.Designacion = parseado.Designacion;
+            item.Cantidad = parseado.Cantidad;
+            item.Lote = parseado.Lote;
+
+            item.RepetidoEnLote =
+                !etiquetasDelLote.Add(
+                    parseado.CodigoOriginal);
+
+            if (item.RepetidoEnLote)
+            {
+                item.Mensaje =
+                    "Código repetido dentro del lote de escaneo.";
+            }
+
+            var claveEscaneada =
+                NormalizarNumeroParte(
+                    parseado.NumeroParte);
+
+            if (string.IsNullOrWhiteSpace(
+                    claveEscaneada))
+            {
+                item.Mensaje =
+                    "El número de parte no contiene letras o números válidos.";
+            }
+            else if (!catalogoPartes.TryGetValue(
+                claveEscaneada,
+                out var candidatos))
+            {
+                item.Mensaje =
+                    $"No existe un registro activo en NumeroParte ni ReferenciaSAP con la secuencia: {claveEscaneada}.";
+            }
+            else
+            {
+                var exactos =
+                    candidatos
+                        .Where(x =>
+                            string.Equals(
+                                x.NumeroParte.Trim(),
+                                parseado.NumeroParte.Trim(),
+                                StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(
+                                x.ReferenciaSAP.Trim(),
+                                parseado.NumeroParte.Trim(),
+                                StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                ParteCatalogoEscaneo? candidato = null;
+
+                if (exactos.Count == 1)
+                {
+                    candidato = exactos[0];
+                }
+                else if (candidatos.Count == 1)
+                {
+                    candidato = candidatos[0];
+                }
+
+                if (candidato == null)
+                {
+                    var opciones =
+                        string.Join(
+                            ", ",
+                            candidatos
+                                .Select(x => x.NumeroParte)
+                                .Distinct(
+                                    StringComparer.OrdinalIgnoreCase)
+                                .Take(10));
+
+                    item.Mensaje =
+                        $"Coincidencia ambigua. Estos catálogos tienen la misma secuencia alfanumérica: {opciones}.";
+                }
+                else
+                {
+                    item.ExisteEnCatalogo = true;
+                    item.ParteID = candidato.ParteID;
+                    item.NumeroParteCatalogo =
+                        string.IsNullOrWhiteSpace(
+                            candidato.NumeroParte)
+                            ? candidato.ReferenciaSAP
+                            : candidato.NumeroParte;
+
+                    item.DescripcionCatalogo =
+                        candidato.Descripcion;
+
+                    item.CoincidenciaNormalizada =
+                        !string.Equals(
+                            candidato.NumeroParte.Trim(),
+                            parseado.NumeroParte.Trim(),
+                            StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            const string etiquetaSql = @"
+SELECT CASE WHEN EXISTS
+(
+    SELECT 1
+    FROM dbo.AlmacenPT_Cajas
+    WHERE Etiqueta = @Etiqueta
+) THEN 1 ELSE 0 END;";
+
+            await using (var etiqueta =
+                new SqlCommand(
+                    etiquetaSql,
+                    connection))
+            {
+                if (transaction != null)
+                    etiqueta.Transaction = transaction;
+
+                etiqueta.Parameters.Add(
+                    "@Etiqueta",
+                    SqlDbType.NVarChar,
+                    120).Value =
+                    parseado.CodigoOriginal;
+
+                item.YaRegistrado =
+                    Convert.ToInt32(
+                        await etiqueta.ExecuteScalarAsync(
+                            cancellationToken)
+                        ?? 0) == 1;
+
+                if (item.YaRegistrado)
+                {
+                    item.Mensaje =
+                        "La etiqueta ya existe en Almacén PT.";
+                }
+            }
+
+            if (model.EsEntregaOF)
+            {
+                if (contextoOF == null)
+                {
+                    item.CoincideConOF = false;
+                    item.CoincideConParte = false;
+                    item.Mensaje =
+                        "La OF o el número de parte ya no están disponibles.";
+                }
+                else
+                {
+                    item.CoincideConOF =
+                        string.Equals(
+                            NormalizarNumeroParte(
+                                parseado.NumeroOF),
+                            NormalizarNumeroParte(
+                                contextoOF.NumeroOF),
+                            StringComparison.OrdinalIgnoreCase);
+
+                    item.CoincideConParte =
+                        item.ExisteEnCatalogo
+                        && item.ParteID ==
+                           model.ParteIDEsperada;
+
+                    if (!item.CoincideConOF)
+                    {
+                        item.Mensaje =
+                            $"La etiqueta pertenece a la OF {parseado.NumeroOF}, no a {contextoOF.NumeroOF}.";
+                    }
+                    else if (!item.CoincideConParte)
+                    {
+                        item.Mensaje =
+                            $"La etiqueta pertenece a la parte {parseado.NumeroParte}, no a {contextoOF.Codigo}.";
+                    }
+                }
+            }
+
+            if (item.Parseado)
+                totalParseado += item.Cantidad;
+
+            if (item.Valido)
+            {
+                var mensajeParte =
+                    item.CoincidenciaNormalizada
+                        ? $"Enlazado al catálogo {item.NumeroParteCatalogo} mediante NumeroParte o ReferenciaSAP."
+                        : "Número de parte exacto.";
+
+                item.Mensaje =
+                    DesignacionCoincide(
+                        item.Designacion,
+                        item.DescripcionCatalogo)
+                        ? $"{mensajeParte} Listo para registrar."
+                        : $"{mensajeParte} La designación difiere del catálogo; se conservará la del catálogo.";
+            }
+
+            resultados.Add(item);
+        }
+
+        if (model.EsEntregaOF
+            && contextoOF != null
+            && totalParseado > contextoOF.Pendiente)
+        {
+            foreach (var item in resultados
+                .Where(x => x.Parseado))
+            {
+                item.CoincideConOF = false;
+                item.Mensaje =
+                    $"El lote suma {totalParseado:N0} PZS y la OF solo tiene {contextoOF.Pendiente:N0} PZS pendientes.";
+            }
+        }
+
+        return resultados;
+    }
+    private async Task InsertarMovimientoEntradaPTAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int cajaID,
+        AlmacenPTCodigoBarrasVm item,
+        AlmacenPTEntradaLoteVm model,
+        string observaciones,
+        string referencia,
+        string tipoMovimiento,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+INSERT dbo.AlmacenPT_Movimientos
+(
+    CajaID,
+    ParteID,
+    NumeroOF,
+    TipoMovimiento,
+    Cantidad,
+    UbicacionID,
+    EstadoCalidad,
+    ResponsableUsuarioID,
+    Observaciones,
+    FechaMovimiento,
+    FechaCreacion,
+    CreadoPor,
+    Activo,
+    ReferenciaOperacion
+)
+VALUES
+(
+    @CajaID,
+    @ParteID,
+    @NumeroOF,
+    @Tipo,
+    @Cantidad,
+    @UbicacionID,
+    @Estado,
+    @UsuarioID,
+    @Observaciones,
+    SYSDATETIME(),
+    SYSUTCDATETIME(),
+    @Usuario,
+    1,
+    @Referencia
+);";
+
+        await using var command =
+            new SqlCommand(
+                sql,
+                connection,
+                transaction);
+
+        command.Parameters.Add(
+            "@CajaID",
+            SqlDbType.Int).Value =
+            cajaID;
+
+        command.Parameters.Add(
+            "@ParteID",
+            SqlDbType.Int).Value =
+            item.ParteID;
+
+        command.Parameters.Add(
+            "@NumeroOF",
+            SqlDbType.NVarChar,
+            80).Value =
+            item.NumeroOF;
+
+        command.Parameters.Add(
+            "@Tipo",
+            SqlDbType.NVarChar,
+            30).Value =
+            tipoMovimiento;
+
+        command.Parameters.Add(
+            "@Cantidad",
+            SqlDbType.Int).Value =
+            item.Cantidad;
+
+        command.Parameters.Add(
+            "@UbicacionID",
+            SqlDbType.Int).Value =
+            model.UbicacionID!.Value;
+
+        command.Parameters.Add(
+            "@Estado",
+            SqlDbType.NVarChar,
+            30).Value =
+            model.EstadoCalidad;
+
+        command.Parameters.Add(
+            "@UsuarioID",
+            SqlDbType.Int).Value =
+            UsuarioID.HasValue
+                ? UsuarioID.Value
+                : DBNull.Value;
+
+        command.Parameters.Add(
+            "@Observaciones",
+            SqlDbType.NVarChar,
+            800).Value =
+            observaciones;
+
+        command.Parameters.Add(
+            "@Usuario",
+            SqlDbType.NVarChar,
+            120).Value =
+            UsuarioNombre;
+
+        command.Parameters.Add(
+            "@Referencia",
+            SqlDbType.NVarChar,
+            120).Value =
+            referencia;
+
+        await command.ExecuteNonQueryAsync(
+            cancellationToken);
+    }
+
+    private async Task CargarEntradaLoteAsync(
+        AlmacenPTEntradaLoteVm vm,
+        CancellationToken cancellationToken)
+    {
+        await using var connection =
+            await AbrirConexionAsync(cancellationToken);
+
+        vm.Ubicaciones =
+            await CargarUbicacionesAsync(
+                connection,
+                cancellationToken);
+
+        vm.EstadosCalidad =
+            EstadosCalidad
+                .Select(
+                    (x, i) =>
+                        new AlmacenSelectVm
+                        {
+                            Id = i + 1,
+                            Texto = x,
+                            Extra = x
+                        })
+                .ToList();
+
+        if (vm.ParteIDEsperada.HasValue
+            && vm.ParteIDEsperada.Value > 0)
+        {
+            const string sql = @"
+SELECT
+    NumeroParte,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(Designacion)), N''),
+        NULLIF(LTRIM(RTRIM(Descripcion)), N''),
+        N''
+    ) AS Descripcion
+FROM dbo.ERP_Partes
+WHERE ParteID = @ParteID
+  AND Activo = 1;";
+
+            await using var command =
+                new SqlCommand(
+                    sql,
+                    connection);
+
+            command.Parameters.Add(
+                "@ParteID",
+                SqlDbType.Int).Value =
+                vm.ParteIDEsperada.Value;
+
+            await using var reader =
+                await command.ExecuteReaderAsync(
+                    cancellationToken);
+
+            if (await reader.ReadAsync(
+                    cancellationToken))
+            {
+                vm.NumeroParteEsperada =
+                    Texto(reader, "NumeroParte");
+
+                vm.DescripcionParteEsperada =
+                    Texto(reader, "Descripcion");
+            }
+        }
+    }
+
+    private static List<string> SepararCodigosEscaneados(
+        string? valor) =>
+        (valor ?? string.Empty)
+            .Split(
+                new[] { "\r\n", "\n", "\r" },
+                StringSplitOptions.RemoveEmptyEntries
+                | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+    private static string NormalizarCodigosEscaneados(
+        string? valor) =>
+        string.Join(
+            Environment.NewLine,
+            SepararCodigosEscaneados(valor));
+
+    private static string ConstruirObservacionEntradaEscaneada(
+        string? observaciones,
+        string designacion)
+    {
+        var baseTexto =
+            string.IsNullOrWhiteSpace(observaciones)
+                ? "Recepción masiva de PT por escáner de código de barras."
+                : observaciones.Trim();
+
+        var resultado =
+            $"{baseTexto} Designación etiqueta: {designacion}.";
+
+        return resultado.Length <= 800
+            ? resultado
+            : resultado[..800];
+    }
+
+    private sealed record ParteCatalogoEscaneo(
+        int ParteID,
+        string NumeroParte,
+        string ReferenciaSAP,
+        string Descripcion);
+
+    private static async Task<
+        Dictionary<string, List<ParteCatalogoEscaneo>>>
+        CargarCatalogoPartesNormalizadoAsync(
+            SqlConnection connection,
+            SqlTransaction? transaction,
+            CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT
+    ParteID,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(NumeroParte)), N''),
+        N''
+    ) AS NumeroParte,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(ReferenciaSAP)), N''),
+        N''
+    ) AS ReferenciaSAP,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(Designacion)), N''),
+        NULLIF(LTRIM(RTRIM(Descripcion)), N''),
+        N''
+    ) AS Descripcion
+FROM dbo.ERP_Partes
+WHERE Activo = 1
+  AND
+  (
+      NULLIF(LTRIM(RTRIM(NumeroParte)), N'') IS NOT NULL
+      OR NULLIF(LTRIM(RTRIM(ReferenciaSAP)), N'') IS NOT NULL
+  )
+ORDER BY ParteID;";
+
+        await using var command =
+            new SqlCommand(
+                sql,
+                connection);
+
+        if (transaction != null)
+            command.Transaction = transaction;
+
+        var resultado =
+            new Dictionary<
+                string,
+                List<ParteCatalogoEscaneo>>(
+                    StringComparer.OrdinalIgnoreCase);
+
+        await using var reader =
+            await command.ExecuteReaderAsync(
+                cancellationToken);
+
+        while (await reader.ReadAsync(
+            cancellationToken))
+        {
+            var candidato =
+                new ParteCatalogoEscaneo(
+                    Entero(reader, "ParteID"),
+                    Texto(reader, "NumeroParte"),
+                    Texto(reader, "ReferenciaSAP"),
+                    Texto(reader, "Descripcion"));
+
+            AgregarCandidatoCatalogo(
+                resultado,
+                candidato.NumeroParte,
+                candidato);
+
+            AgregarCandidatoCatalogo(
+                resultado,
+                candidato.ReferenciaSAP,
+                candidato);
+        }
+
+        return resultado;
+    }
+
+    private static void AgregarCandidatoCatalogo(
+        Dictionary<string, List<ParteCatalogoEscaneo>> resultado,
+        string identificador,
+        ParteCatalogoEscaneo candidato)
+    {
+        var clave =
+            NormalizarNumeroParte(
+                identificador);
+
+        if (string.IsNullOrWhiteSpace(clave))
+            return;
+
+        if (!resultado.TryGetValue(
+                clave,
+                out var lista))
+        {
+            lista =
+                new List<ParteCatalogoEscaneo>();
+
+            resultado[clave] = lista;
+        }
+
+        if (!lista.Any(x =>
+            x.ParteID == candidato.ParteID))
+        {
+            lista.Add(candidato);
+        }
+    }
+    private static string NormalizarNumeroParte(
+        string? numeroParte)
+    {
+        if (string.IsNullOrWhiteSpace(numeroParte))
+            return string.Empty;
+
+        return new string(
+            numeroParte
+                .Where(char.IsLetterOrDigit)
+                .Select(char.ToUpperInvariant)
+                .ToArray());
+    }
+    private static bool DesignacionCoincide(
+        string etiqueta,
+        string catalogo)
+    {
+        static string Normalizar(string valor) =>
+            new(
+                valor
+                    .Where(char.IsLetterOrDigit)
+                    .Select(char.ToUpperInvariant)
+                    .ToArray());
+
+        var a = Normalizar(etiqueta);
+        var b = Normalizar(catalogo);
+
+        return string.IsNullOrWhiteSpace(a)
+            || string.IsNullOrWhiteSpace(b)
+            || a == b
+            || a.Contains(b, StringComparison.Ordinal)
+            || b.Contains(a, StringComparison.Ordinal);
     }
 
     [HttpGet]
@@ -1047,5 +2047,19 @@ ORDER BY Almacen,Rack,Nivel,Posicion;";
         return rows;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
