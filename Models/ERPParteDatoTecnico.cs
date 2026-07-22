@@ -24,6 +24,9 @@ namespace ERP.NSQuell.Models
         [Column(TypeName = "decimal(18,6)")]
         public decimal? PesoBrutoPieza { get; set; }
 
+        [Column(TypeName = "decimal(18,6)")]
+        public decimal? PesoNetoPieza { get; set; }
+
         [StringLength(100)]
         public string? EmbalajeCodigo { get; set; }
 
@@ -62,5 +65,25 @@ namespace ERP.NSQuell.Models
         public DateTime FechaCreacion { get; set; }
 
         public DateTime? FechaModificacion { get; set; }
+<<<<<<< HEAD
+=======
+
+        public int? MaterialID { get; set; }
+
+        [StringLength(80)]
+        public string? Color { get; set; }
+
+        public int? Cavidades { get; set; }
+
+        public int? ObjetivoHora { get; set; }
+
+        public int? PiezasPorCaja { get; set; }
+
+        public int? MaquinaPrincipalID { get; set; }
+
+        public int? MaquinaSustitutaID { get; set; }
+
+        public int? MoldePrincipalID { get; set; }
+>>>>>>> origin/Alex_modulo-altas
     }
 }

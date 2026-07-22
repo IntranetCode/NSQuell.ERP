@@ -62,6 +62,7 @@ namespace ERP.NSQuell.Controllers
 
             if (!string.IsNullOrWhiteSpace(busqueda))
             {
+<<<<<<< HEAD
                 consulta = consulta.Where(x =>
                     x.Parte.NumeroParte.Contains(busqueda) ||
                     (x.Parte.ReferenciaSAP != null &&
@@ -85,6 +86,13 @@ namespace ERP.NSQuell.Controllers
                      (x.Molde.CodigoMolde.Contains(busqueda) ||
                       (x.Molde.NombreMolde != null &&
                        x.Molde.NombreMolde.Contains(busqueda))))
+=======
+                partesQuery = partesQuery.Where(p =>
+                    p.NumeroParte.Contains(busqueda) ||
+                    (p.ReferenciaSAP != null && p.ReferenciaSAP.Contains(busqueda)) ||
+                    p.Descripcion.Contains(busqueda) ||
+                    (p.Designacion != null && p.Designacion.Contains(busqueda))
+>>>>>>> origin/Alex_modulo-altas
                 );
             }
 
@@ -106,9 +114,22 @@ namespace ERP.NSQuell.Controllers
                 }
             }
 
+<<<<<<< HEAD
             var partes = await consulta
                 .OrderBy(x => x.Parte.NumeroParte)
                 .Select(x => new ParteListadoItemViewModel
+=======
+            var partes = await (
+                from p in partesQuery
+
+                join c in _context.ERPClientes.AsNoTracking()
+                    on p.ClienteID equals c.ClienteID into clientesJoin
+                from c in clientesJoin.DefaultIfEmpty()
+
+                orderby p.NumeroParte
+
+                select new ParteListadoItemViewModel
+>>>>>>> origin/Alex_modulo-altas
                 {
                     ParteID = x.Parte.ParteID,
                     NumeroParte = x.Parte.NumeroParte,
@@ -119,6 +140,7 @@ namespace ERP.NSQuell.Controllers
                         ? x.Cliente.Codigo + " - " + x.Cliente.Nombre
                         : "Cliente ID " + x.Parte.ClienteID,
 
+<<<<<<< HEAD
                     MaquinaPrincipal = x.Maquina != null
                         ? x.Maquina.Codigo + " - " + x.Maquina.Nombre
                         : null,
@@ -134,6 +156,18 @@ namespace ERP.NSQuell.Controllers
                     Activo = x.Parte.Activo,
 
                     TieneDatosTecnicos = x.DatosTecnicos != null
+=======
+                    MaquinaPrincipal = null,
+                    MoldePrincipal = null,
+
+                    StockMinimo = p.StockMinimo,
+                    StockAviso = p.StockAviso,
+                    StockConfigurado = p.StockConfigurado,
+                    Activo = p.Activo,
+
+                    TieneDatosTecnicos = _context.ERPParteDatosTecnicos
+                        .Any(dt => dt.ParteID == p.ParteID)
+>>>>>>> origin/Alex_modulo-altas
                 })
                 .ToListAsync();
 
@@ -194,7 +228,11 @@ namespace ERP.NSQuell.Controllers
             {
                 ModelState.AddModelError(
                     nameof(model.NumeroParte),
+<<<<<<< HEAD
                     "Ya existe una parte con este n˙mero para el cliente seleccionado.");
+=======
+                    "Ya existe una parte con este n√∫mero para el cliente seleccionado.");
+>>>>>>> origin/Alex_modulo-altas
             }
 
             ValidarStock(model);
@@ -202,15 +240,20 @@ namespace ERP.NSQuell.Controllers
 
             if (!ModelState.IsValid)
             {
+<<<<<<< HEAD
                 model.Clientes =
                     await CargarClientesAsync(model.ClienteID);
 
+=======
+                model.Clientes = await CargarClientesAsync(model.ClienteID);
+>>>>>>> origin/Alex_modulo-altas
                 return View(model);
             }
 
             var usuarioId =
                 HttpContext.Session.GetInt32("UsuarioID");
 
+<<<<<<< HEAD
             var parte = new ERPParte
             {
                 ClienteID = model.ClienteID,
@@ -284,6 +327,52 @@ namespace ERP.NSQuell.Controllers
 
             _context.ERPPartes.Add(parte);
             await _context.SaveChangesAsync();
+=======
+            var numeroParte = model.NumeroParte.Trim();
+            var referenciaSAP = string.IsNullOrWhiteSpace(model.ReferenciaSAP) ? null : model.ReferenciaSAP.Trim();
+            var descripcion = model.Descripcion.Trim();
+            var designacion = string.IsNullOrWhiteSpace(model.Designacion) ? null : model.Designacion.Trim();
+            var fechaCreacion = DateTime.Now;
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO dbo.ERP_Partes
+                (
+                    ClienteID,
+                    NumeroParte,
+                    ReferenciaSAP,
+                    Descripcion,
+                    Designacion,
+                    RequiereGP12,
+                    RequiereCertificado,
+                    Activo,
+                    UsuarioCreacionID,
+                    FechaCreacion,
+                    UsuarioModificacionID,
+                    FechaModificacion,
+                    StockMinimo,
+                    StockAviso,
+                    StockConfigurado
+                )
+                VALUES
+                (
+                    {model.ClienteID},
+                    {numeroParte},
+                    {referenciaSAP},
+                    {descripcion},
+                    {designacion},
+                    {model.RequiereGP12},
+                    {model.RequiereCertificado},
+                    {model.Activo},
+                    {usuarioId},
+                    {fechaCreacion},
+                    {null},
+                    {null},
+                    {model.StockMinimo},
+                    {model.StockAviso},
+                    {model.StockConfigurado}
+                );
+            ");
+>>>>>>> origin/Alex_modulo-altas
 
             TempData["SuccessMessage"] =
                 "La parte fue registrada correctamente.";
@@ -298,15 +387,40 @@ namespace ERP.NSQuell.Controllers
         {
             ViewData["Title"] = "Editar Parte";
 
-            var parte = await _context.ERPPartes
-                .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.ParteID == id);
+            if (id <= 0)
+            {
+                return BadRequest();
+            }
 
-            if (parte == null)
+            var model = await _context.ERPPartes
+                .AsNoTracking()
+                .Where(p => p.ParteID == id)
+                .Select(p => new ParteFormViewModel
+                {
+                    ParteID = p.ParteID,
+                    ClienteID = p.ClienteID,
+                    NumeroParte = p.NumeroParte,
+                    ReferenciaSAP = p.ReferenciaSAP,
+                    Descripcion = p.Descripcion,
+                    Designacion = p.Designacion,
+
+                    RequiereGP12 = p.RequiereGP12,
+                    RequiereCertificado = p.RequiereCertificado,
+
+                    Activo = p.Activo,
+
+                    StockMinimo = p.StockMinimo,
+                    StockAviso = p.StockAviso,
+                    StockConfigurado = p.StockConfigurado
+                })
+                .FirstOrDefaultAsync();
+
+            if (model == null)
             {
                 return NotFound();
             }
 
+<<<<<<< HEAD
             var model = new ParteFormViewModel
             {
                 ParteID = parte.ParteID,
@@ -350,6 +464,9 @@ namespace ERP.NSQuell.Controllers
                 Clientes =
                     await CargarClientesAsync(parte.ClienteID)
             };
+=======
+            model.Clientes = await CargarClientesAsync(model.ClienteID);
+>>>>>>> origin/Alex_modulo-altas
 
             return View(model);
         }
@@ -362,8 +479,17 @@ namespace ERP.NSQuell.Controllers
     int id,
     ParteFormViewModel model)
         {
+<<<<<<< HEAD
             if (!model.ParteID.HasValue ||
                 id != model.ParteID.Value)
+=======
+            if (id <= 0)
+            {
+                return BadRequest();
+            }
+
+            if (!model.ParteID.HasValue || id != model.ParteID.Value)
+>>>>>>> origin/Alex_modulo-altas
             {
                 return BadRequest();
             }
@@ -375,7 +501,11 @@ namespace ERP.NSQuell.Controllers
             {
                 ModelState.AddModelError(
                     nameof(model.NumeroParte),
+<<<<<<< HEAD
                     "Ya existe otra parte con este n˙mero para el cliente seleccionado.");
+=======
+                    "Ya existe otra parte con este n√∫mero para el cliente seleccionado.");
+>>>>>>> origin/Alex_modulo-altas
             }
 
             ValidarStock(model);
@@ -383,16 +513,21 @@ namespace ERP.NSQuell.Controllers
 
             if (!ModelState.IsValid)
             {
+<<<<<<< HEAD
                 model.Clientes =
                     await CargarClientesAsync(model.ClienteID);
 
+=======
+                model.Clientes = await CargarClientesAsync(model.ClienteID);
+>>>>>>> origin/Alex_modulo-altas
                 return View(model);
             }
 
-            var parte = await _context.ERPPartes
-                .FirstOrDefaultAsync(p => p.ParteID == id);
+            var existeParte = await _context.ERPPartes
+                .AsNoTracking()
+                .AnyAsync(p => p.ParteID == id);
 
-            if (parte == null)
+            if (!existeParte)
             {
                 return NotFound();
             }
@@ -400,6 +535,7 @@ namespace ERP.NSQuell.Controllers
             var usuarioId =
                 HttpContext.Session.GetInt32("UsuarioID");
 
+<<<<<<< HEAD
             parte.ClienteID = model.ClienteID;
             parte.NumeroParte = model.NumeroParte.Trim();
 
@@ -471,6 +607,32 @@ namespace ERP.NSQuell.Controllers
             parte.FechaModificacion = DateTime.Now;
 
             await _context.SaveChangesAsync();
+=======
+            var numeroParte = model.NumeroParte.Trim();
+            var referenciaSAP = string.IsNullOrWhiteSpace(model.ReferenciaSAP) ? null : model.ReferenciaSAP.Trim();
+            var descripcion = model.Descripcion.Trim();
+            var designacion = string.IsNullOrWhiteSpace(model.Designacion) ? null : model.Designacion.Trim();
+            var fechaModificacion = DateTime.Now;
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE dbo.ERP_Partes
+                SET
+                    ClienteID = {model.ClienteID},
+                    NumeroParte = {numeroParte},
+                    ReferenciaSAP = {referenciaSAP},
+                    Descripcion = {descripcion},
+                    Designacion = {designacion},
+                    RequiereGP12 = {model.RequiereGP12},
+                    RequiereCertificado = {model.RequiereCertificado},
+                    Activo = {model.Activo},
+                    UsuarioModificacionID = {usuarioId},
+                    FechaModificacion = {fechaModificacion},
+                    StockMinimo = {model.StockMinimo},
+                    StockAviso = {model.StockAviso},
+                    StockConfigurado = {model.StockConfigurado}
+                WHERE ParteID = {id};
+            ");
+>>>>>>> origin/Alex_modulo-altas
 
             TempData["SuccessMessage"] =
                 "La parte fue actualizada correctamente.";
@@ -486,14 +648,21 @@ namespace ERP.NSQuell.Controllers
         {
             var parte = await _context.ERPPartes
                 .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.ParteID == parteId);
+                .Where(p => p.ParteID == parteId)
+                .Select(p => new
+                {
+                    p.ParteID,
+                    p.NumeroParte,
+                    p.Descripcion
+                })
+                .FirstOrDefaultAsync();
 
             if (parte == null)
             {
                 return Json(new
                 {
                     success = false,
-                    message = "No se encontro la parte seleccionada."
+                    message = "No se encontr√≥ la parte seleccionada."
                 });
             }
 
@@ -515,7 +684,11 @@ namespace ERP.NSQuell.Controllers
                     tipoSecado = datoTecnico?.TipoSecado,
                     horasSecado = datoTecnico?.HorasSecado,
                     pesoBrutoPieza = datoTecnico?.PesoBrutoPieza,
+<<<<<<< HEAD
 
+=======
+                    pesoNetoPieza = datoTecnico?.PesoNetoPieza,
+>>>>>>> origin/Alex_modulo-altas
                     embalajeCodigo = datoTecnico?.EmbalajeCodigo,
                     embalajeDescripcion = datoTecnico?.EmbalajeDescripcion,
                     piezasPorEmbalaje = datoTecnico?.PiezasPorEmbalaje,
@@ -617,7 +790,11 @@ namespace ERP.NSQuell.Controllers
                 return Json(new
                 {
                     success = false,
+<<<<<<< HEAD
                     message = string.Join(" ", errores)
+=======
+                    message = "La informaci√≥n enviada no es v√°lida."
+>>>>>>> origin/Alex_modulo-altas
                 });
             }
 
@@ -630,7 +807,11 @@ namespace ERP.NSQuell.Controllers
                 return Json(new
                 {
                     success = false,
+<<<<<<< HEAD
                     message = "No se encontrÛ la parte seleccionada."
+=======
+                    message = "No se encontr√≥ la parte seleccionada."
+>>>>>>> origin/Alex_modulo-altas
                 });
             }
 
@@ -666,6 +847,7 @@ namespace ERP.NSQuell.Controllers
 
             datoTecnico.HorasSecado = model.HorasSecado;
             datoTecnico.PesoBrutoPieza = model.PesoBrutoPieza;
+            datoTecnico.PesoNetoPieza = model.PesoNetoPieza;
 
             datoTecnico.EmbalajeCodigo =
                 string.IsNullOrWhiteSpace(model.EmbalajeCodigo)
@@ -711,7 +893,11 @@ namespace ERP.NSQuell.Controllers
             return Json(new
             {
                 success = true,
+<<<<<<< HEAD
                 message = "Los datos tÈcnicos fueron guardados correctamente."
+=======
+                message = "Los datos t√©cnicos fueron guardados correctamente."
+>>>>>>> origin/Alex_modulo-altas
             });
         }
 
@@ -725,36 +911,6 @@ namespace ERP.NSQuell.Controllers
                     Value = c.ClienteID.ToString(),
                     Text = c.Codigo + " - " + c.Nombre,
                     Selected = seleccionadoId.HasValue && c.ClienteID == seleccionadoId.Value
-                })
-                .ToListAsync();
-        }
-
-        private async Task<List<SelectListItem>> CargarMaquinasAsync(int? seleccionadoId = null)
-        {
-            return await _context.ERPMaquinas
-                .AsNoTracking()
-                .Where(m => m.Activo)
-                .OrderBy(m => m.Codigo)
-                .Select(m => new SelectListItem
-                {
-                    Value = m.MaquinaID.ToString(),
-                    Text = m.Codigo + " - " + m.Nombre,
-                    Selected = seleccionadoId.HasValue && m.MaquinaID == seleccionadoId.Value
-                })
-                .ToListAsync();
-        }
-
-        private async Task<List<SelectListItem>> CargarMoldesAsync(int? seleccionadoId = null)
-        {
-            return await _context.ERPMoldes
-                .AsNoTracking()
-                .Where(m => m.Activo)
-                .OrderBy(m => m.CodigoMolde)
-                .Select(m => new SelectListItem
-                {
-                    Value = m.MoldeID.ToString(),
-                    Text = m.CodigoMolde + " - " + (m.NombreMolde ?? "Sin nombre"),
-                    Selected = seleccionadoId.HasValue && m.MoldeID == seleccionadoId.Value
                 })
                 .ToListAsync();
         }
