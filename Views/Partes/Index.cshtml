@@ -44,16 +44,16 @@
             overflow: hidden;
         }
 
-        .partes-hero-left::after {
-            content: "";
-            position: absolute;
-            right: -62px;
-            top: -62px;
-            width: 160px;
-            height: 160px;
-            border-radius: 50%;
-            border: 1px solid rgba(244, 123, 32, .45);
-        }
+            .partes-hero-left::after {
+                content: "";
+                position: absolute;
+                right: -62px;
+                top: -62px;
+                width: 160px;
+                height: 160px;
+                border-radius: 50%;
+                border: 1px solid rgba(244, 123, 32, .45);
+            }
 
         .partes-hero-icon {
             width: 62px;
@@ -116,12 +116,12 @@
             box-shadow: 0 14px 28px rgba(244, 123, 32, .28);
         }
 
-        .btn-partes-primary:hover,
-        .btn-partes-edit:hover,
-        .btn-partes-save:hover {
-            color: #fff;
-            transform: translateY(-1px);
-        }
+            .btn-partes-primary:hover,
+            .btn-partes-edit:hover,
+            .btn-partes-save:hover {
+                color: #fff;
+                transform: translateY(-1px);
+            }
 
         .partes-filter-chip {
             display: inline-flex;
@@ -201,23 +201,23 @@
             min-width: 0;
         }
 
-        .partes-stat-card strong {
-            display: block;
-            font-size: 1.35rem;
-            line-height: 1;
-            font-weight: 950;
-            color: #0D1929;
-        }
+            .partes-stat-card strong {
+                display: block;
+                font-size: 1.35rem;
+                line-height: 1;
+                font-weight: 950;
+                color: #0D1929;
+            }
 
-        .partes-stat-card span {
-            display: block;
-            margin-top: .25rem;
-            font-size: .68rem;
-            letter-spacing: .08em;
-            text-transform: uppercase;
-            font-weight: 950;
-            color: #29435F;
-        }
+            .partes-stat-card span {
+                display: block;
+                margin-top: .25rem;
+                font-size: .68rem;
+                letter-spacing: .08em;
+                text-transform: uppercase;
+                font-weight: 950;
+                color: #29435F;
+            }
 
         .partes-stat-icon {
             width: 44px;
@@ -229,10 +229,21 @@
             flex: 0 0 auto;
         }
 
-        .partes-stat-icon.muted { background: #29435F; }
-        .partes-stat-icon.green { background: #16A34A; }
-        .partes-stat-icon.red { background: #DC2626; }
-        .partes-stat-icon.orange { background: #FF8200; }
+            .partes-stat-icon.muted {
+                background: #29435F;
+            }
+
+            .partes-stat-icon.green {
+                background: #16A34A;
+            }
+
+            .partes-stat-icon.red {
+                background: #DC2626;
+            }
+
+            .partes-stat-icon.orange {
+                background: #FF8200;
+            }
 
         .partes-list-card {
             margin-top: 1.35rem;
@@ -252,24 +263,24 @@
             background: rgba(255,255,255,.92);
         }
 
-        .partes-list-header h2 {
-            margin: 0;
-            color: #0D1929;
-            font-size: 1rem;
-            font-weight: 950;
-        }
+            .partes-list-header h2 {
+                margin: 0;
+                color: #0D1929;
+                font-size: 1rem;
+                font-weight: 950;
+            }
 
-        .partes-list-header h2 i {
-            color: #FF8200;
-            margin-right: .45rem;
-        }
+                .partes-list-header h2 i {
+                    color: #FF8200;
+                    margin-right: .45rem;
+                }
 
-        .partes-list-header strong {
-            color: #0D1929;
-            font-weight: 950;
-            font-size: .82rem;
-            white-space: nowrap;
-        }
+            .partes-list-header strong {
+                color: #0D1929;
+                font-weight: 950;
+                font-size: .82rem;
+                white-space: nowrap;
+            }
 
         .partes-table-wrap {
             width: 100%;
@@ -282,33 +293,44 @@
             table-layout: fixed;
         }
 
-        .partes-table thead th {
-            padding: .95rem 1rem;
-            background: #0D1929;
-            color: #fff;
-            font-size: .72rem;
-            letter-spacing: .05em;
-            text-transform: uppercase;
-            font-weight: 950;
-            white-space: nowrap;
+            .partes-table thead th {
+                padding: .95rem 1rem;
+                background: #0D1929;
+                color: #fff;
+                font-size: .72rem;
+                letter-spacing: .05em;
+                text-transform: uppercase;
+                font-weight: 950;
+                white-space: nowrap;
+            }
+
+            .partes-table tbody td {
+                padding: 1rem;
+                border-top: 1px solid rgba(41, 67, 95, .10);
+                color: #0D1929;
+                vertical-align: middle;
+                font-weight: 800;
+            }
+
+            .partes-table tbody tr:hover td {
+                background: #FFF4E8;
+            }
+
+        .col-parte {
+            width: 22%;
         }
 
-        .partes-table tbody td {
-            padding: 1rem;
-            border-top: 1px solid rgba(41, 67, 95, .10);
-            color: #0D1929;
-            vertical-align: middle;
-            font-weight: 800;
+        .col-info {
+            width: 44%;
         }
 
-        .partes-table tbody tr:hover td {
-            background: #FFF4E8;
+        .col-control {
+            width: 20%;
         }
 
-        .col-parte { width: 22%; }
-        .col-info { width: 44%; }
-        .col-control { width: 20%; }
-        .col-actions { width: 14%; }
+        .col-actions {
+            width: 14%;
+        }
 
         .partes-code-cell {
             display: flex;
@@ -389,12 +411,12 @@
             font-weight: 850;
         }
 
-        .partes-info-line i {
-            color: #FF8200;
-            width: 14px;
-            flex: 0 0 14px;
-            text-align: center;
-        }
+            .partes-info-line i {
+                color: #FF8200;
+                width: 14px;
+                flex: 0 0 14px;
+                text-align: center;
+            }
 
         .partes-info-label {
             color: #64748B;
@@ -450,31 +472,59 @@
             text-overflow: ellipsis;
         }
 
-        .partes-pill span {
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+            .partes-pill span {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
 
-        .partes-pill.blue { background: #E8F0FB; color: #003A70; border: 1px solid rgba(0, 58, 112, .18); }
-        .partes-pill.gray { background: #EEF4FA; color: #29435F; border: 1px solid rgba(41, 67, 95, .16); }
-        .partes-pill.purple { background: #F1EAFE; color: #6D28D9; border: 1px solid rgba(109, 40, 217, .16); }
-        .partes-pill.orange { background: #FFF4E8; color: #C2410C; border: 1px solid rgba(255, 130, 0, .24); }
+            .partes-pill.blue {
+                background: #E8F0FB;
+                color: #003A70;
+                border: 1px solid rgba(0, 58, 112, .18);
+            }
 
-        .partes-status.active { background: #DCFCE7; color: #15803D; border: 1px solid rgba(21, 128, 61, .22); }
-        .partes-status.inactive { background: #FEE2E2; color: #B91C1C; border: 1px solid rgba(185, 28, 28, .20); }
+            .partes-pill.gray {
+                background: #EEF4FA;
+                color: #29435F;
+                border: 1px solid rgba(41, 67, 95, .16);
+            }
 
-        .partes-tech-status.configured {
-            color: #15803D;
-            background: #DCFCE7;
-            border: 1px solid rgba(21, 128, 61, .22);
-        }
+            .partes-pill.purple {
+                background: #F1EAFE;
+                color: #6D28D9;
+                border: 1px solid rgba(109, 40, 217, .16);
+            }
 
-        .partes-tech-status.pending {
-            color: #9A3412;
-            background: #FFEDD5;
-            border: 1px solid rgba(234, 88, 12, .22);
-        }
+            .partes-pill.orange {
+                background: #FFF4E8;
+                color: #C2410C;
+                border: 1px solid rgba(255, 130, 0, .24);
+            }
+
+            .partes-status.active {
+                background: #DCFCE7;
+                color: #15803D;
+                border: 1px solid rgba(21, 128, 61, .22);
+            }
+
+            .partes-status.inactive {
+                background: #FEE2E2;
+                color: #B91C1C;
+                border: 1px solid rgba(185, 28, 28, .20);
+            }
+
+            .partes-tech-status.configured {
+                color: #15803D;
+                background: #DCFCE7;
+                border: 1px solid rgba(21, 128, 61, .22);
+            }
+
+            .partes-tech-status.pending {
+                color: #9A3412;
+                background: #FFEDD5;
+                border: 1px solid rgba(234, 88, 12, .22);
+            }
 
         .partes-stock strong,
         .partes-stock span {
@@ -482,8 +532,17 @@
             white-space: nowrap;
         }
 
-        .partes-stock strong { color: #0D1929; font-weight: 950; font-size: .78rem; }
-        .partes-stock span { color: #64748B; font-size: .72rem; margin-top: .05rem; }
+        .partes-stock strong {
+            color: #0D1929;
+            font-weight: 950;
+            font-size: .78rem;
+        }
+
+        .partes-stock span {
+            color: #64748B;
+            font-size: .72rem;
+            margin-top: .05rem;
+        }
 
         .partes-actions-inline {
             display: grid;
@@ -512,17 +571,17 @@
             color: #003A70;
         }
 
-        .btn-partes-tech:hover {
-            background: #DCEBFA;
-            color: #003A70;
-            transform: translateY(-1px);
-        }
+            .btn-partes-tech:hover {
+                background: #DCEBFA;
+                color: #003A70;
+                transform: translateY(-1px);
+            }
 
-        .btn-partes-tech.has-tech {
-            background: #DCFCE7;
-            color: #15803D;
-            border-color: rgba(21, 128, 61, .24);
-        }
+            .btn-partes-tech.has-tech {
+                background: #DCFCE7;
+                color: #15803D;
+                border-color: rgba(21, 128, 61, .24);
+            }
 
         .partes-empty {
             min-height: 160px;
@@ -533,17 +592,17 @@
             padding: 2rem;
         }
 
-        .partes-empty i {
-            display: block;
-            font-size: 2rem;
-            color: #FF8200;
-            margin-bottom: .7rem;
-        }
+            .partes-empty i {
+                display: block;
+                font-size: 2rem;
+                color: #FF8200;
+                margin-bottom: .7rem;
+            }
 
-        .partes-empty strong,
-        .partes-empty span {
-            display: block;
-        }
+            .partes-empty strong,
+            .partes-empty span {
+                display: block;
+            }
 
         .partes-tech-modal {
             border: 0;
@@ -624,11 +683,11 @@
             cursor: pointer;
         }
 
-        .partes-switch-card input {
-            position: absolute;
-            opacity: 0;
-            pointer-events: none;
-        }
+            .partes-switch-card input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none;
+            }
 
         .partes-switch-visual {
             width: 48px;
@@ -640,24 +699,38 @@
             transition: .2s ease;
         }
 
-        .partes-switch-visual::after {
-            content: "";
-            position: absolute;
-            top: 4px;
-            left: 4px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #fff;
-            box-shadow: 0 4px 10px rgba(0,0,0,.20);
-            transition: .2s ease;
+            .partes-switch-visual::after {
+                content: "";
+                position: absolute;
+                top: 4px;
+                left: 4px;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                background: #fff;
+                box-shadow: 0 4px 10px rgba(0,0,0,.20);
+                transition: .2s ease;
+            }
+
+        .partes-switch-card input:checked + .partes-switch-visual {
+            background: linear-gradient(135deg, #16A34A, #22C55E);
         }
 
-        .partes-switch-card input:checked + .partes-switch-visual { background: linear-gradient(135deg, #16A34A, #22C55E); }
-        .partes-switch-card input:checked + .partes-switch-visual::after { transform: translateX(20px); }
+            .partes-switch-card input:checked + .partes-switch-visual::after {
+                transform: translateX(20px);
+            }
 
-        .partes-switch-card strong { display: block; color: #0D1929; font-weight: 950; }
-        .partes-switch-card small { display: block; color: #64748B; font-weight: 800; }
+        .partes-switch-card strong {
+            display: block;
+            color: #0D1929;
+            font-weight: 950;
+        }
+
+        .partes-switch-card small {
+            display: block;
+            color: #64748B;
+            font-weight: 800;
+        }
 
         .btn-partes-cancel,
         .btn-partes-save {
@@ -678,41 +751,98 @@
             box-shadow: 0 14px 28px rgba(244, 123, 32, .24);
         }
 
-        html[data-nsq-theme="dark"] .partes-hero { background: linear-gradient(135deg, rgba(13,25,41,.96), rgba(2,8,16,.92)); border-color: rgba(255,255,255,.08); }
+        html[data-nsq-theme="dark"] .partes-hero {
+            background: linear-gradient(135deg, rgba(13,25,41,.96), rgba(2,8,16,.92));
+            border-color: rgba(255,255,255,.08);
+        }
+
         html[data-nsq-theme="dark"] .partes-list-card,
         html[data-nsq-theme="dark"] .partes-list-header,
         html[data-nsq-theme="dark"] .partes-stat-card,
-        html[data-nsq-theme="dark"] .partes-tech-modal { background: rgba(13,25,41,.92); border-color: rgba(255,255,255,.08); }
-        html[data-nsq-theme="dark"] .partes-table tbody td,
-        html[data-nsq-theme="dark"] .partes-code-cell strong,
-        html[data-nsq-theme="dark"] .partes-info-title,
-        html[data-nsq-theme="dark"] .partes-list-header h2,
-        html[data-nsq-theme="dark"] .partes-list-header strong,
-        html[data-nsq-theme="dark"] .partes-stat-card strong,
-        html[data-nsq-theme="dark"] .partes-stock strong { color: #fff; }
-        html[data-nsq-theme="dark"] .partes-table tbody td { border-top-color: rgba(255,255,255,.08); }
-        html[data-nsq-theme="dark"] .partes-table tbody tr:hover td { background: rgba(255,130,0,.08); }
-        html[data-nsq-theme="dark"] .form-control-modern { background: #0D1929; color: #fff; border-color: rgba(255,255,255,.10); }
+        html[data-nsq-theme="dark"] .partes-tech-modal {
+            background: rgba(13,25,41,.92);
+            border-color: rgba(255,255,255,.08);
+        }
+
+            html[data-nsq-theme="dark"] .partes-table tbody td,
+            html[data-nsq-theme="dark"] .partes-code-cell strong,
+            html[data-nsq-theme="dark"] .partes-info-title,
+            html[data-nsq-theme="dark"] .partes-list-header h2,
+            html[data-nsq-theme="dark"] .partes-list-header strong,
+            html[data-nsq-theme="dark"] .partes-stat-card strong,
+            html[data-nsq-theme="dark"] .partes-stock strong {
+                color: #fff;
+            }
+
+        html[data-nsq-theme="dark"] .partes-table tbody td {
+            border-top-color: rgba(255,255,255,.08);
+        }
+
+        html[data-nsq-theme="dark"] .partes-table tbody tr:hover td {
+            background: rgba(255,130,0,.08);
+        }
+
+        html[data-nsq-theme="dark"] .form-control-modern {
+            background: #0D1929;
+            color: #fff;
+            border-color: rgba(255,255,255,.10);
+        }
+
         html[data-nsq-theme="dark"] .partes-info-line,
         html[data-nsq-theme="dark"] .partes-info-label,
         html[data-nsq-theme="dark"] .partes-code-cell small,
-        html[data-nsq-theme="dark"] .partes-stock span { color: #CBD5E1; }
+        html[data-nsq-theme="dark"] .partes-stock span {
+            color: #CBD5E1;
+        }
 
         @@media (max-width: 1180px) {
-            .partes-hero { grid-template-columns: 1fr; }
-            .partes-hero-left { min-height: 290px; }
-            .partes-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .partes-table { min-width: 980px; }
+            .partes-hero {
+                grid-template-columns: 1fr;
+            }
+
+            .partes-hero-left {
+                min-height: 290px;
+            }
+
+            .partes-stats-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .partes-table {
+                min-width: 980px;
+            }
         }
 
         @@media (max-width: 820px) {
-            .partes-page { padding: 1rem .75rem 3rem; }
-            .partes-search-box { grid-template-columns: 1fr; }
-            .partes-filter-select { min-height: 48px; border-right: 0; border-bottom: 1px solid rgba(41, 67, 95, .12); }
-            .partes-search-input, .partes-search-btn { min-height: 52px; }
-            .partes-stats-grid { grid-template-columns: 1fr; }
-            .partes-table { min-width: 940px; }
-            .partes-info-lines { grid-template-columns: 1fr; }
+            .partes-page {
+                padding: 1rem .75rem 3rem;
+            }
+
+            .partes-search-box {
+                grid-template-columns: 1fr;
+            }
+
+            .partes-filter-select {
+                min-height: 48px;
+                border-right: 0;
+                border-bottom: 1px solid rgba(41, 67, 95, .12);
+            }
+
+            .partes-search-input, .partes-search-btn {
+                min-height: 52px;
+            }
+
+            .partes-stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .partes-table {
+                min-width: 940px;
+            }
+
+            .partes-info-lines {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 }
@@ -727,8 +857,8 @@
             <h1>Administración de Partes</h1>
 
             <p>
-                Gestiona el catálogo de partes, clientes relacionados, producción,
-                stock y estado general dentro del módulo de altas.
+                Gestiona el catálogo de partes, información comercial, inventario
+                y fichas técnicas de producción.
             </p>
 
             <div class="partes-hero-actions">
@@ -758,7 +888,7 @@
                            name="busqueda"
                            value="@Model.Busqueda"
                            class="partes-search-input"
-                           placeholder="Buscar por número, descripción, SAP, designación o color..." />
+                           placeholder="Buscar por parte, SAP, descripción, color, material, máquina o molde..." />
 
                     <button type="submit" class="partes-search-btn">
                         <i class="fas fa-search"></i>
@@ -827,10 +957,10 @@
                         foreach (var item in partes)
                         {
                             var avatarText = string.IsNullOrWhiteSpace(item.NumeroParte)
-                                ? "P"
-                                : item.NumeroParte.Length > 4
-                                    ? item.NumeroParte.Substring(0, 4)
-                                    : item.NumeroParte;
+                            ? "P"
+                            : item.NumeroParte.Length > 4
+                            ? item.NumeroParte.Substring(0, 4)
+                            : item.NumeroParte;
 
                             <tr>
                                 <td>
@@ -994,12 +1124,12 @@
 
                             <div class="col-md-4">
                                 <label class="form-label-modern">Horas de secado</label>
-                                <input type="number" step="0.01" id="dtHorasSecado" name="HorasSecado" class="form-control-modern" placeholder="0.00" />
+                                <input type="number" step="0.01" id="dtHorasSecado" name="HorasSecado" min="0" class="form-control-modern" placeholder="0.00" />
                             </div>
 
                             <div class="col-md-4">
                                 <label class="form-label-modern">Peso bruto pieza</label>
-                                <input type="number" step="0.000001" id="dtPesoBrutoPieza" name="PesoBrutoPieza" class="form-control-modern" placeholder="0.000000" />
+                                <input type="number" step="0.000001" id="dtPesoBrutoPieza" name="PesoBrutoPieza" min="0" class="form-control-modern" placeholder="0.000000" />
                             </div>
 
                             <div class="col-md-4">
@@ -1009,7 +1139,7 @@
 
                             <div class="col-md-4">
                                 <label class="form-label-modern">Piezas por embalaje</label>
-                                <input type="number" step="0.0001" id="dtPiezasPorEmbalaje" name="PiezasPorEmbalaje" class="form-control-modern" placeholder="0.0000" />
+                                <input type="number" step="0.0001" id="dtPiezasPorEmbalaje" name="PiezasPorEmbalaje" min="0" class="form-control-modern" placeholder="0.0000" />
                             </div>
 
                             <div class="col-md-12">
@@ -1024,7 +1154,89 @@
 
                             <div class="col-md-8">
                                 <label class="form-label-modern">Descripción de material</label>
-                                <input type="text" id="dtMaterialDescripcion" name="MaterialDescripcion" class="form-control-modern" placeholder="Descripción del material" />
+                                <input type="text" id="dtMaterialDescripcion" name="MaterialDescripcion" maxlength="250" class="form-control-modern" placeholder="Descripción del material" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Color</label>
+                                <input type="text"
+                                       id="dtColor"
+                                       name="Color"
+                                       maxlength="80"
+                                       class="form-control-modern"
+                                       placeholder="Ej. Negro, azul, natural" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Cavidades</label>
+                                <input type="number"
+                                       id="dtCavidades"
+                                       name="Cavidades"
+                                       min="1"
+                                       step="1"
+                                       class="form-control-modern"
+                                       placeholder="Número de cavidades" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Objetivo por hora</label>
+                                <input type="number"
+                                       id="dtObjetivoHora"
+                                       name="ObjetivoHora"
+                                       min="0"
+                                       step="0.01"
+                                       class="form-control-modern"
+                                       placeholder="Objetivo de producción" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Piezas por caja</label>
+                                <input type="number"
+                                       id="dtPiezasPorCaja"
+                                       name="PiezasPorCaja"
+                                       min="1"
+                                       step="1"
+                                       class="form-control-modern"
+                                       placeholder="Piezas por caja" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Máquina principal</label>
+                                <select id="dtMaquinaPrincipalID"
+                                        name="MaquinaPrincipalID"
+                                        class="form-control-modern">
+                                    <option value="">-- Sin máquina principal --</option>
+                                    @foreach (var maquina in Model.Maquinas)
+                                    {
+                                        <option value="@maquina.Value">@maquina.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Máquina sustituta</label>
+                                <select id="dtMaquinaSustitutaID"
+                                        name="MaquinaSustitutaID"
+                                        class="form-control-modern">
+                                    <option value="">-- Sin máquina sustituta --</option>
+                                    @foreach (var maquina in Model.Maquinas)
+                                    {
+                                        <option value="@maquina.Value">@maquina.Text</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label-modern">Molde principal</label>
+                                <select id="dtMoldePrincipalID"
+                                        name="MoldePrincipalID"
+                                        class="form-control-modern">
+                                    <option value="">-- Sin molde principal --</option>
+                                    @foreach (var molde in Model.Moldes)
+                                    {
+                                        <option value="@molde.Value">@molde.Text</option>
+                                    }
+                                </select>
                             </div>
 
                             <div class="col-md-4">
@@ -1131,6 +1343,15 @@
                     setValue('dtMaterialCodigo', data.materialCodigo);
                     setValue('dtMaterialDescripcion', data.materialDescripcion);
                     setValue('dtMaterialID', data.materialID);
+
+                    setValue('dtColor', data.color);
+                    setValue('dtCavidades', data.cavidades);
+                    setValue('dtObjetivoHora', data.objetivoHora);
+                    setValue('dtPiezasPorCaja', data.piezasPorCaja);
+                    setValue('dtMaquinaPrincipalID', data.maquinaPrincipalID);
+                    setValue('dtMaquinaSustitutaID', data.maquinaSustitutaID);
+                    setValue('dtMoldePrincipalID', data.moldePrincipalID);
+
                     setChecked('dtActivo', data.activo);
 
                     modal.show();

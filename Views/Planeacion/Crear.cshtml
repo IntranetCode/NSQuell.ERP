@@ -276,11 +276,13 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
                     <h1>
-                        <i class="fa-solid fa-clipboard-list me-2"></i>
-                        Nueva OF / Planeación
+                        <i class="fa-solid @(Model.EsEdicion ? "fa-pen-to-square" : "fa-clipboard-list") me-2"></i>
+                        @(Model.EsEdicion ? "Editar OF / Planeación" : "Nueva OF / Planeación")
                     </h1>
                     <p>
-                        Captura la OF recibida por Dirección. Los datos técnicos se autollenan desde catálogo maestro y quedan protegidos.
+                        @(Model.EsEdicion
+                                                ? "Modifica la OF antes de que tenga movimientos reales de almacén."
+                                                : "Captura la OF recibida por Dirección. Los datos técnicos se autollenan desde catálogo maestro y quedan protegidos.")
                     </p>
                 </div>
 
@@ -293,8 +295,11 @@
             </div>
         </div>
 
-        <form asp-controller="Planeacion" asp-action="Crear" method="post" id="formCrearOF">
+        <form asp-controller="Planeacion"   asp-action="@(Model.EsEdicion ? "Editar" : "Crear")" method="post" id="formCrearOF">
             @Html.AntiForgeryToken()
+
+            <input type="hidden" asp-for="SolicitudProduccionID" />
+            <input type="hidden" asp-for="EsEdicion" />
 
             <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
 
@@ -436,14 +441,16 @@
                                                    placeholder="Buscar número de parte, referencia o descripción..." /> *@
 
                                             <label class="erp-label">Parte</label>
-                                            <select name="Detalles[@i].ParteID" class="form-select erp-select parte-select">
+                                            <select name="Detalles[@i].ParteID"
+                                                    class="form-select erp-select parte-select"
+                                                    data-valor-actual="@Model.Detalles[i].ParteID">
                                                 <option value="">-- Selecciona cliente primero --</option>
                                             </select>
                                         </div>
 
                                         <div class="col-md-3">
                                             <label class="erp-label">Referencia SAP</label>
-                                            <input name="Detalles[@i].ReferenciaSAP" class="form-control erp-input referencia-input" />
+                                            <input name="Detalles[@i].ReferenciaSAP" value="@Model.Detalles[i].ReferenciaSAP"class="form-control erp-input referencia-input" />
                                         </div>
 
                                         <div class="col-md-3">
@@ -467,7 +474,9 @@
                                                 <option value="">-- Selecciona molde --</option>
                                                 @foreach (var m in Model.Moldes)
                                                 {
-                                                    <option value="@m.Value">@m.Text</option>
+                                                    <option value="@m.Value" selected="@(Model.Detalles[i].MoldeID?.ToString() == m.Value)">
+                                                        @m.Text
+                                                    </option>
                                                 }
                                             </select>
                                         </div>
@@ -580,11 +589,17 @@
                                         <div class="row g-3">
                                             <div class="col-md-4">
                                                 <label class="erp-label">Máquina</label>
+                                                @{
+                                                    var asignacion0 = Model.Detalles[i].AsignacionesMaquina?.FirstOrDefault();
+                                                }
+
                                                 <select name="Detalles[@i].AsignacionesMaquina[0].MaquinaID" class="form-select erp-select maquina-select">
                                                     <option value="">-- Selecciona máquina --</option>
                                                     @foreach (var maq in Model.Maquinas)
                                                     {
-                                                        <option value="@maq.Value">@maq.Text</option>
+                                                        <option value="@maq.Value" selected="@(asignacion0?.MaquinaID.ToString() == maq.Value)">
+                                                            @maq.Text
+                                                        </option>
                                                     }
                                                 </select>
                                             </div>
@@ -650,13 +665,25 @@
 
             <div class="sticky-actions">
                 <div class="d-flex justify-content-end gap-2">
-                    <a asp-controller="Planeacion" asp-action="Index" class="btn btn-erp-light">
-                        Cancelar
-                    </a>
+                    @if (Model.EsEdicion && Model.SolicitudProduccionID.HasValue)
+                    {
+                        <a asp-controller="Planeacion"
+                           asp-action="Detalle"
+                           asp-route-id="@Model.SolicitudProduccionID"
+                           class="btn btn-erp-light">
+                            Cancelar
+                        </a>
+                    }
+                    else
+                    {
+                        <a asp-controller="Planeacion" asp-action="Index" class="btn btn-erp-light">
+                            Cancelar
+                        </a>
+                    }
 
                     <button type="submit" class="btn btn-erp-primary">
                         <i class="fa-solid fa-floppy-disk me-1"></i>
-                        Guardar OF
+                        @(Model.EsEdicion ? "Actualizar OF" : "Guardar OF")
                     </button>
                 </div>
             </div>
@@ -1059,10 +1086,9 @@
                 clearTimeout(timerAnterior);
             }
 
-            const nuevoTimer = setTimeout(async function () {
-                        const yaTeniaValidacion = getValue(card, '.almacen-validado-input') === 'true';
-        await validarAlmacenRenglon(card, !yaTeniaValidacion);
-            }, 650);
+                   const nuevoTimer = setTimeout(async function () {
+            await validarAlmacenRenglon(card, false);
+        }, 450);
 
             timersValidacionAlmacen.set(card, nuevoTimer);
         }
@@ -1125,8 +1151,13 @@
                             clienteNombre.value = data.clienteNombre;
                         }
 
-                        await calcularRenglon(card);
-                        await validarAlmacenRenglon(card, true);
+                                await calcularRenglon(card);
+
+        const cantidad = getValue(card, '.cantidad-input');
+
+        if (cantidad && Number(cantidad) > 0) {
+            await validarAlmacenRenglon(card, false);
+        }
                     } catch (err) {
                         console.error(err);
                         alert('No se pudo cargar la información técnica de la parte.');
@@ -1182,32 +1213,69 @@
                     }
                 }
 
-                async function cargarPartesPorCliente(clienteId) {
-                    try {
-                        const resp = await fetch(`${urlPartesPorCliente}?clienteId=${encodeURIComponent(clienteId)}`);
-                        const data = await resp.json();
+                               async function cargarPartesPorCliente(clienteId) {
+            try {
+                console.log('Cliente seleccionado:', clienteId);
 
-                        if (!data.ok) {
-                            alert(data.mensaje || 'No se pudieron cargar las partes del cliente.');
-                            return;
-                        }
-
-                        partesFiltradasData = data.partes || [];
-
-                        const options = crearOptions(partesFiltradasData, '-- Selecciona parte --');
-
-                        document.querySelectorAll('.parte-select').forEach(select => {
-                            select.innerHTML = options;
-                            select.value = '';
-                        });
-
-                        limpiarDatosParteDeTodosLosRenglones();
-
-                    } catch (err) {
-                        console.error(err);
-                        alert('Error al cargar partes del cliente.');
-                    }
+                if (!clienteId || Number(clienteId) <= 0) {
+                    limpiarPartesDeTodosLosRenglones();
+                    return;
                 }
+
+                const url = `${urlPartesPorCliente}?clienteId=${encodeURIComponent(clienteId)}`;
+                console.log('URL partes:', url);
+
+                const resp = await fetch(url);
+                console.log('Status partes:', resp.status);
+
+                if (!resp.ok) {
+                    alert('No se pudieron cargar las partes del cliente. Respuesta del servidor: ' + resp.status);
+                    return;
+                }
+
+                const data = await resp.json();
+                console.log('Respuesta partes:', data);
+
+                if (!data.ok) {
+                    alert(data.mensaje || 'No se pudieron cargar las partes del cliente.');
+                    return;
+                }
+
+                partesFiltradasData = data.partes || [];
+                console.log('Total partes recibidas:', partesFiltradasData.length);
+
+                const options = crearOptions(partesFiltradasData, '-- Selecciona parte --');
+
+                       document.querySelectorAll('.parte-select').forEach(function (select) {
+            const valorActual = select.getAttribute('data-valor-actual') || select.value || '';
+
+            select.innerHTML = options;
+
+            if (valorActual) {
+                select.value = valorActual;
+            } else {
+                select.value = '';
+            }
+        });
+
+        document.querySelectorAll('.renglon-item').forEach(function (card) {
+            const parteSelect = card.querySelector('.parte-select');
+            const valorActual = parteSelect?.getAttribute('data-valor-actual') || parteSelect?.value || '';
+
+            if (!valorActual) {
+                limpiarDatosParte(card);
+            }
+        });
+
+                if (!partesFiltradasData.length) {
+                    alert('El cliente seleccionado no tiene partes activas registradas.');
+                }
+
+            } catch (err) {
+                console.error(err);
+                alert('Error al cargar partes del cliente.');
+            }
+        }
 
                 function filtrarPartesEnRenglon(input) {
                     const card = input.closest('.renglon-item');
@@ -1297,9 +1365,9 @@
 
                         aplicarResultadoAlmacen(card, data);
 
-                        if (mostrarModal || data.bloquear) {
-                            mostrarModalAlmacen(data);
-                        }
+                                if (data.bloquear) {
+            mostrarModalAlmacen(data);
+        }
 
                         if (data.bloquear) {
                             return false;
@@ -1379,161 +1447,163 @@
                     }
                 }
 
-                        function construirResumenAlmacen(data) {
+                                       function construirResumenAlmacen(data) {
             const pt = data.pt || {};
             const mp = data.mp || {};
             const embalaje = data.embalaje || {};
 
-            let html = `<div class="fw-bold mb-2">${escapeHtml(data.mensaje)}</div>`;
+            let badgeClase = 'bg-secondary';
+            let decisionTexto = data.decision || 'PENDIENTE';
 
             if (data.decision === 'PT') {
-                html += `
-                    <div class="alert alert-success rounded-4 mb-2">
-                        <div class="fw-bold">
-                            <i class="fa-solid fa-boxes-stacked me-1"></i>
-                            Hay producto terminado disponible
-                        </div>
-                        <div>
-                            Disponible: <strong>${escapeHtml(pt.disponible ?? 0)}</strong>
-                            /
-                            Requerido: <strong>${escapeHtml(pt.requerido ?? 0)}</strong>
-                        </div>
-                        <div class="mt-1">
-                            Se puede surtir desde Producto Terminado. No es necesario validar Materia Prima para este renglón.
-                        </div>
-                    </div>
-                `;
+                badgeClase = 'bg-success';
+                decisionTexto = 'Surtir desde PT';
             } else if (data.decision === 'MP') {
-                html += `
-                    <div class="alert alert-primary rounded-4 mb-2">
-                        <div class="fw-bold">
-                            <i class="fa-solid fa-industry me-1"></i>
-                            No hay PT suficiente, pero sí hay Materia Prima
-                        </div>
-                        <div>
-                            PT disponible: <strong>${escapeHtml(pt.disponible ?? 0)}</strong>
-                            /
-                            PT requerido: <strong>${escapeHtml(pt.requerido ?? 0)}</strong>
-                        </div>
-                        <hr />
-                        <div>
-                            <strong>MP:</strong>
-                            ${escapeHtml(mp.codigo ?? '')} - ${escapeHtml(mp.material ?? '')}
-                            <br />
-                            Disponible:
-                            <strong>${escapeHtml(mp.disponibleKg ?? 0)} ${escapeHtml(mp.unidad ?? '')}</strong>
-                            /
-                            Requerido:
-                            <strong>${escapeHtml(mp.requeridoKg ?? 0)} kg</strong>
-                        </div>
-                    </div>
-                `;
+                badgeClase = 'bg-primary';
+                decisionTexto = 'Producir con MP';
             } else {
-                html += `
-                    <div class="alert alert-danger rounded-4 mb-2">
-                        <div class="fw-bold">
-                            <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                            No hay existencia suficiente
-                        </div>
-                        <div>
-                            PT disponible: <strong>${escapeHtml(pt.disponible ?? 0)}</strong>
-                            /
-                            PT requerido: <strong>${escapeHtml(pt.requerido ?? 0)}</strong>
-                        </div>
-                        <hr />
-                        <div>
-                            <strong>MP:</strong>
-                            ${escapeHtml(mp.codigo ?? '')} - ${escapeHtml(mp.material ?? '')}
-                            <br />
-                            Disponible:
-                            <strong>${escapeHtml(mp.disponibleKg ?? 0)} ${escapeHtml(mp.unidad ?? '')}</strong>
-                            /
-                            Requerido:
-                            <strong>${escapeHtml(mp.requeridoKg ?? 0)} kg</strong>
-                        </div>
-                        <div class="mt-2">
-                            No se debe guardar la OF hasta revisar con Almacén o Compras.
-                        </div>
-                    </div>
-                `;
+                badgeClase = 'bg-danger';
+                decisionTexto = 'Revisar existencias';
             }
 
-                    let claseEmbalaje = 'alert-secondary';
-        let tituloEmbalaje = 'Validación de embalaje';
+            let claseEmbalaje = 'text-secondary';
+            let iconoEmbalaje = 'fa-circle-info';
 
-        if (embalaje.semaforo === 'VERDE' || embalaje.suficiente === true) {
-            claseEmbalaje = 'alert-success';
-            tituloEmbalaje = 'Embalaje suficiente';
-        } else if (embalaje.semaforo === 'AMARILLO') {
-            claseEmbalaje = 'alert-warning';
-            tituloEmbalaje = 'Embalaje en nivel de aviso';
-        } else {
-            claseEmbalaje = 'alert-danger';
-            tituloEmbalaje = 'Embalaje por revisar';
-        }
+            if (embalaje.semaforo === 'VERDE' || embalaje.suficiente === true) {
+                claseEmbalaje = 'text-success';
+                iconoEmbalaje = 'fa-circle-check';
+            } else if (embalaje.semaforo === 'AMARILLO') {
+                claseEmbalaje = 'text-warning';
+                iconoEmbalaje = 'fa-triangle-exclamation';
+            } else {
+                claseEmbalaje = 'text-danger';
+                iconoEmbalaje = 'fa-circle-exclamation';
+            }
 
-        html += `
-            <div class="alert ${claseEmbalaje} rounded-4 mb-2">
-                <div class="fw-bold">
-                    <i class="fa-solid fa-box-open me-1"></i>
-                    ${escapeHtml(tituloEmbalaje)}
+            return `
+                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+                    <div class="fw-bold">
+                        ${escapeHtml(data.mensaje ?? 'Validación realizada.')}
+                    </div>
+                    <span class="badge ${badgeClase}">
+                        ${escapeHtml(decisionTexto)}
+                    </span>
                 </div>
-                <div>
-                    <strong>${escapeHtml(embalaje.codigo ?? '')}</strong>
-                    ${escapeHtml(embalaje.nombre ?? '')}
-                </div>
-                <div>
-                    Disponible:
-                    <strong>${escapeHtml(embalaje.disponible ?? 0)} ${escapeHtml(embalaje.unidad ?? '')}</strong>
-                    /
-                    Requerido:
-                    <strong>${escapeHtml(embalaje.requerido ?? 0)} ${escapeHtml(embalaje.unidad ?? '')}</strong>
-                </div>
-                <div class="mt-1">
-                    ${escapeHtml(embalaje.mensaje ?? 'Validación de embalaje pendiente.')}
-                </div>
-            </div>
-        `;
 
-            html += `
-                <div class="mt-2">
-                    <strong>Decisión del sistema:</strong> ${escapeHtml(data.decision)}
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <div class="p-2 rounded-3 border bg-white">
+                            <div class="fw-bold text-success">
+                                <i class="fa-solid fa-boxes-stacked me-1"></i>
+                                Producto terminado
+                            </div>
+                            <div class="small">
+                                Disponible:
+                                <strong>${escapeHtml(pt.disponible ?? 0)}</strong>
+                            </div>
+                            <div class="small">
+                                Requerido:
+                                <strong>${escapeHtml(pt.requerido ?? 0)}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="p-2 rounded-3 border bg-white">
+                            <div class="fw-bold text-primary">
+                                <i class="fa-solid fa-industry me-1"></i>
+                                Materia prima
+                            </div>
+                            <div class="small">
+                                ${escapeHtml(mp.codigo ?? '')}
+                                ${escapeHtml(mp.material ?? '')}
+                            </div>
+                            <div class="small">
+                                Disponible:
+                                <strong>${escapeHtml(mp.disponibleKg ?? 0)} ${escapeHtml(mp.unidad ?? '')}</strong>
+                            </div>
+                            <div class="small">
+                                Requerido:
+                                <strong>${escapeHtml(mp.requeridoKg ?? 0)} kg</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="p-2 rounded-3 border bg-white">
+                            <div class="fw-bold ${claseEmbalaje}">
+                                <i class="fa-solid ${iconoEmbalaje} me-1"></i>
+                                Embalaje
+                            </div>
+                            <div class="small">
+                                ${escapeHtml(embalaje.codigo ?? '')}
+                                ${escapeHtml(embalaje.nombre ?? '')}
+                            </div>
+                            <div class="small">
+                                Disponible:
+                                <strong>${escapeHtml(embalaje.disponible ?? 0)} ${escapeHtml(embalaje.unidad ?? '')}</strong>
+                            </div>
+                            <div class="small">
+                                Requerido:
+                                <strong>${escapeHtml(embalaje.requerido ?? 0)} ${escapeHtml(embalaje.unidad ?? '')}</strong>
+                            </div>
+                            <div class="small mt-1 ${claseEmbalaje}">
+                                ${escapeHtml(embalaje.mensaje ?? '')}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
-
-            return html;
         }
 
+        function mostrarModalAlmacen(data) {
+            const modalTitle = document.getElementById('modalAlmacenTitle');
+            const modalBody = document.getElementById('modalAlmacenBody');
+            const modalIcon = document.getElementById('modalAlmacenIcon');
+            const modalElement = document.getElementById('modalAlmacen');
 
-                function mostrarModalAlmacen(data) {
-                    const modalTitle = document.getElementById('modalAlmacenTitle');
-                    const modalBody = document.getElementById('modalAlmacenBody');
-                    const modalIcon = document.getElementById('modalAlmacenIcon');
+            if (!modalTitle || !modalBody || !modalIcon || !modalElement) {
+                alert(data.mensaje || 'Validación de almacén realizada.');
+                return;
+            }
 
-                    if (!modalTitle || !modalBody || !modalIcon) {
-                        alert(data.mensaje || 'Validación de almacén realizada.');
-                        return;
-                    }
+            modalIcon.className = 'fa-solid me-2';
 
-                    modalIcon.className = 'fa-solid me-2';
+            if (data.decision === 'PT') {
+                modalIcon.classList.add('fa-boxes-stacked', 'text-success');
+                modalTitle.innerText = 'Producto terminado disponible';
+            } else if (data.decision === 'MP') {
+                modalIcon.classList.add('fa-industry', 'text-primary');
+                modalTitle.innerText = 'Materia prima suficiente';
+            } else {
+                modalIcon.classList.add('fa-triangle-exclamation', 'text-danger');
+                modalTitle.innerText = 'Validación de almacén';
+            }
 
-                    if (data.decision === 'PT') {
-                        modalIcon.classList.add('fa-boxes-stacked', 'text-success');
-                        modalTitle.innerText = 'Producto terminado disponible';
-                    } else if (data.decision === 'MP') {
-                        modalIcon.classList.add('fa-industry', 'text-primary');
-                        modalTitle.innerText = 'Materia prima suficiente';
-                    } else {
-                        modalIcon.classList.add('fa-triangle-exclamation', 'text-danger');
-                        modalTitle.innerText = 'Validación de almacén';
-                    }
+            modalBody.innerHTML = construirResumenAlmacen(data);
 
-                    modalBody.innerHTML = construirResumenAlmacen(data);
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement, {
+                backdrop: true,
+                keyboard: true,
+                focus: true
+            });
 
-                    const modalElement = document.getElementById('modalAlmacen');
-                    const modal = new bootstrap.Modal(modalElement);
-                    modal.show();
-                }
+            modal.show();
+        }
+
+                const modalAlmacenElement = document.getElementById('modalAlmacen');
+
+        if (modalAlmacenElement) {
+            modalAlmacenElement.addEventListener('hidden.bs.modal', function () {
+                document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                    backdrop.remove();
+                });
+
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+            });
+        }
 
                 function setValue(card, selector, value) {
                     const input = card.querySelector(selector);
@@ -1615,7 +1685,15 @@
                     });
                 }
 
+                        document.addEventListener('DOMContentLoaded', async function () {
+            const clienteIdInicial = document.getElementById('ClienteID')?.value;
+
+            if (clienteIdInicial && Number(clienteIdInicial) > 0) {
+                await cargarPartesPorCliente(clienteIdInicial);
+            } else {
                 limpiarPartesDeTodosLosRenglones();
+            }
+        });
     </script>
 </body>
 </html>

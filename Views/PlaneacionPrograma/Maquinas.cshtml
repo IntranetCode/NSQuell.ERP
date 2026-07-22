@@ -1,0 +1,817 @@
+﻿@model ERP.NSQuell.Models.PlaneacionProgramaMaquinasVm
+
+@{
+    Layout = null;
+
+    string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
+    string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    string Decimal2(decimal? v) => v.HasValue ? v.Value.ToString("N2") : "-";
+
+    string ClaseEstatus(int estatusId)
+    {
+        return estatusId switch
+        {
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Programado => "badge-info",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnPreparacion => "badge-warn",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnProduccion => "badge-ok",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Pausado => "badge-danger",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Terminado => "badge-done",
+            _ => "badge-info"
+        };
+    }
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Programa por Máquinas | Planeación</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --erp-blue: #004AAD;
+            --erp-blue-dark: #00347a;
+            --erp-gray: #f3f5f8;
+            --erp-border: #d9e1ec;
+            --erp-text: #263238;
+            --erp-muted: #667085;
+            --erp-green: #107c41;
+            --erp-red: #b42318;
+            --erp-orange: #b54708;
+        }
+
+        body {
+            background: var(--erp-gray);
+            color: var(--erp-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .erp-shell {
+            max-width: 1700px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .erp-header {
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+            color: white;
+            border-radius: 22px;
+            padding: 28px 32px;
+            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+            margin-bottom: 22px;
+        }
+
+            .erp-header h1 {
+                font-size: 1.65rem;
+                margin: 0;
+                font-weight: 900;
+            }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 20px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .erp-card-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .erp-card-body {
+            padding: 22px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
+            height: 100%;
+        }
+
+        .metric-label {
+            color: var(--erp-muted);
+            font-size: .76rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .metric-value {
+            font-size: 1.35rem;
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+        }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border-color: var(--erp-blue);
+            color: white;
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+        .btn-erp-light {
+            background: white;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+        .erp-input {
+            border-radius: 12px;
+            border: 1px solid var(--erp-border);
+            padding: 10px 12px;
+        }
+
+        .machine-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 18px;
+        }
+
+        .machine-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
+        }
+
+        .machine-header {
+            background: #eef3fb;
+            border-bottom: 1px solid var(--erp-border);
+            padding: 16px 18px;
+        }
+
+        .machine-title {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            font-size: 1.05rem;
+            margin: 0;
+        }
+
+        .machine-sub {
+            color: var(--erp-muted);
+            font-size: .8rem;
+            margin-top: 3px;
+        }
+
+        .machine-body {
+            padding: 18px;
+        }
+
+        .program-block {
+            border: 1px solid var(--erp-border);
+            border-radius: 16px;
+            padding: 14px;
+            margin-bottom: 12px;
+            background: #fbfdff;
+        }
+
+            .program-block:last-child {
+                margin-bottom: 0;
+            }
+
+        .program-title {
+            font-weight: 900;
+            color: #1d2939;
+            margin-bottom: 3px;
+        }
+
+        .program-desc {
+            color: var(--erp-muted);
+            font-size: .8rem;
+            margin-bottom: 10px;
+        }
+
+        .mini-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .mini-label {
+            font-size: .7rem;
+            color: var(--erp-muted);
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .mini-value {
+            font-size: .84rem;
+            font-weight: 750;
+        }
+
+        .badge-soft {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: .73rem;
+            font-weight: 900;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .badge-info {
+            background: #eef6ff;
+            color: #175cd3;
+            border-color: #b2ddff;
+        }
+
+        .badge-ok {
+            background: #ecfdf3;
+            color: #027a48;
+            border-color: #abefc6;
+        }
+
+        .badge-warn {
+            background: #fff7ed;
+            color: #b54708;
+            border-color: #fed7aa;
+        }
+
+        .badge-danger {
+            background: #fef3f2;
+            color: #b42318;
+            border-color: #fecdca;
+        }
+
+        .badge-done {
+            background: #f2f4f7;
+            color: #475467;
+            border-color: #d0d5dd;
+        }
+
+        .empty-machine {
+            color: var(--erp-muted);
+            text-align: center;
+            padding: 28px 10px;
+            border: 1px dashed var(--erp-border);
+            border-radius: 16px;
+            background: #fbfdff;
+        }
+
+        .section-label {
+            font-size: .75rem;
+            color: var(--erp-muted);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="erp-shell">
+
+        <div class="erp-header">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h1>
+                        <i class="fa-solid fa-table-columns me-2"></i>
+                        Programa por Máquinas
+                    </h1>
+                    <p class="mb-0 mt-2">
+                        Vista de qué máquina está trabajando, qué sigue, horarios, piezas pendientes y condición T.P / I.P.
+                    </p>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-list me-1"></i>
+                        Programa general
+                    </a>
+
+                    <a asp-controller="PlaneacionRelease" asp-action="Calculadora" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-calculator me-1"></i>
+                        Calculadora
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success rounded-4 fw-semibold">
+                <i class="fa-solid fa-circle-check me-2"></i>
+                @TempData["Success"]
+            </div>
+        }
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger rounded-4 fw-semibold">
+                <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                @TempData["Error"]
+            </div>
+        }
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Programas</div>
+                    <div class="metric-value">@Model.TotalProgramas.ToString("N0")</div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Piezas programadas</div>
+                    <div class="metric-value">@Model.TotalPiezasProgramadas.ToString("N0")</div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Piezas pendientes</div>
+                    <div class="metric-value">@Model.TotalPiezasPendientes.ToString("N0")</div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Horas programadas</div>
+                    <div class="metric-value">@Model.TotalHorasProgramadas.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="erp-card">
+            <div class="erp-card-header">
+                <div>
+                    <h2 class="h5 fw-bold m-0 text-primary">
+                        <i class="fa-solid fa-filter me-2"></i>
+                        Rango de visualización
+                    </h2>
+                    <div class="text-muted small">
+                        Consulta programa por fecha programada.
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card-body">
+                <form asp-controller="PlaneacionPrograma" asp-action="Maquinas" method="get">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="fw-bold small text-muted">Desde</label>
+                            <input name="fechaDesde"
+                                   type="date"
+                                   value="@Model.FechaDesde.ToString("yyyy-MM-dd")"
+                                   class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="fw-bold small text-muted">Hasta</label>
+                            <input name="fechaHasta"
+                                   type="date"
+                                   value="@Model.FechaHasta.ToString("yyyy-MM-dd")"
+                                   class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-erp-primary w-100">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i>
+                                Consultar
+                            </button>
+                        </div>
+
+                        <div class="col-md-3">
+                            <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn btn-erp-light w-100">
+                                Limpiar
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="machine-grid">
+            @foreach (var maq in Model.Maquinas)
+            {
+                <div class="machine-card">
+                    <div class="machine-header">
+                        <h3 class="machine-title">
+                            <i class="fa-solid fa-gears me-2"></i>
+                            @maq.MaquinaCodigo
+                        </h3>
+                        <div class="machine-sub">@maq.MaquinaNombre</div>
+                    </div>
+
+                    <div class="machine-body">
+                        @if (maq.Programas.Any())
+                        {
+                            @if (maq.Actual != null)
+                            {
+                                <div class="section-label">Actual / próximo activo</div>
+
+                                <div class="program-block">
+                                    <div class="d-flex justify-content-between gap-2 flex-wrap mb-2">
+                                        <span class="badge-soft @ClaseEstatus(maq.Actual.EstatusID)">
+                                            <i class="fa-solid fa-circle" style="font-size:.45rem;"></i>
+                                            @maq.Actual.EstatusNombre
+                                        </span>
+
+                                        <span class="badge-soft badge-info">
+                                            @Valor(maq.Actual.CondicionProduccion)
+                                        </span>
+                                    </div>
+
+                                    <div class="program-title">
+                                        @Valor(maq.Actual.ReferenciaSAP ?? maq.Actual.NumeroParte)
+                                    </div>
+
+                                    <div class="program-desc">
+                                        @Valor(maq.Actual.DesignacionDescripcionSAP)
+                                    </div>
+
+                                    <div class="mini-grid">
+                                        <div>
+                                            <div class="mini-label">Cliente</div>
+                                            <div class="mini-value">@Valor(maq.Actual.ClienteNombre)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Molde</div>
+                                            <div class="mini-value">@Valor(maq.Actual.MoldeCodigo)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Color</div>
+                                            <div class="mini-value">@Valor(maq.Actual.Color)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Inicio</div>
+                                            <div class="mini-value">@FechaHora(maq.Actual.FechaInicioProgramada)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Fin</div>
+                                            <div class="mini-value">@FechaHora(maq.Actual.FechaFinProgramada)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Programadas</div>
+                                            <div class="mini-value">@maq.Actual.CantidadProgramada.ToString("N0")</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Pendientes</div>
+                                            <div class="mini-value">@maq.Actual.CantidadPendiente.ToString("N0")</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Horas</div>
+                                            <div class="mini-value">@Decimal2(maq.Actual.HorasProgramadas)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Secuencia</div>
+                                            <div class="mini-value">@(maq.Actual.SecuenciaMaquina?.ToString() ?? "-")</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3 d-flex gap-2 flex-wrap">
+                                        @if (maq.Actual.PuedeGenerarOF)
+                                        {
+                                            <button type="button"
+                                                    class="btn btn-sm btn-erp-primary btn-generar-of"
+                                                    data-programa-id="@maq.Actual.ProgramaProduccionID"
+                                                    data-referencia="@Valor(maq.Actual.ReferenciaSAP ?? maq.Actual.NumeroParte)"
+                                                    data-designacion="@Valor(maq.Actual.DesignacionDescripcionSAP)"
+                                                    data-maquina="@Valor(maq.Actual.MaquinaCodigo)"
+                                                    data-molde="@Valor(maq.Actual.MoldeCodigo)"
+                                                    data-cantidad="@maq.Actual.CantidadProgramada.ToString("N0")">
+                                                <i class="fa-solid fa-file-circle-plus me-1"></i>
+                                                Generar OF
+                                            </button>
+                                        }
+                                        else if (maq.Actual.TieneOF)
+                                        {
+                                            <a asp-controller="Planeacion"
+                                               asp-action="Detalle"
+                                               asp-route-id="@maq.Actual.SolicitudProduccionID"
+                                               class="btn btn-sm btn-success rounded-3 fw-bold">
+                                                <i class="fa-solid fa-circle-check me-1"></i>
+                                                Ver OF
+                                            </a>
+                                        }
+                                    </div>
+
+                                </div>
+                            }
+
+                            @if (maq.Siguiente != null)
+                            {
+                                <div class="section-label mt-3">Siguiente</div>
+
+                                <div class="program-block">
+                                    <div class="d-flex justify-content-between gap-2 flex-wrap mb-2">
+                                        <span class="badge-soft @ClaseEstatus(maq.Siguiente.EstatusID)">
+                                            @maq.Siguiente.EstatusNombre
+                                        </span>
+
+                                        <span class="badge-soft badge-info">
+                                            @Valor(maq.Siguiente.CondicionProduccion)
+                                        </span>
+                                    </div>
+
+                                    <div class="program-title">
+                                        @Valor(maq.Siguiente.ReferenciaSAP ?? maq.Siguiente.NumeroParte)
+                                    </div>
+
+                                    <div class="program-desc">
+                                        @Valor(maq.Siguiente.DesignacionDescripcionSAP)
+                                    </div>
+
+                                    <div class="mini-grid">
+                                        <div>
+                                            <div class="mini-label">Inicio</div>
+                                            <div class="mini-value">@FechaHora(maq.Siguiente.FechaInicioProgramada)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Fin</div>
+                                            <div class="mini-value">@FechaHora(maq.Siguiente.FechaFinProgramada)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Color</div>
+                                            <div class="mini-value">@Valor(maq.Siguiente.Color)</div>
+                                        </div>
+
+                                        <div>
+                                            <div class="mini-label">Molde</div>
+                                            <div class="mini-value">@Valor(maq.Siguiente.MoldeCodigo)</div>
+                                        </div>
+
+
+
+                                        <div>
+                                            <div class="mini-label">Pendiente</div>
+                                            <div class="mini-value">@maq.Siguiente.CantidadPendiente.ToString("N0")</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3 d-flex gap-2 flex-wrap">
+                                        @if (maq.Siguiente.PuedeGenerarOF)
+                                        {
+                                            <button type="button"
+                                                    class="btn btn-sm btn-erp-primary btn-generar-of"
+                                                    data-programa-id="@maq.Siguiente.ProgramaProduccionID"
+                                                    data-referencia="@Valor(maq.Siguiente.ReferenciaSAP ?? maq.Siguiente.NumeroParte)"
+                                                    data-designacion="@Valor(maq.Siguiente.DesignacionDescripcionSAP)"
+                                                    data-maquina="@Valor(maq.Siguiente.MaquinaCodigo)"
+                                                    data-molde="@Valor(maq.Siguiente.MoldeCodigo)"
+                                                    data-cantidad="@maq.Siguiente.CantidadProgramada.ToString("N0")">
+                                                <i class="fa-solid fa-file-circle-plus me-1"></i>
+                                                Generar OF
+                                            </button>
+                                        }
+                                        else if (maq.Siguiente.TieneOF)
+                                        {
+                                            <a asp-controller="Planeacion"
+                                               asp-action="Detalle"
+                                               asp-route-id="@maq.Siguiente.SolicitudProduccionID"
+                                               class="btn btn-sm btn-success rounded-3 fw-bold">
+                                                <i class="fa-solid fa-circle-check me-1"></i>
+                                                Ver OF
+                                            </a>
+                                        }
+                                    </div>
+
+
+                                </div>
+                            }
+
+                            @if (maq.Programas.Count > 2)
+                            {
+                                <div class="section-label mt-3">Resto del programa</div>
+
+                                @foreach (var p in maq.Programas
+                                                    .Where(x => x.ProgramaProduccionID != (maq.Actual?.ProgramaProduccionID ?? 0))
+                                                    .Where(x => x.ProgramaProduccionID != (maq.Siguiente?.ProgramaProduccionID ?? 0))
+                                                    .OrderBy(x => x.FechaInicioProgramada)
+                                                    .ThenBy(x => x.SecuenciaMaquina))
+                                {
+                                    <div class="program-block">
+                                        <div class="d-flex justify-content-between gap-2 flex-wrap mb-2">
+                                            <span class="badge-soft @ClaseEstatus(p.EstatusID)">
+                                                @p.EstatusNombre
+                                            </span>
+
+                                            <span class="badge-soft badge-info">
+                                                @Valor(p.CondicionProduccion)
+                                            </span>
+                                        </div>
+
+                                        <div class="program-title">
+                                            @Valor(p.ReferenciaSAP ?? p.NumeroParte)
+                                        </div>
+
+                                        <div class="program-desc">
+                                            @Valor(p.DesignacionDescripcionSAP)
+                                        </div>
+
+                                        <div class="mini-grid">
+                                            <div>
+                                                <div class="mini-label">Inicio</div>
+                                                <div class="mini-value">@FechaHora(p.FechaInicioProgramada)</div>
+                                            </div>
+
+                                            <div>
+                                                <div class="mini-label">Fin</div>
+                                                <div class="mini-value">@FechaHora(p.FechaFinProgramada)</div>
+                                            </div>
+
+                                            <div>
+                                                <div class="mini-label">Color</div>
+                                                <div class="mini-value">@Valor(p.Color)</div>
+                                            </div>
+
+                                            <div>
+                                                <div class="mini-label">Molde</div>
+                                                <div class="mini-value">@Valor(p.MoldeCodigo)</div>
+                                            </div>
+
+                                            <div>
+                                                <div class="mini-label">Pendiente</div>
+                                                <div class="mini-value">@p.CantidadPendiente.ToString("N0")</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-3 d-flex gap-2 flex-wrap">
+                                            @if (p.PuedeGenerarOF)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-erp-primary btn-generar-of"
+                                                        data-programa-id="@p.ProgramaProduccionID"
+                                                        data-referencia="@Valor(p.ReferenciaSAP ?? p.NumeroParte)"
+                                                        data-designacion="@Valor(p.DesignacionDescripcionSAP)"
+                                                        data-maquina="@Valor(p.MaquinaCodigo)"
+                                                        data-molde="@Valor(p.MoldeCodigo)"
+                                                        data-cantidad="@p.CantidadProgramada.ToString("N0")">
+                                                    <i class="fa-solid fa-file-circle-plus me-1"></i>
+                                                    Generar OF
+                                                </button>
+                                            }
+                                            else if (p.TieneOF)
+                                            {
+                                                <a asp-controller="Planeacion"
+                                                   asp-action="Detalle"
+                                                   asp-route-id="@p.SolicitudProduccionID"
+                                                   class="btn btn-sm btn-success rounded-3 fw-bold">
+                                                    <i class="fa-solid fa-circle-check me-1"></i>
+                                                    Ver OF
+                                                </a>
+                                            }
+                                        </div>
+
+                                    </div>
+                                }
+                            }
+                        }
+                        else
+                        {
+                            <div class="empty-machine">
+                                <i class="fa-regular fa-calendar-xmark fa-2x mb-2"></i>
+                                <div class="fw-bold">Sin programa en este rango.</div>
+                                <div class="small">No hay producciones programadas para esta máquina.</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+    </div>
+
+    <form asp-controller="PlaneacionPrograma"
+          asp-action="GenerarOF"
+          method="post"
+          id="formGenerarOF"
+          class="d-none">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="programaProduccionId" id="programaProduccionIdGenerarOF" />
+    </form>
+
+    <div class="modal fade" id="modalGenerarOF" tabindex="-1" aria-labelledby="modalGenerarOFLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold text-primary" id="modalGenerarOFLabel">
+                            <i class="fa-solid fa-file-circle-plus me-2"></i>
+                            Generar Orden de Fabricación
+                        </h5>
+                        <div class="text-muted small">
+                            Confirma que deseas generar la OF desde este programa.
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert alert-warning rounded-4 mb-3">
+                        <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                        Al confirmar se creará una nueva OF y quedará ligada al programa de producción.
+                    </div>
+
+                    <div class="border rounded-4 p-3 bg-light">
+                        <div class="mb-2">
+                            <div class="small text-muted fw-bold">Referencia SAP</div>
+                            <div class="fw-bold" id="modalOFReferencia">-</div>
+                        </div>
+
+                        <div class="mb-2">
+                            <div class="small text-muted fw-bold">Designación</div>
+                            <div id="modalOFDesignacion">-</div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <div class="small text-muted fw-bold">Máquina</div>
+                                <div class="fw-semibold" id="modalOFMaquina">-</div>
+                            </div>
+
+                            <div class="col-4">
+                                <div class="small text-muted fw-bold">Molde</div>
+                                <div class="fw-semibold" id="modalOFMolde">-</div>
+                            </div>
+
+                            <div class="col-4">
+                                <div class="small text-muted fw-bold">Cantidad</div>
+                                <div class="fw-semibold" id="modalOFCantidad">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-erp-light" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+
+                    <button type="button" class="btn btn-erp-primary" id="btnConfirmarGenerarOF">
+                        <i class="fa-solid fa-check me-1"></i>
+                        Sí, generar OF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        let programaSeleccionadoOF = null;
+
+        document.querySelectorAll('.btn-generar-of').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                programaSeleccionadoOF = this.dataset.programaId;
+
+                document.getElementById('modalOFReferencia').textContent = this.dataset.referencia || '-';
+                document.getElementById('modalOFDesignacion').textContent = this.dataset.designacion || '-';
+                document.getElementById('modalOFMaquina').textContent = this.dataset.maquina || '-';
+                document.getElementById('modalOFMolde').textContent = this.dataset.molde || '-';
+                document.getElementById('modalOFCantidad').textContent = this.dataset.cantidad || '-';
+
+                const modal = new bootstrap.Modal(document.getElementById('modalGenerarOF'));
+                modal.show();
+            });
+        });
+
+        document.getElementById('btnConfirmarGenerarOF')?.addEventListener('click', function () {
+            if (!programaSeleccionadoOF) {
+                return;
+            }
+
+            document.getElementById('programaProduccionIdGenerarOF').value = programaSeleccionadoOF;
+            document.getElementById('formGenerarOF').submit();
+        });
+    </script>
+
+</body>
+</html>

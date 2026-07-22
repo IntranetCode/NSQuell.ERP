@@ -10,7 +10,7 @@ namespace ERP.NSQuell.Models
         [Key]
         public int ParteDatoTecnicoID { get; set; }
 
-        public int? ParteID { get; set; }
+        public int ParteID { get; set; }
 
         [StringLength(80)]
         public string? Ciclo { get; set; }
@@ -39,12 +39,28 @@ namespace ERP.NSQuell.Models
         [StringLength(250)]
         public string? MaterialDescripcion { get; set; }
 
+        public int? MaterialID { get; set; }
+
+        [StringLength(80)]
+        public string? Color { get; set; }
+
+        public int? Cavidades { get; set; }
+
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? ObjetivoHora { get; set; }
+
+        public int? PiezasPorCaja { get; set; }
+
+        public int? MaquinaPrincipalID { get; set; }
+
+        public int? MaquinaSustitutaID { get; set; }
+
+        public int? MoldePrincipalID { get; set; }
+
         public bool Activo { get; set; } = true;
 
         public DateTime FechaCreacion { get; set; }
 
         public DateTime? FechaModificacion { get; set; }
-
-        public int? MaterialID { get; set; }
     }
 }

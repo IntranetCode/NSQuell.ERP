@@ -47,6 +47,10 @@ namespace ERP.NSQuell.Models
 
         public string? NotasGenerales { get; set; }
 
+        public int? SolicitudProduccionID { get; set; }
+        public bool EsEdicion { get; set; }
+
+        public int EstatusID { get; set; }
         public List<PlaneacionOFDetalleCrearVm> Detalles { get; set; } = new();
 
         public List<SelectListItem> Clientes { get; set; } = new();
@@ -150,9 +154,7 @@ namespace ERP.NSQuell.Models
         public string? Observaciones { get; set; }
     }
 
-    // ============================================================
-    // VIEWMODEL DETALLE
-    // ============================================================
+    //view model 
     public class PlaneacionOFDetalleVm
     {
         public int SolicitudProduccionID { get; set; }
@@ -183,6 +185,9 @@ namespace ERP.NSQuell.Models
         public decimal? VentaTotalOF { get; set; }
         public decimal? UtilidadEstimadaOF { get; set; }
         public string? MonedaCosto { get; set; }
+
+        public bool PuedeEditar { get; set; }
+        public string? MotivoNoEditable { get; set; }
 
         public List<PlaneacionOFDetalleRenglonVm> Detalles { get; set; } = new();
         public List<PlaneacionOFHistorialVm> Historial { get; set; } = new();

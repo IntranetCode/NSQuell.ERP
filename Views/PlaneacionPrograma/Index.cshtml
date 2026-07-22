@@ -1,0 +1,506 @@
+﻿@model List<ERP.NSQuell.Models.PlaneacionProgramaIndexVm>
+
+@{
+    Layout = null;
+
+    string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
+    string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    string Decimal2(decimal? v) => v.HasValue ? v.Value.ToString("N2") : "-";
+
+    var totalProgramas = Model?.Count ?? 0;
+    var totalProgramado = Model?.Sum(x => x.CantidadProgramada) ?? 0;
+    var totalProducido = Model?.Sum(x => x.CantidadProducida) ?? 0;
+    var totalPendiente = Model?.Sum(x => x.CantidadPendiente) ?? 0;
+    var totalHoras = Model?.Sum(x => x.HorasProgramadas ?? 0) ?? 0;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Programa de Producción | Planeación</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --erp-blue: #004AAD;
+            --erp-blue-dark: #00347a;
+            --erp-gray: #f3f5f8;
+            --erp-border: #d9e1ec;
+            --erp-text: #263238;
+            --erp-muted: #667085;
+            --erp-green: #107c41;
+            --erp-red: #b42318;
+            --erp-orange: #b54708;
+        }
+
+        body {
+            background: var(--erp-gray);
+            color: var(--erp-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .erp-shell {
+            max-width: 1650px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .erp-header {
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+            color: white;
+            border-radius: 22px;
+            padding: 28px 32px;
+            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+            margin-bottom: 22px;
+        }
+
+            .erp-header h1 {
+                font-size: 1.65rem;
+                margin: 0;
+                font-weight: 900;
+            }
+
+            .erp-header p {
+                margin: 7px 0 0 0;
+                opacity: .92;
+            }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 20px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .erp-card-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .erp-card-body {
+            padding: 22px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
+            height: 100%;
+        }
+
+        .metric-label {
+            color: var(--erp-muted);
+            font-size: .76rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .metric-value {
+            font-size: 1.35rem;
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+        }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border-color: var(--erp-blue);
+            color: white;
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+            .btn-erp-primary:hover {
+                background: var(--erp-blue-dark);
+                border-color: var(--erp-blue-dark);
+                color: white;
+            }
+
+        .btn-erp-light {
+            background: white;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+        .table thead th {
+            background: #eef3fb;
+            color: #00347a;
+            font-size: .75rem;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+
+        .table td {
+            font-size: .84rem;
+            vertical-align: middle;
+        }
+
+        .small-muted {
+            color: var(--erp-muted);
+            font-size: .78rem;
+        }
+
+        .badge-status {
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: .76rem;
+            font-weight: 900;
+            background: #eef6ff;
+            color: #175cd3;
+            border: 1px solid #b2ddff;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 42px 18px;
+            color: var(--erp-muted);
+        }
+
+            .empty-state i {
+                font-size: 2.3rem;
+                color: #98a2b3;
+                margin-bottom: 10px;
+            }
+    </style>
+</head>
+
+<body>
+    <div class="erp-shell">
+
+        <div class="erp-header">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h1>
+                        <i class="fa-solid fa-industry me-2"></i>
+                        Programa de Producción
+                    </h1>
+                    <p>
+                        Producciones programadas por máquina, parte, molde y horario.
+                    </p>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <a asp-controller="Menu" asp-action="Grupo" asp-route-id="3" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-arrow-left me-1"></i>
+                        Volver
+                    </a>
+
+                    <a asp-controller="PlaneacionRelease" asp-action="Calculadora" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-calculator me-1"></i>
+                        Calculadora
+                    </a>
+
+                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-table-columns me-1"></i>
+                        Vista máquinas
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success rounded-4 fw-semibold">
+                <i class="fa-solid fa-circle-check me-2"></i>
+                @TempData["Success"]
+            </div>
+        }
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger rounded-4 fw-semibold">
+                <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                @TempData["Error"]
+            </div>
+        }
+
+        <div class="row g-3 mb-3">
+            <div class="col-md">
+                <div class="metric-card">
+                    <div class="metric-label">Programas</div>
+                    <div class="metric-value">@totalProgramas.ToString("N0")</div>
+                </div>
+            </div>
+            <div class="col-md">
+                <div class="metric-card">
+                    <div class="metric-label">Piezas programadas</div>
+                    <div class="metric-value">@totalProgramado.ToString("N0")</div>
+                </div>
+            </div>
+            <div class="col-md">
+                <div class="metric-card">
+                    <div class="metric-label">Piezas producidas</div>
+                    <div class="metric-value">@totalProducido.ToString("N0")</div>
+                </div>
+            </div>
+            <div class="col-md">
+                <div class="metric-card">
+                    <div class="metric-label">Piezas pendientes</div>
+                    <div class="metric-value">@totalPendiente.ToString("N0")</div>
+                </div>
+            </div>
+            <div class="col-md">
+                <div class="metric-card">
+                    <div class="metric-label">Horas programadas</div>
+                    <div class="metric-value">@totalHoras.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="erp-card">
+            <div class="erp-card-header">
+                <div>
+                    <h2 class="h5 fw-bold m-0 text-primary">
+                        <i class="fa-solid fa-list-check me-2"></i>
+                        Programa general
+                    </h2>
+                    <div class="text-muted small">
+                        Lista completa de producciones programadas.
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card-body">
+                @if (Model != null && Model.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Release</th>
+                                    <th>Cliente</th>
+                                    <th>Parte</th>
+                                    <th>Máquina</th>
+                                    <th>Molde</th>
+                                    <th>Cond.</th>
+                                    <th>Sec.</th>
+                                    <th>Programada</th>
+                                    <th>Producida</th>
+                                    <th>Pendiente</th>
+                                    <th>Inicio</th>
+                                    <th>Fin</th>
+                                    <th>Horas</th>
+                                    <th>Estatus</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in Model)
+                                {
+                                    <tr>
+                                        <td><strong>@p.ProgramaProduccionID</strong></td>
+                                        <td>@Valor(p.FolioRelease)</td>
+                                        <td>@Valor(p.ClienteNombre)</td>
+                                        <td>
+                                            <strong>@Valor(p.ReferenciaSAP ?? p.NumeroParte)</strong><br />
+                                            <span class="small-muted">@Valor(p.DesignacionDescripcionSAP)</span>
+                                        </td>
+                                        <td>
+                                            <strong>@Valor(p.MaquinaCodigo)</strong><br />
+                                            <span class="small-muted">@Valor(p.MaquinaNombre)</span>
+                                        </td>
+                                        <td>@Valor(p.MoldeCodigo)</td>
+                                        <td>@Valor(p.CondicionProduccion)</td>
+                                        <td>@(p.SecuenciaMaquina?.ToString() ?? "-")</td>
+                                        <td>@p.CantidadProgramada.ToString("N0")</td>
+                                        <td>@p.CantidadProducida.ToString("N0")</td>
+                                        <td><strong>@p.CantidadPendiente.ToString("N0")</strong></td>
+                                        <td>@FechaHora(p.FechaInicioProgramada)</td>
+                                        <td>@FechaHora(p.FechaFinProgramada)</td>
+                                        <td>@Decimal2(p.HorasProgramadas)</td>
+                                        <td>
+                                            <span class="badge-status">
+                                                <i class="fa-solid fa-circle" style="font-size:.45rem;"></i>
+                                                @p.EstatusNombre
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @if (p.PuedeGenerarOF)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-erp-primary btn-generar-of"
+                                                        data-programa-id="@p.ProgramaProduccionID"
+                                                        data-referencia="@Valor(p.ReferenciaSAP ?? p.NumeroParte)"
+                                                        data-designacion="@Valor(p.DesignacionDescripcionSAP)"
+                                                        data-maquina="@Valor(p.MaquinaCodigo)"
+                                                        data-molde="@Valor(p.MoldeCodigo)"
+                                                        data-cantidad="@p.CantidadProgramada.ToString("N0")">
+                                                    <i class="fa-solid fa-file-circle-plus me-1"></i>
+                                                    Generar OF
+                                                </button>
+                                            }
+                                            else if (p.TieneOF)
+                                            {
+                                                <a asp-controller="Planeacion"
+                                                   asp-action="Detalle"
+                                                   asp-route-id="@p.SolicitudProduccionID"
+                                                   class="btn btn-sm btn-success rounded-3 fw-bold">
+                                                    <i class="fa-solid fa-circle-check me-1"></i>
+                                                    Ver OF
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="small-muted">
+                                                    No disponible
+                                                </span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <i class="fa-solid fa-industry"></i>
+                        <div class="fw-bold">No hay producciones programadas.</div>
+                        <div class="small">Ve a la Calculadora de Necesidades y programa un renglón.</div>
+                        <div class="mt-3">
+                            <a asp-controller="PlaneacionRelease" asp-action="Calculadora" class="btn btn-erp-primary">
+                                <i class="fa-solid fa-calculator me-1"></i>
+                                Ir a Calculadora
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+    </div>
+
+    <form asp-controller="PlaneacionPrograma"
+          asp-action="GenerarOF"
+          method="post"
+          id="formGenerarOF"
+          class="d-none">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="programaProduccionId" id="programaProduccionIdGenerarOF" />
+    </form>
+
+    <div class="modal fade" id="modalGenerarOF" tabindex="-1" aria-labelledby="modalGenerarOFLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold text-primary" id="modalGenerarOFLabel">
+                            <i class="fa-solid fa-file-circle-plus me-2"></i>
+                            Generar Orden de Fabricación
+                        </h5>
+                        <div class="text-muted small">
+                            Confirma que deseas generar la OF desde este programa.
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert alert-warning rounded-4 mb-3">
+                        <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                        Al confirmar se creará una nueva OF y quedará ligada al programa de producción.
+                    </div>
+
+                    <div class="border rounded-4 p-3 bg-light">
+                        <div class="mb-2">
+                            <div class="small text-muted fw-bold">Referencia SAP</div>
+                            <div class="fw-bold" id="modalOFReferencia">-</div>
+                        </div>
+
+                        <div class="mb-2">
+                            <div class="small text-muted fw-bold">Designación</div>
+                            <div id="modalOFDesignacion">-</div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <div class="small text-muted fw-bold">Máquina</div>
+                                <div class="fw-semibold" id="modalOFMaquina">-</div>
+                            </div>
+
+                            <div class="col-4">
+                                <div class="small text-muted fw-bold">Molde</div>
+                                <div class="fw-semibold" id="modalOFMolde">-</div>
+                            </div>
+
+                            <div class="col-4">
+                                <div class="small text-muted fw-bold">Cantidad</div>
+                                <div class="fw-semibold" id="modalOFCantidad">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-erp-light" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+
+                    <button type="button" class="btn btn-erp-primary" id="btnConfirmarGenerarOF">
+                        <i class="fa-solid fa-check me-1"></i>
+                        Sí, generar OF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        let programaSeleccionadoOF = null;
+
+        document.querySelectorAll('.btn-generar-of').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                programaSeleccionadoOF = this.dataset.programaId;
+
+                document.getElementById('modalOFReferencia').textContent = this.dataset.referencia || '-';
+                document.getElementById('modalOFDesignacion').textContent = this.dataset.designacion || '-';
+                document.getElementById('modalOFMaquina').textContent = this.dataset.maquina || '-';
+                document.getElementById('modalOFMolde').textContent = this.dataset.molde || '-';
+                document.getElementById('modalOFCantidad').textContent = this.dataset.cantidad || '-';
+
+                const modal = new bootstrap.Modal(document.getElementById('modalGenerarOF'));
+                modal.show();
+            });
+        });
+
+        document.getElementById('btnConfirmarGenerarOF')?.addEventListener('click', function () {
+            if (!programaSeleccionadoOF) {
+                return;
+            }
+
+            document.getElementById('programaProduccionIdGenerarOF').value = programaSeleccionadoOF;
+            document.getElementById('formGenerarOF').submit();
+        });
+    </script>
+
+
+</body>
+</html>

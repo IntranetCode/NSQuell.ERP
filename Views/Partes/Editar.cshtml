@@ -709,126 +709,313 @@ html[data-nsq-theme="dark"] .partes-form-footer { background: rgba(2,8,16,.72); 
 <div class="partes-form-page">
     <section class="partes-form-hero">
         <div>
-            <span class="partes-form-kicker"><i class="fas fa-cubes"></i> Edición de partes</span>
+            <span class="partes-form-kicker">
+                <i class="fas fa-cubes"></i>
+                Edición de partes
+            </span>
+
+            ```
             <h1>Editar parte</h1>
-            <p>Actualiza la información general de la parte, cliente relacionado, máquina, molde, requisitos de producción, stock y estado.</p>
+
+            <p>
+                Actualiza la información general, comercial, requisitos,
+                configuración de inventario y estado de la parte.
+            </p>
         </div>
 
         <div class="partes-form-actions-top">
-            <a asp-controller="Partes" asp-action="Index" class="btn-partes-secondary">
-                <i class="fas fa-arrow-left"></i> Volver al catálogo
+            <a asp-controller="Partes"
+               asp-action="Index"
+               class="btn-partes-secondary">
+                <i class="fas fa-arrow-left"></i>
+                Volver al catálogo
             </a>
         </div>
+        ```
+
     </section>
 
-    <form asp-controller="Partes" asp-action="Editar" asp-route-id="@Model.ParteID" method="post" class="partes-form-card">
+    <form asp-controller="Partes"
+          asp-action="Editar"
+          asp-route-id="@Model.ParteID"
+          method="post"
+          class="partes-form-card">
+
+        ```
         @Html.AntiForgeryToken()
+
         <input type="hidden" asp-for="ParteID" />
-        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div asp-validation-summary="ModelOnly"
+             class="alert alert-danger"></div>
 
         <section class="partes-form-section">
             <div class="partes-section-title">
                 <i class="fas fa-clipboard-list"></i>
-                <div><h2>Datos generales</h2><span>Información principal para identificar la parte.</span></div>
+
+                <div>
+                    <h2>Datos generales</h2>
+                    <span>
+                        Información principal para identificar la parte.
+                    </span>
+                </div>
             </div>
 
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="ClienteID" class="form-label-modern">Cliente</label>
-                    <select asp-for="ClienteID" asp-items="Model.Clientes" class="form-control-modern">
-                        <option value="">-- Seleccione un cliente --</option>
+                    <label asp-for="ClienteID"
+                           class="form-label-modern">
+                        Cliente
+                    </label>
+
+                    <select asp-for="ClienteID"
+                            asp-items="Model.Clientes"
+                            class="form-control-modern">
+                        <option value="">
+                            -- Seleccione un cliente --
+                        </option>
                     </select>
-                    <span asp-validation-for="ClienteID" class="text-danger small"></span>
+
+                    <span asp-validation-for="ClienteID"
+                          class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-4">
-                    <label asp-for="NumeroParte" class="form-label-modern">Número de parte</label>
-                    <input asp-for="NumeroParte" class="form-control-modern" placeholder="Ej. 02-10-061-03" />
-                    <span asp-validation-for="NumeroParte" class="text-danger small"></span>
+                    <label asp-for="NumeroParte"
+                           class="form-label-modern">
+                        Número de parte
+                    </label>
+
+                    <input asp-for="NumeroParte"
+                           class="form-control-modern"
+                           placeholder="Ej. 02-10-061-03" />
+
+                    <span asp-validation-for="NumeroParte"
+                          class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-4">
-                    <label asp-for="ReferenciaSAP" class="form-label-modern">Referencia SAP</label>
-                    <input asp-for="ReferenciaSAP" class="form-control-modern" placeholder="Referencia SAP" />
-                    <span asp-validation-for="ReferenciaSAP" class="text-danger small"></span>
+                    <label asp-for="ReferenciaSAP"
+                           class="form-label-modern">
+                        Referencia SAP
+                    </label>
+
+                    <input asp-for="ReferenciaSAP"
+                           class="form-control-modern"
+                           placeholder="Referencia SAP" />
+
+                    <span asp-validation-for="ReferenciaSAP"
+                          class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-12">
-                    <label asp-for="Descripcion" class="form-label-modern">Descripción</label>
-                    <input asp-for="Descripcion" class="form-control-modern" placeholder="Descripción de la parte" />
-                    <span asp-validation-for="Descripcion" class="text-danger small"></span>
+                    <label asp-for="Descripcion"
+                           class="form-label-modern">
+                        Descripción
+                    </label>
+
+                    <input asp-for="Descripcion"
+                           class="form-control-modern"
+                           placeholder="Descripción de la parte" />
+
+                    <span asp-validation-for="Descripcion"
+                          class="text-danger small"></span>
                 </div>
 
-                <div class="col-md-8">
-                    <label asp-for="Designacion" class="form-label-modern">Designación</label>
-                    <input asp-for="Designacion" class="form-control-modern" placeholder="Designación comercial o interna" />
-                    <span asp-validation-for="Designacion" class="text-danger small"></span>
-                </div>
+                <div class="col-md-12">
+                    <label asp-for="Designacion"
+                           class="form-label-modern">
+                        Designación
+                    </label>
 
-                <div class="col-md-4">
-                    <label asp-for="Color" class="form-label-modern">Color</label>
-                    <input asp-for="Color" class="form-control-modern" placeholder="Ej. Negro, Azul, Natural" />
-                    <span asp-validation-for="Color" class="text-danger small"></span>
-                </div>
-            </div>
-        </section>
+                    <input asp-for="Designacion"
+                           class="form-control-modern"
+                           placeholder="Designación comercial o interna" />
 
-        <section class="partes-form-section">
-            <div class="partes-section-title">
-                <i class="fas fa-industry"></i>
-                <div><h2>Producción</h2><span>Datos operativos usados para fabricar la parte.</span></div>
-            </div>
-
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label asp-for="Cavidades" class="form-label-modern">Cavidades</label>
-                    <input asp-for="Cavidades" type="number" min="0" class="form-control-modern" placeholder="0" />
-                    <span asp-validation-for="Cavidades" class="text-danger small"></span>
-                </div>
-
-                <div class="col-md-4">
-                    <label asp-for="ObjetivoHora" class="form-label-modern">Objetivo por hora</label>
-                    <input asp-for="ObjetivoHora" type="number" min="0" class="form-control-modern" placeholder="0" />
-                    <span asp-validation-for="ObjetivoHora" class="text-danger small"></span>
-                </div>
-
-                <div class="col-md-4">
-                    <label asp-for="PiezasPorCaja" class="form-label-modern">Piezas por caja</label>
-                    <input asp-for="PiezasPorCaja" type="number" min="0" class="form-control-modern" placeholder="0" />
-                    <span asp-validation-for="PiezasPorCaja" class="text-danger small"></span>
+                    <span asp-validation-for="Designacion"
+                          class="text-danger small"></span>
                 </div>
             </div>
         </section>
 
         <section class="partes-form-section">
             <div class="partes-section-title">
-                <i class="fas fa-gears"></i>
-                <div><h2>Máquina y molde</h2><span>Relación operativa de la parte con maquinaria y moldes.</span></div>
+                <i class="fas fa-note-sticky"></i>
+
+                <div>
+                    <h2>Notas</h2>
+                    <span>
+                        Observaciones o información adicional de la parte.
+                    </span>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="Notas"
+                           class="form-label-modern">
+                        Notas
+                    </label>
+
+                    <textarea asp-for="Notas"
+                              class="form-control-modern"
+                              rows="4"
+                              maxlength="500"
+                              placeholder="Observaciones, restricciones o información adicional"></textarea>
+
+                    <span asp-validation-for="Notas"
+                          class="text-danger small"></span>
+                </div>
+            </div>
+        </section>
+
+        <section class="partes-form-section">
+            <div class="partes-section-title">
+                <i class="fas fa-tags"></i>
+
+                <div>
+                    <h2>Precio de venta</h2>
+                    <span>
+                        Información comercial y origen del precio asignado.
+                    </span>
+                </div>
             </div>
 
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="MaquinaPrincipalID" class="form-label-modern">Máquina principal</label>
-                    <select asp-for="MaquinaPrincipalID" asp-items="Model.Maquinas" class="form-control-modern">
-                        <option value="">-- Sin máquina principal --</option>
-                    </select>
-                    <span asp-validation-for="MaquinaPrincipalID" class="text-danger small"></span>
+                    <label asp-for="PrecioVentaUnitario"
+                           class="form-label-modern">
+                        Precio unitario
+                    </label>
+
+                    <input asp-for="PrecioVentaUnitario"
+                           type="number"
+                           min="0"
+                           step="0.0001"
+                           class="form-control-modern"
+                           placeholder="0.0000" />
+
+                    <span asp-validation-for="PrecioVentaUnitario"
+                          class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-4">
-                    <label asp-for="MaquinaSustitutaID" class="form-label-modern">Máquina sustituta</label>
-                    <select asp-for="MaquinaSustitutaID" asp-items="Model.Maquinas" class="form-control-modern">
-                        <option value="">-- Sin máquina sustituta --</option>
+                    <label asp-for="MonedaPrecioVenta"
+                           class="form-label-modern">
+                        Moneda
+                    </label>
+
+                    <select asp-for="MonedaPrecioVenta"
+                            class="form-control-modern">
+                        <option value="">
+                            -- Seleccione una moneda --
+                        </option>
+                        <option value="MXN">
+                            MXN - Peso mexicano
+                        </option>
+                        <option value="USD">
+                            USD - Dólar estadounidense
+                        </option>
+                        <option value="EUR">
+                            EUR - Euro
+                        </option>
                     </select>
-                    <span asp-validation-for="MaquinaSustitutaID" class="text-danger small"></span>
+
+                    <span asp-validation-for="MonedaPrecioVenta"
+                          class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-4">
-                    <label asp-for="MoldePrincipalID" class="form-label-modern">Molde principal</label>
-                    <select asp-for="MoldePrincipalID" asp-items="Model.Moldes" class="form-control-modern">
-                        <option value="">-- Sin molde principal --</option>
+                    <label asp-for="UnidadPrecioVenta"
+                           class="form-label-modern">
+                        Unidad de precio
+                    </label>
+
+                    <input asp-for="UnidadPrecioVenta"
+                           class="form-control-modern"
+                           placeholder="Ej. Pieza, kilogramo, millar" />
+
+                    <span asp-validation-for="UnidadPrecioVenta"
+                          class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="FuentePrecioVenta"
+                           class="form-label-modern">
+                        Fuente del precio
+                    </label>
+
+                    <select asp-for="FuentePrecioVenta"
+                            class="form-control-modern">
+                        <option value="">
+                            -- Seleccione el origen --
+                        </option>
+                        <option value="MANUAL">
+                            Captura manual
+                        </option>
+                        <option value="SAP">
+                            SAP
+                        </option>
+                        <option value="COTIZACION">
+                            Cotización
+                        </option>
+                        <option value="CONTRATO">
+                            Contrato
+                        </option>
+                        <option value="LISTA_PRECIOS">
+                            Lista de precios
+                        </option>
+                        <option value="OTRO">
+                            Otro
+                        </option>
                     </select>
-                    <span asp-validation-for="MoldePrincipalID" class="text-danger small"></span>
+
+                    <span asp-validation-for="FuentePrecioVenta"
+                          class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="ClavePrecioVentaOrigen"
+                           class="form-label-modern">
+                        Clave de origen
+                    </label>
+
+                    <input asp-for="ClavePrecioVentaOrigen"
+                           class="form-control-modern"
+                           placeholder="Folio, contrato o clave relacionada" />
+
+                    <span asp-validation-for="ClavePrecioVentaOrigen"
+                          class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="FechaPrecioVenta"
+                           class="form-label-modern">
+                        Fecha del precio
+                    </label>
+
+                    <input asp-for="FechaPrecioVenta"
+                           type="date"
+                           class="form-control-modern" />
+
+                    <span asp-validation-for="FechaPrecioVenta"
+                          class="text-danger small"></span>
+                </div>
+
+                <div class="col-12">
+                    <label asp-for="DescripcionPrecioVentaOrigen"
+                           class="form-label-modern">
+                        Descripción del origen
+                    </label>
+
+                    <textarea asp-for="DescripcionPrecioVentaOrigen"
+                              class="form-control-modern"
+                              rows="3"
+                              maxlength="250"
+                              placeholder="Descripción adicional del documento o fuente del precio"></textarea>
+
+                    <span asp-validation-for="DescripcionPrecioVentaOrigen"
+                          class="text-danger small"></span>
                 </div>
             </div>
         </section>
@@ -836,20 +1023,42 @@ html[data-nsq-theme="dark"] .partes-form-footer { background: rgba(2,8,16,.72); 
         <section class="partes-form-section">
             <div class="partes-section-title">
                 <i class="fas fa-shield-halved"></i>
-                <div><h2>Requisitos</h2><span>Condiciones adicionales que puede requerir la parte.</span></div>
+
+                <div>
+                    <h2>Requisitos</h2>
+                    <span>
+                        Condiciones adicionales requeridas por la parte.
+                    </span>
+                </div>
             </div>
 
             <div class="partes-switch-grid">
                 <label class="partes-switch-card">
-                    <input asp-for="RequiereGP12" type="checkbox" />
+                    <input asp-for="RequiereGP12"
+                           type="checkbox" />
+
                     <span class="partes-switch-visual"></span>
-                    <div><strong>Requiere GP12</strong><small>Marca si la parte necesita control GP12.</small></div>
+
+                    <div>
+                        <strong>Requiere GP12</strong>
+                        <small>
+                            Marca si la parte necesita control GP12.
+                        </small>
+                    </div>
                 </label>
 
                 <label class="partes-switch-card">
-                    <input asp-for="RequiereCertificado" type="checkbox" />
+                    <input asp-for="RequiereCertificado"
+                           type="checkbox" />
+
                     <span class="partes-switch-visual"></span>
-                    <div><strong>Requiere certificado</strong><small>Marca si la parte requiere certificado.</small></div>
+
+                    <div>
+                        <strong>Requiere certificado</strong>
+                        <small>
+                            Marca si la parte requiere certificado.
+                        </small>
+                    </div>
                 </label>
             </div>
         </section>
@@ -857,27 +1066,61 @@ html[data-nsq-theme="dark"] .partes-form-footer { background: rgba(2,8,16,.72); 
         <section class="partes-form-section">
             <div class="partes-section-title">
                 <i class="fas fa-boxes-stacked"></i>
-                <div><h2>Stock</h2><span>Configuración básica de inventario para la parte.</span></div>
+
+                <div>
+                    <h2>Stock</h2>
+                    <span>
+                        Configuración básica de inventario para la parte.
+                    </span>
+                </div>
             </div>
 
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="StockMinimo" class="form-label-modern">Stock mínimo</label>
-                    <input asp-for="StockMinimo" type="number" min="0" class="form-control-modern" placeholder="0" />
-                    <span asp-validation-for="StockMinimo" class="text-danger small"></span>
+                    <label asp-for="StockMinimo"
+                           class="form-label-modern">
+                        Stock mínimo
+                    </label>
+
+                    <input asp-for="StockMinimo"
+                           type="number"
+                           min="0"
+                           class="form-control-modern"
+                           placeholder="0" />
+
+                    <span asp-validation-for="StockMinimo"
+                          class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-4">
-                    <label asp-for="StockAviso" class="form-label-modern">Stock aviso</label>
-                    <input asp-for="StockAviso" type="number" min="0" class="form-control-modern" placeholder="0" />
-                    <span asp-validation-for="StockAviso" class="text-danger small"></span>
+                    <label asp-for="StockAviso"
+                           class="form-label-modern">
+                        Stock de aviso
+                    </label>
+
+                    <input asp-for="StockAviso"
+                           type="number"
+                           min="0"
+                           class="form-control-modern"
+                           placeholder="0" />
+
+                    <span asp-validation-for="StockAviso"
+                          class="text-danger small"></span>
                 </div>
 
                 <div class="col-md-4 d-flex align-items-end">
                     <label class="partes-switch-card compact w-100">
-                        <input asp-for="StockConfigurado" type="checkbox" />
+                        <input asp-for="StockConfigurado"
+                               type="checkbox" />
+
                         <span class="partes-switch-visual"></span>
-                        <div><strong>Stock configurado</strong><small>Activar control de stock.</small></div>
+
+                        <div>
+                            <strong>Stock configurado</strong>
+                            <small>
+                                Activar control de stock.
+                            </small>
+                        </div>
                     </label>
                 </div>
             </div>
@@ -886,26 +1129,48 @@ html[data-nsq-theme="dark"] .partes-form-footer { background: rgba(2,8,16,.72); 
         <section class="partes-form-section">
             <div class="partes-section-title">
                 <i class="fas fa-toggle-on"></i>
-                <div><h2>Estado</h2><span>Define si la parte estará disponible en el catálogo.</span></div>
+
+                <div>
+                    <h2>Estado</h2>
+                    <span>
+                        Define si la parte estará disponible en el catálogo.
+                    </span>
+                </div>
             </div>
 
             <label class="partes-switch-card compact">
-                <input asp-for="Activo" type="checkbox" />
+                <input asp-for="Activo"
+                       type="checkbox" />
+
                 <span class="partes-switch-visual"></span>
-                <div><strong>Parte activa</strong><small>Desactiva para ocultarla del catálogo operativo.</small></div>
+
+                <div>
+                    <strong>Parte activa</strong>
+                    <small>
+                        Desactiva para ocultarla del catálogo operativo.
+                    </small>
+                </div>
             </label>
         </section>
 
         <div class="partes-form-footer">
-            <a asp-controller="Partes" asp-action="Index" class="btn-partes-cancel">
-                <i class="fas fa-times"></i> Cancelar
+            <a asp-controller="Partes"
+               asp-action="Index"
+               class="btn-partes-cancel">
+                <i class="fas fa-times"></i>
+                Cancelar
             </a>
 
-            <button type="submit" class="btn-partes-save">
-                <i class="fas fa-save"></i> Guardar cambios
+            <button type="submit"
+                    class="btn-partes-save">
+                <i class="fas fa-save"></i>
+                Guardar cambios
             </button>
         </div>
+        ```
+
     </form>
+
 </div>
 
 @section Scripts {

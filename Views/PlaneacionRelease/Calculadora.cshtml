@@ -1,0 +1,737 @@
+﻿@model ERP.NSQuell.Models.PlaneacionNecesidadFiltroVm
+
+@{
+    Layout = null;
+
+    string Valor(string? valor) => string.IsNullOrWhiteSpace(valor) ? "-" : valor;
+    string Entero(int? valor) => valor.HasValue ? valor.Value.ToString("N0") : "-";
+    string Decimal2(decimal? valor) => valor.HasValue ? valor.Value.ToString("N2") : "-";
+    string Decimal4(decimal? valor) => valor.HasValue ? valor.Value.ToString("N4") : "-";
+    string Fecha(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy") : "-";
+    string FechaHora(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+
+    string ClaseResultado(bool? daTiempo)
+    {
+        if (daTiempo == true) return "badge-ok";
+        if (daTiempo == false) return "badge-no";
+        return "badge-warn";
+    }
+
+    string TextoResultado(bool? daTiempo)
+    {
+        if (daTiempo == true) return "Sí da tiempo";
+        if (daTiempo == false) return "No da tiempo";
+        return "Sin validar";
+    }
+
+    
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Calculadora de Necesidades | Planeación</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --erp-blue: #004AAD;
+            --erp-blue-dark: #00347a;
+            --erp-gray: #f3f5f8;
+            --erp-border: #d9e1ec;
+            --erp-text: #263238;
+            --erp-muted: #667085;
+            --erp-green: #107c41;
+            --erp-red: #b42318;
+            --erp-orange: #b54708;
+        }
+
+        body {
+            background: var(--erp-gray);
+            color: var(--erp-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .erp-shell {
+            max-width: 1700px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .erp-header {
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+            color: white;
+            border-radius: 22px;
+            padding: 28px 32px;
+            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+            margin-bottom: 22px;
+        }
+
+            .erp-header h1 {
+                font-size: 1.65rem;
+                margin: 0;
+                font-weight: 900;
+            }
+
+            .erp-header p {
+                margin: 7px 0 0 0;
+                opacity: .92;
+            }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 20px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .erp-card-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .erp-card-body {
+            padding: 22px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            padding: 18px;
+            height: 100%;
+            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
+        }
+
+        .metric-label {
+            color: var(--erp-muted);
+            font-size: .76rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .metric-value {
+            font-size: 1.35rem;
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            line-height: 1.15;
+        }
+
+        .erp-label {
+            font-weight: 800;
+            color: #33465f;
+            font-size: .82rem;
+            margin-bottom: 6px;
+        }
+
+        .erp-input,
+        .erp-select {
+            border-radius: 12px;
+            border: 1px solid var(--erp-border);
+            padding: 10px 12px;
+        }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border-color: var(--erp-blue);
+            color: white;
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+            .btn-erp-primary:hover {
+                background: var(--erp-blue-dark);
+                border-color: var(--erp-blue-dark);
+                color: white;
+            }
+
+        .btn-erp-light {
+            background: white;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+        .table thead th {
+            background: #eef3fb;
+            color: #00347a;
+            font-size: .74rem;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            vertical-align: middle;
+        }
+
+        .table td {
+            font-size: .82rem;
+            vertical-align: middle;
+        }
+
+        .small-muted {
+            color: var(--erp-muted);
+            font-size: .78rem;
+        }
+
+        .badge-calc {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: .76rem;
+            font-weight: 900;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .badge-ok {
+            background: #ecfdf3;
+            color: #027a48;
+            border-color: #abefc6;
+        }
+
+        .badge-no {
+            background: #fef3f2;
+            color: #b42318;
+            border-color: #fecdca;
+        }
+
+        .badge-warn {
+            background: #fff7ed;
+            color: #b54708;
+            border-color: #fed7aa;
+        }
+
+        .badge-mp {
+            background: #fff7ed;
+            color: #b54708;
+            border: 1px solid #fed7aa;
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-weight: 800;
+            font-size: .72rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 42px 18px;
+            color: var(--erp-muted);
+        }
+
+            .empty-state i {
+                font-size: 2.4rem;
+                color: #98a2b3;
+                margin-bottom: 10px;
+            }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 0;
+            background: rgba(243, 245, 248, .92);
+            backdrop-filter: blur(10px);
+            padding: 14px 0;
+            z-index: 20;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="erp-shell">
+
+        <div class="erp-header">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h1>
+                        <i class="fa-solid fa-calculator me-2"></i>
+                        Calculadora de Necesidades
+                    </h1>
+                    <p>
+                        Vista global de demanda del cliente contra PT disponible, producción programada, MP, embalaje y capacidad inicial.
+                    </p>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-arrow-left me-1"></i>
+                        Releases
+                    </a>
+
+                    <a asp-controller="PlaneacionRelease" asp-action="Crear" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-plus me-1"></i>
+                        Nuevo Release
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-label">Renglones</div>
+                    <div class="metric-value">@Model.TotalRenglones</div>
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-label">Piezas requeridas</div>
+                    <div class="metric-value">@Model.TotalRequerido.ToString("N0")</div>
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-label">Desde PT</div>
+                    <div class="metric-value">@Model.TotalDesdePT.ToString("N0")</div>
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-label">A producir</div>
+                    <div class="metric-value">@Model.TotalAProducir.ToString("N0")</div>
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-label">MP requerida kg</div>
+                    <div class="metric-value">@Model.TotalMPRequerida.ToString("N4")</div>
+                </div>
+            </div>
+
+            <div class="col-md-2">
+                <div class="metric-card">
+                    <div class="metric-label">Horas necesarias</div>
+                    <div class="metric-value">@Model.TotalHoras.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            @foreach (var p in Model.ResumenPeriodos)
+            {
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-label">@p.Periodo</div>
+                        <div class="metric-value">@p.PiezasAProducir.ToString("N0")</div>
+
+                        <div class="small-muted mt-2">
+                            <div>
+                                Req:
+                                <strong>@p.CantidadRequerida.ToString("N0")</strong>
+                            </div>
+
+                            <div>
+                                Desde PT:
+                                <strong>@p.PiezasDesdePT.ToString("N0")</strong>
+                            </div>
+
+                            <div>
+                                Programado:
+                                <strong>@p.ProduccionProgramadaPendiente.ToString("N0")</strong>
+                            </div>
+
+                            <div>
+                                Horas:
+                                <strong>@p.HorasNecesarias.ToString("N2")</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="erp-card">
+            <div class="erp-card-header">
+                <div>
+                    <h2 class="h5 fw-bold m-0 text-primary">
+                        <i class="fa-solid fa-filter me-2"></i>
+                        Filtros
+                    </h2>
+                    <div class="text-muted small">
+                        Filtra por cliente, parte, rango de fechas o alertas.
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card-body">
+                <form asp-controller="PlaneacionRelease" asp-action="Calculadora" method="get">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="erp-label">Cliente</label>
+                            <select name="clienteId" id="clienteIdFiltro" class="form-select erp-select">
+                                <option value="">Todos</option>
+                                @foreach (var c in Model.Clientes)
+                                {
+                                    <option value="@c.Value" selected="@(Model.ClienteID?.ToString() == c.Value)">
+                                        @c.Text
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="erp-label">Parte</label>
+                            <select name="parteId" id="parteIdFiltro" class="form-select erp-select">
+                                <option value="">Todas</option>
+                                @foreach (var p in Model.Partes)
+                                {
+                                    <option value="@p.Value" selected="@(Model.ParteID?.ToString() == p.Value)">
+                                        @p.Text
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Desde</label>
+                            <input name="fechaDesde"
+                                   type="date"
+                                   value="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
+                                   class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="erp-label">Hasta</label>
+                            <input name="fechaHasta"
+                                   type="date"
+                                   value="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))"
+                                   class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-erp-primary w-100">
+                                <i class="fa-solid fa-magnifying-glass me-1"></i>
+                                Filtrar
+                            </button>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="d-flex gap-3 flex-wrap">
+                                <div class="form-check">
+                                    <input type="hidden" name="soloPendientes" value="false" />
+
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           name="soloPendientes"
+                                           value="true"
+                                           id="soloPendientes"
+                                           checked="@Model.SoloPendientes" />
+                                    <label class="form-check-label fw-semibold" for="soloPendientes">
+                                        Solo pendientes por producir
+                                    </label>
+                                </div>
+
+                                <div class="form-check">
+                                    <input type="hidden" name="soloSinCapacidad" value="false" />
+
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           name="soloSinCapacidad"
+                                           value="true"
+                                           id="soloSinCapacidad"
+                                           checked="@Model.SoloSinCapacidad" />
+                                    <label class="form-check-label fw-semibold" for="soloSinCapacidad">
+                                        Solo sin capacidad
+                                    </label>
+                                </div>
+
+                                <div class="form-check">
+                                    <input type="hidden" name="soloSinMP" value="false" />
+
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           name="soloSinMP"
+                                           value="true"
+                                           id="soloSinMP"
+                                           checked="@Model.SoloSinMP" />
+                                    <label class="form-check-label fw-semibold" for="soloSinMP">
+                                        Solo sin MP suficiente
+                                    </label>
+                                </div>
+
+                                <a asp-controller="PlaneacionRelease" asp-action="Calculadora" class="btn btn-sm btn-erp-light">
+                                    Limpiar filtros
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="erp-card">
+            <div class="erp-card-header">
+                <div>
+                    <h2 class="h5 fw-bold m-0 text-primary">
+                        <i class="fa-solid fa-table-list me-2"></i>
+                        Necesidades calculadas
+                    </h2>
+                    <div class="text-muted small">
+                        Demanda por cliente, parte y fecha requerida.
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card-body">
+                @if (Model.Necesidades != null && Model.Necesidades.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Release</th>
+                                    <th>Cliente</th>
+                                    <th>Parte</th>
+                                    <th>Fecha req.</th>
+                                    <th>Req.</th>
+                                    <th>PT</th>
+                                    <th>Prog.</th>
+                                    <th>Desde PT</th>
+                                    <th>A producir</th>
+                                    <th>MP req.</th>
+                                    <th>MP disp.</th>
+                                    <th>Emb. req.</th>
+                                    <th>Emb. disp.</th>
+                                    <th>Máquina</th>
+                                    <th>Molde</th>
+                                    <th>Horas</th>
+                                    <th>Fin est.</th>
+                                    <th>Resultado</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var n in Model.Necesidades)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@Valor(n.FolioRelease)</strong>
+                                            <div class="small-muted">Ren. @n.Renglon</div>
+                                        </td>
+
+                                        <td>@Valor(n.ClienteNombre)</td>
+
+                                        <td>
+                                            <strong>@Valor(n.ReferenciaSAP ?? n.NumeroParte)</strong><br />
+                                            <span class="small-muted">@Valor(n.DesignacionDescripcionSAP)</span>
+                                        </td>
+
+                                        <td>@n.FechaRequerida.ToString("dd/MM/yyyy")</td>
+                                        <td>@n.CantidadRequerida.ToString("N0")</td>
+                                        <td>@Entero(n.PTDisponibleAlCalcular)</td>
+                                        <td>@Entero(n.ProduccionProgramadaPendiente)</td>
+
+                                        <td>
+                                            <strong>@Entero(n.PiezasDesdePT)</strong>
+                                        </td>
+
+                                        <td>
+                                            <strong>@Entero(n.PiezasAProducir)</strong>
+                                        </td>
+
+                                        <td>@Decimal4(n.MPRequeridaKg)</td>
+
+                                        <td>
+                                            @Decimal4(n.MPDisponibleKg)
+
+                                            @if (n.TieneMPInsuficiente)
+                                            {
+                                                <div class="mt-1">
+                                                    <span class="badge-mp">
+                                                        MP insuficiente
+                                                    </span>
+                                                </div>
+                                            }
+                                        </td>
+
+                                        <td>@Decimal4(n.EmbalajeRequerido)</td>
+
+                                        <td>
+                                            @Decimal4(n.EmbalajeDisponible)
+
+                                            @if (n.TieneEmbalajeInsuficiente)
+                                            {
+                                                <div class="mt-1">
+                                                    <span class="badge-mp">
+                                                        Emb. insuf.
+                                                    </span>
+                                                </div>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            <strong>@Valor(n.MaquinaSugeridaCodigo)</strong><br />
+                                            <span class="small-muted">@Valor(n.MaquinaSugeridaNombre)</span>
+                                        </td>
+
+                                        <td>@Valor(n.MoldeCodigo)</td>
+                                        <td>@Decimal2(n.HorasNecesarias)</td>
+                                        <td>@FechaHora(n.FechaFinEstimada)</td>
+
+                                        <td>
+                                            <span class="badge-calc @ClaseResultado(n.DaTiempo)">
+                                                @TextoResultado(n.DaTiempo)
+                                            </span>
+                                            <div class="small-muted mt-1">
+                                                @Valor(n.MensajeCapacidad)
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <div class="d-flex flex-column gap-2">
+                                                <a asp-controller="PlaneacionRelease"
+                                                   asp-action="Detalle"
+                                                   asp-route-id="@n.ReleaseID"
+                                                   class="btn btn-sm btn-erp-light">
+                                                    <i class="fa-solid fa-eye me-1"></i>
+                                                    Ver Release
+                                                </a>
+
+                                                @if ((n.PiezasAProducir ?? 0) > 0 && !n.YaProgramado)
+                                                {
+                                                    <a asp-controller="PlaneacionPrograma"
+                                                       asp-action="CrearDesdeNecesidad"
+                                                       asp-route-releaseDetalleId="@n.ReleaseDetalleID"
+                                                       class="btn btn-sm btn-erp-primary">
+                                                        <i class="fa-solid fa-industry me-1"></i>
+                                                        Programar
+                                                    </a>
+                                                }
+                                                else if (n.YaProgramado)
+                                                {
+                                                    <a asp-controller="PlaneacionPrograma"
+                                                       asp-action="Maquinas"
+                                                       class="btn btn-sm btn-success rounded-3 fw-bold">
+                                                        <i class="fa-solid fa-circle-check me-1"></i>
+                                                        Ya programado
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge-calc badge-ok">
+                                                        Cubierto con PT
+                                                    </span>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+
+                            <tfoot>
+                                <tr class="fw-bold">
+                                    <td colspan="4" class="text-end">Totales</td>
+                                    <td>@Model.TotalRequerido.ToString("N0")</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td>@Model.TotalDesdePT.ToString("N0")</td>
+                                    <td>@Model.TotalAProducir.ToString("N0")</td>
+                                    <td>@Model.TotalMPRequerida.ToString("N4")</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td colspan="2"></td>
+                                    <td>@Model.TotalHoras.ToString("N2")</td>
+                                    <td colspan="3"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <i class="fa-solid fa-calculator"></i>
+                        <div class="fw-bold">No hay necesidades con los filtros seleccionados.</div>
+                        <div class="small">Captura un Release o limpia los filtros.</div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="sticky-actions">
+            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-erp-light">
+                    <i class="fa-solid fa-arrow-left me-1"></i>
+                    Volver a Releases
+                </a>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionPrograma"
+                       asp-action="Maquinas"
+                       class="btn btn-erp-primary">
+                        <i class="fa-solid fa-industry me-1"></i>
+                        Ver programa
+                    </a>
+
+                    <button type="button" class="btn btn-erp-primary" disabled>
+                        <i class="fa-solid fa-file-circle-plus me-1"></i>
+                        Generar OF
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const urlPartesPorCliente = '@Url.Action("ObtenerPartesPorCliente", "PlaneacionRelease")';
+
+        const clienteFiltro = document.getElementById('clienteIdFiltro');
+        const parteFiltro = document.getElementById('parteIdFiltro');
+
+        clienteFiltro?.addEventListener('change', async function () {
+            const clienteId = this.value;
+
+            if (!parteFiltro) return;
+
+            parteFiltro.innerHTML = '<option value="">Todas</option>';
+
+            if (!clienteId) {
+                return;
+            }
+
+            try {
+                const resp = await fetch(`${urlPartesPorCliente}?clienteId=${encodeURIComponent(clienteId)}`);
+                const data = await resp.json();
+
+                if (!data.ok) {
+                    alert(data.mensaje || 'No se pudieron cargar las partes del cliente.');
+                    return;
+                }
+
+                const partes = data.partes || [];
+
+                partes.forEach(function (p) {
+                    const opt = document.createElement('option');
+                    opt.value = p.value;
+                    opt.textContent = p.text;
+                    parteFiltro.appendChild(opt);
+                });
+
+            } catch (err) {
+                console.error(err);
+                alert('No se pudieron cargar las partes del cliente.');
+            }
+        });
+    </script>
+
+</body>
+</html>

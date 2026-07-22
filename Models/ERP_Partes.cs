@@ -10,7 +10,6 @@ namespace ERP.NSQuell.Models
         [Key]
         public int ParteID { get; set; }
 
-        [Required]
         public int ClienteID { get; set; }
 
         [Required]
@@ -27,47 +26,9 @@ namespace ERP.NSQuell.Models
         [StringLength(200)]
         public string? Designacion { get; set; }
 
-        [StringLength(80)]
-        public string? Color { get; set; }
-
-        public int? Cavidades { get; set; }
-
-        public int? ObjetivoHora { get; set; }
-
-        public int? PiezasPorCaja { get; set; }
-
         public bool RequiereGP12 { get; set; }
 
         public bool RequiereCertificado { get; set; }
-
-        public int? MaquinaPrincipalID { get; set; }
-
-        public int? MaquinaSustitutaID { get; set; }
-
-        public int? MoldePrincipalID { get; set; }
-
-        [StringLength(100)]
-        public string? MaterialCodigo { get; set; }
-
-        [StringLength(250)]
-        public string? MaterialDescripcion { get; set; }
-
-        [StringLength(100)]
-        public string? TipoSecado { get; set; }
-
-        [Column(TypeName = "decimal(10,2)")]
-        public decimal? HorasSecado { get; set; }
-
-        [Column(TypeName = "decimal(18,6)")]
-        public decimal? PesoBrutoPieza { get; set; }
-
-        [StringLength(100)]
-        public string? EmbalajeCodigo { get; set; }
-
-        [StringLength(250)]
-        public string? EmbalajeDescripcion { get; set; }
-
-        public int? PiezasPorEmbalaje { get; set; }
 
         [StringLength(500)]
         public string? Notas { get; set; }
@@ -86,8 +47,26 @@ namespace ERP.NSQuell.Models
 
         public int StockAviso { get; set; }
 
-        public int? MaterialID { get; set; }
-
         public bool StockConfigurado { get; set; }
+
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? PrecioVentaUnitario { get; set; }
+
+        [StringLength(10)]
+        public string? MonedaPrecioVenta { get; set; }
+
+        [StringLength(50)]
+        public string? UnidadPrecioVenta { get; set; }
+
+        [StringLength(50)]
+        public string? FuentePrecioVenta { get; set; }
+
+        [StringLength(100)]
+        public string? ClavePrecioVentaOrigen { get; set; }
+
+        [StringLength(250)]
+        public string? DescripcionPrecioVentaOrigen { get; set; }
+
+        public DateTime? FechaPrecioVenta { get; set; }
     }
 }
