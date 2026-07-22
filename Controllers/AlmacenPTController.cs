@@ -608,12 +608,6 @@ ORDER BY Valor;";
 
         ViewData["AccionEntradaPT"] = accion;
 
-        ViewData["AccionEntradaPT"] = accion;
-
-        ViewData["AccionEntradaPT"] = accion;
-
-        ViewData["AccionEntradaPT"] = accion;
-
         if (!AlmacenOFEntregaService.TokenValido(
                 model.OperacionToken))
         {
@@ -1131,7 +1125,7 @@ VALUES
                 out var candidatos))
             {
                 item.Mensaje =
-                    $"No existe un número de parte activo con la misma secuencia alfanumérica: {claveEscaneada}.";
+                    $"No existe un registro activo en NumeroParte ni ReferenciaSAP con la secuencia: {claveEscaneada}.";
             }
             else
             {
@@ -1140,6 +1134,10 @@ VALUES
                         .Where(x =>
                             string.Equals(
                                 x.NumeroParte.Trim(),
+                                parseado.NumeroParte.Trim(),
+                                StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(
+                                x.ReferenciaSAP.Trim(),
                                 parseado.NumeroParte.Trim(),
                                 StringComparison.OrdinalIgnoreCase))
                         .ToList();
@@ -1174,7 +1172,11 @@ VALUES
                     item.ExisteEnCatalogo = true;
                     item.ParteID = candidato.ParteID;
                     item.NumeroParteCatalogo =
-                        candidato.NumeroParte;
+                        string.IsNullOrWhiteSpace(
+                            candidato.NumeroParte)
+                            ? candidato.ReferenciaSAP
+                            : candidato.NumeroParte;
+
                     item.DescripcionCatalogo =
                         candidato.Descripcion;
 
@@ -1265,7 +1267,7 @@ SELECT CASE WHEN EXISTS
             {
                 var mensajeParte =
                     item.CoincidenciaNormalizada
-                        ? $"Enlazado al catálogo {item.NumeroParteCatalogo} ignorando únicamente separadores."
+                        ? $"Enlazado al catálogo {item.NumeroParteCatalogo} mediante NumeroParte o ReferenciaSAP."
                         : "Número de parte exacto.";
 
                 item.Mensaje =
@@ -1516,6 +1518,7 @@ WHERE ParteID = @ParteID
     private sealed record ParteCatalogoEscaneo(
         int ParteID,
         string NumeroParte,
+        string ReferenciaSAP,
         string Descripcion);
 
     private static async Task<
@@ -1528,7 +1531,16 @@ WHERE ParteID = @ParteID
         const string sql = @"
 SELECT
     ParteID,
-    NumeroParte,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(NumeroParte)), N''),
+        N''
+    ) AS NumeroParte,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(ReferenciaSAP)), N''),
+        N''
+    ) AS ReferenciaSAP,
     COALESCE
     (
         NULLIF(LTRIM(RTRIM(Designacion)), N''),
@@ -1537,7 +1549,11 @@ SELECT
     ) AS Descripcion
 FROM dbo.ERP_Partes
 WHERE Activo = 1
-  AND NULLIF(LTRIM(RTRIM(NumeroParte)), N'') IS NOT NULL
+  AND
+  (
+      NULLIF(LTRIM(RTRIM(NumeroParte)), N'') IS NOT NULL
+      OR NULLIF(LTRIM(RTRIM(ReferenciaSAP)), N'') IS NOT NULL
+  )
 ORDER BY ParteID;";
 
         await using var command =
@@ -1561,36 +1577,55 @@ ORDER BY ParteID;";
         while (await reader.ReadAsync(
             cancellationToken))
         {
-            var numeroParte =
-                Texto(reader, "NumeroParte");
-
-            var clave =
-                NormalizarNumeroParte(
-                    numeroParte);
-
-            if (string.IsNullOrWhiteSpace(clave))
-                continue;
-
-            if (!resultado.TryGetValue(
-                clave,
-                out var lista))
-            {
-                lista =
-                    new List<ParteCatalogoEscaneo>();
-
-                resultado[clave] = lista;
-            }
-
-            lista.Add(
+            var candidato =
                 new ParteCatalogoEscaneo(
                     Entero(reader, "ParteID"),
-                    numeroParte,
-                    Texto(reader, "Descripcion")));
+                    Texto(reader, "NumeroParte"),
+                    Texto(reader, "ReferenciaSAP"),
+                    Texto(reader, "Descripcion"));
+
+            AgregarCandidatoCatalogo(
+                resultado,
+                candidato.NumeroParte,
+                candidato);
+
+            AgregarCandidatoCatalogo(
+                resultado,
+                candidato.ReferenciaSAP,
+                candidato);
         }
 
         return resultado;
     }
 
+    private static void AgregarCandidatoCatalogo(
+        Dictionary<string, List<ParteCatalogoEscaneo>> resultado,
+        string identificador,
+        ParteCatalogoEscaneo candidato)
+    {
+        var clave =
+            NormalizarNumeroParte(
+                identificador);
+
+        if (string.IsNullOrWhiteSpace(clave))
+            return;
+
+        if (!resultado.TryGetValue(
+                clave,
+                out var lista))
+        {
+            lista =
+                new List<ParteCatalogoEscaneo>();
+
+            resultado[clave] = lista;
+        }
+
+        if (!lista.Any(x =>
+            x.ParteID == candidato.ParteID))
+        {
+            lista.Add(candidato);
+        }
+    }
     private static string NormalizarNumeroParte(
         string? numeroParte)
     {
@@ -2012,6 +2047,7 @@ ORDER BY Almacen,Rack,Nivel,Posicion;";
         return rows;
     }
 }
+
 
 
 
