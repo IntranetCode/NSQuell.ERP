@@ -3,12 +3,39 @@
 @{
     Layout = null;
 
-    string Valor(string? valor) => string.IsNullOrWhiteSpace(valor) ? "-" : valor;
-    string Fecha(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy") : "-";
-    string FechaHora(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy HH:mm") : "-";
-    string Entero(int? valor) => valor.HasValue ? valor.Value.ToString("N0") : "-";
-    string Decimal2(decimal? valor) => valor.HasValue ? valor.Value.ToString("N2") : "-";
-    string Decimal4(decimal? valor) => valor.HasValue ? valor.Value.ToString("N4") : "-";
+    var detalles = Model.Detalles ?? new List<ERP.NSQuell.Models.PlaneacionReleaseDetalleRenglonVm>();
+    var totalProgramados = detalles.Count(x => x.ProgramaProduccionID.HasValue);
+    var totalCubiertosConPt = detalles.Count(x => (x.PiezasAProducir ?? 0) <= 0);
+    var totalPendientes = detalles.Count(x =>
+        (x.PiezasAProducir ?? 0) > 0 &&
+        !x.ProgramaProduccionID.HasValue);
+    var totalSinCapacidad = detalles.Count(x => x.DaTiempo == false);
+    var totalSinMp = detalles.Count(x =>
+        (x.MPRequeridaKg ?? 0) > 0 &&
+        (x.MPDisponibleKg ?? 0) < (x.MPRequeridaKg ?? 0));
+    var totalSinEmbalaje = detalles.Count(x =>
+        (x.EmbalajeRequerido ?? 0) > 0 &&
+        (x.EmbalajeDisponible ?? 0) < (x.EmbalajeRequerido ?? 0));
+
+    var puedeRecalcular =
+        totalProgramados == 0 &&
+        Model.EstatusID != ERP.NSQuell.Models.PlaneacionReleaseEstatus.Cerrado &&
+        Model.EstatusID != ERP.NSQuell.Models.PlaneacionReleaseEstatus.Cancelado;
+
+    string Valor(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) ? "-" : valor;
+
+    string Entero(int? valor) =>
+        valor.HasValue ? valor.Value.ToString("N0") : "-";
+
+    string Decimal2(decimal? valor) =>
+        valor.HasValue ? valor.Value.ToString("N2") : "-";
+
+    string Decimal4(decimal? valor) =>
+        valor.HasValue ? valor.Value.ToString("N4") : "-";
+
+    string FechaHora(DateTime? fecha) =>
+        fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy HH:mm") : "-";
 
     string ClaseTiempo(bool? daTiempo)
     {
@@ -23,227 +50,486 @@
         if (daTiempo == false) return "No da tiempo";
         return "Sin validar";
     }
+
+    string ClaseEstatusRelease(int estatusId)
+    {
+        return estatusId switch
+        {
+            ERP.NSQuell.Models.PlaneacionReleaseEstatus.Capturado => "status-capturado",
+            ERP.NSQuell.Models.PlaneacionReleaseEstatus.Calculado => "status-calculado",
+            ERP.NSQuell.Models.PlaneacionReleaseEstatus.Programado => "status-programado",
+            ERP.NSQuell.Models.PlaneacionReleaseEstatus.ConOF => "status-con-of",
+            ERP.NSQuell.Models.PlaneacionReleaseEstatus.Cerrado => "status-cerrado",
+            ERP.NSQuell.Models.PlaneacionReleaseEstatus.Cancelado => "status-cancelado",
+            _ => "status-desconocido"
+        };
+    }
 }
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>Detalle Release | Planeación</title>
+    <title>Detalle del Release | Planeación</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
 
     <style>
-        :root {
-            --erp-blue: #004AAD;
-            --erp-blue-dark: #00347a;
-            --erp-gray: #f3f5f8;
-            --erp-border: #d9e1ec;
-            --erp-text: #263238;
-            --erp-muted: #667085;
-            --erp-green: #107c41;
-            --erp-red: #b42318;
-            --erp-orange: #b54708;
-        }
+            :root {
+                --erp-blue: #004AAD;
+                --erp-blue-dark: #00347a;
+                --erp-gray: #f3f5f8;
+                --erp-border: #d9e1ec;
+                --erp-text: #263238;
+                --erp-muted: #667085;
+                --erp-green: #107c41;
+                --erp-red: #b42318;
+                --erp-orange: #b54708;
+                --erp-purple: #6941c6;
+            }
 
-        body {
-            background: var(--erp-gray);
-            color: var(--erp-text);
-            font-family: "Segoe UI", Arial, sans-serif;
-        }
+            body {
+                background: var(--erp-gray);
+                color: var(--erp-text);
+                font-family: "Segoe UI", Arial, sans-serif;
+            }
 
-        .erp-shell {
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 28px;
-        }
+            .erp-shell {
+                max-width: 1700px;
+                margin: 0 auto;
+                padding: 28px;
+            }
 
-        .erp-header {
-            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
-            color: white;
-            border-radius: 22px;
-            padding: 28px 32px;
-            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
-            margin-bottom: 22px;
-        }
+            .erp-header {
+                margin-bottom: 22px;
+                padding: 28px 32px;
+                border-radius: 22px;
+                background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+                color: white;
+                box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+            }
 
-            .erp-header h1 {
-                font-size: 1.65rem;
-                margin: 0;
+                .erp-header h1 {
+                    margin: 0;
+                    font-size: 1.65rem;
+                    font-weight: 900;
+                }
+
+                .erp-header p {
+                    max-width: 900px;
+                    margin: 7px 0 0;
+                    opacity: .92;
+                }
+
+            .stage-label,
+            .header-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                border: 1px solid rgba(255, 255, 255, .35);
+                border-radius: 999px;
+                background: rgba(255, 255, 255, .12);
+                color: white;
                 font-weight: 900;
             }
 
-        .header-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            background: rgba(255,255,255,.16);
-            color: white;
-            border: 1px solid rgba(255,255,255,.28);
-            border-radius: 999px;
-            padding: 7px 12px;
-            font-size: .82rem;
-            font-weight: 800;
-            margin-top: 12px;
-            margin-right: 6px;
-        }
-
-        .erp-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 20px;
-            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-
-        .erp-card-header {
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--erp-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
-            flex-wrap: wrap;
-        }
-
-        .erp-card-body {
-            padding: 22px;
-        }
-
-        .erp-label {
-            font-weight: 800;
-            color: #33465f;
-            font-size: .78rem;
-            text-transform: uppercase;
-            letter-spacing: .035em;
-            margin-bottom: 4px;
-        }
-
-        .erp-value {
-            color: #263238;
-            font-weight: 650;
-            min-height: 24px;
-        }
-
-        .metric-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
-            height: 100%;
-        }
-
-        .metric-label {
-            color: var(--erp-muted);
-            font-size: .78rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
-        .metric-value {
-            font-size: 1.35rem;
-            font-weight: 900;
-            color: var(--erp-blue-dark);
-        }
-
-        .btn-erp-primary {
-            background: var(--erp-blue);
-            border-color: var(--erp-blue);
-            color: white;
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
-
-            .btn-erp-primary:hover {
-                background: var(--erp-blue-dark);
-                border-color: var(--erp-blue-dark);
-                color: white;
+            .stage-label {
+                margin-bottom: 12px;
+                padding: 6px 11px;
+                font-size: .75rem;
+                letter-spacing: .05em;
+                text-transform: uppercase;
             }
 
-        .btn-erp-light {
-            background: white;
-            border: 1px solid var(--erp-border);
-            color: var(--erp-blue-dark);
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
+            .header-badge {
+                margin-top: 13px;
+                margin-right: 6px;
+                padding: 7px 12px;
+                font-size: .8rem;
+            }
 
-        .badge-calc {
-            display: inline-flex;
-            align-items: center;
-            border-radius: 999px;
-            padding: 7px 12px;
-            font-size: .78rem;
-            font-weight: 900;
-            border: 1px solid transparent;
-        }
+            .erp-card {
+                overflow: hidden;
+                margin-bottom: 20px;
+                border: 1px solid var(--erp-border);
+                border-radius: 20px;
+                background: white;
+                box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            }
 
-        .badge-ok {
-            background: #ecfdf3;
-            color: #027a48;
-            border-color: #abefc6;
-        }
+            .erp-card-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 14px;
+                flex-wrap: wrap;
+                padding: 18px 22px;
+                border-bottom: 1px solid var(--erp-border);
+            }
 
-        .badge-no {
-            background: #fef3f2;
-            color: #b42318;
-            border-color: #fecdca;
-        }
+            .erp-card-body {
+                padding: 22px;
+            }
 
-        .badge-warn {
-            background: #fff7ed;
-            color: #b54708;
-            border-color: #fed7aa;
-        }
+            .metric-card {
+                height: 100%;
+                padding: 18px;
+                border: 1px solid var(--erp-border);
+                border-radius: 18px;
+                background: white;
+                box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
+            }
 
-        .table thead th {
-            background: #eef3fb;
-            color: #00347a;
-            font-size: .76rem;
-            white-space: nowrap;
-            text-transform: uppercase;
-            letter-spacing: .03em;
-            vertical-align: middle;
-        }
+            .metric-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 38px;
+                height: 38px;
+                margin-bottom: 12px;
+                border-radius: 12px;
+                background: #eef3fb;
+                color: var(--erp-blue);
+            }
 
-        .table td {
-            font-size: .84rem;
-            vertical-align: middle;
-        }
+            .metric-label {
+                color: var(--erp-muted);
+                font-size: .76rem;
+                font-weight: 800;
+                letter-spacing: .04em;
+                text-transform: uppercase;
+            }
 
-        .small-muted {
-            color: var(--erp-muted);
-            font-size: .78rem;
-        }
+            .metric-value {
+                color: var(--erp-blue-dark);
+                font-size: 1.4rem;
+                font-weight: 900;
+                line-height: 1.15;
+            }
 
-        .sticky-actions {
-            position: sticky;
-            bottom: 0;
-            background: rgba(243, 245, 248, .92);
-            backdrop-filter: blur(10px);
-            padding: 14px 0;
-            z-index: 20;
-        }
+            .erp-label {
+                margin-bottom: 5px;
+                color: #33465f;
+                font-size: .77rem;
+                font-weight: 800;
+                letter-spacing: .035em;
+                text-transform: uppercase;
+            }
+
+            .erp-value {
+                min-height: 24px;
+                color: var(--erp-text);
+                font-weight: 650;
+                overflow-wrap: anywhere;
+            }
+
+            .btn-erp-primary {
+                padding: 10px 15px;
+                border-color: var(--erp-blue);
+                border-radius: 13px;
+                background: var(--erp-blue);
+                color: white;
+                font-weight: 800;
+            }
+
+                .btn-erp-primary:hover,
+                .btn-erp-primary:focus {
+                    border-color: var(--erp-blue-dark);
+                    background: var(--erp-blue-dark);
+                    color: white;
+                }
+
+            .btn-erp-light {
+                padding: 10px 15px;
+                border: 1px solid var(--erp-border);
+                border-radius: 13px;
+                background: white;
+                color: var(--erp-blue-dark);
+                font-weight: 800;
+            }
+
+                .btn-erp-light:hover {
+                    border-color: #b9c8db;
+                    background: #eef3fb;
+                    color: var(--erp-blue-dark);
+                }
+
+                .btn-erp-light:disabled {
+                    border-color: #e4e7ec;
+                    background: #f2f4f7;
+                    color: #98a2b3;
+                    opacity: 1;
+                }
+
+            .btn-programar {
+                border-color: var(--erp-blue);
+                border-radius: 10px;
+                background: var(--erp-blue);
+                color: white;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+
+                .btn-programar:hover {
+                    border-color: var(--erp-blue-dark);
+                    background: var(--erp-blue-dark);
+                    color: white;
+                }
+
+            .flow-note {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                margin-bottom: 20px;
+                padding: 15px 17px;
+                border: 1px solid #b2ddff;
+                border-radius: 16px;
+                background: #eff8ff;
+                color: #1849a9;
+            }
+
+                .flow-note i {
+                    margin-top: 2px;
+                    font-size: 1.15rem;
+                }
+
+            .warning-note {
+                display: flex;
+                align-items: flex-start;
+                gap: 10px;
+                margin-top: 14px;
+                padding: 12px 14px;
+                border: 1px solid #fed7aa;
+                border-radius: 13px;
+                background: #fff7ed;
+                color: #9a3412;
+                font-size: .82rem;
+                font-weight: 650;
+            }
+
+            .badge-status,
+            .badge-calc,
+            .badge-resource {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                border: 1px solid transparent;
+                border-radius: 999px;
+                font-size: .74rem;
+                font-weight: 900;
+                white-space: nowrap;
+            }
+
+            .badge-status {
+                padding: 7px 11px;
+            }
+
+            .badge-calc {
+                padding: 6px 10px;
+            }
+
+            .badge-resource {
+                padding: 4px 8px;
+                font-size: .69rem;
+            }
+
+            .status-capturado,
+            .badge-neutral {
+                border-color: #d0d5dd;
+                background: #f2f4f7;
+                color: #475467;
+            }
+
+            .status-calculado {
+                border-color: #b2ddff;
+                background: #eff8ff;
+                color: #175cd3;
+            }
+
+            .status-programado,
+            .badge-programado {
+                border-color: #d9d6fe;
+                background: #f4f3ff;
+                color: #5925dc;
+            }
+
+            .status-con-of,
+            .status-cerrado,
+            .badge-ok,
+            .badge-cubierto {
+                border-color: #abefc6;
+                background: #ecfdf3;
+                color: #027a48;
+            }
+
+            .status-cancelado,
+            .badge-no {
+                border-color: #fecdca;
+                background: #fef3f2;
+                color: #b42318;
+            }
+
+            .status-desconocido,
+            .badge-warn,
+            .badge-pendiente {
+                border-color: #fed7aa;
+                background: #fff7ed;
+                color: #b54708;
+            }
+
+            .filters {
+                margin-bottom: 18px;
+                padding: 16px;
+                border: 1px solid var(--erp-border);
+                border-radius: 16px;
+                background: #f8fafc;
+            }
+
+            .form-control,
+            .form-select {
+                min-height: 43px;
+                border-color: var(--erp-border);
+                border-radius: 12px;
+            }
+
+                .form-control:focus,
+                .form-select:focus {
+                    border-color: #84adff;
+                    box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
+                }
+
+            .results-summary {
+                color: var(--erp-muted);
+                font-size: .82rem;
+                font-weight: 800;
+            }
+
+            .table-wrap {
+                max-height: 68vh;
+                overflow: auto;
+                border: 1px solid var(--erp-border);
+                border-radius: 14px;
+            }
+
+            .table {
+                min-width: 1500px;
+                margin: 0;
+            }
+
+                .table thead {
+                    position: sticky;
+                    top: 0;
+                    z-index: 5;
+                }
+
+                    .table thead th {
+                        padding: 12px 10px;
+                        border-bottom-width: 1px;
+                        background: #eef3fb;
+                        color: var(--erp-blue-dark);
+                        font-size: .72rem;
+                        letter-spacing: .03em;
+                        text-transform: uppercase;
+                        vertical-align: middle;
+                        white-space: nowrap;
+                    }
+
+                .table td {
+                    padding: 12px 10px;
+                    font-size: .8rem;
+                    vertical-align: top;
+                }
+
+                .table tbody tr.row-warning > td {
+                    background: #fffdf8;
+                }
+
+                .table tbody tr.row-programmed > td {
+                    background: #fcfbff;
+                }
+
+            .cell-title {
+                color: #1d2939;
+                font-weight: 850;
+            }
+
+            .cell-line {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                margin-top: 4px;
+                color: var(--erp-muted);
+                white-space: nowrap;
+            }
+
+                .cell-line strong {
+                    color: #344054;
+                    font-weight: 800;
+                }
+
+            .small-muted {
+                color: var(--erp-muted);
+                font-size: .75rem;
+            }
+
+            .empty-state {
+                padding: 46px 18px;
+                color: var(--erp-muted);
+                text-align: center;
+            }
+
+                .empty-state i {
+                    margin-bottom: 10px;
+                    color: #98a2b3;
+                    font-size: 2.3rem;
+                }
+
+            .sticky-actions {
+                position: sticky;
+                bottom: 0;
+                z-index: 20;
+                padding: 14px 0;
+                background: rgba(243, 245, 248, .93);
+                backdrop-filter: blur(10px);
+            }
+
+            @@media (max-width: 767.98px) {
+                .erp-shell {
+                    padding: 16px;
+                }
+
+                .erp-header {
+                    padding: 22px;
+                    border-radius: 18px;
+                }
+
+                .erp-card-body {
+                    padding: 16px;
+                }
+            }
     </style>
 </head>
 
 <body>
     <div class="erp-shell">
-
-        <div class="erp-header">
+        <header class="erp-header">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
+                    <div class="stage-label">
+                        <i class="fa-solid fa-route"></i>
+                        Etapa 1 · Revisión del Release
+                    </div>
+
                     <h1>
-                        <i class="fa-solid fa-calculator me-2"></i>
-                        Detalle Release / Calculadora de necesidades
+                        <i class="fa-solid fa-file-circle-check me-2"></i>
+                        Detalle del Release
                     </h1>
+
+                    <p>
+                        Revisa cómo se cubrirá la demanda con producto terminado y qué renglones deben pasar al programa de producción.
+                    </p>
 
                     <div>
                         <span class="header-badge">
@@ -255,31 +541,26 @@
                             <i class="fa-solid fa-building"></i>
                             @(Model.ClienteNombre ?? "Sin cliente")
                         </span>
-
-                        <span class="header-badge">
-                            <i class="fa-solid fa-circle-info"></i>
-                            @Model.EstatusNombre
-                        </span>
                     </div>
                 </div>
 
                 <div class="d-flex gap-2 flex-wrap">
-                    <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Index"
+                       class="btn btn-light fw-bold rounded-3">
                         <i class="fa-solid fa-arrow-left me-1"></i>
-                        Volver
+                        Releases
                     </a>
 
-                    <form asp-controller="PlaneacionRelease" asp-action="Recalcular" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@Model.ReleaseID" />
-                        <button type="submit" class="btn btn-light fw-bold rounded-3">
-                            <i class="fa-solid fa-rotate me-1"></i>
-                            Recalcular
-                        </button>
-                    </form>
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Calculadora"
+                       class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-calculator me-1"></i>
+                        Necesidades
+                    </a>
                 </div>
             </div>
-        </div>
+        </header>
 
         @if (TempData["Success"] != null)
         {
@@ -297,234 +578,653 @@
             </div>
         }
 
-        <div class="row g-3 mb-3">
-            <div class="col-md-2">
+        <div class="flow-note">
+            <i class="fa-solid fa-circle-info"></i>
+            <div>
+                <strong>Resultado del cálculo inicial.</strong>
+                Los renglones cubiertos con PT no requieren producción. Los pendientes pueden programarse individualmente desde esta tabla o revisarse junto con las demás necesidades en la Calculadora.
+            </div>
+        </div>
+
+        <section class="row g-3 mb-3">
+            <div class="col-sm-6 col-xl-2">
                 <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-list-ol"></i>
+                    </div>
                     <div class="metric-label">Renglones</div>
-                    <div class="metric-value">@Model.TotalRenglones</div>
+                    <div class="metric-value">@Model.TotalRenglones.ToString("N0")</div>
                 </div>
             </div>
 
-            <div class="col-md-2">
+            <div class="col-sm-6 col-xl-2">
                 <div class="metric-card">
-                    <div class="metric-label">Requeridas</div>
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                    </div>
+                    <div class="metric-label">Piezas requeridas</div>
                     <div class="metric-value">@Model.TotalPiezasRequeridas.ToString("N0")</div>
                 </div>
             </div>
 
-            <div class="col-md-2">
+            <div class="col-sm-6 col-xl-2">
                 <div class="metric-card">
-                    <div class="metric-label">Desde PT</div>
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-warehouse"></i>
+                    </div>
+                    <div class="metric-label">Cubiertas desde PT</div>
                     <div class="metric-value">@Model.TotalPiezasDesdePT.ToString("N0")</div>
                 </div>
             </div>
 
-            <div class="col-md-2">
+            <div class="col-sm-6 col-xl-2">
                 <div class="metric-card">
-                    <div class="metric-label">A producir</div>
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-industry"></i>
+                    </div>
+                    <div class="metric-label">Piezas a producir</div>
                     <div class="metric-value">@Model.TotalPiezasAProducir.ToString("N0")</div>
                 </div>
             </div>
 
-            <div class="col-md-2">
+            <div class="col-sm-6 col-xl-2">
                 <div class="metric-card">
-                    <div class="metric-label">MP kg</div>
-                    <div class="metric-value">@Model.TotalMPRequeridaKg.ToString("N4")</div>
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-weight-hanging"></i>
+                    </div>
+                    <div class="metric-label">MP requerida</div>
+                    <div class="metric-value">@Model.TotalMPRequeridaKg.ToString("N2") kg</div>
                 </div>
             </div>
 
-            <div class="col-md-2">
+            <div class="col-sm-6 col-xl-2">
                 <div class="metric-card">
-                    <div class="metric-label">Horas</div>
+                    <div class="metric-icon">
+                        <i class="fa-regular fa-clock"></i>
+                    </div>
+                    <div class="metric-label">Horas necesarias</div>
                     <div class="metric-value">@Model.TotalHorasNecesarias.ToString("N2")</div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <div class="erp-card">
+        <section class="erp-card">
             <div class="erp-card-header">
                 <div>
                     <h2 class="h5 fw-bold m-0 text-primary">
                         <i class="fa-solid fa-file-lines me-2"></i>
-                        Encabezado
+                        Datos generales
                     </h2>
                     <div class="text-muted small">
-                        Información general del release recibido.
+                        Información recibida del cliente y estado actual del Release.
+                    </div>
+                </div>
+
+                <span class="badge-status @ClaseEstatusRelease(Model.EstatusID)">
+                    <i class="fa-solid fa-circle" style="font-size:.45rem;"></i>
+                    @(Model.EstatusNombre ?? "Desconocido")
+                </span>
+            </div>
+
+            <div class="erp-card-body">
+                <div class="row g-3">
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="erp-label">Folio</div>
+                        <div class="erp-value">@Valor(Model.FolioRelease)</div>
+                    </div>
+
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="erp-label">Cliente</div>
+                        <div class="erp-value">@Valor(Model.ClienteNombre)</div>
+                    </div>
+
+                    <div class="col-sm-6 col-lg-2">
+                        <div class="erp-label">Fecha de recepción</div>
+                        <div class="erp-value">@Model.FechaRecepcion.ToString("dd/MM/yyyy")</div>
+                    </div>
+
+                    <div class="col-sm-6 col-lg-2">
+                        <div class="erp-label">Versión</div>
+                        <div class="erp-value">@Valor(Model.VersionRelease)</div>
+                    </div>
+
+                    <div class="col-sm-6 col-lg-2">
+                        <div class="erp-label">Archivo de origen</div>
+                        <div class="erp-value">@Valor(Model.ArchivoOrigenNombre)</div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="erp-label">Observaciones</div>
+                        <div class="erp-value">@Valor(Model.Observaciones)</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="erp-card">
+            <div class="erp-card-header">
+                <div>
+                    <h2 class="h5 fw-bold m-0 text-primary">
+                        <i class="fa-solid fa-chart-pie me-2"></i>
+                        Resultado operativo
+                    </h2>
+                    <div class="text-muted small">
+                        Situación de los renglones antes de pasar al programa de producción.
                     </div>
                 </div>
             </div>
 
             <div class="erp-card-body">
                 <div class="row g-3">
-                    <div class="col-md-3">
-                        <div class="erp-label">Folio</div>
-                        <div class="erp-value">@Valor(Model.FolioRelease)</div>
+                    <div class="col-sm-6 col-lg-4 col-xl-2">
+                        <div class="erp-label">Cubiertos con PT</div>
+                        <div class="erp-value fs-5">@totalCubiertosConPt.ToString("N0")</div>
                     </div>
 
-                    <div class="col-md-3">
-                        <div class="erp-label">Cliente</div>
-                        <div class="erp-value">@Valor(Model.ClienteNombre)</div>
+                    <div class="col-sm-6 col-lg-4 col-xl-2">
+                        <div class="erp-label">Pendientes de programar</div>
+                        <div class="erp-value fs-5">@totalPendientes.ToString("N0")</div>
                     </div>
 
-                    <div class="col-md-3">
-                        <div class="erp-label">Fecha recepción</div>
-                        <div class="erp-value">@Model.FechaRecepcion.ToString("dd/MM/yyyy")</div>
+                    <div class="col-sm-6 col-lg-4 col-xl-2">
+                        <div class="erp-label">Ya programados</div>
+                        <div class="erp-value fs-5">@totalProgramados.ToString("N0")</div>
                     </div>
 
-                    <div class="col-md-3">
-                        <div class="erp-label">Versión</div>
-                        <div class="erp-value">@Valor(Model.VersionRelease)</div>
+                    <div class="col-sm-6 col-lg-4 col-xl-2">
+                        <div class="erp-label">Sin capacidad</div>
+                        <div class="erp-value fs-5 @(totalSinCapacidad > 0 ? "text-danger" : "")">
+                            @totalSinCapacidad.ToString("N0")
+                        </div>
                     </div>
 
-                    <div class="col-md-12">
-                        <div class="erp-label">Observaciones</div>
-                        <div class="erp-value">@Valor(Model.Observaciones)</div>
+                    <div class="col-sm-6 col-lg-4 col-xl-2">
+                        <div class="erp-label">MP insuficiente</div>
+                        <div class="erp-value fs-5 @(totalSinMp > 0 ? "text-warning" : "")">
+                            @totalSinMp.ToString("N0")
+                        </div>
+                    </div>
+
+                    <div class="col-sm-6 col-lg-4 col-xl-2">
+                        <div class="erp-label">Embalaje insuficiente</div>
+                        <div class="erp-value fs-5 @(totalSinEmbalaje > 0 ? "text-warning" : "")">
+                            @totalSinEmbalaje.ToString("N0")
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="erp-card">
+                @if (!puedeRecalcular)
+                {
+                    <div class="warning-note">
+                        <i class="fa-solid fa-lock"></i>
+                        <div>
+                            El recálculo está bloqueado porque el Release ya tiene renglones programados o se encuentra cerrado/cancelado. Esto evita regresar accidentalmente su estatus a “Calculado”.
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="erp-card">
             <div class="erp-card-header">
                 <div>
                     <h2 class="h5 fw-bold m-0 text-primary">
                         <i class="fa-solid fa-table-list me-2"></i>
-                        Calculadora de necesidades
+                        Necesidades del Release
                     </h2>
                     <div class="text-muted small">
-                        Requerido contra PT disponible, producción pendiente, MP, embalaje y capacidad inicial.
+                        Demanda, inventario, material, embalaje, capacidad y avance por renglón.
                     </div>
+                </div>
+
+                <div id="resultsSummary" class="results-summary">
+                    @detalles.Count registro@(detalles.Count == 1 ? "" : "s")
                 </div>
             </div>
 
             <div class="erp-card-body">
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover align-middle">
-                        <thead>
-                            <tr>
-                                <th>Ren.</th>
-                                <th>Parte</th>
-                                <th>Fecha req.</th>
-                                <th>Req.</th>
-                                <th>PT disp.</th>
-                                <th>Prog. pend.</th>
-                                <th>Desde PT</th>
-                                <th>A producir</th>
-                                <th>MP req.</th>
-                                <th>MP disp.</th>
-                                <th>Emb. req.</th>
-                                <th>Emb. disp.</th>
-                                <th>Máquina</th>
-                                <th>Molde</th>
-                                <th>Horas</th>
-                                <th>Fin estimado</th>
-                                <th>Resultado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (Model.Detalles != null && Model.Detalles.Any())
-                            {
-                                foreach (var d in Model.Detalles)
+                @if (detalles.Any())
+                {
+                    <div class="filters">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-7">
+                                <label for="detailSearch" class="form-label small fw-bold text-muted">
+                                    Buscar parte
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white border-end-0 rounded-start-3">
+                                        <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                                    </span>
+                                    <input id="detailSearch"
+                                           type="search"
+                                           class="form-control border-start-0"
+                                           placeholder="Número de parte, referencia, designación, máquina o molde..." />
+                                </div>
+                            </div>
+
+                            <div class="col-md-7 col-lg-3">
+                                <label for="detailStatus" class="form-label small fw-bold text-muted">
+                                    Situación
+                                </label>
+                                <select id="detailStatus" class="form-select">
+                                    <option value="">Todos los renglones</option>
+                                    <option value="pendiente">Pendientes de programar</option>
+                                    <option value="programado">Ya programados</option>
+                                    <option value="cubierto">Cubiertos con PT</option>
+                                    <option value="sin-capacidad">Sin capacidad</option>
+                                    <option value="sin-mp">MP insuficiente</option>
+                                    <option value="sin-embalaje">Embalaje insuficiente</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-5 col-lg-2 d-grid">
+                                <button id="clearFilters" type="button" class="btn btn-erp-light">
+                                    <i class="fa-solid fa-filter-circle-xmark me-1"></i>
+                                    Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="detailTable" class="table-wrap">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Renglón / Parte</th>
+                                    <th>Demanda y cobertura</th>
+                                    <th>Materia prima</th>
+                                    <th>Embalaje</th>
+                                    <th>Máquina y molde</th>
+                                    <th>Fechas y horas</th>
+                                    <th>Resultado</th>
+                                    <th>Avance / Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var d in detalles)
                                 {
-                                    <tr>
-                                        <td>@d.Renglon</td>
+                                    var piezasAProducir = d.PiezasAProducir ?? 0;
+                                    var estaProgramado = d.ProgramaProduccionID.HasValue;
+                                    var cubiertoConPt = piezasAProducir <= 0;
+                                    var mpInsuficiente =
+                                        (d.MPRequeridaKg ?? 0) > 0 &&
+                                        (d.MPDisponibleKg ?? 0) < (d.MPRequeridaKg ?? 0);
+                                    var embalajeInsuficiente =
+                                        (d.EmbalajeRequerido ?? 0) > 0 &&
+                                        (d.EmbalajeDisponible ?? 0) < (d.EmbalajeRequerido ?? 0);
+
+                                    var estadoPrincipal = estaProgramado
+                                        ? "programado"
+                                        : cubiertoConPt
+                                            ? "cubierto"
+                                            : "pendiente";
+
+                                    var filtrosEstado = string.Join(" ", new[]
+                                    {
+                                        estadoPrincipal,
+                                        d.DaTiempo == false ? "sin-capacidad" : "",
+                                        mpInsuficiente ? "sin-mp" : "",
+                                        embalajeInsuficiente ? "sin-embalaje" : ""
+                                    });
+
+                                    var textoBusqueda = string.Join(" ", new[]
+                                    {
+                                        d.NumeroParte,
+                                        d.ReferenciaSAP,
+                                        d.DesignacionDescripcionSAP,
+                                        d.MaterialCodigo,
+                                        d.MaterialDescripcion,
+                                        d.EmbalajeCodigo,
+                                        d.EmbalajeDescripcion,
+                                        d.MaquinaSugeridaCodigo,
+                                        d.MaquinaSugeridaNombre,
+                                        d.MoldeCodigo
+                                    }.Where(x => !string.IsNullOrWhiteSpace(x))).ToLowerInvariant();
+
+                                    <tr class="detail-row @(estaProgramado ? "row-programmed" : d.DaTiempo == false ? "row-warning" : "")"
+                                        data-search="@textoBusqueda"
+                                        data-status="@filtrosEstado">
                                         <td>
-                                            <strong>@Valor(d.ReferenciaSAP ?? d.NumeroParte)</strong><br />
-                                            <span class="small-muted">@Valor(d.DesignacionDescripcionSAP)</span>
+                                            <div class="small-muted">Renglón @d.Renglon</div>
+                                            <div class="cell-title">@Valor(d.ReferenciaSAP ?? d.NumeroParte)</div>
+                                            <div class="small-muted mt-1">@Valor(d.DesignacionDescripcionSAP)</div>
+                                            @if (!string.IsNullOrWhiteSpace(d.NumeroParte) &&
+                                                 !string.Equals(d.NumeroParte, d.ReferenciaSAP, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <div class="small-muted mt-1">
+                                                    Parte interna: @d.NumeroParte
+                                                </div>
+                                            }
                                         </td>
-                                        <td>@d.FechaRequerida.ToString("dd/MM/yyyy")</td>
-                                        <td>@d.CantidadRequerida.ToString("N0")</td>
-                                        <td>@Entero(d.PTDisponibleAlCalcular)</td>
-                                        <td>@Entero(d.ProduccionProgramadaPendiente)</td>
+
                                         <td>
-                                            <strong>@Entero(d.PiezasDesdePT)</strong>
+                                            <div class="cell-line">
+                                                <span>Requeridas</span>
+                                                <strong>@d.CantidadRequerida.ToString("N0")</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>PT disponible</span>
+                                                <strong>@Entero(d.PTDisponibleAlCalcular)</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Prog. pendiente</span>
+                                                <strong>@Entero(d.ProduccionProgramadaPendiente)</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Desde PT</span>
+                                                <strong>@Entero(d.PiezasDesdePT)</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>A producir</span>
+                                                <strong class="@(piezasAProducir > 0 ? "text-primary" : "text-success")">
+                                                    @Entero(d.PiezasAProducir)
+                                                </strong>
+                                            </div>
                                         </td>
+
                                         <td>
-                                            <strong>@Entero(d.PiezasAProducir)</strong>
+                                            <div class="cell-title">@Valor(d.MaterialCodigo)</div>
+                                            <div class="small-muted">@Valor(d.MaterialDescripcion)</div>
+                                            <div class="cell-line">
+                                                <span>Peso/pieza</span>
+                                                <strong>@Decimal4(d.PesoBrutoPieza) kg</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Requerida</span>
+                                                <strong>@Decimal4(d.MPRequeridaKg) kg</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Disponible</span>
+                                                <strong>@Decimal4(d.MPDisponibleKg) kg</strong>
+                                            </div>
+                                            @if (mpInsuficiente)
+                                            {
+                                                <span class="badge-resource badge-warn mt-2">
+                                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                                    MP insuficiente
+                                                </span>
+                                            }
                                         </td>
-                                        <td>@Decimal4(d.MPRequeridaKg)</td>
-                                        <td>@Decimal4(d.MPDisponibleKg)</td>
-                                        <td>@Decimal4(d.EmbalajeRequerido)</td>
-                                        <td>@Decimal4(d.EmbalajeDisponible)</td>
+
                                         <td>
-                                            <strong>@Valor(d.MaquinaSugeridaCodigo)</strong><br />
-                                            <span class="small-muted">@Valor(d.MaquinaSugeridaNombre)</span>
+                                            <div class="cell-title">@Valor(d.EmbalajeCodigo)</div>
+                                            <div class="small-muted">@Valor(d.EmbalajeDescripcion)</div>
+                                            <div class="cell-line">
+                                                <span>Piezas/emb.</span>
+                                                <strong>@Decimal2(d.PiezasPorEmbalaje)</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Requerido</span>
+                                                <strong>@Decimal2(d.EmbalajeRequerido)</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Disponible</span>
+                                                <strong>@Decimal2(d.EmbalajeDisponible)</strong>
+                                            </div>
+                                            @if (embalajeInsuficiente)
+                                            {
+                                                <span class="badge-resource badge-warn mt-2">
+                                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                                    Embalaje insuficiente
+                                                </span>
+                                            }
                                         </td>
-                                        <td>@Valor(d.MoldeCodigo)</td>
-                                        <td>@Decimal2(d.HorasNecesarias)</td>
-                                        <td>@FechaHora(d.FechaFinEstimada)</td>
+
+                                        <td>
+                                            <div class="cell-title">@Valor(d.MaquinaSugeridaCodigo)</div>
+                                            <div class="small-muted">@Valor(d.MaquinaSugeridaNombre)</div>
+                                            <div class="cell-line">
+                                                <span>Molde</span>
+                                                <strong>@Valor(d.MoldeCodigo)</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Objetivo/hora</span>
+                                                <strong>@Entero(d.ObjetivoHora)</strong>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <div class="cell-line">
+                                                <span>Requerida</span>
+                                                <strong>@d.FechaRequerida.ToString("dd/MM/yyyy")</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Inicio sugerido</span>
+                                                <strong>@FechaHora(d.FechaInicioSugerida)</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Fin estimado</span>
+                                                <strong>@FechaHora(d.FechaFinEstimada)</strong>
+                                            </div>
+                                            <div class="cell-line">
+                                                <span>Horas</span>
+                                                <strong>@Decimal2(d.HorasNecesarias)</strong>
+                                            </div>
+                                        </td>
+
                                         <td>
                                             <span class="badge-calc @ClaseTiempo(d.DaTiempo)">
                                                 @TextoTiempo(d.DaTiempo)
                                             </span>
-                                            <div class="small-muted mt-1">
+                                            <div class="small-muted mt-2">
                                                 @Valor(d.MensajeCapacidad)
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <div class="d-flex flex-column align-items-start gap-2">
+                                                @if (estaProgramado)
+                                                {
+                                                    <span class="badge-calc badge-programado">
+                                                        <i class="fa-solid fa-circle-check"></i>
+                                                        Ya programado
+                                                    </span>
+                                                    <div class="small-muted">
+                                                        Programa #@d.ProgramaProduccionID
+                                                    </div>
+                                                    <a asp-controller="PlaneacionPrograma"
+                                                       asp-action="Index"
+                                                       class="btn btn-sm btn-erp-light">
+                                                        <i class="fa-solid fa-eye me-1"></i>
+                                                        Ver programa
+                                                    </a>
+                                                }
+                                                else if (cubiertoConPt)
+                                                {
+                                                    <span class="badge-calc badge-cubierto">
+                                                        <i class="fa-solid fa-warehouse"></i>
+                                                        Cubierto con PT
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge-calc badge-pendiente">
+                                                        <i class="fa-regular fa-clock"></i>
+                                                        Pendiente
+                                                    </span>
+                                                    <a asp-controller="PlaneacionPrograma"
+                                                       asp-action="CrearDesdeNecesidad"
+                                                       asp-route-releaseDetalleId="@d.ReleaseDetalleID"
+                                                       class="btn btn-sm btn-programar">
+                                                        <i class="fa-solid fa-industry me-1"></i>
+                                                        Programar renglón
+                                                    </a>
+                                                }
                                             </div>
                                         </td>
                                     </tr>
                                 }
-                            }
-                            else
-                            {
-                                <tr>
-                                    <td colspan="17" class="text-center text-muted">
-                                        No hay renglones en este release.
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                        <tfoot>
-                            <tr class="fw-bold">
-                                <td colspan="3" class="text-end">Totales</td>
-                                <td>@Model.TotalPiezasRequeridas.ToString("N0")</td>
-                                <td></td>
-                                <td></td>
-                                <td>@Model.TotalPiezasDesdePT.ToString("N0")</td>
-                                <td>@Model.TotalPiezasAProducir.ToString("N0")</td>
-                                <td>@Model.TotalMPRequeridaKg.ToString("N4")</td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td colspan="2"></td>
-                                <td>@Model.TotalHorasNecesarias.ToString("N2")</td>
-                                <td colspan="2"></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="noFilterResults" class="empty-state d-none">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <div class="fw-bold">No se encontraron renglones.</div>
+                        <div class="small">Cambia o limpia los filtros para volver a mostrar resultados.</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <i class="fa-regular fa-folder-open"></i>
+                        <div class="fw-bold">Este Release no contiene renglones activos.</div>
+                        <div class="small">Regresa a Releases para revisar otro registro.</div>
+                    </div>
+                }
             </div>
-        </div>
+        </section>
 
         <div class="sticky-actions">
-            <div class="d-flex justify-content-between gap-2 flex-wrap">
-                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-erp-light">
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <a asp-controller="PlaneacionRelease"
+                   asp-action="Index"
+                   class="btn btn-erp-light">
                     <i class="fa-solid fa-arrow-left me-1"></i>
                     Volver a Releases
                 </a>
 
                 <div class="d-flex gap-2 flex-wrap">
-                    <form asp-controller="PlaneacionRelease" asp-action="Recalcular" method="post">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@Model.ReleaseID" />
-                        <button type="submit" class="btn btn-erp-light">
-                            <i class="fa-solid fa-rotate me-1"></i>
-                            Recalcular
+                    @if (puedeRecalcular)
+                    {
+                        <form id="recalculateForm"
+                              asp-controller="PlaneacionRelease"
+                              asp-action="Recalcular"
+                              method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.ReleaseID" />
+                            <button id="recalculateButton"
+                                    type="submit"
+                                    class="btn btn-erp-light">
+                                <i class="fa-solid fa-rotate me-1"></i>
+                                <span class="btn-label">Recalcular</span>
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="btn btn-erp-light"
+                                disabled
+                                title="No se puede recalcular un Release que ya avanzó al programa.">
+                            <i class="fa-solid fa-lock me-1"></i>
+                            Recalcular bloqueado
                         </button>
-                    </form>
+                    }
 
-                    <button type="button" class="btn btn-erp-primary" disabled>
-                        <i class="fa-solid fa-industry me-1"></i>
-                        Generar programa
-                    </button>
-
-                    <button type="button" class="btn btn-erp-primary" disabled>
-                        <i class="fa-solid fa-file-circle-plus me-1"></i>
-                        Generar OF
-                    </button>
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Calculadora"
+                       class="btn btn-erp-primary">
+                        <i class="fa-solid fa-arrow-right me-1"></i>
+                        Revisar todas las necesidades
+                    </a>
                 </div>
             </div>
         </div>
-
     </div>
+
+    <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const searchInput = document.getElementById("detailSearch");
+                const statusFilter = document.getElementById("detailStatus");
+                const clearButton = document.getElementById("clearFilters");
+                const rows = Array.from(document.querySelectorAll(".detail-row"));
+                const table = document.getElementById("detailTable");
+                const noResults = document.getElementById("noFilterResults");
+                const resultsSummary = document.getElementById("resultsSummary");
+                const recalculateForm = document.getElementById("recalculateForm");
+                const recalculateButton = document.getElementById("recalculateButton");
+
+                function normalize(value) {
+                    return (value || "")
+                        .toString()
+                        .toLowerCase()
+                        .normalize("NFD")
+                        .replace(/[\u0300-\u036f]/g, "")
+                        .trim();
+                }
+
+                function applyFilters() {
+                    if (!searchInput || !statusFilter || rows.length === 0) {
+                        return;
+                    }
+
+                    const searchValue = normalize(searchInput.value);
+                    const statusValue = normalize(statusFilter.value);
+                    let visibleRows = 0;
+
+                    rows.forEach(function (row) {
+                        const rowSearch = normalize(row.dataset.search);
+                        const rowStatuses = normalize(row.dataset.status)
+                            .split(/\s+/)
+                            .filter(Boolean);
+
+                        const matchesSearch =
+                            !searchValue ||
+                            rowSearch.includes(searchValue);
+
+                        const matchesStatus =
+                            !statusValue ||
+                            rowStatuses.includes(statusValue);
+
+                        const isVisible = matchesSearch && matchesStatus;
+
+                        row.classList.toggle("d-none", !isVisible);
+
+                        if (isVisible) {
+                            visibleRows++;
+                        }
+                    });
+
+                    if (table) {
+                        table.classList.toggle("d-none", visibleRows === 0);
+                    }
+
+                    if (noResults) {
+                        noResults.classList.toggle("d-none", visibleRows !== 0);
+                    }
+
+                    if (resultsSummary) {
+                        resultsSummary.textContent =
+                            visibleRows + (visibleRows === 1 ? " registro" : " registros");
+                    }
+                }
+
+                searchInput?.addEventListener("input", applyFilters);
+                statusFilter?.addEventListener("change", applyFilters);
+
+                clearButton?.addEventListener("click", function () {
+                    if (searchInput) searchInput.value = "";
+                    if (statusFilter) statusFilter.value = "";
+                    applyFilters();
+                    searchInput?.focus();
+                });
+
+                recalculateForm?.addEventListener("submit", function (event) {
+                    const confirmed = window.confirm(
+                        "Se volverán a consultar inventarios, material, embalaje y capacidad para todos los renglones. ¿Deseas continuar?"
+                    );
+
+                    if (!confirmed) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    if (recalculateButton) {
+                        recalculateButton.disabled = true;
+                        const icon = recalculateButton.querySelector("i");
+                        const label = recalculateButton.querySelector(".btn-label");
+
+                        if (icon) {
+                            icon.className = "fa-solid fa-spinner fa-spin me-1";
+                        }
+
+                        if (label) {
+                            label.textContent = "Recalculando...";
+                        }
+                    }
+                });
+            });
+    </script>
 </body>
 </html>
