@@ -2,170 +2,282 @@
 
 @{
     Layout = null;
+
+    var totalReleases = Model?.Count ?? 0;
+    var totalRenglones = Model?.Sum(x => x.TotalRenglones) ?? 0;
+    var totalRequeridas = Model?.Sum(x => x.TotalPiezasRequeridas) ?? 0;
+    var totalProducir = Model?.Sum(x => x.TotalPiezasAProducir) ?? 0;
 }
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>Release | Planeación</title>
+    <title>Releases de clientes | Planeación</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
 
     <style>
-        :root {
-            --erp-blue: #004AAD;
-            --erp-blue-dark: #00347a;
-            --erp-gray: #f3f5f8;
-            --erp-border: #d9e1ec;
-            --erp-text: #263238;
-            --erp-muted: #667085;
-            --erp-green: #107c41;
-            --erp-orange: #b54708;
-            --erp-red: #b42318;
-        }
+            :root {
+                --erp-blue: #004AAD;
+                --erp-blue-dark: #00347a;
+                --erp-gray: #f3f5f8;
+                --erp-border: #d9e1ec;
+                --erp-text: #263238;
+                --erp-muted: #667085;
+                --erp-green: #107c41;
+                --erp-orange: #b54708;
+                --erp-red: #b42318;
+                --erp-purple: #6941c6;
+            }
 
-        body {
-            background: var(--erp-gray);
-            color: var(--erp-text);
-            font-family: "Segoe UI", Arial, sans-serif;
-        }
+            body {
+                background: var(--erp-gray);
+                color: var(--erp-text);
+                font-family: "Segoe UI", Arial, sans-serif;
+            }
 
-        .erp-shell {
-            max-width: 1500px;
-            margin: 0 auto;
-            padding: 28px;
-        }
+            .erp-shell {
+                max-width: 1500px;
+                margin: 0 auto;
+                padding: 28px;
+            }
 
-        .erp-header {
-            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
-            color: white;
-            border-radius: 22px;
-            padding: 28px 32px;
-            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
-            margin-bottom: 22px;
-        }
+            .erp-header {
+                background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+                color: white;
+                border-radius: 22px;
+                padding: 28px 32px;
+                box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+                margin-bottom: 22px;
+            }
 
-        .erp-header h1 {
-            font-size: 1.65rem;
-            margin: 0;
-            font-weight: 900;
-        }
+                .erp-header h1 {
+                    font-size: 1.65rem;
+                    margin: 0;
+                    font-weight: 900;
+                }
 
-        .erp-header p {
-            margin: 7px 0 0 0;
-            opacity: .92;
-        }
+                .erp-header p {
+                    margin: 7px 0 0 0;
+                    opacity: .92;
+                }
 
-        .erp-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 20px;
-            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
-            overflow: hidden;
-        }
+            .stage-label {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                padding: 6px 11px;
+                margin-bottom: 12px;
+                border: 1px solid rgba(255, 255, 255, .35);
+                border-radius: 999px;
+                background: rgba(255, 255, 255, .12);
+                font-size: .75rem;
+                font-weight: 900;
+                letter-spacing: .05em;
+                text-transform: uppercase;
+            }
 
-        .erp-card-header {
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--erp-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
-            flex-wrap: wrap;
-        }
+            .erp-card {
+                background: white;
+                border: 1px solid var(--erp-border);
+                border-radius: 20px;
+                box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+                overflow: hidden;
+            }
 
-        .erp-card-body {
-            padding: 22px;
-        }
+            .erp-card-header {
+                padding: 18px 22px;
+                border-bottom: 1px solid var(--erp-border);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 14px;
+                flex-wrap: wrap;
+            }
 
-        .btn-erp-primary {
-            background: var(--erp-blue);
-            border-color: var(--erp-blue);
-            color: white;
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
+            .erp-card-body {
+                padding: 22px;
+            }
 
-        .btn-erp-primary:hover {
-            background: var(--erp-blue-dark);
-            border-color: var(--erp-blue-dark);
-            color: white;
-        }
+            .btn-erp-primary {
+                background: var(--erp-blue);
+                border-color: var(--erp-blue);
+                color: white;
+                font-weight: 800;
+                border-radius: 13px;
+                padding: 10px 15px;
+            }
 
-        .btn-erp-light {
-            background: white;
-            border: 1px solid var(--erp-border);
-            color: var(--erp-blue-dark);
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
+                .btn-erp-primary:hover {
+                    background: var(--erp-blue-dark);
+                    border-color: var(--erp-blue-dark);
+                    color: white;
+                }
 
-        .metric-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
-            height: 100%;
-        }
+            .btn-erp-light {
+                background: white;
+                border: 1px solid var(--erp-border);
+                color: var(--erp-blue-dark);
+                font-weight: 800;
+                border-radius: 13px;
+                padding: 10px 15px;
+            }
 
-        .metric-label {
-            color: var(--erp-muted);
-            font-size: .78rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
+                .btn-erp-light:hover {
+                    background: #eef3fb;
+                    border-color: #b9c8db;
+                    color: var(--erp-blue-dark);
+                }
 
-        .metric-value {
-            font-size: 1.45rem;
-            font-weight: 900;
-            color: var(--erp-blue-dark);
-        }
+            .metric-card {
+                background: white;
+                border: 1px solid var(--erp-border);
+                border-radius: 18px;
+                padding: 18px;
+                box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
+                height: 100%;
+            }
 
-        .table thead th {
-            background: #eef3fb;
-            color: #00347a;
-            font-size: .78rem;
-            white-space: nowrap;
-            text-transform: uppercase;
-            letter-spacing: .03em;
-        }
+            .metric-icon {
+                width: 38px;
+                height: 38px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 12px;
+                border-radius: 12px;
+                background: #eef3fb;
+                color: var(--erp-blue);
+            }
 
-        .table td {
-            font-size: .88rem;
-            vertical-align: middle;
-        }
+            .metric-label {
+                color: var(--erp-muted);
+                font-size: .78rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+            }
 
-        .badge-status {
-            display: inline-flex;
-            align-items: center;
-            border-radius: 999px;
-            padding: 7px 12px;
-            font-size: .78rem;
-            font-weight: 900;
-            border: 1px solid transparent;
-            background: #eef6ff;
-            color: #175cd3;
-            border-color: #b2ddff;
-        }
+            .metric-value {
+                font-size: 1.45rem;
+                font-weight: 900;
+                color: var(--erp-blue-dark);
+            }
 
-        .empty-state {
-            text-align: center;
-            padding: 42px 18px;
-            color: var(--erp-muted);
-        }
+            .filters {
+                background: #f8fafc;
+                border: 1px solid var(--erp-border);
+                border-radius: 16px;
+                padding: 16px;
+                margin-bottom: 18px;
+            }
 
-        .empty-state i {
-            font-size: 2.3rem;
-            color: #98a2b3;
-            margin-bottom: 10px;
-        }
+            .form-control,
+            .form-select {
+                border-color: var(--erp-border);
+                border-radius: 12px;
+                min-height: 43px;
+            }
+
+                .form-control:focus,
+                .form-select:focus {
+                    border-color: #84adff;
+                    box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
+                }
+
+            .table thead th {
+                background: #eef3fb;
+                color: #00347a;
+                font-size: .76rem;
+                white-space: nowrap;
+                text-transform: uppercase;
+                letter-spacing: .03em;
+            }
+
+            .table td {
+                font-size: .88rem;
+                vertical-align: middle;
+            }
+
+            .badge-status {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                padding: 7px 12px;
+                font-size: .76rem;
+                font-weight: 900;
+                white-space: nowrap;
+                border: 1px solid transparent;
+            }
+
+            .status-capturado {
+                color: #175cd3;
+                background: #eff8ff;
+                border-color: #b2ddff;
+            }
+
+            .status-calculado {
+                color: var(--erp-purple);
+                background: #f4f3ff;
+                border-color: #d9d6fe;
+            }
+
+            .status-programado {
+                color: var(--erp-orange);
+                background: #fffaeb;
+                border-color: #fedf89;
+            }
+
+            .status-con-of,
+            .status-cerrado {
+                color: var(--erp-green);
+                background: #ecfdf3;
+                border-color: #abefc6;
+            }
+
+            .status-cancelado {
+                color: var(--erp-red);
+                background: #fef3f2;
+                border-color: #fecdca;
+            }
+
+            .status-desconocido {
+                color: #475467;
+                background: #f2f4f7;
+                border-color: #d0d5dd;
+            }
+
+            .empty-state {
+                text-align: center;
+                padding: 42px 18px;
+                color: var(--erp-muted);
+            }
+
+                .empty-state i {
+                    font-size: 2.3rem;
+                    color: #98a2b3;
+                    margin-bottom: 10px;
+                }
+
+            .results-summary {
+                color: var(--erp-muted);
+                font-size: .84rem;
+                font-weight: 700;
+            }
+
+            @@media (max-width: 767.98px) {
+                .erp-shell {
+                    padding: 16px;
+                }
+
+                .erp-header {
+                    padding: 22px;
+                    border-radius: 18px;
+                }
+            }
     </style>
 </head>
 
@@ -175,22 +287,47 @@
         <div class="erp-header">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
+                    <div class="stage-label">
+                        <i class="fa-solid fa-flag-checkered"></i>
+                        Etapa 1 del flujo
+                    </div>
+
                     <h1>
                         <i class="fa-solid fa-calendar-check me-2"></i>
-                        Release / Programa de Planeación
+                        Releases de clientes
                     </h1>
+
                     <p>
-                        Recepción de demanda del cliente y cálculo inicial de necesidades de producción.
+                        Recepción de la demanda del cliente antes del cálculo de necesidades y la programación.
                     </p>
                 </div>
 
                 <div class="d-flex gap-2 flex-wrap">
-                    <a asp-controller="Menu" asp-action="Grupo" asp-route-id="3" class="btn btn-light fw-bold rounded-3">
+                    <a asp-controller="Menu"
+                       asp-action="Grupo"
+                       asp-route-id="3"
+                       class="btn btn-light fw-bold rounded-3">
                         <i class="fa-solid fa-arrow-left me-1"></i>
                         Volver
                     </a>
 
-                    <a asp-controller="PlaneacionRelease" asp-action="Crear" class="btn btn-light fw-bold rounded-3">
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Calculadora"
+                       class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-calculator me-1"></i>
+                        Necesidades
+                    </a>
+
+                    <a asp-controller="PlaneacionPrograma"
+                       asp-action="Index"
+                       class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-list-ol me-1"></i>
+                        Programa general
+                    </a>
+
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Crear"
+                       class="btn btn-warning fw-bold rounded-3">
                         <i class="fa-solid fa-plus me-1"></i>
                         Nuevo Release
                     </a>
@@ -214,37 +351,42 @@
             </div>
         }
 
-        @{
-            var totalReleases = Model?.Count ?? 0;
-            var totalRenglones = Model?.Sum(x => x.TotalRenglones) ?? 0;
-            var totalRequeridas = Model?.Sum(x => x.TotalPiezasRequeridas) ?? 0;
-            var totalProducir = Model?.Sum(x => x.TotalPiezasAProducir) ?? 0;
-        }
-
         <div class="row g-3 mb-3">
-            <div class="col-md-3">
+            <div class="col-sm-6 col-xl-3">
                 <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </div>
                     <div class="metric-label">Releases</div>
-                    <div class="metric-value">@totalReleases</div>
+                    <div class="metric-value">@totalReleases.ToString("N0")</div>
                 </div>
             </div>
 
-            <div class="col-md-3">
+            <div class="col-sm-6 col-xl-3">
                 <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-list-check"></i>
+                    </div>
                     <div class="metric-label">Renglones</div>
-                    <div class="metric-value">@totalRenglones</div>
+                    <div class="metric-value">@totalRenglones.ToString("N0")</div>
                 </div>
             </div>
 
-            <div class="col-md-3">
+            <div class="col-sm-6 col-xl-3">
                 <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                    </div>
                     <div class="metric-label">Piezas requeridas</div>
                     <div class="metric-value">@totalRequeridas.ToString("N0")</div>
                 </div>
             </div>
 
-            <div class="col-md-3">
+            <div class="col-sm-6 col-xl-3">
                 <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fa-solid fa-industry"></i>
+                    </div>
                     <div class="metric-label">Piezas a producir</div>
                     <div class="metric-value">@totalProducir.ToString("N0")</div>
                 </div>
@@ -255,20 +397,65 @@
             <div class="erp-card-header">
                 <div>
                     <h2 class="h5 fw-bold m-0 text-primary">
-                        <i class="fa-solid fa-list-check me-2"></i>
-                        Releases capturados
+                        <i class="fa-solid fa-inbox me-2"></i>
+                        Releases recibidos
                     </h2>
                     <div class="text-muted small">
-                        Releases recibidos del cliente y calculados por Planeación.
+                        Consulta cada Release y revisa su avance dentro del flujo de Planeación.
                     </div>
+                </div>
+
+                <div id="resultsSummary" class="results-summary">
+                    @totalReleases registro@(totalReleases == 1 ? "" : "s")
                 </div>
             </div>
 
             <div class="erp-card-body">
                 @if (Model != null && Model.Any())
                 {
+                    <div class="filters">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-6">
+                                <label for="releaseSearch" class="form-label small fw-bold text-muted">
+                                    Buscar Release
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white border-end-0 rounded-start-3">
+                                        <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                                    </span>
+                                    <input id="releaseSearch"
+                                           type="search"
+                                           class="form-control border-start-0"
+                                           placeholder="Folio, cliente o versión..." />
+                                </div>
+                            </div>
+
+                            <div class="col-md-7 col-lg-4">
+                                <label for="statusFilter" class="form-label small fw-bold text-muted">
+                                    Estatus
+                                </label>
+                                <select id="statusFilter" class="form-select">
+                                    <option value="">Todos los estatus</option>
+                                    <option value="capturado">Capturado</option>
+                                    <option value="calculado">Calculado</option>
+                                    <option value="programado">Programado</option>
+                                    <option value="con of">Con OF</option>
+                                    <option value="cerrado">Cerrado</option>
+                                    <option value="cancelado">Cancelado</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-5 col-lg-2 d-grid">
+                                <button id="clearFilters" type="button" class="btn btn-erp-light">
+                                    <i class="fa-solid fa-filter-circle-xmark me-1"></i>
+                                    Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="table-responsive">
-                        <table class="table table-bordered table-hover align-middle">
+                        <table class="table table-bordered table-hover align-middle mb-0">
                             <thead>
                                 <tr>
                                     <th>Folio</th>
@@ -276,17 +463,36 @@
                                     <th>Recepción</th>
                                     <th>Versión</th>
                                     <th>Estatus</th>
-                                    <th>Renglones</th>
-                                    <th>Req.</th>
-                                    <th>A producir</th>
+                                    <th class="text-end">Renglones</th>
+                                    <th class="text-end">Requeridas</th>
+                                    <th class="text-end">A producir</th>
                                     <th>Creado</th>
                                     <th class="text-center">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="releaseTableBody">
                                 @foreach (var item in Model)
                                 {
-                                    <tr>
+                                    var statusClass = item.EstatusID switch
+                                    {
+                                        1 => "status-capturado",
+                                        2 => "status-calculado",
+                                        3 => "status-programado",
+                                        4 => "status-con-of",
+                                        9 => "status-cerrado",
+                                        99 => "status-cancelado",
+                                        _ => "status-desconocido"
+                                    };
+
+                                    var searchableText = string.Join(" ",
+                                        item.FolioRelease ?? string.Empty,
+                                        item.ClienteNombre ?? string.Empty,
+                                        item.VersionRelease ?? string.Empty
+                                    ).ToLowerInvariant();
+
+                                    <tr class="release-row"
+                                        data-search="@searchableText"
+                                        data-status="@((item.EstatusNombre ?? string.Empty).ToLowerInvariant())">
                                         <td>
                                             <strong>@(item.FolioRelease ?? "-")</strong>
                                         </td>
@@ -294,14 +500,14 @@
                                         <td>@item.FechaRecepcion.ToString("dd/MM/yyyy")</td>
                                         <td>@(item.VersionRelease ?? "-")</td>
                                         <td>
-                                            <span class="badge-status">
+                                            <span class="badge-status @statusClass">
                                                 <i class="fa-solid fa-circle me-2" style="font-size:.45rem;"></i>
-                                                @item.EstatusNombre
+                                                @(item.EstatusNombre ?? "Desconocido")
                                             </span>
                                         </td>
-                                        <td>@item.TotalRenglones.ToString("N0")</td>
-                                        <td>@item.TotalPiezasRequeridas.ToString("N0")</td>
-                                        <td>
+                                        <td class="text-end">@item.TotalRenglones.ToString("N0")</td>
+                                        <td class="text-end">@item.TotalPiezasRequeridas.ToString("N0")</td>
+                                        <td class="text-end">
                                             <strong>@item.TotalPiezasAProducir.ToString("N0")</strong>
                                         </td>
                                         <td>@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
@@ -309,9 +515,10 @@
                                             <a asp-controller="PlaneacionRelease"
                                                asp-action="Detalle"
                                                asp-route-id="@item.ReleaseID"
-                                               class="btn btn-sm btn-erp-primary">
+                                               class="btn btn-sm btn-erp-primary"
+                                               title="Abrir detalle del Release">
                                                 <i class="fa-solid fa-eye me-1"></i>
-                                                Ver
+                                                Ver detalle
                                             </a>
                                         </td>
                                     </tr>
@@ -319,24 +526,101 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <div id="noFilterResults" class="empty-state d-none">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <div class="fw-bold">No se encontraron Releases.</div>
+                        <div class="small">Cambia o limpia los filtros para volver a mostrar registros.</div>
+                    </div>
                 }
                 else
                 {
                     <div class="empty-state">
                         <i class="fa-regular fa-folder-open"></i>
-                        <div class="fw-bold">No hay releases capturados.</div>
-                        <div class="small">Comienza capturando el primer Release del cliente.</div>
+                        <div class="fw-bold">No hay Releases capturados.</div>
+                        <div class="small">Comienza registrando la demanda recibida del cliente.</div>
                         <div class="mt-3">
-                            <a asp-controller="PlaneacionRelease" asp-action="Crear" class="btn btn-erp-primary">
+                            <a asp-controller="PlaneacionRelease"
+                               asp-action="Crear"
+                               class="btn btn-erp-primary">
                                 <i class="fa-solid fa-plus me-1"></i>
-                                Crear Release
+                                Crear primer Release
                             </a>
                         </div>
                     </div>
                 }
             </div>
         </div>
-
     </div>
+
+    <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const searchInput = document.getElementById("releaseSearch");
+                const statusFilter = document.getElementById("statusFilter");
+                const clearButton = document.getElementById("clearFilters");
+                const rows = Array.from(document.querySelectorAll(".release-row"));
+                const table = document.querySelector(".table-responsive");
+                const noResults = document.getElementById("noFilterResults");
+                const resultsSummary = document.getElementById("resultsSummary");
+
+                if (!searchInput || !statusFilter || rows.length === 0) {
+                    return;
+                }
+
+                function normalize(value) {
+                    return (value || "")
+                        .toString()
+                        .toLowerCase()
+                        .normalize("NFD")
+                        .replace(/[\u0300-\u036f]/g, "")
+                        .trim();
+                }
+
+                function applyFilters() {
+                    const searchValue = normalize(searchInput.value);
+                    const statusValue = normalize(statusFilter.value);
+                    let visibleRows = 0;
+
+                    rows.forEach(function (row) {
+                        const rowSearch = normalize(row.dataset.search);
+                        const rowStatus = normalize(row.dataset.status);
+                        const matchesSearch = !searchValue || rowSearch.includes(searchValue);
+                        const matchesStatus = !statusValue || rowStatus === statusValue;
+                        const isVisible = matchesSearch && matchesStatus;
+
+                        row.classList.toggle("d-none", !isVisible);
+
+                        if (isVisible) {
+                            visibleRows++;
+                        }
+                    });
+
+                    if (table) {
+                        table.classList.toggle("d-none", visibleRows === 0);
+                    }
+
+                    if (noResults) {
+                        noResults.classList.toggle("d-none", visibleRows !== 0);
+                    }
+
+                    if (resultsSummary) {
+                        resultsSummary.textContent =
+                            visibleRows + (visibleRows === 1 ? " registro" : " registros");
+                    }
+                }
+
+                searchInput.addEventListener("input", applyFilters);
+                statusFilter.addEventListener("change", applyFilters);
+
+                if (clearButton) {
+                    clearButton.addEventListener("click", function () {
+                        searchInput.value = "";
+                        statusFilter.value = "";
+                        applyFilters();
+                        searchInput.focus();
+                    });
+                }
+            });
+    </script>
 </body>
 </html>

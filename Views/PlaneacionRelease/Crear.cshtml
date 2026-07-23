@@ -2,12 +2,6 @@
 
 @{
     Layout = null;
-
-    var clientesData = Model.Clientes.Select(x => new { value = x.Value, text = x.Text }).ToList();
-    var partesData = Model.Partes.Select(x => new { value = x.Value, text = x.Text }).ToList();
-
-    var clientesJson = System.Text.Json.JsonSerializer.Serialize(clientesData);
-    var partesJson = System.Text.Json.JsonSerializer.Serialize(partesData);
 }
 
 <!DOCTYPE html>
@@ -21,156 +15,294 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
 
     <style>
-        :root {
-            --erp-blue: #004AAD;
-            --erp-blue-dark: #00347a;
-            --erp-gray: #f3f5f8;
-            --erp-border: #d9e1ec;
-            --erp-text: #263238;
-        }
+            :root {
+                --erp-blue: #004AAD;
+                --erp-blue-dark: #00347a;
+                --erp-gray: #f3f5f8;
+                --erp-border: #d9e1ec;
+                --erp-text: #263238;
+                --erp-muted: #667085;
+                --erp-green: #107c41;
+                --erp-red: #b42318;
+                --erp-orange: #b54708;
+            }
 
-        body {
-            background: var(--erp-gray);
-            color: var(--erp-text);
-            font-family: "Segoe UI", Arial, sans-serif;
-        }
+            body {
+                background: var(--erp-gray);
+                color: var(--erp-text);
+                font-family: "Segoe UI", Arial, sans-serif;
+            }
 
-        .erp-shell {
-            max-width: 1550px;
-            margin: 0 auto;
-            padding: 28px;
-        }
+            .erp-shell {
+                max-width: 1500px;
+                margin: 0 auto;
+                padding: 28px;
+            }
 
-        .erp-header {
-            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
-            color: white;
-            border-radius: 22px;
-            padding: 28px 32px;
-            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
-            margin-bottom: 22px;
-        }
+            .erp-header {
+                background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+                color: white;
+                border-radius: 22px;
+                padding: 28px 32px;
+                box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+                margin-bottom: 22px;
+            }
 
-            .erp-header h1 {
-                font-size: 1.65rem;
-                margin: 0;
+                .erp-header h1 {
+                    margin: 0;
+                    font-size: 1.65rem;
+                    font-weight: 900;
+                }
+
+                .erp-header p {
+                    max-width: 900px;
+                    margin: 7px 0 0;
+                    opacity: .92;
+                }
+
+            .stage-label {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                padding: 6px 11px;
+                margin-bottom: 12px;
+                border: 1px solid rgba(255, 255, 255, .35);
+                border-radius: 999px;
+                background: rgba(255, 255, 255, .12);
+                font-size: .75rem;
+                font-weight: 900;
+                letter-spacing: .05em;
+                text-transform: uppercase;
+            }
+
+            .erp-card {
+                overflow: hidden;
+                margin-bottom: 20px;
+                border: 1px solid var(--erp-border);
+                border-radius: 20px;
+                background: white;
+                box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            }
+
+            .erp-card-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 14px;
+                flex-wrap: wrap;
+                padding: 18px 22px;
+                border-bottom: 1px solid var(--erp-border);
+            }
+
+            .erp-card-body {
+                padding: 22px;
+            }
+
+            .section-number {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 34px;
+                height: 34px;
+                flex: 0 0 34px;
+                border-radius: 11px;
+                background: #e8f0ff;
+                color: var(--erp-blue);
+                font-size: .9rem;
                 font-weight: 900;
             }
 
-        .erp-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 20px;
-            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-
-        .erp-card-header {
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--erp-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
-            flex-wrap: wrap;
-        }
-
-        .erp-card-body {
-            padding: 22px;
-        }
-
-        .erp-label {
-            font-weight: 800;
-            color: #33465f;
-            font-size: .82rem;
-            margin-bottom: 6px;
-        }
-
-        .erp-input,
-        .erp-select,
-        .erp-textarea {
-            border-radius: 12px;
-            border: 1px solid var(--erp-border);
-            padding: 10px 12px;
-        }
-
-        .btn-erp-primary {
-            background: var(--erp-blue);
-            border-color: var(--erp-blue);
-            color: white;
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
-
-            .btn-erp-primary:hover {
-                background: var(--erp-blue-dark);
-                border-color: var(--erp-blue-dark);
-                color: white;
+            .erp-label {
+                margin-bottom: 6px;
+                color: #33465f;
+                font-size: .8rem;
+                font-weight: 800;
             }
 
-        .btn-erp-light {
-            background: white;
-            border: 1px solid var(--erp-border);
-            color: var(--erp-blue-dark);
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
+            .required-label::after {
+                content: " *";
+                color: var(--erp-red);
+            }
 
-        .btn-erp-danger {
-            background: white;
-            border: 1px solid #f2b8b5;
-            color: #b42318;
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
+            .form-control,
+            .form-select {
+                min-height: 43px;
+                border-color: var(--erp-border);
+                border-radius: 12px;
+            }
 
-        .renglon-card {
-            border: 1px solid var(--erp-border);
-            border-radius: 18px;
-            overflow: hidden;
-            margin-bottom: 18px;
-            background: white;
-        }
+                .form-control:focus,
+                .form-select:focus {
+                    border-color: #84adff;
+                    box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
+                }
 
-        .renglon-header {
-            background: #eef3fb;
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--erp-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
+            textarea.form-control {
+                min-height: 84px;
+            }
 
-        .renglon-body {
-            padding: 18px;
-        }
+            .btn-erp-primary {
+                padding: 10px 15px;
+                border-color: var(--erp-blue);
+                border-radius: 13px;
+                background: var(--erp-blue);
+                color: white;
+                font-weight: 800;
+            }
 
-        .badge-renglon {
-            background: var(--erp-blue);
-            color: white;
-            border-radius: 999px;
-            padding: 6px 12px;
-            font-weight: 900;
-        }
+                .btn-erp-primary:hover,
+                .btn-erp-primary:focus {
+                    border-color: var(--erp-blue-dark);
+                    background: var(--erp-blue-dark);
+                    color: white;
+                }
 
-        .small-help {
-            font-size: .78rem;
-            color: #758397;
-        }
+            .btn-erp-light {
+                padding: 10px 15px;
+                border: 1px solid var(--erp-border);
+                border-radius: 13px;
+                background: white;
+                color: var(--erp-blue-dark);
+                font-weight: 800;
+            }
 
-        .sticky-actions {
-            position: sticky;
-            bottom: 0;
-            background: rgba(243, 245, 248, .92);
-            backdrop-filter: blur(10px);
-            padding: 14px 0;
-            z-index: 20;
-        }
+                .btn-erp-light:hover {
+                    border-color: #b9c8db;
+                    background: #eef3fb;
+                    color: var(--erp-blue-dark);
+                }
+
+            .btn-erp-danger {
+                padding: 8px 12px;
+                border: 1px solid #f2b8b5;
+                border-radius: 11px;
+                background: white;
+                color: var(--erp-red);
+                font-weight: 800;
+            }
+
+                .btn-erp-danger:hover {
+                    border-color: #fda29b;
+                    background: #fef3f2;
+                    color: #912018;
+                }
+
+            .flow-note {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 15px 17px;
+                margin-bottom: 20px;
+                border: 1px solid #b2ddff;
+                border-radius: 16px;
+                background: #eff8ff;
+                color: #1849a9;
+            }
+
+                .flow-note i {
+                    margin-top: 2px;
+                    font-size: 1.05rem;
+                }
+
+            .summary-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                padding: 7px 11px;
+                border: 1px solid var(--erp-border);
+                border-radius: 999px;
+                background: #f8fafc;
+                color: #475467;
+                font-size: .78rem;
+                font-weight: 800;
+            }
+
+            .renglon-card {
+                overflow: hidden;
+                margin-bottom: 18px;
+                border: 1px solid var(--erp-border);
+                border-radius: 18px;
+                background: white;
+            }
+
+            .renglon-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                flex-wrap: wrap;
+                padding: 14px 16px;
+                border-bottom: 1px solid var(--erp-border);
+                background: #eef3fb;
+            }
+
+            .renglon-body {
+                padding: 18px;
+            }
+
+            .badge-renglon {
+                padding: 6px 12px;
+                border-radius: 999px;
+                background: var(--erp-blue);
+                color: white;
+                font-size: .78rem;
+                font-weight: 900;
+            }
+
+            .small-help {
+                margin-top: 5px;
+                color: #758397;
+                font-size: .76rem;
+            }
+
+            .validation-summary-valid {
+                display: none;
+            }
+
+            .validation-summary-errors ul {
+                margin-bottom: 0;
+            }
+
+            .form-error {
+                display: none;
+            }
+
+                .form-error.is-visible {
+                    display: block;
+                }
+
+            .sticky-actions {
+                position: sticky;
+                bottom: 0;
+                z-index: 20;
+                padding: 14px 0;
+                border-top: 1px solid rgba(217, 225, 236, .85);
+                background: rgba(243, 245, 248, .94);
+                backdrop-filter: blur(10px);
+            }
+
+            @@media (max-width: 767.98px) {
+                .erp-shell {
+                    padding: 16px;
+                }
+
+                .erp-header {
+                    padding: 22px;
+                    border-radius: 18px;
+                }
+
+                .erp-card-body {
+                    padding: 17px;
+                }
+
+                .sticky-actions .d-flex {
+                    flex-direction: column-reverse;
+                }
+
+                .sticky-actions .btn {
+                    width: 100%;
+                }
+            }
     </style>
 </head>
 
@@ -180,77 +312,137 @@
         <div class="erp-header">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
+                    <div class="stage-label">
+                        <i class="fa-solid fa-flag-checkered"></i>
+                        Etapa 1 · Captura del Release
+                    </div>
+
                     <h1>
                         <i class="fa-solid fa-calendar-plus me-2"></i>
-                        Nuevo Release
+                        Nuevo Release de cliente
                     </h1>
-                    <p class="mb-0 mt-2">
-                        Captura la demanda recibida del cliente. El sistema calculará PT disponible, piezas a producir, MP, embalaje y capacidad inicial.
+
+                    <p>
+                        Registra la demanda recibida. Al guardar, el sistema calculará automáticamente
+                        inventario PT, producción pendiente, material, embalaje y capacidad inicial.
                     </p>
                 </div>
 
-                <div>
-                    <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-arrow-left me-1"></i>
-                        Volver
-                    </a>
+                <a asp-controller="PlaneacionRelease"
+                   asp-action="Index"
+                   class="btn btn-light fw-bold rounded-3">
+                    <i class="fa-solid fa-arrow-left me-1"></i>
+                    Volver a Releases
+                </a>
+            </div>
+        </div>
+
+        <div class="flow-note">
+            <i class="fa-solid fa-circle-info"></i>
+            <div>
+                <div class="fw-bold">Esta pantalla solamente captura la demanda del cliente.</div>
+                <div class="small">
+                    El cálculo de necesidades se ejecutará al guardar y después podrás revisar el resultado antes de programar la producción.
                 </div>
             </div>
         </div>
 
-        <form asp-controller="PlaneacionRelease" asp-action="Crear" method="post" id="formRelease">
+        <form asp-controller="PlaneacionRelease"
+              asp-action="Crear"
+              method="post"
+              id="formRelease"
+              novalidate>
             @Html.AntiForgeryToken()
 
-            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            <div asp-validation-summary="All"
+                 class="alert alert-danger rounded-4 fw-semibold"
+                 id="serverValidationSummary"></div>
+
+            <div class="alert alert-danger rounded-4 fw-semibold form-error"
+                 id="formError"
+                 role="alert">
+                <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                <span id="formErrorText"></span>
+            </div>
 
             <div class="erp-card">
                 <div class="erp-card-header">
-                    <div>
-                        <h2 class="h5 fw-bold m-0 text-primary">
-                            <i class="fa-solid fa-file-lines me-2"></i>
-                            Encabezado del Release
-                        </h2>
-                        <div class="text-muted small">
-                            Información general recibida del cliente.
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="section-number">1</span>
+                        <div>
+                            <h2 class="h5 fw-bold m-0 text-primary">
+                                Datos generales
+                            </h2>
+                            <div class="text-muted small">
+                                Identificación y origen del Release recibido.
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="erp-card-body">
                     <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="erp-label">Folio Release</label>
-                            <input asp-for="FolioRelease" class="form-control erp-input" />
-                        </div>
-
-                        <div class="col-md-3">
-                            <label class="erp-label">Fecha recepción</label>
-                            <input asp-for="FechaRecepcion" type="date" class="form-control erp-input" />
-                        </div>
-
-                        <div class="col-md-3">
-                            <label class="erp-label">Versión release</label>
-                            <input asp-for="VersionRelease" class="form-control erp-input" placeholder="Ej. Semana 30 / Julio / Rev. 1" />
-                        </div>
-
-                        <div class="col-md-3">
-                            <label class="erp-label">Cliente</label>
-                            <select asp-for="ClienteID" class="form-select erp-select" id="ClienteID">
+                        <div class="col-md-6 col-xl-3">
+                            <label asp-for="ClienteID" class="erp-label required-label">Cliente</label>
+                            <select asp-for="ClienteID"
+                                    class="form-select"
+                                    id="ClienteID">
                                 <option value="">-- Selecciona cliente --</option>
-                                @foreach (var c in Model.Clientes)
+                                @foreach (var cliente in Model.Clientes)
                                 {
-                                    <option value="@c.Value">@c.Text</option>
+                                    <option value="@cliente.Value">@cliente.Text</option>
                                 }
                             </select>
                             <input asp-for="ClienteNombre" type="hidden" id="ClienteNombre" />
+                            <div class="small-help">
+                                La lista de partes se filtrará con base en el cliente.
+                            </div>
                         </div>
 
-                        <div class="col-12">
-                            <label class="erp-label">Observaciones</label>
+                        <div class="col-md-6 col-xl-3">
+                            <label asp-for="FolioRelease" class="erp-label">Folio Release</label>
+                            <input asp-for="FolioRelease"
+                                   class="form-control"
+                                   maxlength="40"
+                                   placeholder="Folio sugerido por el sistema" />
+                            <div class="small-help">
+                                Puedes conservar el folio sugerido.
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 col-xl-3">
+                            <label asp-for="FechaRecepcion" class="erp-label required-label">Fecha de recepción</label>
+                            <input asp-for="FechaRecepcion"
+                                   type="date"
+                                   class="form-control" />
+                        </div>
+
+                        <div class="col-md-6 col-xl-3">
+                            <label asp-for="VersionRelease" class="erp-label">Versión del Release</label>
+                            <input asp-for="VersionRelease"
+                                   class="form-control"
+                                   maxlength="50"
+                                   placeholder="Ej. Semana 30 / Rev. 1" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label asp-for="ArchivoOrigenNombre" class="erp-label">Archivo u origen</label>
+                            <input asp-for="ArchivoOrigenNombre"
+                                   class="form-control"
+                                   maxlength="255"
+                                   placeholder="Ej. Release_S30.xlsx o correo del cliente" />
+                            <div class="small-help">
+                                Referencia del archivo, correo o documento del que se capturó la información.
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label asp-for="Observaciones" class="erp-label">Observaciones</label>
                             <textarea asp-for="Observaciones"
-                                      class="form-control erp-textarea"
+                                      class="form-control"
+                                      maxlength="500"
                                       rows="2"
-                                      placeholder="Notas del release, archivo origen, correo, versión enviada por cliente..."></textarea>
+                                      placeholder="Notas, cambios de versión o indicaciones del cliente..."></textarea>
                         </div>
                     </div>
                 </div>
@@ -258,20 +450,36 @@
 
             <div class="erp-card">
                 <div class="erp-card-header">
-                    <div>
-                        <h2 class="h5 fw-bold m-0 text-primary">
-                            <i class="fa-solid fa-layer-group me-2"></i>
-                            Renglones del Release
-                        </h2>
-                        <div class="text-muted small">
-                            Captura parte, fecha requerida y cantidad solicitada.
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="section-number">2</span>
+                        <div>
+                            <h2 class="h5 fw-bold m-0 text-primary">
+                                Demanda del cliente
+                            </h2>
+                            <div class="text-muted small">
+                                Captura la parte, fecha requerida y cantidad de cada renglón.
+                            </div>
                         </div>
                     </div>
 
-                    <button type="button" class="btn btn-erp-primary" onclick="agregarRenglon()">
-                        <i class="fa-solid fa-plus me-1"></i>
-                        Agregar renglón
-                    </button>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="summary-chip">
+                            <i class="fa-solid fa-list-ol"></i>
+                            <span id="totalRenglones">0</span> renglón(es)
+                        </span>
+
+                        <span class="summary-chip">
+                            <i class="fa-solid fa-cubes"></i>
+                            <span id="totalCantidad">0</span> pieza(s)
+                        </span>
+
+                        <button type="button"
+                                class="btn btn-erp-primary"
+                                id="btnAgregarRenglon">
+                            <i class="fa-solid fa-plus me-1"></i>
+                            Agregar renglón
+                        </button>
+                    </div>
                 </div>
 
                 <div class="erp-card-body">
@@ -284,54 +492,69 @@
                                         <span class="badge-renglon">
                                             Renglón <span class="numero-renglon">@(i + 1)</span>
                                         </span>
-                                        <span class="text-muted small fw-semibold">Demanda del cliente</span>
+                                        <span class="text-muted small fw-semibold">
+                                            Requerimiento del cliente
+                                        </span>
                                     </div>
 
-                                    <button type="button" class="btn btn-sm btn-erp-danger" onclick="eliminarRenglon(this)">
+                                    <button type="button"
+                                            class="btn btn-sm btn-erp-danger btn-quitar-renglon">
                                         <i class="fa-regular fa-trash-can me-1"></i>
                                         Quitar
                                     </button>
                                 </div>
 
                                 <div class="renglon-body">
-                                    <input type="hidden" name="Detalles[@i].Renglon" value="@(i + 1)" class="input-renglon" />
+                                    <input type="hidden"
+                                           name="Detalles[@i].Renglon"
+                                           value="@(i + 1)"
+                                           class="input-renglon" />
 
                                     <div class="row g-3">
-                                        <div class="col-md-6">
-                                            <label class="erp-label">Parte</label>
-                                            <select name="Detalles[@i].ParteID" class="form-select erp-select parte-select">
+                                        <div class="col-lg-6">
+                                            <label class="erp-label required-label">Parte</label>
+                                            <select name="Detalles[@i].ParteID"
+                                                    class="form-select parte-select"
+                                                    data-selected="@Model.Detalles[i].ParteID">
                                                 <option value="">-- Selecciona cliente primero --</option>
                                             </select>
                                             <div class="small-help">
-                                                Se usará para buscar PT, MP, embalaje, máquina y molde.
+                                                Se utilizará para consultar PT, MP, embalaje, máquina y molde.
                                             </div>
                                         </div>
 
-                                        <div class="col-md-3">
-                                            <label class="erp-label">Fecha requerida</label>
+                                        <div class="col-md-6 col-lg-3">
+                                            <label class="erp-label required-label">Fecha requerida</label>
                                             <input name="Detalles[@i].FechaRequerida"
                                                    type="date"
                                                    value="@(Model.Detalles[i].FechaRequerida?.ToString("yyyy-MM-dd"))"
-                                                   class="form-control erp-input fecha-requerida-input" />
+                                                   class="form-control fecha-requerida-input" />
                                         </div>
 
-                                        <div class="col-md-3">
-                                            <label class="erp-label">Cantidad requerida</label>
+                                        <div class="col-md-6 col-lg-3">
+                                            <label class="erp-label required-label">Cantidad requerida</label>
                                             <input name="Detalles[@i].CantidadRequerida"
                                                    type="number"
-                                                   min="0"
+                                                   min="1"
+                                                   step="1"
                                                    value="@Model.Detalles[i].CantidadRequerida"
-                                                   class="form-control erp-input cantidad-input" />
+                                                   class="form-control cantidad-input" />
                                         </div>
 
-                                        <div class="col-md-4">
+                                        <div class="col-lg-4">
                                             <label class="erp-label">Referencia SAP / cliente</label>
-                                            <input name="Detalles[@i].ReferenciaSAP"   class="form-control erp-input referencia-input" />
+                                            <input name="Detalles[@i].ReferenciaSAP"
+                                                   value="@Model.Detalles[i].ReferenciaSAP"
+                                                   class="form-control referencia-input"
+                                                   readonly />
                                         </div>
 
-                                        <div class="col-md-8">
+                                        <div class="col-lg-8">
                                             <label class="erp-label">Designación / descripción</label>
-                                            <input name="Detalles[@i].DesignacionDescripcionSAP"    class="form-control erp-input designacion-input" />
+                                            <input name="Detalles[@i].DesignacionDescripcionSAP"
+                                                   value="@Model.Detalles[i].DesignacionDescripcionSAP"
+                                                   class="form-control designacion-input"
+                                                   readonly />
                                         </div>
                                     </div>
                                 </div>
@@ -339,7 +562,9 @@
                         }
                     </div>
 
-                    <button type="button" class="btn btn-erp-light" onclick="agregarRenglon()">
+                    <button type="button"
+                            class="btn btn-erp-light"
+                            id="btnAgregarOtroRenglon">
                         <i class="fa-solid fa-plus me-1"></i>
                         Agregar otro renglón
                     </button>
@@ -348,13 +573,17 @@
 
             <div class="sticky-actions">
                 <div class="d-flex justify-content-end gap-2">
-                    <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-erp-light">
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Index"
+                       class="btn btn-erp-light">
                         Cancelar
                     </a>
 
-                    <button type="submit" class="btn btn-erp-primary">
+                    <button type="submit"
+                            class="btn btn-erp-primary"
+                            id="btnGuardar">
                         <i class="fa-solid fa-calculator me-1"></i>
-                        Guardar y calcular necesidades
+                        <span class="btn-label">Guardar y calcular necesidades</span>
                     </button>
                 </div>
             </div>
@@ -362,285 +591,448 @@
     </div>
 
     <script>
-        const clientesData = @Html.Raw(clientesJson);
-        const partesData = @Html.Raw(partesJson);
-        const urlParteInfoRelease = '@Url.Action("ObtenerParteInfoRelease", "PlaneacionRelease")';
-        const urlPartesPorCliente = '@Url.Action("ObtenerPartesPorCliente", "PlaneacionRelease")';
+            const urlParteInfoRelease = '@Url.Action("ObtenerParteInfoRelease", "PlaneacionRelease")';
+            const urlPartesPorCliente = '@Url.Action("ObtenerPartesPorCliente", "PlaneacionRelease")';
 
-        function escapeHtml(value) {
-            return String(value ?? '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", '&#039;')
-                .replaceAll('`', '&#096;');
-        }
+            const formRelease = document.getElementById('formRelease');
+            const clienteSelect = document.getElementById('ClienteID');
+            const clienteNombreInput = document.getElementById('ClienteNombre');
+            const contenedorRenglones = document.getElementById('contenedorRenglones');
+            const formError = document.getElementById('formError');
+            const formErrorText = document.getElementById('formErrorText');
+            const btnGuardar = document.getElementById('btnGuardar');
 
-        function crearOptionsPartes() {
-            let html = '<option value="">-- Selecciona parte --</option>';
+            let clientePartesCargado = null;
+            let partesClienteActual = [];
 
-            partesData.forEach(x => {
-                html += `<option value="${escapeHtml(x.value)}">${escapeHtml(x.text)}</option>`;
-            });
-
-            return html;
-        }
-
-                function agregarRenglon() {
-            const contenedor = document.getElementById('contenedorRenglones');
-            const index = contenedor.querySelectorAll('.renglon-item').length;
-
-            contenedor.insertAdjacentHTML('beforeend', crearHtmlRenglon(index));
-            renumerarRenglones();
-
-            const clienteId = document.getElementById('ClienteID')?.value;
-
-            if (clienteId && Number(clienteId) > 0) {
-                cargarPartesPorCliente(clienteId);
+            function escapeHtml(value) {
+                return String(value ?? '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;')
+                    .replaceAll('`', '&#096;');
             }
-        }
 
-        function crearHtmlRenglon(i) {
-            const hoy = new Date().toISOString().slice(0, 10);
+            function fechaLocalActual() {
+                const ahora = new Date();
+                const local = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
+                return local.toISOString().slice(0, 10);
+            }
 
-            return `
-                <div class="renglon-card renglon-item" data-index="${i}">
-                    <div class="renglon-header">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge-renglon">
-                                Renglón <span class="numero-renglon">${i + 1}</span>
-                            </span>
-                            <span class="text-muted small fw-semibold">Demanda del cliente</span>
+            function crearOptionsDesdeLista(data, placeholder) {
+                let html = `<option value="">${escapeHtml(placeholder)}</option>`;
+
+                data.forEach(item => {
+                    html += `<option value="${escapeHtml(item.value)}">${escapeHtml(item.text)}</option>`;
+                });
+
+                return html;
+            }
+
+            function llenarSelectPartes(select, partes, selectedValue = '') {
+                select.innerHTML = crearOptionsDesdeLista(partes, '-- Selecciona parte --');
+
+                if (selectedValue && select.querySelector(`option[value="${CSS.escape(String(selectedValue))}"]`)) {
+                    select.value = String(selectedValue);
+                }
+
+                select.dataset.selected = select.value || '';
+            }
+
+            async function cargarPartesPorCliente(clienteId, preservarSeleccion) {
+                const selects = Array.from(document.querySelectorAll('.parte-select'));
+                const seleccionAnterior = selects.map(select =>
+                    preservarSeleccion ? (select.value || select.dataset.selected || '') : ''
+                );
+
+                if (!clienteId || Number(clienteId) <= 0) {
+                    partesClienteActual = [];
+                    clientePartesCargado = null;
+
+                    selects.forEach(select => {
+                        select.innerHTML = '<option value="">-- Selecciona cliente primero --</option>';
+                        select.dataset.selected = '';
+                        limpiarInfoRenglon(select.closest('.renglon-item'));
+                    });
+
+                    return;
+                }
+
+                selects.forEach(select => {
+                    select.innerHTML = '<option value="">Cargando partes...</option>';
+                    select.disabled = true;
+                });
+
+                try {
+                    const response = await fetch(
+                        `${urlPartesPorCliente}?clienteId=${encodeURIComponent(clienteId)}`
+                    );
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.ok) {
+                        throw new Error(data.mensaje || 'No se pudieron cargar las partes del cliente.');
+                    }
+
+                    partesClienteActual = data.partes || [];
+                    clientePartesCargado = String(clienteId);
+
+                    selects.forEach((select, index) => {
+                        llenarSelectPartes(select, partesClienteActual, seleccionAnterior[index]);
+                        select.disabled = false;
+
+                        if (!preservarSeleccion) {
+                            limpiarInfoRenglon(select.closest('.renglon-item'));
+                        }
+                    });
+                } catch (error) {
+                    console.error(error);
+
+                    selects.forEach(select => {
+                        select.innerHTML = '<option value="">-- No fue posible cargar partes --</option>';
+                        select.disabled = false;
+                    });
+
+                    mostrarError(error.message || 'No se pudieron cargar las partes del cliente.');
+                }
+            }
+
+            function crearHtmlRenglon(index) {
+                return `
+                    <div class="renglon-card renglon-item" data-index="${index}">
+                        <div class="renglon-header">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge-renglon">
+                                    Renglón <span class="numero-renglon">${index + 1}</span>
+                                </span>
+                                <span class="text-muted small fw-semibold">
+                                    Requerimiento del cliente
+                                </span>
+                            </div>
+
+                            <button type="button"
+                                    class="btn btn-sm btn-erp-danger btn-quitar-renglon">
+                                <i class="fa-regular fa-trash-can me-1"></i>
+                                Quitar
+                            </button>
                         </div>
 
-                        <button type="button" class="btn btn-sm btn-erp-danger" onclick="eliminarRenglon(this)">
-                            <i class="fa-regular fa-trash-can me-1"></i>
-                            Quitar
-                        </button>
-                    </div>
+                        <div class="renglon-body">
+                            <input type="hidden"
+                                   name="Detalles[${index}].Renglon"
+                                   value="${index + 1}"
+                                   class="input-renglon" />
 
-                    <div class="renglon-body">
-                        <input type="hidden" name="Detalles[${i}].Renglon" value="${i + 1}" class="input-renglon" />
+                            <div class="row g-3">
+                                <div class="col-lg-6">
+                                    <label class="erp-label required-label">Parte</label>
+                                    <select name="Detalles[${index}].ParteID"
+                                            class="form-select parte-select"
+                                            data-selected="">
+                                        <option value="">-- Selecciona cliente primero --</option>
+                                    </select>
+                                    <div class="small-help">
+                                        Se utilizará para consultar PT, MP, embalaje, máquina y molde.
+                                    </div>
+                                </div>
 
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="erp-label">Parte</label>
-                                        <select name="Detalles[${i}].ParteID" class="form-select erp-select parte-select">
-            <option value="">-- Selecciona cliente primero --</option>
-        </select>
-                                <div class="small-help">
-                                    Se usará para buscar PT, MP, embalaje, máquina y molde.
+                                <div class="col-md-6 col-lg-3">
+                                    <label class="erp-label required-label">Fecha requerida</label>
+                                    <input name="Detalles[${index}].FechaRequerida"
+                                           type="date"
+                                           value="${fechaLocalActual()}"
+                                           class="form-control fecha-requerida-input" />
+                                </div>
+
+                                <div class="col-md-6 col-lg-3">
+                                    <label class="erp-label required-label">Cantidad requerida</label>
+                                    <input name="Detalles[${index}].CantidadRequerida"
+                                           type="number"
+                                           min="1"
+                                           step="1"
+                                           class="form-control cantidad-input" />
+                                </div>
+
+                                <div class="col-lg-4">
+                                    <label class="erp-label">Referencia SAP / cliente</label>
+                                    <input name="Detalles[${index}].ReferenciaSAP"
+                                           class="form-control referencia-input"
+                                           readonly />
+                                </div>
+
+                                <div class="col-lg-8">
+                                    <label class="erp-label">Designación / descripción</label>
+                                    <input name="Detalles[${index}].DesignacionDescripcionSAP"
+                                           class="form-control designacion-input"
+                                           readonly />
                                 </div>
                             </div>
-
-                            <div class="col-md-3">
-                                <label class="erp-label">Fecha requerida</label>
-                                <input name="Detalles[${i}].FechaRequerida"
-                                       type="date"
-                                       value="${hoy}"
-                                       class="form-control erp-input fecha-requerida-input" />
-                            </div>
-
-                            <div class="col-md-3">
-                                <label class="erp-label">Cantidad requerida</label>
-                                <input name="Detalles[${i}].CantidadRequerida"
-                                       type="number"
-                                       min="0"
-                                       class="form-control erp-input cantidad-input" />
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="erp-label">Referencia SAP / cliente</label>
-                                <input name="Detalles[${i}].ReferenciaSAP" class="form-control erp-input referencia-input" />
-                            </div>
-
-                            <div class="col-md-8">
-                                <label class="erp-label">Designación / descripción</label>
-                                <input name="Detalles[${i}].DesignacionDescripcionSAP" class="form-control erp-input designacion-input" />
-                            </div>
                         </div>
-                    </div>
-                </div>`;
-        }
-
-        function eliminarRenglon(btn) {
-            const contenedor = document.getElementById('contenedorRenglones');
-            const total = contenedor.querySelectorAll('.renglon-item').length;
-
-            if (total <= 1) {
-                alert('Debe quedar al menos un renglón.');
-                return;
+                    </div>`;
             }
 
-            btn.closest('.renglon-item').remove();
-            renumerarRenglones();
-        }
+            function agregarRenglon() {
+                const index = contenedorRenglones.querySelectorAll('.renglon-item').length;
+                contenedorRenglones.insertAdjacentHTML('beforeend', crearHtmlRenglon(index));
 
-        function renumerarRenglones() {
-            const renglones = document.querySelectorAll('.renglon-item');
+                const nuevoSelect = contenedorRenglones
+                    .querySelector('.renglon-item:last-child .parte-select');
 
-            renglones.forEach((card, index) => {
-                card.dataset.index = index;
+                if (clientePartesCargado === String(clienteSelect.value) && partesClienteActual.length) {
+                    llenarSelectPartes(nuevoSelect, partesClienteActual);
+                } else if (clienteSelect.value) {
+                    cargarPartesPorCliente(clienteSelect.value, true);
+                }
 
-                const numero = card.querySelector('.numero-renglon');
-                if (numero) numero.innerText = index + 1;
+                renumerarRenglones();
+                actualizarResumen();
+            }
 
-                const inputRenglon = card.querySelector('.input-renglon');
-                if (inputRenglon) inputRenglon.value = index + 1;
+            function eliminarRenglon(button) {
+                const renglones = contenedorRenglones.querySelectorAll('.renglon-item');
 
-                card.querySelectorAll('[name]').forEach(el => {
-                    el.name = el.name.replace(/Detalles\[\d+\]/g, `Detalles[${index}]`);
+                if (renglones.length <= 1) {
+                    mostrarError('Debe quedar al menos un renglón en el Release.');
+                    return;
+                }
+
+                button.closest('.renglon-item')?.remove();
+                renumerarRenglones();
+                actualizarResumen();
+                ocultarError();
+            }
+
+            function renumerarRenglones() {
+                const renglones = document.querySelectorAll('.renglon-item');
+
+                renglones.forEach((card, index) => {
+                    card.dataset.index = index;
+
+                    const numero = card.querySelector('.numero-renglon');
+                    if (numero) numero.textContent = index + 1;
+
+                    const inputRenglon = card.querySelector('.input-renglon');
+                    if (inputRenglon) inputRenglon.value = index + 1;
+
+                    card.querySelectorAll('[name]').forEach(element => {
+                        element.name = element.name.replace(
+                            /Detalles\[\d+\]/g,
+                            `Detalles[${index}]`
+                        );
+                    });
                 });
-            });
-        }
+            }
 
-                const clienteSelect = document.getElementById('ClienteID');
-        const clienteNombre = document.getElementById('ClienteNombre');
+            function actualizarResumen() {
+                const renglones = document.querySelectorAll('.renglon-item');
+                let totalCantidad = 0;
 
-        if (clienteSelect && clienteNombre) {
-            clienteSelect.addEventListener('change', async function () {
-                const selected = this.options[this.selectedIndex];
-                clienteNombre.value = selected ? selected.text : '';
+                renglones.forEach(card => {
+                    const cantidad = Number(card.querySelector('.cantidad-input')?.value || 0);
+                    totalCantidad += Number.isFinite(cantidad) ? cantidad : 0;
+                });
 
-                await cargarPartesPorCliente(this.value);
-            });
-        }
+                document.getElementById('totalRenglones').textContent =
+                    renglones.length.toLocaleString('es-MX');
 
-        const formRelease = document.getElementById('formRelease');
+                document.getElementById('totalCantidad').textContent =
+                    totalCantidad.toLocaleString('es-MX');
 
-        if (formRelease) {
-            formRelease.addEventListener('submit', function (e) {
+                document.querySelectorAll('.btn-quitar-renglon').forEach(button => {
+                    button.disabled = renglones.length <= 1;
+                    button.title = renglones.length <= 1
+                        ? 'Debe quedar al menos un renglón'
+                        : 'Quitar renglón';
+                });
+            }
+
+            async function cargarInfoParteRelease(select) {
+                const parteId = select.value;
+                const card = select.closest('.renglon-item');
+
+                if (!card) return;
+
+                select.dataset.selected = parteId || '';
+
+                if (!parteId) {
+                    limpiarInfoRenglon(card);
+                    return;
+                }
+
+                setInfoCargando(card, true);
+
+                try {
+                    const response = await fetch(
+                        `${urlParteInfoRelease}?parteId=${encodeURIComponent(parteId)}`
+                    );
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.ok) {
+                        throw new Error(data.mensaje || 'No se encontró la información de la parte.');
+                    }
+
+                    setValue(card, '.referencia-input', data.referenciaSAP);
+                    setValue(card, '.designacion-input', data.designacionDescripcionSAP);
+                    ocultarError();
+                } catch (error) {
+                    console.error(error);
+                    limpiarInfoRenglon(card);
+                    mostrarError(error.message || 'No se pudo cargar la información de la parte.');
+                } finally {
+                    setInfoCargando(card, false);
+                }
+            }
+
+            function setInfoCargando(card, cargando) {
+                const referencia = card.querySelector('.referencia-input');
+                const designacion = card.querySelector('.designacion-input');
+
+                if (cargando) {
+                    if (referencia) referencia.placeholder = 'Cargando...';
+                    if (designacion) designacion.placeholder = 'Cargando...';
+                } else {
+                    if (referencia) referencia.placeholder = '';
+                    if (designacion) designacion.placeholder = '';
+                }
+            }
+
+            function limpiarInfoRenglon(card) {
+                if (!card) return;
+                setValue(card, '.referencia-input', '');
+                setValue(card, '.designacion-input', '');
+            }
+
+            function setValue(card, selector, value) {
+                const input = card.querySelector(selector);
+                if (input) input.value = value ?? '';
+            }
+
+            function mostrarError(mensaje) {
+                formErrorText.textContent = mensaje;
+                formError.classList.add('is-visible');
+                formError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            function ocultarError() {
+                formError.classList.remove('is-visible');
+                formErrorText.textContent = '';
+            }
+
+            function validarFormulario() {
+                ocultarError();
+                renumerarRenglones();
+
+                if (!clienteSelect.value) {
+                    mostrarError('Selecciona el cliente del Release.');
+                    clienteSelect.focus();
+                    return false;
+                }
+
+                const fechaRecepcion = document.getElementById('FechaRecepcion');
+
+                if (!fechaRecepcion?.value) {
+                    mostrarError('Captura la fecha de recepción del Release.');
+                    fechaRecepcion?.focus();
+                    return false;
+                }
+
                 const renglones = document.querySelectorAll('.renglon-item');
 
                 if (!renglones.length) {
-                    e.preventDefault();
-                    alert('Debes capturar al menos un renglón.');
+                    mostrarError('Debes capturar al menos un renglón del Release.');
+                    return false;
+                }
+
+                for (let index = 0; index < renglones.length; index++) {
+                    const card = renglones[index];
+                    const parte = card.querySelector('.parte-select');
+                    const fecha = card.querySelector('.fecha-requerida-input');
+                    const cantidad = card.querySelector('.cantidad-input');
+
+                    if (!parte?.value) {
+                        mostrarError(`Selecciona la parte del renglón ${index + 1}.`);
+                        parte?.focus();
+                        return false;
+                    }
+
+                    if (!fecha?.value) {
+                        mostrarError(`Captura la fecha requerida del renglón ${index + 1}.`);
+                        fecha?.focus();
+                        return false;
+                    }
+
+                    if (!cantidad?.value || Number(cantidad.value) <= 0) {
+                        mostrarError(`La cantidad del renglón ${index + 1} debe ser mayor a cero.`);
+                        cantidad?.focus();
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            function bloquearGuardado() {
+                btnGuardar.disabled = true;
+                btnGuardar.querySelector('i').className = 'fa-solid fa-spinner fa-spin me-1';
+                btnGuardar.querySelector('.btn-label').textContent = 'Guardando y calculando...';
+            }
+
+            document.getElementById('btnAgregarRenglon')
+                ?.addEventListener('click', agregarRenglon);
+
+            document.getElementById('btnAgregarOtroRenglon')
+                ?.addEventListener('click', agregarRenglon);
+
+            contenedorRenglones.addEventListener('click', event => {
+                const button = event.target.closest('.btn-quitar-renglon');
+                if (button) eliminarRenglon(button);
+            });
+
+            contenedorRenglones.addEventListener('change', async event => {
+                if (event.target.classList.contains('parte-select')) {
+                    await cargarInfoParteRelease(event.target);
+                }
+            });
+
+            contenedorRenglones.addEventListener('input', event => {
+                if (event.target.classList.contains('cantidad-input')) {
+                    actualizarResumen();
+                }
+            });
+
+            clienteSelect.addEventListener('change', async function () {
+                const selected = this.options[this.selectedIndex];
+                clienteNombreInput.value = this.value && selected ? selected.text : '';
+                ocultarError();
+                await cargarPartesPorCliente(this.value, false);
+            });
+
+            formRelease.addEventListener('submit', event => {
+                if (!validarFormulario()) {
+                    event.preventDefault();
                     return;
                 }
 
-                for (const card of renglones) {
-                    const parte = card.querySelector('.parte-select')?.value;
-                    const fecha = card.querySelector('.fecha-requerida-input')?.value;
-                    const cantidad = card.querySelector('.cantidad-input')?.value;
-
-                    if (!parte) {
-                        e.preventDefault();
-                        alert('Todos los renglones deben tener una parte seleccionada.');
-                        return;
-                    }
-
-                    if (!fecha) {
-                        e.preventDefault();
-                        alert('Todos los renglones deben tener fecha requerida.');
-                        return;
-                    }
-
-                    if (!cantidad || Number(cantidad) <= 0) {
-                        e.preventDefault();
-                        alert('Todos los renglones deben tener cantidad requerida mayor a cero.');
-                        return;
-                    }
-                }
-            });
-        }
-
-                document.addEventListener('change', async function (e) {
-            if (e.target.classList.contains('parte-select')) {
-                await cargarInfoParteRelease(e.target);
-            }
-        });
-
-                async function cargarInfoParteRelease(select) {
-            const parteId = select.value;
-            const card = select.closest('.renglon-item');
-
-            if (!card) return;
-
-            if (!parteId) {
-                setValue(card, '.referencia-input', '');
-                setValue(card, '.designacion-input', '');
-                return;
-            }
-
-            try {
-                const resp = await fetch(`${urlParteInfoRelease}?parteId=${encodeURIComponent(parteId)}`);
-                const data = await resp.json();
-
-                if (!data.ok) {
-                    alert(data.mensaje || 'No se encontró la información de la parte.');
-                    return;
-                }
-
-                setValue(card, '.referencia-input', data.referenciaSAP);
-                setValue(card, '.designacion-input', data.designacionDescripcionSAP);
-
-            } catch (err) {
-                console.error(err);
-                alert('No se pudo cargar la información de la parte.');
-            }
-        }
-
-        function setValue(card, selector, value) {
-            const input = card.querySelector(selector);
-            if (input) {
-                input.value = value ?? '';
-            }
-        }
-
-                async function cargarPartesPorCliente(clienteId) {
-            limpiarPartesDeTodosLosRenglones();
-
-            if (!clienteId || Number(clienteId) <= 0) {
-                return;
-            }
-
-            try {
-                const resp = await fetch(`${urlPartesPorCliente}?clienteId=${encodeURIComponent(clienteId)}`);
-                const data = await resp.json();
-
-                if (!data.ok) {
-                    alert(data.mensaje || 'No se pudieron cargar las partes del cliente.');
-                    return;
-                }
-
-                const partes = data.partes || [];
-                const opciones = crearOptionsDesdeLista(partes, '-- Selecciona parte --');
-
-                document.querySelectorAll('.parte-select').forEach(function (select) {
-                    select.innerHTML = opciones;
-                });
-
-            } catch (err) {
-                console.error(err);
-                alert('No se pudieron cargar las partes del cliente.');
-            }
-        }
-
-        function crearOptionsDesdeLista(data, placeholder) {
-            let html = `<option value="">${escapeHtml(placeholder)}</option>`;
-
-            data.forEach(x => {
-                html += `<option value="${escapeHtml(x.value)}">${escapeHtml(x.text)}</option>`;
+                bloquearGuardado();
             });
 
-            return html;
-        }
+            document.addEventListener('DOMContentLoaded', async () => {
+                renumerarRenglones();
+                actualizarResumen();
 
-        function limpiarPartesDeTodosLosRenglones() {
-            document.querySelectorAll('.renglon-item').forEach(function (card) {
-                const parteSelect = card.querySelector('.parte-select');
+                if (clienteSelect.value) {
+                    const selected = clienteSelect.options[clienteSelect.selectedIndex];
 
-                if (parteSelect) {
-                    parteSelect.innerHTML = '<option value="">-- Selecciona cliente primero --</option>';
-                    parteSelect.value = '';
+                    if (!clienteNombreInput.value && selected) {
+                        clienteNombreInput.value = selected.text;
+                    }
+
+                    await cargarPartesPorCliente(clienteSelect.value, true);
                 }
-
-                setValue(card, '.referencia-input', '');
-                setValue(card, '.designacion-input', '');
             });
-        }
-
     </script>
 </body>
 </html>
