@@ -1,0 +1,953 @@
+{
+  "LoteID": "d05f7f9e7e474f41a303ef94749c99bc",
+  "FechaProceso": "2026-07-24T11:19:18.4549056-06:00",
+  "UsuarioID": 2282,
+  "ErrorGeneral": null,
+  "NotaGeneral": null,
+  "Documentos": [
+    {
+      "DocumentoID": "3b23bb28d0b0431b8f18530e99564fb3",
+      "Archivo": "SA Schedule Line 0021022049 Sleeve.pdf",
+      "ArchivoTemporal": "3b23bb28d0b0431b8f18530e99564fb3.pdf",
+      "Estado": "OMITIDO",
+      "Mensaje": "El mismo documento HUF ya fue importado.",
+      "Plantilla": "HUF_SUPPLIER_SCHEDULE",
+      "Sha256": "D6A56DB30EDAEFDAD1781DF9FCB947AE407A269969558E74709D630D8C173584",
+      "FechaDocumento": "2026-07-15T00:00:00",
+      "ClienteID": 18,
+      "Cliente": "HUF MEXICO",
+      "FolioCliente": "0000000024",
+      "Version": "Print 15.07.2026",
+      "TotalEntregas": 44,
+      "TotalPiezas": 178784,
+      "ReleaseID": null,
+      "FolioRelease": null,
+      "Advertencias": [
+        "Las semanas HUF se registraron con el lunes de la semana ISO como fecha operativa.",
+        "Los meses HUF se registraron con el primer dia del mes como fecha operativa.",
+        "La demanda ARREAR se registro con la fecha de recepcion del archivo para tratarla como vencida/inmediata."
+      ],
+      "ReleasePreparado": {
+        "ClienteID": 18,
+        "ClienteNombre": "HUF MEXICO",
+        "FolioRelease": null,
+        "FolioCliente": "0000000024",
+        "FechaRecepcion": "2026-07-24T00:00:00-06:00",
+        "VersionRelease": "Print 15.07.2026",
+        "ArchivoOrigenNombre": "SA Schedule Line 0021022049 Sleeve.pdf",
+        "ArchivoRelease": null,
+        "PlantillaImportacion": "HUF_SUPPLIER_SCHEDULE",
+        "ImportadoDesdeArchivo": true,
+        "Observaciones": null,
+        "EstatusID": 1,
+        "Renglones": [
+          {
+            "Renglon": 1,
+            "ParteID": 656,
+            "NumeroParte": "34975302-003-A1",
+            "ReferenciaSAP": "34975302-003-A1",
+            "DesignacionDescripcionSAP": "Sleeve",
+            "Observaciones": null,
+            "UnidadMedidaCliente": "PC",
+            "ContratoCliente": "21022049",
+            "Entregas": [
+              {
+                "SecuenciaEntrega": 1,
+                "FechaRequerida": "2026-07-24T00:00:00-06:00",
+                "CantidadRequerida": 2784,
+                "FechaCarga": null
+              },
+              {
+                "SecuenciaEntrega": 2,
+                "FechaRequerida": "2026-07-21T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-07-20T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 3,
+                "FechaRequerida": "2026-07-28T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-07-27T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 4,
+                "FechaRequerida": "2026-08-04T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2026-08-03T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 5,
+                "FechaRequerida": "2026-08-11T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2026-08-10T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 6,
+                "FechaRequerida": "2026-08-18T00:00:00",
+                "CantidadRequerida": 6000,
+                "FechaCarga": "2026-08-17T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 7,
+                "FechaRequerida": "2026-08-25T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2026-08-24T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 8,
+                "FechaRequerida": "2026-09-01T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-08-31T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 9,
+                "FechaRequerida": "2026-09-08T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-09-07T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 10,
+                "FechaRequerida": "2026-09-15T00:00:00",
+                "CantidadRequerida": 5000,
+                "FechaCarga": "2026-09-14T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 11,
+                "FechaRequerida": "2026-09-22T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-09-21T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 12,
+                "FechaRequerida": "2026-09-29T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-09-28T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 13,
+                "FechaRequerida": "2026-10-06T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2026-10-05T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 14,
+                "FechaRequerida": "2026-10-12T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-10-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 15,
+                "FechaRequerida": "2026-10-19T00:00:00",
+                "CantidadRequerida": 5000,
+                "FechaCarga": "2026-10-19T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 16,
+                "FechaRequerida": "2026-10-26T00:00:00",
+                "CantidadRequerida": 2000,
+                "FechaCarga": "2026-10-26T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 17,
+                "FechaRequerida": "2026-11-02T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-11-02T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 18,
+                "FechaRequerida": "2026-11-09T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-11-09T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 19,
+                "FechaRequerida": "2026-11-16T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2026-11-13T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 20,
+                "FechaRequerida": "2026-11-23T00:00:00",
+                "CantidadRequerida": 7000,
+                "FechaCarga": "2026-11-23T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 21,
+                "FechaRequerida": "2026-11-30T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2026-11-30T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 22,
+                "FechaRequerida": "2026-12-07T00:00:00",
+                "CantidadRequerida": 8000,
+                "FechaCarga": "2026-12-07T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 23,
+                "FechaRequerida": "2027-01-04T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2027-01-04T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 24,
+                "FechaRequerida": "2027-01-18T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2027-01-18T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 25,
+                "FechaRequerida": "2027-01-25T00:00:00",
+                "CantidadRequerida": 5000,
+                "FechaCarga": "2027-01-25T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 26,
+                "FechaRequerida": "2027-02-01T00:00:00",
+                "CantidadRequerida": 2000,
+                "FechaCarga": "2027-01-29T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 27,
+                "FechaRequerida": "2027-02-08T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2027-02-08T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 28,
+                "FechaRequerida": "2027-02-15T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2027-02-15T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 29,
+                "FechaRequerida": "2027-02-22T00:00:00",
+                "CantidadRequerida": 5000,
+                "FechaCarga": "2027-02-22T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 30,
+                "FechaRequerida": "2027-03-01T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2027-03-01T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 31,
+                "FechaRequerida": "2027-03-08T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2027-03-08T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 32,
+                "FechaRequerida": "2027-03-15T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2027-03-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 33,
+                "FechaRequerida": "2027-03-22T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2027-03-22T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 34,
+                "FechaRequerida": "2027-03-29T00:00:00",
+                "CantidadRequerida": 2000,
+                "FechaCarga": "2027-03-29T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 35,
+                "FechaRequerida": "2027-04-05T00:00:00",
+                "CantidadRequerida": 5000,
+                "FechaCarga": "2027-04-05T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 36,
+                "FechaRequerida": "2027-04-12T00:00:00",
+                "CantidadRequerida": 5000,
+                "FechaCarga": "2027-04-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 37,
+                "FechaRequerida": "2027-04-19T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2027-04-19T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 38,
+                "FechaRequerida": "2027-04-26T00:00:00",
+                "CantidadRequerida": 5000,
+                "FechaCarga": "2027-04-26T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 39,
+                "FechaRequerida": "2027-05-03T00:00:00",
+                "CantidadRequerida": 2000,
+                "FechaCarga": "2027-05-03T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 40,
+                "FechaRequerida": "2027-05-10T00:00:00",
+                "CantidadRequerida": 4000,
+                "FechaCarga": "2027-05-10T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 41,
+                "FechaRequerida": "2027-05-17T00:00:00",
+                "CantidadRequerida": 5000,
+                "FechaCarga": "2027-05-17T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 42,
+                "FechaRequerida": "2027-05-24T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2027-05-24T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 43,
+                "FechaRequerida": "2027-05-31T00:00:00",
+                "CantidadRequerida": 3000,
+                "FechaCarga": "2027-05-31T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 44,
+                "FechaRequerida": "2027-06-01T00:00:00",
+                "CantidadRequerida": 11000,
+                "FechaCarga": "2027-06-07T00:00:00"
+              }
+            ]
+          }
+        ],
+        "Clientes": [],
+        "Partes": []
+      }
+    },
+    {
+      "DocumentoID": "a6e349b22e4d4d6c965a4a48dca29057",
+      "Archivo": "SA Schedule Line 0021022051 lock cylinder.pdf",
+      "ArchivoTemporal": "a6e349b22e4d4d6c965a4a48dca29057.pdf",
+      "Estado": "OMITIDO",
+      "Mensaje": "El mismo documento HUF ya fue importado.",
+      "Plantilla": "HUF_SUPPLIER_SCHEDULE",
+      "Sha256": "A767012E3292AB28AAC0C128C735F113FCDB0BB15BB44FBFDDE702BFAA1963A9",
+      "FechaDocumento": "2026-07-15T00:00:00",
+      "ClienteID": 18,
+      "Cliente": "HUF MEXICO",
+      "FolioCliente": "0000000024",
+      "Version": "Print 15.07.2026",
+      "TotalEntregas": 41,
+      "TotalPiezas": 169600,
+      "ReleaseID": null,
+      "FolioRelease": null,
+      "Advertencias": [
+        "Las semanas HUF se registraron con el lunes de la semana ISO como fecha operativa.",
+        "Los meses HUF se registraron con el primer dia del mes como fecha operativa."
+      ],
+      "ReleasePreparado": {
+        "ClienteID": 18,
+        "ClienteNombre": "HUF MEXICO",
+        "FolioRelease": null,
+        "FolioCliente": "0000000024",
+        "FechaRecepcion": "2026-07-24T00:00:00-06:00",
+        "VersionRelease": "Print 15.07.2026",
+        "ArchivoOrigenNombre": "SA Schedule Line 0021022051 lock cylinder.pdf",
+        "ArchivoRelease": null,
+        "PlantillaImportacion": "HUF_SUPPLIER_SCHEDULE",
+        "ImportadoDesdeArchivo": true,
+        "Observaciones": null,
+        "EstatusID": 1,
+        "Renglones": [
+          {
+            "Renglon": 1,
+            "ParteID": 654,
+            "NumeroParte": "34975351-000-A1",
+            "ReferenciaSAP": "34975351-000-A1",
+            "DesignacionDescripcionSAP": "lock cylinder",
+            "Observaciones": null,
+            "UnidadMedidaCliente": "PC",
+            "ContratoCliente": "21022051",
+            "Entregas": [
+              {
+                "SecuenciaEntrega": 1,
+                "FechaRequerida": "2026-08-04T00:00:00",
+                "CantidadRequerida": 3700,
+                "FechaCarga": "2026-08-03T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 2,
+                "FechaRequerida": "2026-08-11T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2026-08-10T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 3,
+                "FechaRequerida": "2026-08-18T00:00:00",
+                "CantidadRequerida": 4900,
+                "FechaCarga": "2026-08-17T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 4,
+                "FechaRequerida": "2026-08-25T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2026-08-24T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 5,
+                "FechaRequerida": "2026-09-01T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2026-08-31T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 6,
+                "FechaRequerida": "2026-09-08T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2026-09-07T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 7,
+                "FechaRequerida": "2026-09-15T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2026-09-14T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 8,
+                "FechaRequerida": "2026-09-22T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2026-09-21T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 9,
+                "FechaRequerida": "2026-09-29T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2026-09-28T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 10,
+                "FechaRequerida": "2026-10-06T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2026-10-05T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 11,
+                "FechaRequerida": "2026-10-12T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2026-10-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 12,
+                "FechaRequerida": "2026-10-19T00:00:00",
+                "CantidadRequerida": 4900,
+                "FechaCarga": "2026-10-19T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 13,
+                "FechaRequerida": "2026-10-26T00:00:00",
+                "CantidadRequerida": 2800,
+                "FechaCarga": "2026-10-26T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 14,
+                "FechaRequerida": "2026-11-02T00:00:00",
+                "CantidadRequerida": 2800,
+                "FechaCarga": "2026-11-02T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 15,
+                "FechaRequerida": "2026-11-09T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2026-11-09T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 16,
+                "FechaRequerida": "2026-11-16T00:00:00",
+                "CantidadRequerida": 4900,
+                "FechaCarga": "2026-11-13T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 17,
+                "FechaRequerida": "2026-11-23T00:00:00",
+                "CantidadRequerida": 6300,
+                "FechaCarga": "2026-11-23T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 18,
+                "FechaRequerida": "2026-11-30T00:00:00",
+                "CantidadRequerida": 2800,
+                "FechaCarga": "2026-11-30T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 19,
+                "FechaRequerida": "2026-12-07T00:00:00",
+                "CantidadRequerida": 7700,
+                "FechaCarga": "2026-12-07T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 20,
+                "FechaRequerida": "2027-01-04T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2027-01-04T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 21,
+                "FechaRequerida": "2027-01-18T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2027-01-18T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 22,
+                "FechaRequerida": "2027-01-25T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2027-01-25T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 23,
+                "FechaRequerida": "2027-02-01T00:00:00",
+                "CantidadRequerida": 2100,
+                "FechaCarga": "2027-01-29T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 24,
+                "FechaRequerida": "2027-02-08T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2027-02-08T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 25,
+                "FechaRequerida": "2027-02-15T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2027-02-15T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 26,
+                "FechaRequerida": "2027-02-22T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2027-02-22T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 27,
+                "FechaRequerida": "2027-03-01T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2027-03-01T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 28,
+                "FechaRequerida": "2027-03-08T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2027-03-08T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 29,
+                "FechaRequerida": "2027-03-15T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2027-03-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 30,
+                "FechaRequerida": "2027-03-22T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2027-03-22T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 31,
+                "FechaRequerida": "2027-03-29T00:00:00",
+                "CantidadRequerida": 2100,
+                "FechaCarga": "2027-03-29T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 32,
+                "FechaRequerida": "2027-04-05T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2027-04-05T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 33,
+                "FechaRequerida": "2027-04-12T00:00:00",
+                "CantidadRequerida": 4900,
+                "FechaCarga": "2027-04-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 34,
+                "FechaRequerida": "2027-04-19T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2027-04-19T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 35,
+                "FechaRequerida": "2027-04-26T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2027-04-26T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 36,
+                "FechaRequerida": "2027-05-03T00:00:00",
+                "CantidadRequerida": 2100,
+                "FechaCarga": "2027-05-03T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 37,
+                "FechaRequerida": "2027-05-10T00:00:00",
+                "CantidadRequerida": 4900,
+                "FechaCarga": "2027-05-10T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 38,
+                "FechaRequerida": "2027-05-17T00:00:00",
+                "CantidadRequerida": 4200,
+                "FechaCarga": "2027-05-17T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 39,
+                "FechaRequerida": "2027-05-24T00:00:00",
+                "CantidadRequerida": 3500,
+                "FechaCarga": "2027-05-24T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 40,
+                "FechaRequerida": "2027-05-31T00:00:00",
+                "CantidadRequerida": 2800,
+                "FechaCarga": "2027-05-31T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 41,
+                "FechaRequerida": "2027-06-01T00:00:00",
+                "CantidadRequerida": 11200,
+                "FechaCarga": "2027-06-07T00:00:00"
+              }
+            ]
+          }
+        ],
+        "Clientes": [],
+        "Partes": []
+      }
+    },
+    {
+      "DocumentoID": "7ff3ba5bac79443d981e8b5e9f8392e5",
+      "Archivo": "SA Schedule Line 0021022048 Cylinder.pdf",
+      "ArchivoTemporal": "7ff3ba5bac79443d981e8b5e9f8392e5.pdf",
+      "Estado": "OMITIDO",
+      "Mensaje": "El mismo documento HUF ya fue importado.",
+      "Plantilla": "HUF_SUPPLIER_SCHEDULE",
+      "Sha256": "4199E67645B99FB0C3499F1553020576FED3790E4BAECA81B53CBC2E9D508DE1",
+      "FechaDocumento": "2026-07-15T00:00:00",
+      "ClienteID": 18,
+      "Cliente": "HUF MEXICO",
+      "FolioCliente": "0000000023",
+      "Version": "Print 15.07.2026",
+      "TotalEntregas": 45,
+      "TotalPiezas": 629805,
+      "ReleaseID": null,
+      "FolioRelease": null,
+      "Advertencias": [
+        "Las semanas HUF se registraron con el lunes de la semana ISO como fecha operativa.",
+        "Los meses HUF se registraron con el primer dia del mes como fecha operativa.",
+        "La demanda ARREAR se registro con la fecha de recepcion del archivo para tratarla como vencida/inmediata."
+      ],
+      "ReleasePreparado": {
+        "ClienteID": 18,
+        "ClienteNombre": "HUF MEXICO",
+        "FolioRelease": null,
+        "FolioCliente": "0000000023",
+        "FechaRecepcion": "2026-07-24T00:00:00-06:00",
+        "VersionRelease": "Print 15.07.2026",
+        "ArchivoOrigenNombre": "SA Schedule Line 0021022048 Cylinder.pdf",
+        "ArchivoRelease": null,
+        "PlantillaImportacion": "HUF_SUPPLIER_SCHEDULE",
+        "ImportadoDesdeArchivo": true,
+        "Observaciones": null,
+        "EstatusID": 1,
+        "Renglones": [
+          {
+            "Renglon": 1,
+            "ParteID": 641,
+            "NumeroParte": "34947651-006-A1",
+            "ReferenciaSAP": "34947651-006-A1",
+            "DesignacionDescripcionSAP": "Cylinder",
+            "Observaciones": null,
+            "UnidadMedidaCliente": "PC",
+            "ContratoCliente": "21022048",
+            "Entregas": [
+              {
+                "SecuenciaEntrega": 1,
+                "FechaRequerida": "2026-07-24T00:00:00-06:00",
+                "CantidadRequerida": 5405,
+                "FechaCarga": null
+              },
+              {
+                "SecuenciaEntrega": 2,
+                "FechaRequerida": "2026-07-21T00:00:00",
+                "CantidadRequerida": 13300,
+                "FechaCarga": "2026-07-20T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 3,
+                "FechaRequerida": "2026-07-28T00:00:00",
+                "CantidadRequerida": 14000,
+                "FechaCarga": "2026-07-27T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 4,
+                "FechaRequerida": "2026-08-04T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2026-08-03T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 5,
+                "FechaRequerida": "2026-08-11T00:00:00",
+                "CantidadRequerida": 12600,
+                "FechaCarga": "2026-08-10T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 6,
+                "FechaRequerida": "2026-08-18T00:00:00",
+                "CantidadRequerida": 15400,
+                "FechaCarga": "2026-08-17T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 7,
+                "FechaRequerida": "2026-08-25T00:00:00",
+                "CantidadRequerida": 11200,
+                "FechaCarga": "2026-08-24T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 8,
+                "FechaRequerida": "2026-09-01T00:00:00",
+                "CantidadRequerida": 11200,
+                "FechaCarga": "2026-08-31T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 9,
+                "FechaRequerida": "2026-09-08T00:00:00",
+                "CantidadRequerida": 12600,
+                "FechaCarga": "2026-09-07T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 10,
+                "FechaRequerida": "2026-09-15T00:00:00",
+                "CantidadRequerida": 14700,
+                "FechaCarga": "2026-09-14T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 11,
+                "FechaRequerida": "2026-09-22T00:00:00",
+                "CantidadRequerida": 11200,
+                "FechaCarga": "2026-09-21T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 12,
+                "FechaRequerida": "2026-09-29T00:00:00",
+                "CantidadRequerida": 18200,
+                "FechaCarga": "2026-09-28T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 13,
+                "FechaRequerida": "2026-10-06T00:00:00",
+                "CantidadRequerida": 11200,
+                "FechaCarga": "2026-10-05T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 14,
+                "FechaRequerida": "2026-10-12T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2026-10-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 15,
+                "FechaRequerida": "2026-10-19T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2026-10-19T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 16,
+                "FechaRequerida": "2026-10-26T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2026-10-26T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 17,
+                "FechaRequerida": "2026-11-02T00:00:00",
+                "CantidadRequerida": 11200,
+                "FechaCarga": "2026-11-02T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 18,
+                "FechaRequerida": "2026-11-09T00:00:00",
+                "CantidadRequerida": 17500,
+                "FechaCarga": "2026-11-09T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 19,
+                "FechaRequerida": "2026-11-16T00:00:00",
+                "CantidadRequerida": 19600,
+                "FechaCarga": "2026-11-13T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 20,
+                "FechaRequerida": "2026-11-23T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2026-11-23T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 21,
+                "FechaRequerida": "2026-11-30T00:00:00",
+                "CantidadRequerida": 14000,
+                "FechaCarga": "2026-11-30T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 22,
+                "FechaRequerida": "2026-12-07T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2026-12-07T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 23,
+                "FechaRequerida": "2027-01-04T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2027-01-04T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 24,
+                "FechaRequerida": "2027-01-11T00:00:00",
+                "CantidadRequerida": 20300,
+                "FechaCarga": "2027-01-11T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 25,
+                "FechaRequerida": "2027-01-18T00:00:00",
+                "CantidadRequerida": 9800,
+                "FechaCarga": "2027-01-18T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 26,
+                "FechaRequerida": "2027-01-25T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2027-01-25T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 27,
+                "FechaRequerida": "2027-02-01T00:00:00",
+                "CantidadRequerida": 14700,
+                "FechaCarga": "2027-01-29T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 28,
+                "FechaRequerida": "2027-02-08T00:00:00",
+                "CantidadRequerida": 18200,
+                "FechaCarga": "2027-02-08T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 29,
+                "FechaRequerida": "2027-02-15T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2027-02-15T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 30,
+                "FechaRequerida": "2027-02-22T00:00:00",
+                "CantidadRequerida": 12600,
+                "FechaCarga": "2027-02-22T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 31,
+                "FechaRequerida": "2027-03-01T00:00:00",
+                "CantidadRequerida": 8400,
+                "FechaCarga": "2027-03-01T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 32,
+                "FechaRequerida": "2027-03-08T00:00:00",
+                "CantidadRequerida": 23800,
+                "FechaCarga": "2027-03-08T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 33,
+                "FechaRequerida": "2027-03-15T00:00:00",
+                "CantidadRequerida": 12600,
+                "FechaCarga": "2027-03-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 34,
+                "FechaRequerida": "2027-03-22T00:00:00",
+                "CantidadRequerida": 6300,
+                "FechaCarga": "2027-03-22T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 35,
+                "FechaRequerida": "2027-03-29T00:00:00",
+                "CantidadRequerida": 10500,
+                "FechaCarga": "2027-03-29T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 36,
+                "FechaRequerida": "2027-04-05T00:00:00",
+                "CantidadRequerida": 19600,
+                "FechaCarga": "2027-04-05T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 37,
+                "FechaRequerida": "2027-04-12T00:00:00",
+                "CantidadRequerida": 11200,
+                "FechaCarga": "2027-04-12T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 38,
+                "FechaRequerida": "2027-04-19T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2027-04-19T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 39,
+                "FechaRequerida": "2027-04-26T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2027-04-26T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 40,
+                "FechaRequerida": "2027-05-03T00:00:00",
+                "CantidadRequerida": 17500,
+                "FechaCarga": "2027-05-03T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 41,
+                "FechaRequerida": "2027-05-10T00:00:00",
+                "CantidadRequerida": 14700,
+                "FechaCarga": "2027-05-10T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 42,
+                "FechaRequerida": "2027-05-17T00:00:00",
+                "CantidadRequerida": 9800,
+                "FechaCarga": "2027-05-17T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 43,
+                "FechaRequerida": "2027-05-24T00:00:00",
+                "CantidadRequerida": 14000,
+                "FechaCarga": "2027-05-24T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 44,
+                "FechaRequerida": "2027-05-31T00:00:00",
+                "CantidadRequerida": 11900,
+                "FechaCarga": "2027-05-31T00:00:00"
+              },
+              {
+                "SecuenciaEntrega": 45,
+                "FechaRequerida": "2027-06-01T00:00:00",
+                "CantidadRequerida": 49700,
+                "FechaCarga": "2027-06-07T00:00:00"
+              }
+            ]
+          }
+        ],
+        "Clientes": [],
+        "Partes": []
+      }
+    }
+  ],
+  "Total": 3,
+  "Validados": 0,
+  "Pendientes": 0,
+  "Omitidos": 3,
+  "Errores": 0,
+  "Guardados": 0
+}

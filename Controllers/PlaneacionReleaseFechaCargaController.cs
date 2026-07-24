@@ -21,6 +21,19 @@ WHERE r.Activo = 1
   AND ISNULL(r.ImportadoDesdeArchivo, 0) = 1
   AND d.FechaCarga IS NULL
   AND d.FechaRequerida IS NOT NULL;
+=======
+UPDATE detalle
+SET detalle.FechaCarga =
+    DATEADD(DAY, -1, CONVERT(DATE, detalle.FechaRequerida))
+FROM dbo.Planeacion_ReleaseDetalle detalle
+INNER JOIN dbo.Planeacion_Releases release
+    ON release.ReleaseID = detalle.ReleaseID
+WHERE release.Activo = 1
+  AND detalle.Activo = 1
+  AND ISNULL(release.ImportadoDesdeArchivo, 0) = 1
+  AND detalle.FechaCarga IS NULL
+  AND detalle.FechaRequerida IS NOT NULL;
+>>>>>>> origin/Rama_Adrian
 
 SELECT @@ROWCOUNT;";
 
@@ -35,4 +48,8 @@ SELECT @@ROWCOUNT;";
         return Convert.ToInt32(
             await cmd.ExecuteScalarAsync());
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> origin/Rama_Adrian
