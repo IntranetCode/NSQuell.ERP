@@ -43,7 +43,109 @@
         .table th { background:#eef4ff; color:var(--blue-dark); white-space:nowrap; }
         .pending-box { min-width:310px; }
         .file-name { min-width:220px; max-width:320px; overflow-wrap:anywhere; }
-    </style>
+    
+        /* DETALLE_DOCUMENTO_MODAL_V1_0_1 */
+        .file-detail-link {
+            display: inline-flex;
+            align-items: flex-start;
+            gap: 8px;
+            max-width: 100%;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: var(--blue);
+            font: inherit;
+            font-weight: 850;
+            line-height: 1.25;
+            text-align: left;
+            text-decoration: underline;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 3px;
+            cursor: pointer;
+        }
+
+        .file-detail-link:hover,
+        .file-detail-link:focus {
+            color: var(--blue-dark);
+        }
+
+        .file-detail-link span {
+            overflow-wrap: anywhere;
+        }
+
+        .document-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px;
+        }
+
+        .document-summary-box {
+            min-width: 0;
+            padding: 13px;
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            background: #f8fafc;
+        }
+
+        .document-summary-label {
+            margin-bottom: 4px;
+            color: #667085;
+            font-size: .68rem;
+            font-weight: 900;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .document-summary-value {
+            color: #1f2937;
+            font-size: .88rem;
+            font-weight: 750;
+            overflow-wrap: anywhere;
+        }
+
+        .document-part-card {
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 17px;
+            background: #fff;
+        }
+
+        .document-part-header {
+            padding: 13px 15px;
+            border-bottom: 1px solid var(--border);
+            background: #eef4ff;
+            color: var(--blue-dark);
+        }
+
+        .document-part-body {
+            padding: 15px;
+        }
+
+        .document-part-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .document-delivery-table th {
+            background: #f8fafc;
+            color: #475467;
+            font-size: .72rem;
+            white-space: nowrap;
+        }
+
+        .document-delivery-table td {
+            font-size: .82rem;
+        }
+
+        .document-empty {
+            padding: 24px;
+            border: 1px dashed var(--border);
+            border-radius: 16px;
+            background: #f8fafc;
+            color: #667085;
+            text-align: center;
+        }</style>
 </head>
 <body>
 <div class="page">
@@ -103,7 +205,21 @@
                                 else { <span class="text-muted">—</span> }
                             </td>
                             <td><span class="badge @Badge(documento.Estado)">@EstadoTexto(documento.Estado)</span></td>
-                            <td class="file-name"><strong>@documento.Archivo</strong><div class="small text-muted">@documento.Plantilla.Replace("GOLDEN", "GOLDE")</div></td>
+                            <td class="file-name">
+                                <button type="button"
+                                        class="file-detail-link"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#detalleDocumento_@documento.DocumentoID"
+                                        aria-label="Ver desglose de @documento.Archivo"
+                                        title="Ver toda la información que se agregará">
+                                    <i class="fa-solid fa-file-circle-info"></i>
+                                    <span>@documento.Archivo</span>
+                                </button>
+
+                                <div class="small text-muted">
+                                    @documento.Plantilla.Replace("GOLDEN", "GOLDE")
+                                </div>
+                            </td>
                             <td><div class="fw-bold">@(documento.Cliente ?? "-")</div><div class="small text-muted">@(documento.FolioCliente ?? "-")</div></td>
                             <td>
                                 <div>@(string.IsNullOrWhiteSpace(documento.PartesTexto) ? "-" : documento.PartesTexto)</div>
@@ -158,7 +274,360 @@
             </div>
     </section>
 
-    <div id="validationTableContainer">
+        @* DETALLE_DOCUMENTO_MODAL_V1_0_1 *@
+    @foreach (var documento in Model.Documentos)
+    {
+        var preparado = documento.ReleasePreparado;
+
+        <div class="modal fade"
+             id="detalleDocumento_@documento.DocumentoID"
+             tabindex="-1"
+             aria-labelledby="tituloDetalleDocumento_@documento.DocumentoID"
+             aria-hidden="true">
+
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content border-0 rounded-4 shadow">
+                    <div class="modal-header border-0 pb-0">
+                        <div class="pe-3">
+                            <div class="small text-muted fw-bold text-uppercase mb-1">
+                                Vista previa de lo que se agregará
+                            </div>
+
+                            <h2 class="modal-title h5 fw-bold text-primary"
+                                id="tituloDetalleDocumento_@documento.DocumentoID">
+                                <i class="fa-solid fa-file-circle-info me-2"></i>
+                                @documento.Archivo
+                            </h2>
+                        </div>
+
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="alert alert-info fw-semibold">
+                            Este desglose corresponde a la información preparada que se registrará
+                            al guardar este documento como Release.
+                        </div>
+
+                        <div class="document-summary-grid mb-4">
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Estado</div>
+                                <div class="document-summary-value">
+                                    <span class="badge @Badge(documento.Estado)">
+                                        @EstadoTexto(documento.Estado)
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Plantilla detectada</div>
+                                <div class="document-summary-value">
+                                    @(string.IsNullOrWhiteSpace(documento.Plantilla)
+                                        ? "-"
+                                        : documento.Plantilla.Replace("GOLDEN", "GOLDE"))
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Cliente</div>
+                                <div class="document-summary-value">
+                                    @(documento.Cliente ?? preparado.ClienteNombre ?? "-")
+                                    @if (documento.ClienteID.HasValue)
+                                    {
+                                        <span class="text-muted">· ID @documento.ClienteID</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Folio cliente</div>
+                                <div class="document-summary-value">
+                                    @(documento.FolioCliente ?? preparado.FolioCliente ?? "-")
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Folio interno</div>
+                                <div class="document-summary-value">
+                                    @(documento.FolioRelease ?? preparado.FolioRelease ?? "Se generará al guardar")
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Fecha del documento</div>
+                                <div class="document-summary-value">
+                                    @(documento.FechaDocumento?.ToString("dd/MM/yyyy") ?? "-")
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Fecha de recepción</div>
+                                <div class="document-summary-value">
+                                    @preparado.FechaRecepcion.ToString("dd/MM/yyyy")
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Versión / semana</div>
+                                <div class="document-summary-value">
+                                    @(documento.Version ?? preparado.VersionRelease ?? "-")
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Partes</div>
+                                <div class="document-summary-value">
+                                    @preparado.Renglones.Count.ToString("N0")
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Entregas</div>
+                                <div class="document-summary-value">
+                                    @documento.TotalEntregas.ToString("N0")
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Piezas totales</div>
+                                <div class="document-summary-value">
+                                    @documento.TotalPiezas.ToString("N0")
+                                </div>
+                            </div>
+
+                            <div class="document-summary-box">
+                                <div class="document-summary-label">Partes pendientes</div>
+                                <div class="document-summary-value">
+                                    @documento.PartesPendientes.ToString("N0")
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(preparado.Observaciones))
+                        {
+                            <section class="mb-4">
+                                <h3 class="h6 fw-bold text-primary">Observaciones del Release</h3>
+                                <div class="border rounded-3 bg-light p-3">
+                                    @preparado.Observaciones
+                                </div>
+                            </section>
+                        }
+
+                        <section class="mb-4">
+                            <h3 class="h6 fw-bold text-primary">Resultado del análisis</h3>
+
+                            <div class="border rounded-3 bg-light p-3">
+                                @(string.IsNullOrWhiteSpace(documento.Mensaje)
+                                    ? "Sin mensaje adicional."
+                                    : documento.Mensaje)
+                            </div>
+
+                            @if (documento.Advertencias.Any())
+                            {
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    <div class="fw-bold mb-2">Advertencias</div>
+                                    <ul class="mb-0">
+                                        @foreach (var advertencia in documento.Advertencias)
+                                        {
+                                            <li>@advertencia</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                        </section>
+
+                        <section>
+                            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                                <div>
+                                    <h3 class="h5 fw-bold text-primary mb-1">
+                                        Partes y entregas que se agregarán
+                                    </h3>
+                                    <div class="small text-muted">
+                                        Cada bloque representa un renglón del Release preparado.
+                                    </div>
+                                </div>
+
+                                <span class="badge text-bg-primary rounded-pill px-3 py-2">
+                                    @preparado.Renglones.Count renglón(es)
+                                </span>
+                            </div>
+
+                            @if (!preparado.Renglones.Any())
+                            {
+                                <div class="document-empty">
+                                    El documento no contiene renglones preparados para registrar.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="d-grid gap-3">
+                                    @foreach (var renglon in preparado.Renglones)
+                                    {
+                                        <article class="document-part-card">
+                                            <div class="document-part-header">
+                                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                                    <div>
+                                                        <div class="fw-bold">
+                                                            Renglón @renglon.Renglon
+                                                            · @(renglon.NumeroParte ?? renglon.ReferenciaSAP ?? "Sin número de parte")
+                                                        </div>
+
+                                                        <div class="small mt-1">
+                                                            @(renglon.DesignacionDescripcionSAP ?? "Sin descripción")
+                                                        </div>
+                                                    </div>
+
+                                                    @if (renglon.ParteID.HasValue)
+                                                    {
+                                                        <span class="badge text-bg-success">
+                                                            Parte vinculada · ID @renglon.ParteID
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge text-bg-warning">
+                                                            Pendiente de vincular
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <div class="document-part-body">
+                                                <div class="document-part-meta mb-3">
+                                                    <div class="document-summary-box">
+                                                        <div class="document-summary-label">Número de parte</div>
+                                                        <div class="document-summary-value">
+                                                            @(renglon.NumeroParte ?? "-")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="document-summary-box">
+                                                        <div class="document-summary-label">Referencia SAP</div>
+                                                        <div class="document-summary-value">
+                                                            @(renglon.ReferenciaSAP ?? "-")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="document-summary-box">
+                                                        <div class="document-summary-label">Unidad de medida</div>
+                                                        <div class="document-summary-value">
+                                                            @(renglon.UnidadMedidaCliente ?? "-")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="document-summary-box">
+                                                        <div class="document-summary-label">Contrato cliente</div>
+                                                        <div class="document-summary-value">
+                                                            @(renglon.ContratoCliente ?? "-")
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                @if (!string.IsNullOrWhiteSpace(renglon.Observaciones))
+                                                {
+                                                    <div class="alert alert-light border mb-3">
+                                                        <strong>Observaciones:</strong>
+                                                        @renglon.Observaciones
+                                                    </div>
+                                                }
+
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-bordered align-middle mb-0 document-delivery-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Secuencia</th>
+                                                                <th>Fecha requerida</th>
+                                                                <th>Fecha de carga</th>
+                                                                <th class="text-end">Cantidad</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @if (!renglon.Entregas.Any())
+                                                            {
+                                                                <tr>
+                                                                    <td colspan="4"
+                                                                        class="text-center text-muted py-3">
+                                                                        Sin entregas preparadas.
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                            else
+                                                            {
+                                                                @foreach (var entrega in renglon.Entregas)
+                                                                {
+                                                                    <tr>
+                                                                        <td>@entrega.SecuenciaEntrega</td>
+                                                                        <td>
+                                                                            @(entrega.FechaRequerida?.ToString("dd/MM/yyyy") ?? "-")
+                                                                        </td>
+                                                                        <td>
+                                                                            @(entrega.FechaCarga?.ToString("dd/MM/yyyy") ?? "-")
+                                                                        </td>
+                                                                        <td class="text-end fw-bold">
+                                                                            @entrega.CantidadRequerida.ToString("N0")
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                        </section>
+
+                        <details class="mt-4">
+                            <summary class="fw-bold text-primary">
+                                Información técnica del archivo
+                            </summary>
+
+                            <div class="document-summary-grid mt-3">
+                                <div class="document-summary-box">
+                                    <div class="document-summary-label">Documento ID</div>
+                                    <div class="document-summary-value">
+                                        @documento.DocumentoID
+                                    </div>
+                                </div>
+
+                                <div class="document-summary-box">
+                                    <div class="document-summary-label">SHA-256</div>
+                                    <div class="document-summary-value">
+                                        @(string.IsNullOrWhiteSpace(documento.Sha256)
+                                            ? "-"
+                                            : documento.Sha256)
+                                    </div>
+                                </div>
+
+                                <div class="document-summary-box">
+                                    <div class="document-summary-label">Archivo temporal</div>
+                                    <div class="document-summary-value">
+                                        @(string.IsNullOrWhiteSpace(documento.ArchivoTemporal)
+                                            ? "-"
+                                            : documento.ArchivoTemporal)
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div class="modal-footer border-0">
+                        <button type="button"
+                                class="btn btn-outline-secondary fw-bold"
+                                data-bs-dismiss="modal">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+<div id="validationTableContainer">
         @Html.AntiForgeryToken()
         <input type="hidden" name="loteId" value="@Model.LoteID" />
     </div>
