@@ -1,13 +1,32 @@
 ﻿@model ERP.NSQuell.Models.PlaneacionReleaseDetalleVm
-@using ERP.NSQuell.Models
-@using System.Linq
 
 @{
     Layout = null;
 
-    var detalles = Model.Detalles ?? new List<PlaneacionReleaseDetalleRenglonVm>();
+    string Valor(string? valor) => string.IsNullOrWhiteSpace(valor) ? "-" : valor;
+    string Fecha(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy") : "-";
+    string FechaHora(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    string Entero(int? valor) => valor.HasValue ? valor.Value.ToString("N0") : "-";
+    string Decimal2(decimal? valor) => valor.HasValue ? valor.Value.ToString("N2") : "-";
+    string Decimal4(decimal? valor) => valor.HasValue ? valor.Value.ToString("N4") : "-";
 
-    var grupos = detalles
+    string ClaseTiempo(bool? daTiempo)
+    {
+        if (daTiempo == true) return "badge-ok";
+        if (daTiempo == false) return "badge-no";
+        return "badge-warn";
+    }
+
+    string TextoTiempo(bool? daTiempo)
+    {
+        if (daTiempo == true) return "Sí da tiempo";
+        if (daTiempo == false) return "No da tiempo";
+        return "Sin validar";
+    }
+
+    string TextoImportado(bool importado) => importado ? "Desde archivo" : "Captura manual";
+
+    var grupos = (Model.Detalles ?? new List<ERP.NSQuell.Models.PlaneacionReleaseDetalleRenglonVm>())
         .GroupBy(x => new
         {
             x.ReleaseRenglonID,
@@ -22,43 +41,17 @@
         .OrderBy(g => g.Key.Renglon)
         .ToList();
 
-    var totalEntregas = detalles.Count;
-    var totalCantidad = detalles.Sum(x => x.CantidadRequerida);
-    var totalPartes = grupos.Count;
-}
-
-@functions {
-    public static string Valor(string valor)
-    {
-        return string.IsNullOrWhiteSpace(valor) ? "-" : valor;
-    }
-
-    public static string Fecha(DateTime? fecha)
-    {
-        return fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy") : "-";
-    }
-
-    public static string FechaNoNull(DateTime fecha)
-    {
-        return fecha.ToString("dd/MM/yyyy");
-    }
-
-    public static string Entero(int valor)
-    {
-        return valor.ToString("N0");
-    }
-
-    public static string TextoImportado(bool importado)
-    {
-        return importado ? "Desde archivo" : "Captura manual";
-    }
+    var totalEntregas = Model.Detalles?.Count ?? 0;
+    var esPdfOriginal = Model.ImportadoDesdeArchivo &&
+        !string.IsNullOrWhiteSpace(Model.ArchivoOrigenNombre) &&
+        Model.ArchivoOrigenNombre.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
 }
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>Detalle Release | Releases de Cliente</title>
+    <title>Detalle Release | Planeación</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -73,220 +66,74 @@
             --erp-text: #263238;
             --erp-muted: #667085;
             --erp-green: #107c41;
-            --erp-orange: #b54708;
             --erp-red: #b42318;
-        }
-
-        * {
-            box-sizing: border-box;
+            --erp-orange: #b54708;
         }
 
         body {
-            min-height: 100vh;
-            margin: 0;
-            background: radial-gradient(circle at top left, rgba(0, 74, 173, .11), transparent 30%), radial-gradient(circle at 88% 16%, rgba(16, 124, 65, .08), transparent 27%), linear-gradient(180deg, #f7faff 0%, #eef3f9 100%);
+            background: var(--erp-gray);
             color: var(--erp-text);
             font-family: "Segoe UI", Arial, sans-serif;
         }
 
         .erp-shell {
-            max-width: 1640px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 28px;
         }
 
         .erp-header {
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 22px;
-            padding: 30px 34px;
-            border-radius: 28px;
-            background: linear-gradient(135deg, rgba(0,74,173,.98), rgba(0,52,122,.98)), url("data:image/svg+xml,%3Csvg width='900' height='320' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='rgba(255,255,255,.13)' stroke-width='2'%3E%3Cpath d='M0 250 C180 100 260 300 430 130 S700 80 900 190'/%3E%3Cpath d='M0 80 C200 190 260 20 480 100 S650 260 900 120'/%3E%3C/g%3E%3C/svg%3E");
-            background-size: cover;
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
             color: white;
-            box-shadow: 0 18px 42px rgba(0, 74, 173, .24);
+            border-radius: 22px;
+            padding: 28px 32px;
+            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+            margin-bottom: 22px;
         }
 
-            .erp-header::after {
-                content: "";
-                position: absolute;
-                right: -95px;
-                top: -115px;
-                width: 315px;
-                height: 315px;
-                border-radius: 999px;
-                background: rgba(255,255,255,.10);
+            .erp-header h1 {
+                font-size: 1.65rem;
+                margin: 0;
+                font-weight: 900;
             }
 
-        .stage-label {
-            position: relative;
-            z-index: 2;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-            padding: 7px 12px;
-            border: 1px solid rgba(255,255,255,.35);
-            border-radius: 999px;
-            background: rgba(255,255,255,.13);
-            font-size: .75rem;
-            font-weight: 950;
-            letter-spacing: .05em;
-            text-transform: uppercase;
-        }
-
-        .erp-header h1 {
-            position: relative;
-            z-index: 2;
-            margin: 0;
-            font-size: 1.9rem;
-            font-weight: 950;
-        }
-
-        .erp-header p {
-            position: relative;
-            z-index: 2;
-            max-width: 920px;
-            margin: 8px 0 0 0;
-            color: rgba(255,255,255,.90);
-        }
+            .erp-header p {
+                margin: 7px 0 0 0;
+                opacity: .92;
+            }
 
         .header-badge {
-            position: relative;
-            z-index: 2;
             display: inline-flex;
             align-items: center;
             gap: 7px;
-            margin-top: 12px;
-            margin-right: 6px;
-            padding: 7px 12px;
-            border: 1px solid rgba(255,255,255,.28);
-            border-radius: 999px;
             background: rgba(255,255,255,.16);
             color: white;
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 999px;
+            padding: 7px 12px;
             font-size: .82rem;
-            font-weight: 850;
-        }
-
-        .btn-erp-primary {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            padding: 10px 15px;
-            border: 1px solid var(--erp-blue);
-            border-radius: 14px;
-            background: var(--erp-blue);
-            color: white;
-            font-weight: 900;
-            text-decoration: none;
-        }
-
-            .btn-erp-primary:hover {
-                border-color: var(--erp-blue-dark);
-                background: var(--erp-blue-dark);
-                color: white;
-            }
-
-        .btn-erp-light {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            padding: 10px 15px;
-            border: 1px solid var(--erp-border);
-            border-radius: 14px;
-            background: white;
-            color: var(--erp-blue-dark);
-            font-weight: 900;
-            text-decoration: none;
-        }
-
-            .btn-erp-light:hover {
-                background: #eef3fb;
-                color: var(--erp-blue-dark);
-            }
-
-        .btn-glass {
-            position: relative;
-            z-index: 2;
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            padding: 10px 15px;
-            border: 1px solid rgba(255,255,255,.35);
-            border-radius: 14px;
-            background: rgba(255,255,255,.14);
-            color: white;
-            font-weight: 900;
-            text-decoration: none;
-            backdrop-filter: blur(10px);
-        }
-
-            .btn-glass:hover {
-                background: white;
-                color: var(--erp-blue);
-            }
-
-        .metric-card {
-            position: relative;
-            height: 100%;
-            overflow: hidden;
-            padding: 18px;
-            border: 1px solid var(--erp-border);
-            border-radius: 22px;
-            background: white;
-            box-shadow: 0 8px 22px rgba(30, 55, 90, .07);
-        }
-
-            .metric-card::before {
-                content: "";
-                position: absolute;
-                left: 0;
-                top: 0;
-                bottom: 0;
-                width: 7px;
-                background: var(--erp-blue);
-            }
-
-        .metric-label {
-            color: var(--erp-muted);
-            font-size: .74rem;
-            font-weight: 950;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
-        .metric-value {
-            color: var(--erp-blue-dark);
-            font-size: 1.45rem;
-            font-weight: 950;
-            line-height: 1.15;
-        }
-
-        .metric-sub {
-            margin-top: 3px;
-            color: var(--erp-muted);
-            font-size: .80rem;
-            font-weight: 650;
+            font-weight: 800;
+            margin-top: 12px;
+            margin-right: 6px;
         }
 
         .erp-card {
-            overflow: hidden;
-            margin-bottom: 20px;
-            border: 1px solid var(--erp-border);
-            border-radius: 24px;
             background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 20px;
             box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+            overflow: hidden;
         }
 
         .erp-card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 14px;
-            flex-wrap: wrap;
             padding: 18px 22px;
             border-bottom: 1px solid var(--erp-border);
-            background: linear-gradient(135deg, #ffffff, #f7fbff);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
         }
 
         .erp-card-body {
@@ -294,18 +141,123 @@
         }
 
         .erp-label {
-            margin-bottom: 4px;
+            font-weight: 800;
             color: #33465f;
-            font-size: .74rem;
-            font-weight: 950;
-            letter-spacing: .04em;
+            font-size: .78rem;
             text-transform: uppercase;
+            letter-spacing: .035em;
+            margin-bottom: 4px;
         }
 
         .erp-value {
-            min-height: 24px;
             color: #263238;
-            font-weight: 760;
+            font-weight: 650;
+            min-height: 24px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
+            height: 100%;
+        }
+
+        .metric-label {
+            color: var(--erp-muted);
+            font-size: .78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .metric-value {
+            font-size: 1.35rem;
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+        }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border-color: var(--erp-blue);
+            color: white;
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+            .btn-erp-primary:hover {
+                background: var(--erp-blue-dark);
+                border-color: var(--erp-blue-dark);
+                color: white;
+            }
+
+        .btn-erp-light {
+            background: white;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+            font-weight: 800;
+            border-radius: 13px;
+            padding: 10px 15px;
+        }
+
+        .badge-calc {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: .78rem;
+            font-weight: 900;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .badge-ok {
+            background: #ecfdf3;
+            color: #027a48;
+            border-color: #abefc6;
+        }
+
+        .badge-no {
+            background: #fef3f2;
+            color: #b42318;
+            border-color: #fecdca;
+        }
+
+        .badge-warn {
+            background: #fff7ed;
+            color: #b54708;
+            border-color: #fed7aa;
+        }
+
+        .renglon-card {
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            background: #fff;
+            overflow: hidden;
+            margin-bottom: 18px;
+        }
+
+        .renglon-header {
+            background: #eef3fb;
+            border-bottom: 1px solid var(--erp-border);
+            padding: 16px 18px;
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .renglon-title {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            font-size: 1rem;
+        }
+
+        .renglon-body {
+            padding: 18px;
         }
 
         .summary-chip {
@@ -318,118 +270,36 @@
             background: white;
             color: #475467;
             font-size: .78rem;
-            font-weight: 850;
+            font-weight: 800;
+        }
+
+        .table thead th {
+            background: #eef3fb;
+            color: #00347a;
+            font-size: .76rem;
             white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            vertical-align: middle;
         }
 
-            .summary-chip.primary {
-                background: #eff8ff;
-                color: #175cd3;
-                border-color: #b2ddff;
-            }
-
-            .summary-chip.ok {
-                background: #ecfdf3;
-                color: #027a48;
-                border-color: #abefc6;
-            }
-
-        .flow-note {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 20px;
-            padding: 15px 17px;
-            border: 1px solid #b2ddff;
-            border-radius: 18px;
-            background: #eff8ff;
-            color: #1849a9;
-            font-weight: 700;
-        }
-
-        .renglon-card {
-            overflow: hidden;
-            margin-bottom: 18px;
-            border: 1px solid var(--erp-border);
-            border-radius: 24px;
-            background: white;
-            box-shadow: 0 10px 24px rgba(30, 55, 90, .07);
-        }
-
-        .renglon-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 14px;
-            flex-wrap: wrap;
-            padding: 18px 20px;
-            border-bottom: 1px solid var(--erp-border);
-            background: linear-gradient(135deg, #eef6ff, #ffffff);
-        }
-
-        .renglon-title {
-            color: var(--erp-blue-dark);
-            font-size: 1.05rem;
-            font-weight: 950;
-        }
-
-        .renglon-subtitle {
-            margin-top: 4px;
-            color: var(--erp-muted);
+        .table td {
             font-size: .84rem;
-            font-weight: 650;
+            vertical-align: middle;
         }
 
-        .renglon-body {
-            padding: 20px;
-        }
-
-        .table-modern {
-            border-collapse: separate;
-            border-spacing: 0;
-            min-width: 880px;
-        }
-
-            .table-modern thead th {
-                background: #eef3fb;
-                color: #00347a;
-                border-bottom: 1px solid var(--erp-border);
-                font-size: .75rem;
-                font-weight: 950;
-                letter-spacing: .03em;
-                text-transform: uppercase;
-                vertical-align: middle;
-                white-space: nowrap;
-            }
-
-            .table-modern td {
-                border-color: #edf1f7;
-                font-size: .86rem;
-                vertical-align: middle;
-            }
-
-        .cell-strong {
-            color: var(--erp-blue-dark);
-            font-weight: 950;
-        }
-
-        .empty-state {
-            padding: 54px 20px;
-            border: 1px dashed var(--erp-border);
-            border-radius: 24px;
-            background: white;
+        .small-muted {
             color: var(--erp-muted);
-            text-align: center;
+            font-size: .78rem;
         }
 
         .sticky-actions {
             position: sticky;
             bottom: 0;
-            z-index: 20;
-            padding: 14px 0;
             background: rgba(243, 245, 248, .92);
-            border-top: 1px solid rgba(217, 225, 236, .85);
             backdrop-filter: blur(10px);
+            padding: 14px 0;
+            z-index: 20;
         }
 
         @@media (max-width: 767.98px) {
@@ -439,84 +309,161 @@
 
             .erp-header {
                 padding: 22px;
-                border-radius: 20px;
+                border-radius: 18px;
             }
 
-                .erp-header h1 {
-                    font-size: 1.5rem;
-                }
-
-            .erp-card-body,
-            .renglon-body {
+            .erp-card-body {
                 padding: 17px;
             }
+        }
+    
+        /* RELEASE_DETAIL_RESTORED_V1_7 */
+        .erp-header {
+            position: relative;
+            overflow: hidden;
+        }
 
-            .sticky-actions .d-flex {
-                flex-direction: column-reverse;
-            }
+        .erp-header::after {
+            content: "";
+            position: absolute;
+            right: -75px;
+            top: -105px;
+            width: 270px;
+            height: 270px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.09);
+            pointer-events: none;
+        }
 
-            .sticky-actions .btn,
-            .sticky-actions a {
-                width: 100%;
-                justify-content: center;
-            }
+        .erp-header > * {
+            position: relative;
+            z-index: 2;
+        }
+
+        .metric-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 20px;
+        }
+
+        .metric-card::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            background: linear-gradient(180deg, #004aad, #2f80ed);
+        }
+
+        .renglon-card {
+            border-radius: 24px;
+            box-shadow: 0 14px 34px rgba(31, 63, 104, .09);
+        }
+
+        .renglon-header {
+            padding: 20px 22px;
+            background:
+                radial-gradient(circle at 92% 10%, rgba(0,74,173,.10), transparent 26%),
+                linear-gradient(135deg, #eef5ff, #ffffff);
+        }
+
+        .renglon-body {
+            padding: 22px;
+        }
+
+        .table-responsive {
+            border: 1px solid #dbe4f0;
+            border-radius: 16px;
+            box-shadow: 0 8px 20px rgba(31, 63, 104, .05);
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead th {
+            padding: 13px 10px;
+            background: linear-gradient(135deg, #e8f1ff, #eef4fd);
+            border-bottom: 2px solid #c9d8eb;
+        }
+
+        .table tbody td {
+            padding: 12px 9px;
+        }
+
+        .table tbody tr:nth-child(even) td {
+            background: #f9fbfe;
+        }
+
+        .table tbody tr:hover td {
+            background: #eef6ff;
+        }
+
+        .table tfoot td {
+            padding: 13px 9px;
+            background: #eaf3ff;
+            color: #00347a;
+        }
+
+        .badge-calc {
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,.55);
         }
     </style>
 </head>
 
 <body>
     <div class="erp-shell">
-
-        <section class="erp-header">
+        <div class="erp-header">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
-                    <div class="stage-label">
-                        <i class="fa-solid fa-flag-checkered"></i>
-                        Etapa 1 · Consulta del Release
-                    </div>
-
                     <h1>
                         <i class="fa-solid fa-file-lines me-2"></i>
                         Detalle del Release
                     </h1>
 
                     <p>
-                        Consulta la demanda capturada del cliente. Esta pantalla no calcula stock, materia prima, embalaje ni capacidad; esos cálculos inician en Programa de Planeación.
+                        Consulta la demanda capturada por renglón y sus entregas, con fecha de carga, fecha requerida y cálculo inicial.
                     </p>
 
                     <div>
-                        <span class="header-badge">
-                            <i class="fa-solid fa-hashtag"></i>
-                            @(Model.FolioRelease ?? "Sin folio")
-                        </span>
-
-                        <span class="header-badge">
-                            <i class="fa-solid fa-barcode"></i>
-                            @(Model.FolioCliente ?? "Sin folio cliente")
-                        </span>
-
-                        <span class="header-badge">
-                            <i class="fa-solid fa-building"></i>
-                            @(Model.ClienteNombre ?? "Sin cliente")
-                        </span>
-
-                        <span class="header-badge">
-                            <i class="fa-solid fa-circle-info"></i>
-                            @Model.EstatusNombre
-                        </span>
+                        <span class="header-badge"><i class="fa-solid fa-hashtag"></i>@(Model.FolioRelease ?? "Sin folio")</span>
+                        <span class="header-badge"><i class="fa-solid fa-barcode"></i>@(Model.FolioCliente ?? "Sin folio cliente")</span>
+                        <span class="header-badge"><i class="fa-solid fa-building"></i>@(Model.ClienteNombre ?? "Sin cliente")</span>
+                        <span class="header-badge"><i class="fa-solid fa-circle-info"></i>@Model.EstatusNombre</span>
                     </div>
                 </div>
 
-                <div class="d-flex gap-2 flex-wrap position-relative" style="z-index:2;">
-                    <a asp-controller="PlaneacionRelease"
-                       asp-action="Index"
-                       class="btn-glass">
-                        <i class="fa-solid fa-arrow-left"></i>
-                        Volver a Bandeja
+                <div class="d-flex gap-2 flex-wrap">
+                    @if (Model.ImportadoDesdeArchivo && !string.IsNullOrWhiteSpace(Model.ArchivoOrigenNombre))
+                    {
+                        <a asp-controller="PlaneacionRelease"
+                           asp-action="DescargarDocumentoImportado"
+                           asp-route-id="@Model.ReleaseID"
+                           target="_blank"
+                           rel="noopener"
+                           class="btn btn-light fw-bold rounded-3">
+                            <i class="fa-solid @(esPdfOriginal ? "fa-file-pdf" : "fa-download") me-1"></i>
+                            @(esPdfOriginal ? "Ver PDF original" : "Descargar archivo original")
+                        </a>
+                    }
+
+                    <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+                        <i class="fa-solid fa-arrow-left me-1"></i>
+                        Volver
                     </a>
+
+                    <form asp-controller="PlaneacionRelease" asp-action="Recalcular" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.ReleaseID" />
+                        <button type="submit" class="btn btn-light fw-bold rounded-3">
+                            <i class="fa-solid fa-rotate me-1"></i>
+                            Recalcular
+                        </button>
+                    </form>
                 </div>
             </div>
-        </section>
+        </div>
 
         @if (TempData["Success"] != null)
         {
@@ -534,16 +481,6 @@
             </div>
         }
 
-<<<<<<< HEAD
-        <div class="flow-note">
-            <i class="fa-solid fa-circle-info mt-1"></i>
-            <div>
-                <div class="fw-bold">Release guardado como demanda del cliente.</div>
-                <div class="small">
-                    Para calcular necesidades, stock, MP, embalaje y viabilidad, entra al módulo Programa de Planeación.
-                </div>
-            </div>
-=======
         @if (Model.ImportadoDesdeArchivo &&
              Model.EstatusID == ERP.NSQuell.Models.PlaneacionReleaseEstatus.Capturado)
         {
@@ -568,105 +505,30 @@
             <div class="col-md-2"><div class="metric-card"><div class="metric-label">Desde PT</div><div class="metric-value">@Model.TotalPiezasDesdePT.ToString("N0")</div></div></div>
             <div class="col-md-2"><div class="metric-card"><div class="metric-label">A producir</div><div class="metric-value">@Model.TotalPiezasAProducir.ToString("N0")</div></div></div>
             <div class="col-md-2"><div class="metric-card"><div class="metric-label">Horas</div><div class="metric-value">@Model.TotalHorasNecesarias.ToString("N2")</div></div></div>
->>>>>>> origin/Adrian-lectura-PDF
         </div>
 
-        <section class="row g-3 mb-3">
-            <div class="col-md-3">
-                <div class="metric-card">
-                    <div class="metric-label">Partes / renglones</div>
-                    <div class="metric-value">@totalPartes.ToString("N0")</div>
-                    <div class="metric-sub">partidas capturadas</div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="metric-card">
-                    <div class="metric-label">Entregas</div>
-                    <div class="metric-value">@totalEntregas.ToString("N0")</div>
-                    <div class="metric-sub">fechas del cliente</div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="metric-card">
-                    <div class="metric-label">Cantidad requerida</div>
-                    <div class="metric-value">@totalCantidad.ToString("N0")</div>
-                    <div class="metric-sub">piezas solicitadas</div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="metric-card">
-                    <div class="metric-label">Origen</div>
-                    <div class="metric-value" style="font-size:1.15rem;">@TextoImportado(Model.ImportadoDesdeArchivo)</div>
-                    <div class="metric-sub">@Valor(Model.ArchivoOrigenNombre)</div>
-                </div>
-            </div>
-        </section>
-
-        <section class="erp-card">
+        <div class="erp-card">
             <div class="erp-card-header">
                 <div>
-                    <h2 class="h5 fw-bold m-0 text-primary">
-                        <i class="fa-solid fa-file-lines me-2"></i>
-                        Encabezado
-                    </h2>
-                    <div class="text-muted small">
-                        Información general del release recibido.
-                    </div>
+                    <h2 class="h5 fw-bold m-0 text-primary"><i class="fa-solid fa-file-lines me-2"></i>Encabezado</h2>
+                    <div class="text-muted small">Información general del release recibido.</div>
                 </div>
             </div>
 
             <div class="erp-card-body">
                 <div class="row g-3">
-                    <div class="col-md-3">
-                        <div class="erp-label">Folio interno</div>
-                        <div class="erp-value">@Valor(Model.FolioRelease)</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Folio cliente / schedule / contrato</div>
-                        <div class="erp-value">@Valor(Model.FolioCliente)</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Cliente</div>
-                        <div class="erp-value">@Valor(Model.ClienteNombre)</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Fecha recepción</div>
-                        <div class="erp-value">@Model.FechaRecepcion.ToString("dd/MM/yyyy")</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Semana / versión</div>
-                        <div class="erp-value">@Valor(Model.VersionRelease)</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Origen</div>
-                        <div class="erp-value">@TextoImportado(Model.ImportadoDesdeArchivo)</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Plantilla importación</div>
-                        <div class="erp-value">@Valor(Model.PlantillaImportacion)</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Archivo origen</div>
-                        <div class="erp-value">@Valor(Model.ArchivoOrigenNombre)</div>
-                    </div>
-
-                    <div class="col-md-12">
-                        <div class="erp-label">Observaciones</div>
-                        <div class="erp-value">@Valor(Model.Observaciones)</div>
-                    </div>
+                    <div class="col-md-3"><div class="erp-label">Folio interno</div><div class="erp-value">@Valor(Model.FolioRelease)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Folio cliente / Schedule / Contrato</div><div class="erp-value">@Valor(Model.FolioCliente)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Cliente</div><div class="erp-value">@Valor(Model.ClienteNombre)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Fecha recepción</div><div class="erp-value">@Model.FechaRecepcion.ToString("dd/MM/yyyy")</div></div>
+                    <div class="col-md-3"><div class="erp-label">Semana / versión</div><div class="erp-value">@Valor(Model.VersionRelease)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Archivo origen</div><div class="erp-value">@Valor(Model.ArchivoOrigenNombre)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Plantilla importación</div><div class="erp-value">@Valor(Model.PlantillaImportacion)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Origen</div><div class="erp-value">@TextoImportado(Model.ImportadoDesdeArchivo)</div></div>
+                    <div class="col-md-12"><div class="erp-label">Observaciones</div><div class="erp-value">@Valor(Model.Observaciones)</div></div>
                 </div>
             </div>
-        </section>
+        </div>
 
         @if (grupos.Any())
         {
@@ -678,74 +540,55 @@
                 .ToList();
 
                 var totalReqGrupo = entregas.Sum(x => x.CantidadRequerida);
+                var totalPTGrupo = entregas.Sum(x => x.PiezasDesdePT ?? 0);
+                var totalProdGrupo = entregas.Sum(x => x.PiezasAProducir ?? 0);
+                var totalMPGrupo = entregas.Sum(x => x.MPRequeridaKg ?? 0);
+                var totalHorasGrupo = entregas.Sum(x => x.HorasNecesarias ?? 0);
 
-                <section class="renglon-card">
+                <div class="renglon-card">
                     <div class="renglon-header">
                         <div>
-                            <div class="renglon-title">
-                                Renglón @grupo.Key.Renglon · @Valor(grupo.Key.ReferenciaSAP ?? grupo.Key.NumeroParte)
-                            </div>
-
-                            <div class="renglon-subtitle">
-                                @Valor(grupo.Key.DesignacionDescripcionSAP)
-                            </div>
+                            <div class="renglon-title">Renglón @grupo.Key.Renglon · @Valor(grupo.Key.ReferenciaSAP ?? grupo.Key.NumeroParte)</div>
+                            <div class="small-muted">@Valor(grupo.Key.DesignacionDescripcionSAP)</div>
                         </div>
 
                         <div class="d-flex gap-2 flex-wrap">
-                            <span class="summary-chip">
-                                <i class="fa-solid fa-ruler"></i>
-                                UM: @Valor(grupo.Key.UnidadMedidaCliente)
-                            </span>
-
-                            <span class="summary-chip primary">
-                                <i class="fa-solid fa-truck"></i>
-                                @entregas.Count entrega(s)
-                            </span>
-
-                            <span class="summary-chip ok">
-                                <i class="fa-solid fa-cubes"></i>
-                                @totalReqGrupo.ToString("N0") piezas
-                            </span>
+                            <span class="summary-chip"><i class="fa-solid fa-ruler"></i>UM: @Valor(grupo.Key.UnidadMedidaCliente)</span>
+                            <span class="summary-chip"><i class="fa-solid fa-file-contract"></i>Contrato: @Valor(grupo.Key.ContratoCliente)</span>
+                            <span class="summary-chip"><i class="fa-solid fa-truck"></i>@entregas.Count entrega(s)</span>
+                            <span class="summary-chip"><i class="fa-solid fa-cubes"></i>Req: @totalReqGrupo.ToString("N0")</span>
+                            <span class="summary-chip"><i class="fa-solid fa-industry"></i>A producir: @totalProdGrupo.ToString("N0")</span>
                         </div>
                     </div>
 
                     <div class="renglon-body">
                         <div class="row g-3 mb-3">
-                            <div class="col-md-3">
-                                <div class="erp-label">No. parte</div>
-                                <div class="erp-value">@Valor(grupo.Key.NumeroParte)</div>
-                            </div>
-
-                            <div class="col-md-3">
-                                <div class="erp-label">Referencia SAP / cliente</div>
-                                <div class="erp-value">@Valor(grupo.Key.ReferenciaSAP)</div>
-                            </div>
-
-                            <div class="col-md-3">
-                                <div class="erp-label">Unidad cliente</div>
-                                <div class="erp-value">@Valor(grupo.Key.UnidadMedidaCliente)</div>
-                            </div>
-
-                            <div class="col-md-3">
-                                <div class="erp-label">Contrato / orden cliente</div>
-                                <div class="erp-value">@Valor(grupo.Key.ContratoCliente)</div>
-                            </div>
-
-                            <div class="col-md-12">
-                                <div class="erp-label">Designación / descripción</div>
-                                <div class="erp-value">@Valor(grupo.Key.DesignacionDescripcionSAP)</div>
-                            </div>
+                            <div class="col-md-3"><div class="erp-label">No. parte</div><div class="erp-value">@Valor(grupo.Key.NumeroParte)</div></div>
+                            <div class="col-md-3"><div class="erp-label">Referencia SAP / cliente</div><div class="erp-value">@Valor(grupo.Key.ReferenciaSAP)</div></div>
+                            <div class="col-md-3"><div class="erp-label">Unidad cliente</div><div class="erp-value">@Valor(grupo.Key.UnidadMedidaCliente)</div></div>
+                            <div class="col-md-3"><div class="erp-label">Contrato / orden cliente</div><div class="erp-value">@Valor(grupo.Key.ContratoCliente)</div></div>
+                            <div class="col-md-12"><div class="erp-label">Designación / descripción</div><div class="erp-value">@Valor(grupo.Key.DesignacionDescripcionSAP)</div></div>
                         </div>
 
                         <div class="table-responsive">
-                            <table class="table table-modern table-hover align-middle">
+                            <table class="table table-bordered table-hover align-middle">
                                 <thead>
                                     <tr>
                                         <th>Entrega</th>
                                         <th>Fecha carga</th>
                                         <th>Fecha requerida</th>
-                                        <th class="text-end">Cantidad requerida</th>
-                                        <th>Unidad</th>
+                                        <th>Req.</th>
+                                        <th>PT disp.</th>
+                                        <th>Prod. pend.</th>
+                                        <th>Desde PT</th>
+                                        <th>A producir</th>
+                                        <th>MP req.</th>
+                                        <th>MP disp.</th>
+                                        <th>Emb. req.</th>
+                                        <th>Emb. disp.</th>
+                                        <th>Horas</th>
+                                        <th>Fin estimado</th>
+                                        <th>Resultado</th>
                                     </tr>
                                 </thead>
 
@@ -756,24 +599,23 @@
                                         var secuencia = d.SecuenciaEntrega ?? (i + 1);
 
                                         <tr>
+                                            <td><strong>@secuencia</strong></td>
+                                            <td>@Fecha(d.FechaCarga)</td>
+                                            <td>@d.FechaRequerida.ToString("dd/MM/yyyy")</td>
+                                            <td>@d.CantidadRequerida.ToString("N0")</td>
+                                            <td>@Entero(d.PTDisponibleAlCalcular)</td>
+                                            <td>@Entero(d.ProduccionProgramadaPendiente)</td>
+                                            <td><strong>@Entero(d.PiezasDesdePT)</strong></td>
+                                            <td><strong>@Entero(d.PiezasAProducir)</strong></td>
+                                            <td>@Decimal4(d.MPRequeridaKg)</td>
+                                            <td>@Decimal4(d.MPDisponibleKg)</td>
+                                            <td>@Decimal4(d.EmbalajeRequerido)</td>
+                                            <td>@Decimal4(d.EmbalajeDisponible)</td>
+                                            <td>@Decimal2(d.HorasNecesarias)</td>
+                                            <td>@FechaHora(d.FechaFinEstimada)</td>
                                             <td>
-                                                <strong>@secuencia</strong>
-                                            </td>
-
-                                            <td>
-                                                @Fecha(d.FechaCarga)
-                                            </td>
-
-                                            <td>
-                                                @FechaNoNull(d.FechaRequerida)
-                                            </td>
-
-                                            <td class="text-end cell-strong">
-                                                @Entero(d.CantidadRequerida)
-                                            </td>
-
-                                            <td>
-                                                @Valor(grupo.Key.UnidadMedidaCliente)
+                                                <span class="badge-calc @ClaseTiempo(d.DaTiempo)">@TextoTiempo(d.DaTiempo)</span>
+                                                <div class="small-muted mt-1">@Valor(d.MensajeCapacidad)</div>
                                             </td>
                                         </tr>
                                     }
@@ -781,45 +623,60 @@
 
                                 <tfoot>
                                     <tr class="fw-bold">
-                                        <td colspan="3" class="text-end">Total renglón</td>
-                                        <td class="text-end">@totalReqGrupo.ToString("N0")</td>
-                                        <td>@Valor(grupo.Key.UnidadMedidaCliente)</td>
+                                        <td colspan="3" class="text-end">Totales renglón</td>
+                                        <td>@totalReqGrupo.ToString("N0")</td>
+                                        <td></td>
+                                        <td></td>
+                                        <td>@totalPTGrupo.ToString("N0")</td>
+                                        <td>@totalProdGrupo.ToString("N0")</td>
+                                        <td>@totalMPGrupo.ToString("N4")</td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td>@totalHorasGrupo.ToString("N2")</td>
+                                        <td colspan="2"></td>
                                     </tr>
                                 </tfoot>
                             </table>
                         </div>
                     </div>
-                </section>
+                </div>
             }
         }
         else
         {
-            <div class="empty-state">
-                <i class="fa-solid fa-inbox fa-3x mb-3"></i>
-                <h3 class="fw-bold text-primary">No hay renglones en este release</h3>
-                <p class="mb-0">
-                    Regresa a la bandeja y valida que el release tenga entregas capturadas.
-                </p>
+            <div class="erp-card">
+                <div class="erp-card-body text-center text-muted py-5">
+                    <i class="fa-solid fa-inbox fa-2x mb-3"></i>
+                    <div class="fw-bold">No hay renglones en este release.</div>
+                </div>
             </div>
         }
 
-        <section class="sticky-actions">
+        <div class="sticky-actions">
             <div class="d-flex justify-content-between gap-2 flex-wrap">
-                <a asp-controller="PlaneacionRelease"
-                   asp-action="Index"
-                   class="btn btn-erp-light">
+                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-erp-light">
                     <i class="fa-solid fa-arrow-left me-1"></i>
-                    Volver a Bandeja
+                    Volver a Releases
                 </a>
 
-                <a asp-controller="PlaneacionRelease"
-                   asp-action="Crear"
-                   class="btn btn-erp-primary">
-                    <i class="fa-solid fa-plus me-1"></i>
-                    Nuevo release
-                </a>
+                <div class="d-flex gap-2 flex-wrap">
+                    <form asp-controller="PlaneacionRelease" asp-action="Recalcular" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.ReleaseID" />
+                        <button type="submit" class="btn btn-erp-light">
+                            <i class="fa-solid fa-rotate me-1"></i>
+                            Recalcular
+                        </button>
+                    </form>
+
+                    <a asp-controller="PlaneacionRelease" asp-action="Calculadora" asp-route-clienteId="@Model.ClienteID" class="btn btn-erp-primary">
+                        <i class="fa-solid fa-list-check me-1"></i>
+                        Ir a Programa de Planeación
+                    </a>
+                </div>
             </div>
-        </section>
+        </div>
     </div>
 </body>
 </html>

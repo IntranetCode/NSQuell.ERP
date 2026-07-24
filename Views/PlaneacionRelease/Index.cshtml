@@ -627,12 +627,12 @@
                         Carga multiple de documentos
                     </h2>
                     <div class="text-muted small">
-                        Sube los Releases recibidos durante el dia. El sistema identifica automaticamente la estructura de cada documento. Puedes mezclar PDF HUF/VERITAS y Excel GOLDEN/NORMA en el mismo lote; cada archivo valido crea su Release.
+                        Sube los Releases recibidos durante el dia. El sistema identifica automaticamente la estructura de cada documento. Puedes mezclar PDF HUF/VERITAS y Excel GOLDEN/NORMA/AIR THERMAL en el mismo lote; cada archivo valido crea su Release.
                     </div>
                 </div>
                 <span class="pill pill-success">
                     <i class="fa-solid fa-circle-check"></i>
-                    PDF HUF/VERITAS + Excel GOLDEN/NORMA
+                    PDF HUF/VERITAS + Excel GOLDEN/NORMA/AIR THERMAL
                 </span>
             </div>
 
@@ -652,11 +652,11 @@
                                name="archivos"
                                type="file"
                                multiple
-                               accept=".pdf,.xlsx,.xls,.csv"
+                               accept=".pdf,.xlsx,.xls,.xlsm,.csv"
                                class="form-control input-modern"
                                required />
                         <div class="form-text">
-                            Maximo 25 archivos por lote y 10 MB por archivo. Se detectan automaticamente PDF HUF/VERITAS y Excel GOLDEN/NORMA antes de vincular cliente, partes, fechas y cantidades.
+                            Maximo 25 archivos por lote y 10 MB por archivo. Se detectan automaticamente PDF HUF/VERITAS y Excel GOLDEN/NORMA/AIR THERMAL antes de vincular cliente, partes, fechas y cantidades.
                         </div>
                     </div>
 
@@ -670,7 +670,7 @@
 
                 <div class="alert alert-light border rounded-4 mt-3 mb-0 small fw-semibold">
                     <i class="fa-solid fa-calendar-day text-primary me-2"></i>
-                    Operacion diaria: cada documento equivale a un Release. HUF reemplaza la parte activa; VERITAS el contrato activo; GOLDEN y NORMA reemplazan la matriz semanal activa del cliente. Las versiones anteriores quedan cerradas para no duplicar necesidades.
+                    Operacion diaria: cada documento equivale a un Release. HUF reemplaza la parte activa; VERITAS el contrato activo; GOLDEN y NORMA reemplazan la matriz semanal activa; AIR THERMAL reemplaza su Material Release activo. Las versiones anteriores quedan cerradas para no duplicar necesidades.
                 </div>
             </div>
         </section>

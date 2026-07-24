@@ -457,9 +457,13 @@ ORDER BY r.FechaCreacion DESC;";
                                 await ImportarDocumentoNormaSeguroAsync(bytes, item, usuarioId);
                                 break;
 
+                            case ReleaseExcelTemplate.AirThermalMaterialRelease:
+                                await ImportarDocumentoAirThermalSeguroAsync(bytes, item, usuarioId);
+                                break;
+
                             default:
                                 item.Estado = "NO_SOPORTADO";
-                                item.Mensaje = "El Excel original fue conservado, pero no se reconocio su estructura. Actualmente se detectan las matrices GOLDEN y NORMA.";
+                                item.Mensaje = "El Excel original fue conservado, pero no se reconocio su estructura. Actualmente se detectan las matrices GOLDEN, NORMA y AIR THERMAL.";
                                 break;
                         }
 
@@ -467,7 +471,7 @@ ORDER BY r.FechaCreacion DESC;";
                     }
 
                     item.Estado = "NO_SOPORTADO";
-                    item.Mensaje = "El archivo original fue conservado. Actualmente se admiten PDF HUF/VERITAS y Excel GOLDEN/NORMA; CSV y otras plantillas quedan pendientes.";
+                    item.Mensaje = "El archivo original fue conservado. Actualmente se admiten PDF HUF/VERITAS y Excel GOLDEN/NORMA/AIR THERMAL; CSV y otras plantillas quedan pendientes.";
                 }
                 catch (Exception ex)
                 {
@@ -816,6 +820,21 @@ ORDER BY r.FechaCreacion DESC;";
         }
 
         // RELEASE_EXCEL_GOLDEN_NORMA_V1_4
+        // RELEASE_EXCEL_AIR_THERMAL_V1_8
+        private async Task ImportarDocumentoAirThermalSeguroAsync(
+            byte[] bytes,
+            PlaneacionReleaseImportacionArchivoVm item,
+            int usuarioId)
+        {
+            var document = ReleaseExcelDocumentDetector.ParseAirThermal(
+                bytes,
+                item.Archivo);
+
+            await ImportarDocumentoExcelMatrizSeguroAsync(
+                document,
+                item,
+                usuarioId);
+        }
         private async Task ImportarDocumentoGoldenSeguroAsync(
             byte[] bytes,
             PlaneacionReleaseImportacionArchivoVm item,
@@ -843,9 +862,13 @@ ORDER BY r.FechaCreacion DESC;";
             item.Parte = document.Rows.Count == 1
                 ? document.Rows[0].PartNumber
                 : $"{document.Rows.Count} partes";
-            item.Descripcion = document.TemplateCode == "GOLDEN_WEEKLY_RELEASE"
-                ? "Matriz semanal GOLDEN"
-                : "Matriz semanal NORMA";
+            item.Descripcion = document.TemplateCode switch
+            {
+                "GOLDEN_WEEKLY_RELEASE" => "Matriz semanal GOLDEN",
+                "NORMA_WEEKLY_RELEASE" => "Matriz semanal NORMA",
+                "AIR_THERMAL_MATERIAL_RELEASE" => "Material Release AIR THERMAL",
+                _ => "Release Excel"
+            };
             item.Schedule = document.VersionText;
             item.OrdenCliente = document.FolioCliente;
             item.Version = document.VersionText;
@@ -880,11 +903,17 @@ ORDER BY r.FechaCreacion DESC;";
 
                 foreach (var row in document.Rows)
                 {
-                    var match = await BuscarParteImportacionIncluyendoInactivasAsync(
-                        row.PartNumber,
-                        clienteId.Value,
-                        cn,
-                        tx);
+                    var match = document.TemplateCode == "AIR_THERMAL_MATERIAL_RELEASE"
+                        ? await BuscarParteAirThermalIncluyendoRevisionesAsync(
+                            row.PartNumber,
+                            clienteId.Value,
+                            cn,
+                            tx)
+                        : await BuscarParteImportacionIncluyendoInactivasAsync(
+                            row.PartNumber,
+                            clienteId.Value,
+                            cn,
+                            tx);
 
                     if (match == null)
                     {
@@ -1035,6 +1064,17 @@ WHERE Activo = 1
   AND UPPER(ISNULL(Nombre, '')) LIKE '%NORMA%'
 ORDER BY ClienteID;";
             }
+            else if (templateCode == "AIR_THERMAL_MATERIAL_RELEASE")
+            {
+                sql = @"
+SELECT TOP (1) ClienteID
+FROM dbo.ERP_Clientes
+WHERE Activo = 1
+  AND UPPER(ISNULL(Nombre, '')) LIKE '%AIR%THERMAL%'
+ORDER BY
+    CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(Nombre, '')))) = 'AIR THERMAL SYSTEMS' THEN 0 ELSE 1 END,
+    ClienteID;";
+            }
             else
             {
                 return null;
@@ -1111,7 +1151,8 @@ WHERE ReleaseID = @ReleaseID
 
             if (!clienteId.HasValue ||
                 (templateCode != "GOLDEN_WEEKLY_RELEASE" &&
-                 templateCode != "NORMA_WEEKLY_RELEASE"))
+                 templateCode != "NORMA_WEEKLY_RELEASE" &&
+                 templateCode != "AIR_THERMAL_MATERIAL_RELEASE"))
             {
                 return;
             }
@@ -1268,13 +1309,149 @@ WHERE ReleaseID = @ReleaseID
             public string? NumeroParte { get; init; }
             public string? ReferenciaSAP { get; init; }
         }
+        // RELEASE_PART_ALIAS_MASTER_V1_1
+        private static async Task<ParteImportacionMatch?> BuscarParteActivaPorAliasMaestroAsync(
+            string referencia,
+            int clienteId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+IF OBJECT_ID(N'dbo.vw_ERP_ParteIdentificadores', N'V') IS NULL
+BEGIN
+    SELECT TOP (0)
+        p.ParteID,
+        p.Activo,
+        p.NumeroParte,
+        p.ReferenciaSAP
+    FROM dbo.ERP_Partes p;
+    RETURN;
+END;
 
+DECLARE @Normalizada NVARCHAR(150) = UPPER(
+    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+        LTRIM(RTRIM(@Referencia)),
+        CHAR(13), ''), CHAR(10), ''), ' ', ''), '.', ''), '-', ''), '_', ''), '/', ''), '?', '')
+);
+
+;WITH Candidatos AS
+(
+    SELECT DISTINCT i.ParteID
+    FROM dbo.vw_ERP_ParteIdentificadores i
+    WHERE i.ClienteID = @ClienteID
+      AND i.IdentificadorNormalizado = @Normalizada
+)
+SELECT
+    p.ParteID,
+    p.Activo,
+    p.NumeroParte,
+    p.ReferenciaSAP
+FROM Candidatos c
+INNER JOIN dbo.ERP_Partes p
+    ON p.ParteID = c.ParteID
+WHERE p.Activo = 1
+  AND (SELECT COUNT(1) FROM Candidatos) = 1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 150).Value = referencia.Trim();
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = clienteId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                return null;
+
+            return new ParteImportacionMatch
+            {
+                ParteID = Convert.ToInt32(rd["ParteID"]),
+                Activa = Convert.ToBoolean(rd["Activo"]),
+                NumeroParte = rd["NumeroParte"] as string,
+                ReferenciaSAP = rd["ReferenciaSAP"] as string
+            };
+        }
+
+        private static async Task<ParteImportacionMatch?> BuscarParteAirThermalIncluyendoRevisionesAsync(
+            string referencia,
+            int clienteId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            var referenciaBase = Regex.Replace(
+                referencia.Trim(),
+                @"[._-]\d{3}$",
+                string.Empty,
+                RegexOptions.CultureInvariant);
+
+            const string sql = @"
+DECLARE @Normalizada NVARCHAR(150) = UPPER(
+    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(@Referencia)), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')
+);
+
+DECLARE @BaseNormalizada NVARCHAR(150) = UPPER(
+    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(@ReferenciaBase)), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')
+);
+
+SELECT TOP (1)
+    ParteID,
+    ISNULL(Activo, 0) AS Activo,
+    NumeroParte,
+    ReferenciaSAP
+FROM dbo.ERP_Partes
+WHERE ClienteID = @ClienteID
+  AND
+  (
+        UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(NumeroParte, ''), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')) = @Normalizada
+     OR UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(ReferenciaSAP, ''), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')) = @Normalizada
+     OR (
+            @BaseNormalizada <> @Normalizada
+        AND
+        (
+              UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(NumeroParte, ''), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')) = @BaseNormalizada
+           OR UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(ReferenciaSAP, ''), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')) = @BaseNormalizada
+        )
+     )
+  )
+ORDER BY
+    CASE WHEN ISNULL(Activo, 0) = 1 THEN 0 ELSE 1 END,
+    CASE
+        WHEN UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(ReferenciaSAP, ''), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')) = @Normalizada THEN 0
+        WHEN UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(NumeroParte, ''), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')) = @Normalizada THEN 1
+        WHEN UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(ReferenciaSAP, ''), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')) = @BaseNormalizada THEN 2
+        ELSE 3
+    END,
+    ParteID;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 150).Value = referencia.Trim();
+            cmd.Parameters.Add("@ReferenciaBase", SqlDbType.NVarChar, 150).Value = referenciaBase;
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = clienteId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                return null;
+
+            return new ParteImportacionMatch
+            {
+                ParteID = Convert.ToInt32(rd["ParteID"]),
+                Activa = Convert.ToBoolean(rd["Activo"]),
+                NumeroParte = rd["NumeroParte"] as string,
+                ReferenciaSAP = rd["ReferenciaSAP"] as string
+            };
+        }
         private static async Task<ParteImportacionMatch?> BuscarParteImportacionIncluyendoInactivasAsync(
             string referencia,
             int clienteId,
             SqlConnection cn,
             SqlTransaction tx)
         {
+            var aliasMatch = await BuscarParteActivaPorAliasMaestroAsync(
+                referencia,
+                clienteId,
+                cn,
+                tx);
+
+            if (aliasMatch != null)
+                return aliasMatch;
+
             const string sql = @"
 DECLARE @Normalizada NVARCHAR(150) = UPPER(
     REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(@Referencia)), '-', ''), '.', ''), ' ', ''), '/', ''), '_', '')
@@ -1372,7 +1549,25 @@ WHERE ReleaseID = @ReleaseID
                 ? "application/pdf"
                 : "application/octet-stream";
 
-            return PhysicalFile(fullPath, contentType, fileName);
+            
+            // RELEASE_ORIGINAL_INLINE_V1_7
+            if (contentType == "application/pdf")
+            {
+                var safeFileName = Path.GetFileName(fileName).Replace("\"", string.Empty);
+                Response.Headers["Content-Disposition"] =
+                    $"inline; filename=\"{safeFileName}\"";
+
+                return PhysicalFile(
+                    fullPath,
+                    contentType,
+                    enableRangeProcessing: true);
+            }
+
+            return PhysicalFile(
+                fullPath,
+                contentType,
+                fileName,
+                enableRangeProcessing: true);
         }
 
         [HttpGet]
