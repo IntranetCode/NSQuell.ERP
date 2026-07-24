@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+﻿using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace ERP.NSQuell.Models
 {
@@ -341,7 +343,7 @@ namespace ERP.NSQuell.Models
 
 
     // HELPERS
-    
+
     public static class PlaneacionOFEstatus
     {
         public const int Capturada = 1;

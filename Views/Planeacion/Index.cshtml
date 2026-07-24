@@ -4,13 +4,22 @@
     Layout = null;
     var success = TempData["Success"] as string;
     var error = TempData["Error"] as string;
+
+    var lista = Model ?? new List<ERP.NSQuell.Models.PlaneacionOFIndexVm>();
+    var pendientesGenerarOF = lista.Count(x => x.SolicitudProduccionID < 0);
+    var ofGeneradas = lista.Count(x => x.SolicitudProduccionID > 0);
+    var totalPiezas = lista.Sum(x => x.TotalPiezas);
+
+    string Valor(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    string Fecha(DateTime? value) => value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "Sin fecha";
+    string FechaHora(DateTime? value) => value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "Sin definir";
 }
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>Planeación OF | ERP QUELL</title>
+    <title>Bandeja de OF | ERP QUELL</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -23,6 +32,11 @@
             --erp-gray: #f3f5f8;
             --erp-border: #d9e1ec;
             --erp-text: #263238;
+            --erp-muted: #687789;
+            --erp-green: #157347;
+            --erp-orange: #a76700;
+            --erp-purple: #5b35b1;
+            --erp-red: #b42318;
         }
 
         body {
@@ -32,7 +46,7 @@
         }
 
         .erp-shell {
-            max-width: 1500px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 28px;
         }
@@ -40,16 +54,16 @@
         .erp-header {
             background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
             color: white;
-            border-radius: 20px;
-            padding: 26px 30px;
+            border-radius: 22px;
+            padding: 28px 30px;
             box-shadow: 0 14px 34px rgba(0, 74, 173, .22);
             margin-bottom: 22px;
         }
 
             .erp-header h1 {
-                font-size: 1.55rem;
+                font-size: 1.65rem;
                 margin: 0;
-                font-weight: 800;
+                font-weight: 900;
                 letter-spacing: .2px;
             }
 
@@ -58,11 +72,32 @@
                 opacity: .92;
             }
 
+        .erp-stat {
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.25);
+            border-radius: 16px;
+            padding: 14px 16px;
+            min-width: 150px;
+        }
+
+        .erp-stat-value {
+            font-size: 1.35rem;
+            font-weight: 950;
+            line-height: 1.1;
+        }
+
+        .erp-stat-label {
+            font-size: .78rem;
+            opacity: .9;
+            font-weight: 700;
+        }
+
         .erp-card {
             background: white;
             border: 1px solid var(--erp-border);
-            border-radius: 18px;
+            border-radius: 20px;
             box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            overflow: hidden;
         }
 
         .erp-card-header {
@@ -76,7 +111,7 @@
         }
 
         .erp-card-title {
-            font-weight: 800;
+            font-weight: 900;
             color: var(--erp-blue-dark);
             margin: 0;
         }
@@ -85,7 +120,7 @@
             background: var(--erp-blue);
             border-color: var(--erp-blue);
             color: white;
-            font-weight: 700;
+            font-weight: 800;
             border-radius: 12px;
             padding: 10px 16px;
         }
@@ -100,9 +135,14 @@
             background: #fff;
             border: 1px solid var(--erp-border);
             color: var(--erp-blue-dark);
-            font-weight: 700;
+            font-weight: 800;
             border-radius: 12px;
         }
+
+            .btn-erp-light:hover {
+                background: #eef3fb;
+                color: var(--erp-blue-dark);
+            }
 
         .erp-table {
             margin: 0;
@@ -111,7 +151,7 @@
             .erp-table thead th {
                 background: #eef3fb;
                 color: #30445f;
-                font-size: .82rem;
+                font-size: .78rem;
                 text-transform: uppercase;
                 letter-spacing: .04em;
                 border-bottom: 1px solid var(--erp-border);
@@ -124,12 +164,12 @@
             }
 
         .erp-folio {
-            font-weight: 800;
+            font-weight: 900;
             color: var(--erp-blue-dark);
         }
 
         .erp-muted {
-            color: #687789;
+            color: var(--erp-muted);
             font-size: .88rem;
         }
 
@@ -140,8 +180,14 @@
             border-radius: 999px;
             padding: 6px 11px;
             font-size: .78rem;
-            font-weight: 800;
+            font-weight: 900;
             white-space: nowrap;
+        }
+
+        .status-0 {
+            background: #fff4de;
+            color: #a76700;
+            border: 1px solid #ffd99a;
         }
 
         .status-1 {
@@ -183,29 +229,11 @@
             color: #6c757d;
         }
 
-        .erp-stat {
-            background: rgba(255,255,255,.14);
-            border: 1px solid rgba(255,255,255,.25);
-            border-radius: 16px;
-            padding: 14px 16px;
-            min-width: 150px;
-        }
-
-        .erp-stat-value {
-            font-size: 1.25rem;
-            font-weight: 900;
-        }
-
-        .erp-stat-label {
-            font-size: .78rem;
-            opacity: .9;
-        }
-
         .search-box {
             border-radius: 13px;
             border: 1px solid var(--erp-border);
             padding: 10px 14px;
-            min-width: 280px;
+            min-width: 300px;
         }
 
         .empty-state {
@@ -219,6 +247,37 @@
                 color: #b5c3d6;
                 margin-bottom: 15px;
             }
+
+        .row-pending-of {
+            background: #fffaf0;
+        }
+
+            .row-pending-of td {
+                border-color: #ffe7b3;
+            }
+
+        .badge-source {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: .72rem;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .badge-programa {
+            background: #fff4de;
+            color: #a76700;
+            border: 1px solid #ffd99a;
+        }
+
+        .badge-of {
+            background: #e8f1ff;
+            color: var(--erp-blue);
+            border: 1px solid #bdd7ff;
+        }
 
         @@media (max-width: 768px) {
             .erp-shell {
@@ -248,34 +307,36 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
                     <h1>
-                        <i class="fa-solid fa-calendar-check me-2"></i>
-                        Planeación / Captura de OF
+                        <i class="fa-solid fa-clipboard-list me-2"></i>
+                        Bandeja de Órdenes de Fabricación
                     </h1>
                     <p>
-                        Captura de órdenes recibidas por Dirección, autollenado técnico por parte y seguimiento de planeación.
+                        Aquí aparecen las OF ya generadas y los programas de máquina que están listos para convertirse en OF.
                     </p>
                 </div>
 
                 <div class="d-flex gap-2 flex-wrap">
                     <div class="erp-stat">
-                        <div class="erp-stat-value">@Model.Count</div>
-                        <div class="erp-stat-label">OF capturadas</div>
+                        <div class="erp-stat-value">@ofGeneradas.ToString("N0")</div>
+                        <div class="erp-stat-label">OF generadas</div>
                     </div>
 
                     <div class="erp-stat">
-                        <div class="erp-stat-value">@Model.Sum(x => x.TotalPiezas).ToString("N0")</div>
+                        <div class="erp-stat-value">@pendientesGenerarOF.ToString("N0")</div>
+                        <div class="erp-stat-label">Pendientes generar OF</div>
+                    </div>
+
+                    <div class="erp-stat">
+                        <div class="erp-stat-value">@totalPiezas.ToString("N0")</div>
                         <div class="erp-stat-label">Piezas totales</div>
                     </div>
                 </div>
             </div>
         </div>
 
-
-
-
         @if (!string.IsNullOrWhiteSpace(success))
         {
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <div class="alert alert-success alert-dismissible fade show rounded-4 fw-semibold" role="alert">
                 <i class="fa-solid fa-circle-check me-2"></i>
                 @success
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -284,7 +345,7 @@
 
         @if (!string.IsNullOrWhiteSpace(error))
         {
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <div class="alert alert-danger alert-dismissible fade show rounded-4 fw-semibold" role="alert">
                 <i class="fa-solid fa-triangle-exclamation me-2"></i>
                 @error
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -296,15 +357,15 @@
                 <div>
                     <h2 class="erp-card-title h5">
                         <i class="fa-solid fa-list-check me-2"></i>
-                        Bandeja de Planeación
+                        Bandeja OF
                     </h2>
                     <div class="erp-muted">
-                        Consulta las OF capturadas y su avance.
+                        Las filas amarillas vienen desde Máquinas / Cambios Programados y todavía no tienen OF.
                     </div>
                 </div>
 
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <input id="txtBuscar" class="search-box" type="text" placeholder="Buscar folio, cliente, OF..." />
+                    <input id="txtBuscar" class="search-box" type="text" placeholder="Buscar folio, cliente, parte, máquina..." />
 
                     <a href="/Menu/Grupo/3" class="btn btn-erp-light">
                         <i class="fa-solid fa-arrow-left me-1"></i>
@@ -313,21 +374,21 @@
 
                     <a asp-controller="Planeacion" asp-action="Crear" class="btn btn-erp-primary">
                         <i class="fa-solid fa-plus me-1"></i>
-                        Nueva OF
+                        Nueva OF manual
                     </a>
                 </div>
             </div>
 
-            @if (Model == null || !Model.Any())
+            @if (!lista.Any())
             {
                 <div class="empty-state">
                     <i class="fa-regular fa-folder-open"></i>
-                    <h5 class="fw-bold">Aún no hay OF capturadas</h5>
-                    <p class="mb-3">Comienza capturando la primera orden recibida por Dirección.</p>
+                    <h5 class="fw-bold">Aún no hay OF ni programas listos</h5>
+                    <p class="mb-3">Cuando guardes un Programa Cambio de Molde, aparecerá aquí como pendiente para generar OF.</p>
 
-                    <a asp-controller="Planeacion" asp-action="Crear" class="btn btn-erp-primary">
-                        <i class="fa-solid fa-plus me-1"></i>
-                        Capturar primera OF
+                    <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn btn-erp-primary">
+                        <i class="fa-solid fa-list-check me-1"></i>
+                        Ir a Programa de Planeación
                     </a>
                 </div>
             }
@@ -337,6 +398,7 @@
                     <table class="table erp-table align-middle" id="tablaOF">
                         <thead>
                             <tr>
+                                <th>Origen</th>
                                 <th>Folio</th>
                                 <th>OF Dirección</th>
                                 <th>Cliente</th>
@@ -344,23 +406,49 @@
                                 <th>Planeación</th>
                                 <th>Renglones</th>
                                 <th>Piezas</th>
-                            
                                 <th>Estatus</th>
-                                <th>Responsable</th>
+                                <th>Responsable / Programa</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            @foreach (var item in Model)
+                            @foreach (var item in lista)
                             {
-                                <tr>
+                                var esPendientePrograma = item.SolicitudProduccionID < 0;
+                                var programaProduccionId = Math.Abs(item.SolicitudProduccionID);
+
+                                <tr class="@(esPendientePrograma ? "row-pending-of" : "")">
+                                    <td>
+                                        @if (esPendientePrograma)
+                                        {
+                                            <span class="badge-source badge-programa">
+                                                <i class="fa-solid fa-gears"></i>
+                                                Programa
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge-source badge-of">
+                                                <i class="fa-solid fa-file-lines"></i>
+                                                OF
+                                            </span>
+                                        }
+                                    </td>
+
                                     <td>
                                         <div class="erp-folio">
-                                            @(string.IsNullOrWhiteSpace(item.FolioSolicitud) ? "Sin folio" : item.FolioSolicitud)
+                                            @Valor(item.FolioSolicitud)
                                         </div>
                                         <div class="erp-muted">
-                                            ID @item.SolicitudProduccionID
+                                            @if (esPendientePrograma)
+                                            {
+                                                <span>Programa ID @programaProduccionId</span>
+                                            }
+                                            else
+                                            {
+                                                <span>OF ID @item.SolicitudProduccionID</span>
+                                            }
                                         </div>
                                     </td>
 
@@ -377,7 +465,7 @@
 
                                     <td>
                                         <div class="fw-semibold">
-                                            @(string.IsNullOrWhiteSpace(item.Cliente) ? "Sin cliente" : item.Cliente)
+                                            @Valor(item.Cliente)
                                         </div>
                                     </td>
 
@@ -389,19 +477,19 @@
 
                                         <div>
                                             <span class="erp-muted">Requerida:</span>
-                                            @(item.FechaRequerida.HasValue? item.FechaRequerida.Value.ToString("dd/MM/yyyy") : "Sin fecha")
+                                            @Fecha(item.FechaRequerida)
                                         </div>
                                     </td>
 
                                     <td>
                                         <div>
                                             <span class="erp-muted">Inicio:</span>
-                                            @(item.FechaInicioPlaneada.HasValue? item.FechaInicioPlaneada.Value.ToString("dd/MM/yyyy HH:mm") : "Sin definir")
+                                            @FechaHora(item.FechaInicioPlaneada)
                                         </div>
 
                                         <div>
                                             <span class="erp-muted">Fin:</span>
-                                            @(item.FechaFinPlaneada.HasValue? item.FechaFinPlaneada.Value.ToString("dd/MM/yyyy HH:mm") : "Sin definir")
+                                            @FechaHora(item.FechaFinPlaneada)
                                         </div>
                                     </td>
 
@@ -416,8 +504,6 @@
                                             @item.TotalPiezas.ToString("N0")
                                         </span>
                                     </td>
-
-                                   
 
                                     <td>
                                         <span class="status-pill status-@item.EstatusID">
@@ -438,13 +524,31 @@
                                     </td>
 
                                     <td class="text-end">
-                                        <a asp-controller="Planeacion"
-                                           asp-action="Detalle"
-                                           asp-route-id="@item.SolicitudProduccionID"
-                                           class="btn btn-sm btn-erp-light">
-                                            <i class="fa-regular fa-eye me-1"></i>
-                                            Ver
-                                        </a>
+                                        @if (esPendientePrograma)
+                                        {
+                                            <form asp-controller="PlaneacionPrograma"
+                                                  asp-action="GenerarOF"
+                                                  method="post"
+                                                  class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="programaProduccionId" value="@programaProduccionId" />
+
+                                                <button type="submit" class="btn btn-sm btn-erp-primary">
+                                                    <i class="fa-solid fa-file-circle-plus me-1"></i>
+                                                    Generar OF
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <a asp-controller="Planeacion"
+                                               asp-action="Detalle"
+                                               asp-route-id="@item.SolicitudProduccionID"
+                                               class="btn btn-sm btn-erp-light">
+                                                <i class="fa-regular fa-eye me-1"></i>
+                                                Ver
+                                            </a>
+                                        }
                                     </td>
                                 </tr>
                             }

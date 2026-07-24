@@ -25,7 +25,10 @@ namespace ERP.NSQuell.Controllers
         {
             var lista = new List<PlaneacionOFIndexVm>();
 
-            const string sql = @"
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            const string sqlOF = @"
 SELECT
     s.SolicitudProduccionID,
     s.FolioSolicitud,
@@ -62,37 +65,130 @@ GROUP BY
     s.FechaCreacion
 ORDER BY s.FechaCreacion DESC;";
 
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
-
-            await using var cmd = new SqlCommand(sql, cn);
-            await using var rd = await cmd.ExecuteReaderAsync();
-
-            while (await rd.ReadAsync())
+            await using (var cmd = new SqlCommand(sqlOF, cn))
+            await using (var rd = await cmd.ExecuteReaderAsync())
             {
-                var estatusId = Convert.ToInt32(rd["EstatusID"]);
-
-                lista.Add(new PlaneacionOFIndexVm
+                while (await rd.ReadAsync())
                 {
-                    SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
-                    FolioSolicitud = rd["FolioSolicitud"] as string,
-                    NumeroOFRecibida = rd["NumeroOFRecibida"] as string,
-                    FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
-                    FechaRequerida = rd["FechaRequerida"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaRequerida"]),
-                    FechaInicioPlaneada = rd["FechaInicioPlaneada"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioPlaneada"]),
-                    FechaFinPlaneada = rd["FechaFinPlaneada"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinPlaneada"]),
-                    Cliente = rd["Cliente"] as string,
-                    Prioridad = rd["Prioridad"] as string ?? "Normal",
-                    EstatusID = estatusId,
-                    EstatusNombre = PlaneacionOFEstatus.Nombre(estatusId),
-                    ResponsablePlaneacionNombre = rd["ResponsablePlaneacionNombre"] as string,
-                    TotalRenglones = Convert.ToInt32(rd["TotalRenglones"]),
-                    TotalPiezas = Convert.ToInt32(rd["TotalPiezas"])
-                });
+                    var estatusId = Convert.ToInt32(rd["EstatusID"]);
+
+                    lista.Add(new PlaneacionOFIndexVm
+                    {
+                        SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
+                        FolioSolicitud = rd["FolioSolicitud"] as string,
+                        NumeroOFRecibida = rd["NumeroOFRecibida"] as string,
+                        FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
+                        FechaRequerida = rd["FechaRequerida"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaRequerida"]),
+                        FechaInicioPlaneada = rd["FechaInicioPlaneada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaInicioPlaneada"]),
+                        FechaFinPlaneada = rd["FechaFinPlaneada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaFinPlaneada"]),
+                        Cliente = rd["Cliente"] as string,
+                        Prioridad = rd["Prioridad"] as string ?? "Normal",
+                        EstatusID = estatusId,
+                        EstatusNombre = PlaneacionOFEstatus.Nombre(estatusId),
+                        ResponsablePlaneacionNombre = rd["ResponsablePlaneacionNombre"] as string,
+                        TotalRenglones = Convert.ToInt32(rd["TotalRenglones"]),
+                        TotalPiezas = Convert.ToInt32(rd["TotalPiezas"])
+                    });
+                }
             }
+
+            const string sqlProgramadosSinOF = @"
+SELECT
+    pp.ProgramaProduccionID,
+    pp.ClienteID,
+    ISNULL(c.Nombre, pp.ClienteNombre) AS ClienteNombre,
+    pp.ReferenciaSAP,
+    pp.NumeroParte,
+    pp.DesignacionDescripcionSAP,
+    pp.CantidadProgramada,
+    pp.FechaInicioProgramada,
+    pp.FechaFinProgramada,
+    pp.FechaCreacion,
+    pp.MaquinaCodigo,
+    pp.MaquinaNombre,
+    pp.MoldeCodigo,
+    pp.CondicionProduccion,
+    pp.EstatusID
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.ERP_Clientes c
+    ON c.ClienteID = pp.ClienteID
+WHERE pp.Activo = 1
+  AND pp.SolicitudProduccionID IS NULL
+  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
+ORDER BY
+    pp.FechaInicioProgramada,
+    pp.MaquinaCodigo,
+    pp.SecuenciaMaquina,
+    pp.ProgramaProduccionID;";
+
+            await using (var cmd = new SqlCommand(sqlProgramadosSinOF, cn))
+            await using (var rd = await cmd.ExecuteReaderAsync())
+            {
+                while (await rd.ReadAsync())
+                {
+                    var programaProduccionId = Convert.ToInt32(rd["ProgramaProduccionID"]);
+                    var maquinaCodigo = rd["MaquinaCodigo"] as string;
+                    var moldeCodigo = rd["MoldeCodigo"] as string;
+                    var condicion = rd["CondicionProduccion"] as string;
+
+                    var folioPendiente = $"PROG-{programaProduccionId:0000}";
+
+                    lista.Add(new PlaneacionOFIndexVm
+                    {
+                        // ID negativo para identificar en la vista que todavía no existe OF.
+                        SolicitudProduccionID = programaProduccionId * -1,
+
+                        FolioSolicitud = folioPendiente,
+                        NumeroOFRecibida = "Pendiente generar OF",
+
+                        FechaSolicitud = rd["FechaCreacion"] == DBNull.Value
+                            ? DateTime.Today
+                            : Convert.ToDateTime(rd["FechaCreacion"]),
+
+                        FechaRequerida = rd["FechaFinProgramada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaFinProgramada"]).Date,
+
+                        FechaInicioPlaneada = rd["FechaInicioProgramada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaInicioProgramada"]),
+
+                        FechaFinPlaneada = rd["FechaFinProgramada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaFinProgramada"]),
+
+                        Cliente = rd["ClienteNombre"] as string,
+
+                        Prioridad = "Programado",
+                        EstatusID = 0,
+                        EstatusNombre = "Pendiente generar OF",
+                        ResponsablePlaneacionNombre =
+                            $"Máq: {maquinaCodigo ?? "-"} · Molde: {moldeCodigo ?? "-"} · {condicion ?? "-"}",
+
+                        TotalRenglones = 1,
+                        TotalPiezas = rd["CantidadProgramada"] == DBNull.Value
+                            ? 0
+                            : Convert.ToInt32(rd["CantidadProgramada"])
+                    });
+                }
+            }
+
+            lista = lista
+                .OrderBy(x => x.SolicitudProduccionID > 0 ? 1 : 0)
+                .ThenBy(x => x.FechaInicioPlaneada ?? x.FechaSolicitud)
+                .ThenByDescending(x => x.FechaSolicitud)
+                .ToList();
 
             return View(lista);
         }
+
+
 
         // crearr get
         [HttpGet]

@@ -1,12 +1,55 @@
 ﻿@model ERP.NSQuell.Models.PlaneacionProgramaCrearDesdeNecesidadVm
+@using Microsoft.AspNetCore.Mvc.Rendering
 
 @{
     Layout = null;
+}
 
-    string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
-    string Decimal4(decimal? v) => v.HasValue ? v.Value.ToString("N4") : "-";
-    string Decimal2(decimal? v) => v.HasValue ? v.Value.ToString("N2") : "-";
-    string Entero(int? v) => v.HasValue ? v.Value.ToString("N0") : "-";
+@functions {
+    public static string Valor(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    public static string Entero(int? value)
+    {
+        return value.HasValue ? value.Value.ToString("N0") : "0";
+    }
+
+    public static string Decimal2(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N2") : "0.00";
+    }
+
+    public static string Decimal4(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N4") : "0.0000";
+    }
+
+    public static string TimeValue(TimeSpan? value)
+    {
+        return value.HasValue ? value.Value.ToString(@"hh\:mm") : "";
+    }
+
+    public static string DateTimeLocal(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("yyyy-MM-ddTHH:mm") : "";
+    }
+
+    public static bool TieneValor(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value);
+    }
+
+    public static bool TieneValor(int? value)
+    {
+        return value.HasValue && value.Value > 0;
+    }
+
+    public static bool TieneValor(decimal? value)
+    {
+        return value.HasValue && value.Value > 0;
+    }
 }
 
 <!DOCTYPE html>
@@ -21,250 +64,471 @@
 
     <style>
         :root {
-            --erp-blue: #004AAD;
-            --erp-blue-dark: #00347a;
-            --erp-gray: #f3f5f8;
-            --erp-border: #d9e1ec;
-            --erp-text: #263238;
-            --erp-muted: #667085;
-            --erp-green: #107c41;
-            --erp-red: #b42318;
-            --erp-orange: #b54708;
+            --blue: #004AAD;
+            --blue-dark: #00347a;
+            --purple: #6650a4;
+            --purple-dark: #4e3a85;
+            --green: #107c41;
+            --orange: #b54708;
+            --red: #b42318;
+            --bg: #f4f7fb;
+            --card: #ffffff;
+            --border: #d9e3f1;
+            --text: #1f2937;
+            --muted: #667085;
+            --shadow: 0 16px 38px rgba(15, 23, 42, .09);
         }
 
         body {
-            background: var(--erp-gray);
-            color: var(--erp-text);
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at 0% 0%, rgba(102, 80, 164, .12), transparent 32%), radial-gradient(circle at 95% 10%, rgba(0, 74, 173, .10), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #edf2f8 100%);
+            color: var(--text);
             font-family: "Segoe UI", Arial, sans-serif;
         }
 
-        .erp-shell {
-            max-width: 1500px;
+        .page {
+            max-width: 1680px;
             margin: 0 auto;
-            padding: 28px;
+            padding: 26px;
         }
 
-        .erp-header {
-            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
-            color: white;
-            border-radius: 22px;
-            padding: 28px 32px;
-            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
-            margin-bottom: 22px;
+        .hero {
+            position: relative;
+            overflow: hidden;
+            border-radius: 28px;
+            padding: 30px 32px;
+            margin-bottom: 20px;
+            color: #fff;
+            background: linear-gradient(135deg, rgba(102,80,164,.98), rgba(78,58,133,.98)), url("data:image/svg+xml,%3Csvg width='900' height='300' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='rgba(255,255,255,.15)' stroke-width='2'%3E%3Cpath d='M0 235 C170 90 260 275 430 120 S710 70 900 180'/%3E%3Cpath d='M0 75 C210 190 280 20 500 100 S660 250 900 105'/%3E%3C/g%3E%3C/svg%3E");
+            background-size: cover;
+            box-shadow: 0 24px 58px rgba(78, 58, 133, .28);
         }
 
-            .erp-header h1 {
-                font-size: 1.65rem;
-                margin: 0;
-                font-weight: 900;
+            .hero::after {
+                content: "";
+                position: absolute;
+                right: -115px;
+                top: -135px;
+                width: 340px;
+                height: 340px;
+                border-radius: 999px;
+                background: rgba(255,255,255,.11);
             }
 
-            .erp-header p {
-                margin: 7px 0 0;
-                opacity: .92;
-            }
-
-        .stage-label {
+        .stage {
+            position: relative;
+            z-index: 2;
             display: inline-flex;
             align-items: center;
-            gap: 7px;
-            padding: 6px 11px;
+            gap: 8px;
+            padding: 7px 12px;
             margin-bottom: 12px;
-            border: 1px solid rgba(255, 255, 255, .35);
+            border: 1px solid rgba(255,255,255,.35);
             border-radius: 999px;
-            background: rgba(255, 255, 255, .12);
-            font-size: .75rem;
-            font-weight: 900;
+            background: rgba(255,255,255,.14);
+            font-size: .76rem;
+            font-weight: 950;
+            text-transform: uppercase;
             letter-spacing: .05em;
-            text-transform: uppercase;
         }
 
-        .erp-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 20px;
-            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
-            margin-bottom: 20px;
-            overflow: hidden;
+        .hero h1 {
+            position: relative;
+            z-index: 2;
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 950;
         }
 
-        .erp-card-header {
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--erp-border);
+        .hero p {
+            position: relative;
+            z-index: 2;
+            max-width: 970px;
+            margin: 8px 0 0;
+            color: rgba(255,255,255,.90);
+        }
+
+        .hero-actions {
+            position: relative;
+            z-index: 2;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
+            gap: 10px;
             flex-wrap: wrap;
+            margin-top: 16px;
         }
 
-        .erp-card-body {
-            padding: 22px;
-        }
-
-        .erp-label {
-            font-weight: 800;
-            color: #33465f;
-            font-size: .78rem;
-            text-transform: uppercase;
-            letter-spacing: .035em;
-            margin-bottom: 5px;
-        }
-
-        .erp-value {
-            font-weight: 650;
-            min-height: 24px;
-        }
-
-        .erp-input,
-        .erp-select,
-        .erp-textarea {
-            border-radius: 12px;
-            border: 1px solid var(--erp-border);
-            padding: 10px 12px;
-        }
-
-        .btn-erp-primary {
-            background: var(--erp-blue);
-            border-color: var(--erp-blue);
-            color: white;
-            font-weight: 800;
-            border-radius: 13px;
+        .btn-glass {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
             padding: 10px 15px;
+            border: 1px solid rgba(255,255,255,.36);
+            border-radius: 14px;
+            background: rgba(255,255,255,.14);
+            color: #fff;
+            font-weight: 900;
+            text-decoration: none;
+            backdrop-filter: blur(10px);
         }
 
-            .btn-erp-primary:hover,
-            .btn-erp-primary:focus {
-                background: var(--erp-blue-dark);
-                border-color: var(--erp-blue-dark);
-                color: white;
+            .btn-glass:hover {
+                background: #fff;
+                color: var(--purple);
             }
 
-        .btn-erp-light {
-            background: white;
-            border: 1px solid var(--erp-border);
-            color: var(--erp-blue-dark);
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
+        .btn-main {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: 1px solid var(--purple);
+            border-radius: 14px;
+            background: var(--purple);
+            color: #fff;
+            font-weight: 950;
+            text-decoration: none;
         }
 
-            .btn-erp-light:hover {
-                background: #eef3fb;
-                color: var(--erp-blue-dark);
+            .btn-main:hover {
+                background: var(--purple-dark);
+                border-color: var(--purple-dark);
+                color: #fff;
             }
 
-        .metric-card {
-            border: 1px solid var(--erp-border);
-            border-radius: 16px;
-            padding: 16px;
-            background: #fbfdff;
-            height: 100%;
+        .btn-light-main {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: #fff;
+            color: var(--purple-dark);
+            font-weight: 950;
+            text-decoration: none;
         }
 
-        .metric-label {
-            color: var(--erp-muted);
-            font-size: .74rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
-        .metric-value {
-            font-size: 1.2rem;
-            font-weight: 900;
-            color: var(--erp-blue-dark);
-        }
-
-        .suggestion-box {
-            border: 1px solid #b2ddff;
-            border-radius: 16px;
-            background: #eff8ff;
-            padding: 15px;
-            height: 100%;
-        }
-
-        .suggestion-title {
-            color: #1849a9;
-            font-weight: 900;
-            font-size: .8rem;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-            margin-bottom: 6px;
-        }
+            .btn-light-main:hover {
+                background: #f4f0ff;
+                color: var(--purple-dark);
+            }
 
         .flow-note {
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            padding: 15px 17px;
             margin-bottom: 20px;
-            border: 1px solid #fed7aa;
+            padding: 15px 17px;
+            border: 1px solid #d6bbfb;
+            border-radius: 18px;
+            background: #f4ebff;
+            color: #53389e;
+            font-weight: 750;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(420px, .9fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .cardx {
+            overflow: hidden;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: var(--card);
+            box-shadow: var(--shadow);
+        }
+
+        .cardx-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(180deg, #ffffff, #f8fbff);
+        }
+
+        .cardx-title {
+            margin: 0;
+            color: var(--purple-dark);
+            font-size: 1.12rem;
+            font-weight: 950;
+        }
+
+        .cardx-sub {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: .88rem;
+            font-weight: 650;
+        }
+
+        .cardx-body {
+            padding: 22px;
+        }
+
+        .field-label {
+            margin-bottom: 5px;
+            color: #344054;
+            font-size: .76rem;
+            font-weight: 950;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .field-value {
+            min-height: 26px;
+            color: #152033;
+            font-weight: 850;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 10px 12px;
+            box-shadow: none;
+        }
+
+            .form-control:focus,
+            .form-select:focus {
+                border-color: rgba(102,80,164,.48);
+                box-shadow: 0 0 0 .20rem rgba(102,80,164,.12);
+            }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .metric {
+            padding: 13px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: #fbfdff;
+        }
+
+            .metric .k {
+                color: var(--muted);
+                font-size: .70rem;
+                font-weight: 950;
+                letter-spacing: .04em;
+                text-transform: uppercase;
+            }
+
+            .metric .v {
+                margin-top: 3px;
+                color: var(--blue-dark);
+                font-size: 1.12rem;
+                font-weight: 950;
+            }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 11px;
+        }
+
+        .tech-item {
+            padding: 12px;
+            border: 1px solid var(--border);
             border-radius: 16px;
+            background: #fbfdff;
+        }
+
+        .tech-k {
+            color: var(--muted);
+            font-size: .70rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .tech-v {
+            margin-top: 3px;
+            color: #182437;
+            font-weight: 900;
+        }
+
+        .badge-ok,
+        .badge-warn,
+        .badge-muted {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            font-size: .76rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .badge-ok {
+            color: var(--green);
+            background: #ecfdf3;
+            border: 1px solid #abefc6;
+        }
+
+        .badge-warn {
+            color: var(--orange);
             background: #fff7ed;
-            color: #9a3412;
+            border: 1px solid #fed7aa;
+        }
+
+        .badge-muted {
+            color: #475467;
+            background: #f2f4f7;
+            border: 1px solid #d0d5dd;
+        }
+
+        .decision-box {
+            border: 1px solid #d6bbfb;
+            border-radius: 24px;
+            background: linear-gradient(180deg, #ffffff, #fbf8ff);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 18px;
+        }
+
+        .decision-head {
+            padding: 20px 22px;
+            border-bottom: 1px solid #e9d7fe;
+            background: linear-gradient(135deg, #f4ebff, #ffffff);
+        }
+
+        .decision-title {
+            margin: 0;
+            color: var(--purple-dark);
+            font-size: 1.18rem;
+            font-weight: 950;
+        }
+
+        .decision-body {
+            padding: 22px;
+        }
+
+        .step-line {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .step-number {
+            width: 30px;
+            height: 30px;
+            flex: 0 0 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: var(--purple);
+            color: #fff;
+            font-weight: 950;
+            font-size: .82rem;
+        }
+
+        .formula-box {
+            padding: 13px 14px;
+            border: 1px dashed #b692f6;
+            border-radius: 16px;
+            background: #f9f5ff;
+            color: #53389e;
+            font-weight: 750;
         }
 
         .sticky-actions {
             position: sticky;
             bottom: 0;
-            background: rgba(243, 245, 248, .92);
+            z-index: 30;
+            margin-top: 20px;
+            padding: 13px 0;
+            background: rgba(244,247,251,.92);
+            border-top: 1px solid rgba(217,227,241,.85);
             backdrop-filter: blur(10px);
-            padding: 14px 0;
-            z-index: 20;
         }
 
-        @@media (max-width: 767.98px) {
-            .erp-shell {
-                padding: 16px;
+        @@media (max-width: 1100px) {
+            .layout {
+                grid-template-columns: 1fr;
             }
 
-            .erp-header {
+            .decision-box {
+                position: static;
+            }
+        }
+
+        @@media (max-width: 768px) {
+            .page {
+                padding: 15px;
+            }
+
+            .hero {
                 padding: 22px;
-                border-radius: 18px;
+                border-radius: 22px;
+            }
+
+                .hero h1 {
+                    font-size: 1.55rem;
+                }
+
+            .metric-grid,
+            .tech-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 
 <body>
-    <div class="erp-shell">
+    <div class="page">
 
-        <div class="erp-header">
-            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                <div>
-                    <div class="stage-label">
-                        <i class="fa-solid fa-arrows-rotate"></i>
-                        Etapa 3 · Cambio de Molde
-                    </div>
-
-                    <h1>
-                        <i class="fa-solid fa-gears me-2"></i>
-                        Programa Cambio de Molde
-                    </h1>
-
-                    <p>
-                        Revisa la necesidad calculada, confirma máquina/molde y define hora de cambio, arranque y producción.
-                    </p>
-                </div>
-
-                <div>
-                    <a asp-controller="PlaneacionRelease"
-                       asp-action="Calculadora"
-                       class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-arrow-left me-1"></i>
-                        Volver a Programa de Planeación
-                    </a>
-                </div>
+        <section class="hero">
+            <div class="stage">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                Etapa 3 · Programa Cambio de Molde
             </div>
-        </div>
+
+            <h1>
+                <i class="fa-solid fa-gears me-2"></i>
+                Programa Cambio de Molde
+            </h1>
+
+            <p>
+                Confirma máquina y molde final, define la condición operativa, hora de cambio, hora de arranque y producción programada antes de mandar a OF.
+            </p>
+
+            <div class="hero-actions">
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Index"
+                   class="btn-glass">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Volver a Programa de Planeación
+                </a>
+
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Maquinas"
+                   class="btn-glass">
+                    <i class="fa-solid fa-industry"></i>
+                    Ver máquinas
+                </a>
+            </div>
+        </section>
 
         <div class="flow-note">
             <i class="fa-solid fa-circle-info mt-1"></i>
             <div>
-                <div class="fw-bold">Esta pantalla define dónde y cuándo se producirá.</div>
+                <div class="fw-bold">Aquí se decide el cambio de molde.</div>
                 <div class="small">
-                    La demanda ya fue calculada en Programa de Planeación. Aquí se confirma la máquina, molde, cambio y arranque antes de generar la OF.
+                    Los datos de parte, material, molde, máquina, cavidades, ciclo, objetivo y horas vienen desde Programa de Planeación.
                 </div>
             </div>
         </div>
@@ -309,296 +573,356 @@
             <input type="hidden" asp-for="PiezasPorEmbalaje" />
             <input type="hidden" asp-for="CantidadEmbalajes" />
 
-            <div class="erp-card">
-                <div class="erp-card-header">
-                    <div>
-                        <h2 class="h5 fw-bold m-0 text-primary">
-                            <i class="fa-solid fa-file-lines me-2"></i>
-                            Necesidad origen
-                        </h2>
-                        <div class="text-muted small">
-                            Datos calculados desde Release / Programa de Planeación.
-                        </div>
-                    </div>
-                </div>
+            <input type="hidden" asp-for="PiezasPorCaja" />
+            <input type="hidden" asp-for="QtyPorDia" />
+            <input type="hidden" asp-for="MaquinaSustitutaID" />
+            <input type="hidden" asp-for="MaquinaSustitutaCodigo" />
+            <input type="hidden" asp-for="MaquinaSustitutaNombre" />
+            <input type="hidden" asp-for="TipoSecado" />
+            <input type="hidden" asp-for="HorasSecado" />
+            <input type="hidden" asp-for="HorasSecadoTexto" />
 
-                <div class="erp-card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <div class="erp-label">Release</div>
-                            <div class="erp-value">@Valor(Model.FolioRelease)</div>
-                        </div>
+            <div class="layout">
 
-                        <div class="col-md-3">
-                            <div class="erp-label">Cliente</div>
-                            <div class="erp-value">@Valor(Model.ClienteNombre)</div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="erp-label">Referencia SAP / Cliente</div>
-                            <div class="erp-value">@Valor(Model.ReferenciaSAP ?? Model.NumeroParte)</div>
-                        </div>
-
-                        <div class="col-md-3">
-                            <div class="erp-label">Color</div>
-                            <input asp-for="Color"
-                                   class="form-control erp-input"
-                                   maxlength="100"
-                                   placeholder="Ej. Natural, Negro, Azul, Rojo..." />
-                        </div>
-
-                        <div class="col-md-12">
-                            <div class="erp-label">Designación / descripción</div>
-                            <div class="erp-value">@Valor(Model.DesignacionDescripcionSAP)</div>
-                        </div>
-                    </div>
-
-                    <div class="row g-3 mt-2">
-                        <div class="col-md-2">
-                            <div class="metric-card">
-                                <div class="metric-label">Requeridas</div>
-                                <div class="metric-value">@Model.CantidadRequerida.ToString("N0")</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-2">
-                            <div class="metric-card">
-                                <div class="metric-label">Desde PT</div>
-                                <div class="metric-value">@Model.PiezasDesdePT.ToString("N0")</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-2">
-                            <div class="metric-card">
-                                <div class="metric-label">A producir</div>
-                                <div class="metric-value">@Model.PiezasAProducir.ToString("N0")</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-2">
-                            <div class="metric-card">
-                                <div class="metric-label">MP kg</div>
-                                <div class="metric-value">@Decimal4(Model.CantidadMpKg)</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-2">
-                            <div class="metric-card">
-                                <div class="metric-label">Embalajes</div>
-                                <div class="metric-value">@Decimal4(Model.CantidadEmbalajes)</div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-2">
-                            <div class="metric-card">
-                                <div class="metric-label">Horas calc.</div>
-                                <div class="metric-value">@Decimal2(Model.HorasProgramadas)</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="erp-card">
-                <div class="erp-card-header">
-                    <div>
-                        <h2 class="h5 fw-bold m-0 text-primary">
-                            <i class="fa-solid fa-lightbulb me-2"></i>
-                            Sugerencia inicial
-                        </h2>
-                        <div class="text-muted small">
-                            Datos sugeridos desde el catálogo técnico de la parte. Puedes cambiarlos antes de guardar.
-                        </div>
-                    </div>
-                </div>
-
-                <div class="erp-card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="suggestion-box">
-                                <div class="suggestion-title">
-                                    <i class="fa-solid fa-industry me-1"></i>
-                                    Máquina sugerida
+                <div>
+                    <section class="cardx">
+                        <div class="cardx-header">
+                            <div>
+                                <h2 class="cardx-title">
+                                    <i class="fa-solid fa-file-lines me-2"></i>
+                                    Necesidad origen
+                                </h2>
+                                <div class="cardx-sub">
+                                    Datos heredados desde Programa de Planeación.
                                 </div>
-                                <div class="erp-value">
-                                    @Valor(Model.MaquinaCodigo)
-                                    @if (!string.IsNullOrWhiteSpace(Model.MaquinaNombre))
-                                    {
-                                        <span class="text-muted"> · @Model.MaquinaNombre</span>
-                                    }
+                            </div>
+
+                            <span class="badge-ok">
+                                <i class="fa-solid fa-circle-check"></i>
+                                Listo para cambio
+                            </span>
+                        </div>
+
+                        <div class="cardx-body">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-3">
+                                    <div class="field-label">Release</div>
+                                    <div class="field-value">@Valor(Model.FolioRelease)</div>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <div class="field-label">Cliente</div>
+                                    <div class="field-value">@Valor(Model.ClienteNombre)</div>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <div class="field-label">No. parte</div>
+                                    <div class="field-value">@Valor(Model.NumeroParte ?? Model.ReferenciaSAP)</div>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <div class="field-label">Color</div>
+                                    <input asp-for="Color"
+                                           class="form-control"
+                                           maxlength="100"
+                                           placeholder="Ej. Natural, Negro, Azul..." />
+                                </div>
+
+                                <div class="col-12">
+                                    <div class="field-label">Designación / descripción</div>
+                                    <div class="field-value">@Valor(Model.DesignacionDescripcionSAP)</div>
+                                </div>
+                            </div>
+
+                            <div class="metric-grid">
+                                <div class="metric">
+                                    <div class="k">Requerido</div>
+                                    <div class="v">@Model.CantidadRequerida.ToString("N0")</div>
+                                </div>
+
+                                <div class="metric">
+                                    <div class="k">Stock usado</div>
+                                    <div class="v">@Model.PiezasDesdePT.ToString("N0")</div>
+                                </div>
+
+                                <div class="metric">
+                                    <div class="k">A producir</div>
+                                    <div class="v">@Model.PiezasAProducir.ToString("N0")</div>
+                                </div>
+
+                                <div class="metric">
+                                    <div class="k">MP requerida</div>
+                                    <div class="v">@Decimal4(Model.CantidadMpKg) kg</div>
+                                </div>
+
+                                <div class="metric">
+                                    <div class="k">Embalajes</div>
+                                    <div class="v">@Decimal2(Model.CantidadEmbalajes)</div>
+                                </div>
+
+                                <div class="metric">
+                                    <div class="k">Horas fórmula</div>
+                                    <div class="v">@Decimal2(Model.HorasProgramadas)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="cardx">
+                        <div class="cardx-header">
+                            <div>
+                                <h2 class="cardx-title">
+                                    <i class="fa-solid fa-microchip me-2"></i>
+                                    Datos técnicos de planeación
+                                </h2>
+                                <div class="cardx-sub">
+                                    Información que alimenta el Programa Cambio de Molde.
                                 </div>
                             </div>
                         </div>
 
-                        <div class="col-md-6">
-                            <div class="suggestion-box">
-                                <div class="suggestion-title">
-                                    <i class="fa-solid fa-cube me-1"></i>
-                                    Molde sugerido
+                        <div class="cardx-body">
+                            <div class="tech-grid">
+                                <div class="tech-item">
+                                    <div class="tech-k">Molde</div>
+                                    <div class="tech-v">@Valor(Model.MoldeCodigo)</div>
                                 </div>
-                                <div class="erp-value">@Valor(Model.MoldeCodigo)</div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Material / Resina</div>
+                                    <div class="tech-v">@Valor(Model.MaterialCodigo)</div>
+                                    <div class="text-muted small">@Valor(Model.MaterialDescripcion)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Cavidades</div>
+                                    <div class="tech-v">@Entero(Model.Cavidades)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Ciclo</div>
+                                    <div class="tech-v">@Valor(Model.Ciclo)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Máquina asignada</div>
+                                    <div class="tech-v">@Valor(Model.MaquinaCodigo)</div>
+                                    <div class="text-muted small">@Valor(Model.MaquinaNombre)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Máquina sustituta</div>
+                                    <div class="tech-v">@Valor(Model.MaquinaSustitutaCodigo)</div>
+                                    <div class="text-muted small">@Valor(Model.MaquinaSustitutaNombre)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Qty por día</div>
+                                    <div class="tech-v">@Entero(Model.QtyPorDia)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Peso pza bruto</div>
+                                    <div class="tech-v">@Decimal4(Model.PesoBrutoPieza)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Objetivo / hra pzas</div>
+                                    <div class="tech-v">@Entero(Model.ObjetivoHora)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Piezas por embalaje</div>
+                                    <div class="tech-v">@Decimal2(Model.PiezasPorEmbalaje)</div>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
                 </div>
-            </div>
 
-            <div class="erp-card">
-                <div class="erp-card-header">
-                    <div>
-                        <h2 class="h5 fw-bold m-0 text-primary">
-                            <i class="fa-solid fa-gears me-2"></i>
-                            Decisión de cambio de molde
+                <aside class="decision-box">
+                    <div class="decision-head">
+                        <h2 class="decision-title">
+                            <i class="fa-solid fa-sliders me-2"></i>
+                            Decisión de Cambio de Molde
                         </h2>
-                        <div class="text-muted small">
-                            Selecciona la máquina final, molde final, hora de cambio y hora de arranque.
+                        <div class="cardx-sub">
+                            Confirma los datos operativos antes de guardar.
                         </div>
                     </div>
-                </div>
 
-                <div class="erp-card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="erp-label">Cantidad a producir</label>
-                            <input asp-for="CantidadProgramada"
-                                   type="number"
-                                   min="1"
-                                   max="@Model.PiezasAProducir"
-                                   class="form-control erp-input" />
-                            <div class="text-muted small mt-1">
-                                Máximo sugerido: @Model.PiezasAProducir.ToString("N0")
+                    <div class="decision-body">
+                        <div class="step-line">
+                            <div class="step-number">1</div>
+                            <div class="w-100">
+                                <label class="field-label">Condición</label>
+                                <select asp-for="CondicionProduccion"
+                                        asp-items="Model.Condiciones"
+                                        class="form-select">
+                                </select>
+                                <span asp-validation-for="CondicionProduccion" class="text-danger small"></span>
                             </div>
                         </div>
 
-                        <div class="col-md-3">
-                            <label class="erp-label">Máquina final</label>
-                            <select asp-for="MaquinaID" class="form-select erp-select">
-                                <option value="">-- Selecciona máquina --</option>
-                                @foreach (var maq in Model.Maquinas)
+                        <div class="step-line">
+                            <div class="step-number">2</div>
+                            <div class="w-100">
+                                <label class="field-label">Máquina final</label>
+                                <select asp-for="MaquinaID"
+                                        asp-items="Model.Maquinas"
+                                        class="form-select">
+                                    <option value="">-- Selecciona máquina --</option>
+                                </select>
+                                <span asp-validation-for="MaquinaID" class="text-danger small"></span>
+
+                                @if (TieneValor(Model.MaquinaSustitutaCodigo))
                                 {
-                                    <option value="@maq.Value" selected="@(Model.MaquinaID?.ToString() == maq.Value)">
-                                        @maq.Text
-                                    </option>
+                                    <div class="small text-muted mt-1">
+                                        Alternativa sugerida: <strong>@Model.MaquinaSustitutaCodigo</strong>
+                                    </div>
                                 }
-                            </select>
-                            <span asp-validation-for="MaquinaID" class="text-danger small"></span>
+                            </div>
                         </div>
 
-                        <div class="col-md-3">
-                            <label class="erp-label">Molde final</label>
-                            <select asp-for="MoldeID" class="form-select erp-select">
-                                <option value="">-- Selecciona molde --</option>
-                                @foreach (var mol in Model.Moldes)
-                                {
-                                    <option value="@mol.Value" selected="@(Model.MoldeID?.ToString() == mol.Value)">
-                                        @mol.Text
-                                    </option>
-                                }
-                            </select>
-                            <span asp-validation-for="MoldeID" class="text-danger small"></span>
+                        <div class="step-line">
+                            <div class="step-number">3</div>
+                            <div class="w-100">
+                                <label class="field-label">Molde final</label>
+                                <select asp-for="MoldeID"
+                                        asp-items="Model.Moldes"
+                                        class="form-select">
+                                    <option value="">-- Selecciona molde --</option>
+                                </select>
+                                <span asp-validation-for="MoldeID" class="text-danger small"></span>
+                            </div>
                         </div>
 
-                        <div class="col-md-3">
-                            <label class="erp-label">Condición producción</label>
-                            <select asp-for="CondicionProduccion" class="form-select erp-select">
-                                @foreach (var c in Model.Condiciones)
-                                {
-                                    <option value="@c.Value" selected="@(Model.CondicionProduccion == c.Value)">
-                                        @c.Text
-                                    </option>
-                                }
-                            </select>
+                        <div class="step-line">
+                            <div class="step-number">4</div>
+                            <div class="w-100">
+                                <label class="field-label">Cantidad programada</label>
+                                <input asp-for="CantidadProgramada"
+                                       type="number"
+                                       min="1"
+                                       max="@Model.PiezasAProducir"
+                                       class="form-control"
+                                       id="CantidadProgramada" />
+                                <div class="small text-muted mt-1">
+                                    Máximo pendiente: <strong>@Model.PiezasAProducir.ToString("N0")</strong>
+                                </div>
+                                <span asp-validation-for="CantidadProgramada" class="text-danger small"></span>
+                            </div>
                         </div>
 
-                        <div class="col-md-3">
-                            <label class="erp-label">Inicio programado</label>
-                            <input asp-for="FechaInicioProgramada"
-                                   type="datetime-local"
-                                   value="@(Model.FechaInicioProgramada?.ToString("yyyy-MM-ddTHH:mm"))"
-                                   class="form-control erp-input"
-                                   id="FechaInicioProgramada" />
-                            <span asp-validation-for="FechaInicioProgramada" class="text-danger small"></span>
+                        <div class="formula-box mb-3">
+                            <div class="fw-bold">
+                                <i class="fa-solid fa-square-root-variable me-1"></i>
+                                Fórmula horas programadas
+                            </div>
+                            <div class="small">
+                                Cantidad programada ÷ Objetivo por hora =
+                                <strong id="formulaHoras">@Decimal2(Model.HorasProgramadas)</strong> hrs
+                            </div>
                         </div>
 
-                        <div class="col-md-3">
-                            <label class="erp-label">Hora cambio de molde</label>
-                            <input type="time"
-                                   name="Cambio"
-                                   value="@(Model.Cambio?.ToString(@"hh\:mm"))"
-                                   class="form-control erp-input"
-                                   id="Cambio" />
-                            <span asp-validation-for="Cambio" class="text-danger small"></span>
-                        </div>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="field-label">Inicio programado</label>
+                                <input asp-for="FechaInicioProgramada"
+                                       type="datetime-local"
+                                       value="@DateTimeLocal(Model.FechaInicioProgramada)"
+                                       class="form-control"
+                                       id="FechaInicioProgramada" />
+                                <span asp-validation-for="FechaInicioProgramada" class="text-danger small"></span>
+                            </div>
 
-                        <div class="col-md-3">
-                            <label class="erp-label">Hora arranque</label>
-                            <input type="time"
-                                   name="Arranque"
-                                   value="@(Model.Arranque?.ToString(@"hh\:mm"))"
-                                   class="form-control erp-input"
-                                   id="Arranque" />
-                            <span asp-validation-for="Arranque" class="text-danger small"></span>
-                        </div>
+                            <div class="col-md-6">
+                                <label class="field-label">Hora cambio</label>
+                                <input asp-for="Cambio"
+                                       type="time"
+                                       value="@TimeValue(Model.Cambio)"
+                                       class="form-control"
+                                       id="Cambio" />
+                                <span asp-validation-for="Cambio" class="text-danger small"></span>
+                            </div>
 
-                        <div class="col-md-3">
-                            <label class="erp-label">Horas programadas</label>
-                            <input asp-for="HorasProgramadas"
-                                   type="number"
-                                   step="0.01"
-                                   min="0.01"
-                                   class="form-control erp-input"
-                                   id="HorasProgramadas" />
-                            <span asp-validation-for="HorasProgramadas" class="text-danger small"></span>
-                        </div>
+                            <div class="col-md-6">
+                                <label class="field-label">Hora arranque</label>
+                                <input asp-for="Arranque"
+                                       type="time"
+                                       value="@TimeValue(Model.Arranque)"
+                                       class="form-control"
+                                       id="Arranque" />
+                                <span asp-validation-for="Arranque" class="text-danger small"></span>
+                            </div>
 
-                        <div class="col-md-4">
-                            <label class="erp-label">Fin programado estimado</label>
-                            <input asp-for="FechaFinProgramada"
-                                   type="datetime-local"
-                                   value="@(Model.FechaFinProgramada?.ToString("yyyy-MM-ddTHH:mm"))"
-                                   class="form-control erp-input"
-                                   id="FechaFinProgramada"
-                                   readonly />
-                        </div>
+                            <div class="col-md-6">
+                                <label class="field-label">Horas programadas</label>
+                                <input asp-for="HorasProgramadas"
+                                       type="number"
+                                       step="0.01"
+                                       min="0.01"
+                                       class="form-control"
+                                       id="HorasProgramadas" />
+                                <span asp-validation-for="HorasProgramadas" class="text-danger small"></span>
+                            </div>
 
-                        <div class="col-md-8">
-                            <label class="erp-label">Observaciones</label>
-                            <textarea asp-for="Observaciones"
-                                      rows="3"
-                                      class="form-control erp-textarea"
-                                      placeholder="Comentarios de planeación, prioridad, restricciones, cambio de molde, etc."></textarea>
+                            <div class="col-md-6">
+                                <label class="field-label">Fin estimado</label>
+                                <input asp-for="FechaFinProgramada"
+                                       type="datetime-local"
+                                       value="@DateTimeLocal(Model.FechaFinProgramada)"
+                                       class="form-control"
+                                       id="FechaFinProgramada"
+                                       readonly />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="field-label">Observaciones</label>
+                                <textarea asp-for="Observaciones"
+                                          rows="4"
+                                          class="form-control"
+                                          placeholder="Comentarios de planeación, prioridad, restricciones, paro, cambio de molde, etc."></textarea>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </aside>
             </div>
 
-            <div class="sticky-actions">
+            <section class="sticky-actions">
                 <div class="d-flex justify-content-between gap-2 flex-wrap">
-                    <a asp-controller="PlaneacionRelease"
-                       asp-action="Calculadora"
-                       class="btn btn-erp-light">
-                        <i class="fa-solid fa-arrow-left me-1"></i>
+                    <a asp-controller="PlaneacionPrograma"
+                       asp-action="Index"
+                       class="btn-light-main">
+                        <i class="fa-solid fa-arrow-left"></i>
                         Cancelar
                     </a>
 
-                    <button type="submit" class="btn btn-erp-primary" id="btnGuardar">
-                        <i class="fa-solid fa-floppy-disk me-1"></i>
-                        <span class="btn-label">Guardar cambio de molde</span>
+                    <button type="submit" class="btn-main" id="btnGuardar">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span class="btn-label">Guardar Programa Cambio de Molde</span>
                     </button>
                 </div>
-            </div>
+            </section>
         </form>
-
     </div>
 
     <script>
+        const objetivoHora = Number('@(Model.ObjetivoHora ?? 0)');
+        const cantidadInput = document.getElementById('CantidadProgramada');
         const inicioInput = document.getElementById('FechaInicioProgramada');
         const horasInput = document.getElementById('HorasProgramadas');
         const finInput = document.getElementById('FechaFinProgramada');
         const cambioInput = document.getElementById('Cambio');
         const arranqueInput = document.getElementById('Arranque');
+        const formulaHoras = document.getElementById('formulaHoras');
         const formPrograma = document.getElementById('formPrograma');
         const btnGuardar = document.getElementById('btnGuardar');
+
+        function toDecimal(value) {
+            const n = Number(value || 0);
+            return isNaN(n) ? 0 : n;
+        }
 
         function formatearFechaLocal(fecha) {
             const yyyy = fecha.getFullYear();
@@ -615,11 +939,25 @@
             return value.substring(11, 16);
         }
 
+        function recalcularHorasPorCantidad() {
+            if (!cantidadInput || !horasInput || objetivoHora <= 0) return;
+
+            const cantidad = toDecimal(cantidadInput.value);
+            const horas = cantidad > 0 ? (cantidad / objetivoHora) : 0;
+
+            if (horas > 0) {
+                horasInput.value = horas.toFixed(2);
+                if (formulaHoras) {
+                    formulaHoras.textContent = horas.toFixed(2);
+                }
+            }
+        }
+
         function recalcularFin() {
             if (!inicioInput || !horasInput || !finInput) return;
 
             const inicioValue = inicioInput.value;
-            const horas = Number(horasInput.value || 0);
+            const horas = toDecimal(horasInput.value);
 
             if (!inicioValue || horas <= 0) {
                 finInput.value = '';
@@ -647,25 +985,93 @@
             }
         }
 
+        cantidadInput?.addEventListener('input', function () {
+            recalcularHorasPorCantidad();
+            recalcularFin();
+        });
+
         inicioInput?.addEventListener('change', function () {
             sincronizarHorasCambioArranque();
             recalcularFin();
         });
 
-        horasInput?.addEventListener('input', recalcularFin);
+        horasInput?.addEventListener('input', function () {
+            if (formulaHoras) {
+                formulaHoras.textContent = toDecimal(horasInput.value).toFixed(2);
+            }
+            recalcularFin();
+        });
 
         formPrograma?.addEventListener('submit', function () {
             if (!btnGuardar) return;
 
             btnGuardar.disabled = true;
-            btnGuardar.querySelector('i').className = 'fa-solid fa-spinner fa-spin me-1';
+            btnGuardar.querySelector('i').className = 'fa-solid fa-spinner fa-spin';
             btnGuardar.querySelector('.btn-label').textContent = 'Guardando cambio...';
         });
 
         document.addEventListener('DOMContentLoaded', function () {
             sincronizarHorasCambioArranque();
+            recalcularHorasPorCantidad();
             recalcularFin();
         });
+
+                function sumarUnaHoraAInputTime(horaValue) {
+            if (!horaValue || horaValue.length < 5) return '';
+
+            const partes = horaValue.split(':');
+            const hh = Number(partes[0] || 0);
+            const mm = Number(partes[1] || 0);
+
+            const fecha = new Date();
+            fecha.setHours(hh);
+            fecha.setMinutes(mm);
+            fecha.setSeconds(0);
+            fecha.setMilliseconds(0);
+
+            fecha.setHours(fecha.getHours() + 1);
+
+            const nuevoHH = String(fecha.getHours()).padStart(2, '0');
+            const nuevoMM = String(fecha.getMinutes()).padStart(2, '0');
+
+            return `${nuevoHH}:${nuevoMM}`;
+        }
+
+        function sincronizarCambioYArranqueDesdeInicio() {
+            if (!inicioInput) return;
+
+            const horaCambio = obtenerHoraDesdeFechaLocal(inicioInput.value);
+
+            if (!horaCambio) return;
+
+            if (cambioInput) {
+                cambioInput.value = horaCambio;
+            }
+
+            if (arranqueInput) {
+                arranqueInput.value = sumarUnaHoraAInputTime(horaCambio);
+            }
+        }
+
+        cambioInput?.addEventListener('change', function () {
+            if (arranqueInput) {
+                arranqueInput.value = sumarUnaHoraAInputTime(cambioInput.value);
+            }
+            recalcularFin();
+        });
+
+        // Si ya tienes este evento:
+        // inicioInput?.addEventListener('change', function () { ... });
+        //
+        // reemplázalo por este:
+
+        inicioInput?.addEventListener('change', function () {
+            sincronizarCambioYArranqueDesdeInicio();
+            recalcularFin();
+        });
+
+
     </script>
+
 </body>
 </html>

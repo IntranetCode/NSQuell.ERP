@@ -1,230 +1,691 @@
-﻿@model List<ERP.NSQuell.Models.PlaneacionProgramaIndexVm>
+﻿@model ERP.NSQuell.Models.PlaneacionProgramaNecesidadFiltroVm
+@using ERP.NSQuell.Models
+@using System.Linq
+@using System.Collections.Generic
+
+@functions {
+    public static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    public static string F(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "-";
+    }
+
+    public static string N0(int? value)
+    {
+        return value.HasValue ? value.Value.ToString("N0") : "0";
+    }
+
+    public static string D2(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N2") : "0.00";
+    }
+
+    public static string D4(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N4") : "0.0000";
+    }
+
+    public static bool NecesitaProduccion(PlaneacionProgramaNecesidadVm x)
+    {
+        return (x.PiezasAProducir ?? 0) > 0;
+    }
+
+    public static bool StockOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return (x.PiezasDesdePT ?? 0) > 0 || !NecesitaProduccion(x);
+    }
+
+    public static bool MpOk(PlaneacionProgramaNecesidadVm x)
+    {
+        if (!NecesitaProduccion(x))
+            return true;
+
+        return (x.MPDisponibleKg ?? 0) >= (x.MPRequeridaKg ?? 0)
+            && (x.MPRequeridaKg ?? 0) > 0;
+    }
+
+    public static bool EmbalajeOk(PlaneacionProgramaNecesidadVm x)
+    {
+        if (!NecesitaProduccion(x))
+            return true;
+
+        return (x.EmbalajeDisponible ?? 0) >= (x.EmbalajeRequerido ?? 0)
+            && (x.EmbalajeRequerido ?? 0) > 0;
+    }
+
+    public static bool MoldeOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || x.MoldeID.HasValue;
+    }
+
+    public static bool MaquinaOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || x.MaquinaSugeridaID.HasValue;
+    }
+
+    public static bool MaterialOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || x.MaterialID.HasValue || !string.IsNullOrWhiteSpace(x.MaterialCodigo);
+    }
+
+    public static bool CavidadesOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || ((x.Cavidades ?? 0) > 0);
+    }
+
+    public static bool CicloOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || !string.IsNullOrWhiteSpace(x.Ciclo);
+    }
+
+    public static bool ObjetivoOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || ((x.ObjetivoHora ?? 0) > 0);
+    }
+
+    public static bool PesoOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || ((x.PesoBrutoPieza ?? 0) > 0);
+    }
+
+    public static bool DatosTecnicosOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return MaterialOk(x)
+            && MoldeOk(x)
+            && MaquinaOk(x)
+            && CavidadesOk(x)
+            && CicloOk(x)
+            && ObjetivoOk(x)
+            && PesoOk(x);
+    }
+
+    public static bool ListoCambioMolde(PlaneacionProgramaNecesidadVm x)
+    {
+        return !x.ProgramaProduccionID.HasValue
+            && NecesitaProduccion(x)
+            && DatosTecnicosOk(x)
+            && MpOk(x)
+            && EmbalajeOk(x);
+    }
+
+    public static bool PendienteAbasto(PlaneacionProgramaNecesidadVm x)
+    {
+        return !x.ProgramaProduccionID.HasValue
+            && NecesitaProduccion(x)
+            && DatosTecnicosOk(x)
+            && (!MpOk(x) || !EmbalajeOk(x));
+    }
+
+    public static bool PendienteDatosTecnicos(PlaneacionProgramaNecesidadVm x)
+    {
+        return !x.ProgramaProduccionID.HasValue
+            && NecesitaProduccion(x)
+            && !DatosTecnicosOk(x);
+    }
+
+    public static bool CubiertoOProgramado(PlaneacionProgramaNecesidadVm x)
+    {
+        return x.ProgramaProduccionID.HasValue || !NecesitaProduccion(x);
+    }
+
+    public static string ClienteNombre(PlaneacionProgramaNecesidadVm x)
+    {
+        return string.IsNullOrWhiteSpace(x.ClienteNombre) ? "Sin cliente" : x.ClienteNombre!;
+    }
+
+    public static string ParteClave(PlaneacionProgramaNecesidadVm x)
+    {
+        if (!string.IsNullOrWhiteSpace(x.NumeroParte))
+            return x.NumeroParte!;
+
+        if (!string.IsNullOrWhiteSpace(x.ReferenciaSAP))
+            return x.ReferenciaSAP!;
+
+        return "-";
+    }
+
+    public static string EstadoTexto(PlaneacionProgramaNecesidadVm x)
+    {
+        if (x.ProgramaProduccionID.HasValue)
+            return "Ya programado";
+
+        if (!NecesitaProduccion(x))
+            return "Cubierto";
+
+        if (ListoCambioMolde(x))
+            return "Listo para Cambio de Molde";
+
+        if (PendienteAbasto(x))
+            return "Pendiente de abasto";
+
+        return "Pendiente de datos técnicos";
+    }
+
+    public static string EstadoClase(PlaneacionProgramaNecesidadVm x)
+    {
+        if (ListoCambioMolde(x))
+            return "estado-ok";
+
+        if (PendienteAbasto(x))
+            return "estado-warn";
+
+        if (PendienteDatosTecnicos(x))
+            return "estado-danger";
+
+        return "estado-muted";
+    }
+
+    public static string CheckClase(bool ok)
+    {
+        return ok ? "check ok" : "check no";
+    }
+
+    public static string CheckIcono(bool ok)
+    {
+        return ok ? "fa-circle-check" : "fa-circle-xmark";
+    }
+
+    public static string CollapseId(string prefix, int a, int b = 0, int c = 0)
+    {
+        return prefix + "_" + a.ToString() + "_" + b.ToString() + "_" + c.ToString();
+    }
+}
 
 @{
     Layout = null;
 
-    string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
-    string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
-    string Decimal2(decimal? v) => v.HasValue ? v.Value.ToString("N2") : "-";
+    var necesidades = Model.Necesidades ?? new List<PlaneacionProgramaNecesidadVm>();
 
-    var totalProgramas = Model?.Count ?? 0;
-    var totalProgramado = Model?.Sum(x => x.CantidadProgramada) ?? 0;
-    var totalProducido = Model?.Sum(x => x.CantidadProducida) ?? 0;
-    var totalPendiente = Model?.Sum(x => x.CantidadPendiente) ?? 0;
-    var totalHoras = Model?.Sum(x => x.HorasProgramadas ?? 0) ?? 0;
+    var listos = necesidades
+        .Where(ListoCambioMolde)
+        .OrderBy(x => ClienteNombre(x))
+        .ThenBy(x => ParteClave(x))
+        .ThenBy(x => x.FechaRequerida)
+        .ToList();
+
+    var abasto = necesidades
+        .Where(PendienteAbasto)
+        .OrderBy(x => ClienteNombre(x))
+        .ThenBy(x => ParteClave(x))
+        .ThenBy(x => x.FechaRequerida)
+        .ToList();
+
+    var datosTecnicos = necesidades
+        .Where(PendienteDatosTecnicos)
+        .OrderBy(x => ClienteNombre(x))
+        .ThenBy(x => ParteClave(x))
+        .ThenBy(x => x.FechaRequerida)
+        .ToList();
+
+    var resueltos = necesidades
+        .Where(CubiertoOProgramado)
+        .OrderBy(x => ClienteNombre(x))
+        .ThenBy(x => ParteClave(x))
+        .ThenBy(x => x.FechaRequerida)
+        .ToList();
+
+    var totalAProducir = necesidades.Sum(x => x.PiezasAProducir ?? 0);
+    var totalStock = necesidades.Sum(x => x.PiezasDesdePT ?? 0);
+    var totalHoras = necesidades.Sum(x => x.HorasNecesarias ?? 0);
 }
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>Programa de Producción | Planeación</title>
+    <title>Programa de Planeación</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
 
     <style>
         :root {
-            --erp-blue: #004AAD;
-            --erp-blue-dark: #00347a;
-            --erp-gray: #f3f5f8;
-            --erp-border: #d9e1ec;
-            --erp-text: #263238;
-            --erp-muted: #667085;
-            --erp-green: #107c41;
-            --erp-red: #b42318;
-            --erp-orange: #b54708;
+            --azul: #0b4ea2;
+            --azul2: #063a78;
+            --fondo: #f3f6fb;
+            --card: #ffffff;
+            --linea: #d9e3f1;
+            --texto: #1f2937;
+            --muted: #667085;
+            --ok: #0f7a4f;
+            --ok-bg: #ebfff4;
+            --warn: #b86b00;
+            --warn-bg: #fff7e6;
+            --danger: #b42318;
+            --danger-bg: #fff1f0;
+            --gray-bg: #f4f5f7;
+            --shadow: 0 16px 36px rgba(15, 23, 42, .08);
         }
 
         body {
-            background: var(--erp-gray);
-            color: var(--erp-text);
+            margin: 0;
+            background: radial-gradient(circle at 0% 0%, rgba(11, 78, 162, .10), transparent 32%), linear-gradient(180deg, #f8fbff 0%, #edf2f8 100%);
             font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--texto);
         }
 
-        .erp-shell {
-            max-width: 1650px;
+        .page {
+            max-width: 1720px;
             margin: 0 auto;
-            padding: 28px;
+            padding: 24px;
         }
 
-        .erp-header {
-            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
-            color: white;
-            border-radius: 22px;
-            padding: 28px 32px;
-            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
-            margin-bottom: 22px;
+        .hero {
+            border-radius: 26px;
+            padding: 28px 30px;
+            margin-bottom: 20px;
+            color: #fff;
+            background: linear-gradient(135deg, var(--azul), var(--azul2));
+            box-shadow: var(--shadow);
         }
 
-            .erp-header h1 {
-                font-size: 1.65rem;
-                margin: 0;
+            .hero h1 {
+                margin: 0 0 8px 0;
+                font-size: 2rem;
                 font-weight: 900;
             }
 
-            .erp-header p {
-                margin: 7px 0 0 0;
+            .hero p {
+                margin: 0;
                 opacity: .92;
+                max-width: 1050px;
             }
 
-        .erp-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 20px;
-            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+        .hero-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+
+        .btn-glass {
+            color: #fff;
+            text-decoration: none;
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.13);
+            border-radius: 14px;
+            padding: 9px 14px;
+            font-weight: 800;
+        }
+
+            .btn-glass:hover {
+                color: var(--azul);
+                background: #fff;
+            }
+
+        .kpis {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .kpi {
+            background: var(--card);
+            border: 1px solid var(--linea);
+            border-radius: 18px;
+            padding: 15px;
+            box-shadow: 0 8px 22px rgba(15,23,42,.05);
+        }
+
+            .kpi .label {
+                color: var(--muted);
+                font-size: .76rem;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+            }
+
+            .kpi .value {
+                margin-top: 5px;
+                font-size: 1.55rem;
+                font-weight: 950;
+                color: var(--azul2);
+            }
+
+        .filter-card {
+            background: #fff;
+            border: 1px solid var(--linea);
+            border-radius: 22px;
+            padding: 18px;
+            margin-bottom: 18px;
+            box-shadow: 0 8px 22px rgba(15,23,42,.05);
+        }
+
+        .form-label {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 13px;
+            border: 1px solid var(--linea);
+            padding: 10px 12px;
+        }
+
+        .btn-main {
+            border: none;
+            border-radius: 13px;
+            padding: 10px 14px;
+            color: #fff;
+            background: linear-gradient(135deg, var(--azul), var(--azul2));
+            font-weight: 900;
+            text-decoration: none;
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+        }
+
+            .btn-main:hover {
+                color: #fff;
+                opacity: .95;
+            }
+
+        .section {
+            background: #fff;
+            border: 1px solid var(--linea);
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
             margin-bottom: 20px;
+        }
+
+        .section-head {
+            padding: 17px 20px;
+            border-bottom: 1px solid #edf1f7;
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+            cursor: pointer;
+            background: linear-gradient(180deg, #fff, #f8fbff);
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 1.12rem;
+            font-weight: 950;
+            color: var(--azul2);
+        }
+
+        .section-sub {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: .9rem;
+        }
+
+        .count-pill {
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: .86rem;
+            font-weight: 900;
+            background: #eef4ff;
+            color: var(--azul);
+            border: 1px solid #cfe0ff;
+        }
+
+        .client-box {
+            margin: 14px 16px;
+            border: 1px solid var(--linea);
+            border-radius: 18px;
+            overflow: hidden;
+            background: #fbfdff;
+        }
+
+        .client-head {
+            background: linear-gradient(180deg, #fff, #f7faff);
+            padding: 14px 16px;
+            border-bottom: 1px solid #edf1f7;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            cursor: pointer;
+        }
+
+        .client-title {
+            margin: 0;
+            font-size: 1.02rem;
+            font-weight: 950;
+        }
+
+        .client-meta {
+            color: var(--muted);
+            font-size: .88rem;
+        }
+
+        .part-box {
+            margin: 12px;
+            border: 1px solid #e4ebf5;
+            border-radius: 16px;
+            background: #fff;
             overflow: hidden;
         }
 
-        .erp-card-header {
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--erp-border);
+        .part-head {
+            padding: 12px 14px;
+            background: #fbfdff;
+            border-bottom: 1px solid #edf1f7;
             display: flex;
             justify-content: space-between;
+            gap: 12px;
             align-items: center;
-            gap: 14px;
             flex-wrap: wrap;
+            cursor: pointer;
         }
 
-        .erp-card-body {
-            padding: 22px;
+        .part-title {
+            font-weight: 950;
+            color: #12284a;
         }
 
-        .metric-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
-            height: 100%;
+        .part-desc {
+            color: var(--muted);
+            font-size: .87rem;
+            margin-top: 2px;
         }
 
-        .metric-label {
-            color: var(--erp-muted);
-            font-size: .76rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: .04em;
+        .table-wrap {
+            padding: 0;
+            overflow-x: auto;
         }
 
-        .metric-value {
-            font-size: 1.35rem;
-            font-weight: 900;
-            color: var(--erp-blue-dark);
+        .table-clean {
+            min-width: 1500px;
+            width: 100%;
+            border-collapse: collapse;
         }
 
-        .btn-erp-primary {
-            background: var(--erp-blue);
-            border-color: var(--erp-blue);
-            color: white;
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
-
-            .btn-erp-primary:hover {
-                background: var(--erp-blue-dark);
-                border-color: var(--erp-blue-dark);
-                color: white;
+            .table-clean th,
+            .table-clean td {
+                border-bottom: 1px solid #edf1f7;
+                padding: 10px;
+                vertical-align: middle;
+                font-size: .86rem;
             }
 
-        .btn-erp-light {
-            background: white;
-            border: 1px solid var(--erp-border);
-            color: var(--erp-blue-dark);
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
+            .table-clean th {
+                position: sticky;
+                top: 0;
+                z-index: 3;
+                background: #f8fbff;
+                color: #4b5563;
+                font-size: .72rem;
+                font-weight: 950;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                white-space: nowrap;
+            }
 
-        .table thead th {
-            background: #eef3fb;
-            color: #00347a;
-            font-size: .75rem;
-            white-space: nowrap;
-            text-transform: uppercase;
-            letter-spacing: .03em;
-        }
+            .table-clean td {
+                background: #fff;
+            }
 
-        .table td {
-            font-size: .84rem;
-            vertical-align: middle;
-        }
+            .table-clean tr:hover td {
+                background: #f8fbff;
+            }
 
-        .small-muted {
-            color: var(--erp-muted);
-            font-size: .78rem;
-        }
-
-        .badge-status {
+        .estado {
             border-radius: 999px;
-            padding: 7px 12px;
-            font-size: .76rem;
+            padding: 6px 10px;
+            font-size: .74rem;
             font-weight: 900;
-            background: #eef6ff;
-            color: #175cd3;
-            border: 1px solid #b2ddff;
+            white-space: nowrap;
+            border: 1px solid transparent;
             display: inline-flex;
             align-items: center;
             gap: 6px;
+        }
+
+        .estado-ok {
+            background: var(--ok-bg);
+            color: var(--ok);
+            border-color: #bcebd3;
+        }
+
+        .estado-warn {
+            background: var(--warn-bg);
+            color: var(--warn);
+            border-color: #f2d59a;
+        }
+
+        .estado-danger {
+            background: var(--danger-bg);
+            color: var(--danger);
+            border-color: #f3b8b3;
+        }
+
+        .estado-muted {
+            background: var(--gray-bg);
+            color: #5b6472;
+            border-color: #d8dde5;
+        }
+
+        .check {
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: .74rem;
+            font-weight: 900;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin: 2px;
             white-space: nowrap;
         }
 
-        .empty-state {
-            text-align: center;
-            padding: 42px 18px;
-            color: var(--erp-muted);
+            .check.ok {
+                background: var(--ok-bg);
+                color: var(--ok);
+                border-color: #bcebd3;
+            }
+
+            .check.no {
+                background: var(--danger-bg);
+                color: var(--danger);
+                border-color: #f3b8b3;
+            }
+
+        .msg {
+            min-width: 220px;
+            color: #35517a;
+            font-size: .84rem;
+            font-weight: 650;
         }
 
-            .empty-state i {
-                font-size: 2.3rem;
-                color: #98a2b3;
-                margin-bottom: 10px;
+        .empty {
+            margin: 16px;
+            padding: 28px 16px;
+            text-align: center;
+            color: var(--muted);
+            border: 1px dashed var(--linea);
+            border-radius: 18px;
+            background: #fbfdff;
+            font-weight: 750;
+        }
+
+        .chev {
+            transition: transform .18s ease;
+            color: var(--azul);
+        }
+
+        [aria-expanded="true"] .chev {
+            transform: rotate(90deg);
+        }
+
+        .small-link {
+            color: var(--azul);
+            font-weight: 900;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+            .small-link:hover {
+                text-decoration: underline;
             }
-    </style>
+
+        @@media (max-width: 1200px) {
+            .kpis
+
+        {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        }
+
+        @@media (max-width: 700px) {
+            .page
+
+        {
+            padding: 14px;
+        }
+
+        .kpis {
+            grid-template-columns: 1fr;
+        }
+
+        }</style>
 </head>
 
 <body>
-    <div class="erp-shell">
+    <div class="page">
 
-        <div class="erp-header">
-            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                <div>
-                    <h1>
-                        <i class="fa-solid fa-industry me-2"></i>
-                        Programa de Producción
-                    </h1>
-                    <p>
-                        Producciones programadas por máquina, parte, molde y horario.
-                    </p>
-                </div>
+        <section class="hero">
+            <h1>
+                <i class="fa-solid fa-list-check me-2"></i>
+                Programa de Planeación
+            </h1>
+            <p>
+                Vista por filas, desplegable por sección, cliente y parte. Aquí se valida stock, material, cavidades,
+                ciclos, molde, máquina y horas programadas antes de pasar a Programa Cambio de Molde.
+            </p>
 
-                <div class="d-flex gap-2 flex-wrap">
-                    <a asp-controller="Menu" asp-action="Grupo" asp-route-id="3" class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-arrow-left me-1"></i>
-                        Volver
-                    </a>
-
-                    <a asp-controller="PlaneacionRelease" asp-action="Calculadora" class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-calculator me-1"></i>
-                        Calculadora
-                    </a>
-
-                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-table-columns me-1"></i>
-                        Vista máquinas
-                    </a>
-                    <a asp-controller="PlaneacionPanorama"
-                       asp-action="Index"
-                       class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-chart-line me-1"></i>
-                        Panorama
-                    </a>
-                </div>
+            <div class="hero-actions">
+                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn-glass">
+                    <i class="fa-solid fa-inbox"></i>
+                    Releases
+                </a>
+                <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-glass">
+                    <i class="fa-solid fa-gears"></i>
+                    Máquinas / Cambio de Molde
+                </a>
+                <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass">
+                    <i class="fa-solid fa-chart-line"></i>
+                    Panorama
+                </a>
             </div>
-        </div>
+        </section>
 
         @if (TempData["Success"] != null)
         {
@@ -242,271 +703,330 @@
             </div>
         }
 
-        <div class="row g-3 mb-3">
-            <div class="col-md">
-                <div class="metric-card">
-                    <div class="metric-label">Programas</div>
-                    <div class="metric-value">@totalProgramas.ToString("N0")</div>
-                </div>
-            </div>
-            <div class="col-md">
-                <div class="metric-card">
-                    <div class="metric-label">Piezas programadas</div>
-                    <div class="metric-value">@totalProgramado.ToString("N0")</div>
-                </div>
-            </div>
-            <div class="col-md">
-                <div class="metric-card">
-                    <div class="metric-label">Piezas producidas</div>
-                    <div class="metric-value">@totalProducido.ToString("N0")</div>
-                </div>
-            </div>
-            <div class="col-md">
-                <div class="metric-card">
-                    <div class="metric-label">Piezas pendientes</div>
-                    <div class="metric-value">@totalPendiente.ToString("N0")</div>
-                </div>
-            </div>
-            <div class="col-md">
-                <div class="metric-card">
-                    <div class="metric-label">Horas programadas</div>
-                    <div class="metric-value">@totalHoras.ToString("N2")</div>
-                </div>
-            </div>
-        </div>
+        <section class="filter-card">
+            <form asp-controller="PlaneacionPrograma" asp-action="Index" method="get">
+                <div class="row g-3 align-items-end">
+                    <div class="col-xl-3 col-md-6">
+                        <label class="form-label">Cliente</label>
+                        <select asp-for="ClienteID" asp-items="Model.Clientes" class="form-select">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
 
-        <div class="erp-card">
-            <div class="erp-card-header">
-                <div>
-                    <h2 class="h5 fw-bold m-0 text-primary">
-                        <i class="fa-solid fa-list-check me-2"></i>
-                        Programa general
-                    </h2>
-                    <div class="text-muted small">
-                        Lista completa de producciones programadas.
+                    <div class="col-xl-3 col-md-6">
+                        <label class="form-label">Parte</label>
+                        <select asp-for="ParteID" asp-items="Model.Partes" class="form-select">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+
+                    <div class="col-xl-2 col-md-6">
+                        <label class="form-label">Desde</label>
+                        <input asp-for="FechaDesde" type="date" class="form-control" />
+                    </div>
+
+                    <div class="col-xl-2 col-md-6">
+                        <label class="form-label">Hasta</label>
+                        <input asp-for="FechaHasta" type="date" class="form-control" />
+                    </div>
+
+                    <div class="col-xl-2 col-md-12">
+                        <button type="submit" class="btn-main w-100">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            Consultar
+                        </button>
+                    </div>
+
+                    <div class="col-12 d-flex gap-2 flex-wrap">
+                        <a class="btn btn-outline-primary rounded-3 fw-bold"
+                           asp-controller="PlaneacionPrograma"
+                           asp-action="Index"
+                           asp-route-soloListos="true">
+                            Listos para Cambio de Molde
+                        </a>
+
+                        <a class="btn btn-outline-warning rounded-3 fw-bold"
+                           asp-controller="PlaneacionPrograma"
+                           asp-action="Index"
+                           asp-route-soloPendienteAbasto="true">
+                            Pendiente abasto
+                        </a>
+
+                        <a class="btn btn-outline-danger rounded-3 fw-bold"
+                           asp-controller="PlaneacionPrograma"
+                           asp-action="Index"
+                           asp-route-soloPendienteDatosTecnicos="true">
+                            Pendiente datos técnicos
+                        </a>
+
+                        <a class="btn btn-outline-secondary rounded-3 fw-bold"
+                           asp-controller="PlaneacionPrograma"
+                           asp-action="Index">
+                            Limpiar
+                        </a>
                     </div>
                 </div>
+            </form>
+        </section>
+
+        <section class="kpis">
+            <div class="kpi">
+                <div class="label">Listos cambio molde</div>
+                <div class="value">@listos.Count.ToString("N0")</div>
             </div>
 
-            <div class="erp-card-body">
-                @if (Model != null && Model.Any())
+            <div class="kpi">
+                <div class="label">Pendiente abasto</div>
+                <div class="value">@abasto.Count.ToString("N0")</div>
+            </div>
+
+            <div class="kpi">
+                <div class="label">Pendiente datos técnicos</div>
+                <div class="value">@datosTecnicos.Count.ToString("N0")</div>
+            </div>
+
+            <div class="kpi">
+                <div class="label">A producir</div>
+                <div class="value">@totalAProducir.ToString("N0")</div>
+            </div>
+
+            <div class="kpi">
+                <div class="label">Stock usado</div>
+                <div class="value">@totalStock.ToString("N0")</div>
+            </div>
+
+            <div class="kpi">
+                <div class="label">Horas prog.</div>
+                <div class="value">@totalHoras.ToString("N2")</div>
+            </div>
+        </section>
+
+        @{
+            var secciones = new List<dynamic>
                 {
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-hover align-middle">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Release</th>
-                                    <th>Cliente</th>
-                                    <th>Parte</th>
-                                    <th>Máquina</th>
-                                    <th>Molde</th>
-                                    <th>Cond.</th>
-                                    <th>Sec.</th>
-                                    <th>Programada</th>
-                                    <th>Producida</th>
-                                    <th>Pendiente</th>
-                                    <th>Inicio</th>
-                                    <th>Fin</th>
-                                    <th>Horas</th>
-                                    <th>Estatus</th>
-                                    <th>Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var p in Model)
-                                {
-                                    <tr>
-                                        <td><strong>@p.ProgramaProduccionID</strong></td>
-                                        <td>@Valor(p.FolioRelease)</td>
-                                        <td>@Valor(p.ClienteNombre)</td>
-                                        <td>
-                                            <strong>@Valor(p.ReferenciaSAP ?? p.NumeroParte)</strong><br />
-                                            <span class="small-muted">@Valor(p.DesignacionDescripcionSAP)</span>
-                                        </td>
-                                        <td>
-                                            <strong>@Valor(p.MaquinaCodigo)</strong><br />
-                                            <span class="small-muted">@Valor(p.MaquinaNombre)</span>
-                                        </td>
-                                        <td>@Valor(p.MoldeCodigo)</td>
-                                        <td>@Valor(p.CondicionProduccion)</td>
-                                        <td>@(p.SecuenciaMaquina?.ToString() ?? "-")</td>
-                                        <td>@p.CantidadProgramada.ToString("N0")</td>
-                                        <td>@p.CantidadProducida.ToString("N0")</td>
-                                        <td><strong>@p.CantidadPendiente.ToString("N0")</strong></td>
-                                        <td>@FechaHora(p.FechaInicioProgramada)</td>
-                                        <td>@FechaHora(p.FechaFinProgramada)</td>
-                                        <td>@Decimal2(p.HorasProgramadas)</td>
-                                        <td>
-                                            <span class="badge-status">
-                                                <i class="fa-solid fa-circle" style="font-size:.45rem;"></i>
-                                                @p.EstatusNombre
-                                            </span>
-                                        </td>
-                                        <td>
-                                            @if (p.PuedeGenerarOF)
-                                            {
-                                                <button type="button"
-                                                        class="btn btn-sm btn-erp-primary btn-generar-of"
-                                                        data-programa-id="@p.ProgramaProduccionID"
-                                                        data-referencia="@Valor(p.ReferenciaSAP ?? p.NumeroParte)"
-                                                        data-designacion="@Valor(p.DesignacionDescripcionSAP)"
-                                                        data-maquina="@Valor(p.MaquinaCodigo)"
-                                                        data-molde="@Valor(p.MoldeCodigo)"
-                                                        data-cantidad="@p.CantidadProgramada.ToString("N0")">
-                                                    <i class="fa-solid fa-file-circle-plus me-1"></i>
-                                                    Generar OF
-                                                </button>
-                                            }
-                                            else if (p.TieneOF)
-                                            {
-                                                <a asp-controller="Planeacion"
-                                                   asp-action="Detalle"
-                                                   asp-route-id="@p.SolicitudProduccionID"
-                                                   class="btn btn-sm btn-success rounded-3 fw-bold">
-                                                    <i class="fa-solid fa-circle-check me-1"></i>
-                                                    Ver OF
-                                                </a>
-                                            }
-                                            else
-                                            {
-                                                <span class="small-muted">
-                                                    No disponible
-                                                </span>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-                else
-                {
-                    <div class="empty-state">
-                        <i class="fa-solid fa-industry"></i>
-                        <div class="fw-bold">No hay producciones programadas.</div>
-                        <div class="small">Ve a la Calculadora de Necesidades y programa un renglón.</div>
-                        <div class="mt-3">
-                            <a asp-controller="PlaneacionRelease" asp-action="Calculadora" class="btn btn-erp-primary">
-                                <i class="fa-solid fa-calculator me-1"></i>
-                                Ir a Calculadora
-                            </a>
-                        </div>
-                    </div>
-                }
-            </div>
-        </div>
+                new { Titulo = "1. Listas para Programa Cambio de Molde", Sub = "Renglones con producción pendiente y datos suficientes para pasar al siguiente paso.", Items = listos, Id = "listos", Open = true },
+                new { Titulo = "2. Pendientes de abastecimiento", Sub = "Tienen datos técnicos, pero no pasan porque falta MP o embalaje.", Items = abasto, Id = "abasto", Open = false },
+                new { Titulo = "3. Pendientes de datos técnicos", Sub = "Falta molde, material, cavidades, ciclo, máquina, objetivo/hra o peso bruto.", Items = datosTecnicos, Id = "datos", Open = false },
+                new { Titulo = "4. Cubiertas o ya programadas", Sub = "Consulta de renglones que no requieren acción inmediata.", Items = resueltos, Id = "resueltos", Open = false }
+                };
 
-    </div>
+            var sectionIndex = 0;
+        }
 
-    <form asp-controller="PlaneacionPrograma"
-          asp-action="GenerarOF"
-          method="post"
-          id="formGenerarOF"
-          class="d-none">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="programaProduccionId" id="programaProduccionIdGenerarOF" />
-    </form>
+        @foreach (var sec in secciones)
+        {
+            sectionIndex++;
+            var sectionCollapseId = CollapseId("sec", sectionIndex);
+            List<PlaneacionProgramaNecesidadVm> items = sec.Items;
+            bool sectionOpen = sec.Open;
 
-    <div class="modal fade" id="modalGenerarOF" tabindex="-1" aria-labelledby="modalGenerarOFLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content rounded-4 border-0 shadow-lg">
-                <div class="modal-header border-0 pb-0">
+            <section class="section">
+                <div class="section-head"
+                     data-bs-toggle="collapse"
+                     data-bs-target="#@sectionCollapseId"
+                     aria-expanded="@(sectionOpen ? "true" : "false")"
+                     aria-controls="@sectionCollapseId">
                     <div>
-                        <h5 class="modal-title fw-bold text-primary" id="modalGenerarOFLabel">
-                            <i class="fa-solid fa-file-circle-plus me-2"></i>
-                            Generar Orden de Fabricación
-                        </h5>
-                        <div class="text-muted small">
-                            Confirma que deseas generar la OF desde este programa.
-                        </div>
+                        <h2 class="section-title">
+                            <i class="fa-solid fa-chevron-right chev me-2"></i>
+                            @sec.Titulo
+                        </h2>
+                        <div class="section-sub">@sec.Sub</div>
                     </div>
 
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    <div class="count-pill">@items.Count.ToString("N0") registro(s)</div>
                 </div>
 
-                <div class="modal-body">
-                    <div class="alert alert-warning rounded-4 mb-3">
-                        <i class="fa-solid fa-triangle-exclamation me-2"></i>
-                        Al confirmar se creará una nueva OF y quedará ligada al programa de producción.
-                    </div>
+                <div id="@sectionCollapseId" class="collapse @(sectionOpen ? "show" : "")">
+                    @if (!items.Any())
+                    {
+                        <div class="empty">No hay registros en esta sección.</div>
+                    }
+                    else
+                    {
+                        var clientIndex = 0;
 
-                    <div class="border rounded-4 p-3 bg-light">
-                        <div class="mb-2">
-                            <div class="small text-muted fw-bold">Referencia SAP</div>
-                            <div class="fw-bold" id="modalOFReferencia">-</div>
-                        </div>
+                        foreach (var cliente in items.GroupBy(ClienteNombre).OrderBy(x => x.Key))
+                        {
+                            clientIndex++;
+                            var clienteCollapseId = CollapseId("cli", sectionIndex, clientIndex);
+                            var clienteItems = cliente.ToList();
+                            var clienteAProducir = clienteItems.Sum(x => x.PiezasAProducir ?? 0);
+                            var clienteHoras = clienteItems.Sum(x => x.HorasNecesarias ?? 0);
 
-                        <div class="mb-2">
-                            <div class="small text-muted fw-bold">Designación</div>
-                            <div id="modalOFDesignacion">-</div>
-                        </div>
+                            <div class="client-box">
+                                <div class="client-head"
+                                     data-bs-toggle="collapse"
+                                     data-bs-target="#@clienteCollapseId"
+                                     aria-expanded="true"
+                                     aria-controls="@clienteCollapseId">
+                                    <div>
+                                        <h3 class="client-title">
+                                            <i class="fa-solid fa-chevron-right chev me-2"></i>
+                                            @cliente.Key
+                                        </h3>
+                                        <div class="client-meta">
+                                            @clienteItems.Count.ToString("N0") registro(s) ·
+                                            @clienteAProducir.ToString("N0") a producir ·
+                                            @clienteHoras.ToString("N2") hrs
+                                        </div>
+                                    </div>
 
-                        <div class="row g-2">
-                            <div class="col-4">
-                                <div class="small text-muted fw-bold">Máquina</div>
-                                <div class="fw-semibold" id="modalOFMaquina">-</div>
+                                    <div class="count-pill">Cliente</div>
+                                </div>
+
+                                <div id="@clienteCollapseId" class="collapse show">
+                                    @{
+                                        var parteIndex = 0;
+                                    }
+
+                                    @foreach (var parte in clienteItems.GroupBy(ParteClave).OrderBy(x => x.Key))
+                                    {
+                                        parteIndex++;
+                                        var parteCollapseId = CollapseId("parte", sectionIndex, clientIndex, parteIndex);
+                                        var parteItems = parte.ToList();
+                                        var primera = parteItems.FirstOrDefault();
+                                        var parteAProducir = parteItems.Sum(x => x.PiezasAProducir ?? 0);
+                                        var parteHoras = parteItems.Sum(x => x.HorasNecesarias ?? 0);
+
+                                        <div class="part-box">
+                                            <div class="part-head"
+                                                 data-bs-toggle="collapse"
+                                                 data-bs-target="#@parteCollapseId"
+                                                 aria-expanded="true"
+                                                 aria-controls="@parteCollapseId">
+                                                <div>
+                                                    <div class="part-title">
+                                                        <i class="fa-solid fa-chevron-right chev me-2"></i>
+                                                        @parte.Key
+                                                    </div>
+                                                    <div class="part-desc">
+                                                        @Txt(primera?.DesignacionDescripcionSAP) ·
+                                                        @parteItems.Count.ToString("N0") entrega(s) ·
+                                                        @parteAProducir.ToString("N0") a producir ·
+                                                        @parteHoras.ToString("N2") hrs
+                                                    </div>
+                                                </div>
+
+                                                <div class="count-pill">Parte</div>
+                                            </div>
+
+                                            <div id="@parteCollapseId" class="collapse show">
+                                                <div class="table-wrap">
+                                                    <table class="table-clean">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Estado</th>
+                                                                <th>Release</th>
+                                                                <th>Fecha requerida</th>
+                                                                <th>Requerido</th>
+                                                                <th>Stock</th>
+                                                                <th>Programado</th>
+                                                                <th>A producir</th>
+                                                                <th>Molde</th>
+                                                                <th>Material / Resina</th>
+                                                                <th>Cavidades</th>
+                                                                <th>Ciclo</th>
+                                                                <th>Máquina</th>
+                                                                <th>Horas prog.</th>
+                                                                <th>Qty día</th>
+                                                                <th>Peso bruto</th>
+                                                                <th>Obj/Hra</th>
+                                                                <th>MP disp./req.</th>
+                                                                <th>Emb. disp./req.</th>
+                                                                <th>Validación</th>
+                                                                <th>Observación</th>
+                                                                <th>Acción</th>
+                                                            </tr>
+                                                        </thead>
+
+                                                        <tbody>
+                                                            @foreach (var item in parteItems)
+                                                            {
+                                                                <tr>
+                                                                    <td>
+                                                                        <span class="estado @EstadoClase(item)">
+                                                                            @EstadoTexto(item)
+                                                                        </span>
+                                                                    </td>
+
+                                                                    <td>@Txt(item.FolioRelease)</td>
+                                                                    <td>@F(item.FechaRequerida)</td>
+                                                                    <td>@item.CantidadRequerida.ToString("N0")</td>
+                                                                    <td>@N0(item.PiezasDesdePT)</td>
+                                                                    <td>@N0(item.ProduccionProgramadaPendiente)</td>
+                                                                    <td><strong>@N0(item.PiezasAProducir)</strong></td>
+                                                                    <td>@Txt(item.MoldeCodigo)</td>
+                                                                    <td>
+                                                                        <strong>@Txt(item.MaterialCodigo)</strong><br />
+                                                                        <span class="text-muted">@Txt(item.MaterialDescripcion)</span>
+                                                                    </td>
+                                                                    <td>@N0(item.Cavidades)</td>
+                                                                    <td>@Txt(item.Ciclo)</td>
+                                                                    <td>
+                                                                        <strong>@Txt(item.MaquinaSugeridaCodigo)</strong><br />
+                                                                        <span class="text-muted">@Txt(item.MaquinaSugeridaNombre)</span>
+                                                                    </td>
+                                                                    <td>@D2(item.HorasNecesarias)</td>
+                                                                    <td>@N0(item.QtyPorDia)</td>
+                                                                    <td>@D4(item.PesoBrutoPieza)</td>
+                                                                    <td>@N0(item.ObjetivoHora)</td>
+                                                                    <td>@D4(item.MPDisponibleKg) / @D4(item.MPRequeridaKg) kg</td>
+                                                                    <td>@D2(item.EmbalajeDisponible) / @D2(item.EmbalajeRequerido)</td>
+                                                                    <td>
+                                                                        <span class="@CheckClase(StockOk(item))"><i class="fa-solid @CheckIcono(StockOk(item))"></i> Stock</span>
+                                                                        <span class="@CheckClase(MoldeOk(item))"><i class="fa-solid @CheckIcono(MoldeOk(item))"></i> Molde</span>
+                                                                        <span class="@CheckClase(MaterialOk(item))"><i class="fa-solid @CheckIcono(MaterialOk(item))"></i> Material</span>
+                                                                        <span class="@CheckClase(CavidadesOk(item))"><i class="fa-solid @CheckIcono(CavidadesOk(item))"></i> Cav.</span>
+                                                                        <span class="@CheckClase(CicloOk(item))"><i class="fa-solid @CheckIcono(CicloOk(item))"></i> Ciclo</span>
+                                                                        <span class="@CheckClase(MaquinaOk(item))"><i class="fa-solid @CheckIcono(MaquinaOk(item))"></i> Máquina</span>
+                                                                        <span class="@CheckClase(ObjetivoOk(item))"><i class="fa-solid @CheckIcono(ObjetivoOk(item))"></i> Obj</span>
+                                                                        <span class="@CheckClase(MpOk(item))"><i class="fa-solid @CheckIcono(MpOk(item))"></i> MP</span>
+                                                                        <span class="@CheckClase(EmbalajeOk(item))"><i class="fa-solid @CheckIcono(EmbalajeOk(item))"></i> Emb.</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <div class="msg">@Txt(item.MensajeCapacidad)</div>
+                                                                    </td>
+                                                                    <td>
+                                                                        @if (ListoCambioMolde(item))
+                                                                        {
+                                                                            <a class="small-link"
+                                                                               href="@Url.Action("CrearDesdeNecesidad", "PlaneacionPrograma", new { releaseDetalleId = item.ReleaseDetalleID })">
+                                                                                Enviar a Cambio de Molde
+                                                                            </a>
+                                                                        }
+                                                                        else if (item.ProgramaProduccionID.HasValue)
+                                                                        {
+                                                                            <a class="small-link"
+                                                                               asp-controller="PlaneacionPrograma"
+                                                                               asp-action="Maquinas">
+                                                                                Ver en máquinas
+                                                                            </a>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <span class="text-muted fw-semibold">Sin acción</span>
+                                                                        }
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
                             </div>
-
-                            <div class="col-4">
-                                <div class="small text-muted fw-bold">Molde</div>
-                                <div class="fw-semibold" id="modalOFMolde">-</div>
-                            </div>
-
-                            <div class="col-4">
-                                <div class="small text-muted fw-bold">Cantidad</div>
-                                <div class="fw-semibold" id="modalOFCantidad">-</div>
-                            </div>
-                        </div>
-                    </div>
+                        }
+                    }
                 </div>
+            </section>
+        }
 
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-erp-light" data-bs-dismiss="modal">
-                        Cancelar
-                    </button>
-
-                    <button type="button" class="btn btn-erp-primary" id="btnConfirmarGenerarOF">
-                        <i class="fa-solid fa-check me-1"></i>
-                        Sí, generar OF
-                    </button>
-                </div>
-            </div>
-        </div>
     </div>
-
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-    <script>
-        let programaSeleccionadoOF = null;
-
-        document.querySelectorAll('.btn-generar-of').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                programaSeleccionadoOF = this.dataset.programaId;
-
-                document.getElementById('modalOFReferencia').textContent = this.dataset.referencia || '-';
-                document.getElementById('modalOFDesignacion').textContent = this.dataset.designacion || '-';
-                document.getElementById('modalOFMaquina').textContent = this.dataset.maquina || '-';
-                document.getElementById('modalOFMolde').textContent = this.dataset.molde || '-';
-                document.getElementById('modalOFCantidad').textContent = this.dataset.cantidad || '-';
-
-                const modal = new bootstrap.Modal(document.getElementById('modalGenerarOF'));
-                modal.show();
-            });
-        });
-
-        document.getElementById('btnConfirmarGenerarOF')?.addEventListener('click', function () {
-            if (!programaSeleccionadoOF) {
-                return;
-            }
-
-            document.getElementById('programaProduccionIdGenerarOF').value = programaSeleccionadoOF;
-            document.getElementById('formGenerarOF').submit();
-        });
-    </script>
-
 
 </body>
 </html>

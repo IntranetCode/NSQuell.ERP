@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace ERP.NSQuell.Models
 {
@@ -112,7 +115,20 @@ namespace ERP.NSQuell.Models
 
         public string? Observaciones { get; set; }
 
+
+        public int? PiezasPorCaja { get; set; }
+        public int? QtyPorDia { get; set; }
+
+        public int? MaquinaSustitutaID { get; set; }
+        public string? MaquinaSustitutaCodigo { get; set; }
+        public string? MaquinaSustitutaNombre { get; set; }
+
         public string? Color { get; set; }
+        public string? TipoSecado { get; set; }
+        public decimal? HorasSecado { get; set; }
+        public string? HorasSecadoTexto { get; set; }
+
+
 
         public TimeSpan? Cambio { get; set; }
         public TimeSpan? Arranque { get; set; }
@@ -144,6 +160,120 @@ namespace ERP.NSQuell.Models
                 .Where(x => x.EstatusID == PlaneacionProgramaEstatus.Programado)
                 .OrderBy(x => x.FechaInicioProgramada)
                 .FirstOrDefault();
+    }
+
+
+    public class PlaneacionProgramaNecesidadFiltroVm
+    {
+        public int? ClienteID { get; set; }
+        public int? ParteID { get; set; }
+
+        public DateTime? FechaDesde { get; set; }
+        public DateTime? FechaHasta { get; set; }
+
+        public bool SoloPendientes { get; set; }
+        public bool SoloSinCapacidad { get; set; }
+        public bool SoloSinMP { get; set; }
+
+        public List<PlaneacionProgramaNecesidadVm> Necesidades { get; set; } = new();
+
+        public List<SelectListItem> Clientes { get; set; } = new();
+        public List<SelectListItem> Partes { get; set; } = new();
+
+        public int TotalRenglones => Necesidades.Count;
+        public int TotalRequerido => Necesidades.Sum(x => x.CantidadRequerida);
+        public int TotalStock => Necesidades.Sum(x => x.PiezasDesdePT ?? 0);
+        public int TotalAProducir => Necesidades.Sum(x => x.PiezasAProducir ?? 0);
+        public decimal TotalMPRequerida => Necesidades.Sum(x => x.MPRequeridaKg ?? 0);
+        public decimal TotalHoras => Necesidades.Sum(x => x.HorasNecesarias ?? 0);
+    }
+
+    public class PlaneacionProgramaNecesidadVm
+    {
+        public int ReleaseID { get; set; }
+        public int ReleaseDetalleID { get; set; }
+
+        public string? FolioRelease { get; set; }
+
+        public int? ClienteID { get; set; }
+        public string? ClienteNombre { get; set; }
+
+        public int Renglon { get; set; }
+
+        public int? ParteID { get; set; }
+        public string? NumeroParte { get; set; }
+        public string? ReferenciaSAP { get; set; }
+        public string? DesignacionDescripcionSAP { get; set; }
+
+        public DateTime FechaRecepcion { get; set; }
+        public DateTime FechaRequerida { get; set; }
+
+        public int CantidadRequerida { get; set; }
+
+        public int? PTDisponibleAlCalcular { get; set; }
+        public int? ProduccionProgramadaPendiente { get; set; }
+
+        public int? PiezasDesdePT { get; set; }
+        public int? PiezasAProducir { get; set; }
+
+        public int? MaterialID { get; set; }
+        public string? MaterialCodigo { get; set; }
+        public string? MaterialDescripcion { get; set; }
+
+        public decimal? MPRequeridaKg { get; set; }
+        public decimal? MPDisponibleKg { get; set; }
+
+        public string? EmbalajeCodigo { get; set; }
+        public string? EmbalajeDescripcion { get; set; }
+        public decimal? EmbalajeRequerido { get; set; }
+        public decimal? EmbalajeDisponible { get; set; }
+
+        public int? MaquinaSugeridaID { get; set; }
+        public string? MaquinaSugeridaCodigo { get; set; }
+        public string? MaquinaSugeridaNombre { get; set; }
+
+        public int? MoldeID { get; set; }
+        public string? MoldeCodigo { get; set; }
+
+        public int? ObjetivoHora { get; set; }
+        public decimal? HorasNecesarias { get; set; }
+
+        public DateTime? FechaInicioSugerida { get; set; }
+        public DateTime? FechaFinEstimada { get; set; }
+
+        public bool? DaTiempo { get; set; }
+        public string? MensajeCapacidad { get; set; }
+
+        public int? ProgramaProduccionID { get; set; }
+        public int? SolicitudProduccionID { get; set; }
+
+        public int EstatusID { get; set; }
+
+        public bool YaProgramado => ProgramaProduccionID.HasValue;
+
+        public bool TieneMPInsuficiente =>
+            (MPRequeridaKg ?? 0) > 0 &&
+            (MPDisponibleKg ?? 0) < (MPRequeridaKg ?? 0);
+
+        public bool TieneEmbalajeInsuficiente =>
+            (EmbalajeRequerido ?? 0) > 0 &&
+            (EmbalajeDisponible ?? 0) < (EmbalajeRequerido ?? 0);
+
+        // Datos técnicos para detalle de Programa de Planeación
+        public string? Ciclo { get; set; }
+        public int? Cavidades { get; set; }
+        public decimal? PesoBrutoPieza { get; set; }
+        public int? PiezasPorCaja { get; set; }
+        public int? QtyPorDia { get; set; }
+
+        public int? MaquinaSustitutaID { get; set; }
+        public string? MaquinaSustitutaCodigo { get; set; }
+        public string? MaquinaSustitutaNombre { get; set; }
+
+        public string? Color { get; set; }
+        public string? TipoSecado { get; set; }
+        public decimal? HorasSecado { get; set; }
+        public string? HorasSecadoTexto { get; set; }
     }
 
     public class PlaneacionProgramaMaquinasVm

@@ -616,7 +616,7 @@
                         </div>
 
                         <div class="col-md-6 col-xl-3">
-                            <label asp-for="VersionRelease" class="erp-label">Versión automática</label>
+                            <label asp-for="VersionRelease" class="erp-label">Semana</label>
                             <input asp-for="VersionRelease"
                                    class="form-control"
                                    maxlength="50"
@@ -927,8 +927,8 @@
                     <button type="submit"
                             class="btn btn-erp-primary"
                             id="btnGuardar">
-                        <i class="fa-solid fa-calculator me-1"></i>
-                        <span class="btn-label">Guardar y calcular necesidades</span>
+                        <i class="fa-solid fa-floppy-disk me-1"></i>
+                        <span class="btn-label">Guardar release</span>
                     </button>
                 </div>
             </div>
@@ -1524,7 +1524,7 @@
         function bloquearGuardado() {
             btnGuardar.disabled = true;
             btnGuardar.querySelector('i').className = 'fa-solid fa-spinner fa-spin me-1';
-            btnGuardar.querySelector('.btn-label').textContent = 'Guardando y calculando...';
+            btnGuardar.querySelector('.btn-label').textContent = 'Guardando ...';
         }
 
         function bloquearLecturaArchivo() {

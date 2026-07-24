@@ -135,6 +135,8 @@ ORDER BY r.FechaCreacion DESC;";
 
             return View(vm);
         }
+
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Crear(PlaneacionReleaseCrearVm vm)
@@ -255,8 +257,12 @@ ORDER BY r.FechaCreacion DESC;";
                             entrega
                         );
 
-                        await CompletarDetalleDesdeParteAsync(detalle, cn, (SqlTransaction)tx);
-                        await CalcularNecesidadAsync(detalle, cn, (SqlTransaction)tx);
+                        /*
+                            IMPORTANTE:
+                            Aquí NO se calcula stock, MP, embalaje, horas ni máquina.
+                            Release solo guarda la demanda del cliente.
+                            El cálculo se hará después en Programa de Planeación.
+                        */
 
                         await InsertarReleaseDetalleAsync(
                             releaseId,
@@ -274,18 +280,15 @@ ORDER BY r.FechaCreacion DESC;";
                     renglonNumero++;
                 }
 
-                await ActualizarEstatusReleaseAsync(
-                    releaseId,
-                    PlaneacionReleaseEstatus.Calculado,
-                    usuarioId,
-                    cn,
-                    (SqlTransaction)tx
-                );
+                /*
+                    No cambiamos a Calculado.
+                    Se queda en Capturado porque todavía no pasó por Programa de Planeación.
+                */
 
                 await tx.CommitAsync();
 
-                TempData["Success"] = "Release capturado y calculado correctamente.";
-                return RedirectToAction(nameof(Detalle), new { id = releaseId });
+                TempData["Success"] = "Release guardado correctamente en bandeja.";
+                return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
             {
@@ -296,6 +299,7 @@ ORDER BY r.FechaCreacion DESC;";
                 return View(vm);
             }
         }
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
