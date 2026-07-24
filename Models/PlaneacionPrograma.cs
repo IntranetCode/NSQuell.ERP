@@ -81,6 +81,12 @@ namespace ERP.NSQuell.Models
 
         public int CantidadRequerida { get; set; }
         public int PiezasDesdePT { get; set; }
+
+        // Apartado de PT generado desde Programa de Planeación.
+        public int PTDisponibleAlCalcular { get; set; }
+        public int PTApartadoOtros { get; set; }
+        public int PTDisponibleNeto { get; set; }
+
         public int PiezasAProducir { get; set; }
 
         public int CantidadProgramada { get; set; }
@@ -211,6 +217,8 @@ namespace ERP.NSQuell.Models
         public int CantidadRequerida { get; set; }
 
         public int? PTDisponibleAlCalcular { get; set; }
+        public int? PTApartadoOtros { get; set; }
+        public int? PTDisponibleNeto { get; set; }
         public int? ProduccionProgramadaPendiente { get; set; }
 
         public int? PiezasDesdePT { get; set; }

@@ -4,195 +4,96 @@
 @using System.Collections.Generic
 
 @functions {
-    public static string Txt(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? "-" : value;
-    }
+    public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    public static string F(DateTime value) => value == DateTime.MinValue ? "-" : value.ToString("dd/MM/yyyy");
+    public static string F(DateTime? value) => value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "-";
+    public static string N0(int? value) => value.HasValue ? value.Value.ToString("N0") : "0";
+    public static string N0(decimal? value) => value.HasValue ? value.Value.ToString("N0") : "0";
+    public static string D2(decimal? value) => value.HasValue ? value.Value.ToString("N2") : "0.00";
+    public static string D4(decimal? value) => value.HasValue ? value.Value.ToString("N4") : "0.0000";
 
-    public static string F(DateTime? value)
-    {
-        return value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "-";
-    }
-
-    public static string N0(int? value)
-    {
-        return value.HasValue ? value.Value.ToString("N0") : "0";
-    }
-
-    public static string D2(decimal? value)
-    {
-        return value.HasValue ? value.Value.ToString("N2") : "0.00";
-    }
-
-    public static string D4(decimal? value)
-    {
-        return value.HasValue ? value.Value.ToString("N4") : "0.0000";
-    }
-
-    public static bool NecesitaProduccion(PlaneacionProgramaNecesidadVm x)
-    {
-        return (x.PiezasAProducir ?? 0) > 0;
-    }
-
-    public static bool StockOk(PlaneacionProgramaNecesidadVm x)
-    {
-        return (x.PiezasDesdePT ?? 0) > 0 || !NecesitaProduccion(x);
-    }
+    public static bool NecesitaProduccion(PlaneacionProgramaNecesidadVm x) => (x.PiezasAProducir ?? 0) > 0;
+    public static bool StockOk(PlaneacionProgramaNecesidadVm x) => (x.PiezasDesdePT ?? 0) > 0 || !NecesitaProduccion(x);
 
     public static bool MpOk(PlaneacionProgramaNecesidadVm x)
     {
-        if (!NecesitaProduccion(x))
-            return true;
-
-        return (x.MPDisponibleKg ?? 0) >= (x.MPRequeridaKg ?? 0)
-            && (x.MPRequeridaKg ?? 0) > 0;
+        if (!NecesitaProduccion(x)) return true;
+        return (x.MPDisponibleKg ?? 0) >= (x.MPRequeridaKg ?? 0) && (x.MPRequeridaKg ?? 0) > 0;
     }
 
     public static bool EmbalajeOk(PlaneacionProgramaNecesidadVm x)
     {
-        if (!NecesitaProduccion(x))
-            return true;
-
-        return (x.EmbalajeDisponible ?? 0) >= (x.EmbalajeRequerido ?? 0)
-            && (x.EmbalajeRequerido ?? 0) > 0;
+        if (!NecesitaProduccion(x)) return true;
+        return (x.EmbalajeDisponible ?? 0) >= (x.EmbalajeRequerido ?? 0) && (x.EmbalajeRequerido ?? 0) > 0;
     }
 
-    public static bool MoldeOk(PlaneacionProgramaNecesidadVm x)
-    {
-        return !NecesitaProduccion(x) || x.MoldeID.HasValue;
-    }
-
-    public static bool MaquinaOk(PlaneacionProgramaNecesidadVm x)
-    {
-        return !NecesitaProduccion(x) || x.MaquinaSugeridaID.HasValue;
-    }
-
-    public static bool MaterialOk(PlaneacionProgramaNecesidadVm x)
-    {
-        return !NecesitaProduccion(x) || x.MaterialID.HasValue || !string.IsNullOrWhiteSpace(x.MaterialCodigo);
-    }
-
-    public static bool CavidadesOk(PlaneacionProgramaNecesidadVm x)
-    {
-        return !NecesitaProduccion(x) || ((x.Cavidades ?? 0) > 0);
-    }
-
-    public static bool CicloOk(PlaneacionProgramaNecesidadVm x)
-    {
-        return !NecesitaProduccion(x) || !string.IsNullOrWhiteSpace(x.Ciclo);
-    }
-
-    public static bool ObjetivoOk(PlaneacionProgramaNecesidadVm x)
-    {
-        return !NecesitaProduccion(x) || ((x.ObjetivoHora ?? 0) > 0);
-    }
-
-    public static bool PesoOk(PlaneacionProgramaNecesidadVm x)
-    {
-        return !NecesitaProduccion(x) || ((x.PesoBrutoPieza ?? 0) > 0);
-    }
+    public static bool MoldeOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MoldeID.HasValue;
+    public static bool MaquinaOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MaquinaSugeridaID.HasValue;
+    public static bool MaterialOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MaterialID.HasValue || !string.IsNullOrWhiteSpace(x.MaterialCodigo);
+    public static bool CavidadesOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.Cavidades ?? 0) > 0);
+    public static bool CicloOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || !string.IsNullOrWhiteSpace(x.Ciclo);
+    public static bool ObjetivoOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.ObjetivoHora ?? 0) > 0);
+    public static bool PesoOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.PesoBrutoPieza ?? 0) > 0);
 
     public static bool DatosTecnicosOk(PlaneacionProgramaNecesidadVm x)
     {
-        return MaterialOk(x)
-            && MoldeOk(x)
-            && MaquinaOk(x)
-            && CavidadesOk(x)
-            && CicloOk(x)
-            && ObjetivoOk(x)
-            && PesoOk(x);
+        return MaterialOk(x) && MoldeOk(x) && MaquinaOk(x) && CavidadesOk(x) && CicloOk(x) && ObjetivoOk(x) && PesoOk(x);
     }
 
     public static bool ListoCambioMolde(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue
-            && NecesitaProduccion(x)
-            && DatosTecnicosOk(x)
-            && MpOk(x)
-            && EmbalajeOk(x);
+        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && DatosTecnicosOk(x) && MpOk(x) && EmbalajeOk(x);
     }
 
     public static bool PendienteAbasto(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue
-            && NecesitaProduccion(x)
-            && DatosTecnicosOk(x)
-            && (!MpOk(x) || !EmbalajeOk(x));
+        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && DatosTecnicosOk(x) && (!MpOk(x) || !EmbalajeOk(x));
     }
 
     public static bool PendienteDatosTecnicos(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue
-            && NecesitaProduccion(x)
-            && !DatosTecnicosOk(x);
+        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && !DatosTecnicosOk(x);
     }
 
-    public static bool CubiertoOProgramado(PlaneacionProgramaNecesidadVm x)
-    {
-        return x.ProgramaProduccionID.HasValue || !NecesitaProduccion(x);
-    }
-
-    public static string ClienteNombre(PlaneacionProgramaNecesidadVm x)
-    {
-        return string.IsNullOrWhiteSpace(x.ClienteNombre) ? "Sin cliente" : x.ClienteNombre!;
-    }
+    public static bool CubiertoOProgramado(PlaneacionProgramaNecesidadVm x) => x.ProgramaProduccionID.HasValue || !NecesitaProduccion(x);
+    public static string ClienteNombre(PlaneacionProgramaNecesidadVm x) => string.IsNullOrWhiteSpace(x.ClienteNombre) ? "Sin cliente" : x.ClienteNombre!;
 
     public static string ParteClave(PlaneacionProgramaNecesidadVm x)
     {
-        if (!string.IsNullOrWhiteSpace(x.NumeroParte))
-            return x.NumeroParte!;
-
-        if (!string.IsNullOrWhiteSpace(x.ReferenciaSAP))
-            return x.ReferenciaSAP!;
-
+        if (!string.IsNullOrWhiteSpace(x.NumeroParte)) return x.NumeroParte!;
+        if (!string.IsNullOrWhiteSpace(x.ReferenciaSAP)) return x.ReferenciaSAP!;
         return "-";
     }
 
     public static string EstadoTexto(PlaneacionProgramaNecesidadVm x)
     {
-        if (x.ProgramaProduccionID.HasValue)
-            return "Ya programado";
-
-        if (!NecesitaProduccion(x))
-            return "Cubierto";
-
-        if (ListoCambioMolde(x))
-            return "Listo para Cambio de Molde";
-
-        if (PendienteAbasto(x))
-            return "Pendiente de abasto";
-
+        if (x.ProgramaProduccionID.HasValue) return "Ya programado";
+        if (!NecesitaProduccion(x)) return "Cubierto";
+        if (ListoCambioMolde(x)) return "Listo para Cambio de Molde";
+        if (PendienteAbasto(x)) return "Pendiente de abasto";
         return "Pendiente de datos técnicos";
     }
 
     public static string EstadoClase(PlaneacionProgramaNecesidadVm x)
     {
-        if (ListoCambioMolde(x))
-            return "estado-ok";
-
-        if (PendienteAbasto(x))
-            return "estado-warn";
-
-        if (PendienteDatosTecnicos(x))
-            return "estado-danger";
-
+        if (ListoCambioMolde(x)) return "estado-ok";
+        if (PendienteAbasto(x)) return "estado-warn";
+        if (PendienteDatosTecnicos(x)) return "estado-danger";
         return "estado-muted";
     }
 
-    public static string CheckClase(bool ok)
+    public static string CardClase(PlaneacionProgramaNecesidadVm x)
     {
-        return ok ? "check ok" : "check no";
+        if (ListoCambioMolde(x)) return "card-ok";
+        if (PendienteAbasto(x)) return "card-warn";
+        if (PendienteDatosTecnicos(x)) return "card-danger";
+        return "card-muted";
     }
 
-    public static string CheckIcono(bool ok)
-    {
-        return ok ? "fa-circle-check" : "fa-circle-xmark";
-    }
-
-    public static string CollapseId(string prefix, int a, int b = 0, int c = 0)
-    {
-        return prefix + "_" + a.ToString() + "_" + b.ToString() + "_" + c.ToString();
-    }
+    public static string CheckClase(bool ok) => ok ? "check ok" : "check no";
+    public static string CheckIcono(bool ok) => ok ? "fa-circle-check" : "fa-circle-xmark";
+    public static string CollapseId(string prefix, int a) => prefix + "_" + a.ToString();
+    public static string ModalId(PlaneacionProgramaNecesidadVm item) => "modalCambio_" + item.ReleaseDetalleID.ToString();
 
     public static string DataSearch(PlaneacionProgramaNecesidadVm item)
     {
@@ -210,44 +111,56 @@
             item.MensajeCapacidad ?? string.Empty
         ).ToLowerInvariant();
     }
+
+    public static DateTime PrioridadFecha(PlaneacionProgramaNecesidadVm item)
+    {
+        return item.FechaRequerida == DateTime.MinValue ? DateTime.MaxValue : item.FechaRequerida;
+    }
+
+    public static int PrioridadEntrada(PlaneacionProgramaNecesidadVm item)
+    {
+        return item.ReleaseDetalleID;
+    }
+
+    public static string PrioridadTexto(PlaneacionProgramaNecesidadVm item)
+    {
+        var fecha = item.FechaRequerida == DateTime.MinValue
+            ? "Sin fecha"
+            : item.FechaRequerida.ToString("dd/MM/yyyy");
+
+        return fecha + " · Entrada " + item.ReleaseDetalleID.ToString();
+    }
+
+    public sealed class SeccionUi
+    {
+        public string Titulo { get; set; } = "";
+        public string Sub { get; set; } = "";
+        public string Icono { get; set; } = "";
+        public string Clase { get; set; } = "";
+        public bool Open { get; set; }
+        public List<PlaneacionProgramaNecesidadVm> Items { get; set; } = new();
+    }
 }
 
 @{
     Layout = null;
-
     var necesidades = Model.Necesidades ?? new List<PlaneacionProgramaNecesidadVm>();
 
-    var listos = necesidades
-        .Where(ListoCambioMolde)
-        .OrderBy(x => ClienteNombre(x))
-        .ThenBy(x => ParteClave(x))
-        .ThenBy(x => x.FechaRequerida)
-        .ToList();
+    // Prioridad FIFO de planeación:
+    // 1) Primero lo que tiene FechaRequerida más cercana.
+    // 2) Si empatan, gana el ReleaseDetalleID más antiguo.
+    var listos = necesidades.Where(ListoCambioMolde).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
+    var abasto = necesidades.Where(PendienteAbasto).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
+    var datosTecnicos = necesidades.Where(PendienteDatosTecnicos).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
+    var resueltos = necesidades.Where(CubiertoOProgramado).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
 
-    var abasto = necesidades
-        .Where(PendienteAbasto)
-        .OrderBy(x => ClienteNombre(x))
-        .ThenBy(x => ParteClave(x))
-        .ThenBy(x => x.FechaRequerida)
-        .ToList();
-
-    var datosTecnicos = necesidades
-        .Where(PendienteDatosTecnicos)
-        .OrderBy(x => ClienteNombre(x))
-        .ThenBy(x => ParteClave(x))
-        .ThenBy(x => x.FechaRequerida)
-        .ToList();
-
-    var resueltos = necesidades
-        .Where(CubiertoOProgramado)
-        .OrderBy(x => ClienteNombre(x))
-        .ThenBy(x => ParteClave(x))
-        .ThenBy(x => x.FechaRequerida)
-        .ToList();
-
-    var totalAProducir = necesidades.Sum(x => x.PiezasAProducir ?? 0);
-    var totalStock = necesidades.Sum(x => x.PiezasDesdePT ?? 0);
-    var totalHoras = necesidades.Sum(x => x.HorasNecesarias ?? 0);
+    var secciones = new List<SeccionUi>
+    {
+        new SeccionUi { Titulo = "Listos para Programa Cambio de Molde", Sub = "Renglones liberados para definir cambio, arranque, máquina y molde final.", Items = listos, Open = true, Icono = "fa-circle-check", Clase = "sec-ok" },
+        new SeccionUi { Titulo = "Pendientes de abastecimiento", Sub = "Tienen datos técnicos completos, pero falta MP o embalaje.", Items = abasto, Open = false, Icono = "fa-truck-ramp-box", Clase = "sec-warn" },
+        new SeccionUi { Titulo = "Pendientes de datos técnicos", Sub = "Falta molde, material, cavidades, ciclo, máquina, objetivo/hra o peso bruto.", Items = datosTecnicos, Open = false, Icono = "fa-screwdriver-wrench", Clase = "sec-danger" },
+        new SeccionUi { Titulo = "Cubiertas o ya programadas", Sub = "Renglones ya cubiertos con stock o ya enviados a máquinas.", Items = resueltos, Open = false, Icono = "fa-box-check", Clase = "sec-muted" }
+    };
 }
 
 <!DOCTYPE html>
@@ -256,7 +169,6 @@
     <meta charset="utf-8" />
     <title>Programa de Planeación</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
 
@@ -264,8 +176,7 @@
         :root {
             --azul: #0b4ea2;
             --azul2: #063a78;
-            --fondo: #f3f6fb;
-            --card: #ffffff;
+            --azul-soft: #eef6ff;
             --linea: #d9e3f1;
             --texto: #1f2937;
             --muted: #667085;
@@ -276,48 +187,53 @@
             --danger: #b42318;
             --danger-bg: #fff1f0;
             --gray-bg: #f4f5f7;
-            --shadow: 0 16px 36px rgba(15, 23, 42, .08);
+            --shadow: 0 16px 36px rgba(15,23,42,.08);
+            --shadow-soft: 0 8px 22px rgba(15,23,42,.05)
+        }
+
+        * {
+            box-sizing: border-box
         }
 
         body {
             margin: 0;
-            background: radial-gradient(circle at 0% 0%, rgba(11, 78, 162, .10), transparent 32%), linear-gradient(180deg, #f8fbff 0%, #edf2f8 100%);
-            font-family: "Segoe UI", Arial, sans-serif;
-            color: var(--texto);
+            background: radial-gradient(circle at 0% 0%,rgba(11,78,162,.10),transparent 32%),linear-gradient(180deg,#f8fbff 0%,#edf2f8 100%);
+            font-family: "Segoe UI",Arial,sans-serif;
+            color: var(--texto)
         }
 
         .page {
-            max-width: 1720px;
+            max-width: 1760px;
             margin: 0 auto;
-            padding: 24px;
+            padding: 24px
         }
 
         .hero {
-            border-radius: 26px;
-            padding: 28px 30px;
-            margin-bottom: 20px;
+            border-radius: 28px;
+            padding: 30px;
+            margin-bottom: 18px;
             color: #fff;
-            background: linear-gradient(135deg, var(--azul), var(--azul2));
-            box-shadow: var(--shadow);
+            background: linear-gradient(135deg,rgba(11,78,162,.98),rgba(6,58,120,.98));
+            box-shadow: var(--shadow)
         }
 
             .hero h1 {
                 margin: 0 0 8px 0;
                 font-size: 2rem;
-                font-weight: 900;
+                font-weight: 950
             }
 
             .hero p {
                 margin: 0;
                 opacity: .92;
-                max-width: 1050px;
+                max-width: 1120px
             }
 
         .hero-actions {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
-            margin-top: 16px;
+            margin-top: 16px
         }
 
         .btn-glass {
@@ -327,97 +243,123 @@
             background: rgba(255,255,255,.13);
             border-radius: 14px;
             padding: 9px 14px;
-            font-weight: 800;
+            font-weight: 850;
+            display: inline-flex;
+            gap: 8px;
+            align-items: center
         }
 
             .btn-glass:hover {
                 color: var(--azul);
-                background: #fff;
-            }
-
-        .kpis {
-            display: grid;
-            grid-template-columns: repeat(6, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 18px;
-        }
-
-        .kpi {
-            background: var(--card);
-            border: 1px solid var(--linea);
-            border-radius: 18px;
-            padding: 15px;
-            box-shadow: 0 8px 22px rgba(15,23,42,.05);
-        }
-
-            .kpi .label {
-                color: var(--muted);
-                font-size: .76rem;
-                font-weight: 900;
-                text-transform: uppercase;
-                letter-spacing: .04em;
-            }
-
-            .kpi .value {
-                margin-top: 5px;
-                font-size: 1.55rem;
-                font-weight: 950;
-                color: var(--azul2);
+                background: #fff
             }
 
         .filter-card {
-            background: #fff;
+            background: rgba(255,255,255,.94);
             border: 1px solid var(--linea);
-            border-radius: 22px;
+            border-radius: 24px;
             padding: 18px;
             margin-bottom: 18px;
-            box-shadow: 0 8px 22px rgba(15,23,42,.05);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(14px)
         }
 
         .form-label {
             color: var(--muted);
             font-size: .78rem;
-            font-weight: 900;
+            font-weight: 950;
             text-transform: uppercase;
+            letter-spacing: .04em
         }
 
-        .form-control,
-        .form-select {
-            border-radius: 13px;
+        .form-control, .form-select {
+            border-radius: 14px;
             border: 1px solid var(--linea);
             padding: 10px 12px;
+            min-height: 45px
         }
 
         .btn-main {
             border: none;
-            border-radius: 13px;
+            border-radius: 14px;
             padding: 10px 14px;
+            min-height: 45px;
             color: #fff;
-            background: linear-gradient(135deg, var(--azul), var(--azul2));
+            background: linear-gradient(135deg,var(--azul),var(--azul2));
             font-weight: 900;
             text-decoration: none;
             display: inline-flex;
             gap: 8px;
             align-items: center;
-            justify-content: center;
+            justify-content: center
         }
 
             .btn-main:hover {
                 color: #fff;
-                opacity: .95;
+                opacity: .96
             }
+
+        .quick-btn {
+            border-radius: 999px;
+            padding: 9px 13px;
+            border: 1px solid var(--linea);
+            background: #fff;
+            font-size: .83rem;
+            font-weight: 950;
+            text-decoration: none;
+            color: var(--azul2);
+            display: inline-flex;
+            align-items: center;
+            gap: 7px
+        }
+
+            .quick-btn:hover {
+                border-color: rgba(11,78,162,.35);
+                background: var(--azul-soft);
+                color: var(--azul)
+            }
+
+        .quick-ok {
+            color: var(--ok);
+            border-color: #bcebd3;
+            background: var(--ok-bg)
+        }
+
+        .quick-warn {
+            color: var(--warn);
+            border-color: #f2d59a;
+            background: var(--warn-bg)
+        }
+
+        .quick-danger {
+            color: var(--danger);
+            border-color: #f3b8b3;
+            background: var(--danger-bg)
+        }
 
         .section {
             background: #fff;
             border: 1px solid var(--linea);
-            border-radius: 24px;
+            border-radius: 26px;
             overflow: hidden;
-            box-shadow: var(--shadow);
-            margin-bottom: 20px;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 18px
         }
 
+            .section.sec-ok {
+                border-color: #bcebd3
+            }
+
+            .section.sec-warn {
+                border-color: #f2d59a
+            }
+
+            .section.sec-danger {
+                border-color: #f3b8b3
+            }
+
         .section-head {
-            padding: 17px 20px;
+            padding: 18px 20px;
             border-bottom: 1px solid #edf1f7;
             display: flex;
             justify-content: space-between;
@@ -425,7 +367,7 @@
             align-items: center;
             flex-wrap: wrap;
             cursor: pointer;
-            background: linear-gradient(180deg, #fff, #f8fbff);
+            background: linear-gradient(180deg,#fff,#f8fbff)
         }
 
         .section-title {
@@ -433,494 +375,662 @@
             font-size: 1.12rem;
             font-weight: 950;
             color: var(--azul2);
+            display: flex;
+            align-items: center;
+            gap: 9px
+        }
+
+        .section-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 14px;
+            background: var(--azul-soft);
+            color: var(--azul);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center
         }
 
         .section-sub {
-            margin-top: 3px;
+            margin-top: 4px;
             color: var(--muted);
-            font-size: .9rem;
+            font-size: .9rem
         }
 
-        .count-pill {
+        .section-body {
+            padding: 16px
+        }
+
+        .count-pill, .summary-pill {
             border-radius: 999px;
-            padding: 8px 12px;
-            font-size: .86rem;
-            font-weight: 900;
+            padding: 7px 11px;
+            font-size: .78rem;
+            font-weight: 950;
             background: #eef4ff;
             color: var(--azul);
             border: 1px solid #cfe0ff;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px
         }
 
-        .client-box {
-            margin: 14px 16px;
+        .summary-pill {
+            background: #fff;
+            color: #344054;
+            border-color: var(--linea)
+        }
+
+        .client-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill,minmax(330px,1fr));
+            gap: 12px;
+        }
+
+        .client-panel {
             border: 1px solid var(--linea);
-            border-radius: 18px;
+            background: linear-gradient(180deg,#ffffff,#fbfdff);
+            border-radius: 24px;
+            box-shadow: 0 8px 22px rgba(15,23,42,.045);
             overflow: hidden;
-            background: #fbfdff;
         }
 
-        .client-head {
-            background: linear-gradient(180deg, #fff, #f7faff);
-            padding: 14px 16px;
-            border-bottom: 1px solid #edf1f7;
+        .client-panel-head {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            padding: 16px;
+            text-align: left;
             display: flex;
             justify-content: space-between;
+            align-items: flex-start;
             gap: 12px;
-            align-items: center;
-            flex-wrap: wrap;
             cursor: pointer;
         }
 
-        .client-title {
-            margin: 0;
-            font-size: 1.02rem;
+            .client-panel-head:hover {
+                background: #f6faff;
+            }
+
+        .client-name {
+            color: #102a52;
+            font-size: 1rem;
             font-weight: 950;
+            line-height: 1.2;
         }
 
         .client-meta {
             color: var(--muted);
-            font-size: .88rem;
+            font-size: .82rem;
+            font-weight: 750;
+            margin-top: 4px;
         }
 
-        .part-box {
-            margin: 12px;
-            border: 1px solid #e4ebf5;
-            border-radius: 16px;
-            background: #fff;
-            overflow: hidden;
+        .client-priority {
+            color: var(--azul2);
+            background: var(--azul-soft);
+            border: 1px solid #cfe0ff;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: .72rem;
+            font-weight: 950;
+            white-space: nowrap;
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
         }
 
-        .part-head {
-            padding: 12px 14px;
+        .client-body {
+            border-top: 1px solid #edf1f7;
+            padding: 14px;
             background: #fbfdff;
-            border-bottom: 1px solid #edf1f7;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill,minmax(260px,1fr));
+            gap: 10px
+        }
+
+        .need-card {
+            background: #fff;
+            border: 1px solid var(--linea);
+            border-radius: 18px;
+            padding: 12px;
+            box-shadow: 0 6px 16px rgba(15,23,42,.040);
+            position: relative;
+            overflow: hidden;
+            transition: .16s ease;
+            min-height: 214px
+        }
+
+            .need-card:hover {
+                transform: translateY(-3px);
+                box-shadow: var(--shadow)
+            }
+
+            .need-card:before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 7px;
+                background: var(--azul)
+            }
+
+        .card-ok:before {
+            background: var(--ok)
+        }
+
+        .card-warn:before {
+            background: var(--warn)
+        }
+
+        .card-danger:before {
+            background: var(--danger)
+        }
+
+        .card-muted:before {
+            background: #98A2B3
+        }
+
+        .need-head {
             display: flex;
             justify-content: space-between;
-            gap: 12px;
-            align-items: center;
-            flex-wrap: wrap;
-            cursor: pointer;
+            gap: 9px;
+            align-items: flex-start;
+            margin-bottom: 10px
         }
 
-        .part-title {
+        .need-title {
+            color: #102a52;
             font-weight: 950;
-            color: #12284a;
+            font-size: .95rem;
+            line-height: 1.2
         }
 
-        .part-desc {
+        .need-sub {
             color: var(--muted);
-            font-size: .87rem;
-            margin-top: 2px;
+            font-size: .76rem;
+            font-weight: 700;
+            margin-top: 3px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden
         }
-
-        .table-wrap {
-            padding: 0;
-            overflow-x: auto;
-        }
-
-        .table-clean {
-            min-width: 1500px;
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-            .table-clean th,
-            .table-clean td {
-                border-bottom: 1px solid #edf1f7;
-                padding: 10px;
-                vertical-align: middle;
-                font-size: .86rem;
-            }
-
-            .table-clean th {
-                position: sticky;
-                top: 0;
-                z-index: 3;
-                background: #f8fbff;
-                color: #4b5563;
-                font-size: .72rem;
-                font-weight: 950;
-                text-transform: uppercase;
-                letter-spacing: .04em;
-                white-space: nowrap;
-            }
-
-            .table-clean td {
-                background: #fff;
-            }
-
-            .table-clean tr:hover td {
-                background: #f8fbff;
-            }
 
         .estado {
             border-radius: 999px;
-            padding: 6px 10px;
-            font-size: .74rem;
-            font-weight: 900;
+            padding: 5px 8px;
+            font-size: .68rem;
+            font-weight: 950;
             white-space: nowrap;
             border: 1px solid transparent;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px
         }
 
         .estado-ok {
             background: var(--ok-bg);
             color: var(--ok);
-            border-color: #bcebd3;
+            border-color: #bcebd3
         }
 
         .estado-warn {
             background: var(--warn-bg);
             color: var(--warn);
-            border-color: #f2d59a;
+            border-color: #f2d59a
         }
 
         .estado-danger {
             background: var(--danger-bg);
             color: var(--danger);
-            border-color: #f3b8b3;
+            border-color: #f3b8b3
         }
 
         .estado-muted {
             background: var(--gray-bg);
             color: #5b6472;
-            border-color: #d8dde5;
+            border-color: #d8dde5
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 7px
+        }
+
+        .data-box {
+            border: 1px solid #edf1f7;
+            background: #fbfdff;
+            border-radius: 12px;
+            padding: 8px;
+            min-width: 0
+        }
+
+        .data-label {
+            color: var(--muted);
+            font-size: .61rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            white-space: nowrap
+        }
+
+        .data-value {
+            margin-top: 2px;
+            color: #111827;
+            font-size: .84rem;
+            font-weight: 950;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap
+        }
+
+        .validation-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 10px
         }
 
         .check {
             border-radius: 999px;
-            padding: 5px 9px;
-            font-size: .74rem;
-            font-weight: 900;
+            padding: 4px 7px;
+            font-size: .64rem;
+            font-weight: 950;
             border: 1px solid transparent;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
-            margin: 2px;
-            white-space: nowrap;
+            gap: 4px;
+            white-space: nowrap
         }
 
             .check.ok {
                 background: var(--ok-bg);
                 color: var(--ok);
-                border-color: #bcebd3;
+                border-color: #bcebd3
             }
 
             .check.no {
                 background: var(--danger-bg);
                 color: var(--danger);
-                border-color: #f3b8b3;
+                border-color: #f3b8b3
             }
 
         .msg {
-            min-width: 220px;
             color: #35517a;
-            font-size: .84rem;
+            font-size: .74rem;
             font-weight: 650;
+            margin-top: 8px;
+            min-height: 18px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
         }
 
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #edf1f7
+        }
+
+        .btn-card-main, .btn-card-light {
+            border-radius: 12px;
+            padding: 8px 10px;
+            font-size: .78rem;
+            font-weight: 950;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        .btn-card-main {
+            border: none;
+            color: #fff;
+            background: linear-gradient(135deg,var(--azul),var(--azul2))
+        }
+
+            .btn-card-main:hover {
+                color: #fff;
+                opacity: .96
+            }
+
+        .btn-card-light {
+            border: 1px solid var(--linea);
+            color: var(--azul2);
+            background: #fff
+        }
+
+            .btn-card-light:hover {
+                background: var(--azul-soft);
+                color: var(--azul)
+            }
+
         .empty {
-            margin: 16px;
-            padding: 28px 16px;
+            padding: 34px 18px;
             text-align: center;
             color: var(--muted);
             border: 1px dashed var(--linea);
-            border-radius: 18px;
+            border-radius: 20px;
             background: #fbfdff;
-            font-weight: 750;
+            font-weight: 800
         }
 
         .chev {
             transition: transform .18s ease;
-            color: var(--azul);
+            color: var(--azul)
         }
 
         [aria-expanded="true"] .chev {
-            transform: rotate(90deg);
-        }
-
-        .small-link {
-            color: var(--azul);
-            font-weight: 900;
-            text-decoration: none;
-            white-space: nowrap;
-        }
-
-            .small-link:hover {
-                text-decoration: underline;
-            }
-
-
-        .section-body {
-            padding: 14px;
-        }
-
-        .section-head:hover, .client-head:hover, .part-head:hover {
-            background: linear-gradient(180deg, #ffffff, #eef6ff);
-        }
-
-        .client-box {
-            margin: 10px 0;
-            box-shadow: 0 8px 20px rgba(15, 23, 42, .035);
-        }
-
-        .client-head {
-            min-height: 76px;
-        }
-
-        .part-box {
-            margin: 10px 0;
-            box-shadow: 0 6px 16px rgba(15, 23, 42, .03);
-        }
-
-        .part-head {
-            min-height: 68px;
-        }
-
-        .summary-pills {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 8px;
-        }
-
-        .summary-pill {
-            border: 1px solid var(--linea);
-            background: #fff;
-            border-radius: 999px;
-            padding: 7px 10px;
-            font-size: .78rem;
-            font-weight: 950;
-            color: #334155;
-            white-space: nowrap;
-        }
-
-        .table-wrap {
-            max-height: 460px;
-            border-top: 1px solid #edf1f7;
-            background: #fff;
-        }
-
-        .table-clean {
-            min-width: 1680px;
-        }
-
-            .table-clean th, .table-clean td {
-                padding: 8px 9px;
-                font-size: .80rem;
-            }
-
-            .table-clean th {
-                top: 0;
-                box-shadow: 0 1px 0 #edf1f7;
-            }
-
-        .estado {
-            padding: 5px 9px;
-            font-size: .70rem;
-        }
-
-        .check {
-            padding: 4px 7px;
-            font-size: .68rem;
-        }
-
-        .msg {
-            max-width: 260px;
+            transform: rotate(90deg)
         }
 
         .hidden-by-search {
-            display: none !important;
+            display: none !important
         }
 
-        @@media (max-width: 1200px) {
-            .kpis {
-                grid-template-columns: repeat(3, 1fr);
+        .compact-priority {
+            font-size: .68rem;
+            color: var(--muted);
+            font-weight: 850;
+            margin-top: 3px
+        }
+
+        .mini-metrics {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 6px;
+            margin-top: 9px
+        }
+
+        .mini-metric {
+            border: 1px solid #edf1f7;
+            background: #fbfdff;
+            border-radius: 12px;
+            padding: 7px;
+            min-width: 0
+        }
+
+        .mini-metric-label {
+            color: var(--muted);
+            font-size: .58rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .mini-metric-value {
+            color: #111827;
+            font-size: .84rem;
+            font-weight: 950;
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap
+        }
+
+        .compact-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px
+        }
+
+        .compact-chip {
+            border: 1px solid var(--linea);
+            background: white;
+            color: #344054;
+            border-radius: 999px;
+            padding: 4px 7px;
+            font-size: .66rem;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px
+        }
+
+        .modal-content {
+            border-radius: 26px;
+            border: none;
+            box-shadow: var(--shadow)
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg,var(--azul),var(--azul2));
+            color: #fff;
+            border-radius: 26px 26px 0 0;
+            border-bottom: none;
+            padding: 22px 24px
+        }
+
+        .modal-title {
+            font-weight: 950
+        }
+
+        .modal-body {
+            padding: 22px 24px
+        }
+
+        .modal-summary {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 10px
+        }
+
+        .modal-box {
+            border: 1px solid var(--linea);
+            border-radius: 16px;
+            background: #fbfdff;
+            padding: 11px
+        }
+
+        .modal-label {
+            color: var(--muted);
+            font-size: .70rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .modal-value {
+            color: var(--texto);
+            font-weight: 950;
+            margin-top: 3px
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 18px;
+            z-index: 20;
+            margin-top: 20px;
+            background: rgba(255,255,255,.92);
+            border: 1px solid var(--linea);
+            backdrop-filter: blur(14px);
+            border-radius: 22px;
+            padding: 12px;
+            box-shadow: var(--shadow)
+        }
+
+        body.client-focus {
+            overflow: hidden;
+        }
+
+            body.client-focus .hero,
+            body.client-focus .filter-card,
+            body.client-focus .sticky-actions,
+            body.client-focus .section:not(.has-focus),
+            body.client-focus .section.has-focus > .section-head {
+                display: none !important;
+            }
+
+            body.client-focus .page {
+                max-width: none;
+                padding: 0;
+            }
+
+            body.client-focus .section.has-focus {
+                border: none;
+                box-shadow: none;
+                margin: 0;
+                border-radius: 0;
+                background: transparent;
+            }
+
+                body.client-focus .section.has-focus > .collapse,
+                body.client-focus .section.has-focus > .collapse > .section-body,
+                body.client-focus .section.has-focus .client-grid {
+                    display: block !important;
+                    padding: 0;
+                }
+
+            body.client-focus .client-panel:not(.is-fullscreen) {
+                display: none !important;
+            }
+
+        .client-panel.is-fullscreen {
+            position: fixed;
+            inset: 10px;
+            z-index: 1020;
+            display: flex !important;
+            flex-direction: column;
+            background: #ffffff;
+            border: 1px solid #cfe0ff;
+            border-radius: 26px;
+            box-shadow: 0 26px 70px rgba(15,23,42,.22);
+            overflow: hidden;
+        }
+
+            .client-panel.is-fullscreen .client-panel-head {
+                flex: 0 0 auto;
+                background: linear-gradient(135deg,#ffffff,#f6faff);
+                border-bottom: 1px solid #e6eef9;
+                padding: 18px 20px;
+            }
+
+            .client-panel.is-fullscreen .client-name {
+                font-size: 1.18rem;
+            }
+
+            .client-panel.is-fullscreen .client-meta {
+                font-size: .88rem;
+            }
+
+            .client-panel.is-fullscreen .client-priority::after {
+                content: " · Clic en el encabezado para cerrar";
+            }
+
+            .client-panel.is-fullscreen .collapse {
+                display: block !important;
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow: hidden;
+            }
+
+            .client-panel.is-fullscreen .client-body {
+                height: 100%;
+                overflow: auto;
+                padding: 16px;
+                background: linear-gradient(180deg,#fbfdff,#f3f7fc);
+            }
+
+            .client-panel.is-fullscreen .cards-grid {
+                grid-template-columns: repeat(auto-fill,minmax(230px,1fr));
+                gap: 10px;
+                align-content: start;
+                padding-bottom: 24px;
+            }
+
+            .client-panel.is-fullscreen .need-card {
+                min-height: 198px;
+            }
+
+            .client-panel.is-fullscreen .modal {
+                z-index: 1080;
+            }
+
+                .client-panel.is-fullscreen .modal.show {
+                    display: block;
+                }
+
+        @@media(max-width:1200px) {
+            .cards-grid {
+                grid-template-columns: repeat(auto-fill,minmax(250px,1fr))
             }
         }
 
-        @@media (max-width: 700px) {
+        @@media(max-width:700px) {
             .page {
-                padding: 14px;
+                padding: 14px
             }
 
-            .kpis {
-                grid-template-columns: 1fr;
+            .hero {
+                padding: 24px
             }
-        }</style>
+
+            .cards-grid {
+                grid-template-columns: 1fr
+            }
+
+            .data-grid, .modal-summary {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+        }
+    </style>
 </head>
-
 <body>
     <div class="page">
-
         <section class="hero">
-            <h1>
-                <i class="fa-solid fa-list-check me-2"></i>
-                Programa de Planeación
-            </h1>
-            <p>
-                Vista compacta por sección, cliente y parte. Solo se despliega el detalle cuando el usuario lo necesita,
-                evitando tablas enormes abiertas desde el inicio.
-            </p>
-
+            <h1><i class="fa-solid fa-list-check me-2"></i>Programa de Planeación</h1>
+            <p>Vista por tarjetas: cada necesidad se revisa rápido, y el envío a Programa Cambio de Molde se confirma en modal antes de continuar.</p>
             <div class="hero-actions">
-                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn-glass">
-                    <i class="fa-solid fa-inbox"></i>
-                    Releases
-                </a>
-                <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-glass">
-                    <i class="fa-solid fa-gears"></i>
-                    Máquinas / Cambio de Molde
-                </a>
-                <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass">
-                    <i class="fa-solid fa-chart-line"></i>
-                    Panorama
-                </a>
+                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn-glass"><i class="fa-solid fa-inbox"></i>Releases</a>
+                <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-glass"><i class="fa-solid fa-gears"></i>Máquinas / Cambio de Molde</a>
+                <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass"><i class="fa-solid fa-chart-line"></i>Panorama</a>
             </div>
         </section>
 
         @if (TempData["Success"] != null)
         {
-            <div class="alert alert-success rounded-4 fw-semibold">
-                <i class="fa-solid fa-circle-check me-2"></i>
-                @TempData["Success"]
-            </div>
+            <div class="alert alert-success rounded-4 fw-semibold"><i class="fa-solid fa-circle-check me-2"></i>@TempData["Success"]</div>
         }
-
         @if (TempData["Error"] != null)
         {
-            <div class="alert alert-danger rounded-4 fw-semibold">
-                <i class="fa-solid fa-triangle-exclamation me-2"></i>
-                @TempData["Error"]
-            </div>
+            <div class="alert alert-danger rounded-4 fw-semibold"><i class="fa-solid fa-triangle-exclamation me-2"></i>@TempData["Error"]</div>
         }
 
         <section class="filter-card">
             <form asp-controller="PlaneacionPrograma" asp-action="Index" method="get">
                 <div class="row g-3 align-items-end">
-                    <div class="col-xl-3 col-md-6">
-                        <label class="form-label">Cliente</label>
-                        <select asp-for="ClienteID" asp-items="Model.Clientes" class="form-select">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-
-                    <div class="col-xl-3 col-md-6">
-                        <label class="form-label">Parte</label>
-                        <select asp-for="ParteID" asp-items="Model.Partes" class="form-select">
-                            <option value="">Todas</option>
-                        </select>
-                    </div>
-
-                    <div class="col-xl-2 col-md-6">
-                        <label class="form-label">Desde</label>
-                        <input asp-for="FechaDesde" type="date" class="form-control" />
-                    </div>
-
-                    <div class="col-xl-2 col-md-6">
-                        <label class="form-label">Hasta</label>
-                        <input asp-for="FechaHasta" type="date" class="form-control" />
-                    </div>
-
-                    <div class="col-xl-2 col-md-12">
-                        <button type="submit" class="btn-main w-100">
-                            <i class="fa-solid fa-magnifying-glass"></i>
-                            Consultar
-                        </button>
-                    </div>
+                    <div class="col-xl-3 col-md-6"><label class="form-label">Cliente</label><select asp-for="ClienteID" asp-items="Model.Clientes" class="form-select"><option value="">Todos</option></select></div>
+                    <div class="col-xl-3 col-md-6"><label class="form-label">Parte</label><select asp-for="ParteID" asp-items="Model.Partes" class="form-select"><option value="">Todas</option></select></div>
+                    <div class="col-xl-2 col-md-6"><label class="form-label">Desde</label><input asp-for="FechaDesde" type="date" class="form-control" /></div>
+                    <div class="col-xl-2 col-md-6"><label class="form-label">Hasta</label><input asp-for="FechaHasta" type="date" class="form-control" /></div>
+                    <div class="col-xl-2 col-md-12"><button type="submit" class="btn-main w-100"><i class="fa-solid fa-magnifying-glass"></i>Consultar</button></div>
 
                     <div class="col-12 d-flex gap-2 flex-wrap">
-                        <a class="btn btn-outline-primary rounded-3 fw-bold"
-                           asp-controller="PlaneacionPrograma"
-                           asp-action="Index"
-                           asp-route-soloListos="true">
-                            Listos para Cambio de Molde
-                        </a>
-
-                        <a class="btn btn-outline-warning rounded-3 fw-bold"
-                           asp-controller="PlaneacionPrograma"
-                           asp-action="Index"
-                           asp-route-soloPendienteAbasto="true">
-                            Pendiente abasto
-                        </a>
-
-                        <a class="btn btn-outline-danger rounded-3 fw-bold"
-                           asp-controller="PlaneacionPrograma"
-                           asp-action="Index"
-                           asp-route-soloPendienteDatosTecnicos="true">
-                            Pendiente datos técnicos
-                        </a>
-
-                        <a class="btn btn-outline-secondary rounded-3 fw-bold"
-                           asp-controller="PlaneacionPrograma"
-                           asp-action="Index">
-                            Limpiar
-                        </a>
-
-                       
-
-                        <button type="button"
-                                class="btn btn-outline-dark rounded-3 fw-bold"
-                                id="btnCerrarTodo">
-                            <i class="fa-solid fa-down-left-and-up-right-to-center me-1"></i>
-                            Cerrar todo
-                        </button>
+                        <a class="quick-btn quick-ok" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloListos="true"><i class="fa-solid fa-circle-check"></i>Listos cambio molde</a>
+                        <a class="quick-btn quick-warn" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloPendienteAbasto="true"><i class="fa-solid fa-truck-ramp-box"></i>Pendiente abasto</a>
+                        <a class="quick-btn quick-danger" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloPendienteDatosTecnicos="true"><i class="fa-solid fa-screwdriver-wrench"></i>Pendiente datos técnicos</a>
+                        <a class="quick-btn" asp-controller="PlaneacionPrograma" asp-action="Index"><i class="fa-solid fa-rotate-left"></i>Limpiar</a>
+                        <button type="button" class="quick-btn" id="btnCerrarTodo"><i class="fa-solid fa-down-left-and-up-right-to-center"></i>Cerrar todo</button>
                     </div>
 
-                    <div class="col-12">
-                        <label class="form-label">Buscar en pantalla</label>
-                        <input id="txtBuscarPantalla"
-                               type="search"
-                               class="form-control"
-                               placeholder="Buscar cliente, parte, release, molde, máquina, material..." />
-                    </div>
+                    <div class="col-12"><label class="form-label">Buscar en pantalla</label><input id="txtBuscarPantalla" type="search" class="form-control" placeholder="Buscar cliente, parte, release, molde, máquina, material..." /></div>
                 </div>
             </form>
         </section>
 
-        <section class="kpis">
-            <div class="kpi">
-                <div class="label">Listos cambio molde</div>
-                <div class="value">@listos.Count.ToString("N0")</div>
-            </div>
-
-            <div class="kpi">
-                <div class="label">Pendiente abasto</div>
-                <div class="value">@abasto.Count.ToString("N0")</div>
-            </div>
-
-            <div class="kpi">
-                <div class="label">Pendiente datos técnicos</div>
-                <div class="value">@datosTecnicos.Count.ToString("N0")</div>
-            </div>
-            @*
-            <div class="kpi">
-                <div class="label">A producir</div>
-                <div class="value">@totalAProducir.ToString("N0")</div>
-            </div>*@
-
-            <div class="kpi">
-                <div class="label">Stock usado</div>
-                <div class="value">@totalStock.ToString("N0")</div>
-            </div>
-
-            <div class="kpi">
-                <div class="label">Horas prog.</div>
-                <div class="value">@totalHoras.ToString("N2")</div>
-            </div>
-        </section>
-
         @{
-            var secciones = new List<dynamic>
-                {
-                new { Titulo = "1. Listas para Programa Cambio de Molde", Sub = "Renglones con producción pendiente y datos suficientes para pasar al siguiente paso.", Items = listos, Id = "listos", Open = true },
-                new { Titulo = "2. Pendientes de abastecimiento", Sub = "Tienen datos técnicos, pero no pasan porque falta MP o embalaje.", Items = abasto, Id = "abasto", Open = false },
-                new { Titulo = "3. Pendientes de datos técnicos", Sub = "Falta molde, material, cavidades, ciclo, máquina, objetivo/hra o peso bruto.", Items = datosTecnicos, Id = "datos", Open = false },
-                new { Titulo = "4. Cubiertas o ya programadas", Sub = "Consulta de renglones que no requieren acción inmediata.", Items = resueltos, Id = "resueltos", Open = false }
-                };
-
             var sectionIndex = 0;
         }
 
@@ -928,254 +1038,282 @@
         {
             sectionIndex++;
             var sectionCollapseId = CollapseId("sec", sectionIndex);
-            List<PlaneacionProgramaNecesidadVm> items = sec.Items;
-            bool sectionOpen = sec.Open;
+            var items = sec.Items;
+            var sectionOpen = sec.Open;
 
-            <section class="section" data-section>
-                <div class="section-head"
-                     data-bs-toggle="collapse"
-                     data-bs-target="#@sectionCollapseId"
-                     aria-expanded="@(sectionOpen ? "true" : "false")"
-                     aria-controls="@sectionCollapseId">
+            <section class="section @sec.Clase" data-section data-search="@string.Join(" ", items.Select(DataSearch))">
+                <div class="section-head" data-bs-toggle="collapse" data-bs-target="#@sectionCollapseId" aria-expanded="@(sectionOpen ? "true" : "false")" aria-controls="@sectionCollapseId">
                     <div>
-                        <h2 class="section-title">
-                            <i class="fa-solid fa-chevron-right chev me-2"></i>
-                            @sec.Titulo
-                        </h2>
+                        <h2 class="section-title"><span class="section-icon"><i class="fa-solid @sec.Icono"></i></span><span>@sec.Titulo</span><i class="fa-solid fa-chevron-right chev"></i></h2>
                         <div class="section-sub">@sec.Sub</div>
                     </div>
-
-                    <div class="count-pill">@items.Count.ToString("N0") registro(s)</div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="count-pill">@items.Count.ToString("N0") registro(s)</span>
+                        <span class="summary-pill">@items.Sum(x => x.CantidadRequerida).ToString("N0") requerido</span>
+                        <span class="summary-pill">@items.Sum(x => x.ProduccionProgramadaPendiente ?? 0).ToString("N0") programado</span>
+                        <span class="summary-pill">@items.Sum(x => x.HorasNecesarias ?? 0).ToString("N2") hrs</span>
+                    </div>
                 </div>
 
                 <div id="@sectionCollapseId" class="collapse @(sectionOpen ? "show" : "")" data-collapse-level="section">
-                    @if (!items.Any())
-                    {
-                        <div class="empty">No hay registros en esta sección.</div>
-                    }
-                    else
-                    {
-                        var clientIndex = 0;
-
-                        foreach (var cliente in items.GroupBy(ClienteNombre).OrderBy(x => x.Key))
+                    <div class="section-body">
+                        @if (!items.Any())
                         {
-                            clientIndex++;
-                            var clienteCollapseId = CollapseId("cli", sectionIndex, clientIndex);
-                            var clienteItems = cliente.ToList();
-                            var clienteAProducir = clienteItems.Sum(x => x.PiezasAProducir ?? 0);
-                            var clienteHoras = clienteItems.Sum(x => x.HorasNecesarias ?? 0);
+                            <div class="empty"><i class="fa-regular fa-folder-open fa-2x mb-2"></i><div>No hay registros en esta sección.</div></div>
+                        }
+                        else
+                        {
+                            var clientesOrdenados = items
+                            .GroupBy(ClienteNombre)
+                            .Select(g => new
+                            {
+                                Cliente = g.Key,
+                                Items = g.OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList(),
+                                FechaPrioridad = g.Min(PrioridadFecha),
+                                EntradaPrioridad = g.Min(PrioridadEntrada)
+                            })
+                            .OrderBy(g => g.FechaPrioridad)
+                            .ThenBy(g => g.EntradaPrioridad)
+                            .ThenBy(g => g.Cliente)
+                            .ToList();
 
-                            <div class="client-box" data-client data-search='@cliente.Key @string.Join(" ", clienteItems.Select(DataSearch))'>
-                                <div class="client-head"
-                                     data-bs-toggle="collapse"
-                                     data-bs-target="#@clienteCollapseId"
-                                     aria-expanded="true"
-                                     aria-controls="@clienteCollapseId">
-                                    <div>
-                                        <h3 class="client-title">
-                                            <i class="fa-solid fa-chevron-right chev me-2"></i>
-                                            @cliente.Key
-                                        </h3>
-                                        <div class="client-meta">
-                                            @clienteItems.Count.ToString("N0") registro(s) ·
-                                            @clienteItems.Select(ParteClave).Distinct().Count().ToString("N0") parte(s)
-                                        </div>
-                                    </div>
+                            <div class="client-grid">
+                                @{
+                                    var clientIndex = 0;
+                                }
 
-                                    <div class="summary-pills">
-                                        <span class="summary-pill">@clienteAProducir.ToString("N0") a producir</span>
-                                        <span class="summary-pill">@clienteHoras.ToString("N2") hrs</span>
-                                        <span class="count-pill">
-                                            <i class="fa-solid fa-chevron-right chev me-1"></i>
-                                            Abrir cliente
-                                        </span>
-                                    </div>
-                                </div>
+                                @foreach (var clienteGrupo in clientesOrdenados)
+                                {
+                                    clientIndex++;
+                                    var clienteCollapseId = "cliente_" + sectionIndex.ToString() + "_" + clientIndex.ToString();
+                                    var clienteItems = clienteGrupo.Items;
+                                    var primerItemCliente = clienteItems.First();
+                                    var partesCliente = clienteItems.Select(ParteClave).Distinct().Count();
 
-                                <div id="@clienteCollapseId" class="collapse" data-collapse-level="client">
-                                    @{
-                                        var parteIndex = 0;
-                                    }
-
-                                    @foreach (var parte in clienteItems.GroupBy(ParteClave).OrderBy(x => x.Key))
-                                    {
-                                        parteIndex++;
-                                        var parteCollapseId = CollapseId("parte", sectionIndex, clientIndex, parteIndex);
-                                        var parteItems = parte.ToList();
-                                        var primera = parteItems.FirstOrDefault();
-                                        var parteAProducir = parteItems.Sum(x => x.PiezasAProducir ?? 0);
-                                        var parteHoras = parteItems.Sum(x => x.HorasNecesarias ?? 0);
-
-                                        <div class="part-box" data-part data-search='@parte.Key @string.Join(" ", parteItems.Select(DataSearch))'>
-                                            <div class="part-head"
-                                                 data-bs-toggle="collapse"
-                                                 data-bs-target="#@parteCollapseId"
-                                                 aria-expanded="true"
-                                                 aria-controls="@parteCollapseId">
-                                                <div>
-                                                    <div class="part-title">
-                                                        <i class="fa-solid fa-chevron-right chev me-2"></i>
-                                                        @parte.Key
-                                                    </div>
-                                                    <div class="part-desc">
-                                                        @Txt(primera?.DesignacionDescripcionSAP) ·
-                                                        @parteItems.Count.ToString("N0") entrega(s)
-                                                    </div>
+                                    <article class="client-panel" data-client data-search="@clienteGrupo.Cliente @string.Join(" ", clienteItems.Select(DataSearch))">
+                                        <button type="button"
+                                                class="client-panel-head"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#@clienteCollapseId"
+                                                aria-expanded="false"
+                                                aria-controls="@clienteCollapseId">
+                                            <div>
+                                                <div class="client-name">
+                                                    <i class="fa-solid fa-chevron-right chev me-2"></i>
+                                                    @clienteGrupo.Cliente
                                                 </div>
-
-                                                <div class="summary-pills">
-                                                    <span class="summary-pill">@parteAProducir.ToString("N0") a producir</span>
-                                                    <span class="summary-pill">@parteHoras.ToString("N2") hrs</span>
-                                                    <span class="summary-pill">
-                                                        <i class="fa-solid fa-industry me-1"></i>
-                                                        @Txt(primera?.MaquinaSugeridaCodigo)
-                                                    </span>
-                                                    <span class="summary-pill">
-                                                        <i class="fa-solid fa-shapes me-1"></i>
-                                                        @Txt(primera?.MoldeCodigo)
-                                                    </span>
-                                                    <span class="count-pill">
-                                                        <i class="fa-solid fa-chevron-right chev me-1"></i>
-                                                        Abrir parte
-                                                    </span>
+                                                <div class="client-meta">
+                                                    @clienteItems.Count.ToString("N0") registro(s) ·
+                                                    @partesCliente.ToString("N0") parte(s) ·
+                                                    @clienteItems.Sum(x => x.CantidadRequerida).ToString("N0") requerido ·
+                                                    @clienteItems.Sum(x => x.ProduccionProgramadaPendiente ?? 0).ToString("N0") programado
                                                 </div>
                                             </div>
 
-                                            <div id="@parteCollapseId" class="collapse" data-collapse-level="part">
-                                                <div class="table-wrap">
-                                                    <table class="table-clean">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>Estado</th>
-                                                                <th>Release</th>
-                                                                <th>Fecha requerida</th>
-                                                                <th>Requerido</th>
-                                                                <th>Stock</th>
-                                                                <th>Programado</th>
-                                                              
-                                                                <th>Molde</th>
-                                                                <th>Material / Resina</th>
-                                                                <th>Cavidades</th>
-                                                                <th>Ciclo</th>
-                                                                <th>Máquina</th>
-                                                                <th>Horas prog.</th>
-                                                                <th>Qty día</th>
-                                                                <th>Peso bruto</th>
-                                                                <th>Obj/Hra</th>
-                                                                <th>MP disp./req.</th>
-                                                                <th>Emb. disp./req.</th>
-                                                                <th>Validación</th>
-                                                                <th>Observación</th>
-                                                                <th>Acción</th>
-                                                            </tr>
-                                                        </thead>
+                                            <span class="client-priority">
+                                                <i class="fa-solid fa-arrow-up-short-wide"></i>
+                                                @PrioridadTexto(primerItemCliente)
+                                            </span>
+                                        </button>
 
-                                                        <tbody>
-                                                            @foreach (var item in parteItems)
-                                                            {
-                                                                <tr data-row data-search="@DataSearch(item)">
-                                                                    <td>
-                                                                        <span class="estado @EstadoClase(item)">
-                                                                            @EstadoTexto(item)
-                                                                        </span>
-                                                                    </td>
+                                        <div id="@clienteCollapseId" class="collapse" data-collapse-level="client">
+                                            <div class="client-body">
+                                                <div class="cards-grid">
+                                                    @foreach (var item in clienteItems)
+                                                    {
+                                                        var modalId = ModalId(item);
 
-                                                                    <td>@Txt(item.FolioRelease)</td>
-                                                                    <td>@F(item.FechaRequerida)</td>
-                                                                    <td>@item.CantidadRequerida.ToString("N0")</td>
-                                                                    <td>@N0(item.PiezasDesdePT)</td>
-                                                                    <td>@N0(item.ProduccionProgramadaPendiente)</td>
-                                                                   
-                                                                    <td>@Txt(item.MoldeCodigo)</td>
-                                                                    <td>
-                                                                        <strong>@Txt(item.MaterialCodigo)</strong><br />
-                                                                        <span class="text-muted">@Txt(item.MaterialDescripcion)</span>
-                                                                    </td>
-                                                                    <td>@N0(item.Cavidades)</td>
-                                                                    <td>@Txt(item.Ciclo)</td>
-                                                                    <td>
-                                                                        <strong>@Txt(item.MaquinaSugeridaCodigo)</strong><br />
-                                                                        <span class="text-muted">@Txt(item.MaquinaSugeridaNombre)</span>
-                                                                    </td>
-                                                                    <td>@D2(item.HorasNecesarias)</td>
-                                                                    <td>@N0(item.QtyPorDia)</td>
-                                                                    <td>@D4(item.PesoBrutoPieza)</td>
-                                                                    <td>@N0(item.ObjetivoHora)</td>
-                                                                    <td>@D4(item.MPDisponibleKg) / @D4(item.MPRequeridaKg) kg</td>
-                                                                    <td>@D2(item.EmbalajeDisponible) / @D2(item.EmbalajeRequerido)</td>
-                                                                    <td>
-                                                                        <span class="@CheckClase(StockOk(item))"><i class="fa-solid @CheckIcono(StockOk(item))"></i> Stock</span>
-                                                                        <span class="@CheckClase(MoldeOk(item))"><i class="fa-solid @CheckIcono(MoldeOk(item))"></i> Molde</span>
-                                                                        <span class="@CheckClase(MaterialOk(item))"><i class="fa-solid @CheckIcono(MaterialOk(item))"></i> Material</span>
-                                                                        <span class="@CheckClase(CavidadesOk(item))"><i class="fa-solid @CheckIcono(CavidadesOk(item))"></i> Cav.</span>
-                                                                        <span class="@CheckClase(CicloOk(item))"><i class="fa-solid @CheckIcono(CicloOk(item))"></i> Ciclo</span>
-                                                                        <span class="@CheckClase(MaquinaOk(item))"><i class="fa-solid @CheckIcono(MaquinaOk(item))"></i> Máquina</span>
-                                                                        <span class="@CheckClase(ObjetivoOk(item))"><i class="fa-solid @CheckIcono(ObjetivoOk(item))"></i> Obj</span>
-                                                                        <span class="@CheckClase(MpOk(item))"><i class="fa-solid @CheckIcono(MpOk(item))"></i> MP</span>
-                                                                        <span class="@CheckClase(EmbalajeOk(item))"><i class="fa-solid @CheckIcono(EmbalajeOk(item))"></i> Emb.</span>
-                                                                    </td>
-                                                                    <td>
-                                                                        <div class="msg">@Txt(item.MensajeCapacidad)</div>
-                                                                    </td>
-                                                                    <td>
+                                                        <article class="need-card @CardClase(item)" data-row data-search="@DataSearch(item)">
+                                                            <div class="need-head">
+                                                                <div>
+                                                                    <div class="need-title">@ParteClave(item)</div>
+                                                                    <div class="need-sub">@Txt(item.DesignacionDescripcionSAP)</div>
+                                                                    <div class="compact-priority">
+                                                                        <i class="fa-solid fa-arrow-up-short-wide me-1"></i>
+                                                                        @PrioridadTexto(item)
+                                                                    </div>
+                                                                </div>
+                                                                <span class="estado @EstadoClase(item)"><i class="fa-solid fa-circle"></i>@EstadoTexto(item)</span>
+                                                            </div>
+
+                                                            <div class="mini-metrics">
+                                                                <div class="mini-metric">
+                                                                    <div class="mini-metric-label">Fecha</div>
+                                                                    <div class="mini-metric-value">@F(item.FechaRequerida)</div>
+                                                                </div>
+                                                                <div class="mini-metric">
+                                                                    <div class="mini-metric-label">Requerido</div>
+                                                                    <div class="mini-metric-value">@item.CantidadRequerida.ToString("N0")</div>
+                                                                </div>
+                                                                <div class="mini-metric">
+                                                                    <div class="mini-metric-label">PT apartado</div>
+                                                                    <div class="mini-metric-value">@N0(item.PiezasDesdePT)</div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="compact-line">
+                                                                <span class="compact-chip"><i class="fa-solid fa-industry"></i>@Txt(item.MaquinaSugeridaCodigo)</span>
+                                                                <span class="compact-chip"><i class="fa-solid fa-shapes"></i>@Txt(item.MoldeCodigo)</span>
+                                                                <span class="compact-chip"><i class="fa-solid fa-boxes-stacked"></i>Prog. @N0(item.ProduccionProgramadaPendiente)</span>
+                                                                <span class="compact-chip"><i class="fa-solid fa-clock"></i>@D2(item.HorasNecesarias) hrs</span>
+                                                            </div>
+
+                                                            <div class="card-actions">
+                                                                <button type="button" class="btn-card-light" data-bs-toggle="modal" data-bs-target="#@modalId">
+                                                                    <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+                                                                    Abrir
+                                                                </button>
+
+                                                                @if (item.ProgramaProduccionID.HasValue)
+                                                                {
+                                                                    <a class="btn-card-main" asp-controller="PlaneacionPrograma" asp-action="Maquinas">
+                                                                        <i class="fa-solid fa-table-columns"></i>
+                                                                        Máquinas
+                                                                    </a>
+                                                                }
+                                                                else if (ListoCambioMolde(item))
+                                                                {
+                                                                    <span class="summary-pill">Listo</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="summary-pill">Revisar</span>
+                                                                }
+                                                            </div>
+                                                        </article>
+
+                                                        <div class="modal fade" id="@modalId" tabindex="-1" aria-hidden="true" data-bs-backdrop="false">
+                                                            <div class="modal-dialog modal-dialog-centered modal-lg">
+                                                                <div class="modal-content">
+                                                                    <div class="modal-header">
+                                                                        <div>
+                                                                            <h5 class="modal-title"><i class="fa-solid fa-circle-info me-2"></i>Detalle de necesidad</h5>
+                                                                            <div class="small opacity-75 mt-1">Revisa la información clave antes de programar el molde.</div>
+                                                                        </div>
+                                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                                                                    </div>
+
+                                                                    <div class="modal-body">
+                                                                        <div class="modal-summary">
+                                                                            <div class="modal-box"><div class="modal-label">Cliente</div><div class="modal-value">@ClienteNombre(item)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Parte</div><div class="modal-value">@ParteClave(item)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Prioridad FIFO</div><div class="modal-value">@PrioridadTexto(item)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Release</div><div class="modal-value">@Txt(item.FolioRelease)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Designación</div><div class="modal-value">@Txt(item.DesignacionDescripcionSAP)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Fecha requerida</div><div class="modal-value">@F(item.FechaRequerida)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Requerido</div><div class="modal-value">@item.CantidadRequerida.ToString("N0") pzas</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">PT físico</div><div class="modal-value">@N0(item.PTDisponibleAlCalcular) pzas</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">PT apartado por otros</div><div class="modal-value">@N0(item.PTApartadoOtros) pzas</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">PT neto disponible</div><div class="modal-value">@N0(item.PTDisponibleNeto) pzas</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">PT reservado para este release</div><div class="modal-value">@N0(item.PiezasDesdePT) pzas</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Programado pendiente</div><div class="modal-value">@N0(item.ProduccionProgramadaPendiente) pzas</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Máquina / Molde</div><div class="modal-value">@Txt(item.MaquinaSugeridaCodigo) / @Txt(item.MoldeCodigo)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Material</div><div class="modal-value">@Txt(item.MaterialCodigo) · @Txt(item.MaterialDescripcion)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">MP disp./req.</div><div class="modal-value">@D4(item.MPDisponibleKg) / @D4(item.MPRequeridaKg)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Emb. disp./req.</div><div class="modal-value">@D2(item.EmbalajeDisponible) / @D2(item.EmbalajeRequerido)</div></div>
+                                                                            <div class="modal-box"><div class="modal-label">Horas / Obj-Hra</div><div class="modal-value">@D2(item.HorasNecesarias) / @N0(item.ObjetivoHora)</div></div>
+                                                                        </div>
+
+                                                                        <div class="validation-row">
+                                                                            <span class="@CheckClase(StockOk(item))"><i class="fa-solid @CheckIcono(StockOk(item))"></i>Stock</span>
+                                                                            <span class="@CheckClase(MoldeOk(item))"><i class="fa-solid @CheckIcono(MoldeOk(item))"></i>Molde</span>
+                                                                            <span class="@CheckClase(MaterialOk(item))"><i class="fa-solid @CheckIcono(MaterialOk(item))"></i>Material</span>
+                                                                            <span class="@CheckClase(CavidadesOk(item))"><i class="fa-solid @CheckIcono(CavidadesOk(item))"></i>Cav.</span>
+                                                                            <span class="@CheckClase(CicloOk(item))"><i class="fa-solid @CheckIcono(CicloOk(item))"></i>Ciclo</span>
+                                                                            <span class="@CheckClase(MaquinaOk(item))"><i class="fa-solid @CheckIcono(MaquinaOk(item))"></i>Máquina</span>
+                                                                            <span class="@CheckClase(ObjetivoOk(item))"><i class="fa-solid @CheckIcono(ObjetivoOk(item))"></i>Obj</span>
+                                                                            <span class="@CheckClase(MpOk(item))"><i class="fa-solid @CheckIcono(MpOk(item))"></i>MP</span>
+                                                                            <span class="@CheckClase(EmbalajeOk(item))"><i class="fa-solid @CheckIcono(EmbalajeOk(item))"></i>Emb.</span>
+                                                                        </div>
                                                                         @if (ListoCambioMolde(item))
                                                                         {
-                                                                            <a class="small-link"
-                                                                               href="@Url.Action("CrearDesdeNecesidad", "PlaneacionPrograma", new { releaseDetalleId = item.ReleaseDetalleID })">
-                                                                                Enviar a Cambio de Molde
+                                                                            <div class="alert alert-info rounded-4 fw-semibold mt-3 mb-0"><i class="fa-solid fa-circle-info me-2"></i>Al continuar, se abrirá la pantalla donde se define condición T.P / I.P, hora de cambio, hora de arranque y máquina final.</div>
+                                                                        }
+                                                                        else if (item.ProgramaProduccionID.HasValue)
+                                                                        {
+                                                                            <div class="alert alert-success rounded-4 fw-semibold mt-3 mb-0"><i class="fa-solid fa-circle-check me-2"></i>Esta necesidad ya fue programada. Puedes consultarla en máquinas.</div>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <div class="alert alert-warning rounded-4 fw-semibold mt-3 mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i>Esta necesidad todavía no está lista para programarse. Revisa las validaciones marcadas en rojo.</div>
+                                                                        }
+                                                                    </div>
+
+                                                                    <div class="modal-footer">
+                                                                        <button type="button" class="btn btn-light rounded-4 fw-bold" data-bs-dismiss="modal">Cerrar</button>
+
+                                                                        @if (ListoCambioMolde(item))
+                                                                        {
+                                                                            <a class="btn btn-primary rounded-4 fw-bold" href="@Url.Action("CrearDesdeNecesidad", "PlaneacionPrograma", new { releaseDetalleId = item.ReleaseDetalleID })">
+                                                                                Programar molde
+                                                                                <i class="fa-solid fa-arrow-right ms-1"></i>
                                                                             </a>
                                                                         }
                                                                         else if (item.ProgramaProduccionID.HasValue)
                                                                         {
-                                                                            <a class="small-link"
-                                                                               asp-controller="PlaneacionPrograma"
-                                                                               asp-action="Maquinas">
+                                                                            <a class="btn btn-primary rounded-4 fw-bold" asp-controller="PlaneacionPrograma" asp-action="Maquinas">
                                                                                 Ver en máquinas
+                                                                                <i class="fa-solid fa-table-columns ms-1"></i>
                                                                             </a>
                                                                         }
-                                                                        else
-                                                                        {
-                                                                            <span class="text-muted fw-semibold">Sin acción</span>
-                                                                        }
-                                                                    </td>
-                                                                </tr>
-                                                            }
-                                                        </tbody>
-                                                    </table>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    }
                                                 </div>
                                             </div>
                                         </div>
-                                    }
-                                </div>
+                                    </article>
+                                }
                             </div>
                         }
-                    }
+                    </div>
                 </div>
             </section>
         }
 
+        <section class="sticky-actions">
+            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light rounded-4 fw-bold"><i class="fa-solid fa-arrow-left me-1"></i>Releases</a>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn btn-light rounded-4 fw-bold"><i class="fa-solid fa-chart-line me-1"></i>Panorama</a>
+                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-main"><i class="fa-solid fa-gears me-1"></i>Máquinas / Cambios</a>
+                </div>
+            </div>
+        </section>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const buscar = document.getElementById("txtBuscarPantalla");
-            const btnAbrirTodo = document.getElementById("btnAbrirTodo");
             const btnCerrarTodo = document.getElementById("btnCerrarTodo");
-
             const sections = Array.from(document.querySelectorAll("[data-section]"));
             const clients = Array.from(document.querySelectorAll("[data-client]"));
-            const parts = Array.from(document.querySelectorAll("[data-part]"));
             const rows = Array.from(document.querySelectorAll("[data-row]"));
 
+            function limpiarPantallaCompletaCliente() {
+                document.body.classList.remove("client-focus");
+                sections.forEach(section => section.classList.remove("has-focus"));
+                clients.forEach(client => client.classList.remove("is-fullscreen"));
+            }
+
+            function activarPantallaCompletaCliente(collapseEl) {
+                const client = collapseEl.closest("[data-client]");
+                const section = collapseEl.closest("[data-section]");
+
+                if (!client || !section) return;
+
+                limpiarPantallaCompletaCliente();
+
+                document.body.classList.add("client-focus");
+                section.classList.add("has-focus");
+                client.classList.add("is-fullscreen");
+            }
+
             function normalize(value) {
-                return (value || "")
-                    .toString()
-                    .toLowerCase()
-                    .normalize("NFD")
-                    .replace(/[\u0300-\u036f]/g, "")
-                    .trim();
+                return (value || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
             }
 
             function setCollapse(el, show) {
@@ -1186,65 +1324,71 @@
 
             function aplicarBusqueda() {
                 const q = normalize(buscar?.value || "");
-
                 rows.forEach(row => {
                     const visible = !q || normalize(row.dataset.search).includes(q);
                     row.classList.toggle("hidden-by-search", !visible);
                 });
 
-                parts.forEach(part => {
-                    const partSearch = normalize(part.dataset.search);
-                    const visibleRows = Array.from(part.querySelectorAll("[data-row]"))
-                        .some(row => !row.classList.contains("hidden-by-search"));
-
-                    const visible = !q || partSearch.includes(q) || visibleRows;
-                    part.classList.toggle("hidden-by-search", !visible);
-
-                    if (q && visible) {
-                        setCollapse(part.querySelector("[data-collapse-level='part']"), true);
-                    }
-                });
-
                 clients.forEach(client => {
-                    const clientSearch = normalize(client.dataset.search);
-                    const visibleParts = Array.from(client.querySelectorAll("[data-part]"))
-                        .some(part => !part.classList.contains("hidden-by-search"));
+                    const visibleRows = Array.from(client.querySelectorAll("[data-row]")).some(row => !row.classList.contains("hidden-by-search"));
+                    const visibleClient = !q || normalize(client.dataset.search).includes(q) || visibleRows;
+                    client.classList.toggle("hidden-by-search", !visibleClient);
 
-                    const visible = !q || clientSearch.includes(q) || visibleParts;
-                    client.classList.toggle("hidden-by-search", !visible);
-
-                    if (q && visible) {
+                    if (q && visibleClient) {
                         setCollapse(client.querySelector("[data-collapse-level='client']"), true);
                     }
                 });
 
                 sections.forEach(section => {
-                    const visibleClients = Array.from(section.querySelectorAll("[data-client]"))
-                        .some(client => !client.classList.contains("hidden-by-search"));
-
+                    const visibleClients = Array.from(section.querySelectorAll("[data-client]")).some(client => !client.classList.contains("hidden-by-search"));
                     section.classList.toggle("hidden-by-search", q && !visibleClients);
-
-                    if (q && visibleClients) {
-                        setCollapse(section.querySelector("[data-collapse-level='section']"), true);
-                    }
+                    if (q && visibleClients) setCollapse(section.querySelector("[data-collapse-level='section']"), true);
                 });
             }
 
-            buscar?.addEventListener("input", aplicarBusqueda);
+            document.querySelectorAll(".modal").forEach(modal => {
+                modal.addEventListener("click", function (event) {
+                    event.stopPropagation();
+                });
+            });
 
-            btnAbrirTodo?.addEventListener("click", function () {
-                document.querySelectorAll(".collapse").forEach(el => {
-                    if (!el.closest(".hidden-by-search")) {
-                        setCollapse(el, true);
+            document.querySelectorAll("[data-collapse-level='client']").forEach(el => {
+                el.addEventListener("shown.bs.collapse", function () {
+                    activarPantallaCompletaCliente(el);
+                });
+
+                el.addEventListener("hidden.bs.collapse", function () {
+                    const client = el.closest("[data-client]");
+                    if (client && client.classList.contains("is-fullscreen")) {
+                        limpiarPantallaCompletaCliente();
                     }
                 });
             });
 
+            document.addEventListener("keydown", function (event) {
+                if (event.key !== "Escape" || !document.body.classList.contains("client-focus")) {
+                    return;
+                }
+
+                const modalAbierto = document.querySelector(".modal.show");
+                if (modalAbierto) {
+                    return;
+                }
+
+                const openClient = document.querySelector(".client-panel.is-fullscreen [data-collapse-level='client']");
+                if (openClient) {
+                    setCollapse(openClient, false);
+                } else {
+                    limpiarPantallaCompletaCliente();
+                }
+            });
+
+            buscar?.addEventListener("input", aplicarBusqueda);
             btnCerrarTodo?.addEventListener("click", function () {
-                document.querySelectorAll(".collapse").forEach(el => setCollapse(el, false));
+                limpiarPantallaCompletaCliente();
+                document.querySelectorAll("[data-collapse-level='section']").forEach(el => setCollapse(el, false));
             });
         });
     </script>
-
 </body>
 </html>

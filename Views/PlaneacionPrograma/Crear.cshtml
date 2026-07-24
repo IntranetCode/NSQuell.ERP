@@ -552,6 +552,9 @@
 
             <input type="hidden" asp-for="CantidadRequerida" />
             <input type="hidden" asp-for="PiezasDesdePT" />
+            <input type="hidden" asp-for="PTDisponibleAlCalcular" />
+            <input type="hidden" asp-for="PTApartadoOtros" />
+            <input type="hidden" asp-for="PTDisponibleNeto" />
             <input type="hidden" asp-for="PiezasAProducir" />
 
             <input type="hidden" asp-for="MaquinaCodigo" />
@@ -636,32 +639,47 @@
 
                             <div class="metric-grid">
                                 <div class="metric">
-                                    <div class="k">Requerido</div>
+                                    <div class="k">Requerido (pzas)</div>
                                     <div class="v">@Model.CantidadRequerida.ToString("N0")</div>
                                 </div>
 
                                 <div class="metric">
-                                    <div class="k">Stock usado</div>
+                                    <div class="k">PT físico (pzas)</div>
+                                    <div class="v">@Model.PTDisponibleAlCalcular.ToString("N0")</div>
+                                </div>
+
+                                <div class="metric">
+                                    <div class="k">PT apartado otros (pzas)</div>
+                                    <div class="v">@Model.PTApartadoOtros.ToString("N0")</div>
+                                </div>
+
+                                <div class="metric">
+                                    <div class="k">PT neto disponible (pzas)</div>
+                                    <div class="v">@Model.PTDisponibleNeto.ToString("N0")</div>
+                                </div>
+
+                                <div class="metric">
+                                    <div class="k">PT reservado release (pzas)</div>
                                     <div class="v">@Model.PiezasDesdePT.ToString("N0")</div>
                                 </div>
 
                                 <div class="metric">
-                                    <div class="k">A producir</div>
+                                    <div class="k">A producir (pzas)</div>
                                     <div class="v">@Model.PiezasAProducir.ToString("N0")</div>
                                 </div>
 
                                 <div class="metric">
-                                    <div class="k">MP requerida</div>
+                                    <div class="k">MP requerida (kg)</div>
                                     <div class="v">@Decimal4(Model.CantidadMpKg) kg</div>
                                 </div>
 
                                 <div class="metric">
-                                    <div class="k">Embalajes</div>
+                                    <div class="k">Embalajes (pzas)</div>
                                     <div class="v">@Decimal2(Model.CantidadEmbalajes)</div>
                                 </div>
 
                                 <div class="metric">
-                                    <div class="k">Horas fórmula</div>
+                                    <div class="k">Horas fórmula (hrs)</div>
                                     <div class="v">@Decimal2(Model.HorasProgramadas)</div>
                                 </div>
                             </div>
@@ -695,12 +713,12 @@
                                 </div>
 
                                 <div class="tech-item">
-                                    <div class="tech-k">Cavidades</div>
+                                    <div class="tech-k">Cavidades (pzas)</div>
                                     <div class="tech-v">@Entero(Model.Cavidades)</div>
                                 </div>
 
                                 <div class="tech-item">
-                                    <div class="tech-k">Ciclo</div>
+                                    <div class="tech-k">Ciclo (seg)</div>
                                     <div class="tech-v">@Valor(Model.Ciclo)</div>
                                 </div>
 
@@ -717,22 +735,22 @@
                                 </div>
 
                                 <div class="tech-item">
-                                    <div class="tech-k">Qty por día</div>
+                                    <div class="tech-k">Qty por día (pzas)</div>
                                     <div class="tech-v">@Entero(Model.QtyPorDia)</div>
                                 </div>
 
                                 <div class="tech-item">
-                                    <div class="tech-k">Peso pza bruto</div>
+                                    <div class="tech-k">Peso pza bruto (g/pza)</div>
                                     <div class="tech-v">@Decimal4(Model.PesoBrutoPieza)</div>
                                 </div>
 
                                 <div class="tech-item">
-                                    <div class="tech-k">Objetivo / hra pzas</div>
+                                    <div class="tech-k">Objetivo / hr (pzas)</div>
                                     <div class="tech-v">@Entero(Model.ObjetivoHora)</div>
                                 </div>
 
                                 <div class="tech-item">
-                                    <div class="tech-k">Piezas por embalaje</div>
+                                    <div class="tech-k">Piezas por embalaje (pzas)</div>
                                     <div class="tech-v">@Decimal2(Model.PiezasPorEmbalaje)</div>
                                 </div>
                             </div>
@@ -800,7 +818,7 @@
                         <div class="step-line">
                             <div class="step-number">4</div>
                             <div class="w-100">
-                                <label class="field-label">Cantidad programada</label>
+                                <label class="field-label">Cantidad programada (pzas)</label>
                                 <input asp-for="CantidadProgramada"
                                        type="number"
                                        min="1"
@@ -820,7 +838,7 @@
                                 Fórmula horas programadas
                             </div>
                             <div class="small">
-                                Cantidad programada ÷ Objetivo por hora =
+                                Cantidad programada ÷ Objetivo por hora, redondeado hacia arriba =
                                 <strong id="formulaHoras">@Decimal2(Model.HorasProgramadas)</strong> hrs
                             </div>
                         </div>
@@ -857,7 +875,7 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label class="field-label">Horas programadas</label>
+                                <label class="field-label">Horas programadas (hrs redondeadas)</label>
                                 <input asp-for="HorasProgramadas"
                                        type="number"
                                        step="0.01"
@@ -934,6 +952,23 @@
             return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
         }
 
+        function redondearSiguienteBloque(fecha, minutosBloque) {
+            const f = new Date(fecha);
+            f.setSeconds(0);
+            f.setMilliseconds(0);
+
+            const residuo = f.getMinutes() % minutosBloque;
+            if (residuo !== 0) {
+                f.setMinutes(f.getMinutes() + (minutosBloque - residuo));
+            }
+
+            return f;
+        }
+
+        function minimoFechaHoraPermitido() {
+            return formatearFechaLocal(redondearSiguienteBloque(new Date(), 15));
+        }
+
         function obtenerHoraDesdeFechaLocal(value) {
             if (!value || value.length < 16) return '';
             return value.substring(11, 16);
@@ -943,12 +978,12 @@
             if (!cantidadInput || !horasInput || objetivoHora <= 0) return;
 
             const cantidad = toDecimal(cantidadInput.value);
-            const horas = cantidad > 0 ? (cantidad / objetivoHora) : 0;
+            const horas = cantidad > 0 ? Math.ceil(cantidad / objetivoHora) : 0;
 
             if (horas > 0) {
-                horasInput.value = horas.toFixed(2);
+                horasInput.value = horas.toFixed(0);
                 if (formulaHoras) {
-                    formulaHoras.textContent = horas.toFixed(2);
+                    formulaHoras.textContent = horas.toFixed(0);
                 }
             }
         }
@@ -997,12 +1032,23 @@
 
         horasInput?.addEventListener('input', function () {
             if (formulaHoras) {
-                formulaHoras.textContent = toDecimal(horasInput.value).toFixed(2);
+                formulaHoras.textContent = Math.ceil(toDecimal(horasInput.value)).toFixed(0);
             }
             recalcularFin();
         });
 
-        formPrograma?.addEventListener('submit', function () {
+        formPrograma?.addEventListener('submit', function (event) {
+            if (inicioInput) {
+                const minimo = minimoFechaHoraPermitido();
+                inicioInput.min = minimo;
+
+                if (inicioInput.value && inicioInput.value < minimo) {
+                    event.preventDefault();
+                    alert('No puedes seleccionar una hora que ya pasó. Selecciona ' + minimo.replace('T', ' ') + ' o posterior.');
+                    return;
+                }
+            }
+
             if (!btnGuardar) return;
 
             btnGuardar.disabled = true;
@@ -1011,6 +1057,14 @@
         });
 
         document.addEventListener('DOMContentLoaded', function () {
+            if (inicioInput) {
+                inicioInput.min = minimoFechaHoraPermitido();
+
+                if (!inicioInput.value || inicioInput.value < inicioInput.min) {
+                    inicioInput.value = inicioInput.min;
+                }
+            }
+
             sincronizarHorasCambioArranque();
             recalcularHorasPorCantidad();
             recalcularFin();

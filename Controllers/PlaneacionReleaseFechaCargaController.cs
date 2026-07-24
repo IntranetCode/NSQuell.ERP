@@ -1,0 +1,38 @@
+﻿using Microsoft.Data.SqlClient;
+using System.Data;
+
+namespace ERP.NSQuell.Controllers;
+
+public partial class PlaneacionReleaseController
+{
+    private async Task<int> AutocompletarFechasCargaImportadasAsync()
+    {
+        const string sql = @"
+SET NOCOUNT ON;
+
+UPDATE d
+SET d.FechaCarga =
+    DATEADD(DAY, -1, CONVERT(DATE, d.FechaRequerida))
+FROM dbo.Planeacion_ReleaseDetalle d
+INNER JOIN dbo.Planeacion_Releases r
+    ON r.ReleaseID = d.ReleaseID
+WHERE r.Activo = 1
+  AND d.Activo = 1
+  AND ISNULL(r.ImportadoDesdeArchivo, 0) = 1
+  AND d.FechaCarga IS NULL
+  AND d.FechaRequerida IS NOT NULL;
+
+SELECT @@ROWCOUNT;";
+
+        await using var cn =
+            new SqlConnection(ConnectionString);
+
+        await cn.OpenAsync();
+
+        await using var cmd =
+            new SqlCommand(sql, cn);
+
+        return Convert.ToInt32(
+            await cmd.ExecuteScalarAsync());
+    }
+}
