@@ -11,7 +11,7 @@ using static ERP.NSQuell.Models.PlaneacionReleaseEstatus;
 
 namespace ERP.NSQuell.Controllers
 {
-    public class PlaneacionReleaseController : Controller
+    public partial class PlaneacionReleaseController : Controller
     {
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;
@@ -31,6 +31,9 @@ namespace ERP.NSQuell.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(int? clienteId = null)
         {
+            // RELEASE_FECHA_CARGA_AUTO_V1_0
+            await AutocompletarFechasCargaImportadasAsync();
+
             var lista = new List<PlaneacionReleaseIndexVm>();
 
             const string sql = @"
@@ -52,7 +55,9 @@ SELECT
     COUNT(d.ReleaseDetalleID) AS TotalEntregas,
 
     ISNULL(SUM(d.CantidadRequerida), 0) AS TotalPiezasRequeridas,
-    ISNULL(SUM(ISNULL(d.PiezasAProducir, 0)), 0) AS TotalPiezasAProducir
+    ISNULL(SUM(ISNULL(d.PiezasAProducir, 0)), 0) AS TotalPiezasAProducir,
+    -- RELEASE_HISTORICO_V1_0_1
+    MAX(d.FechaRequerida) AS UltimaFechaRequerida
 FROM dbo.Planeacion_Releases r
 LEFT JOIN dbo.ERP_Clientes c
     ON c.ClienteID = r.ClienteID
@@ -109,7 +114,10 @@ ORDER BY r.FechaCreacion DESC;";
                     TotalRenglones = Convert.ToInt32(rd["TotalRenglones"]),
                     TotalEntregas = Convert.ToInt32(rd["TotalEntregas"]),
                     TotalPiezasRequeridas = Convert.ToInt32(rd["TotalPiezasRequeridas"]),
-                    TotalPiezasAProducir = Convert.ToInt32(rd["TotalPiezasAProducir"])
+                    TotalPiezasAProducir = Convert.ToInt32(rd["TotalPiezasAProducir"]),
+                    UltimaFechaRequerida = rd["UltimaFechaRequerida"] == DBNull.Value
+                        ? null
+                        : Convert.ToDateTime(rd["UltimaFechaRequerida"])
                 });
             }
 
@@ -1196,6 +1204,15 @@ WHERE ReleaseID = @ReleaseID
                 var secuencia = 1;
                 foreach (var entrega in renglon.Entregas)
                 {
+                    // Solo para Releases importados:
+                    // conservar una fecha real si el documento la trae;
+                    // si falta, usar un día calendario antes de la requerida.
+                    if (!entrega.FechaCarga.HasValue &&
+                        entrega.FechaRequerida.HasValue)
+                    {
+                        entrega.FechaCarga =
+                            entrega.FechaRequerida.Value.Date.AddDays(-1);
+                    }
                     entrega.SecuenciaEntrega = secuencia;
                     var detalle = CrearDetalleDesdeRenglonEntrega(renglon, entrega);
 
@@ -2470,13 +2487,23 @@ SELECT
     d.FechaFinEstimada,
     d.DaTiempo,
     d.MensajeCapacidad,
-    d.ProgramaProduccionID,
+    programaActivo.ProgramaProduccionID AS ProgramaProduccionID,
     d.SolicitudProduccionID,
     d.EstatusID
 FROM dbo.Planeacion_ReleaseDetalle d
 LEFT JOIN dbo.Planeacion_ReleaseRenglones rr
     ON rr.ReleaseRenglonID = d.ReleaseRenglonID
    AND rr.Activo = 1
+OUTER APPLY
+(
+    SELECT TOP (1)
+        pp.ProgramaProduccionID
+    FROM dbo.Planeacion_ProgramaProduccion pp
+    WHERE pp.ReleaseDetalleID = d.ReleaseDetalleID
+      AND pp.Activo = 1
+      AND ISNULL(pp.EstatusID, 1) NOT IN (9, 99)
+    ORDER BY pp.ProgramaProduccionID DESC
+) programaActivo
 WHERE d.ReleaseID = @ReleaseID
   AND d.Activo = 1
 ORDER BY d.Renglon, ISNULL(d.SecuenciaEntrega, 9999), d.FechaRequerida;";

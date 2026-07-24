@@ -3,7 +3,15 @@
 @{
     Layout = null;
 
-    var releases = Model ?? new List<ERP.NSQuell.Models.PlaneacionReleaseIndexVm>();
+    // RELEASE_INDEX_HISTORICO_V1_0_1
+    var todosReleases = Model ?? new List<ERP.NSQuell.Models.PlaneacionReleaseIndexVm>();
+
+    var releases = todosReleases
+        .Where(x =>
+            !x.UltimaFechaRequerida.HasValue ||
+            x.UltimaFechaRequerida.Value.Date >= DateTime.Today)
+        .ToList();
+
     var totalReleases = releases.Count;
 
     var gruposClientes = releases
@@ -528,7 +536,40 @@
                 grid-template-columns: 1fr;
             }
         }
-    </style>
+    
+        /* RELEASE_GRID_ROWS_FIX_V1_0_1 */
+        .release-grid {
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)) !important;
+            align-items: stretch;
+        }
+
+        .release-card {
+            min-width: 0;
+            height: 100%;
+        }
+
+        .release-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .mini-box,
+        .mini-value,
+        .release-card .text-muted,
+        .release-card .release-sub {
+            min-width: 0;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        @@media (max-width: 620px) {
+            .release-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+</style>
 </head>
 
 <body>
@@ -616,62 +657,6 @@
             </div>
         }
 
-        @* HUF_MULTI_UPLOAD_PANEL_V1 *@
-        <section class="panel">
-            <div class="panel-header">
-                <div>
-                    <h2 class="h5 fw-bold text-primary m-0">
-                        <i class="fa-solid fa-file-arrow-up me-2"></i>
-                        Carga multiple de documentos
-                    </h2>
-                    <div class="text-muted small">
-                        Sube los Releases recibidos durante el dia. El sistema identifica automaticamente la estructura de cada documento. Puedes mezclar PDF HUF/VERITAS y Excel GOLDEN/NORMA/AIR THERMAL en el mismo lote; cada archivo valido crea su Release.
-                    </div>
-                </div>
-                <span class="pill pill-success">
-                    <i class="fa-solid fa-circle-check"></i>
-                    PDF HUF/VERITAS + Excel GOLDEN/NORMA/AIR THERMAL
-                </span>
-            </div>
-
-            <div class="panel-body">
-                <form asp-controller="PlaneacionRelease"
-                      asp-action="ImportarDocumentos"
-                      method="post"
-                      enctype="multipart/form-data"
-                      class="row g-3 align-items-end">
-                    @Html.AntiForgeryToken()
-
-                    <div class="col-lg-9">
-                        <label for="archivosRelease" class="form-label small fw-bold text-muted">
-                            Documentos de Release
-                        </label>
-                        <input id="archivosRelease"
-                               name="archivos"
-                               type="file"
-                               multiple
-                               accept=".pdf,.xlsx,.xls,.xlsm,.csv"
-                               class="form-control input-modern"
-                               required />
-                        <div class="form-text">
-                            Maximo 25 archivos por lote y 10 MB por archivo. Se detectan automaticamente PDF HUF/VERITAS y Excel GOLDEN/NORMA/AIR THERMAL antes de vincular cliente, partes, fechas y cantidades.
-                        </div>
-                    </div>
-
-                    <div class="col-lg-3 d-grid">
-                        <button type="submit" class="btn btn-main justify-content-center py-3">
-                            <i class="fa-solid fa-gears me-1"></i>
-                            Leer y crear Releases
-                        </button>
-                    </div>
-                </form>
-
-                <div class="alert alert-light border rounded-4 mt-3 mb-0 small fw-semibold">
-                    <i class="fa-solid fa-calendar-day text-primary me-2"></i>
-                    Operacion diaria: cada documento equivale a un Release. HUF reemplaza la parte activa; VERITAS el contrato activo; GOLDEN y NORMA reemplazan la matriz semanal activa; AIR THERMAL reemplaza su Material Release activo. Las versiones anteriores quedan cerradas para no duplicar necesidades.
-                </div>
-            </div>
-        </section>
         <section class="panel">
             <div class="panel-header">
                 <div>
@@ -766,6 +751,15 @@
                                                 @releasesCliente.Count.ToString("N0")
                                             </span>
 
+                                            <a asp-controller="PlaneacionRelease"
+                                               asp-action="Historico"
+                                               asp-route-clienteId="@grupo.Key.ClienteID"
+                                               class="pill pill-warning text-decoration-none"
+                                               onclick="event.stopPropagation();">
+                                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                                Histórico
+                                            </a>
+
                                             <span class="pill pill-muted">
                                                 <i class="fa-solid fa-chevron-down"></i>
                                                 Abrir
@@ -835,13 +829,21 @@
                                                         </div>
                                                     }
 
-                                                    <div class="d-grid">
+                                                                                                        <div class="release-actions">
                                                         <a asp-controller="PlaneacionRelease"
                                                            asp-action="Detalle"
                                                            asp-route-id="@item.ReleaseID"
                                                            class="btn btn-main justify-content-center">
                                                             <i class="fa-solid fa-eye me-1"></i>
                                                             Ver detalle
+                                                        </a>
+
+                                                        <a asp-controller="PlaneacionRelease"
+                                                           asp-action="Editar"
+                                                           asp-route-id="@item.ReleaseID"
+                                                           class="btn btn-light-main justify-content-center">
+                                                            <i class="fa-solid fa-pen-to-square me-1"></i>
+                                                            Editar
                                                         </a>
                                                     </div>
                                                 </div>

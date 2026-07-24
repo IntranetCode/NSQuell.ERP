@@ -28,6 +28,8 @@ namespace ERP.NSQuell.Models
 
         public bool ImportadoDesdeArchivo { get; set; }
 
+        public DateTime? UltimaFechaRequerida { get; set; }
+
     }
 
     public class PlaneacionReleaseCrearVm
