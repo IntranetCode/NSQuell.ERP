@@ -145,7 +145,14 @@
             background: #f8fafc;
             color: #667085;
             text-align: center;
-        }</style>
+        }
+        /* MODAL_EDICION_DOCUMENTO_V2_0 */
+        .edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+        .edit-field label{display:block;margin-bottom:5px;color:#475467;font-size:.72rem;font-weight:850}
+        .edit-part{overflow:hidden;border:1px solid var(--border);border-radius:18px;background:#fff}
+        .edit-part-head{padding:12px 15px;border-bottom:1px solid var(--border);background:#eef4ff;color:var(--blue-dark);font-weight:850}
+        .edit-part-body{padding:15px}
+        .modal-xl{--bs-modal-width:1500px}</style>
 </head>
 <body>
 <div class="page">
@@ -274,355 +281,225 @@
             </div>
     </section>
 
-        @* DETALLE_DOCUMENTO_MODAL_V1_0_1 *@
+            @* MODAL_EDICION_DOCUMENTO_V2_0 *@
     @foreach (var documento in Model.Documentos)
     {
         var preparado = documento.ReleasePreparado;
 
-        <div class="modal fade"
+        <div class="modal fade document-edit-modal"
              id="detalleDocumento_@documento.DocumentoID"
              tabindex="-1"
-             aria-labelledby="tituloDetalleDocumento_@documento.DocumentoID"
              aria-hidden="true">
 
             <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                 <div class="modal-content border-0 rounded-4 shadow">
-                    <div class="modal-header border-0 pb-0">
-                        <div class="pe-3">
-                            <div class="small text-muted fw-bold text-uppercase mb-1">
-                                Vista previa de lo que se agregará
-                            </div>
+                    <form asp-action="GuardarEdicionDocumentoPreparado" method="post">
+                        @Html.AntiForgeryToken()
 
-                            <h2 class="modal-title h5 fw-bold text-primary"
-                                id="tituloDetalleDocumento_@documento.DocumentoID">
-                                <i class="fa-solid fa-file-circle-info me-2"></i>
-                                @documento.Archivo
-                            </h2>
+                        <input type="hidden" name="LoteID" value="@Model.LoteID" />
+                        <input type="hidden" name="DocumentoID" value="@documento.DocumentoID" />
+
+                        <div class="modal-header border-0 pb-0">
+                            <div>
+                                <div class="small text-muted fw-bold text-uppercase">
+                                    Vista previa editable antes de agregar
+                                </div>
+                                <h2 class="modal-title h5 fw-bold text-primary">
+                                    <i class="fa-solid fa-file-pen me-2"></i>@documento.Archivo
+                                </h2>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
 
-                        <button type="button"
-                                class="btn-close"
-                                data-bs-dismiss="modal"
-                                aria-label="Cerrar"></button>
-                    </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info fw-semibold">
+                                Guardar aqui solo modifica el lote preparado. Todavia no crea el Release.
+                            </div>
 
-                    <div class="modal-body">
-                        <div class="alert alert-info fw-semibold">
-                            Este desglose corresponde a la información preparada que se registrará
-                            al guardar este documento como Release.
-                        </div>
+                            <h3 class="h6 fw-bold text-primary mb-3">Datos generales</h3>
 
-                        <div class="document-summary-grid mb-4">
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Estado</div>
-                                <div class="document-summary-value">
-                                    <span class="badge @Badge(documento.Estado)">
-                                        @EstadoTexto(documento.Estado)
-                                    </span>
+                            <div class="edit-grid mb-3">
+                                <div class="edit-field">
+                                    <label>Cliente</label>
+                                    <select name="ClienteID"
+                                            class="form-select edit-client-select"
+                                            data-current="@documento.ClienteID"
+                                            required>
+                                        <option value="">Cargando clientes...</option>
+                                    </select>
+                                </div>
+
+                                <div class="edit-field">
+                                    <label>Folio cliente / contrato / schedule</label>
+                                    <input name="FolioCliente"
+                                           class="form-control"
+                                           value="@(documento.FolioCliente ?? preparado.FolioCliente)"
+                                           maxlength="150" />
+                                </div>
+
+                                <div class="edit-field">
+                                    <label>Version / semana</label>
+                                    <input name="Version"
+                                           class="form-control"
+                                           value="@(documento.Version ?? preparado.VersionRelease)"
+                                           maxlength="100" />
+                                </div>
+
+                                <div class="edit-field">
+                                    <label>Fecha del documento</label>
+                                    <input name="FechaDocumento"
+                                           type="date"
+                                           class="form-control"
+                                           value="@(documento.FechaDocumento?.ToString("yyyy-MM-dd"))" />
+                                </div>
+
+                                <div class="edit-field">
+                                    <label>Fecha de recepcion</label>
+                                    <input name="FechaRecepcion"
+                                           type="date"
+                                           class="form-control"
+                                           value="@preparado.FechaRecepcion.ToString("yyyy-MM-dd")"
+                                           required />
                                 </div>
                             </div>
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Plantilla detectada</div>
-                                <div class="document-summary-value">
-                                    @(string.IsNullOrWhiteSpace(documento.Plantilla)
-                                        ? "-"
-                                        : documento.Plantilla.Replace("GOLDEN", "GOLDE"))
-                                </div>
+                            <div class="edit-field mb-4">
+                                <label>Observaciones del Release</label>
+                                <textarea name="Observaciones"
+                                          class="form-control"
+                                          rows="3"
+                                          maxlength="2000">@preparado.Observaciones</textarea>
                             </div>
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Cliente</div>
-                                <div class="document-summary-value">
-                                    @(documento.Cliente ?? preparado.ClienteNombre ?? "-")
-                                    @if (documento.ClienteID.HasValue)
-                                    {
-                                        <span class="text-muted">· ID @documento.ClienteID</span>
-                                    }
-                                </div>
-                            </div>
+                            <h3 class="h5 fw-bold text-primary mb-3">
+                                Partes y entregas que se agregaran
+                            </h3>
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Folio cliente</div>
-                                <div class="document-summary-value">
-                                    @(documento.FolioCliente ?? preparado.FolioCliente ?? "-")
-                                </div>
-                            </div>
+                            <div class="d-grid gap-3">
+                                @for (var i = 0; i < preparado.Renglones.Count; i++)
+                                {
+                                    var renglon = preparado.Renglones[i];
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Folio interno</div>
-                                <div class="document-summary-value">
-                                    @(documento.FolioRelease ?? preparado.FolioRelease ?? "Se generará al guardar")
-                                </div>
-                            </div>
+                                    <article class="edit-part">
+                                        <div class="edit-part-head">
+                                            Parte @(i + 1)
+                                            · @(renglon.NumeroParte ?? renglon.ReferenciaSAP ?? "Sin parte")
+                                        </div>
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Fecha del documento</div>
-                                <div class="document-summary-value">
-                                    @(documento.FechaDocumento?.ToString("dd/MM/yyyy") ?? "-")
-                                </div>
-                            </div>
+                                        <div class="edit-part-body">
+                                            <div class="edit-grid mb-3">
+                                                <div class="edit-field">
+                                                    <label>Numero de parte</label>
+                                                    <input name="Renglones[@i].NumeroParte"
+                                                           class="form-control"
+                                                           value="@renglon.NumeroParte"
+                                                           maxlength="150" />
+                                                </div>
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Fecha de recepción</div>
-                                <div class="document-summary-value">
-                                    @preparado.FechaRecepcion.ToString("dd/MM/yyyy")
-                                </div>
-                            </div>
+                                                <div class="edit-field">
+                                                    <label>Referencia SAP</label>
+                                                    <input name="Renglones[@i].ReferenciaSAP"
+                                                           class="form-control"
+                                                           value="@renglon.ReferenciaSAP"
+                                                           maxlength="150" />
+                                                </div>
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Versión / semana</div>
-                                <div class="document-summary-value">
-                                    @(documento.Version ?? preparado.VersionRelease ?? "-")
-                                </div>
-                            </div>
+                                                <div class="edit-field">
+                                                    <label>Descripcion / designacion</label>
+                                                    <input name="Renglones[@i].DesignacionDescripcionSAP"
+                                                           class="form-control"
+                                                           value="@renglon.DesignacionDescripcionSAP"
+                                                           maxlength="300" />
+                                                </div>
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Partes</div>
-                                <div class="document-summary-value">
-                                    @preparado.Renglones.Count.ToString("N0")
-                                </div>
-                            </div>
+                                                <div class="edit-field">
+                                                    <label>Unidad de medida</label>
+                                                    <input name="Renglones[@i].UnidadMedidaCliente"
+                                                           class="form-control"
+                                                           value="@renglon.UnidadMedidaCliente"
+                                                           maxlength="100" />
+                                                </div>
 
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Entregas</div>
-                                <div class="document-summary-value">
-                                    @documento.TotalEntregas.ToString("N0")
-                                </div>
-                            </div>
-
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Piezas totales</div>
-                                <div class="document-summary-value">
-                                    @documento.TotalPiezas.ToString("N0")
-                                </div>
-                            </div>
-
-                            <div class="document-summary-box">
-                                <div class="document-summary-label">Partes pendientes</div>
-                                <div class="document-summary-value">
-                                    @documento.PartesPendientes.ToString("N0")
-                                </div>
-                            </div>
-                        </div>
-
-                        @if (!string.IsNullOrWhiteSpace(preparado.Observaciones))
-                        {
-                            <section class="mb-4">
-                                <h3 class="h6 fw-bold text-primary">Observaciones del Release</h3>
-                                <div class="border rounded-3 bg-light p-3">
-                                    @preparado.Observaciones
-                                </div>
-                            </section>
-                        }
-
-                        <section class="mb-4">
-                            <h3 class="h6 fw-bold text-primary">Resultado del análisis</h3>
-
-                            <div class="border rounded-3 bg-light p-3">
-                                @(string.IsNullOrWhiteSpace(documento.Mensaje)
-                                    ? "Sin mensaje adicional."
-                                    : documento.Mensaje)
-                            </div>
-
-                            @if (documento.Advertencias.Any())
-                            {
-                                <div class="alert alert-warning mt-3 mb-0">
-                                    <div class="fw-bold mb-2">Advertencias</div>
-                                    <ul class="mb-0">
-                                        @foreach (var advertencia in documento.Advertencias)
-                                        {
-                                            <li>@advertencia</li>
-                                        }
-                                    </ul>
-                                </div>
-                            }
-                        </section>
-
-                        <section>
-                            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-                                <div>
-                                    <h3 class="h5 fw-bold text-primary mb-1">
-                                        Partes y entregas que se agregarán
-                                    </h3>
-                                    <div class="small text-muted">
-                                        Cada bloque representa un renglón del Release preparado.
-                                    </div>
-                                </div>
-
-                                <span class="badge text-bg-primary rounded-pill px-3 py-2">
-                                    @preparado.Renglones.Count renglón(es)
-                                </span>
-                            </div>
-
-                            @if (!preparado.Renglones.Any())
-                            {
-                                <div class="document-empty">
-                                    El documento no contiene renglones preparados para registrar.
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="d-grid gap-3">
-                                    @foreach (var renglon in preparado.Renglones)
-                                    {
-                                        <article class="document-part-card">
-                                            <div class="document-part-header">
-                                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                                                    <div>
-                                                        <div class="fw-bold">
-                                                            Renglón @renglon.Renglon
-                                                            · @(renglon.NumeroParte ?? renglon.ReferenciaSAP ?? "Sin número de parte")
-                                                        </div>
-
-                                                        <div class="small mt-1">
-                                                            @(renglon.DesignacionDescripcionSAP ?? "Sin descripción")
-                                                        </div>
-                                                    </div>
-
-                                                    @if (renglon.ParteID.HasValue)
-                                                    {
-                                                        <span class="badge text-bg-success">
-                                                            Parte vinculada · ID @renglon.ParteID
-                                                        </span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge text-bg-warning">
-                                                            Pendiente de vincular
-                                                        </span>
-                                                    }
+                                                <div class="edit-field">
+                                                    <label>Contrato cliente</label>
+                                                    <input name="Renglones[@i].ContratoCliente"
+                                                           class="form-control"
+                                                           value="@renglon.ContratoCliente"
+                                                           maxlength="150" />
                                                 </div>
                                             </div>
 
-                                            <div class="document-part-body">
-                                                <div class="document-part-meta mb-3">
-                                                    <div class="document-summary-box">
-                                                        <div class="document-summary-label">Número de parte</div>
-                                                        <div class="document-summary-value">
-                                                            @(renglon.NumeroParte ?? "-")
-                                                        </div>
-                                                    </div>
+                                            <div class="edit-field mb-3">
+                                                <label>Observaciones de la parte</label>
+                                                <textarea name="Renglones[@i].Observaciones"
+                                                          class="form-control"
+                                                          rows="2"
+                                                          maxlength="1000">@renglon.Observaciones</textarea>
+                                            </div>
 
-                                                    <div class="document-summary-box">
-                                                        <div class="document-summary-label">Referencia SAP</div>
-                                                        <div class="document-summary-value">
-                                                            @(renglon.ReferenciaSAP ?? "-")
-                                                        </div>
-                                                    </div>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-bordered align-middle mb-0">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Fecha requerida</th>
+                                                            <th>Fecha de carga</th>
+                                                            <th>Cantidad</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @for (var j = 0; j < renglon.Entregas.Count; j++)
+                                                        {
+                                                            var entrega = renglon.Entregas[j];
 
-                                                    <div class="document-summary-box">
-                                                        <div class="document-summary-label">Unidad de medida</div>
-                                                        <div class="document-summary-value">
-                                                            @(renglon.UnidadMedidaCliente ?? "-")
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="document-summary-box">
-                                                        <div class="document-summary-label">Contrato cliente</div>
-                                                        <div class="document-summary-value">
-                                                            @(renglon.ContratoCliente ?? "-")
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                @if (!string.IsNullOrWhiteSpace(renglon.Observaciones))
-                                                {
-                                                    <div class="alert alert-light border mb-3">
-                                                        <strong>Observaciones:</strong>
-                                                        @renglon.Observaciones
-                                                    </div>
-                                                }
-
-                                                <div class="table-responsive">
-                                                    <table class="table table-sm table-bordered align-middle mb-0 document-delivery-table">
-                                                        <thead>
                                                             <tr>
-                                                                <th>Secuencia</th>
-                                                                <th>Fecha requerida</th>
-                                                                <th>Fecha de carga</th>
-                                                                <th class="text-end">Cantidad</th>
+                                                                <td>
+                                                                    <input name="Renglones[@i].Entregas[@j].FechaRequerida"
+                                                                           type="date"
+                                                                           class="form-control form-control-sm"
+                                                                           value="@(entrega.FechaRequerida?.ToString("yyyy-MM-dd"))"
+                                                                           required />
+                                                                </td>
+                                                                <td>
+                                                                    <input name="Renglones[@i].Entregas[@j].FechaCarga"
+                                                                           type="date"
+                                                                           class="form-control form-control-sm"
+                                                                           value="@(entrega.FechaCarga?.ToString("yyyy-MM-dd"))" />
+                                                                </td>
+                                                                <td>
+                                                                    <input name="Renglones[@i].Entregas[@j].CantidadRequerida"
+                                                                           type="number"
+                                                                           class="form-control form-control-sm"
+                                                                           value="@entrega.CantidadRequerida"
+                                                                           min="1"
+                                                                           step="1"
+                                                                           required />
+                                                                </td>
                                                             </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @if (!renglon.Entregas.Any())
-                                                            {
-                                                                <tr>
-                                                                    <td colspan="4"
-                                                                        class="text-center text-muted py-3">
-                                                                        Sin entregas preparadas.
-                                                                    </td>
-                                                                </tr>
-                                                            }
-                                                            else
-                                                            {
-                                                                @foreach (var entrega in renglon.Entregas)
-                                                                {
-                                                                    <tr>
-                                                                        <td>@entrega.SecuenciaEntrega</td>
-                                                                        <td>
-                                                                            @(entrega.FechaRequerida?.ToString("dd/MM/yyyy") ?? "-")
-                                                                        </td>
-                                                                        <td>
-                                                                            @(entrega.FechaCarga?.ToString("dd/MM/yyyy") ?? "-")
-                                                                        </td>
-                                                                        <td class="text-end fw-bold">
-                                                                            @entrega.CantidadRequerida.ToString("N0")
-                                                                        </td>
-                                                                    </tr>
-                                                                }
-                                                            }
-                                                        </tbody>
-                                                    </table>
-                                                </div>
+                                                        }
+                                                    </tbody>
+                                                </table>
                                             </div>
-                                        </article>
-                                    }
-                                </div>
-                            }
-                        </section>
-
-                        <details class="mt-4">
-                            <summary class="fw-bold text-primary">
-                                Información técnica del archivo
-                            </summary>
-
-                            <div class="document-summary-grid mt-3">
-                                <div class="document-summary-box">
-                                    <div class="document-summary-label">Documento ID</div>
-                                    <div class="document-summary-value">
-                                        @documento.DocumentoID
-                                    </div>
-                                </div>
-
-                                <div class="document-summary-box">
-                                    <div class="document-summary-label">SHA-256</div>
-                                    <div class="document-summary-value">
-                                        @(string.IsNullOrWhiteSpace(documento.Sha256)
-                                            ? "-"
-                                            : documento.Sha256)
-                                    </div>
-                                </div>
-
-                                <div class="document-summary-box">
-                                    <div class="document-summary-label">Archivo temporal</div>
-                                    <div class="document-summary-value">
-                                        @(string.IsNullOrWhiteSpace(documento.ArchivoTemporal)
-                                            ? "-"
-                                            : documento.ArchivoTemporal)
-                                    </div>
-                                </div>
+                                        </div>
+                                    </article>
+                                }
                             </div>
-                        </details>
-                    </div>
+                        </div>
 
-                    <div class="modal-footer border-0">
-                        <button type="button"
-                                class="btn btn-outline-secondary fw-bold"
-                                data-bs-dismiss="modal">
-                            Cerrar
-                        </button>
-                    </div>
+                        <div class="modal-footer border-0">
+                            <button type="button"
+                                    class="btn btn-outline-secondary fw-bold"
+                                    data-bs-dismiss="modal">
+                                Cerrar
+                            </button>
+
+                            <button type="submit"
+                                    class="btn btn-main px-4"
+                                    @(documento.Estado == ERP.NSQuell.Models.ReleaseValidacionEstados.Guardado ? "disabled" : "")>
+                                <i class="fa-solid fa-floppy-disk me-1"></i>
+                                Guardar cambios
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -825,6 +702,56 @@
             await revalidarGolde();
             await cargarListadosPartes();
         }
-    );</script>
+    );
+    // MODAL_EDICION_DOCUMENTO_V2_0
+    const urlClientesModalEdicion =
+        '@Url.Action("ObtenerClientesValidacionEdicion", "PlaneacionRelease")';
+
+    let clientesModalEdicion = null;
+
+    async function cargarClientesModalEdicion() {
+        if (!clientesModalEdicion) {
+            const response = await fetch(urlClientesModalEdicion);
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.mensaje || 'No se pudieron cargar los clientes.');
+            }
+
+            clientesModalEdicion = data.clientes || [];
+        }
+
+        for (const select of document.querySelectorAll('.edit-client-select')) {
+            if (select.dataset.loaded === '1') {
+                continue;
+            }
+
+            const current = String(select.dataset.current || '');
+            select.innerHTML = '<option value="">-- Selecciona cliente --</option>';
+
+            for (const cliente of clientesModalEdicion) {
+                const option = document.createElement('option');
+                option.value = cliente.id;
+                option.textContent = cliente.text || `Cliente ${cliente.id}`;
+                option.selected = String(cliente.id) === current;
+                select.appendChild(option);
+            }
+
+            select.dataset.loaded = '1';
+        }
+    }
+
+    document.addEventListener('shown.bs.modal', async event => {
+        if (!event.target.classList.contains('document-edit-modal')) {
+            return;
+        }
+
+        try {
+            await cargarClientesModalEdicion();
+        }
+        catch (error) {
+            alert(error.message);
+        }
+    });</script>
 </body>
 </html>
