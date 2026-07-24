@@ -1,0 +1,326 @@
+﻿@model ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm
+@using System.Globalization
+
+@{
+    Layout = null;
+
+    var semanaAnterior = Model.InicioSemana.AddDays(-7);
+    var semanaSiguiente = Model.InicioSemana.AddDays(7);
+    var totalMinutos = (Model.FinSemana - Model.InicioSemana).TotalMinutes;
+
+    string Pct(double value) =>
+        value.ToString("0.####", CultureInfo.InvariantCulture);
+
+    var ahoraVisible =
+        Model.Ahora >= Model.InicioSemana &&
+        Model.Ahora < Model.FinSemana;
+
+    var ahoraLeft = ahoraVisible
+        ? (Model.Ahora - Model.InicioSemana).TotalMinutes / totalMinutos * 100
+        : 0;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calendario Maquinas | Planeacion</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+
+    <style>
+        :root{
+            --blue:#004aad;
+            --blue-dark:#063875;
+            --bg:#eef3f9;
+            --border:#d7e1ee;
+            --text:#1f2937;
+            --muted:#667085;
+            --machine-width:210px;
+        }
+
+        *{box-sizing:border-box}
+        body{margin:0;background:var(--bg);font-family:"Segoe UI",Arial,sans-serif;color:var(--text)}
+        .page{max-width:1920px;margin:0 auto;padding:24px}
+        .hero{padding:25px 28px;border-radius:26px;color:#fff;background:linear-gradient(135deg,var(--blue),var(--blue-dark));box-shadow:0 18px 42px rgba(0,74,173,.22)}
+        .hero h1{font-size:1.7rem;font-weight:950;margin:0}
+        .hero p{margin:8px 0 0;color:rgba(255,255,255,.86)}
+        .btn-glass{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:1px solid rgba(255,255,255,.35);border-radius:13px;background:rgba(255,255,255,.13);color:#fff;text-decoration:none;font-weight:850}
+        .btn-glass:hover{background:#fff;color:var(--blue)}
+
+        .toolbar,.calendar-card{margin-top:18px;border:1px solid var(--border);border-radius:20px;background:#fff;box-shadow:0 10px 28px rgba(16,24,40,.07)}
+        .toolbar{padding:14px}
+        .calendar-card{overflow:hidden}
+
+        .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+        .metric{padding:14px 16px;border:1px solid var(--border);border-radius:17px;background:#fff}
+        .metric span{display:block;color:var(--muted);font-size:.72rem;font-weight:850;text-transform:uppercase}
+        .metric strong{font-size:1.55rem;color:var(--blue-dark)}
+
+        .timeline-scroll{overflow:auto}
+        .timeline{min-width:1250px}
+        .timeline-header,.machine-row{display:grid;grid-template-columns:var(--machine-width) minmax(1000px,1fr)}
+        .machine-head{position:sticky;left:0;z-index:12;padding:13px 14px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:#f8fbff;color:var(--blue-dark);font-weight:900}
+        .days{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border)}
+        .day{padding:10px 8px;border-left:1px solid var(--border);text-align:center;background:#f8fbff}
+        .day strong{display:block;color:var(--blue-dark);font-size:.78rem}
+        .day span{color:var(--muted);font-size:.7rem}
+
+        .machine-row{border-bottom:1px solid #edf1f6}
+        .machine-info{position:sticky;left:0;z-index:10;padding:12px 14px;border-right:1px solid var(--border);background:#fff}
+        .machine-info strong{display:block;color:var(--blue-dark)}
+        .machine-info span{display:block;color:var(--muted);font-size:.72rem}
+        .machine-info em{display:inline-block;margin-top:6px;font-size:.68rem;font-style:normal;font-weight:800;color:#475467}
+
+        .track{position:relative;min-height:72px;background-color:#fff;background-image:linear-gradient(to right,rgba(148,163,184,.18) 1px,transparent 1px),linear-gradient(to right,rgba(71,84,103,.28) 1px,transparent 1px);background-size:calc(100% / 168) 100%,calc(100% / 7) 100%}
+        .now-line{position:absolute;top:0;bottom:0;width:2px;background:#d92d20;z-index:6;pointer-events:none}
+        .block{position:absolute;height:40px;padding:5px 8px;border:0;border-radius:9px;color:#fff;text-align:left;overflow:hidden;box-shadow:0 5px 12px rgba(16,24,40,.18);cursor:pointer}
+        .block strong,.block span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .block strong{font-size:.71rem}
+        .block span{font-size:.64rem;opacity:.92}
+        .bloque-programado{background:#175cd3}
+        .bloque-preparacion{background:#dc6803}
+        .bloque-produccion{background:#067647}
+        .bloque-pausado{background:#b42318}
+        .bloque-terminado{background:#667085}
+        .empty-row{display:flex;align-items:center;padding:15px;color:#98a2b3;font-size:.75rem;font-weight:750}
+
+        .legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:.75rem;font-weight:750}
+        .legend i{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:4px}
+
+        @@media(max-width:800px){
+            .page{padding:13px}
+            .metrics{grid-template-columns:1fr}
+            :root{--machine-width:170px}
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <section class="hero">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="small fw-bold text-uppercase opacity-75 mb-2">Planeacion / Solo lectura</div>
+                <h1><i class="fa-solid fa-calendar-days me-2"></i>CALENDARIO MAQUINAS</h1>
+                <p>Consulta semanal de maquinas, OF, parte, molde, cambio, arranque y horas programadas. Este modulo no modifica ninguna OF.</p>
+            </div>
+
+            <a asp-controller="PlaneacionPrograma"
+               asp-action="Index"
+               class="btn-glass">
+                <i class="fa-solid fa-arrow-left"></i>
+                Volver a Planeacion
+            </a>
+        </div>
+    </section>
+
+    <section class="metrics">
+        <div class="metric"><span>Maquinas</span><strong>@Model.TotalMaquinas</strong></div>
+        <div class="metric"><span>OF / programas visibles</span><strong>@Model.TotalBloques</strong></div>
+        <div class="metric"><span>Trabajando ahora</span><strong>@Model.TrabajandoAhora</strong></div>
+    </section>
+
+    <section class="toolbar">
+        <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
+            <div class="d-flex gap-2 flex-wrap">
+                <a asp-action="Index"
+                   asp-route-semana="@semanaAnterior.ToString("yyyy-MM-dd")"
+                   class="btn btn-outline-primary fw-bold">
+                    <i class="fa-solid fa-chevron-left"></i>
+                    Semana anterior
+                </a>
+
+                <a asp-action="Index"
+                   class="btn btn-primary fw-bold">
+                    Hoy
+                </a>
+
+                <a asp-action="Index"
+                   asp-route-semana="@semanaSiguiente.ToString("yyyy-MM-dd")"
+                   class="btn btn-outline-primary fw-bold">
+                    Semana siguiente
+                    <i class="fa-solid fa-chevron-right"></i>
+                </a>
+            </div>
+
+            <div style="min-width:280px">
+                <label class="form-label fw-bold mb-1">Buscar maquina, OF, cliente o parte</label>
+                <input id="calendarSearch"
+                       class="form-control"
+                       type="search"
+                       placeholder="Ej. 500-T, OF 24, GOLDE, 100234..." />
+            </div>
+        </div>
+    </section>
+
+    <section class="calendar-card">
+        <div class="p-3 border-bottom d-flex justify-content-between gap-3 flex-wrap">
+            <div>
+                <strong class="text-primary">
+                    Semana @Model.InicioSemana.ToString("dd/MM/yyyy")
+                    al @Model.FinSemana.AddDays(-1).ToString("dd/MM/yyyy")
+                </strong>
+                <div class="small text-muted">
+                    Los bloques son informativos y no se pueden arrastrar ni editar.
+                </div>
+            </div>
+
+            <div class="legend">
+                <span><i style="background:#175cd3"></i>Programado</span>
+                <span><i style="background:#dc6803"></i>Preparacion</span>
+                <span><i style="background:#067647"></i>Produccion</span>
+                <span><i style="background:#b42318"></i>Pausado</span>
+                <span><i style="background:#667085"></i>Terminado</span>
+            </div>
+        </div>
+
+        <div class="timeline-scroll">
+            <div class="timeline">
+                <div class="timeline-header">
+                    <div class="machine-head">MAQUINA</div>
+
+                    <div class="days">
+                        @for (var day = 0; day < 7; day++)
+                        {
+                            var fecha = Model.InicioSemana.AddDays(day);
+
+                            <div class="day">
+                                <strong>@fecha.ToString("dddd", new CultureInfo("es-MX")).ToUpperInvariant()</strong>
+                                <span>@fecha.ToString("dd/MM")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @foreach (var maquina in Model.Maquinas)
+                {
+                    var rowHeight = Math.Max(72, 12 + maquina.Carriles * 48);
+                    var search = string.Join(" ",
+                        maquina.Codigo,
+                        maquina.Nombre,
+                        string.Join(" ", maquina.Bloques.Select(x =>
+                            $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo}")))
+                        .ToLowerInvariant();
+
+                    <div class="machine-row calendar-machine-row"
+                         data-search="@search">
+                        <div class="machine-info" style="min-height:@(rowHeight)px">
+                            <strong>@maquina.Codigo</strong>
+                            <span>@maquina.Nombre</span>
+                            <em>@maquina.Bloques.Count bloque(s)</em>
+                        </div>
+
+                        <div class="track" style="height:@(rowHeight)px">
+                            @if (ahoraVisible)
+                            {
+                                <div class="now-line"
+                                     style="left:@Pct(ahoraLeft)%"
+                                     title="Hora actual"></div>
+                            }
+
+                            @if (!maquina.Bloques.Any())
+                            {
+                                <div class="empty-row">Sin OF programada durante esta semana.</div>
+                            }
+
+                            @foreach (var bloque in maquina.Bloques)
+                            {
+                                var visibleInicio = bloque.Inicio < Model.InicioSemana
+                                    ? Model.InicioSemana
+                                    : bloque.Inicio;
+
+                                var visibleFin = bloque.Fin > Model.FinSemana
+                                    ? Model.FinSemana
+                                    : bloque.Fin;
+
+                                var left = (visibleInicio - Model.InicioSemana).TotalMinutes / totalMinutos * 100;
+                                var width = Math.Max(
+                                    .35,
+                                    (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
+
+                                var top = 8 + bloque.Carril * 48;
+
+                                <button type="button"
+                                        class="block @bloque.ClaseEstado"
+                                        style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
+                                        title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm")">
+                                    <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
+                                    <span>@(bloque.ClienteNombre ?? "Sin cliente")</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+</div>
+
+@foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
+{
+    <div class="modal fade"
+         id="ofModal_@bloque.ProgramaProduccionID"
+         tabindex="-1"
+         aria-hidden="true">
+
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header border-0">
+                    <div>
+                        <div class="small text-muted fw-bold text-uppercase">Detalle de produccion · Solo lectura</div>
+                        <h2 class="modal-title h5 fw-bold text-primary">@bloque.OFTexto</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Maquina</small><strong class="d-block">@bloque.MaquinaCodigo</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Estatus</small><strong class="d-block">@bloque.EstatusTexto</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Molde</small><strong class="d-block">@(bloque.MoldeCodigo ?? "-")</strong></div></div>
+                        <div class="col-md-6"><div class="border rounded-3 p-3"><small class="text-muted">Cliente</small><strong class="d-block">@(bloque.ClienteNombre ?? "-")</strong></div></div>
+                        <div class="col-md-6"><div class="border rounded-3 p-3"><small class="text-muted">Parte</small><strong class="d-block">@bloque.ParteTexto</strong><span class="small">@bloque.Descripcion</span></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Cambio de molde</small><strong class="d-block">@(bloque.Cambio?.ToString(@"hh\:mm") ?? "-")</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Arranque</small><strong class="d-block">@(bloque.Arranque?.ToString(@"hh\:mm") ?? "-")</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Horas a producir</small><strong class="d-block">@bloque.HorasProgramadas.ToString("N2")</strong></div></div>
+                        <div class="col-md-6"><div class="border rounded-3 p-3"><small class="text-muted">Inicio</small><strong class="d-block">@bloque.Inicio.ToString("dd/MM/yyyy HH:mm")</strong></div></div>
+                        <div class="col-md-6"><div class="border rounded-3 p-3"><small class="text-muted">Fin</small><strong class="d-block">@bloque.Fin.ToString("dd/MM/yyyy HH:mm")</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Programadas</small><strong class="d-block">@bloque.CantidadProgramada.ToString("N0")</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Producidas</small><strong class="d-block">@bloque.CantidadProducida.ToString("N0")</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Pendientes</small><strong class="d-block">@bloque.CantidadPendiente.ToString("N0")</strong></div></div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0">
+                    <button type="button"
+                            class="btn btn-outline-secondary fw-bold"
+                            data-bs-dismiss="modal">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const search = document.getElementById('calendarSearch');
+
+    search?.addEventListener('input', () => {
+        const value = search.value.trim().toLowerCase();
+
+        for (const row of document.querySelectorAll('.calendar-machine-row')) {
+            row.style.display =
+                !value || (row.dataset.search || '').includes(value)
+                    ? ''
+                    : 'none';
+        }
+    });
+</script>
+</body>
+</html>

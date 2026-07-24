@@ -1073,12 +1073,34 @@
             <h1><i class="fa-solid fa-list-check me-2"></i>Programa de Planeación</h1>
             <p>Vista por tarjetas: cada necesidad se revisa rápido, y el envío a Programa Cambio de Molde se confirma en modal antes de continuar.</p>
             <div class="hero-actions">
+<<<<<<< HEAD
                 <a asp-controller="Menu"
                    asp-action="Grupo"
                    asp-route-id="3"
                    class="btn btn-light rounded-4 fw-bold">
                     <i class="fa-solid fa-arrow-left me-1"></i>
                     Volver
+=======
+                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn-glass">
+                    <i class="fa-solid fa-inbox"></i>
+                    Releases
+                </a>
+                <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-glass">
+                    <i class="fa-solid fa-gears"></i>
+                    Máquinas / Cambio de Molde
+                </a>
+                                @* CALENDARIO_MAQUINAS_LECTURA_V1_0 *@
+                <a asp-controller="PlaneacionCalendarioMaquinas"
+                   asp-action="Index"
+                   class="btn-glass">
+                    <i class="fa-solid fa-calendar-days"></i>
+                    Calendario Maquinas
+                </a>
+
+<a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass">
+                    <i class="fa-solid fa-chart-line"></i>
+                    Panorama
+>>>>>>> origin/Rama_Adrian
                 </a>
                 <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn-glass"><i class="fa-solid fa-inbox"></i>Releases</a>
                 <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-glass"><i class="fa-solid fa-gears"></i>Máquinas / Cambio de Molde</a>
