@@ -1,4 +1,5 @@
 ﻿@model ERP.NSQuell.Models.PlaneacionProgramaMaquinasVm
+@using System.Collections.Generic
 
 @{
     Layout = null;
@@ -82,36 +83,79 @@
         return value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
     }
 
+    DateTime RangoInicio()
+    {
+        return Model.FechaDesde.Date;
+    }
+
+    DateTime RangoFin()
+    {
+        return Model.FechaHasta.Date.AddDays(1);
+    }
+
+    DateTime FinReal(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        return p.FechaFinProgramada
+            ?? p.FechaInicioProgramada?.AddHours((double)(p.HorasProgramadas ?? 1))
+            ?? RangoInicio().AddHours(1);
+    }
+
+    DateTime InicioVisible(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        var inicio = p.FechaInicioProgramada ?? RangoInicio();
+        return inicio < RangoInicio() ? RangoInicio() : inicio;
+    }
+
+    DateTime FinVisible(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        var fin = FinReal(p);
+        return fin > RangoFin() ? RangoFin() : fin;
+    }
+
     decimal TimelineLeft(DateTime? fecha)
     {
-        if (!fecha.HasValue) return 0;
-
-        var rangoInicio = Model.FechaDesde.Date;
-        var rangoFin = Model.FechaHasta.Date.AddDays(1);
+        var rangoInicio = RangoInicio();
+        var rangoFin = RangoFin();
         var totalMinutos = (decimal)(rangoFin - rangoInicio).TotalMinutes;
 
-        if (totalMinutos <= 0) return 0;
+        if (!fecha.HasValue || totalMinutos <= 0)
+            return 0;
 
-        var minutos = (decimal)(fecha.Value - rangoInicio).TotalMinutes;
+        var fechaVisible = fecha.Value < rangoInicio ? rangoInicio : fecha.Value;
+        if (fechaVisible > rangoFin)
+            fechaVisible = rangoFin;
+
+        var minutos = (decimal)(fechaVisible - rangoInicio).TotalMinutes;
         return Clamp((minutos / totalMinutos) * 100m);
     }
 
     decimal TimelineWidth(DateTime? inicio, DateTime? fin)
     {
-        if (!inicio.HasValue) return 2;
+        if (!inicio.HasValue)
+            return 0;
 
-        var rangoInicio = Model.FechaDesde.Date;
-        var rangoFin = Model.FechaHasta.Date.AddDays(1);
+        var rangoInicio = RangoInicio();
+        var rangoFin = RangoFin();
         var totalMinutos = (decimal)(rangoFin - rangoInicio).TotalMinutes;
 
-        if (totalMinutos <= 0) return 2;
+        if (totalMinutos <= 0)
+            return 0;
 
+        var inicioVisible = inicio.Value < rangoInicio ? rangoInicio : inicio.Value;
         var finReal = fin ?? inicio.Value.AddHours(1);
-        var minutos = (decimal)(finReal - inicio.Value).TotalMinutes;
+        var finVisible = finReal > rangoFin ? rangoFin : finReal;
+
+        if (finVisible <= inicioVisible)
+            return 0;
+
+        var minutos = (decimal)(finVisible - inicioVisible).TotalMinutes;
         var porcentaje = (minutos / totalMinutos) * 100m;
 
-        if (porcentaje < 2) porcentaje = 2;
-        if (porcentaje > 100) porcentaje = 100;
+        if (porcentaje < 1.6m)
+            porcentaje = 1.6m;
+
+        if (porcentaje > 100)
+            porcentaje = 100;
 
         return porcentaje;
     }
@@ -122,13 +166,57 @@
         var width = TimelineWidth(p.FechaInicioProgramada, p.FechaFinProgramada);
 
         if (left + width > 100)
-        {
             width = 100 - left;
-        }
 
-        if (width < 2) width = 2;
+        if (width < 1.6m)
+            width = 1.6m;
 
         return $"left:{Percent(left)};width:{Percent(width)};";
+    }
+
+    List<DateTime> DiasRango()
+    {
+        var lista = new List<DateTime>();
+        var inicio = Model.FechaDesde.Date;
+        var fin = Model.FechaHasta.Date;
+
+        if (fin < inicio)
+            fin = inicio;
+
+        for (var fecha = inicio; fecha <= fin; fecha = fecha.AddDays(1))
+            lista.Add(fecha);
+
+        return lista;
+    }
+
+    bool ProgramaCruzaDia(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p, DateTime dia)
+    {
+        if (!p.FechaInicioProgramada.HasValue)
+            return false;
+
+        var inicio = p.FechaInicioProgramada.Value;
+        var fin = FinReal(p);
+        var diaInicio = dia.Date;
+        var diaFin = diaInicio.AddDays(1);
+
+        return inicio < diaFin && fin > diaInicio;
+    }
+
+    string RangoVisibleTexto(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        return InicioVisible(p).ToString("dd/MM HH:mm") + " - " + FinVisible(p).ToString("dd/MM HH:mm");
+    }
+
+    string TimelineNowStyle()
+    {
+        var ahora = DateTime.Now;
+        var rangoInicio = RangoInicio();
+        var rangoFin = RangoFin();
+
+        if (ahora < rangoInicio || ahora > rangoFin)
+            return "display:none;";
+
+        return $"left:{Percent(TimelineLeft(ahora))};";
     }
 
     string TimelineClass(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
@@ -745,19 +833,84 @@
             margin-bottom: 12px;
         }
 
+        .timeline-scale {
+            display: grid;
+            gap: 0;
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 18px 18px 0 0;
+            overflow: hidden;
+            background: #F8FBFF;
+        }
+
+        .timeline-scale-day {
+            min-width: 120px;
+            padding: 10px 8px;
+            border-right: 1px solid #E6EDF7;
+            text-align: center;
+        }
+
+            .timeline-scale-day:last-child {
+                border-right: none;
+            }
+
+        .timeline-day-name {
+            color: var(--blue-dark);
+            font-size: .78rem;
+            font-weight: 950;
+            text-transform: capitalize;
+        }
+
+        .timeline-day-date {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 800;
+            margin-top: 2px;
+        }
+
         .timeline-track {
             position: relative;
-            height: 68px;
-            border-radius: 20px;
-            background: repeating-linear-gradient(to right, #F2F4F7 0, #F2F4F7 1px, #FFFFFF 1px, #FFFFFF 8.333%);
+            height: 96px;
+            border-radius: 0 0 18px 18px;
+            background: white;
             border: 1px solid var(--border);
             overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .timeline-day-grid {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            pointer-events: none;
+        }
+
+        .timeline-day-column {
+            border-right: 1px solid #EDF2F7;
+            background: linear-gradient(180deg, rgba(248,251,255,.90), rgba(255,255,255,.65));
+        }
+
+            .timeline-day-column:nth-child(even) {
+                background: linear-gradient(180deg, rgba(242,246,252,.90), rgba(255,255,255,.65));
+            }
+
+            .timeline-day-column:last-child {
+                border-right: none;
+            }
+
+        .timeline-hour-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            border-top: 1px dashed #D7E1EE;
+            pointer-events: none;
         }
 
         .timeline-item {
             position: absolute;
-            top: 15px;
-            height: 38px;
+            top: 34px;
+            height: 42px;
             border-radius: 999px;
             color: white;
             font-size: .74rem;
@@ -765,11 +918,105 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0 10px;
+            padding: 0 12px;
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
-            box-shadow: 0 8px 18px rgba(16,24,40,.14);
+            box-shadow: 0 10px 20px rgba(16,24,40,.18);
+            z-index: 3;
+        }
+
+            .timeline-item small {
+                font-size: .68rem;
+                font-weight: 800;
+                opacity: .95;
+                margin-left: 6px;
+            }
+
+        .timeline-now-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #B42318;
+            z-index: 5;
+            box-shadow: 0 0 0 3px rgba(180,35,24,.10);
+        }
+
+        .timeline-now-label {
+            position: absolute;
+            top: 6px;
+            transform: translateX(-50%);
+            background: #B42318;
+            color: white;
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: .68rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .timeline-help {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+        .timeline-day-detail {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .timeline-day-card {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: #FBFDFF;
+            padding: 12px;
+        }
+
+        .timeline-day-title {
+            color: var(--blue-dark);
+            font-size: .84rem;
+            font-weight: 950;
+            text-transform: capitalize;
+            margin-bottom: 8px;
+        }
+
+        .timeline-day-empty {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 750;
+        }
+
+        .timeline-day-program {
+            border: 1px solid #E4EBF5;
+            background: white;
+            border-radius: 12px;
+            padding: 8px;
+            margin-bottom: 7px;
+        }
+
+            .timeline-day-program:last-child {
+                margin-bottom: 0;
+            }
+
+        .timeline-day-program-title {
+            color: var(--text);
+            font-size: .78rem;
+            font-weight: 950;
+        }
+
+        .timeline-day-program-sub {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 750;
+            margin-top: 2px;
         }
 
         .timeline-primary {
@@ -952,19 +1199,9 @@
                     </div>
                 </div>
                 <div class="hero-actions d-flex gap-2 flex-wrap">
-                    <a asp-controller="PlaneacionPrograma"
-                       asp-action="Index"
-                       class="btn-glass">
-                        <i class="fa-solid fa-arrow-left"></i>
-                        Volver
-                    </a>
+                    <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-glass"><i class="fa-solid fa-arrow-left"></i> Volver</a>
                     <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass"><i class="fa-solid fa-chart-line"></i> Panorama</a>
-                    <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-glass"><i class="fa-solid fa-list"></i> Programa general</a>                    <a asp-controller="PlaneacionPrograma"
-                       asp-action="CalendarioMaquinas"
-                       class="btn-glass">
-                        <i class="fa-solid fa-calendar-week"></i>
-                        Programador semanal
-                    </a>
+                    <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-glass"><i class="fa-solid fa-list"></i> Programa general</a>
                 </div>
             </div>
         </section>
@@ -1105,14 +1342,96 @@
                                                 <div class="stage-head"><h3 class="stage-title">Timeline operativo</h3><div class="stage-desc">Carga completa de la máquina dentro del rango seleccionado.</div></div>
                                                 <div class="stage-body">
                                                     <div class="timeline-panel">
-                                                        <div class="timeline-title"><i class="fa-solid fa-timeline me-2"></i>Línea de tiempo</div>
-                                                        <div class="timeline-track">
-                                                            @foreach (var p in programasOrdenados)
+                                                        @{
+                                                            var diasTimeline = DiasRango();
+                                                            var columnasTimeline = Math.Max(1, diasTimeline.Count);
+                                                        }
+
+                                                        <div class="timeline-title">
+                                                            <i class="fa-solid fa-timeline me-2"></i>
+                                                            Línea de tiempo operativa
+                                                        </div>
+
+                                                        <div class="timeline-help">
+                                                            <span class="pill pill-primary"><i class="fa-solid fa-circle"></i> Programado</span>
+                                                            <span class="pill pill-success"><i class="fa-solid fa-play"></i> En producción</span>
+                                                            <span class="pill pill-warning"><i class="fa-solid fa-wrench"></i> Preparación</span>
+                                                            <span class="pill pill-danger"><i class="fa-solid fa-pause"></i> Pausado</span>
+                                                            <span class="pill pill-muted"><i class="fa-solid fa-calendar"></i> La barra muestra inicio, fin y duración dentro del rango</span>
+                                                        </div>
+
+                                                        <div class="timeline-scale" style="grid-template-columns: repeat(@columnasTimeline, minmax(120px, 1fr));">
+                                                            @foreach (var dia in diasTimeline)
                                                             {
-                                                                <div class="timeline-item @TimelineClass(p)" style="@TimelineStyle(p)" title="@Valor(p.ReferenciaSAP ?? p.NumeroParte) · @FechaHora(p.FechaInicioProgramada) - @FechaHora(p.FechaFinProgramada)">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</div>
+                                                                <div class="timeline-scale-day">
+                                                                    <div class="timeline-day-name">@dia.ToString("dddd", new System.Globalization.CultureInfo("es-MX"))</div>
+                                                                    <div class="timeline-day-date">@dia.ToString("dd/MM/yyyy")</div>
+                                                                </div>
                                                             }
                                                         </div>
-                                                        <div class="timeline-legend"><span>@Model.FechaDesde.ToString("dd/MM/yyyy")</span><span>@Model.FechaHasta.ToString("dd/MM/yyyy")</span></div>
+
+                                                        <div class="timeline-track">
+                                                            <div class="timeline-day-grid" style="grid-template-columns: repeat(@columnasTimeline, minmax(120px, 1fr));">
+                                                                @foreach (var dia in diasTimeline)
+                                                                {
+                                                                    <div class="timeline-day-column"></div>
+                                                                }
+                                                            </div>
+
+                                                            <div class="timeline-hour-line"></div>
+
+                                                            <div class="timeline-now-line" style="@TimelineNowStyle()">
+                                                                <span class="timeline-now-label">Ahora</span>
+                                                            </div>
+
+                                                            @foreach (var p in programasOrdenados)
+                                                            {
+                                                                <div class="timeline-item @TimelineClass(p)"
+                                                                     style="@TimelineStyle(p)"
+                                                                     title="@Valor(p.ReferenciaSAP ?? p.NumeroParte) · @FechaHora(p.FechaInicioProgramada) - @FechaHora(p.FechaFinProgramada)">
+                                                                    @Valor(p.ReferenciaSAP ?? p.NumeroParte)
+                                                                    <small>@InicioVisible(p).ToString("HH:mm") - @FinVisible(p).ToString("HH:mm")</small>
+                                                                </div>
+                                                            }
+                                                        </div>
+
+                                                        <div class="timeline-legend">
+                                                            <span>Inicio del rango: @Model.FechaDesde.ToString("dd/MM/yyyy 00:00")</span>
+                                                            <span>Fin del rango: @Model.FechaHasta.ToString("dd/MM/yyyy 23:59")</span>
+                                                        </div>
+
+                                                        <div class="timeline-day-detail">
+                                                            @foreach (var dia in diasTimeline)
+                                                            {
+                                                                var programasDia = programasOrdenados.Where(p => ProgramaCruzaDia(p, dia)).ToList();
+
+                                                                <div class="timeline-day-card">
+                                                                    <div class="timeline-day-title">
+                                                                        <i class="fa-regular fa-calendar me-1"></i>
+                                                                        @dia.ToString("dddd dd/MM", new System.Globalization.CultureInfo("es-MX"))
+                                                                    </div>
+
+                                                                    @if (!programasDia.Any())
+                                                                    {
+                                                                        <div class="timeline-day-empty">Sin carga programada</div>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        foreach (var pDia in programasDia)
+                                                                        {
+                                                                            <div class="timeline-day-program">
+                                                                                <div class="timeline-day-program-title">
+                                                                                    @Valor(pDia.ReferenciaSAP ?? pDia.NumeroParte)
+                                                                                </div>
+                                                                                <div class="timeline-day-program-sub">
+                                                                                    @RangoVisibleTexto(pDia) · @pDia.CantidadProgramada.ToString("N0") pzas.
+                                                                                </div>
+                                                                            </div>
+                                                                        }
+                                                                    }
+                                                                </div>
+                                                            }
+                                                        </div>
                                                     </div>
 
                                                     <div class="program-list">
@@ -1122,10 +1441,11 @@
                                                             <div class="program-card @featured">
                                                                 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                                                                     <div>
-                                                                        <div class="d-flex gap-2 flex-wrap mb-2"><span class="pill @ClaseEstatus(p.EstatusID)"><i class="fa-solid fa-circle" style="font-size:.45rem;"></i>@p.EstatusNombre</span><span class="pill pill-primary">@Valor(p.CondicionProduccion)</span>@if (maq.Actual?.ProgramaProduccionID == p.ProgramaProduccionID){
-                                                                        <span class="pill pill-success"><i class="fa-solid fa-play"></i>Actual</span>
-                                                                    }
-        </div>
+                                                                        <div class="d-flex gap-2 flex-wrap mb-2">
+                                                                            <span class="pill @ClaseEstatus(p.EstatusID)"><i class="fa-solid fa-circle" style="font-size:.45rem;"></i>@p.EstatusNombre</span><span class="pill pill-primary">@Valor(p.CondicionProduccion)</span>@if (maq.Actual?.ProgramaProduccionID == p.ProgramaProduccionID){
+                                                                            <span class="pill pill-success"><i class="fa-solid fa-play"></i>Actual</span>
+                                                                        }
+                                                                    </div>
                                                                     <div class="program-title">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</div>
                                                                     <div class="program-desc">@Valor(p.DesignacionDescripcionSAP)</div>
                                                                 </div>
@@ -1161,30 +1481,33 @@
                                         </div>
                                     </main>
                                     <aside class="side-panel">
-                                        <div class="side-card"><div class="side-title"><i class="fa-solid fa-play text-success me-2"></i>Programa actual</div>@if (maq.Actual != null){var actual = maq.Actual;
-                                        <div class="queue-item"><div class="fw-bold">@Valor(actual.ReferenciaSAP ?? actual.NumeroParte)</div><div class="text-muted small">@Valor(actual.DesignacionDescripcionSAP)</div><div class="chip-row mt-2"><span class="pill pill-success">@actual.EstatusNombre</span><span class="pill pill-primary">@Valor(actual.MoldeCodigo)</span></div></div>
-                                    }else
-                                    {
+                                        <div class="side-card">
+                                            <div class="side-title"><i class="fa-solid fa-play text-success me-2"></i>Programa actual</div>@if (maq.Actual != null){var actual = maq.Actual;
+                                            <div class="queue-item"><div class="fw-bold">@Valor(actual.ReferenciaSAP ?? actual.NumeroParte)</div><div class="text-muted small">@Valor(actual.DesignacionDescripcionSAP)</div><div class="chip-row mt-2"><span class="pill pill-success">@actual.EstatusNombre</span><span class="pill pill-primary">@Valor(actual.MoldeCodigo)</span></div></div>
+                                        }else
+                                        {
 
-                                        <div class="text-muted small">No hay programa marcado como actual.</div>
-                                    }
-</div>
-                                    <div class="side-card"><div class="side-title"><i class="fa-solid fa-forward-step text-primary me-2"></i>Siguiente carga</div>@if (maq.Siguiente != null){var sig = maq.Siguiente;
-                                    <div class="queue-item"><div class="fw-bold">@Valor(sig.ReferenciaSAP ?? sig.NumeroParte)</div><div class="text-muted small">@Valor(sig.DesignacionDescripcionSAP)</div><div class="chip-row mt-2"><span class="pill pill-primary">@FechaHora(sig.FechaInicioProgramada)</span><span class="pill pill-purple">@Valor(sig.MoldeCodigo)</span></div></div>
-                                                                        }else
-                                    {
+                                            <div class="text-muted small">No hay programa marcado como actual.</div>
+                                        }
+                                    </div>
+                                    <div class="side-card">
+                                        <div class="side-title"><i class="fa-solid fa-forward-step text-primary me-2"></i>Siguiente carga</div>@if (maq.Siguiente != null){var sig = maq.Siguiente;
+                                        <div class="queue-item"><div class="fw-bold">@Valor(sig.ReferenciaSAP ?? sig.NumeroParte)</div><div class="text-muted small">@Valor(sig.DesignacionDescripcionSAP)</div><div class="chip-row mt-2"><span class="pill pill-primary">@FechaHora(sig.FechaInicioProgramada)</span><span class="pill pill-purple">@Valor(sig.MoldeCodigo)</span></div></div>
+                                                                                }else
+                                        {
 
-                                        <div class="text-muted small">No hay siguiente programa identificado.</div>
-                                    }
-</div>
-                                    <div class="side-card"><div class="side-title"><i class="fa-solid fa-list-ol text-primary me-2"></i>Cola resumida</div>@foreach (var p in programasOrdenados.Take(6)){
-                                    <div class="queue-item"><div class="fw-bold">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</div><div class="text-muted small">@FechaHora(p.FechaInicioProgramada)</div><div class="chip-row mt-2"><span class="pill @ClaseEstatus(p.EstatusID)">@p.EstatusNombre</span><span class="pill pill-muted">@p.CantidadProgramada.ToString("N0") pzas.</span></div></div>
-                                                                        }
-@if (programasOrdenados.Count > 6)
-{
-                                        <div class="text-muted small fw-bold">+ @(programasOrdenados.Count - 6) programas más.</div>
-                                    }
-</div>
+                                            <div class="text-muted small">No hay siguiente programa identificado.</div>
+                                        }
+                                    </div>
+                                    <div class="side-card">
+                                        <div class="side-title"><i class="fa-solid fa-list-ol text-primary me-2"></i>Cola resumida</div>@foreach (var p in programasOrdenados.Take(6)){
+                                        <div class="queue-item"><div class="fw-bold">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</div><div class="text-muted small">@FechaHora(p.FechaInicioProgramada)</div><div class="chip-row mt-2"><span class="pill @ClaseEstatus(p.EstatusID)">@p.EstatusNombre</span><span class="pill pill-muted">@p.CantidadProgramada.ToString("N0") pzas.</span></div></div>
+                                                                                }
+                                        @if (programasOrdenados.Count > 6)
+                                        {
+                                            <div class="text-muted small fw-bold">+ @(programasOrdenados.Count - 6) programas más.</div>
+                                        }
+                                    </div>
                                 </aside>
                             </div>
                                                         }
@@ -1201,7 +1524,7 @@
 
         <section class="sticky-actions">
             <div class="d-flex justify-content-between gap-2 flex-wrap">
-                <a asp-controller="PlaneacionRelease" asp-action="Calculadora" class="btn btn-light-main"><i class="fa-solid fa-arrow-left me-1"></i>Volver a Programa de Planeación</a>
+                <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn btn-light-main"><i class="fa-solid fa-arrow-left me-1"></i>Volver a Volver</a>
                 <div class="d-flex gap-2 flex-wrap"><a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn btn-light-main"><i class="fa-solid fa-chart-line me-1"></i>Panorama</a><a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn btn-main"><i class="fa-solid fa-list me-1"></i>Programa general</a></div>
             </div>
         </section>

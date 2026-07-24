@@ -1,53 +1,24 @@
 ﻿@model ERP.NSQuell.Models.PlaneacionPanoramaVm
 @using ERP.NSQuell.Models
 @using System.Globalization
+@using System.Collections.Generic
+@using System.Linq
 
 @{
     Layout = null;
+    var cultura = new CultureInfo("es-MX");
 }
 
 @functions {
-    string Valor(string? v)
-    {
-        return string.IsNullOrWhiteSpace(v) ? "-" : v;
-    }
+    static readonly CultureInfo CulturaMx = new CultureInfo("es-MX");
 
-    string Fecha(DateTime? f)
-    {
-        return f.HasValue ? f.Value.ToString("dd/MM/yyyy") : "-";
-    }
-
-    string FechaLarga(DateTime? f)
-    {
-        return f.HasValue
-            ? f.Value.ToString("dddd dd 'de' MMMM yyyy", new CultureInfo("es-MX"))
-            : "Sin fecha";
-    }
-
-    string FechaHora(DateTime? f)
-    {
-        return f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
-    }
-
-    string Hora(TimeSpan? h)
-    {
-        return h.HasValue ? h.Value.ToString(@"hh\:mm") : "-";
-    }
-
-    string Entero(int v)
-    {
-        return v.ToString("N0");
-    }
-
-    string Decimal2(decimal? v)
-    {
-        return v.HasValue ? v.Value.ToString("N2") : "-";
-    }
-
-    string Decimal2NoNull(decimal v)
-    {
-        return v.ToString("N2");
-    }
+    string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
+    string Fecha(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy") : "-";
+    string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    string Entero(int v) => v.ToString("N0");
+    string EnteroNullable(int? v) => v.HasValue ? v.Value.ToString("N0") : "0";
+    string Decimal2(decimal? v) => v.HasValue ? v.Value.ToString("N2") : "0.00";
+    string Decimal2NoNull(decimal v) => v.ToString("N2");
 
     decimal Porcentaje(int valor, int total)
     {
@@ -55,6 +26,14 @@
             return 0;
 
         return Math.Round(((decimal)valor / total) * 100, 2);
+    }
+
+    decimal PorcentajeDecimal(decimal valor, decimal total)
+    {
+        if (total <= 0)
+            return 0;
+
+        return Math.Round((valor / total) * 100, 2);
     }
 
     string Width(decimal porcentaje)
@@ -87,7 +66,7 @@
         if (string.IsNullOrWhiteSpace(nombre))
             return "?";
 
-        return nombre.Trim().Substring(0, 1).ToUpper();
+        return nombre.Trim().Substring(0, 1).ToUpperInvariant();
     }
 
     string EstadoData(PlaneacionPanoramaRenglonVm r)
@@ -166,18 +145,22 @@
         return fecha.HasValue ? fecha.Value.ToString("yyyy-MM") : "SIN_FECHA";
     }
 
-    string PeriodoAnio(DateTime? fecha)
-    {
-        return fecha.HasValue ? fecha.Value.ToString("yyyy") : "SIN_FECHA";
-    }
-
     string TextoDia(string key)
     {
         if (key == "SIN_FECHA")
             return "Sin fecha";
 
         var f = DateTime.Parse(key);
-        return f.ToString("dddd dd MMMM yyyy", new CultureInfo("es-MX"));
+        return f.ToString("ddd dd/MM", CulturaMx);
+    }
+
+    string TextoDiaLargo(string key)
+    {
+        if (key == "SIN_FECHA")
+            return "Sin fecha";
+
+        var f = DateTime.Parse(key);
+        return f.ToString("dddd dd MMMM yyyy", CulturaMx);
     }
 
     string TextoSemana(string key)
@@ -189,9 +172,9 @@
         var inicio = DateTime.Parse(partes[0]);
         var fin = DateTime.Parse(partes[1]);
 
-        return "Semana " + ISOWeek.GetWeekOfYear(inicio) + " · " +
-               inicio.ToString("dd MMM", new CultureInfo("es-MX")) + " - " +
-               fin.ToString("dd MMM yyyy", new CultureInfo("es-MX"));
+        return "Sem. " + ISOWeek.GetWeekOfYear(inicio) + " · " +
+               inicio.ToString("dd MMM", CulturaMx) + " - " +
+               fin.ToString("dd MMM", CulturaMx);
     }
 
     string TextoMes(string key)
@@ -200,24 +183,18 @@
             return "Sin fecha";
 
         var f = DateTime.Parse(key + "-01");
-        return f.ToString("MMMM yyyy", new CultureInfo("es-MX"));
+        return f.ToString("MMMM yyyy", CulturaMx);
     }
 
-    string TextoAnio(string key)
+    string IdSeguro(string prefijo, int a, int b = 0)
     {
-        return key == "SIN_FECHA" ? "Sin fecha" : key;
+        return $"{prefijo}_{a}_{b}";
     }
-
 
     public sealed class PeriodoGrupo
     {
         public string Key { get; set; } = "";
         public List<PlaneacionPanoramaRenglonVm> Datos { get; set; } = new List<PlaneacionPanoramaRenglonVm>();
-
-        public List<PlaneacionPanoramaRenglonVm> ToList()
-        {
-            return Datos;
-        }
     }
 
     List<PeriodoGrupo> ConstruirGruposDia(IEnumerable<PlaneacionPanoramaRenglonVm> renglones, DateTime desde, DateTime hasta)
@@ -263,7 +240,6 @@
             .ToDictionary(g => g.Key, g => g.ToList());
 
         var lista = new List<PeriodoGrupo>();
-
         var inicio = desde.Date;
         var fin = hasta.Date;
 
@@ -306,7 +282,6 @@
             .ToDictionary(g => g.Key, g => g.ToList());
 
         var lista = new List<PeriodoGrupo>();
-
         var inicio = new DateTime(desde.Year, desde.Month, 1);
         var fin = new DateTime(hasta.Year, hasta.Month, 1);
 
@@ -336,9 +311,93 @@
         return lista;
     }
 
-    string IdSeguro(string prefijo, int a, int b = 0)
+
+    DateTime InicioSemanaDesdeKey(string key)
     {
-        return $"{prefijo}_{a}_{b}";
+        if (key == "SIN_FECHA")
+            return DateTime.Today;
+
+        var partes = key.Split('|');
+        return DateTime.Parse(partes[0]);
+    }
+
+    DateTime FinSemanaDesdeKey(string key)
+    {
+        if (key == "SIN_FECHA")
+            return DateTime.Today;
+
+        var partes = key.Split('|');
+        return DateTime.Parse(partes[1]);
+    }
+
+    DateTime InicioMesDesdeKey(string key)
+    {
+        if (key == "SIN_FECHA")
+            return new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+        return DateTime.Parse(key + "-01");
+    }
+
+    DateTime FinMesDesdeKey(string key)
+    {
+        var inicio = InicioMesDesdeKey(key);
+        return inicio.AddMonths(1).AddDays(-1);
+    }
+
+    int SumaRequerido(PeriodoGrupo g) => g.Datos.Sum(x => x.CantidadRequerida);
+    int SumaPT(PeriodoGrupo g) => g.Datos.Sum(x => x.PiezasDesdePT);
+    int SumaProgramado(PeriodoGrupo g) => g.Datos.Sum(x => x.CantidadProgramada);
+    int SumaProducido(PeriodoGrupo g) => g.Datos.Sum(x => x.CantidadProducida);
+    int SumaPendiente(PeriodoGrupo g) => g.Datos.Sum(x => x.CantidadPendiente);
+    decimal SumaMp(PeriodoGrupo g) => g.Datos.Sum(x => x.CantidadMpKg ?? 0);
+    decimal SumaEmbalajes(PeriodoGrupo g) => g.Datos.Sum(x => x.CantidadEmbalajes ?? 0);
+
+    int MaxCantidad(IEnumerable<PeriodoGrupo> grupos)
+    {
+        var lista = grupos.ToList();
+
+        if (!lista.Any())
+            return 1;
+
+        var max = lista
+            .Select(g => new[]
+            {
+                SumaRequerido(g),
+                SumaPT(g),
+                SumaProgramado(g),
+                SumaProducido(g),
+                SumaPendiente(g)
+            }.Max())
+            .DefaultIfEmpty(1)
+            .Max();
+
+        return Math.Max(1, max);
+    }
+
+    decimal MaxDecimal(IEnumerable<PeriodoGrupo> grupos)
+    {
+        var max = grupos
+            .Select(SumaMp)
+            .DefaultIfEmpty(1m)
+            .Max();
+
+        return Math.Max(1m, max);
+    }
+
+    string SearchCliente(PlaneacionPanoramaClienteVm cliente)
+    {
+        return (
+            cliente.ClienteNombre + " " +
+            string.Join(" ", cliente.Partes.Select(p =>
+                (p.NumeroParte ?? "") + " " +
+                (p.ReferenciaSAP ?? "") + " " +
+                (p.DesignacionDescripcionSAP ?? "") + " " +
+                (p.MaquinaCodigo ?? "") + " " +
+                (p.MoldeCodigo ?? "") + " " +
+                (p.MaterialCodigo ?? "") + " " +
+                (p.MaterialDescripcion ?? "")
+            ))
+        ).ToLowerInvariant();
     }
 }
 
@@ -359,11 +418,13 @@
             --blue-soft: #EEF6FF;
             --green: #10804C;
             --green-soft: #ECFDF3;
+            --orange: #F79009;
+            --orange-soft: #FFF7ED;
             --yellow: #F7B500;
             --yellow-soft: #FFF7DF;
             --red: #B42318;
             --red-soft: #FEF3F2;
-            --purple: #7F2CCB;
+            --purple: #7F56D9;
             --purple-soft: #F4EBFF;
             --gray-bg: #F4F7FB;
             --border: #D9E2EE;
@@ -373,22 +434,27 @@
             --shadow-soft: 0 10px 28px rgba(16, 24, 40, .06);
         }
 
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
-            background: radial-gradient(circle at top left, rgba(0, 74, 173, .11), transparent 28%), linear-gradient(180deg, #F7FAFF 0%, #EEF3F9 100%);
+            background: radial-gradient(circle at top left, rgba(0, 74, 173, .13), transparent 28%), radial-gradient(circle at 88% 12%, rgba(16, 128, 76, .10), transparent 30%), linear-gradient(180deg, #F7FAFF 0%, #EEF3F9 100%);
             color: var(--text);
             font-family: "Segoe UI", Arial, sans-serif;
         }
 
         .page {
-            max-width: 1820px;
+            max-width: 1880px;
             margin: 0 auto;
             padding: 28px;
         }
 
         .hero {
-            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
-            border-radius: 30px;
+            background: linear-gradient(135deg, rgba(0,74,173,.99), rgba(6,56,117,.98)), url("data:image/svg+xml,%3Csvg width='1000' height='360' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='rgba(255,255,255,.14)' stroke-width='2'%3E%3Cpath d='M0 250 C180 100 260 300 430 130 S700 80 1000 190'/%3E%3Cpath d='M0 80 C200 190 260 20 480 100 S650 260 1000 120'/%3E%3C/g%3E%3Cg fill='rgba(255,255,255,.08)'%3E%3Ccircle cx='860' cy='75' r='110'/%3E%3Ccircle cx='930' cy='210' r='58'/%3E%3C/g%3E%3C/svg%3E");
+            background-size: cover;
+            border-radius: 34px;
             padding: 32px;
             color: white;
             margin-bottom: 22px;
@@ -397,41 +463,50 @@
             overflow: hidden;
         }
 
-            .hero::after {
-                content: "";
-                position: absolute;
-                width: 320px;
-                height: 320px;
-                right: -110px;
-                top: -140px;
-                border-radius: 999px;
-                background: rgba(255,255,255,.10);
-            }
-
             .hero h1 {
-                font-size: 2rem;
+                font-size: 2.08rem;
                 font-weight: 950;
                 margin: 0;
-                position: relative;
-                z-index: 2;
             }
 
             .hero p {
-                color: rgba(255,255,255,.86);
+                color: rgba(255,255,255,.88);
                 margin-top: 8px;
-                max-width: 920px;
-                position: relative;
-                z-index: 2;
+                max-width: 980px;
             }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.13);
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: .74rem;
+            font-weight: 950;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
+
+        .btn-glass,
+        .btn-primary-soft,
+        .btn-white-soft {
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+        }
 
         .btn-glass {
             border: 1px solid rgba(255,255,255,.35);
             background: rgba(255,255,255,.14);
             color: white;
-            border-radius: 15px;
-            padding: 10px 15px;
-            font-weight: 850;
-            text-decoration: none;
             backdrop-filter: blur(10px);
         }
 
@@ -444,10 +519,6 @@
             background: var(--blue);
             border: 1px solid var(--blue);
             color: white;
-            border-radius: 15px;
-            padding: 10px 15px;
-            font-weight: 900;
-            text-decoration: none;
         }
 
             .btn-primary-soft:hover {
@@ -459,10 +530,6 @@
             background: white;
             border: 1px solid var(--border);
             color: var(--blue-dark);
-            border-radius: 15px;
-            padding: 10px 15px;
-            font-weight: 900;
-            text-decoration: none;
         }
 
             .btn-white-soft:hover {
@@ -471,7 +538,7 @@
             }
 
         .panel {
-            background: rgba(255,255,255,.90);
+            background: rgba(255,255,255,.92);
             backdrop-filter: blur(12px);
             border: 1px solid var(--border);
             border-radius: 28px;
@@ -498,6 +565,7 @@
             border-radius: 15px;
             border: 1px solid var(--border);
             padding: 11px 13px;
+            box-shadow: none;
         }
 
         .chip-row {
@@ -585,17 +653,17 @@
 
         .client-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
             gap: 20px;
         }
 
         .client-card {
             background: white;
             border: 1px solid var(--border);
-            border-radius: 28px;
+            border-radius: 30px;
             box-shadow: var(--shadow-soft);
             padding: 22px;
-            min-height: 325px;
+            min-height: 350px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -634,18 +702,20 @@
         }
 
         .client-avatar {
-            width: 62px;
-            height: 62px;
-            border-radius: 22px;
+            width: 64px;
+            height: 64px;
+            border-radius: 24px;
             background: linear-gradient(135deg, var(--blue), var(--blue-dark));
             color: white;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.35rem;
+            font-size: 1.45rem;
             font-weight: 950;
             box-shadow: 0 14px 28px rgba(0,74,173,.22);
             margin-bottom: 16px;
+            position: relative;
+            z-index: 2;
         }
 
         .client-title {
@@ -654,6 +724,8 @@
             font-weight: 950;
             margin: 0;
             line-height: 1.18;
+            position: relative;
+            z-index: 2;
         }
 
         .client-sub {
@@ -661,6 +733,8 @@
             font-size: .86rem;
             font-weight: 700;
             margin-top: 8px;
+            position: relative;
+            z-index: 2;
         }
 
         .mini-grid {
@@ -668,6 +742,8 @@
             grid-template-columns: repeat(2, 1fr);
             gap: 11px;
             margin-top: 18px;
+            position: relative;
+            z-index: 2;
         }
 
         .mini-box {
@@ -704,19 +780,19 @@
         }
 
         .bar-success {
-            background: var(--green);
+            background: linear-gradient(90deg, #12B76A, #067647);
         }
 
         .bar-primary {
-            background: var(--blue);
+            background: linear-gradient(90deg, #2E90FA, #004AAD);
         }
 
         .bar-warning {
-            background: var(--yellow);
+            background: linear-gradient(90deg, #FDB022, #DC6803);
         }
 
         .bar-danger {
-            background: var(--red);
+            background: linear-gradient(90deg, #F04438, #B42318);
         }
 
         .pill {
@@ -734,7 +810,7 @@
         .pill-success {
             background: var(--green-soft);
             color: var(--green);
-            border-color: #ABEFc6;
+            border-color: #ABEFC6;
         }
 
         .pill-primary {
@@ -744,9 +820,9 @@
         }
 
         .pill-warning {
-            background: var(--yellow-soft);
-            color: #9A6700;
-            border-color: #FEDF89;
+            background: var(--orange-soft);
+            color: #B54708;
+            border-color: #FED7AA;
         }
 
         .pill-danger {
@@ -797,7 +873,7 @@
 
         .modal-kpis {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
             gap: 14px;
             margin-bottom: 22px;
         }
@@ -812,7 +888,7 @@
 
         .piece-list {
             display: grid;
-            grid-template-columns: 360px minmax(0, 1fr);
+            grid-template-columns: 380px minmax(0, 1fr);
             gap: 22px;
             align-items: start;
         }
@@ -949,75 +1025,151 @@
                 display: block;
             }
 
-        .timeline-grid {
-            display: grid;
-            gap: 16px;
-        }
-
-        .period-card {
-            background: white;
+        .excel-board {
             border: 1px solid var(--border);
-            border-radius: 24px;
+            border-radius: 26px;
             overflow: hidden;
+            background: white;
             box-shadow: var(--shadow-soft);
         }
 
-        .period-head {
+        .excel-board-top {
             padding: 16px 18px;
-            background: linear-gradient(135deg, #F7FBFF, #FFFFFF);
             border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, #FFFFFF, #F7FBFF);
             display: flex;
-            justify-content: space-between;
-            gap: 12px;
             align-items: center;
+            justify-content: space-between;
+            gap: 14px;
             flex-wrap: wrap;
         }
 
-        .period-title {
+        .excel-board-title {
             color: var(--blue-dark);
             font-weight: 950;
+            margin: 0;
             font-size: 1rem;
         }
 
-        .period-sub {
+        .excel-board-sub {
             color: var(--muted);
-            font-size: .8rem;
-            margin-top: 4px;
-            font-weight: 650;
+            font-size: .82rem;
+            font-weight: 700;
+            margin-top: 3px;
         }
 
-        .period-body {
-            padding: 18px;
+        .excel-scroll {
+            overflow: auto;
+            max-height: calc(100vh - 380px);
+            background: linear-gradient(90deg, rgba(0,74,173,.06), transparent 22px) left top / 22px 100% no-repeat, white;
         }
 
-        .gantt-line {
+        .planning-grid {
             display: grid;
-            grid-template-columns: 160px 1fr 110px;
-            gap: 14px;
-            align-items: center;
-            margin-bottom: 12px;
+            min-width: max-content;
         }
 
-        .gantt-label {
-            color: var(--muted);
-            text-transform: uppercase;
-            font-size: .72rem;
-            letter-spacing: .04em;
+        .grid-cell {
+            min-width: 162px;
+            min-height: 74px;
+            border-right: 1px solid #E7EEF8;
+            border-bottom: 1px solid #E7EEF8;
+            padding: 10px;
+            background: #fff;
+            position: relative;
+        }
+
+            .grid-cell:nth-child(even) {
+                background: #FCFDFF;
+            }
+
+        .grid-sticky {
+            position: sticky;
+            left: 0;
+            z-index: 4;
+            min-width: 185px;
+            background: #F8FBFF;
+            color: var(--blue-dark);
+            font-weight: 950;
+            box-shadow: 5px 0 14px rgba(16,24,40,.05);
+        }
+
+        .grid-header {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            min-height: 74px;
+            background: linear-gradient(180deg, #F8FBFF, #FFFFFF);
+            color: var(--blue-dark);
             font-weight: 950;
         }
 
-        .gantt-track {
-            height: 20px;
+        .grid-corner {
+            z-index: 8;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            color: white;
+        }
+
+        .period-name {
+            font-weight: 950;
+            font-size: .84rem;
+            text-transform: capitalize;
+        }
+
+        .period-count {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+
+        .row-label-main {
+            font-size: .82rem;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .row-label-sub {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 750;
+            margin-top: 3px;
+        }
+
+        .cell-value {
+            font-size: 1rem;
+            font-weight: 950;
+            color: var(--text);
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: baseline;
+        }
+
+            .cell-value small {
+                color: var(--muted);
+                font-size: .68rem;
+                font-weight: 850;
+            }
+
+        .cell-bar {
+            height: 10px;
             background: #EEF2F7;
             border-radius: 999px;
             overflow: hidden;
+            margin-top: 10px;
         }
 
-        .gantt-fill {
+        .cell-fill {
             height: 100%;
             border-radius: 999px;
             min-width: 7px;
         }
+
+            .cell-fill.zero {
+                min-width: 0;
+                width: 0 !important;
+            }
 
         .fill-pedido {
             background: linear-gradient(90deg, #2E90FA, #004AAD);
@@ -1043,35 +1195,30 @@
             background: linear-gradient(90deg, #667085, #344054);
         }
 
-        .gantt-num {
-            text-align: right;
-            font-weight: 950;
-            color: var(--text);
-            font-size: .9rem;
+        .action-cell {
+            min-height: 98px;
         }
 
-        .movement-row {
+        .action-stack {
             display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 16px;
+            flex-direction: column;
+            gap: 7px;
         }
 
         .movement {
             border: 1px solid var(--border);
             background: #FBFDFF;
             border-radius: 14px;
-            padding: 9px 11px;
-            font-size: .78rem;
+            padding: 8px 10px;
+            font-size: .76rem;
             font-weight: 850;
             color: #344054;
         }
 
-        .action-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 16px;
+        .empty-action {
+            color: var(--muted);
+            font-size: .76rem;
+            font-weight: 850;
         }
 
         .empty-state {
@@ -1100,6 +1247,125 @@
             padding: 12px;
             box-shadow: var(--shadow);
         }
+
+
+        .period-drill {
+            margin-top: 14px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background: #FFFFFF;
+            overflow: hidden;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .period-drill-head {
+            padding: 14px 16px;
+            background: linear-gradient(135deg, #F8FBFF, #FFFFFF);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .period-drill-title {
+            color: var(--blue-dark);
+            font-weight: 950;
+            font-size: .95rem;
+        }
+
+        .period-drill-sub {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 800;
+            margin-top: 2px;
+        }
+
+        .mini-period-strip {
+            overflow-x: auto;
+            padding: 14px;
+            background: #FBFDFF;
+        }
+
+        .mini-period-grid {
+            display: grid;
+            gap: 10px;
+            min-width: max-content;
+        }
+
+        .mini-period-card {
+            width: 210px;
+            border: 1px solid #E4EBF5;
+            background: white;
+            border-radius: 18px;
+            padding: 12px;
+        }
+
+        .mini-period-title {
+            color: var(--blue-dark);
+            font-size: .82rem;
+            font-weight: 950;
+            text-transform: capitalize;
+            min-height: 34px;
+        }
+
+        .mini-period-value {
+            margin-top: 10px;
+            display: grid;
+            gap: 7px;
+            color: var(--text);
+            font-size: .76rem;
+            font-weight: 850;
+        }
+
+        .mini-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            border-bottom: 1px dashed #E4EBF5;
+            padding-bottom: 5px;
+        }
+
+            .mini-line:last-child {
+                border-bottom: none;
+                padding-bottom: 0;
+            }
+
+            .mini-line span:first-child {
+                color: var(--muted);
+            }
+
+        .month-board {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+        }
+
+        .month-card {
+            border: 1px solid var(--border);
+            background: white;
+            border-radius: 22px;
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+        }
+
+        .month-card-head {
+            padding: 15px;
+            background: linear-gradient(135deg, #F8FBFF, #FFFFFF);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .month-card-title {
+            color: var(--blue-dark);
+            font-weight: 950;
+            text-transform: capitalize;
+        }
+
+        .month-card-body {
+            padding: 14px;
+        }
+
 
         @@media (max-width: 1100px) {
             .piece-list {
@@ -1142,13 +1408,12 @@
                 padding: 22px;
             }
 
-            .gantt-line {
-                grid-template-columns: 1fr;
-                gap: 5px;
+            .grid-cell {
+                min-width: 142px;
             }
 
-            .gantt-num {
-                text-align: left;
+            .grid-sticky {
+                min-width: 160px;
             }
         }
     </style>
@@ -1160,12 +1425,18 @@
         <section class="hero">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
+                    <div class="hero-badge">
+                        <i class="fa-solid fa-chart-line"></i>
+                        Panorama ejecutivo de planeación
+                    </div>
+
                     <h1>
-                        <i class="fa-solid fa-chart-line me-2"></i>
                         Panorama de Planeación
                     </h1>
+
                     <p>
-                        Vista visual por cliente y pieza. Semana despliega día por día, mes despliega semana por semana y año despliega mes por mes.
+                        Vista tipo Excel mejorada: clientes, piezas y carga por periodo con ceros visibles, barras comparativas,
+                        estatus de programación y acciones directas hacia Cambio de Molde u OF.
                     </p>
 
                     <div class="chip-row mt-3">
@@ -1173,9 +1444,11 @@
                             <i class="fa-solid fa-calendar-days"></i>
                             @PlaneacionPanoramaVista.Nombre(Model.Vista)
                         </span>
+
                         <span class="pill pill-success">
                             @Model.FechaDesde.ToString("dd/MM/yyyy") - @Model.FechaHasta.ToString("dd/MM/yyyy")
                         </span>
+
                         <span class="pill pill-warning">
                             @Entero(Model.TotalCantidadPendiente) pendientes
                         </span>
@@ -1195,13 +1468,6 @@
                        class="btn-glass">
                         <i class="fa-solid fa-table-columns me-1"></i>
                         Máquinas
-                    </a>
-
-                    <a asp-controller="PlaneacionPrograma"
-                       asp-action="Index"
-                       class="btn-glass">
-                        <i class="fa-solid fa-list me-1"></i>
-                        Programa general
                     </a>
                 </div>
             </div>
@@ -1229,7 +1495,7 @@
                        asp-route-estatusId="@Model.EstatusID"
                        class="chip @(Model.Vista == PlaneacionPanoramaVista.Dia ? "active" : "")">
                         <i class="fa-solid fa-sun"></i>
-                        Hoy
+                        Diario
                     </a>
 
                     <a asp-controller="PlaneacionPanorama"
@@ -1450,18 +1716,7 @@
 
                     var modalClienteId = IdSeguro("modalCliente", clienteIndex);
                     var estadosCliente = string.Join(" ", cliente.Partes.SelectMany(p => p.Renglones).Select(r => EstadoData(r)).Distinct());
-                    var searchCliente = (
-                    cliente.ClienteNombre + " " +
-                    string.Join(" ", cliente.Partes.Select(p =>
-                    p.NumeroParte + " " +
-                    p.ReferenciaSAP + " " +
-                    p.DesignacionDescripcionSAP + " " +
-                    p.MaquinaCodigo + " " +
-                    p.MoldeCodigo + " " +
-                    p.MaterialCodigo + " " +
-                    p.MaterialDescripcion
-                    ))
-                    ).ToLower();
+                    var searchCliente = SearchCliente(cliente);
 
                     <article class="client-card @ClienteClase(cliente)"
                              data-search="@searchCliente"
@@ -1522,7 +1777,7 @@
                                     data-bs-toggle="modal"
                                     data-bs-target="#@modalClienteId">
                                 <i class="fa-solid fa-up-right-and-down-left-from-center me-1"></i>
-                                Abrir planeación
+                                Abrir panorama
                             </button>
                         </div>
                     </article>
@@ -1535,14 +1790,15 @@
                             <div class="modal-content">
 
                                 <div class="modal-header-custom">
-                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap w-100">
                                         <div>
                                             <h2 class="modal-title-custom">
                                                 <i class="fa-solid fa-building me-2"></i>
                                                 @cliente.ClienteNombre
                                             </h2>
+
                                             <div class="modal-sub-custom">
-                                                Planeación completa por pieza. Semana = días, mes = semanas y año = meses, inspirado en el Excel pero más visual.
+                                                Tablero tipo Excel: periodos completos, ceros visibles, barras por métrica y acciones operativas.
                                             </div>
 
                                             <div class="chip-row mt-3">
@@ -1563,7 +1819,6 @@
                                 </div>
 
                                 <div class="modal-body-custom">
-
                                     <div class="modal-kpis">
                                         <div class="modal-kpi">
                                             <div class="kpi-label">Requerido</div>
@@ -1736,349 +1991,427 @@
                                                                 </div>
                                                             </div>
 
-                                                            <div class="timeline-view active"
-                                                                 data-timeline="@piezaKey"
-                                                                 data-view="dia">
-                                                                <div class="timeline-grid">
-                                                                    @{
-                                                                        var gruposDia = ConstruirGruposDia(pieza.Renglones, Model.FechaDesde, Model.FechaHasta);
-                                                                    }
+                                                            @{
+                                                                // REGLA FINAL:
+                                                                // Diario  = SIEMPRE el día actual en que se abre la vista.
+                                                                // Semana  = se queda día por día, según el rango recibido.
+                                                                // Mes     = columnas generales por semana del mes seleccionado.
+                                                                // Año     = tarjetas de todos los meses del año seleccionado.
 
-                                                                    @foreach (var grupo in gruposDia)
+                                                                var hoyVista = DateTime.Today;
+
+                                                                var inicioMesVista = new DateTime(Model.FechaDesde.Year, Model.FechaDesde.Month, 1);
+                                                                var finMesVista = inicioMesVista.AddMonths(1).AddDays(-1);
+
+                                                                var inicioAnioVista = new DateTime(Model.FechaDesde.Year, 1, 1);
+                                                                var finAnioVista = new DateTime(Model.FechaDesde.Year, 12, 31);
+
+                                                                var vistas = new[]
+                                                                {
+                                                                                                new { Key = "dia", Titulo = "Diario", Sub = "Solo el día actual: " + hoyVista.ToString("dd/MM/yyyy"), Grupos = ConstruirGruposDia(pieza.Renglones, hoyVista, hoyVista), Texto = (Func<string, string>)TextoDiaLargo, Active = true },
+                                                                                                new { Key = "semana", Titulo = "Semana", Sub = "Semana desplegada día por día.", Grupos = ConstruirGruposDia(pieza.Renglones, Model.FechaDesde, Model.FechaHasta), Texto = (Func<string, string>)TextoDia, Active = false },
+                                                                                                new { Key = "mes", Titulo = "Mes", Sub = "Columnas generales por semana. Abre una semana para ver sus días.", Grupos = ConstruirGruposSemana(pieza.Renglones, inicioMesVista, finMesVista), Texto = (Func<string, string>)TextoSemana, Active = false },
+                                                                                                new { Key = "anio", Titulo = "Año", Sub = "Todos los meses del año. Abre un mes para ver sus semanas.", Grupos = ConstruirGruposMes(pieza.Renglones, inicioAnioVista, finAnioVista), Texto = (Func<string, string>)TextoMes, Active = false }
+                                                                                                };
+                                                            }
+
+                                                            @foreach (var vista in vistas)
+                                                            {
+                                                                var grupos = vista.Grupos;
+                                                                var cols = Math.Max(1, grupos.Count);
+                                                                var gridStyle = $"grid-template-columns: 185px repeat({cols}, minmax(162px, 1fr));";
+                                                                var maxCantidad = MaxCantidad(grupos);
+                                                                var maxMp = MaxDecimal(grupos);
+
+                                                                <div class="timeline-view @(vista.Active ? "active" : "")"
+                                                                     data-timeline="@piezaKey"
+                                                                     data-view="@vista.Key">
+
+                                                                    @if (vista.Key == "anio")
                                                                     {
-                                                                        var datos = grupo.ToList();
-                                                                        var requerido = datos.Sum(x => x.CantidadRequerida);
-                                                                        var pt = datos.Sum(x => x.PiezasDesdePT);
-                                                                        var programado = datos.Sum(x => x.CantidadProgramada);
-                                                                        var producido = datos.Sum(x => x.CantidadProducida);
-                                                                        var pendiente = datos.Sum(x => x.CantidadPendiente);
-                                                                        var mp = datos.Sum(x => x.CantidadMpKg ?? 0);
-                                                                        var max = Math.Max(1, new[] { requerido, pt, programado, producido, pendiente }.Max());
-
-                                                                        <div class="period-card">
-                                                                            <div class="period-head">
+                                                                        <div class="excel-board">
+                                                                            <div class="excel-board-top">
                                                                                 <div>
-                                                                                    <div class="period-title">
-                                                                                        <i class="fa-solid fa-calendar-day me-1"></i>
-                                                                                        @TextoDia(grupo.Key)
-                                                                                    </div>
-                                                                                    <div class="period-sub">
-                                                                                        @datos.Count movimiento(s)
+                                                                                    <h4 class="excel-board-title">
+                                                                                        <i class="fa-solid fa-calendar me-2"></i>
+                                                                                        Año · meses
+                                                                                    </h4>
+                                                                                    <div class="excel-board-sub">
+                                                                                        Cada tarjeta es un mes del año seleccionado. Al abrirlo se muestran sus semanas, sin bajar a días.
                                                                                     </div>
                                                                                 </div>
 
                                                                                 <div class="chip-row">
-                                                                                    @foreach (var estado in datos.Select(x => x.EstadoPanorama).Distinct())
+                                                                                    <span class="pill pill-primary">@grupos.Count mes(es)</span>
+                                                                                    <span class="pill pill-warning">@Entero(grupos.Sum(SumaPendiente)) pendientes</span>
+                                                                                    <span class="pill pill-success">@Entero(grupos.Sum(SumaProgramado)) programadas</span>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div class="panel-body">
+                                                                                <div class="month-board">
+                                                                                    @{
+                                                                                        var mesIndex = 0;
+                                                                                    }
+
+                                                                                    @foreach (var mes in grupos)
                                                                                     {
-                                                                                        <span class="pill pill-primary">@estado</span>
+                                                                                        mesIndex++;
+                                                                                        var mesId = $"{piezaKey}_mes_{mesIndex}";
+                                                                                        var requeridoMes = SumaRequerido(mes);
+                                                                                        var programadoMes = SumaProgramado(mes);
+                                                                                        var pendienteMes = SumaPendiente(mes);
+                                                                                        var producidoMes = SumaProducido(mes);
+                                                                                        var mpMes = SumaMp(mes);
+                                                                                        var maxMes = Math.Max(1, new[] { requeridoMes, programadoMes, pendienteMes, producidoMes }.Max());
+                                                                                        var inicioMes = InicioMesDesdeKey(mes.Key);
+                                                                                        var finMes = FinMesDesdeKey(mes.Key);
+                                                                                        var semanasMes = ConstruirGruposSemana(mes.Datos, inicioMes, finMes);
+
+                                                                                        <article class="month-card">
+                                                                                            <div class="month-card-head">
+                                                                                                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                                                                                    <div>
+                                                                                                        <div class="month-card-title">@TextoMes(mes.Key)</div>
+                                                                                                        <div class="period-count">@mes.Datos.Count movimiento(s)</div>
+                                                                                                    </div>
+
+                                                                                                    <button type="button"
+                                                                                                            class="btn btn-white-soft btn-sm"
+                                                                                                            data-bs-toggle="collapse"
+                                                                                                            data-bs-target="#@mesId">
+                                                                                                        <i class="fa-solid fa-chevron-down me-1"></i>
+                                                                                                        Ver mes
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            </div>
+
+                                                                                            <div class="month-card-body">
+                                                                                                <div class="mini-period-value">
+                                                                                                    <div class="mini-line"><span>Pedido</span><strong>@Entero(requeridoMes)</strong></div>
+                                                                                                    <div class="mini-line"><span>Programado</span><strong>@Entero(programadoMes)</strong></div>
+                                                                                                    <div class="mini-line"><span>Producido</span><strong>@Entero(producidoMes)</strong></div>
+                                                                                                    <div class="mini-line"><span>Pendiente</span><strong>@Entero(pendienteMes)</strong></div>
+                                                                                                    <div class="mini-line"><span>MP kg</span><strong>@Decimal2NoNull(mpMes)</strong></div>
+                                                                                                </div>
+
+                                                                                                <div class="cell-bar mt-3">
+                                                                                                    <div class="cell-fill fill-programado @(programadoMes == 0 ? "zero" : "")"
+                                                                                                         style="width:@Width(Porcentaje(programadoMes, maxMes))"></div>
+                                                                                                </div>
+                                                                                            </div>
+
+                                                                                            <div class="collapse" id="@mesId">
+                                                                                                <div class="period-drill">
+                                                                                                    <div class="period-drill-head">
+                                                                                                        <div>
+                                                                                                            <div class="period-drill-title">Semanas de @TextoMes(mes.Key)</div>
+                                                                                                            <div class="period-drill-sub">Detalle semana por semana del mes seleccionado.</div>
+                                                                                                        </div>
+                                                                                                        <span class="pill pill-primary">@semanasMes.Count semana(s)</span>
+                                                                                                    </div>
+
+                                                                                                    <div class="mini-period-strip">
+                                                                                                        <div class="mini-period-grid" style="grid-template-columns: repeat(@Math.Max(1, semanasMes.Count), 210px);">
+                                                                                                            @foreach (var sem in semanasMes)
+                                                                                                            {
+                                                                                                                <div class="mini-period-card">
+                                                                                                                    <div class="mini-period-title">@TextoSemana(sem.Key)</div>
+                                                                                                                    <div class="mini-period-value">
+                                                                                                                        <div class="mini-line"><span>Pedido</span><strong>@Entero(SumaRequerido(sem))</strong></div>
+                                                                                                                        <div class="mini-line"><span>Prog.</span><strong>@Entero(SumaProgramado(sem))</strong></div>
+                                                                                                                        <div class="mini-line"><span>Prod.</span><strong>@Entero(SumaProducido(sem))</strong></div>
+                                                                                                                        <div class="mini-line"><span>Pend.</span><strong>@Entero(SumaPendiente(sem))</strong></div>
+                                                                                                                        <div class="mini-line"><span>MP</span><strong>@Decimal2NoNull(SumaMp(sem))</strong></div>
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                            }
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </article>
                                                                                     }
                                                                                 </div>
                                                                             </div>
-
-                                                                            <div class="period-body">
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Pedido cliente</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pedido" style="width:@Width(Porcentaje(requerido, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(requerido)</div>
+                                                                        </div>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div class="excel-board">
+                                                                            <div class="excel-board-top">
+                                                                                <div>
+                                                                                    <h4 class="excel-board-title">
+                                                                                        <i class="fa-solid fa-table-cells-large me-2"></i>
+                                                                                        @vista.Titulo
+                                                                                    </h4>
+                                                                                    <div class="excel-board-sub">@vista.Sub</div>
                                                                                 </div>
 
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Desde PT</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pt" style="width:@Width(Porcentaje(pt, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(pt)</div>
+                                                                                <div class="chip-row">
+                                                                                    <span class="pill pill-primary">@cols periodo(s)</span>
+                                                                                    <span class="pill pill-warning">@Entero(grupos.Sum(SumaPendiente)) pendientes</span>
+                                                                                    <span class="pill pill-success">@Entero(grupos.Sum(SumaProgramado)) programadas</span>
                                                                                 </div>
+                                                                            </div>
 
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Programado</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-programado" style="width:@Width(Porcentaje(programado, max))"></div>
+                                                                            <div class="excel-scroll">
+                                                                                <div class="planning-grid" style="@gridStyle">
+                                                                                    <div class="grid-cell grid-header grid-sticky grid-corner">
+                                                                                        Métrica
                                                                                     </div>
-                                                                                    <div class="gantt-num">@Entero(programado)</div>
-                                                                                </div>
 
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Producido</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-producido" style="width:@Width(Porcentaje(producido, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(producido)</div>
-                                                                                </div>
-
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Pendiente</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pendiente" style="width:@Width(Porcentaje(pendiente, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(pendiente)</div>
-                                                                                </div>
-
-                                                                                <div class="movement-row">
-                                                                                    <span class="movement">
-                                                                                        <i class="fa-solid fa-weight-hanging me-1"></i>
-                                                                                        MP: @mp.ToString("N2") kg
-                                                                                    </span>
-
-                                                                                    @foreach (var r in datos)
+                                                                                    @foreach (var grupo in grupos)
                                                                                     {
-                                                                                        <span class="movement">
-                                                                                            <i class="fa-solid @EstadoIcono(r) me-1"></i>
-                                                                                            @Valor(r.FolioRelease) · @r.EstadoPanorama
-                                                                                        </span>
+                                                                                        <div class="grid-cell grid-header">
+                                                                                            <div class="period-name">@vista.Texto(grupo.Key)</div>
+                                                                                            <div class="period-count">@grupo.Datos.Count movimiento(s)</div>
+                                                                                        </div>
+                                                                                    }
+
+                                                                                    <div class="grid-cell grid-sticky">
+                                                                                        <div class="row-label-main">Pedido cliente</div>
+                                                                                        <div class="row-label-sub">Demanda release</div>
+                                                                                    </div>
+
+                                                                                    @foreach (var grupo in grupos)
+                                                                                    {
+                                                                                        var valor = SumaRequerido(grupo);
+
+                                                                                        <div class="grid-cell">
+                                                                                            <div class="cell-value">
+                                                                                                <span>@Entero(valor)</span>
+                                                                                                <small>pzas.</small>
+                                                                                            </div>
+                                                                                            <div class="cell-bar">
+                                                                                                <div class="cell-fill fill-pedido @(valor == 0 ? "zero" : "")"
+                                                                                                     style="width:@Width(Porcentaje(valor, maxCantidad))"></div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    }
+
+                                                                                    <div class="grid-cell grid-sticky">
+                                                                                        <div class="row-label-main">Desde PT</div>
+                                                                                        <div class="row-label-sub">Cubierto con inventario</div>
+                                                                                    </div>
+
+                                                                                    @foreach (var grupo in grupos)
+                                                                                    {
+                                                                                        var valor = SumaPT(grupo);
+
+                                                                                        <div class="grid-cell">
+                                                                                            <div class="cell-value">
+                                                                                                <span>@Entero(valor)</span>
+                                                                                                <small>pzas.</small>
+                                                                                            </div>
+                                                                                            <div class="cell-bar">
+                                                                                                <div class="cell-fill fill-pt @(valor == 0 ? "zero" : "")"
+                                                                                                     style="width:@Width(Porcentaje(valor, maxCantidad))"></div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    }
+
+                                                                                    <div class="grid-cell grid-sticky">
+                                                                                        <div class="row-label-main">Programado</div>
+                                                                                        <div class="row-label-sub">En máquinas / cambio molde</div>
+                                                                                    </div>
+
+                                                                                    @foreach (var grupo in grupos)
+                                                                                    {
+                                                                                        var valor = SumaProgramado(grupo);
+
+                                                                                        <div class="grid-cell">
+                                                                                            <div class="cell-value">
+                                                                                                <span>@Entero(valor)</span>
+                                                                                                <small>pzas.</small>
+                                                                                            </div>
+                                                                                            <div class="cell-bar">
+                                                                                                <div class="cell-fill fill-programado @(valor == 0 ? "zero" : "")"
+                                                                                                     style="width:@Width(Porcentaje(valor, maxCantidad))"></div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    }
+
+                                                                                    <div class="grid-cell grid-sticky">
+                                                                                        <div class="row-label-main">Producido</div>
+                                                                                        <div class="row-label-sub">Avance real</div>
+                                                                                    </div>
+
+                                                                                    @foreach (var grupo in grupos)
+                                                                                    {
+                                                                                        var valor = SumaProducido(grupo);
+
+                                                                                        <div class="grid-cell">
+                                                                                            <div class="cell-value">
+                                                                                                <span>@Entero(valor)</span>
+                                                                                                <small>pzas.</small>
+                                                                                            </div>
+                                                                                            <div class="cell-bar">
+                                                                                                <div class="cell-fill fill-producido @(valor == 0 ? "zero" : "")"
+                                                                                                     style="width:@Width(Porcentaje(valor, maxCantidad))"></div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    }
+
+                                                                                    <div class="grid-cell grid-sticky">
+                                                                                        <div class="row-label-main">Pendiente</div>
+                                                                                        <div class="row-label-sub">Por producir / programar</div>
+                                                                                    </div>
+
+                                                                                    @foreach (var grupo in grupos)
+                                                                                    {
+                                                                                        var valor = SumaPendiente(grupo);
+
+                                                                                        <div class="grid-cell">
+                                                                                            <div class="cell-value">
+                                                                                                <span>@Entero(valor)</span>
+                                                                                                <small>pzas.</small>
+                                                                                            </div>
+                                                                                            <div class="cell-bar">
+                                                                                                <div class="cell-fill fill-pendiente @(valor == 0 ? "zero" : "")"
+                                                                                                     style="width:@Width(Porcentaje(valor, maxCantidad))"></div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    }
+
+                                                                                    <div class="grid-cell grid-sticky">
+                                                                                        <div class="row-label-main">MP kg</div>
+                                                                                        <div class="row-label-sub">Materia prima requerida</div>
+                                                                                    </div>
+
+                                                                                    @foreach (var grupo in grupos)
+                                                                                    {
+                                                                                        var valor = SumaMp(grupo);
+
+                                                                                        <div class="grid-cell">
+                                                                                            <div class="cell-value">
+                                                                                                <span>@Decimal2NoNull(valor)</span>
+                                                                                                <small>kg</small>
+                                                                                            </div>
+                                                                                            <div class="cell-bar">
+                                                                                                <div class="cell-fill fill-mp @(valor == 0 ? "zero" : "")"
+                                                                                                     style="width:@Width(PorcentajeDecimal(valor, maxMp))"></div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    }
+
+                                                                                    <div class="grid-cell grid-sticky">
+                                                                                        <div class="row-label-main">Acciones</div>
+                                                                                        <div class="row-label-sub">
+                                                                                            @(vista.Key == "mes" ? "Abrir semana / Cambio de molde / OF" : "Cambio de molde / OF")
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    @foreach (var grupo in grupos)
+                                                                                    {
+                                                                                        var semanaId = $"{piezaKey}_sem_{grupo.Key.Replace("|", "_").Replace("-", "_")}";
+
+                                                                                        <div class="grid-cell action-cell">
+                                                                                            <div class="action-stack">
+                                                                                                @if (vista.Key == "mes")
+                                                                                                {
+                                                                                                    <button type="button"
+                                                                                                            class="btn btn-white-soft btn-sm"
+                                                                                                            data-bs-toggle="collapse"
+                                                                                                            data-bs-target="#@semanaId">
+                                                                                                        <i class="fa-solid fa-chevron-down me-1"></i>
+                                                                                                        Abrir semana
+                                                                                                    </button>
+                                                                                                }
+
+                                                                                                @if (!grupo.Datos.Any())
+                                                                                                {
+                                                                                                    <span class="empty-action">Sin movimiento</span>
+                                                                                                }
+                                                                                                else
+                                                                                                {
+                                                                                                    foreach (var r in grupo.Datos)
+                                                                                                    {
+                                                                                                        <span class="movement">
+                                                                                                            <i class="fa-solid @EstadoIcono(r) me-1"></i>
+                                                                                                            @Valor(r.FolioRelease) · @r.EstadoPanorama
+                                                                                                        </span>
+
+                                                                                                        if (r.EstaPendienteProgramar && r.ReleaseDetalleID.HasValue)
+                                                                                                        {
+                                                                                                            <a asp-controller="PlaneacionPrograma"
+                                                                                                               asp-action="CrearDesdeNecesidad"
+                                                                                                               asp-route-releaseDetalleId="@r.ReleaseDetalleID"
+                                                                                                               class="btn btn-primary-soft btn-sm">
+                                                                                                                <i class="fa-solid fa-gears me-1"></i>
+                                                                                                                Cambio de Molde
+                                                                                                            </a>
+                                                                                                        }
+
+                                                                                                        if (r.TieneOF && r.SolicitudProduccionID.HasValue)
+                                                                                                        {
+                                                                                                            <a asp-controller="Planeacion"
+                                                                                                               asp-action="Detalle"
+                                                                                                               asp-route-id="@r.SolicitudProduccionID"
+                                                                                                               class="btn btn-success btn-sm rounded-4 fw-bold">
+                                                                                                                <i class="fa-solid fa-circle-check me-1"></i>
+                                                                                                                Ver OF
+                                                                                                            </a>
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            </div>
+                                                                                        </div>
                                                                                     }
                                                                                 </div>
 
-                                                                                <div class="action-row">
-                                                                                    @foreach (var r in datos)
+                                                                                @if (vista.Key == "mes")
+                                                                                {
+                                                                                    foreach (var semana in grupos)
                                                                                     {
-                                                                                        if (r.EstaPendienteProgramar && r.ReleaseDetalleID.HasValue)
-                                                                                        {
-                                                                                            <a asp-controller="PlaneacionPrograma"
-                                                                                               asp-action="CrearDesdeNecesidad"
-                                                                                               asp-route-releaseDetalleId="@r.ReleaseDetalleID"
-                                                                                               class="btn btn-primary-soft btn-sm">
-                                                                                                <i class="fa-solid fa-gears me-1"></i>
-                                                                                                Enviar a Cambio de Molde
-                                                                                            </a>
-                                                                                        }
+                                                                                        var semanaId = $"{piezaKey}_sem_{semana.Key.Replace("|", "_").Replace("-", "_")}";
+                                                                                        var inicioSemana = InicioSemanaDesdeKey(semana.Key);
+                                                                                        var finSemana = FinSemanaDesdeKey(semana.Key);
+                                                                                        var diasSemana = ConstruirGruposDia(semana.Datos, inicioSemana, finSemana);
 
-                                                                                        if (r.TieneOF && r.SolicitudProduccionID.HasValue)
-                                                                                        {
-                                                                                            <a asp-controller="Planeacion"
-                                                                                               asp-action="Detalle"
-                                                                                               asp-route-id="@r.SolicitudProduccionID"
-                                                                                               class="btn btn-success btn-sm rounded-4 fw-bold">
-                                                                                                <i class="fa-solid fa-circle-check me-1"></i>
-                                                                                                Ver OF
-                                                                                            </a>
-                                                                                        }
+                                                                                        <div class="collapse" id="@semanaId">
+                                                                                            <div class="period-drill">
+                                                                                                <div class="period-drill-head">
+                                                                                                    <div>
+                                                                                                        <div class="period-drill-title">@TextoSemana(semana.Key)</div>
+                                                                                                        <div class="period-drill-sub">Detalle día por día de esta semana. Desplázate hacia la derecha.</div>
+                                                                                                    </div>
+
+                                                                                                    <div class="chip-row">
+                                                                                                        <span class="pill pill-primary">@diasSemana.Count día(s)</span>
+                                                                                                        <span class="pill pill-warning">@Entero(diasSemana.Sum(SumaPendiente)) pendientes</span>
+                                                                                                    </div>
+                                                                                                </div>
+
+                                                                                                <div class="mini-period-strip">
+                                                                                                    <div class="mini-period-grid" style="grid-template-columns: repeat(@Math.Max(1, diasSemana.Count), 210px);">
+                                                                                                        @foreach (var dia in diasSemana)
+                                                                                                        {
+                                                                                                            <div class="mini-period-card">
+                                                                                                                <div class="mini-period-title">@TextoDia(dia.Key)</div>
+                                                                                                                <div class="mini-period-value">
+                                                                                                                    <div class="mini-line"><span>Pedido</span><strong>@Entero(SumaRequerido(dia))</strong></div>
+                                                                                                                    <div class="mini-line"><span>PT</span><strong>@Entero(SumaPT(dia))</strong></div>
+                                                                                                                    <div class="mini-line"><span>Prog.</span><strong>@Entero(SumaProgramado(dia))</strong></div>
+                                                                                                                    <div class="mini-line"><span>Prod.</span><strong>@Entero(SumaProducido(dia))</strong></div>
+                                                                                                                    <div class="mini-line"><span>Pend.</span><strong>@Entero(SumaPendiente(dia))</strong></div>
+                                                                                                                    <div class="mini-line"><span>MP</span><strong>@Decimal2NoNull(SumaMp(dia))</strong></div>
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        }
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
                                                                                     }
-                                                                                </div>
+                                                                                }
                                                                             </div>
                                                                         </div>
                                                                     }
                                                                 </div>
-                                                            </div>
-
-                                                            <div class="timeline-view"
-                                                                 data-timeline="@piezaKey"
-                                                                 data-view="semana">
-                                                                <div class="timeline-grid">
-                                                                    @{
-                                                                        var gruposSemana = ConstruirGruposDia(pieza.Renglones, Model.FechaDesde, Model.FechaHasta);
-                                                                    }
-
-                                                                    @foreach (var grupo in gruposSemana)
-                                                                    {
-                                                                        var datos = grupo.ToList();
-                                                                        var requerido = datos.Sum(x => x.CantidadRequerida);
-                                                                        var programado = datos.Sum(x => x.CantidadProgramada);
-                                                                        var producido = datos.Sum(x => x.CantidadProducida);
-                                                                        var pendiente = datos.Sum(x => x.CantidadPendiente);
-                                                                        var max = Math.Max(1, new[] { requerido, programado, producido, pendiente }.Max());
-
-                                                                        <div class="period-card">
-                                                                            <div class="period-head">
-                                                                                <div>
-                                                                                    <div class="period-title">
-                                                                                        <i class="fa-solid fa-calendar-day me-1"></i>
-                                                                                        @TextoDia(grupo.Key)
-                                                                                    </div>
-                                                                                    <div class="period-sub">
-                                                                                        Detalle diario de la semana · @datos.Count movimiento(s)
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <span class="pill pill-warning">
-                                                                                    @Entero(pendiente) pendientes
-                                                                                </span>
-                                                                            </div>
-
-                                                                            <div class="period-body">
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Pedido del día</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pedido" style="width:@Width(Porcentaje(requerido, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(requerido)</div>
-                                                                                </div>
-
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Programado</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-programado" style="width:@Width(Porcentaje(programado, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(programado)</div>
-                                                                                </div>
-
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Producido</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-producido" style="width:@Width(Porcentaje(producido, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(producido)</div>
-                                                                                </div>
-
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Pendiente</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pendiente" style="width:@Width(Porcentaje(pendiente, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(pendiente)</div>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    }
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="timeline-view"
-                                                                 data-timeline="@piezaKey"
-                                                                 data-view="mes">
-                                                                <div class="timeline-grid">
-                                                                    @{
-                                                                        var gruposMes = ConstruirGruposSemana(pieza.Renglones, Model.FechaDesde, Model.FechaHasta);
-                                                                    }
-
-                                                                    @foreach (var grupo in gruposMes)
-                                                                    {
-                                                                        var datos = grupo.ToList();
-                                                                        var requerido = datos.Sum(x => x.CantidadRequerida);
-                                                                        var programado = datos.Sum(x => x.CantidadProgramada);
-                                                                        var producido = datos.Sum(x => x.CantidadProducida);
-                                                                        var pendiente = datos.Sum(x => x.CantidadPendiente);
-                                                                        var max = Math.Max(1, new[] { requerido, programado, producido, pendiente }.Max());
-
-                                                                        <div class="period-card">
-                                                                            <div class="period-head">
-                                                                                <div>
-                                                                                    <div class="period-title">
-                                                                                        <i class="fa-solid fa-calendar-week me-1"></i>
-                                                                                        @TextoSemana(grupo.Key)
-                                                                                    </div>
-                                                                                    <div class="period-sub">
-                                                                                        Resumen semana a semana del mes · @datos.Count movimiento(s)
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <span class="pill pill-primary">
-                                                                                    @Decimal2NoNull(Porcentaje(programado, requerido))% programado
-                                                                                </span>
-                                                                            </div>
-
-                                                                            <div class="period-body">
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Pedido semanal</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pedido" style="width:@Width(Porcentaje(requerido, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(requerido)</div>
-                                                                                </div>
-
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Programado</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-programado" style="width:@Width(Porcentaje(programado, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(programado)</div>
-                                                                                </div>
-
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Pendiente</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pendiente" style="width:@Width(Porcentaje(pendiente, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(pendiente)</div>
-                                                                                </div>
-
-                                                                                <div class="movement-row">
-                                                                                    <span class="movement">Producido: @Entero(producido)</span>
-                                                                                    <span class="movement">MP: @datos.Sum(x => x.CantidadMpKg ?? 0).ToString("N2") kg</span>
-                                                                                    <span class="movement">Embalajes: @datos.Sum(x => x.CantidadEmbalajes ?? 0).ToString("N0")</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    }
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="timeline-view"
-                                                                 data-timeline="@piezaKey"
-                                                                 data-view="anio">
-                                                                <div class="timeline-grid">
-                                                                    @{
-                                                                        var gruposAnio = ConstruirGruposMes(pieza.Renglones, Model.FechaDesde, Model.FechaHasta);
-                                                                    }
-
-                                                                    @foreach (var grupo in gruposAnio)
-                                                                    {
-                                                                        var datos = grupo.ToList();
-                                                                        var requerido = datos.Sum(x => x.CantidadRequerida);
-                                                                        var programado = datos.Sum(x => x.CantidadProgramada);
-                                                                        var producido = datos.Sum(x => x.CantidadProducida);
-                                                                        var pendiente = datos.Sum(x => x.CantidadPendiente);
-                                                                        var max = Math.Max(1, new[] { requerido, programado, producido, pendiente }.Max());
-
-                                                                        <div class="period-card">
-                                                                            <div class="period-head">
-                                                                                <div>
-                                                                                    <div class="period-title">
-                                                                                        <i class="fa-solid fa-calendar-days me-1"></i>
-                                                                                        @TextoMes(grupo.Key)
-                                                                                    </div>
-                                                                                    <div class="period-sub">
-                                                                                        Resumen mes a mes del año · @datos.Count movimiento(s)
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <span class="pill pill-success">
-                                                                                    @Entero(producido) producido
-                                                                                </span>
-                                                                            </div>
-
-                                                                            <div class="period-body">
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Pedido mensual</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pedido" style="width:@Width(Porcentaje(requerido, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(requerido)</div>
-                                                                                </div>
-
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Programado</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-programado" style="width:@Width(Porcentaje(programado, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(programado)</div>
-                                                                                </div>
-
-                                                                                <div class="gantt-line">
-                                                                                    <div class="gantt-label">Pendiente</div>
-                                                                                    <div class="gantt-track">
-                                                                                        <div class="gantt-fill fill-pendiente" style="width:@Width(Porcentaje(pendiente, max))"></div>
-                                                                                    </div>
-                                                                                    <div class="gantt-num">@Entero(pendiente)</div>
-                                                                                </div>
-
-                                                                                <div class="movement-row">
-                                                                                    <span class="movement">MP anual: @datos.Sum(x => x.CantidadMpKg ?? 0).ToString("N2") kg</span>
-                                                                                    <span class="movement">Embalaje anual: @datos.Sum(x => x.CantidadEmbalajes ?? 0).ToString("N0")</span>
-                                                                                    <span class="movement">Con OF: @datos.Count(x => x.TieneOF)</span>
-                                                                                    <span class="movement">Pendiente programar: @datos.Count(x => x.EstaPendienteProgramar)</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    }
-                                                                </div>
-                                                            </div>
-
+                                                            }
                                                         </div>
                                                     </div>
-
                                                 </section>
                                             }
                                         </main>
@@ -2129,12 +2462,21 @@
 
         let estadoActivo = 'todos';
 
+        function normalizar(valor) {
+            return (valor || '')
+                .toString()
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
         function aplicarFiltros() {
-            const texto = (inputBusqueda?.value || '').trim().toLowerCase();
+            const texto = normalizar(inputBusqueda?.value || '');
 
             cardsCliente.forEach(card => {
-                const search = (card.dataset.search || '').toLowerCase();
-                const estados = (card.dataset.estados || '').toLowerCase();
+                const search = normalizar(card.dataset.search || '');
+                const estados = normalizar(card.dataset.estados || '');
 
                 const coincideTexto = !texto || search.includes(texto);
                 const coincideEstado = estadoActivo === 'todos' || estados.includes(estadoActivo);

@@ -556,9 +556,7 @@
                             <i class="fa-solid fa-file-lines"></i>
                             @totalReleases release@(totalReleases == 1 ? "" : "s")
                         </span>
-                        <span class="pill pill-muted">
-                            Versión automática por semana
-                        </span>
+                        
                     </div>
                 </div>
 
@@ -584,8 +582,8 @@
                             Panorama
                         </a>
 
-                        <a asp-controller="PlaneacionRelease"
-                           asp-action="Calculadora"
+                        <a asp-controller="PlaneacionPrograma"
+                           asp-action="Index"
                            class="btn-glass">
                             <i class="fa-solid fa-list-check"></i>
                             Programa de Planeación
@@ -900,8 +898,8 @@
                         Panorama
                     </a>
 
-                    <a asp-controller="PlaneacionRelease"
-                       asp-action="Calculadora"
+                    <a asp-controller="PlaneacionPrograma"
+                       asp-action="Index"
                        class="btn btn-light-main">
                         <i class="fa-solid fa-list-check me-1"></i>
                         Programa de Planeación
