@@ -17,29 +17,78 @@ namespace ERP.NSQuell.Models
         public int TotalPiezasRequeridas { get; set; }
         public int TotalPiezasAProducir { get; set; }
         public DateTime FechaCreacion { get; set; }
+
+        public int TotalEntregas { get; set; }
+
+        public string? FolioCliente { get; set; }
+
+        public string? ArchivoOrigenNombre { get; set; }
+
+        public string? PlantillaImportacion { get; set; }
+
+        public bool ImportadoDesdeArchivo { get; set; }
+
     }
 
     public class PlaneacionReleaseCrearVm
     {
-        public int? ReleaseID { get; set; }
-        public bool EsEdicion { get; set; }
-
-        public string? FolioRelease { get; set; }
-
         public int? ClienteID { get; set; }
         public string? ClienteNombre { get; set; }
 
+        public string? FolioRelease { get; set; }
+
+        public string? FolioCliente { get; set; }
+
         public DateTime FechaRecepcion { get; set; } = DateTime.Today;
+
         public string? VersionRelease { get; set; }
+
         public string? ArchivoOrigenNombre { get; set; }
+
+        public IFormFile? ArchivoRelease { get; set; }
+
+        public string? PlantillaImportacion { get; set; }
+
+        public bool ImportadoDesdeArchivo { get; set; }
+
         public string? Observaciones { get; set; }
 
-        public int EstatusID { get; set; } = PlaneacionReleaseEstatus.Capturado;
+        public int EstatusID { get; set; }
 
-        public List<PlaneacionReleaseDetalleCrearVm> Detalles { get; set; } = new();
+        public List<PlaneacionReleaseRenglonCrearVm> Renglones { get; set; } = new();
 
         public List<SelectListItem> Clientes { get; set; } = new();
+
         public List<SelectListItem> Partes { get; set; } = new();
+    }
+
+    public class PlaneacionReleaseRenglonCrearVm
+    {
+        public int Renglon { get; set; }
+
+        public int? ParteID { get; set; }
+
+        public string? NumeroParte { get; set; }
+        public string? ReferenciaSAP { get; set; }
+        public string? DesignacionDescripcionSAP { get; set; }
+
+        public string? Observaciones { get; set; }
+
+        public string? UnidadMedidaCliente { get; set; }
+
+        public string? ContratoCliente { get; set; }
+        public List<PlaneacionReleaseEntregaCrearVm> Entregas { get; set; } = new();
+    }
+
+    public class PlaneacionReleaseEntregaCrearVm
+    {
+        public int SecuenciaEntrega { get; set; }
+
+        public DateTime? FechaRequerida { get; set; }
+
+        public int CantidadRequerida { get; set; }
+
+        public DateTime? FechaCarga { get; set; }
     }
 
     public class PlaneacionReleaseDetalleCrearVm
@@ -95,6 +144,7 @@ namespace ERP.NSQuell.Models
         public int? ProgramaProduccionID { get; set; }
         public int? SolicitudProduccionID { get; set; }
 
+        public DateTime? FechaCarga { get; set; }
         public int EstatusID { get; set; } = PlaneacionReleaseEstatus.Capturado;
     }
 
@@ -113,6 +163,12 @@ namespace ERP.NSQuell.Models
 
         public int EstatusID { get; set; }
         public string? EstatusNombre { get; set; }
+
+        public string? FolioCliente { get; set; }
+
+        public string? PlantillaImportacion { get; set; }
+
+        public bool ImportadoDesdeArchivo { get; set; }
 
         public List<PlaneacionReleaseDetalleRenglonVm> Detalles { get; set; } = new();
 
@@ -177,6 +233,15 @@ namespace ERP.NSQuell.Models
         public int? SolicitudProduccionID { get; set; }
 
         public int EstatusID { get; set; }
+
+        public int? ReleaseRenglonID { get; set; }
+        public int? SecuenciaEntrega { get; set; }
+
+        public DateTime? FechaCarga { get; set; }
+
+        public string? UnidadMedidaCliente { get; set; }
+
+        public string? ContratoCliente { get; set; }
     }
 
 

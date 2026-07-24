@@ -23,6 +23,25 @@
         if (daTiempo == false) return "No da tiempo";
         return "Sin validar";
     }
+
+    string TextoImportado(bool importado) => importado ? "Desde archivo" : "Captura manual";
+
+    var grupos = (Model.Detalles ?? new List<ERP.NSQuell.Models.PlaneacionReleaseDetalleRenglonVm>())
+        .GroupBy(x => new
+        {
+            x.ReleaseRenglonID,
+            x.Renglon,
+            x.ParteID,
+            x.NumeroParte,
+            x.ReferenciaSAP,
+            x.DesignacionDescripcionSAP,
+            x.UnidadMedidaCliente,
+            x.ContratoCliente
+        })
+        .OrderBy(g => g.Key.Renglon)
+        .ToList();
+
+    var totalEntregas = Model.Detalles?.Count ?? 0;
 }
 
 <!DOCTYPE html>
@@ -73,6 +92,11 @@
                 font-size: 1.65rem;
                 margin: 0;
                 font-weight: 900;
+            }
+
+            .erp-header p {
+                margin: 7px 0 0 0;
+                opacity: .92;
             }
 
         .header-badge {
@@ -183,6 +207,7 @@
             font-size: .78rem;
             font-weight: 900;
             border: 1px solid transparent;
+            white-space: nowrap;
         }
 
         .badge-ok {
@@ -201,6 +226,48 @@
             background: #fff7ed;
             color: #b54708;
             border-color: #fed7aa;
+        }
+
+        .renglon-card {
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            background: #fff;
+            overflow: hidden;
+            margin-bottom: 18px;
+        }
+
+        .renglon-header {
+            background: #eef3fb;
+            border-bottom: 1px solid var(--erp-border);
+            padding: 16px 18px;
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .renglon-title {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            font-size: 1rem;
+        }
+
+        .renglon-body {
+            padding: 18px;
+        }
+
+        .summary-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 11px;
+            border: 1px solid var(--erp-border);
+            border-radius: 999px;
+            background: white;
+            color: #475467;
+            font-size: .78rem;
+            font-weight: 800;
         }
 
         .table thead th {
@@ -231,35 +298,43 @@
             padding: 14px 0;
             z-index: 20;
         }
+
+        @@media (max-width: 767.98px) {
+            .erp-shell {
+                padding: 16px;
+            }
+
+            .erp-header {
+                padding: 22px;
+                border-radius: 18px;
+            }
+
+            .erp-card-body {
+                padding: 17px;
+            }
+        }
     </style>
 </head>
 
 <body>
     <div class="erp-shell">
-
         <div class="erp-header">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
                     <h1>
-                        <i class="fa-solid fa-calculator me-2"></i>
-                        Detalle Release / Calculadora de necesidades
+                        <i class="fa-solid fa-file-lines me-2"></i>
+                        Detalle del Release
                     </h1>
 
+                    <p>
+                        Consulta la demanda capturada por renglón y sus entregas, con fecha de carga, fecha requerida y cálculo inicial.
+                    </p>
+
                     <div>
-                        <span class="header-badge">
-                            <i class="fa-solid fa-hashtag"></i>
-                            @(Model.FolioRelease ?? "Sin folio")
-                        </span>
-
-                        <span class="header-badge">
-                            <i class="fa-solid fa-building"></i>
-                            @(Model.ClienteNombre ?? "Sin cliente")
-                        </span>
-
-                        <span class="header-badge">
-                            <i class="fa-solid fa-circle-info"></i>
-                            @Model.EstatusNombre
-                        </span>
+                        <span class="header-badge"><i class="fa-solid fa-hashtag"></i>@(Model.FolioRelease ?? "Sin folio")</span>
+                        <span class="header-badge"><i class="fa-solid fa-barcode"></i>@(Model.FolioCliente ?? "Sin folio cliente")</span>
+                        <span class="header-badge"><i class="fa-solid fa-building"></i>@(Model.ClienteNombre ?? "Sin cliente")</span>
+                        <span class="header-badge"><i class="fa-solid fa-circle-info"></i>@Model.EstatusNombre</span>
                     </div>
                 </div>
 
@@ -298,202 +373,159 @@
         }
 
         <div class="row g-3 mb-3">
-            <div class="col-md-2">
-                <div class="metric-card">
-                    <div class="metric-label">Renglones</div>
-                    <div class="metric-value">@Model.TotalRenglones</div>
-                </div>
-            </div>
-
-            <div class="col-md-2">
-                <div class="metric-card">
-                    <div class="metric-label">Requeridas</div>
-                    <div class="metric-value">@Model.TotalPiezasRequeridas.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-md-2">
-                <div class="metric-card">
-                    <div class="metric-label">Desde PT</div>
-                    <div class="metric-value">@Model.TotalPiezasDesdePT.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-md-2">
-                <div class="metric-card">
-                    <div class="metric-label">A producir</div>
-                    <div class="metric-value">@Model.TotalPiezasAProducir.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-md-2">
-                <div class="metric-card">
-                    <div class="metric-label">MP kg</div>
-                    <div class="metric-value">@Model.TotalMPRequeridaKg.ToString("N4")</div>
-                </div>
-            </div>
-
-            <div class="col-md-2">
-                <div class="metric-card">
-                    <div class="metric-label">Horas</div>
-                    <div class="metric-value">@Model.TotalHorasNecesarias.ToString("N2")</div>
-                </div>
-            </div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Renglones</div><div class="metric-value">@grupos.Count.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Entregas</div><div class="metric-value">@totalEntregas.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Requeridas</div><div class="metric-value">@Model.TotalPiezasRequeridas.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Desde PT</div><div class="metric-value">@Model.TotalPiezasDesdePT.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">A producir</div><div class="metric-value">@Model.TotalPiezasAProducir.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Horas</div><div class="metric-value">@Model.TotalHorasNecesarias.ToString("N2")</div></div></div>
         </div>
 
         <div class="erp-card">
             <div class="erp-card-header">
                 <div>
-                    <h2 class="h5 fw-bold m-0 text-primary">
-                        <i class="fa-solid fa-file-lines me-2"></i>
-                        Encabezado
-                    </h2>
-                    <div class="text-muted small">
-                        Información general del release recibido.
-                    </div>
+                    <h2 class="h5 fw-bold m-0 text-primary"><i class="fa-solid fa-file-lines me-2"></i>Encabezado</h2>
+                    <div class="text-muted small">Información general del release recibido.</div>
                 </div>
             </div>
 
             <div class="erp-card-body">
                 <div class="row g-3">
-                    <div class="col-md-3">
-                        <div class="erp-label">Folio</div>
-                        <div class="erp-value">@Valor(Model.FolioRelease)</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Cliente</div>
-                        <div class="erp-value">@Valor(Model.ClienteNombre)</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Fecha recepción</div>
-                        <div class="erp-value">@Model.FechaRecepcion.ToString("dd/MM/yyyy")</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="erp-label">Versión</div>
-                        <div class="erp-value">@Valor(Model.VersionRelease)</div>
-                    </div>
-
-                    <div class="col-md-12">
-                        <div class="erp-label">Observaciones</div>
-                        <div class="erp-value">@Valor(Model.Observaciones)</div>
-                    </div>
+                    <div class="col-md-3"><div class="erp-label">Folio interno</div><div class="erp-value">@Valor(Model.FolioRelease)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Folio cliente / Schedule / Contrato</div><div class="erp-value">@Valor(Model.FolioCliente)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Cliente</div><div class="erp-value">@Valor(Model.ClienteNombre)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Fecha recepción</div><div class="erp-value">@Model.FechaRecepcion.ToString("dd/MM/yyyy")</div></div>
+                    <div class="col-md-3"><div class="erp-label">Semana / versión</div><div class="erp-value">@Valor(Model.VersionRelease)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Archivo origen</div><div class="erp-value">@Valor(Model.ArchivoOrigenNombre)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Plantilla importación</div><div class="erp-value">@Valor(Model.PlantillaImportacion)</div></div>
+                    <div class="col-md-3"><div class="erp-label">Origen</div><div class="erp-value">@TextoImportado(Model.ImportadoDesdeArchivo)</div></div>
+                    <div class="col-md-12"><div class="erp-label">Observaciones</div><div class="erp-value">@Valor(Model.Observaciones)</div></div>
                 </div>
             </div>
         </div>
 
-        <div class="erp-card">
-            <div class="erp-card-header">
-                <div>
-                    <h2 class="h5 fw-bold m-0 text-primary">
-                        <i class="fa-solid fa-table-list me-2"></i>
-                        Calculadora de necesidades
-                    </h2>
-                    <div class="text-muted small">
-                        Requerido contra PT disponible, producción pendiente, MP, embalaje y capacidad inicial.
-                    </div>
-                </div>
-            </div>
+        @if (grupos.Any())
+        {
+            foreach (var grupo in grupos)
+            {
+                var entregas = grupo
+                .OrderBy(x => x.SecuenciaEntrega ?? 9999)
+                .ThenBy(x => x.FechaRequerida)
+                .ToList();
 
-            <div class="erp-card-body">
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover align-middle">
-                        <thead>
-                            <tr>
-                                <th>Ren.</th>
-                                <th>Parte</th>
-                                <th>Fecha req.</th>
-                                <th>Req.</th>
-                                <th>PT disp.</th>
-                                <th>Prog. pend.</th>
-                                <th>Desde PT</th>
-                                <th>A producir</th>
-                                <th>MP req.</th>
-                                <th>MP disp.</th>
-                                <th>Emb. req.</th>
-                                <th>Emb. disp.</th>
-                                <th>Máquina</th>
-                                <th>Molde</th>
-                                <th>Horas</th>
-                                <th>Fin estimado</th>
-                                <th>Resultado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (Model.Detalles != null && Model.Detalles.Any())
-                            {
-                                foreach (var d in Model.Detalles)
-                                {
+                var totalReqGrupo = entregas.Sum(x => x.CantidadRequerida);
+                var totalPTGrupo = entregas.Sum(x => x.PiezasDesdePT ?? 0);
+                var totalProdGrupo = entregas.Sum(x => x.PiezasAProducir ?? 0);
+                var totalMPGrupo = entregas.Sum(x => x.MPRequeridaKg ?? 0);
+                var totalHorasGrupo = entregas.Sum(x => x.HorasNecesarias ?? 0);
+
+                <div class="renglon-card">
+                    <div class="renglon-header">
+                        <div>
+                            <div class="renglon-title">Renglón @grupo.Key.Renglon · @Valor(grupo.Key.ReferenciaSAP ?? grupo.Key.NumeroParte)</div>
+                            <div class="small-muted">@Valor(grupo.Key.DesignacionDescripcionSAP)</div>
+                        </div>
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="summary-chip"><i class="fa-solid fa-ruler"></i>UM: @Valor(grupo.Key.UnidadMedidaCliente)</span>
+                            <span class="summary-chip"><i class="fa-solid fa-file-contract"></i>Contrato: @Valor(grupo.Key.ContratoCliente)</span>
+                            <span class="summary-chip"><i class="fa-solid fa-truck"></i>@entregas.Count entrega(s)</span>
+                            <span class="summary-chip"><i class="fa-solid fa-cubes"></i>Req: @totalReqGrupo.ToString("N0")</span>
+                            <span class="summary-chip"><i class="fa-solid fa-industry"></i>A producir: @totalProdGrupo.ToString("N0")</span>
+                        </div>
+                    </div>
+
+                    <div class="renglon-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-3"><div class="erp-label">No. parte</div><div class="erp-value">@Valor(grupo.Key.NumeroParte)</div></div>
+                            <div class="col-md-3"><div class="erp-label">Referencia SAP / cliente</div><div class="erp-value">@Valor(grupo.Key.ReferenciaSAP)</div></div>
+                            <div class="col-md-3"><div class="erp-label">Unidad cliente</div><div class="erp-value">@Valor(grupo.Key.UnidadMedidaCliente)</div></div>
+                            <div class="col-md-3"><div class="erp-label">Contrato / orden cliente</div><div class="erp-value">@Valor(grupo.Key.ContratoCliente)</div></div>
+                            <div class="col-md-12"><div class="erp-label">Designación / descripción</div><div class="erp-value">@Valor(grupo.Key.DesignacionDescripcionSAP)</div></div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover align-middle">
+                                <thead>
                                     <tr>
-                                        <td>@d.Renglon</td>
-                                        <td>
-                                            <strong>@Valor(d.ReferenciaSAP ?? d.NumeroParte)</strong><br />
-                                            <span class="small-muted">@Valor(d.DesignacionDescripcionSAP)</span>
-                                        </td>
-                                        <td>@d.FechaRequerida.ToString("dd/MM/yyyy")</td>
-                                        <td>@d.CantidadRequerida.ToString("N0")</td>
-                                        <td>@Entero(d.PTDisponibleAlCalcular)</td>
-                                        <td>@Entero(d.ProduccionProgramadaPendiente)</td>
-                                        <td>
-                                            <strong>@Entero(d.PiezasDesdePT)</strong>
-                                        </td>
-                                        <td>
-                                            <strong>@Entero(d.PiezasAProducir)</strong>
-                                        </td>
-                                        <td>@Decimal4(d.MPRequeridaKg)</td>
-                                        <td>@Decimal4(d.MPDisponibleKg)</td>
-                                        <td>@Decimal4(d.EmbalajeRequerido)</td>
-                                        <td>@Decimal4(d.EmbalajeDisponible)</td>
-                                        <td>
-                                            <strong>@Valor(d.MaquinaSugeridaCodigo)</strong><br />
-                                            <span class="small-muted">@Valor(d.MaquinaSugeridaNombre)</span>
-                                        </td>
-                                        <td>@Valor(d.MoldeCodigo)</td>
-                                        <td>@Decimal2(d.HorasNecesarias)</td>
-                                        <td>@FechaHora(d.FechaFinEstimada)</td>
-                                        <td>
-                                            <span class="badge-calc @ClaseTiempo(d.DaTiempo)">
-                                                @TextoTiempo(d.DaTiempo)
-                                            </span>
-                                            <div class="small-muted mt-1">
-                                                @Valor(d.MensajeCapacidad)
-                                            </div>
-                                        </td>
+                                        <th>Entrega</th>
+                                        <th>Fecha carga</th>
+                                        <th>Fecha requerida</th>
+                                        <th>Req.</th>
+                                        <th>PT disp.</th>
+                                        <th>Prod. pend.</th>
+                                        <th>Desde PT</th>
+                                        <th>A producir</th>
+                                        <th>MP req.</th>
+                                        <th>MP disp.</th>
+                                        <th>Emb. req.</th>
+                                        <th>Emb. disp.</th>
+                                        <th>Horas</th>
+                                        <th>Fin estimado</th>
+                                        <th>Resultado</th>
                                     </tr>
-                                }
-                            }
-                            else
-                            {
-                                <tr>
-                                    <td colspan="17" class="text-center text-muted">
-                                        No hay renglones en este release.
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                        <tfoot>
-                            <tr class="fw-bold">
-                                <td colspan="3" class="text-end">Totales</td>
-                                <td>@Model.TotalPiezasRequeridas.ToString("N0")</td>
-                                <td></td>
-                                <td></td>
-                                <td>@Model.TotalPiezasDesdePT.ToString("N0")</td>
-                                <td>@Model.TotalPiezasAProducir.ToString("N0")</td>
-                                <td>@Model.TotalMPRequeridaKg.ToString("N4")</td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td colspan="2"></td>
-                                <td>@Model.TotalHorasNecesarias.ToString("N2")</td>
-                                <td colspan="2"></td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                                </thead>
+
+                                <tbody>
+                                    @for (var i = 0; i < entregas.Count; i++)
+                                    {
+                                        var d = entregas[i];
+                                        var secuencia = d.SecuenciaEntrega ?? (i + 1);
+
+                                        <tr>
+                                            <td><strong>@secuencia</strong></td>
+                                            <td>@Fecha(d.FechaCarga)</td>
+                                            <td>@d.FechaRequerida.ToString("dd/MM/yyyy")</td>
+                                            <td>@d.CantidadRequerida.ToString("N0")</td>
+                                            <td>@Entero(d.PTDisponibleAlCalcular)</td>
+                                            <td>@Entero(d.ProduccionProgramadaPendiente)</td>
+                                            <td><strong>@Entero(d.PiezasDesdePT)</strong></td>
+                                            <td><strong>@Entero(d.PiezasAProducir)</strong></td>
+                                            <td>@Decimal4(d.MPRequeridaKg)</td>
+                                            <td>@Decimal4(d.MPDisponibleKg)</td>
+                                            <td>@Decimal4(d.EmbalajeRequerido)</td>
+                                            <td>@Decimal4(d.EmbalajeDisponible)</td>
+                                            <td>@Decimal2(d.HorasNecesarias)</td>
+                                            <td>@FechaHora(d.FechaFinEstimada)</td>
+                                            <td>
+                                                <span class="badge-calc @ClaseTiempo(d.DaTiempo)">@TextoTiempo(d.DaTiempo)</span>
+                                                <div class="small-muted mt-1">@Valor(d.MensajeCapacidad)</div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+
+                                <tfoot>
+                                    <tr class="fw-bold">
+                                        <td colspan="3" class="text-end">Totales renglón</td>
+                                        <td>@totalReqGrupo.ToString("N0")</td>
+                                        <td></td>
+                                        <td></td>
+                                        <td>@totalPTGrupo.ToString("N0")</td>
+                                        <td>@totalProdGrupo.ToString("N0")</td>
+                                        <td>@totalMPGrupo.ToString("N4")</td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td>@totalHorasGrupo.ToString("N2")</td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="erp-card">
+                <div class="erp-card-body text-center text-muted py-5">
+                    <i class="fa-solid fa-inbox fa-2x mb-3"></i>
+                    <div class="fw-bold">No hay renglones en este release.</div>
                 </div>
             </div>
-        </div>
+        }
 
         <div class="sticky-actions">
             <div class="d-flex justify-content-between gap-2 flex-wrap">
@@ -512,19 +544,13 @@
                         </button>
                     </form>
 
-                    <button type="button" class="btn btn-erp-primary" disabled>
-                        <i class="fa-solid fa-industry me-1"></i>
-                        Generar programa
-                    </button>
-
-                    <button type="button" class="btn btn-erp-primary" disabled>
-                        <i class="fa-solid fa-file-circle-plus me-1"></i>
-                        Generar OF
-                    </button>
+                    <a asp-controller="PlaneacionRelease" asp-action="Calculadora" asp-route-clienteId="@Model.ClienteID" class="btn btn-erp-primary">
+                        <i class="fa-solid fa-list-check me-1"></i>
+                        Ir a Programa de Planeación
+                    </a>
                 </div>
             </div>
         </div>
-
     </div>
 </body>
 </html>

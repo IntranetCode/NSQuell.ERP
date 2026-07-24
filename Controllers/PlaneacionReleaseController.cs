@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using System.Data;
+using UglyToad.PdfPig;
+using System.Text.RegularExpressions;
+using System.Globalization;
 using static ERP.NSQuell.Models.PlaneacionReleaseEstatus;
 
 namespace ERP.NSQuell.Controllers
@@ -29,18 +32,28 @@ namespace ERP.NSQuell.Controllers
 SELECT
     r.ReleaseID,
     r.FolioRelease,
+    r.FolioCliente,
     r.ClienteID,
     ISNULL(c.Nombre, r.ClienteNombre) AS ClienteNombre,
     r.FechaRecepcion,
     r.VersionRelease,
+    r.ArchivoOrigenNombre,
+    r.PlantillaImportacion,
+    ISNULL(r.ImportadoDesdeArchivo, 0) AS ImportadoDesdeArchivo,
     r.EstatusID,
     r.FechaCreacion,
-    COUNT(d.ReleaseDetalleID) AS TotalRenglones,
+
+    COUNT(DISTINCT rr.ReleaseRenglonID) AS TotalRenglones,
+    COUNT(d.ReleaseDetalleID) AS TotalEntregas,
+
     ISNULL(SUM(d.CantidadRequerida), 0) AS TotalPiezasRequeridas,
     ISNULL(SUM(ISNULL(d.PiezasAProducir, 0)), 0) AS TotalPiezasAProducir
 FROM dbo.Planeacion_Releases r
 LEFT JOIN dbo.ERP_Clientes c
     ON c.ClienteID = r.ClienteID
+LEFT JOIN dbo.Planeacion_ReleaseRenglones rr
+    ON rr.ReleaseID = r.ReleaseID
+   AND rr.Activo = 1
 LEFT JOIN dbo.Planeacion_ReleaseDetalle d
     ON d.ReleaseID = r.ReleaseID
    AND d.Activo = 1
@@ -48,10 +61,14 @@ WHERE r.Activo = 1
 GROUP BY
     r.ReleaseID,
     r.FolioRelease,
+    r.FolioCliente,
     r.ClienteID,
     ISNULL(c.Nombre, r.ClienteNombre),
     r.FechaRecepcion,
     r.VersionRelease,
+    r.ArchivoOrigenNombre,
+    r.PlantillaImportacion,
+    ISNULL(r.ImportadoDesdeArchivo, 0),
     r.EstatusID,
     r.FechaCreacion
 ORDER BY r.FechaCreacion DESC;";
@@ -70,14 +87,19 @@ ORDER BY r.FechaCreacion DESC;";
                 {
                     ReleaseID = Convert.ToInt32(rd["ReleaseID"]),
                     FolioRelease = rd["FolioRelease"] as string,
+                    FolioCliente = rd["FolioCliente"] as string,
                     ClienteID = rd["ClienteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ClienteID"]),
                     ClienteNombre = rd["ClienteNombre"] as string,
                     FechaRecepcion = Convert.ToDateTime(rd["FechaRecepcion"]),
                     VersionRelease = rd["VersionRelease"] as string,
+                    ArchivoOrigenNombre = rd["ArchivoOrigenNombre"] as string,
+                    PlantillaImportacion = rd["PlantillaImportacion"] as string,
+                    ImportadoDesdeArchivo = rd["ImportadoDesdeArchivo"] != DBNull.Value && Convert.ToBoolean(rd["ImportadoDesdeArchivo"]),
                     EstatusID = estatusId,
                     EstatusNombre = PlaneacionReleaseEstatus.Nombre(estatusId),
                     FechaCreacion = Convert.ToDateTime(rd["FechaCreacion"]),
                     TotalRenglones = Convert.ToInt32(rd["TotalRenglones"]),
+                    TotalEntregas = Convert.ToInt32(rd["TotalEntregas"]),
                     TotalPiezasRequeridas = Convert.ToInt32(rd["TotalPiezasRequeridas"]),
                     TotalPiezasAProducir = Convert.ToInt32(rd["TotalPiezasAProducir"])
                 });
@@ -96,32 +118,47 @@ ORDER BY r.FechaCreacion DESC;";
                 EstatusID = PlaneacionReleaseEstatus.Capturado
             };
 
-            vm.Detalles.Add(new PlaneacionReleaseDetalleCrearVm
+            vm.Renglones.Add(new PlaneacionReleaseRenglonCrearVm
             {
                 Renglon = 1,
-                FechaRequerida = DateTime.Today
+                Entregas = new List<PlaneacionReleaseEntregaCrearVm>
+    {
+        new PlaneacionReleaseEntregaCrearVm
+        {
+            SecuenciaEntrega = 1,
+            FechaRequerida = DateTime.Today
+        }
+    }
             });
 
             await CargarCatalogosAsync(vm);
 
             return View(vm);
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Crear(PlaneacionReleaseCrearVm vm)
         {
             var usuarioId = ObtenerUsuarioID();
 
-            vm.Detalles = vm.Detalles
-                .Where(x =>
-                    x.CantidadRequerida > 0 &&
-                    x.FechaRequerida.HasValue &&
-                    (
-                        x.ParteID.HasValue ||
-                        !string.IsNullOrWhiteSpace(x.ReferenciaSAP) ||
-                        !string.IsNullOrWhiteSpace(x.DesignacionDescripcionSAP)
-                    ))
+            vm.Renglones = vm.Renglones
+                .Where(r =>
+                    r.ParteID.HasValue ||
+                    !string.IsNullOrWhiteSpace(r.ReferenciaSAP) ||
+                    !string.IsNullOrWhiteSpace(r.DesignacionDescripcionSAP))
+                .ToList();
+
+            foreach (var r in vm.Renglones)
+            {
+                r.Entregas = r.Entregas
+                    .Where(e =>
+                        e.CantidadRequerida > 0 &&
+                        e.FechaRequerida.HasValue)
+                    .ToList();
+            }
+
+            vm.Renglones = vm.Renglones
+                .Where(r => r.Entregas.Any())
                 .ToList();
 
             if (!vm.ClienteID.HasValue && string.IsNullOrWhiteSpace(vm.ClienteNombre))
@@ -129,18 +166,33 @@ ORDER BY r.FechaCreacion DESC;";
                 ModelState.AddModelError("", "Selecciona o captura el cliente.");
             }
 
-            if (!vm.Detalles.Any())
+            if (!vm.Renglones.Any())
             {
                 ModelState.AddModelError("", "Debes capturar al menos un renglón del release.");
             }
 
-            foreach (var d in vm.Detalles)
+            foreach (var r in vm.Renglones)
             {
-                if (!d.FechaRequerida.HasValue)
-                    ModelState.AddModelError("", $"El renglón {d.Renglon} no tiene fecha requerida.");
+                if (!r.ParteID.HasValue &&
+                    string.IsNullOrWhiteSpace(r.ReferenciaSAP) &&
+                    string.IsNullOrWhiteSpace(r.DesignacionDescripcionSAP))
+                {
+                    ModelState.AddModelError("", $"El renglón {r.Renglon} no tiene parte seleccionada.");
+                }
 
-                if (d.CantidadRequerida <= 0)
-                    ModelState.AddModelError("", $"El renglón {d.Renglon} debe tener cantidad requerida mayor a cero.");
+                if (!r.Entregas.Any())
+                {
+                    ModelState.AddModelError("", $"El renglón {r.Renglon} debe tener al menos una entrega.");
+                }
+
+                foreach (var e in r.Entregas)
+                {
+                    if (!e.FechaRequerida.HasValue)
+                        ModelState.AddModelError("", $"El renglón {r.Renglon}, entrega {e.SecuenciaEntrega}, no tiene fecha requerida.");
+
+                    if (e.CantidadRequerida <= 0)
+                        ModelState.AddModelError("", $"El renglón {r.Renglon}, entrega {e.SecuenciaEntrega}, debe tener cantidad mayor a cero.");
+                }
             }
 
             if (!ModelState.IsValid)
@@ -176,24 +228,50 @@ ORDER BY r.FechaCreacion DESC;";
                     (SqlTransaction)tx
                 );
 
-                var renglon = 1;
+                var renglonNumero = 1;
 
-                foreach (var detalle in vm.Detalles)
+                foreach (var renglon in vm.Renglones)
                 {
-                    detalle.Renglon = renglon;
+                    renglon.Renglon = renglonNumero;
 
-                    await CompletarDetalleDesdeParteAsync(detalle, cn, (SqlTransaction)tx);
-                    await CalcularNecesidadAsync(detalle, cn, (SqlTransaction)tx);
+                    await CompletarRenglonDesdeParteAsync(renglon, cn, (SqlTransaction)tx);
 
-                    await InsertarReleaseDetalleAsync(
+                    var releaseRenglonId = await InsertarReleaseRenglonAsync(
                         releaseId,
-                        detalle,
+                        renglon,
                         usuarioId,
                         cn,
                         (SqlTransaction)tx
                     );
 
-                    renglon++;
+                    var secuenciaEntrega = 1;
+
+                    foreach (var entrega in renglon.Entregas)
+                    {
+                        entrega.SecuenciaEntrega = secuenciaEntrega;
+
+                        var detalle = CrearDetalleDesdeRenglonEntrega(
+                            renglon,
+                            entrega
+                        );
+
+                        await CompletarDetalleDesdeParteAsync(detalle, cn, (SqlTransaction)tx);
+                        await CalcularNecesidadAsync(detalle, cn, (SqlTransaction)tx);
+
+                        await InsertarReleaseDetalleAsync(
+                            releaseId,
+                            releaseRenglonId,
+                            secuenciaEntrega,
+                            detalle,
+                            usuarioId,
+                            cn,
+                            (SqlTransaction)tx
+                        );
+
+                        secuenciaEntrega++;
+                    }
+
+                    renglonNumero++;
                 }
 
                 await ActualizarEstatusReleaseAsync(
@@ -216,6 +294,64 @@ ORDER BY r.FechaCreacion DESC;";
                 ModelState.AddModelError("", "Error al guardar el release: " + ex.Message);
                 await CargarCatalogosAsync(vm);
                 return View(vm);
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LeerArchivoRelease(PlaneacionReleaseCrearVm vm)
+        {
+            if (vm.ArchivoRelease == null || vm.ArchivoRelease.Length <= 0)
+            {
+                ModelState.AddModelError("", "Selecciona un archivo de Release para leer.");
+                await CargarCatalogosAsync(vm);
+                return View("Crear", vm);
+            }
+
+            var extension = Path.GetExtension(vm.ArchivoRelease.FileName).ToLowerInvariant();
+
+            if (extension != ".pdf" && extension != ".xlsx" && extension != ".xls" && extension != ".csv")
+            {
+                ModelState.AddModelError("", "El archivo debe ser PDF, Excel o CSV.");
+                await CargarCatalogosAsync(vm);
+                return View("Crear", vm);
+            }
+
+            try
+            {
+                vm.ArchivoOrigenNombre = Path.GetFileName(vm.ArchivoRelease.FileName);
+                vm.ImportadoDesdeArchivo = true;
+
+                if (string.IsNullOrWhiteSpace(vm.FolioRelease))
+                {
+                    vm.FolioRelease = await GenerarFolioReleaseSugeridoAsync();
+                }
+
+                if (vm.FechaRecepcion == default)
+                {
+                    vm.FechaRecepcion = DateTime.Today;
+                }
+
+                if (extension == ".pdf")
+                {
+                    vm = await LeerReleasePdfPorPlantillaAsync(vm);
+                }
+                else
+                {
+                    vm = await LeerReleaseExcelPorPlantillaAsync(vm);
+                }
+
+                await CargarCatalogosAsync(vm);
+
+                TempData["Success"] = "Archivo leído correctamente. Revisa la información antes de guardar.";
+
+                return View("Crear", vm);
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError("", "No fue posible leer el archivo: " + ex.Message);
+                await CargarCatalogosAsync(vm);
+                return View("Crear", vm);
             }
         }
 
@@ -298,11 +434,14 @@ ORDER BY r.FechaCreacion DESC;";
 INSERT INTO dbo.Planeacion_Releases
 (
     FolioRelease,
+    FolioCliente,
     ClienteID,
     ClienteNombre,
     FechaRecepcion,
     VersionRelease,
     ArchivoOrigenNombre,
+    PlantillaImportacion,
+    ImportadoDesdeArchivo,
     Observaciones,
     EstatusID,
     UsuarioCreacionID,
@@ -313,11 +452,14 @@ OUTPUT INSERTED.ReleaseID
 VALUES
 (
     @FolioRelease,
+    @FolioCliente,
     @ClienteID,
     @ClienteNombre,
     @FechaRecepcion,
     @VersionRelease,
     @ArchivoOrigenNombre,
+    @PlantillaImportacion,
+    @ImportadoDesdeArchivo,
     @Observaciones,
     @EstatusID,
     @UsuarioCreacionID,
@@ -329,6 +471,9 @@ VALUES
 
             cmd.Parameters.Add("@FolioRelease", SqlDbType.NVarChar, 40).Value =
                 (object?)vm.FolioRelease ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FolioCliente", SqlDbType.NVarChar, 100).Value =
+                (object?)vm.FolioCliente ?? DBNull.Value;
 
             cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
                 (object?)vm.ClienteID ?? DBNull.Value;
@@ -344,6 +489,12 @@ VALUES
             cmd.Parameters.Add("@ArchivoOrigenNombre", SqlDbType.NVarChar, 255).Value =
                 (object?)vm.ArchivoOrigenNombre ?? DBNull.Value;
 
+            cmd.Parameters.Add("@PlantillaImportacion", SqlDbType.NVarChar, 100).Value =
+                (object?)vm.PlantillaImportacion ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ImportadoDesdeArchivo", SqlDbType.Bit).Value =
+                vm.ImportadoDesdeArchivo;
+
             cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
                 (object?)vm.Observaciones ?? DBNull.Value;
 
@@ -354,21 +505,26 @@ VALUES
         }
 
         private async Task InsertarReleaseDetalleAsync(
-            int releaseId,
-            PlaneacionReleaseDetalleCrearVm d,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+    int releaseId,
+    int releaseRenglonId,
+    int secuenciaEntrega,
+    PlaneacionReleaseDetalleCrearVm d,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
         {
             const string sql = @"
 INSERT INTO dbo.Planeacion_ReleaseDetalle
 (
     ReleaseID,
+ReleaseRenglonID,
+SecuenciaEntrega,
     Renglon,
     ParteID,
     NumeroParte,
     ReferenciaSAP,
     DesignacionDescripcionSAP,
+FechaCarga,
     FechaRequerida,
     CantidadRequerida,
 
@@ -410,11 +566,14 @@ INSERT INTO dbo.Planeacion_ReleaseDetalle
 VALUES
 (
     @ReleaseID,
+@ReleaseRenglonID,
+@SecuenciaEntrega,
     @Renglon,
     @ParteID,
     @NumeroParte,
     @ReferenciaSAP,
     @DesignacionDescripcionSAP,
+@FechaCarga,
     @FechaRequerida,
     @CantidadRequerida,
 
@@ -455,6 +614,10 @@ VALUES
 );";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@FechaCarga", SqlDbType.Date).Value =
+    (object?)d.FechaCarga ?? DBNull.Value;
+            cmd.Parameters.Add("@ReleaseRenglonID", SqlDbType.Int).Value = releaseRenglonId;
+            cmd.Parameters.Add("@SecuenciaEntrega", SqlDbType.Int).Value = secuenciaEntrega;
 
             AgregarParametrosDetalle(cmd, releaseId, d, usuarioId);
 
@@ -745,11 +908,14 @@ WHERE Codigo = @Codigo;";
 SELECT
     r.ReleaseID,
     r.FolioRelease,
+    r.FolioCliente,
     r.ClienteID,
     ISNULL(c.Nombre, r.ClienteNombre) AS ClienteNombre,
     r.FechaRecepcion,
     r.VersionRelease,
     r.ArchivoOrigenNombre,
+    r.PlantillaImportacion,
+    ISNULL(r.ImportadoDesdeArchivo, 0) AS ImportadoDesdeArchivo,
     r.Observaciones,
     r.EstatusID
 FROM dbo.Planeacion_Releases r
@@ -773,11 +939,14 @@ WHERE r.ReleaseID = @ReleaseID
                 {
                     ReleaseID = Convert.ToInt32(rd["ReleaseID"]),
                     FolioRelease = rd["FolioRelease"] as string,
+                    FolioCliente = rd["FolioCliente"] as string,
                     ClienteID = rd["ClienteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ClienteID"]),
                     ClienteNombre = rd["ClienteNombre"] as string,
                     FechaRecepcion = Convert.ToDateTime(rd["FechaRecepcion"]),
                     VersionRelease = rd["VersionRelease"] as string,
                     ArchivoOrigenNombre = rd["ArchivoOrigenNombre"] as string,
+                    PlantillaImportacion = rd["PlantillaImportacion"] as string,
+                    ImportadoDesdeArchivo = rd["ImportadoDesdeArchivo"] != DBNull.Value && Convert.ToBoolean(rd["ImportadoDesdeArchivo"]),
                     Observaciones = rd["Observaciones"] as string,
                     EstatusID = estatusId,
                     EstatusNombre = PlaneacionReleaseEstatus.Nombre(estatusId)
@@ -797,47 +966,55 @@ WHERE r.ReleaseID = @ReleaseID
 
             const string sql = @"
 SELECT
-    ReleaseDetalleID,
-    Renglon,
-    ParteID,
-    NumeroParte,
-    ReferenciaSAP,
-    DesignacionDescripcionSAP,
-    FechaRequerida,
-    CantidadRequerida,
-    PTDisponibleAlCalcular,
-    ProduccionProgramadaPendiente,
-    PiezasDesdePT,
-    PiezasAProducir,
-    MaterialID,
-    MaterialCodigo,
-    MaterialDescripcion,
-    PesoBrutoPieza,
-    MPRequeridaKg,
-    MPDisponibleKg,
-    EmbalajeCodigo,
-    EmbalajeDescripcion,
-    PiezasPorEmbalaje,
-    EmbalajeRequerido,
-    EmbalajeDisponible,
-    MoldeID,
-    MoldeCodigo,
-    MaquinaSugeridaID,
-    MaquinaSugeridaCodigo,
-    MaquinaSugeridaNombre,
-    ObjetivoHora,
-    HorasNecesarias,
-    FechaInicioSugerida,
-    FechaFinEstimada,
-    DaTiempo,
-    MensajeCapacidad,
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    EstatusID
-FROM dbo.Planeacion_ReleaseDetalle
-WHERE ReleaseID = @ReleaseID
-  AND Activo = 1
-ORDER BY Renglon;";
+    d.ReleaseDetalleID,
+    d.ReleaseRenglonID,
+    d.SecuenciaEntrega,
+    d.Renglon,
+    d.ParteID,
+    d.NumeroParte,
+    d.ReferenciaSAP,
+    d.DesignacionDescripcionSAP,
+    rr.UnidadMedidaCliente,
+    rr.ContratoCliente,
+    d.FechaCarga,
+    d.FechaRequerida,
+    d.CantidadRequerida,
+    d.PTDisponibleAlCalcular,
+    d.ProduccionProgramadaPendiente,
+    d.PiezasDesdePT,
+    d.PiezasAProducir,
+    d.MaterialID,
+    d.MaterialCodigo,
+    d.MaterialDescripcion,
+    d.PesoBrutoPieza,
+    d.MPRequeridaKg,
+    d.MPDisponibleKg,
+    d.EmbalajeCodigo,
+    d.EmbalajeDescripcion,
+    d.PiezasPorEmbalaje,
+    d.EmbalajeRequerido,
+    d.EmbalajeDisponible,
+    d.MoldeID,
+    d.MoldeCodigo,
+    d.MaquinaSugeridaID,
+    d.MaquinaSugeridaCodigo,
+    d.MaquinaSugeridaNombre,
+    d.ObjetivoHora,
+    d.HorasNecesarias,
+    d.FechaInicioSugerida,
+    d.FechaFinEstimada,
+    d.DaTiempo,
+    d.MensajeCapacidad,
+    d.ProgramaProduccionID,
+    d.SolicitudProduccionID,
+    d.EstatusID
+FROM dbo.Planeacion_ReleaseDetalle d
+LEFT JOIN dbo.Planeacion_ReleaseRenglones rr
+    ON rr.ReleaseRenglonID = d.ReleaseRenglonID
+   AND rr.Activo = 1
+WHERE d.ReleaseID = @ReleaseID
+  AND d.Activo = 1
+ORDER BY d.Renglon, ISNULL(d.SecuenciaEntrega, 9999), d.FechaRequerida;";
 
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = releaseId;
@@ -849,11 +1026,16 @@ ORDER BY Renglon;";
                 lista.Add(new PlaneacionReleaseDetalleRenglonVm
                 {
                     ReleaseDetalleID = Convert.ToInt32(rd["ReleaseDetalleID"]),
+                    ReleaseRenglonID = rd["ReleaseRenglonID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseRenglonID"]),
+                    SecuenciaEntrega = rd["SecuenciaEntrega"] == DBNull.Value ? null : Convert.ToInt32(rd["SecuenciaEntrega"]),
                     Renglon = Convert.ToInt32(rd["Renglon"]),
                     ParteID = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]),
                     NumeroParte = rd["NumeroParte"] as string,
                     ReferenciaSAP = rd["ReferenciaSAP"] as string,
                     DesignacionDescripcionSAP = rd["DesignacionDescripcionSAP"] as string,
+                    UnidadMedidaCliente = rd["UnidadMedidaCliente"] as string,
+                    ContratoCliente = rd["ContratoCliente"] as string,
+                    FechaCarga = rd["FechaCarga"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaCarga"]),
                     FechaRequerida = Convert.ToDateTime(rd["FechaRequerida"]),
                     CantidadRequerida = Convert.ToInt32(rd["CantidadRequerida"]),
                     PTDisponibleAlCalcular = rd["PTDisponibleAlCalcular"] == DBNull.Value ? null : Convert.ToInt32(rd["PTDisponibleAlCalcular"]),
@@ -906,6 +1088,7 @@ SELECT
     NumeroParte,
     ReferenciaSAP,
     DesignacionDescripcionSAP,
+    FechaCarga,
     FechaRequerida,
     CantidadRequerida
 FROM dbo.Planeacion_ReleaseDetalle
@@ -928,6 +1111,7 @@ ORDER BY Renglon;";
                     NumeroParte = rd["NumeroParte"] as string,
                     ReferenciaSAP = rd["ReferenciaSAP"] as string,
                     DesignacionDescripcionSAP = rd["DesignacionDescripcionSAP"] as string,
+                    FechaCarga = rd["FechaCarga"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaCarga"]),
                     FechaRequerida = Convert.ToDateTime(rd["FechaRequerida"]),
                     CantidadRequerida = Convert.ToInt32(rd["CantidadRequerida"])
                 });
@@ -1475,6 +1659,133 @@ WHERE p.ParteID = @ParteID
         }
 
 
+        private async Task CompletarRenglonDesdeParteAsync(
+    PlaneacionReleaseRenglonCrearVm r,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            if (!r.ParteID.HasValue)
+                return;
+
+            const string sql = @"
+SELECT
+    p.NumeroParte,
+    p.ReferenciaSAP,
+    p.Descripcion,
+    p.Designacion
+FROM dbo.ERP_Partes p
+WHERE p.ParteID = @ParteID
+  AND p.Activo = 1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = r.ParteID.Value;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return;
+
+            var numeroParte = rd["NumeroParte"] as string;
+            var referenciaSap = rd["ReferenciaSAP"] as string;
+            var descripcion = rd["Descripcion"] as string;
+            var designacion = rd["Designacion"] as string;
+
+            if (string.IsNullOrWhiteSpace(r.NumeroParte))
+                r.NumeroParte = numeroParte;
+
+            if (string.IsNullOrWhiteSpace(r.ReferenciaSAP))
+                r.ReferenciaSAP = !string.IsNullOrWhiteSpace(referenciaSap)
+                    ? referenciaSap
+                    : numeroParte;
+
+            if (string.IsNullOrWhiteSpace(r.DesignacionDescripcionSAP))
+                r.DesignacionDescripcionSAP = !string.IsNullOrWhiteSpace(designacion)
+                    ? designacion
+                    : descripcion;
+        }
+
+
+        private static PlaneacionReleaseDetalleCrearVm CrearDetalleDesdeRenglonEntrega(
+    PlaneacionReleaseRenglonCrearVm renglon,
+    PlaneacionReleaseEntregaCrearVm entrega)
+        {
+            return new PlaneacionReleaseDetalleCrearVm
+            {
+                Renglon = renglon.Renglon,
+
+                ParteID = renglon.ParteID,
+                NumeroParte = renglon.NumeroParte,
+                ReferenciaSAP = renglon.ReferenciaSAP,
+                DesignacionDescripcionSAP = renglon.DesignacionDescripcionSAP,
+
+                FechaCarga = entrega.FechaCarga,
+                FechaRequerida = entrega.FechaRequerida,
+                CantidadRequerida = entrega.CantidadRequerida,
+
+                EstatusID = PlaneacionReleaseEstatus.Capturado
+            };
+        }
+
+        private async Task<int> InsertarReleaseRenglonAsync(
+    int releaseId,
+    PlaneacionReleaseRenglonCrearVm r,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            const string sql = @"
+INSERT INTO dbo.Planeacion_ReleaseRenglones
+(
+    ReleaseID,
+    Renglon,
+    ParteID,
+    NumeroParte,
+    ReferenciaSAP,
+    DesignacionDescripcionSAP,
+    UnidadMedidaCliente,
+    ContratoCliente,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+OUTPUT INSERTED.ReleaseRenglonID
+VALUES
+(
+    @ReleaseID,
+    @Renglon,
+    @ParteID,
+    @NumeroParte,
+    @ReferenciaSAP,
+    @DesignacionDescripcionSAP,
+    @UnidadMedidaCliente,
+    @ContratoCliente,
+    @Observaciones,
+    @UsuarioCreacionID,
+    GETDATE(),
+    1
+);";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = releaseId;
+            cmd.Parameters.Add("@Renglon", SqlDbType.Int).Value = r.Renglon;
+            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = (object?)r.ParteID ?? DBNull.Value;
+            cmd.Parameters.Add("@NumeroParte", SqlDbType.NVarChar, 120).Value = (object?)r.NumeroParte ?? DBNull.Value;
+            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value = (object?)r.ReferenciaSAP ?? DBNull.Value;
+            cmd.Parameters.Add("@DesignacionDescripcionSAP", SqlDbType.NVarChar, 300).Value = (object?)r.DesignacionDescripcionSAP ?? DBNull.Value;
+            cmd.Parameters.Add("@UnidadMedidaCliente", SqlDbType.NVarChar, 30).Value = (object?)r.UnidadMedidaCliente ?? DBNull.Value;
+            cmd.Parameters.Add("@ContratoCliente", SqlDbType.NVarChar, 100).Value = (object?)r.ContratoCliente ?? DBNull.Value;
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = (object?)r.Observaciones ?? DBNull.Value;
+            cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
+
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        }
+
+
+
+
+
         [HttpGet]
         public async Task<IActionResult> ObtenerPartesPorCliente(int clienteId)
         {
@@ -1540,6 +1851,255 @@ ORDER BY
             });
         }
 
+        private async Task<PlaneacionReleaseCrearVm> LeerReleasePdfPorPlantillaAsync(
+    PlaneacionReleaseCrearVm vm)
+        {
+            using var ms = new MemoryStream();
+
+            await vm.ArchivoRelease!.CopyToAsync(ms);
+
+            var bytes = ms.ToArray();
+
+            var texto = ExtraerTextoBasicoPdf(bytes);
+
+            if (texto.Contains("Supplier Schedule Report", StringComparison.OrdinalIgnoreCase) &&
+    texto.Contains("Huf", StringComparison.OrdinalIgnoreCase))
+            {
+                vm.PlantillaImportacion = "HUF_SUPPLIER_SCHEDULE";
+                return await LeerReleaseHufDesdeTextoAsync(vm, texto);
+            }
+
+            throw new InvalidOperationException("No se reconoció la plantilla del archivo PDF.");
+        }
+
+        private Task<PlaneacionReleaseCrearVm> LeerReleaseExcelPorPlantillaAsync(
+    PlaneacionReleaseCrearVm vm)
+        {
+            throw new InvalidOperationException("La lectura de Excel se implementará después de terminar la plantilla HUF PDF.");
+        }
+
+        private static string ExtraerTextoBasicoPdf(byte[] bytes)
+        {
+            using var ms = new MemoryStream(bytes);
+            using var document = PdfDocument.Open(ms);
+
+            var partes = new List<string>();
+
+            foreach (var page in document.GetPages())
+            {
+                partes.Add(page.Text);
+            }
+
+            return string.Join(Environment.NewLine, partes);
+        }
+
+
+        private async Task<PlaneacionReleaseCrearVm> LeerReleaseHufDesdeTextoAsync(
+      PlaneacionReleaseCrearVm vm,
+      string texto)
+        {
+            vm.ClienteNombre = "Huf Mexico";
+
+            vm.FolioCliente = BuscarValor(texto, @"Schedule No:\s*(\S+)");
+
+            var fechaPrint = BuscarValor(texto, @"Print\s+(\d{2}\.\d{2}\.\d{4})");
+
+            if (!string.IsNullOrWhiteSpace(fechaPrint))
+            {
+                vm.VersionRelease = "Print " + fechaPrint;
+            }
+
+            var partNo = BuscarValor(texto, @"Part No:\s*([^\r\n\s]+)");
+            var descripcion = BuscarValor(texto, @"Part Description:\s*(.+)");
+            var unidad = BuscarValor(texto, @"UOM:\s*(\S+)");
+            var contrato = BuscarValor(texto, @"Order Number:\s*(\S+)");
+
+            var clienteId = await ObtenerClienteIdPorNombreAsync("Huf");
+
+            if (clienteId.HasValue)
+            {
+                vm.ClienteID = clienteId.Value;
+            }
+
+            var parteId = await ObtenerParteIdPorReferenciaAsync(partNo, vm.ClienteID);
+
+            var renglon = new PlaneacionReleaseRenglonCrearVm
+            {
+                Renglon = 1,
+                ParteID = parteId,
+                NumeroParte = partNo,
+                ReferenciaSAP = partNo,
+                DesignacionDescripcionSAP = descripcion,
+                UnidadMedidaCliente = unidad,
+                ContratoCliente = contrato,
+                Entregas = new List<PlaneacionReleaseEntregaCrearVm>()
+            };
+
+            var entregas = ExtraerEntregasHuf(texto);
+
+            foreach (var entrega in entregas)
+            {
+                renglon.Entregas.Add(entrega);
+            }
+
+            if (!renglon.Entregas.Any())
+            {
+                throw new InvalidOperationException("No se encontraron entregas en el archivo HUF.");
+            }
+
+            vm.Renglones = new List<PlaneacionReleaseRenglonCrearVm>
+    {
+        renglon
+    };
+
+            vm.ImportadoDesdeArchivo = true;
+            vm.PlantillaImportacion = "HUF_SUPPLIER_SCHEDULE";
+
+            return vm;
+        }
+
+        private static string? BuscarValor(string texto, string patron)
+        {
+            var match = Regex.Match(texto, patron, RegexOptions.IgnoreCase);
+
+            if (!match.Success)
+                return null;
+
+            return match.Groups[1].Value.Trim();
+        }
+
+        private static List<PlaneacionReleaseEntregaCrearVm> ExtraerEntregasHuf(string texto)
+        {
+            var lista = new List<PlaneacionReleaseEntregaCrearVm>();
+
+            var lineas = texto
+                .Replace("\r", "\n")
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => Regex.Replace(x.Trim(), @"\s+", " "))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
+
+            var secuencia = 1;
+
+            foreach (var linea in lineas)
+            {
+                var fechas = Regex.Matches(linea, @"\d{2}\.\d{2}\.\d{4}")
+                    .Select(x => x.Value)
+                    .ToList();
+
+                if (fechas.Count < 2)
+                    continue;
+
+                var cantidades = Regex.Matches(linea, @"(?<![\d.])\d{1,3}(?:,\d{3})+(?![\d.])|(?<![\d.])\d{1,9}(?![\d.])")
+                    .Select(x => x.Value)
+                    .ToList();
+
+                if (!cantidades.Any())
+                    continue;
+
+                if (!DateTime.TryParseExact(
+                        fechas[0],
+                        "dd.MM.yyyy",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var fechaCarga))
+                {
+                    continue;
+                }
+
+                if (!DateTime.TryParseExact(
+                        fechas[1],
+                        "dd.MM.yyyy",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var fechaRequerida))
+                {
+                    continue;
+                }
+
+                var cantidadRaw = cantidades
+                    .FirstOrDefault(x => x.Contains(","))
+                    ?? cantidades.FirstOrDefault();
+
+                if (string.IsNullOrWhiteSpace(cantidadRaw))
+                    continue;
+
+                cantidadRaw = cantidadRaw.Replace(",", "");
+
+                if (!int.TryParse(cantidadRaw, out var cantidad))
+                    continue;
+
+                if (cantidad <= 0)
+                    continue;
+
+                lista.Add(new PlaneacionReleaseEntregaCrearVm
+                {
+                    SecuenciaEntrega = secuencia,
+                    FechaCarga = fechaCarga,
+                    FechaRequerida = fechaRequerida,
+                    CantidadRequerida = cantidad
+                });
+
+                secuencia++;
+            }
+
+            return lista;
+        }
+
+        private async Task<int?> ObtenerClienteIdPorNombreAsync(string nombre)
+        {
+            const string sql = @"
+SELECT TOP 1 ClienteID
+FROM dbo.ERP_Clientes
+WHERE Activo = 1
+  AND Nombre LIKE @Nombre
+ORDER BY Nombre;";
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@Nombre", SqlDbType.NVarChar, 200).Value = "%" + nombre + "%";
+
+            var result = await cmd.ExecuteScalarAsync();
+
+            return result == null || result == DBNull.Value
+                ? null
+                : Convert.ToInt32(result);
+        }
+
+        private async Task<int?> ObtenerParteIdPorReferenciaAsync(string? referencia, int? clienteId)
+        {
+            if (string.IsNullOrWhiteSpace(referencia))
+                return null;
+
+            const string sql = @"
+SELECT TOP 1 ParteID
+FROM dbo.ERP_Partes
+WHERE Activo = 1
+  AND (
+        NumeroParte = @Referencia
+        OR ReferenciaSAP = @Referencia
+      )
+  AND (@ClienteID IS NULL OR ClienteID = @ClienteID)
+ORDER BY ParteID;";
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            await using var cmd = new SqlCommand(sql, cn);
+
+            cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 150).Value = referencia;
+
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
+                (object?)clienteId ?? DBNull.Value;
+
+            var result = await cmd.ExecuteScalarAsync();
+
+            return result == null || result == DBNull.Value
+                ? null
+                : Convert.ToInt32(result);
+        }
         private static List<PlaneacionNecesidadPeriodoVm> ConstruirResumenPeriodos(
     List<PlaneacionNecesidadVm> necesidades)
         {

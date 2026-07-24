@@ -3,341 +3,608 @@
 @{
     Layout = null;
 
-    var totalReleases = Model?.Count ?? 0;
-    var totalRenglones = Model?.Sum(x => x.TotalRenglones) ?? 0;
-    var totalRequeridas = Model?.Sum(x => x.TotalPiezasRequeridas) ?? 0;
-    var totalProducir = Model?.Sum(x => x.TotalPiezasAProducir) ?? 0;
+    var releases = Model ?? new List<ERP.NSQuell.Models.PlaneacionReleaseIndexVm>();
+    var totalReleases = releases.Count;
+
+    var gruposClientes = releases
+        .GroupBy(x => new
+        {
+            x.ClienteID,
+            ClienteNombre = string.IsNullOrWhiteSpace(x.ClienteNombre)
+                ? "Sin cliente"
+                : x.ClienteNombre
+        })
+        .OrderBy(x => x.Key.ClienteNombre)
+        .ToList();
+
+    string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
+    string Fecha(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy") : "-";
+    string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+
+    string InicialCliente(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+            return "?";
+
+        return nombre.Trim().Substring(0, 1).ToUpperInvariant();
+    }
+
+    string IdSeguro(string prefijo, int index)
+    {
+        return $"{prefijo}_{index}";
+    }
+
+    string SemanaRelease(DateTime fecha)
+    {
+        return "SEMANA " + System.Globalization.ISOWeek.GetWeekOfYear(fecha);
+    }
+
+    string TextoOrigen(bool importado)
+    {
+        return importado ? "Archivo" : "Manual";
+    }
+
+    string IconoOrigen(bool importado)
+    {
+        return importado ? "fa-file-import" : "fa-keyboard";
+    }
+
+    string DataSearch(ERP.NSQuell.Models.PlaneacionReleaseIndexVm item)
+    {
+        return string.Join(" ",
+            item.FolioRelease ?? string.Empty,
+            item.FolioCliente ?? string.Empty,
+            item.ClienteNombre ?? string.Empty,
+            item.VersionRelease ?? string.Empty,
+            item.ArchivoOrigenNombre ?? string.Empty,
+            item.PlantillaImportacion ?? string.Empty
+        ).ToLowerInvariant();
+    }
 }
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>Releases de clientes | Planeación</title>
+    <title>Releases de Cliente | Planeación</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
 
     <style>
-            :root {
-                --erp-blue: #004AAD;
-                --erp-blue-dark: #00347a;
-                --erp-gray: #f3f5f8;
-                --erp-border: #d9e1ec;
-                --erp-text: #263238;
-                --erp-muted: #667085;
-                --erp-green: #107c41;
-                --erp-orange: #b54708;
-                --erp-red: #b42318;
-                --erp-purple: #6941c6;
-            }
+        :root {
+            --blue: #004AAD;
+            --blue-dark: #063875;
+            --blue-soft: #EEF6FF;
+            --green: #10804C;
+            --green-soft: #ECFDF3;
+            --orange: #F79009;
+            --orange-soft: #FFF7ED;
+            --red: #B42318;
+            --red-soft: #FEF3F2;
+            --purple: #7F56D9;
+            --purple-soft: #F4EBFF;
+            --gray-bg: #F4F7FB;
+            --border: #D9E2EE;
+            --text: #1F2937;
+            --muted: #667085;
+            --shadow: 0 18px 48px rgba(16, 24, 40, .10);
+            --shadow-soft: 0 10px 28px rgba(16, 24, 40, .06);
+        }
 
-            body {
-                background: var(--erp-gray);
-                color: var(--erp-text);
-                font-family: "Segoe UI", Arial, sans-serif;
-            }
+        * {
+            box-sizing: border-box;
+        }
 
-            .erp-shell {
-                max-width: 1500px;
-                margin: 0 auto;
-                padding: 28px;
-            }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top left, rgba(0, 74, 173, .12), transparent 30%), radial-gradient(circle at 88% 14%, rgba(247, 144, 9, .10), transparent 26%), linear-gradient(180deg, #F7FAFF 0%, #EEF3F9 100%);
+            color: var(--text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
 
-            .erp-header {
-                background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
-                color: white;
-                border-radius: 22px;
-                padding: 28px 32px;
-                box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
-                margin-bottom: 22px;
-            }
+        .page {
+            max-width: 1760px;
+            margin: 0 auto;
+            padding: 28px;
+        }
 
-                .erp-header h1 {
-                    font-size: 1.65rem;
-                    margin: 0;
-                    font-weight: 900;
-                }
+        .hero {
+            border-radius: 32px;
+            background: linear-gradient(135deg, rgba(0,74,173,.98), rgba(6,56,117,.98)), url("data:image/svg+xml,%3Csvg width='900' height='320' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='rgba(255,255,255,.13)' stroke-width='2'%3E%3Cpath d='M0 250 C180 100 260 300 430 130 S700 80 900 190'/%3E%3Cpath d='M0 80 C200 190 260 20 480 100 S650 260 900 120'/%3E%3C/g%3E%3C/svg%3E");
+            background-size: cover;
+            color: white;
+            padding: 32px;
+            box-shadow: 0 24px 62px rgba(0, 74, 173, .28);
+            margin-bottom: 22px;
+            position: relative;
+            overflow: hidden;
+        }
 
-                .erp-header p {
-                    margin: 7px 0 0 0;
-                    opacity: .92;
-                }
-
-            .stage-label {
-                display: inline-flex;
-                align-items: center;
-                gap: 7px;
-                padding: 6px 11px;
-                margin-bottom: 12px;
-                border: 1px solid rgba(255, 255, 255, .35);
+            .hero::after {
+                content: "";
+                position: absolute;
+                right: -110px;
+                top: -140px;
+                width: 340px;
+                height: 340px;
                 border-radius: 999px;
-                background: rgba(255, 255, 255, .12);
-                font-size: .75rem;
-                font-weight: 900;
-                letter-spacing: .05em;
-                text-transform: uppercase;
+                background: rgba(255,255,255,.10);
             }
 
-            .erp-card {
+        .stage-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border: 1px solid rgba(255,255,255,.35);
+            border-radius: 999px;
+            background: rgba(255,255,255,.13);
+            font-size: .75rem;
+            font-weight: 950;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            margin-bottom: 13px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero h1 {
+            font-size: 2rem;
+            font-weight: 950;
+            margin: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero p {
+            max-width: 960px;
+            color: rgba(255,255,255,.88);
+            margin-top: 8px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-actions {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-counter {
+            min-width: 150px;
+            border: 1px solid rgba(255,255,255,.25);
+            background: rgba(255,255,255,.13);
+            border-radius: 24px;
+            padding: 18px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .hero-counter-value {
+            font-size: 2.1rem;
+            font-weight: 950;
+            line-height: 1;
+        }
+
+        .hero-counter-label {
+            color: rgba(255,255,255,.82);
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            margin-top: 6px;
+        }
+
+        .btn-glass {
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.14);
+            color: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 850;
+            text-decoration: none;
+            backdrop-filter: blur(10px);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+            .btn-glass:hover {
                 background: white;
-                border: 1px solid var(--erp-border);
-                border-radius: 20px;
-                box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
-                overflow: hidden;
+                color: var(--blue);
             }
 
-            .erp-card-header {
-                padding: 18px 22px;
-                border-bottom: 1px solid var(--erp-border);
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                gap: 14px;
-                flex-wrap: wrap;
-            }
+        .btn-main {
+            background: var(--blue);
+            border: 1px solid var(--blue);
+            color: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
 
-            .erp-card-body {
-                padding: 22px;
-            }
-
-            .btn-erp-primary {
-                background: var(--erp-blue);
-                border-color: var(--erp-blue);
+            .btn-main:hover {
+                background: var(--blue-dark);
+                border-color: var(--blue-dark);
                 color: white;
-                font-weight: 800;
-                border-radius: 13px;
-                padding: 10px 15px;
             }
 
-                .btn-erp-primary:hover {
-                    background: var(--erp-blue-dark);
-                    border-color: var(--erp-blue-dark);
-                    color: white;
-                }
+        .btn-light-main {
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--blue-dark);
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
 
-            .btn-erp-light {
-                background: white;
-                border: 1px solid var(--erp-border);
-                color: var(--erp-blue-dark);
-                font-weight: 800;
-                border-radius: 13px;
-                padding: 10px 15px;
+            .btn-light-main:hover {
+                background: var(--blue-soft);
+                color: var(--blue);
             }
 
-                .btn-erp-light:hover {
-                    background: #eef3fb;
-                    border-color: #b9c8db;
-                    color: var(--erp-blue-dark);
-                }
+        .alert {
+            border-radius: 20px;
+            font-weight: 700;
+        }
 
-            .metric-card {
-                background: white;
-                border: 1px solid var(--erp-border);
-                border-radius: 18px;
-                padding: 18px;
-                box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
-                height: 100%;
+        .panel {
+            background: rgba(255,255,255,.92);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 22px;
+            overflow: hidden;
+            backdrop-filter: blur(14px);
+        }
+
+        .panel-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .panel-body {
+            padding: 22px;
+        }
+
+        .input-modern {
+            border-radius: 15px;
+            border: 1px solid var(--border);
+            padding: 11px 13px;
+            box-shadow: none;
+        }
+
+            .input-modern:focus {
+                border-color: rgba(0,74,173,.45);
+                box-shadow: 0 0 0 .2rem rgba(0,74,173,.12);
             }
 
-            .metric-icon {
-                width: 38px;
-                height: 38px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                margin-bottom: 12px;
-                border-radius: 12px;
-                background: #eef3fb;
-                color: var(--erp-blue);
+        .pill {
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: .74rem;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .pill-success {
+            background: var(--green-soft);
+            color: var(--green);
+            border-color: #ABEFc6;
+        }
+
+        .pill-info,
+        .pill-primary {
+            background: var(--blue-soft);
+            color: var(--blue);
+            border-color: #B2DDFF;
+        }
+
+        .pill-warning {
+            background: var(--orange-soft);
+            color: #B54708;
+            border-color: #FED7AA;
+        }
+
+        .pill-danger {
+            background: var(--red-soft);
+            color: var(--red);
+            border-color: #FECDCA;
+        }
+
+        .pill-purple {
+            background: var(--purple-soft);
+            color: var(--purple);
+            border-color: #D6BBFB;
+        }
+
+        .pill-muted {
+            background: #F2F4F7;
+            color: #475467;
+            border-color: #D0D5DD;
+        }
+
+        .client-list {
+            display: grid;
+            gap: 18px;
+        }
+
+        .client-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+        }
+
+        .client-head {
+            padding: 22px;
+            background: linear-gradient(135deg, #FFFFFF, #F6FAFF);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .client-head::after {
+                content: "";
+                position: absolute;
+                right: -80px;
+                top: -95px;
+                width: 250px;
+                height: 250px;
+                border-radius: 999px;
+                background: rgba(0,74,173,.08);
             }
 
-            .metric-label {
-                color: var(--erp-muted);
-                font-size: .78rem;
-                font-weight: 800;
-                text-transform: uppercase;
-                letter-spacing: .04em;
+        .client-avatar {
+            width: 58px;
+            height: 58px;
+            border-radius: 21px;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: 950;
+            box-shadow: 0 14px 28px rgba(0,74,173,.22);
+            position: relative;
+            z-index: 2;
+        }
+
+        .client-title {
+            color: var(--blue-dark);
+            font-size: 1.25rem;
+            font-weight: 950;
+            margin: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .client-sub {
+            color: var(--muted);
+            font-size: .86rem;
+            font-weight: 700;
+            margin-top: 5px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .client-body {
+            padding: 18px 22px 22px;
+            background: #FBFDFF;
+        }
+
+        .release-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 14px;
+        }
+
+        .release-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 8px 22px rgba(16, 24, 40, .06);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+            .release-card.hidden-by-filter,
+            .client-card.hidden-by-filter {
+                display: none !important;
             }
 
-            .metric-value {
-                font-size: 1.45rem;
-                font-weight: 900;
-                color: var(--erp-blue-dark);
-            }
+        .release-title {
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 950;
+            margin: 0;
+        }
 
-            .filters {
-                background: #f8fafc;
-                border: 1px solid var(--erp-border);
-                border-radius: 16px;
+        .release-sub {
+            color: var(--muted);
+            font-size: .8rem;
+            font-weight: 650;
+            margin-top: 4px;
+        }
+
+        .release-meta {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .mini-box {
+            border: 1px solid var(--border);
+            background: #FBFDFF;
+            border-radius: 16px;
+            padding: 11px;
+        }
+
+        .mini-label {
+            color: var(--muted);
+            font-size: .68rem;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            font-weight: 950;
+        }
+
+        .mini-value {
+            color: var(--text);
+            font-size: .92rem;
+            font-weight: 950;
+        }
+
+        .empty-state {
+            background: white;
+            border: 1px dashed var(--border);
+            border-radius: 30px;
+            box-shadow: var(--shadow-soft);
+            padding: 54px 20px;
+            text-align: center;
+            color: var(--muted);
+        }
+
+        .results-summary {
+            color: var(--muted);
+            font-size: .84rem;
+            font-weight: 800;
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 18px;
+            z-index: 20;
+            margin-top: 24px;
+            background: rgba(255,255,255,.92);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        @@media (max-width: 768px) {
+            .page {
                 padding: 16px;
-                margin-bottom: 18px;
             }
 
-            .form-control,
-            .form-select {
-                border-color: var(--erp-border);
-                border-radius: 12px;
-                min-height: 43px;
+            .hero {
+                padding: 24px;
+                border-radius: 24px;
             }
 
-                .form-control:focus,
-                .form-select:focus {
-                    border-color: #84adff;
-                    box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
+                .hero h1 {
+                    font-size: 1.55rem;
                 }
 
-            .table thead th {
-                background: #eef3fb;
-                color: #00347a;
-                font-size: .76rem;
-                white-space: nowrap;
-                text-transform: uppercase;
-                letter-spacing: .03em;
+            .release-grid {
+                grid-template-columns: 1fr;
             }
 
-            .table td {
-                font-size: .88rem;
-                vertical-align: middle;
+            .release-meta {
+                grid-template-columns: 1fr;
             }
-
-            .badge-status {
-                display: inline-flex;
-                align-items: center;
-                border-radius: 999px;
-                padding: 7px 12px;
-                font-size: .76rem;
-                font-weight: 900;
-                white-space: nowrap;
-                border: 1px solid transparent;
-            }
-
-            .status-capturado {
-                color: #175cd3;
-                background: #eff8ff;
-                border-color: #b2ddff;
-            }
-
-            .status-calculado {
-                color: var(--erp-purple);
-                background: #f4f3ff;
-                border-color: #d9d6fe;
-            }
-
-            .status-programado {
-                color: var(--erp-orange);
-                background: #fffaeb;
-                border-color: #fedf89;
-            }
-
-            .status-con-of,
-            .status-cerrado {
-                color: var(--erp-green);
-                background: #ecfdf3;
-                border-color: #abefc6;
-            }
-
-            .status-cancelado {
-                color: var(--erp-red);
-                background: #fef3f2;
-                border-color: #fecdca;
-            }
-
-            .status-desconocido {
-                color: #475467;
-                background: #f2f4f7;
-                border-color: #d0d5dd;
-            }
-
-            .empty-state {
-                text-align: center;
-                padding: 42px 18px;
-                color: var(--erp-muted);
-            }
-
-                .empty-state i {
-                    font-size: 2.3rem;
-                    color: #98a2b3;
-                    margin-bottom: 10px;
-                }
-
-            .results-summary {
-                color: var(--erp-muted);
-                font-size: .84rem;
-                font-weight: 700;
-            }
-
-            @@media (max-width: 767.98px) {
-                .erp-shell {
-                    padding: 16px;
-                }
-
-                .erp-header {
-                    padding: 22px;
-                    border-radius: 18px;
-                }
-            }
+        }
     </style>
 </head>
 
 <body>
-    <div class="erp-shell">
+    <div class="page">
 
-        <div class="erp-header">
-            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <section class="hero">
+            <div class="d-flex justify-content-between align-items-start gap-4 flex-wrap">
                 <div>
                     <div class="stage-label">
                         <i class="fa-solid fa-flag-checkered"></i>
-                        Etapa 1 del flujo
+                        Etapa 1 · Releases de Cliente
                     </div>
 
                     <h1>
-                        <i class="fa-solid fa-calendar-check me-2"></i>
-                        Releases de clientes
+                        <i class="fa-solid fa-inbox me-2"></i>
+                        Releases de Cliente
                     </h1>
 
                     <p>
-                        Recepción de la demanda del cliente antes del cálculo de necesidades y la programación.
+                        Bandeja de releases capturados por cliente. Aquí solo se consulta y se abre el detalle; el análisis visual de demanda se revisa en Panorama.
                     </p>
+
+                    <div class="d-flex gap-2 flex-wrap mt-3">
+                        <span class="pill pill-primary">
+                            <i class="fa-solid fa-file-lines"></i>
+                            @totalReleases release@(totalReleases == 1 ? "" : "s")
+                        </span>
+                        <span class="pill pill-muted">
+                            Versión automática por semana
+                        </span>
+                    </div>
                 </div>
 
-                <div class="d-flex gap-2 flex-wrap">
-                    <a asp-controller="Menu"
-                       asp-action="Grupo"
-                       asp-route-id="3"
-                       class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-arrow-left me-1"></i>
-                        Volver
-                    </a>
+                <div class="hero-actions d-flex gap-3 align-items-start flex-wrap">
+                    <div class="hero-counter">
+                        <div class="hero-counter-value">@totalReleases.ToString("N0")</div>
+                        <div class="hero-counter-label">Releases</div>
+                    </div>
 
-                    <a asp-controller="PlaneacionRelease"
-                       asp-action="Calculadora"
-                       class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-calculator me-1"></i>
-                        Necesidades
-                    </a>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a asp-controller="Menu"
+                           asp-action="Grupo"
+                           asp-route-id="3"
+                           class="btn-glass">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            Volver
+                        </a>
 
-                    <a asp-controller="PlaneacionPrograma"
-                       asp-action="Index"
-                       class="btn btn-light fw-bold rounded-3">
-                        <i class="fa-solid fa-list-ol me-1"></i>
-                        Programa general
-                    </a>
+                        <a asp-controller="PlaneacionPanorama"
+                           asp-action="Index"
+                           class="btn-glass">
+                            <i class="fa-solid fa-chart-line"></i>
+                            Panorama
+                        </a>
 
-                    <a asp-controller="PlaneacionRelease"
-                       asp-action="Crear"
-                       class="btn btn-warning fw-bold rounded-3">
-                        <i class="fa-solid fa-plus me-1"></i>
-                        Nuevo Release
-                    </a>
+                        <a asp-controller="PlaneacionRelease"
+                           asp-action="Calculadora"
+                           class="btn-glass">
+                            <i class="fa-solid fa-list-check"></i>
+                            Programa de Planeación
+                        </a>
+
+                        <a asp-controller="PlaneacionRelease"
+                           asp-action="Crear"
+                           class="btn-glass">
+                            <i class="fa-solid fa-plus"></i>
+                            Nuevo release
+                        </a>
+                    </div>
                 </div>
             </div>
-        </div>
+        </section>
 
         @if (TempData["Success"] != null)
         {
-            <div class="alert alert-success rounded-4 fw-semibold">
+            <div class="alert alert-success fw-semibold">
                 <i class="fa-solid fa-circle-check me-2"></i>
                 @TempData["Success"]
             </div>
@@ -345,63 +612,21 @@
 
         @if (TempData["Error"] != null)
         {
-            <div class="alert alert-danger rounded-4 fw-semibold">
+            <div class="alert alert-danger fw-semibold">
                 <i class="fa-solid fa-triangle-exclamation me-2"></i>
                 @TempData["Error"]
             </div>
         }
 
-        <div class="row g-3 mb-3">
-            <div class="col-sm-6 col-xl-3">
-                <div class="metric-card">
-                    <div class="metric-icon">
-                        <i class="fa-solid fa-file-lines"></i>
-                    </div>
-                    <div class="metric-label">Releases</div>
-                    <div class="metric-value">@totalReleases.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-sm-6 col-xl-3">
-                <div class="metric-card">
-                    <div class="metric-icon">
-                        <i class="fa-solid fa-list-check"></i>
-                    </div>
-                    <div class="metric-label">Renglones</div>
-                    <div class="metric-value">@totalRenglones.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-sm-6 col-xl-3">
-                <div class="metric-card">
-                    <div class="metric-icon">
-                        <i class="fa-solid fa-boxes-stacked"></i>
-                    </div>
-                    <div class="metric-label">Piezas requeridas</div>
-                    <div class="metric-value">@totalRequeridas.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-sm-6 col-xl-3">
-                <div class="metric-card">
-                    <div class="metric-icon">
-                        <i class="fa-solid fa-industry"></i>
-                    </div>
-                    <div class="metric-label">Piezas a producir</div>
-                    <div class="metric-value">@totalProducir.ToString("N0")</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="erp-card">
-            <div class="erp-card-header">
+        <section class="panel">
+            <div class="panel-header">
                 <div>
-                    <h2 class="h5 fw-bold m-0 text-primary">
+                    <h2 class="h5 fw-bold text-primary m-0">
                         <i class="fa-solid fa-inbox me-2"></i>
-                        Releases recibidos
+                        Bandeja
                     </h2>
                     <div class="text-muted small">
-                        Consulta cada Release y revisa su avance dentro del flujo de Planeación.
+                        Releases agrupados por cliente. Abre cada cliente para ver sus releases.
                     </div>
                 </div>
 
@@ -410,217 +635,309 @@
                 </div>
             </div>
 
-            <div class="erp-card-body">
-                @if (Model != null && Model.Any())
+            <div class="panel-body">
+                @if (releases.Any())
                 {
-                    <div class="filters">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-lg-6">
-                                <label for="releaseSearch" class="form-label small fw-bold text-muted">
-                                    Buscar Release
-                                </label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-white border-end-0 rounded-start-3">
-                                        <i class="fa-solid fa-magnifying-glass text-muted"></i>
-                                    </span>
-                                    <input id="releaseSearch"
-                                           type="search"
-                                           class="form-control border-start-0"
-                                           placeholder="Folio, cliente o versión..." />
-                                </div>
+                    <div class="row g-3 align-items-end mb-4">
+                        <div class="col-lg-8">
+                            <label for="releaseSearch" class="form-label small fw-bold text-muted">Buscar</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0 rounded-start-4">
+                                    <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                                </span>
+                                <input id="releaseSearch"
+                                       type="search"
+                                       class="form-control input-modern border-start-0"
+                                       placeholder="Buscar folio, cliente, archivo, plantilla o semana..." />
                             </div>
+                        </div>
 
-                            <div class="col-md-7 col-lg-4">
-                                <label for="statusFilter" class="form-label small fw-bold text-muted">
-                                    Estatus
-                                </label>
-                                <select id="statusFilter" class="form-select">
-                                    <option value="">Todos los estatus</option>
-                                    <option value="capturado">Capturado</option>
-                                    <option value="calculado">Calculado</option>
-                                    <option value="programado">Programado</option>
-                                    <option value="con of">Con OF</option>
-                                    <option value="cerrado">Cerrado</option>
-                                    <option value="cancelado">Cancelado</option>
-                                </select>
-                            </div>
-
-                            <div class="col-md-5 col-lg-2 d-grid">
-                                <button id="clearFilters" type="button" class="btn btn-erp-light">
-                                    <i class="fa-solid fa-filter-circle-xmark me-1"></i>
-                                    Limpiar
-                                </button>
-                            </div>
+                        <div class="col-lg-4 d-grid">
+                            <button id="clearFilters" type="button" class="btn btn-light-main justify-content-center">
+                                <i class="fa-solid fa-filter-circle-xmark me-1"></i>
+                                Limpiar búsqueda
+                            </button>
                         </div>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-hover align-middle mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Folio</th>
-                                    <th>Cliente</th>
-                                    <th>Recepción</th>
-                                    <th>Versión</th>
-                                    <th>Estatus</th>
-                                    <th class="text-end">Renglones</th>
-                                    <th class="text-end">Requeridas</th>
-                                    <th class="text-end">A producir</th>
-                                    <th>Creado</th>
-                                    <th class="text-center">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="releaseTableBody">
-                                @foreach (var item in Model)
-                                {
-                                    var statusClass = item.EstatusID switch
-                                    {
-                                        1 => "status-capturado",
-                                        2 => "status-calculado",
-                                        3 => "status-programado",
-                                        4 => "status-con-of",
-                                        9 => "status-cerrado",
-                                        99 => "status-cancelado",
-                                        _ => "status-desconocido"
-                                    };
+                    <div class="client-list" id="clientList">
+                        @{
+                            var clienteIndex = 0;
+                        }
 
-                                    var searchableText = string.Join(" ",
-                                        item.FolioRelease ?? string.Empty,
-                                        item.ClienteNombre ?? string.Empty,
-                                        item.VersionRelease ?? string.Empty
-                                    ).ToLowerInvariant();
+                        @foreach (var grupo in gruposClientes)
+                        {
+                            clienteIndex++;
 
-                                    <tr class="release-row"
-                                        data-search="@searchableText"
-                                        data-status="@((item.EstatusNombre ?? string.Empty).ToLowerInvariant())">
-                                        <td>
-                                            <strong>@(item.FolioRelease ?? "-")</strong>
-                                        </td>
-                                        <td>@(item.ClienteNombre ?? "-")</td>
-                                        <td>@item.FechaRecepcion.ToString("dd/MM/yyyy")</td>
-                                        <td>@(item.VersionRelease ?? "-")</td>
-                                        <td>
-                                            <span class="badge-status @statusClass">
-                                                <i class="fa-solid fa-circle me-2" style="font-size:.45rem;"></i>
-                                                @(item.EstatusNombre ?? "Desconocido")
+                            var collapseId = IdSeguro("cliente", clienteIndex);
+                            var releasesCliente = grupo
+                            .OrderByDescending(x => x.FechaRecepcion)
+                            .ThenByDescending(x => x.FechaCreacion)
+                            .ToList();
+
+                            var searchCliente = string.Join(" ",
+                            grupo.Key.ClienteNombre ?? string.Empty,
+                            string.Join(" ", releasesCliente.Select(DataSearch))
+                            ).ToLowerInvariant();
+
+                            <article class="client-card"
+                                     data-client-card
+                                     data-search="@searchCliente">
+
+                                <div class="client-head"
+                                     data-bs-toggle="collapse"
+                                     data-bs-target="#@collapseId"
+                                     aria-expanded="false"
+                                     aria-controls="@collapseId">
+
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="client-avatar">
+                                                @InicialCliente(grupo.Key.ClienteNombre)
+                                            </div>
+
+                                            <div>
+                                                <h3 class="client-title">
+                                                    @grupo.Key.ClienteNombre
+                                                </h3>
+                                                <div class="client-sub">
+                                                    @releasesCliente.Count.ToString("N0") release@(releasesCliente.Count == 1 ? "" : "s") en bandeja
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex gap-2 flex-wrap position-relative" style="z-index:2;">
+                                            <span class="pill pill-primary">
+                                                <i class="fa-solid fa-file-lines"></i>
+                                                @releasesCliente.Count.ToString("N0")
                                             </span>
-                                        </td>
-                                        <td class="text-end">@item.TotalRenglones.ToString("N0")</td>
-                                        <td class="text-end">@item.TotalPiezasRequeridas.ToString("N0")</td>
-                                        <td class="text-end">
-                                            <strong>@item.TotalPiezasAProducir.ToString("N0")</strong>
-                                        </td>
-                                        <td>@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
-                                        <td class="text-center">
-                                            <a asp-controller="PlaneacionRelease"
-                                               asp-action="Detalle"
-                                               asp-route-id="@item.ReleaseID"
-                                               class="btn btn-sm btn-erp-primary"
-                                               title="Abrir detalle del Release">
-                                                <i class="fa-solid fa-eye me-1"></i>
-                                                Ver detalle
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+
+                                            <span class="pill pill-muted">
+                                                <i class="fa-solid fa-chevron-down"></i>
+                                                Abrir
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="@collapseId" class="collapse">
+                                    <div class="client-body">
+                                        <div class="release-grid">
+                                            @foreach (var item in releasesCliente)
+                                            {
+                                                var versionTexto = SemanaRelease(item.FechaRecepcion);
+                                                var originText = TextoOrigen(item.ImportadoDesdeArchivo);
+                                                var originIcon = IconoOrigen(item.ImportadoDesdeArchivo);
+                                                var searchableText = DataSearch(item) + " " + versionTexto.ToLowerInvariant();
+
+                                                <div class="release-card"
+                                                     data-release-card
+                                                     data-search="@searchableText">
+
+                                                    <div class="d-flex justify-content-between align-items-start gap-3">
+                                                        <div>
+                                                            <h4 class="release-title">
+                                                                @(item.FolioRelease ?? "-")
+                                                            </h4>
+
+                                                            <div class="release-sub">
+                                                                Folio cliente: @(item.FolioCliente ?? "-") · ID @item.ReleaseID
+                                                            </div>
+                                                        </div>
+
+                                                        <span class="pill @(item.ImportadoDesdeArchivo ? "pill-success" : "pill-muted")">
+                                                            <i class="fa-solid @originIcon"></i>
+                                                            @originText
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="release-meta">
+                                                        <div class="mini-box">
+                                                            <div class="mini-label">Recepción</div>
+                                                            <div class="mini-value">@item.FechaRecepcion.ToString("dd/MM/yyyy")</div>
+                                                        </div>
+
+                                                        <div class="mini-box">
+                                                            <div class="mini-label">Semana</div>
+                                                            <div class="mini-value">@versionTexto</div>
+                                                        </div>
+
+                                                        <div class="mini-box">
+                                                            <div class="mini-label">Plantilla</div>
+                                                            <div class="mini-value">@Valor(item.PlantillaImportacion)</div>
+                                                        </div>
+
+                                                        <div class="mini-box">
+                                                            <div class="mini-label">Creado</div>
+                                                            <div class="mini-value">@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</div>
+                                                        </div>
+                                                    </div>
+
+                                                    @if (!string.IsNullOrWhiteSpace(item.ArchivoOrigenNombre))
+                                                    {
+                                                        <div class="text-muted small fw-semibold">
+                                                            <i class="fa-regular fa-file-lines me-1"></i>
+                                                            @item.ArchivoOrigenNombre
+                                                        </div>
+                                                    }
+
+                                                    <div class="d-grid">
+                                                        <a asp-controller="PlaneacionRelease"
+                                                           asp-action="Detalle"
+                                                           asp-route-id="@item.ReleaseID"
+                                                           class="btn btn-main justify-content-center">
+                                                            <i class="fa-solid fa-eye me-1"></i>
+                                                            Ver detalle
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        }
                     </div>
 
-                    <div id="noFilterResults" class="empty-state d-none">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <div class="fw-bold">No se encontraron Releases.</div>
-                        <div class="small">Cambia o limpia los filtros para volver a mostrar registros.</div>
+                    <div id="noFilterResults" class="empty-state d-none mt-3">
+                        <i class="fa-solid fa-magnifying-glass fa-3x mb-3"></i>
+                        <h3 class="fw-bold text-primary">No se encontraron releases</h3>
+                        <p class="mb-0">
+                            Cambia o limpia la búsqueda para volver a mostrar la bandeja.
+                        </p>
                     </div>
                 }
                 else
                 {
                     <div class="empty-state">
-                        <i class="fa-regular fa-folder-open"></i>
-                        <div class="fw-bold">No hay Releases capturados.</div>
-                        <div class="small">Comienza registrando la demanda recibida del cliente.</div>
+                        <i class="fa-regular fa-folder-open fa-3x mb-3"></i>
+                        <h3 class="fw-bold text-primary">No hay releases capturados</h3>
+                        <p class="mb-0">Comienza registrando la demanda recibida del cliente.</p>
                         <div class="mt-3">
                             <a asp-controller="PlaneacionRelease"
                                asp-action="Crear"
-                               class="btn btn-erp-primary">
+                               class="btn btn-main">
                                 <i class="fa-solid fa-plus me-1"></i>
-                                Crear primer Release
+                                Crear primer release
                             </a>
                         </div>
                     </div>
                 }
             </div>
-        </div>
+        </section>
+
+        <section class="sticky-actions">
+            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <a asp-controller="Menu"
+                   asp-action="Grupo"
+                   asp-route-id="3"
+                   class="btn btn-light-main">
+                    <i class="fa-solid fa-arrow-left me-1"></i>
+                    Volver
+                </a>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionPanorama"
+                       asp-action="Index"
+                       class="btn btn-light-main">
+                        <i class="fa-solid fa-chart-line me-1"></i>
+                        Panorama
+                    </a>
+
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Calculadora"
+                       class="btn btn-light-main">
+                        <i class="fa-solid fa-list-check me-1"></i>
+                        Programa de Planeación
+                    </a>
+
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Crear"
+                       class="btn btn-main">
+                        <i class="fa-solid fa-plus me-1"></i>
+                        Nuevo release
+                    </a>
+                </div>
+            </div>
+        </section>
+
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
-            document.addEventListener("DOMContentLoaded", function () {
-                const searchInput = document.getElementById("releaseSearch");
-                const statusFilter = document.getElementById("statusFilter");
-                const clearButton = document.getElementById("clearFilters");
-                const rows = Array.from(document.querySelectorAll(".release-row"));
-                const table = document.querySelector(".table-responsive");
-                const noResults = document.getElementById("noFilterResults");
-                const resultsSummary = document.getElementById("resultsSummary");
+        document.addEventListener("DOMContentLoaded", function () {
+            const searchInput = document.getElementById("releaseSearch");
+            const clearButton = document.getElementById("clearFilters");
+            const clientCards = Array.from(document.querySelectorAll("[data-client-card]"));
+            const releaseCards = Array.from(document.querySelectorAll("[data-release-card]"));
+            const noResults = document.getElementById("noFilterResults");
+            const resultsSummary = document.getElementById("resultsSummary");
 
-                if (!searchInput || !statusFilter || rows.length === 0) {
-                    return;
-                }
+            if (!searchInput || clientCards.length === 0) return;
 
-                function normalize(value) {
-                    return (value || "")
-                        .toString()
-                        .toLowerCase()
-                        .normalize("NFD")
-                        .replace(/[\u0300-\u036f]/g, "")
-                        .trim();
-                }
+            function normalize(value) {
+                return (value || "")
+                    .toString()
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .trim();
+            }
 
-                function applyFilters() {
-                    const searchValue = normalize(searchInput.value);
-                    const statusValue = normalize(statusFilter.value);
-                    let visibleRows = 0;
+            function applyFilters() {
+                const searchValue = normalize(searchInput.value);
+                let visibleReleaseCount = 0;
+                let visibleClientCount = 0;
 
-                    rows.forEach(function (row) {
-                        const rowSearch = normalize(row.dataset.search);
-                        const rowStatus = normalize(row.dataset.status);
-                        const matchesSearch = !searchValue || rowSearch.includes(searchValue);
-                        const matchesStatus = !statusValue || rowStatus === statusValue;
-                        const isVisible = matchesSearch && matchesStatus;
+                clientCards.forEach(function (client) {
+                    const releases = Array.from(client.querySelectorAll("[data-release-card]"));
+                    let clientHasVisibleRelease = false;
 
-                        row.classList.toggle("d-none", !isVisible);
+                    releases.forEach(function (release) {
+                        const releaseSearch = normalize(release.dataset.search);
+                        const clientSearch = normalize(client.dataset.search);
+
+                        const isVisible = !searchValue ||
+                            releaseSearch.includes(searchValue) ||
+                            clientSearch.includes(searchValue);
+
+                        release.classList.toggle("hidden-by-filter", !isVisible);
 
                         if (isVisible) {
-                            visibleRows++;
+                            clientHasVisibleRelease = true;
+                            visibleReleaseCount++;
                         }
                     });
 
-                    if (table) {
-                        table.classList.toggle("d-none", visibleRows === 0);
-                    }
+                    client.classList.toggle("hidden-by-filter", !clientHasVisibleRelease);
 
-                    if (noResults) {
-                        noResults.classList.toggle("d-none", visibleRows !== 0);
+                    if (clientHasVisibleRelease) {
+                        visibleClientCount++;
                     }
+                });
 
-                    if (resultsSummary) {
-                        resultsSummary.textContent =
-                            visibleRows + (visibleRows === 1 ? " registro" : " registros");
-                    }
+                if (noResults) noResults.classList.toggle("d-none", visibleReleaseCount !== 0);
+
+                if (resultsSummary) {
+                    resultsSummary.textContent =
+                        visibleReleaseCount + (visibleReleaseCount === 1 ? " registro" : " registros") +
+                        " · " +
+                        visibleClientCount + (visibleClientCount === 1 ? " cliente" : " clientes");
                 }
+            }
 
-                searchInput.addEventListener("input", applyFilters);
-                statusFilter.addEventListener("change", applyFilters);
+            searchInput.addEventListener("input", applyFilters);
 
-                if (clearButton) {
-                    clearButton.addEventListener("click", function () {
-                        searchInput.value = "";
-                        statusFilter.value = "";
-                        applyFilters();
-                        searchInput.focus();
-                    });
-                }
-            });
+            if (clearButton) {
+                clearButton.addEventListener("click", function () {
+                    searchInput.value = "";
+                    applyFilters();
+                    searchInput.focus();
+                });
+            }
+        });
     </script>
+
 </body>
 </html>

@@ -1,0 +1,2065 @@
+﻿@model ERP.NSQuell.Models.PlaneacionPanoramaVm
+@using ERP.NSQuell.Models
+@using System.Globalization
+
+@{
+    Layout = null;
+}
+
+@functions {
+    string Valor(string? v)
+    {
+        return string.IsNullOrWhiteSpace(v) ? "-" : v;
+    }
+
+    string Fecha(DateTime? f)
+    {
+        return f.HasValue ? f.Value.ToString("dd/MM/yyyy") : "-";
+    }
+
+    string FechaLarga(DateTime? f)
+    {
+        return f.HasValue
+            ? f.Value.ToString("dddd dd 'de' MMMM yyyy", new CultureInfo("es-MX"))
+            : "Sin fecha";
+    }
+
+    string FechaHora(DateTime? f)
+    {
+        return f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    string Hora(TimeSpan? h)
+    {
+        return h.HasValue ? h.Value.ToString(@"hh\:mm") : "-";
+    }
+
+    string Entero(int v)
+    {
+        return v.ToString("N0");
+    }
+
+    string Decimal2(decimal? v)
+    {
+        return v.HasValue ? v.Value.ToString("N2") : "-";
+    }
+
+    string Decimal2NoNull(decimal v)
+    {
+        return v.ToString("N2");
+    }
+
+    decimal Porcentaje(int valor, int total)
+    {
+        if (total <= 0)
+            return 0;
+
+        return Math.Round(((decimal)valor / total) * 100, 2);
+    }
+
+    string Width(decimal porcentaje)
+    {
+        if (porcentaje < 0)
+            porcentaje = 0;
+
+        if (porcentaje > 100)
+            porcentaje = 100;
+
+        return porcentaje.ToString("0.##", CultureInfo.InvariantCulture) + "%";
+    }
+
+    string Barra(decimal porcentaje)
+    {
+        if (porcentaje >= 100)
+            return "bar-success";
+
+        if (porcentaje >= 75)
+            return "bar-primary";
+
+        if (porcentaje >= 40)
+            return "bar-warning";
+
+        return "bar-danger";
+    }
+
+    string InicialCliente(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+            return "?";
+
+        return nombre.Trim().Substring(0, 1).ToUpper();
+    }
+
+    string EstadoData(PlaneacionPanoramaRenglonVm r)
+    {
+        if (r.TieneOF)
+            return "conof";
+
+        if (r.EstaProgramado)
+            return "programado";
+
+        if (r.EstaPendienteProgramar)
+            return "pendiente";
+
+        return "sinpendiente";
+    }
+
+    string EstadoClase(PlaneacionPanoramaRenglonVm r)
+    {
+        if (r.TieneOF)
+            return "pill-success";
+
+        if (r.EstaProgramado)
+            return "pill-primary";
+
+        if (r.EstaPendienteProgramar)
+            return "pill-warning";
+
+        return "pill-muted";
+    }
+
+    string EstadoIcono(PlaneacionPanoramaRenglonVm r)
+    {
+        if (r.TieneOF)
+            return "fa-circle-check";
+
+        if (r.EstaProgramado)
+            return "fa-gears";
+
+        if (r.EstaPendienteProgramar)
+            return "fa-clock";
+
+        return "fa-circle-minus";
+    }
+
+    string ClienteClase(PlaneacionPanoramaClienteVm cliente)
+    {
+        if (cliente.TotalSinOF > 0 && cliente.TotalCantidadPendiente > 0)
+            return "client-card-warning";
+
+        if (cliente.TotalConOF > 0)
+            return "client-card-success";
+
+        return "client-card-primary";
+    }
+
+    string PeriodoDia(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("yyyy-MM-dd") : "SIN_FECHA";
+    }
+
+    string PeriodoSemana(DateTime? fecha)
+    {
+        if (!fecha.HasValue)
+            return "SIN_FECHA";
+
+        var f = fecha.Value.Date;
+        var diferencia = ((int)f.DayOfWeek + 6) % 7;
+        var inicio = f.AddDays(-diferencia);
+        var fin = inicio.AddDays(6);
+
+        return inicio.ToString("yyyy-MM-dd") + "|" + fin.ToString("yyyy-MM-dd");
+    }
+
+    string PeriodoMes(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("yyyy-MM") : "SIN_FECHA";
+    }
+
+    string PeriodoAnio(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("yyyy") : "SIN_FECHA";
+    }
+
+    string TextoDia(string key)
+    {
+        if (key == "SIN_FECHA")
+            return "Sin fecha";
+
+        var f = DateTime.Parse(key);
+        return f.ToString("dddd dd MMMM yyyy", new CultureInfo("es-MX"));
+    }
+
+    string TextoSemana(string key)
+    {
+        if (key == "SIN_FECHA")
+            return "Sin fecha";
+
+        var partes = key.Split('|');
+        var inicio = DateTime.Parse(partes[0]);
+        var fin = DateTime.Parse(partes[1]);
+
+        return "Semana " + ISOWeek.GetWeekOfYear(inicio) + " · " +
+               inicio.ToString("dd MMM", new CultureInfo("es-MX")) + " - " +
+               fin.ToString("dd MMM yyyy", new CultureInfo("es-MX"));
+    }
+
+    string TextoMes(string key)
+    {
+        if (key == "SIN_FECHA")
+            return "Sin fecha";
+
+        var f = DateTime.Parse(key + "-01");
+        return f.ToString("MMMM yyyy", new CultureInfo("es-MX"));
+    }
+
+    string TextoAnio(string key)
+    {
+        return key == "SIN_FECHA" ? "Sin fecha" : key;
+    }
+
+    string IdSeguro(string prefijo, int a, int b = 0)
+    {
+        return $"{prefijo}_{a}_{b}";
+    }
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Panorama de Planeación | ERP Quell</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --blue: #004AAD;
+            --blue-dark: #063875;
+            --blue-soft: #EEF6FF;
+            --green: #10804C;
+            --green-soft: #ECFDF3;
+            --yellow: #F7B500;
+            --yellow-soft: #FFF7DF;
+            --red: #B42318;
+            --red-soft: #FEF3F2;
+            --purple: #7F2CCB;
+            --purple-soft: #F4EBFF;
+            --gray-bg: #F4F7FB;
+            --border: #D9E2EE;
+            --text: #1F2937;
+            --muted: #667085;
+            --shadow: 0 18px 45px rgba(16, 24, 40, .10);
+            --shadow-soft: 0 10px 28px rgba(16, 24, 40, .06);
+        }
+
+        body {
+            margin: 0;
+            background: radial-gradient(circle at top left, rgba(0, 74, 173, .11), transparent 28%),
+                        linear-gradient(180deg, #F7FAFF 0%, #EEF3F9 100%);
+            color: var(--text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .page {
+            max-width: 1820px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            border-radius: 30px;
+            padding: 32px;
+            color: white;
+            margin-bottom: 22px;
+            box-shadow: 0 24px 60px rgba(0, 74, 173, .28);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            width: 320px;
+            height: 320px;
+            right: -110px;
+            top: -140px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.10);
+        }
+
+        .hero h1 {
+            font-size: 2rem;
+            font-weight: 950;
+            margin: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero p {
+            color: rgba(255,255,255,.86);
+            margin-top: 8px;
+            max-width: 920px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .btn-glass {
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.14);
+            color: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 850;
+            text-decoration: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-glass:hover {
+            background: white;
+            color: var(--blue);
+        }
+
+        .btn-primary-soft {
+            background: var(--blue);
+            border: 1px solid var(--blue);
+            color: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+        }
+
+        .btn-primary-soft:hover {
+            background: var(--blue-dark);
+            color: white;
+        }
+
+        .btn-white-soft {
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--blue-dark);
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+        }
+
+        .btn-white-soft:hover {
+            background: var(--blue-soft);
+            color: var(--blue);
+        }
+
+        .panel {
+            background: rgba(255,255,255,.90);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 22px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .panel-body {
+            padding: 22px;
+        }
+
+        .input-modern {
+            border-radius: 15px;
+            border: 1px solid var(--border);
+            padding: 11px 13px;
+        }
+
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+        }
+
+        .chip {
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--blue-dark);
+            border-radius: 999px;
+            padding: 9px 14px;
+            font-weight: 900;
+            font-size: .84rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .chip:hover,
+        .chip.active {
+            background: var(--blue);
+            border-color: var(--blue);
+            color: white;
+        }
+
+        .kpi {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: var(--shadow-soft);
+            padding: 18px;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi::before {
+            content: "";
+            width: 8px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background: var(--blue);
+        }
+
+        .kpi-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 16px;
+            background: var(--blue-soft);
+            color: var(--blue);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .kpi-label {
+            color: var(--muted);
+            text-transform: uppercase;
+            font-size: .72rem;
+            letter-spacing: .05em;
+            font-weight: 950;
+        }
+
+        .kpi-value {
+            font-size: 1.55rem;
+            line-height: 1.1;
+            font-weight: 950;
+            color: var(--blue-dark);
+        }
+
+        .kpi-sub {
+            color: var(--muted);
+            font-size: .8rem;
+            margin-top: 4px;
+            font-weight: 650;
+        }
+
+        .client-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+
+        .client-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            box-shadow: var(--shadow-soft);
+            padding: 22px;
+            min-height: 325px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: .18s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .client-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow);
+        }
+
+        .client-card::after {
+            content: "";
+            position: absolute;
+            right: -75px;
+            top: -90px;
+            width: 230px;
+            height: 230px;
+            border-radius: 999px;
+            opacity: .10;
+            background: var(--blue);
+        }
+
+        .client-card-warning {
+            background: linear-gradient(135deg, #FFF9EE, #FFFFFF);
+        }
+
+        .client-card-success {
+            background: linear-gradient(135deg, #F0FFF6, #FFFFFF);
+        }
+
+        .client-card-primary {
+            background: linear-gradient(135deg, #F2F8FF, #FFFFFF);
+        }
+
+        .client-avatar {
+            width: 62px;
+            height: 62px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            font-weight: 950;
+            box-shadow: 0 14px 28px rgba(0,74,173,.22);
+            margin-bottom: 16px;
+        }
+
+        .client-title {
+            color: var(--blue-dark);
+            font-size: 1.22rem;
+            font-weight: 950;
+            margin: 0;
+            line-height: 1.18;
+        }
+
+        .client-sub {
+            color: var(--muted);
+            font-size: .86rem;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+
+        .mini-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 11px;
+            margin-top: 18px;
+        }
+
+        .mini-box {
+            background: rgba(255,255,255,.86);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 12px;
+        }
+
+        .mini-label {
+            color: var(--muted);
+            font-size: .68rem;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            font-weight: 950;
+        }
+
+        .mini-value {
+            font-size: 1rem;
+            font-weight: 950;
+            color: var(--text);
+        }
+
+        .progress-track {
+            height: 10px;
+            background: #E8EEF6;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 999px;
+        }
+
+        .bar-success { background: var(--green); }
+        .bar-primary { background: var(--blue); }
+        .bar-warning { background: var(--yellow); }
+        .bar-danger { background: var(--red); }
+
+        .pill {
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: .74rem;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .pill-success {
+            background: var(--green-soft);
+            color: var(--green);
+            border-color: #ABEFc6;
+        }
+
+        .pill-primary {
+            background: var(--blue-soft);
+            color: var(--blue);
+            border-color: #B2DDFF;
+        }
+
+        .pill-warning {
+            background: var(--yellow-soft);
+            color: #9A6700;
+            border-color: #FEDF89;
+        }
+
+        .pill-danger {
+            background: var(--red-soft);
+            color: var(--red);
+            border-color: #FECDCA;
+        }
+
+        .pill-purple {
+            background: var(--purple-soft);
+            color: var(--purple);
+            border-color: #D6BBFB;
+        }
+
+        .pill-muted {
+            background: #F2F4F7;
+            color: #475467;
+            border-color: #D0D5DD;
+        }
+
+        .modal-fullscreen .modal-content {
+            border: none;
+            background: #F4F7FB;
+        }
+
+        .modal-header-custom {
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            color: white;
+            padding: 26px 32px;
+            border-bottom: none;
+        }
+
+        .modal-title-custom {
+            font-weight: 950;
+            font-size: 1.55rem;
+            margin: 0;
+        }
+
+        .modal-sub-custom {
+            color: rgba(255,255,255,.82);
+            font-size: .92rem;
+            margin-top: 6px;
+        }
+
+        .modal-body-custom {
+            padding: 24px 32px 32px;
+        }
+
+        .modal-kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .modal-kpi {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 16px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .piece-list {
+            display: grid;
+            grid-template-columns: 360px minmax(0, 1fr);
+            gap: 22px;
+            align-items: start;
+        }
+
+        .piece-sidebar {
+            position: sticky;
+            top: 20px;
+            display: grid;
+            gap: 12px;
+            max-height: calc(100vh - 230px);
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .piece-tab {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 15px;
+            text-align: left;
+            cursor: pointer;
+            box-shadow: var(--shadow-soft);
+            transition: .16s ease;
+        }
+
+        .piece-tab:hover,
+        .piece-tab.active {
+            border-color: rgba(0,74,173,.45);
+            background: #F7FBFF;
+            transform: translateY(-2px);
+        }
+
+        .piece-tab-title {
+            color: var(--text);
+            font-size: .98rem;
+            font-weight: 950;
+            line-height: 1.2;
+        }
+
+        .piece-tab-desc {
+            color: var(--muted);
+            font-size: .79rem;
+            margin-top: 5px;
+            font-weight: 650;
+        }
+
+        .piece-tab-footer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-top: 12px;
+        }
+
+        .piece-detail {
+            display: none;
+        }
+
+        .piece-detail.active {
+            display: block;
+        }
+
+        .piece-stage {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .piece-stage-header {
+            padding: 24px;
+            background: linear-gradient(135deg, #FFFFFF, #F6FAFF);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .piece-stage-title {
+            color: var(--blue-dark);
+            font-size: 1.35rem;
+            font-weight: 950;
+            margin: 0;
+        }
+
+        .piece-stage-desc {
+            color: var(--muted);
+            font-size: .9rem;
+            margin-top: 6px;
+            font-weight: 650;
+        }
+
+        .tech-row {
+            display: flex;
+            gap: 9px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+
+        .piece-stage-body {
+            padding: 24px;
+        }
+
+        .mode-switch {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            background: #F3F7FC;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+        }
+
+        .mode-btn {
+            border: 1px solid transparent;
+            background: white;
+            color: var(--blue-dark);
+            border-radius: 13px;
+            padding: 9px 14px;
+            font-size: .84rem;
+            font-weight: 950;
+            cursor: pointer;
+        }
+
+        .mode-btn:hover,
+        .mode-btn.active {
+            background: var(--blue);
+            color: white;
+        }
+
+        .timeline-view {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .timeline-view.active {
+            display: block;
+        }
+
+        .timeline-grid {
+            display: grid;
+            gap: 16px;
+        }
+
+        .period-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .period-head {
+            padding: 16px 18px;
+            background: linear-gradient(135deg, #F7FBFF, #FFFFFF);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .period-title {
+            color: var(--blue-dark);
+            font-weight: 950;
+            font-size: 1rem;
+        }
+
+        .period-sub {
+            color: var(--muted);
+            font-size: .8rem;
+            margin-top: 4px;
+            font-weight: 650;
+        }
+
+        .period-body {
+            padding: 18px;
+        }
+
+        .gantt-line {
+            display: grid;
+            grid-template-columns: 160px 1fr 110px;
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .gantt-label {
+            color: var(--muted);
+            text-transform: uppercase;
+            font-size: .72rem;
+            letter-spacing: .04em;
+            font-weight: 950;
+        }
+
+        .gantt-track {
+            height: 20px;
+            background: #EEF2F7;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .gantt-fill {
+            height: 100%;
+            border-radius: 999px;
+            min-width: 7px;
+        }
+
+        .fill-pedido { background: linear-gradient(90deg, #2E90FA, #004AAD); }
+        .fill-pt { background: linear-gradient(90deg, #12B76A, #10804C); }
+        .fill-programado { background: linear-gradient(90deg, #7F56D9, #5925DC); }
+        .fill-producido { background: linear-gradient(90deg, #17B26A, #067647); }
+        .fill-pendiente { background: linear-gradient(90deg, #FDB022, #DC6803); }
+        .fill-mp { background: linear-gradient(90deg, #667085, #344054); }
+
+        .gantt-num {
+            text-align: right;
+            font-weight: 950;
+            color: var(--text);
+            font-size: .9rem;
+        }
+
+        .movement-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+
+        .movement {
+            border: 1px solid var(--border);
+            background: #FBFDFF;
+            border-radius: 14px;
+            padding: 9px 11px;
+            font-size: .78rem;
+            font-weight: 850;
+            color: #344054;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+
+        .empty-state {
+            background: white;
+            border: 1px dashed var(--border);
+            border-radius: 30px;
+            box-shadow: var(--shadow-soft);
+            padding: 54px 20px;
+            text-align: center;
+            color: var(--muted);
+        }
+
+        .hidden-by-filter {
+            display: none !important;
+        }
+
+        .sticky-footer-actions {
+            position: sticky;
+            bottom: 18px;
+            z-index: 20;
+            margin-top: 24px;
+            background: rgba(255,255,255,.92);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        @@media (max-width: 1100px) {
+            .piece-list {
+                grid-template-columns: 1fr;
+            }
+
+            .piece-sidebar {
+                position: static;
+                max-height: none;
+                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            }
+        }
+
+        @@media (max-width: 768px) {
+            .page {
+                padding: 16px;
+            }
+
+            .hero {
+                padding: 24px;
+            }
+
+            .hero h1 {
+                font-size: 1.55rem;
+            }
+
+            .client-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .mini-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .modal-body-custom {
+                padding: 18px;
+            }
+
+            .modal-header-custom {
+                padding: 22px;
+            }
+
+            .gantt-line {
+                grid-template-columns: 1fr;
+                gap: 5px;
+            }
+
+            .gantt-num {
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="page">
+
+    <section class="hero">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <h1>
+                    <i class="fa-solid fa-chart-line me-2"></i>
+                    Panorama de Planeación
+                </h1>
+                <p>
+                    Vista visual por cliente y pieza. Abre un cliente para trabajar en pantalla completa y revisar su timeline diario, semanal, mensual o anual.
+                </p>
+
+                <div class="chip-row mt-3">
+                    <span class="pill pill-primary">
+                        <i class="fa-solid fa-calendar-days"></i>
+                        @PlaneacionPanoramaVista.Nombre(Model.Vista)
+                    </span>
+                    <span class="pill pill-success">
+                        @Model.FechaDesde.ToString("dd/MM/yyyy") - @Model.FechaHasta.ToString("dd/MM/yyyy")
+                    </span>
+                    <span class="pill pill-warning">
+                        @Entero(Model.TotalCantidadPendiente) pendientes
+                    </span>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <a asp-controller="PlaneacionRelease"
+                   asp-action="Calculadora"
+                   class="btn-glass">
+                    <i class="fa-solid fa-arrow-left me-1"></i>
+                    Programa de Planeación
+                </a>
+
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Maquinas"
+                   class="btn-glass">
+                    <i class="fa-solid fa-table-columns me-1"></i>
+                    Máquinas
+                </a>
+
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Index"
+                   class="btn-glass">
+                    <i class="fa-solid fa-list me-1"></i>
+                    Programa general
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-header">
+            <div>
+                <h2 class="h5 fw-bold text-primary m-0">
+                    <i class="fa-solid fa-sliders me-2"></i>
+                    Filtros
+                </h2>
+                <div class="text-muted small">
+                    Filtra por periodo, cliente, máquina, pieza o estatus.
+                </div>
+            </div>
+
+            <div class="chip-row">
+                <a asp-controller="PlaneacionPanorama"
+                   asp-action="Index"
+                   asp-route-vista="@PlaneacionPanoramaVista.Dia"
+                   asp-route-clienteId="@Model.ClienteID"
+                   asp-route-maquinaId="@Model.MaquinaID"
+                   asp-route-parteId="@Model.ParteID"
+                   asp-route-estatusId="@Model.EstatusID"
+                   class="chip @(Model.Vista == PlaneacionPanoramaVista.Dia ? "active" : "")">
+                    <i class="fa-solid fa-sun"></i>
+                    Hoy
+                </a>
+
+                <a asp-controller="PlaneacionPanorama"
+                   asp-action="Index"
+                   asp-route-vista="@PlaneacionPanoramaVista.Semana"
+                   asp-route-clienteId="@Model.ClienteID"
+                   asp-route-maquinaId="@Model.MaquinaID"
+                   asp-route-parteId="@Model.ParteID"
+                   asp-route-estatusId="@Model.EstatusID"
+                   class="chip @(Model.Vista == PlaneacionPanoramaVista.Semana ? "active" : "")">
+                    <i class="fa-solid fa-calendar-week"></i>
+                    Semana
+                </a>
+
+                <a asp-controller="PlaneacionPanorama"
+                   asp-action="Index"
+                   asp-route-vista="@PlaneacionPanoramaVista.Mes"
+                   asp-route-clienteId="@Model.ClienteID"
+                   asp-route-maquinaId="@Model.MaquinaID"
+                   asp-route-parteId="@Model.ParteID"
+                   asp-route-estatusId="@Model.EstatusID"
+                   class="chip @(Model.Vista == PlaneacionPanoramaVista.Mes ? "active" : "")">
+                    <i class="fa-solid fa-calendar-days"></i>
+                    Mes
+                </a>
+
+                <a asp-controller="PlaneacionPanorama"
+                   asp-action="Index"
+                   asp-route-vista="@PlaneacionPanoramaVista.Anio"
+                   asp-route-clienteId="@Model.ClienteID"
+                   asp-route-maquinaId="@Model.MaquinaID"
+                   asp-route-parteId="@Model.ParteID"
+                   asp-route-estatusId="@Model.EstatusID"
+                   class="chip @(Model.Vista == PlaneacionPanoramaVista.Anio ? "active" : "")">
+                    <i class="fa-solid fa-calendar"></i>
+                    Año
+                </a>
+
+                <a asp-controller="PlaneacionPanorama"
+                   asp-action="Index"
+                   asp-route-vista="@PlaneacionPanoramaVista.LargoPlazo"
+                   asp-route-clienteId="@Model.ClienteID"
+                   asp-route-maquinaId="@Model.MaquinaID"
+                   asp-route-parteId="@Model.ParteID"
+                   asp-route-estatusId="@Model.EstatusID"
+                   class="chip @(Model.Vista == PlaneacionPanoramaVista.LargoPlazo ? "active" : "")">
+                    <i class="fa-solid fa-timeline"></i>
+                    Largo plazo
+                </a>
+            </div>
+        </div>
+
+        <div class="panel-body">
+            <form asp-controller="PlaneacionPanorama" asp-action="Index" method="get">
+                <input type="hidden" name="vista" value="@Model.Vista" />
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-xl-2 col-md-4">
+                        <label class="fw-bold small text-muted">Desde</label>
+                        <input type="date"
+                               name="fechaDesde"
+                               value="@Model.FechaDesde.ToString("yyyy-MM-dd")"
+                               class="form-control input-modern" />
+                    </div>
+
+                    <div class="col-xl-2 col-md-4">
+                        <label class="fw-bold small text-muted">Hasta</label>
+                        <input type="date"
+                               name="fechaHasta"
+                               value="@Model.FechaHasta.ToString("yyyy-MM-dd")"
+                               class="form-control input-modern" />
+                    </div>
+
+                    <div class="col-xl-2 col-md-4">
+                        <label class="fw-bold small text-muted">Cliente</label>
+                        <select name="clienteId" asp-items="Model.Clientes" class="form-select input-modern"></select>
+                    </div>
+
+                    <div class="col-xl-2 col-md-4">
+                        <label class="fw-bold small text-muted">Máquina</label>
+                        <select name="maquinaId" asp-items="Model.Maquinas" class="form-select input-modern"></select>
+                    </div>
+
+                    <div class="col-xl-2 col-md-4">
+                        <label class="fw-bold small text-muted">Parte</label>
+                        <select name="parteId" asp-items="Model.Partes" class="form-select input-modern"></select>
+                    </div>
+
+                    <div class="col-xl-2 col-md-4">
+                        <label class="fw-bold small text-muted">Estatus</label>
+                        <select name="estatusId" asp-items="Model.Estatus" class="form-select input-modern"></select>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6">
+                        <button type="submit" class="btn btn-primary-soft w-100">
+                            <i class="fa-solid fa-magnifying-glass me-1"></i>
+                            Consultar
+                        </button>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6">
+                        <a asp-controller="PlaneacionPanorama"
+                           asp-action="Index"
+                           class="btn btn-white-soft w-100">
+                            <i class="fa-solid fa-rotate-left me-1"></i>
+                            Limpiar
+                        </a>
+                    </div>
+
+                    <div class="col-xl-6">
+                        <label class="fw-bold small text-muted">Buscar en pantalla</label>
+                        <input id="buscarTexto"
+                               type="text"
+                               class="form-control input-modern"
+                               placeholder="Buscar cliente, pieza, máquina, molde, material..." />
+                    </div>
+                </div>
+            </form>
+
+            <div class="mt-3 chip-row">
+                <button type="button" class="chip active filtro-estado" data-estado="todos">
+                    <i class="fa-solid fa-layer-group"></i>
+                    Todos
+                </button>
+
+                <button type="button" class="chip filtro-estado" data-estado="pendiente">
+                    <i class="fa-solid fa-clock"></i>
+                    Pendiente programar
+                </button>
+
+                <button type="button" class="chip filtro-estado" data-estado="programado">
+                    <i class="fa-solid fa-gears"></i>
+                    Programado
+                </button>
+
+                <button type="button" class="chip filtro-estado" data-estado="conof">
+                    <i class="fa-solid fa-circle-check"></i>
+                    Con OF
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section class="row g-3 mb-4">
+        <div class="col-xl-2 col-md-4">
+            <div class="kpi">
+                <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
+                <div class="kpi-label">Clientes</div>
+                <div class="kpi-value">@Entero(Model.TotalClientes)</div>
+                <div class="kpi-sub">@Entero(Model.TotalPartes) piezas</div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-md-4">
+            <div class="kpi">
+                <div class="kpi-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+                <div class="kpi-label">Requerido</div>
+                <div class="kpi-value">@Entero(Model.TotalCantidadRequerida)</div>
+                <div class="kpi-sub">piezas release</div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-md-4">
+            <div class="kpi">
+                <div class="kpi-icon"><i class="fa-solid fa-industry"></i></div>
+                <div class="kpi-label">Programado</div>
+                <div class="kpi-value">@Entero(Model.TotalCantidadProgramada)</div>
+                <div class="kpi-sub">@Decimal2NoNull(Model.PorcentajeProgramado)%</div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-md-4">
+            <div class="kpi">
+                <div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                <div class="kpi-label">Pendiente</div>
+                <div class="kpi-value">@Entero(Model.TotalCantidadPendiente)</div>
+                <div class="kpi-sub">por producir</div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-md-4">
+            <div class="kpi">
+                <div class="kpi-icon"><i class="fa-solid fa-weight-hanging"></i></div>
+                <div class="kpi-label">MP</div>
+                <div class="kpi-value">@Decimal2NoNull(Model.TotalMpKg)</div>
+                <div class="kpi-sub">kg estimados</div>
+            </div>
+        </div>
+
+        <div class="col-xl-2 col-md-4">
+            <div class="kpi">
+                <div class="kpi-icon"><i class="fa-solid fa-tags"></i></div>
+                <div class="kpi-label">Etiquetas</div>
+                <div class="kpi-value">@Decimal2NoNull(Model.TotalEtiquetas)</div>
+                <div class="kpi-sub">@Decimal2NoNull(Model.TotalEmbalajes) embalajes</div>
+            </div>
+        </div>
+    </section>
+
+    @if (!Model.ClientesPanorama.Any())
+    {
+        <section class="empty-state">
+            <i class="fa-regular fa-calendar-xmark fa-3x mb-3"></i>
+            <h3 class="fw-bold text-primary">Sin datos para este periodo</h3>
+            <p class="mb-0">No hay releases, programas o necesidades en el rango seleccionado.</p>
+        </section>
+    }
+    else
+    {
+        <section class="client-grid" id="gridClientes">
+            @{
+                var clienteIndex = 0;
+            }
+
+            @foreach (var cliente in Model.ClientesPanorama)
+            {
+                clienteIndex++;
+
+                var modalClienteId = IdSeguro("modalCliente", clienteIndex);
+                var estadosCliente = string.Join(" ", cliente.Partes.SelectMany(p => p.Renglones).Select(r => EstadoData(r)).Distinct());
+                var searchCliente = (
+                    cliente.ClienteNombre + " " +
+                    string.Join(" ", cliente.Partes.Select(p =>
+                        p.NumeroParte + " " +
+                        p.ReferenciaSAP + " " +
+                        p.DesignacionDescripcionSAP + " " +
+                        p.MaquinaCodigo + " " +
+                        p.MoldeCodigo + " " +
+                        p.MaterialCodigo + " " +
+                        p.MaterialDescripcion
+                    ))
+                ).ToLower();
+
+                <article class="client-card @ClienteClase(cliente)"
+                         data-search="@searchCliente"
+                         data-estados="@estadosCliente">
+
+                    <div>
+                        <div class="client-avatar">
+                            @InicialCliente(cliente.ClienteNombre)
+                        </div>
+
+                        <h3 class="client-title">
+                            @cliente.ClienteNombre
+                        </h3>
+
+                        <div class="client-sub">
+                            @Entero(cliente.TotalPartes) piezas ·
+                            @Entero(cliente.TotalRenglones) movimientos ·
+                            @Entero(cliente.TotalCantidadPendiente) pendientes
+                        </div>
+
+                        <div class="mini-grid">
+                            <div class="mini-box">
+                                <div class="mini-label">Requerido</div>
+                                <div class="mini-value">@Entero(cliente.TotalCantidadRequerida)</div>
+                            </div>
+
+                            <div class="mini-box">
+                                <div class="mini-label">Programado</div>
+                                <div class="mini-value">@Entero(cliente.TotalCantidadProgramada)</div>
+                            </div>
+
+                            <div class="mini-box">
+                                <div class="mini-label">Pendiente</div>
+                                <div class="mini-value">@Entero(cliente.TotalCantidadPendiente)</div>
+                            </div>
+
+                            <div class="mini-box">
+                                <div class="mini-label">MP kg</div>
+                                <div class="mini-value">@Decimal2NoNull(cliente.TotalMpKg)</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between small fw-bold text-muted mb-1">
+                                <span>Avance programado</span>
+                                <span>@Decimal2NoNull(cliente.PorcentajeProgramado)%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-fill @Barra(cliente.PorcentajeProgramado)"
+                                     style="width:@Width(cliente.PorcentajeProgramado)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-grid">
+                        <button type="button"
+                                class="btn btn-primary-soft"
+                                data-bs-toggle="modal"
+                                data-bs-target="#@modalClienteId">
+                            <i class="fa-solid fa-up-right-and-down-left-from-center me-1"></i>
+                            Abrir planeación
+                        </button>
+                    </div>
+                </article>
+
+                <div class="modal fade"
+                     id="@modalClienteId"
+                     tabindex="-1"
+                     aria-hidden="true">
+                    <div class="modal-dialog modal-fullscreen">
+                        <div class="modal-content">
+
+                            <div class="modal-header-custom">
+                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                    <div>
+                                        <h2 class="modal-title-custom">
+                                            <i class="fa-solid fa-building me-2"></i>
+                                            @cliente.ClienteNombre
+                                        </h2>
+                                        <div class="modal-sub-custom">
+                                            Planeación completa por pieza. Selecciona una pieza y revisa su timeline diario, semanal, mensual o anual.
+                                        </div>
+
+                                        <div class="chip-row mt-3">
+                                            <span class="pill pill-primary">@Entero(cliente.TotalPartes) piezas</span>
+                                            <span class="pill pill-warning">@Entero(cliente.TotalCantidadPendiente) pendientes</span>
+                                            <span class="pill pill-success">@Entero(cliente.TotalConOF) con OF</span>
+                                            <span class="pill pill-muted">@Entero(cliente.TotalSinOF) sin OF</span>
+                                        </div>
+                                    </div>
+
+                                    <button type="button"
+                                            class="btn btn-light fw-bold rounded-4"
+                                            data-bs-dismiss="modal">
+                                        <i class="fa-solid fa-xmark me-1"></i>
+                                        Cerrar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="modal-body-custom">
+
+                                <div class="modal-kpis">
+                                    <div class="modal-kpi">
+                                        <div class="kpi-label">Requerido</div>
+                                        <div class="kpi-value">@Entero(cliente.TotalCantidadRequerida)</div>
+                                    </div>
+
+                                    <div class="modal-kpi">
+                                        <div class="kpi-label">Programado</div>
+                                        <div class="kpi-value">@Entero(cliente.TotalCantidadProgramada)</div>
+                                    </div>
+
+                                    <div class="modal-kpi">
+                                        <div class="kpi-label">Pendiente</div>
+                                        <div class="kpi-value">@Entero(cliente.TotalCantidadPendiente)</div>
+                                    </div>
+
+                                    <div class="modal-kpi">
+                                        <div class="kpi-label">Horas</div>
+                                        <div class="kpi-value">@Decimal2NoNull(cliente.TotalHorasProgramadas)</div>
+                                    </div>
+
+                                    <div class="modal-kpi">
+                                        <div class="kpi-label">MP kg</div>
+                                        <div class="kpi-value">@Decimal2NoNull(cliente.TotalMpKg)</div>
+                                    </div>
+
+                                    <div class="modal-kpi">
+                                        <div class="kpi-label">Etiquetas</div>
+                                        <div class="kpi-value">@Decimal2NoNull(cliente.TotalEtiquetas)</div>
+                                    </div>
+                                </div>
+
+                                <div class="piece-list">
+                                    <aside class="piece-sidebar">
+                                        @{
+                                            var piezaIndex = 0;
+                                        }
+
+                                        @foreach (var pieza in cliente.Partes)
+                                        {
+                                            piezaIndex++;
+
+                                            var piezaKey = IdSeguro("pieza", clienteIndex, piezaIndex);
+                                            var activeClass = piezaIndex == 1 ? "active" : "";
+
+                                            <button type="button"
+                                                    class="piece-tab @activeClass"
+                                                    data-piece-button="@modalClienteId"
+                                                    data-piece-target="@piezaKey">
+                                                <div class="piece-tab-title">
+                                                    <i class="fa-solid fa-cube text-primary me-1"></i>
+                                                    @Valor(pieza.ReferenciaSAP ?? pieza.NumeroParte)
+                                                </div>
+
+                                                <div class="piece-tab-desc">
+                                                    @Valor(pieza.DesignacionDescripcionSAP)
+                                                </div>
+
+                                                <div class="piece-tab-footer">
+                                                    <span class="pill pill-warning">@Entero(pieza.TotalCantidadPendiente) pend.</span>
+                                                    <span class="pill pill-primary">@Entero(pieza.TotalCantidadProgramada) prog.</span>
+                                                </div>
+                                            </button>
+                                        }
+                                    </aside>
+
+                                    <main>
+                                        @{
+                                            var detallePiezaIndex = 0;
+                                        }
+
+                                        @foreach (var pieza in cliente.Partes)
+                                        {
+                                            detallePiezaIndex++;
+
+                                            var piezaKey = IdSeguro("pieza", clienteIndex, detallePiezaIndex);
+                                            var activeClass = detallePiezaIndex == 1 ? "active" : "";
+
+                                            <section class="piece-detail @activeClass"
+                                                     data-piece-panel="@modalClienteId"
+                                                     data-piece-id="@piezaKey">
+
+                                                <div class="piece-stage">
+                                                    <div class="piece-stage-header">
+                                                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                                            <div>
+                                                                <h3 class="piece-stage-title">
+                                                                    @Valor(pieza.ReferenciaSAP ?? pieza.NumeroParte)
+                                                                </h3>
+                                                                <div class="piece-stage-desc">
+                                                                    @Valor(pieza.DesignacionDescripcionSAP)
+                                                                </div>
+
+                                                                <div class="tech-row">
+                                                                    <span class="pill pill-primary">
+                                                                        <i class="fa-solid fa-industry"></i>
+                                                                        @Valor(pieza.MaquinaCodigo)
+                                                                    </span>
+
+                                                                    <span class="pill pill-purple">
+                                                                        <i class="fa-solid fa-shapes"></i>
+                                                                        Molde @Valor(pieza.MoldeCodigo)
+                                                                    </span>
+
+                                                                    <span class="pill pill-muted">
+                                                                        Cav. @(pieza.Cavidades?.ToString() ?? "-")
+                                                                    </span>
+
+                                                                    <span class="pill pill-muted">
+                                                                        Obj/Hr @(pieza.ObjetivoHora?.ToString("N0") ?? "-")
+                                                                    </span>
+
+                                                                    <span class="pill pill-muted">
+                                                                        Color @Valor(pieza.Color)
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="mode-switch" data-switch="@piezaKey">
+                                                                <button type="button" class="mode-btn active" data-view="dia">
+                                                                    <i class="fa-solid fa-sun me-1"></i>
+                                                                    Diario
+                                                                </button>
+                                                                <button type="button" class="mode-btn" data-view="semana">
+                                                                    <i class="fa-solid fa-calendar-week me-1"></i>
+                                                                    Semana
+                                                                </button>
+                                                                <button type="button" class="mode-btn" data-view="mes">
+                                                                    <i class="fa-solid fa-calendar-days me-1"></i>
+                                                                    Mes
+                                                                </button>
+                                                                <button type="button" class="mode-btn" data-view="anio">
+                                                                    <i class="fa-solid fa-calendar me-1"></i>
+                                                                    Año
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="piece-stage-body">
+                                                        <div class="modal-kpis">
+                                                            <div class="modal-kpi">
+                                                                <div class="kpi-label">Requerido</div>
+                                                                <div class="kpi-value">@Entero(pieza.TotalCantidadRequerida)</div>
+                                                            </div>
+
+                                                            <div class="modal-kpi">
+                                                                <div class="kpi-label">Desde PT</div>
+                                                                <div class="kpi-value">@Entero(pieza.TotalPiezasDesdePT)</div>
+                                                            </div>
+
+                                                            <div class="modal-kpi">
+                                                                <div class="kpi-label">Programado</div>
+                                                                <div class="kpi-value">@Entero(pieza.TotalCantidadProgramada)</div>
+                                                            </div>
+
+                                                            <div class="modal-kpi">
+                                                                <div class="kpi-label">Producido</div>
+                                                                <div class="kpi-value">@Entero(pieza.TotalCantidadProducida)</div>
+                                                            </div>
+
+                                                            <div class="modal-kpi">
+                                                                <div class="kpi-label">Pendiente</div>
+                                                                <div class="kpi-value">@Entero(pieza.TotalCantidadPendiente)</div>
+                                                            </div>
+
+                                                            <div class="modal-kpi">
+                                                                <div class="kpi-label">MP kg</div>
+                                                                <div class="kpi-value">@Decimal2NoNull(pieza.TotalMpKg)</div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="timeline-view active"
+                                                             data-timeline="@piezaKey"
+                                                             data-view="dia">
+                                                            <div class="timeline-grid">
+                                                                @{
+                                                                    var gruposDia = pieza.Renglones
+                                                                        .GroupBy(r => PeriodoDia(r.FechaRequerida ?? r.FechaInicioProgramada))
+                                                                        .OrderBy(g => g.Key)
+                                                                        .ToList();
+                                                                }
+
+                                                                @foreach (var grupo in gruposDia)
+                                                                {
+                                                                    var datos = grupo.ToList();
+                                                                    var requerido = datos.Sum(x => x.CantidadRequerida);
+                                                                    var pt = datos.Sum(x => x.PiezasDesdePT);
+                                                                    var programado = datos.Sum(x => x.CantidadProgramada);
+                                                                    var producido = datos.Sum(x => x.CantidadProducida);
+                                                                    var pendiente = datos.Sum(x => x.CantidadPendiente);
+                                                                    var mp = datos.Sum(x => x.CantidadMpKg ?? 0);
+                                                                    var max = Math.Max(1, new[] { requerido, pt, programado, producido, pendiente }.Max());
+
+                                                                    <div class="period-card">
+                                                                        <div class="period-head">
+                                                                            <div>
+                                                                                <div class="period-title">
+                                                                                    <i class="fa-solid fa-calendar-day me-1"></i>
+                                                                                    @TextoDia(grupo.Key)
+                                                                                </div>
+                                                                                <div class="period-sub">
+                                                                                    @datos.Count movimiento(s)
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div class="chip-row">
+                                                                                @foreach (var estado in datos.Select(x => x.EstadoPanorama).Distinct())
+                                                                                {
+                                                                                    <span class="pill pill-primary">@estado</span>
+                                                                                }
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div class="period-body">
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Pedido cliente</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pedido" style="width:@Width(Porcentaje(requerido, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(requerido)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Desde PT</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pt" style="width:@Width(Porcentaje(pt, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(pt)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Programado</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-programado" style="width:@Width(Porcentaje(programado, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(programado)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Producido</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-producido" style="width:@Width(Porcentaje(producido, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(producido)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Pendiente</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pendiente" style="width:@Width(Porcentaje(pendiente, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(pendiente)</div>
+                                                                            </div>
+
+                                                                            <div class="movement-row">
+                                                                                <span class="movement">
+                                                                                    <i class="fa-solid fa-weight-hanging me-1"></i>
+                                                                                    MP: @mp.ToString("N2") kg
+                                                                                </span>
+
+                                                                                @foreach (var r in datos)
+                                                                                {
+                                                                                    <span class="movement">
+                                                                                        <i class="fa-solid @EstadoIcono(r) me-1"></i>
+                                                                                        @Valor(r.FolioRelease) · @r.EstadoPanorama
+                                                                                    </span>
+                                                                                }
+                                                                            </div>
+
+                                                                            <div class="action-row">
+                                                                                @foreach (var r in datos)
+                                                                                {
+                                                                                    if (r.EstaPendienteProgramar && r.ReleaseDetalleID.HasValue)
+                                                                                    {
+                                                                                        <a asp-controller="PlaneacionPrograma"
+                                                                                           asp-action="CrearDesdeNecesidad"
+                                                                                           asp-route-releaseDetalleId="@r.ReleaseDetalleID"
+                                                                                           class="btn btn-primary-soft btn-sm">
+                                                                                            <i class="fa-solid fa-gears me-1"></i>
+                                                                                            Enviar a Cambio de Molde
+                                                                                        </a>
+                                                                                    }
+
+                                                                                    if (r.TieneOF && r.SolicitudProduccionID.HasValue)
+                                                                                    {
+                                                                                        <a asp-controller="Planeacion"
+                                                                                           asp-action="Detalle"
+                                                                                           asp-route-id="@r.SolicitudProduccionID"
+                                                                                           class="btn btn-success btn-sm rounded-4 fw-bold">
+                                                                                            <i class="fa-solid fa-circle-check me-1"></i>
+                                                                                            Ver OF
+                                                                                        </a>
+                                                                                    }
+                                                                                }
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="timeline-view"
+                                                             data-timeline="@piezaKey"
+                                                             data-view="semana">
+                                                            <div class="timeline-grid">
+                                                                @{
+                                                                    var gruposSemana = pieza.Renglones
+                                                                        .GroupBy(r => PeriodoSemana(r.FechaRequerida ?? r.FechaInicioProgramada))
+                                                                        .OrderBy(g => g.Key)
+                                                                        .ToList();
+                                                                }
+
+                                                                @foreach (var grupo in gruposSemana)
+                                                                {
+                                                                    var datos = grupo.ToList();
+                                                                    var requerido = datos.Sum(x => x.CantidadRequerida);
+                                                                    var programado = datos.Sum(x => x.CantidadProgramada);
+                                                                    var producido = datos.Sum(x => x.CantidadProducida);
+                                                                    var pendiente = datos.Sum(x => x.CantidadPendiente);
+                                                                    var max = Math.Max(1, new[] { requerido, programado, producido, pendiente }.Max());
+
+                                                                    <div class="period-card">
+                                                                        <div class="period-head">
+                                                                            <div>
+                                                                                <div class="period-title">
+                                                                                    <i class="fa-solid fa-calendar-week me-1"></i>
+                                                                                    @TextoSemana(grupo.Key)
+                                                                                </div>
+                                                                                <div class="period-sub">
+                                                                                    Resumen semanal · @datos.Count movimiento(s)
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <span class="pill pill-warning">
+                                                                                @Entero(pendiente) pendientes
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div class="period-body">
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Pedido semanal</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pedido" style="width:@Width(Porcentaje(requerido, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(requerido)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Programado</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-programado" style="width:@Width(Porcentaje(programado, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(programado)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Producido</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-producido" style="width:@Width(Porcentaje(producido, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(producido)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Pendiente</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pendiente" style="width:@Width(Porcentaje(pendiente, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(pendiente)</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="timeline-view"
+                                                             data-timeline="@piezaKey"
+                                                             data-view="mes">
+                                                            <div class="timeline-grid">
+                                                                @{
+                                                                    var gruposMes = pieza.Renglones
+                                                                        .GroupBy(r => PeriodoMes(r.FechaRequerida ?? r.FechaInicioProgramada))
+                                                                        .OrderBy(g => g.Key)
+                                                                        .ToList();
+                                                                }
+
+                                                                @foreach (var grupo in gruposMes)
+                                                                {
+                                                                    var datos = grupo.ToList();
+                                                                    var requerido = datos.Sum(x => x.CantidadRequerida);
+                                                                    var programado = datos.Sum(x => x.CantidadProgramada);
+                                                                    var producido = datos.Sum(x => x.CantidadProducida);
+                                                                    var pendiente = datos.Sum(x => x.CantidadPendiente);
+                                                                    var max = Math.Max(1, new[] { requerido, programado, producido, pendiente }.Max());
+
+                                                                    <div class="period-card">
+                                                                        <div class="period-head">
+                                                                            <div>
+                                                                                <div class="period-title">
+                                                                                    <i class="fa-solid fa-calendar-days me-1"></i>
+                                                                                    @TextoMes(grupo.Key)
+                                                                                </div>
+                                                                                <div class="period-sub">
+                                                                                    Resumen mensual · @datos.Count movimiento(s)
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <span class="pill pill-primary">
+                                                                                @Decimal2NoNull(Porcentaje(programado, requerido))% programado
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div class="period-body">
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Pedido mensual</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pedido" style="width:@Width(Porcentaje(requerido, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(requerido)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Programado</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-programado" style="width:@Width(Porcentaje(programado, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(programado)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Pendiente</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pendiente" style="width:@Width(Porcentaje(pendiente, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(pendiente)</div>
+                                                                            </div>
+
+                                                                            <div class="movement-row">
+                                                                                <span class="movement">Producido: @Entero(producido)</span>
+                                                                                <span class="movement">MP: @datos.Sum(x => x.CantidadMpKg ?? 0).ToString("N2") kg</span>
+                                                                                <span class="movement">Embalajes: @datos.Sum(x => x.CantidadEmbalajes ?? 0).ToString("N0")</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="timeline-view"
+                                                             data-timeline="@piezaKey"
+                                                             data-view="anio">
+                                                            <div class="timeline-grid">
+                                                                @{
+                                                                    var gruposAnio = pieza.Renglones
+                                                                        .GroupBy(r => PeriodoAnio(r.FechaRequerida ?? r.FechaInicioProgramada))
+                                                                        .OrderBy(g => g.Key)
+                                                                        .ToList();
+                                                                }
+
+                                                                @foreach (var grupo in gruposAnio)
+                                                                {
+                                                                    var datos = grupo.ToList();
+                                                                    var requerido = datos.Sum(x => x.CantidadRequerida);
+                                                                    var programado = datos.Sum(x => x.CantidadProgramada);
+                                                                    var producido = datos.Sum(x => x.CantidadProducida);
+                                                                    var pendiente = datos.Sum(x => x.CantidadPendiente);
+                                                                    var max = Math.Max(1, new[] { requerido, programado, producido, pendiente }.Max());
+
+                                                                    <div class="period-card">
+                                                                        <div class="period-head">
+                                                                            <div>
+                                                                                <div class="period-title">
+                                                                                    <i class="fa-solid fa-calendar me-1"></i>
+                                                                                    Año @TextoAnio(grupo.Key)
+                                                                                </div>
+                                                                                <div class="period-sub">
+                                                                                    Resumen anual · @datos.Count movimiento(s)
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <span class="pill pill-success">
+                                                                                @Entero(producido) producido
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div class="period-body">
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Pedido anual</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pedido" style="width:@Width(Porcentaje(requerido, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(requerido)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Programado</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-programado" style="width:@Width(Porcentaje(programado, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(programado)</div>
+                                                                            </div>
+
+                                                                            <div class="gantt-line">
+                                                                                <div class="gantt-label">Pendiente</div>
+                                                                                <div class="gantt-track">
+                                                                                    <div class="gantt-fill fill-pendiente" style="width:@Width(Porcentaje(pendiente, max))"></div>
+                                                                                </div>
+                                                                                <div class="gantt-num">@Entero(pendiente)</div>
+                                                                            </div>
+
+                                                                            <div class="movement-row">
+                                                                                <span class="movement">MP anual: @datos.Sum(x => x.CantidadMpKg ?? 0).ToString("N2") kg</span>
+                                                                                <span class="movement">Embalaje anual: @datos.Sum(x => x.CantidadEmbalajes ?? 0).ToString("N0")</span>
+                                                                                <span class="movement">Con OF: @datos.Count(x => x.TieneOF)</span>
+                                                                                <span class="movement">Pendiente programar: @datos.Count(x => x.EstaPendienteProgramar)</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+
+                                                    </div>
+                                                </div>
+
+                                            </section>
+                                        }
+                                    </main>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </section>
+    }
+
+    <section class="sticky-footer-actions">
+        <div class="d-flex justify-content-between gap-2 flex-wrap">
+            <a asp-controller="PlaneacionRelease"
+               asp-action="Calculadora"
+               class="btn btn-white-soft">
+                <i class="fa-solid fa-arrow-left me-1"></i>
+                Volver a Programa de Planeación
+            </a>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Maquinas"
+                   class="btn btn-white-soft">
+                    <i class="fa-solid fa-table-columns me-1"></i>
+                    Máquinas
+                </a>
+
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Index"
+                   class="btn btn-primary-soft">
+                    <i class="fa-solid fa-list me-1"></i>
+                    Programa general
+                </a>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    const inputBusqueda = document.getElementById('buscarTexto');
+    const cardsCliente = Array.from(document.querySelectorAll('.client-card'));
+    const filtrosEstado = Array.from(document.querySelectorAll('.filtro-estado'));
+
+    let estadoActivo = 'todos';
+
+    function aplicarFiltros() {
+        const texto = (inputBusqueda?.value || '').trim().toLowerCase();
+
+        cardsCliente.forEach(card => {
+            const search = (card.dataset.search || '').toLowerCase();
+            const estados = (card.dataset.estados || '').toLowerCase();
+
+            const coincideTexto = !texto || search.includes(texto);
+            const coincideEstado = estadoActivo === 'todos' || estados.includes(estadoActivo);
+
+            if (coincideTexto && coincideEstado) {
+                card.classList.remove('hidden-by-filter');
+            } else {
+                card.classList.add('hidden-by-filter');
+            }
+        });
+    }
+
+    inputBusqueda?.addEventListener('input', aplicarFiltros);
+
+    filtrosEstado.forEach(btn => {
+        btn.addEventListener('click', function () {
+            filtrosEstado.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            estadoActivo = this.dataset.estado || 'todos';
+            aplicarFiltros();
+        });
+    });
+
+    document.querySelectorAll('[data-piece-button]').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const modalId = this.dataset.pieceButton;
+            const pieceId = this.dataset.pieceTarget;
+
+            document.querySelectorAll(`[data-piece-button="${modalId}"]`).forEach(b => {
+                b.classList.remove('active');
+            });
+
+            document.querySelectorAll(`[data-piece-panel="${modalId}"]`).forEach(panel => {
+                panel.classList.remove('active');
+            });
+
+            this.classList.add('active');
+
+            const target = document.querySelector(`[data-piece-panel="${modalId}"][data-piece-id="${pieceId}"]`);
+
+            if (target) {
+                target.classList.add('active');
+            }
+        });
+    });
+
+    document.querySelectorAll('.mode-switch').forEach(sw => {
+        const key = sw.dataset.switch;
+        const buttons = Array.from(sw.querySelectorAll('.mode-btn'));
+
+        buttons.forEach(btn => {
+            btn.addEventListener('click', function () {
+                const view = this.dataset.view;
+
+                buttons.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                document.querySelectorAll(`[data-timeline="${key}"]`).forEach(timeline => {
+                    if (timeline.dataset.view === view) {
+                        timeline.classList.add('active');
+                    } else {
+                        timeline.classList.remove('active');
+                    }
+                });
+            });
+        });
+    });
+</script>
+
+</body>
+</html>
