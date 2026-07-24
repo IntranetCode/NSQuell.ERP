@@ -1,0 +1,195 @@
+﻿@model ERP.NSQuell.Models.PlaneacionReleaseImportacionResultadoVm
+
+@{
+    Layout = null;
+
+    string EstadoClase(string estado) => estado switch
+    {
+        "CREADO" => "text-bg-success",
+        "PENDIENTE" => "text-bg-warning",
+        "OMITIDO" => "text-bg-secondary",
+        "NO_SOPORTADO" => "text-bg-secondary",
+        _ => "text-bg-danger"
+    };
+
+    string EstadoTexto(string estado) => estado switch
+    {
+        "CREADO" => "Creado",
+        "PENDIENTE" => "Pendiente",
+        "OMITIDO" => "Omitido",
+        "NO_SOPORTADO" => "No soportado",
+        _ => "Error"
+    };
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Importacion de Releases | Planeacion</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+    <style>
+        :root { --blue:#004AAD; --blue-dark:#063875; --bg:#f3f6fa; --border:#d9e2ee; }
+        body { background:var(--bg); font-family:"Segoe UI",Arial,sans-serif; color:#263238; }
+        .shell { max-width:1540px; margin:0 auto; padding:28px; }
+        .hero { border-radius:24px; padding:26px 30px; color:#fff; background:linear-gradient(135deg,var(--blue),var(--blue-dark)); box-shadow:0 18px 45px rgba(0,74,173,.22); }
+        .card-modern { border:1px solid var(--border); border-radius:20px; box-shadow:0 10px 25px rgba(30,55,90,.07); }
+        .metric { border:1px solid var(--border); border-radius:18px; padding:16px; background:#fff; height:100%; }
+        .metric strong { display:block; color:var(--blue-dark); font-size:1.55rem; }
+        .metric span { color:#667085; font-size:.78rem; font-weight:800; text-transform:uppercase; }
+        .table th { white-space:nowrap; background:#eef4ff; color:var(--blue-dark); }
+        .file-name { max-width:300px; overflow-wrap:anywhere; }
+        .btn-main { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:800; border-radius:12px; }
+        .btn-main:hover { background:var(--blue-dark); border-color:var(--blue-dark); color:#fff; }
+        .saved-file { max-width:360px; overflow-wrap:anywhere; }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <section class="hero mb-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="small fw-bold text-uppercase opacity-75 mb-2">Planeacion / Releases</div>
+                <h1 class="h3 fw-bold mb-2"><i class="fa-solid fa-file-import me-2"></i>Resultado de importacion</h1>
+                <p class="mb-0 opacity-75">El archivo original se conserva antes de analizarlo. Un documento con datos pendientes no se pierde y puede vincularse despues.</p>
+            </div>
+            <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+                <i class="fa-solid fa-arrow-left me-1"></i> Volver a Releases
+            </a>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorGeneral))
+    {
+        <div class="alert alert-danger rounded-4 fw-semibold">@Model.ErrorGeneral</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.NotaGeneral))
+    {
+        <div class="alert alert-info rounded-4 fw-semibold">@Model.NotaGeneral</div>
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-xl"><div class="metric"><strong>@Model.TotalArchivos</strong><span>Archivos</span></div></div>
+        <div class="col-6 col-xl"><div class="metric"><strong>@Model.Exitosos</strong><span>Creados</span></div></div>
+        <div class="col-6 col-xl"><div class="metric"><strong>@Model.Pendientes</strong><span>Pendientes</span></div></div>
+        <div class="col-6 col-xl"><div class="metric"><strong>@Model.Omitidos</strong><span>Omitidos</span></div></div>
+        <div class="col-6 col-xl"><div class="metric"><strong>@Model.Errores</strong><span>Errores</span></div></div>
+        <div class="col-6 col-xl"><div class="metric"><strong>@Model.TotalEntregas.ToString("N0")</strong><span>Entregas conservadas</span></div></div>
+        <div class="col-6 col-xl"><div class="metric"><strong>@Model.TotalPiezas.ToString("N0")</strong><span>Piezas conservadas</span></div></div>
+    </div>
+
+    <section class="card card-modern">
+        <div class="card-header bg-white border-0 p-4">
+            <h2 class="h5 fw-bold text-primary mb-1">Detalle por documento</h2>
+            <div class="text-muted small">Proceso ejecutado: @Model.FechaProceso.ToString("dd/MM/yyyy HH:mm")</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                <tr>
+                    <th>Estado</th>
+                    <th>Archivo</th>
+                    <th>Cliente / Parte</th>
+                    <th>Schedule / Orden</th>
+                    <th>Entregas</th>
+                    <th>Piezas</th>
+                    <th>Resultado</th>
+                    <th>Acciones</th>
+                </tr>
+                </thead>
+                <tbody>
+                @if (Model.Archivos.Any())
+                {
+                    foreach (var item in Model.Archivos)
+                    {
+                        <tr>
+                            <td><span class="badge @EstadoClase(item.Estado)">@EstadoTexto(item.Estado)</span></td>
+                            <td class="file-name">
+                                <strong>@item.Archivo</strong>
+                                @if (!string.IsNullOrWhiteSpace(item.Version))
+                                {
+                                    <div class="small text-muted">@item.Version</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(item.ArchivoGuardado))
+                                {
+                                    <div class="small text-success-emphasis saved-file mt-1">
+                                        <i class="fa-solid fa-box-archive me-1"></i>Original conservado
+                                        <div class="text-muted">App_Data/Releases/Originales/@item.ArchivoGuardado</div>
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                <div class="fw-bold">@(item.Cliente ?? "-")</div>
+                                <div class="small">@(item.Parte ?? "-")</div>
+                                <div class="small text-muted">@(item.Descripcion ?? "")</div>
+                            </td>
+                            <td>
+                                <div>Schedule: @(item.Schedule ?? "-")</div>
+                                <div class="small text-muted">Orden: @(item.OrdenCliente ?? "-")</div>
+                            </td>
+                            <td>@item.TotalEntregas.ToString("N0")</td>
+                            <td>@item.TotalPiezas.ToString("N0")</td>
+                            <td style="min-width:310px;">
+                                <div>@item.Mensaje</div>
+                                @if (item.VersionesAnterioresCerradas > 0)
+                                {
+                                    <div class="small text-muted mt-1">Versiones anteriores cerradas: @item.VersionesAnterioresCerradas</div>
+                                }
+                                @if (item.Advertencias.Any())
+                                {
+                                    <ul class="small text-warning-emphasis mt-2 mb-0 ps-3">
+                                        @foreach (var warning in item.Advertencias)
+                                        {
+                                            <li>@warning</li>
+                                        }
+                                    </ul>
+                                }
+                            </td>
+                            <td>
+                                <div class="d-grid gap-2" style="min-width:170px;">
+                                    @if (item.ReleaseID.HasValue)
+                                    {
+                                        <a asp-controller="PlaneacionRelease" asp-action="Detalle" asp-route-id="@item.ReleaseID" class="btn btn-sm btn-main text-nowrap">
+                                            <i class="fa-solid fa-eye me-1"></i>@(item.FolioRelease ?? "Ver release")
+                                        </a>
+                                        <a asp-controller="PlaneacionRelease" asp-action="DescargarDocumentoImportado" asp-route-id="@item.ReleaseID" class="btn btn-sm btn-outline-secondary text-nowrap">
+                                            <i class="fa-solid fa-download me-1"></i>PDF original
+                                        </a>
+                                    }
+                                    @if (item.RequiereVinculacion && item.ReleaseID.HasValue)
+                                    {
+                                        <a asp-controller="PlaneacionRelease" asp-action="VincularPartes" asp-route-id="@item.ReleaseID" class="btn btn-sm btn-warning fw-bold text-nowrap">
+                                            <i class="fa-solid fa-link me-1"></i>Vincular parte
+                                        </a>
+                                    }
+                                    @if (item.ClienteID.HasValue)
+                                    {
+                                        <a asp-controller="PlaneacionRelease" asp-action="Index" asp-route-clienteId="@item.ClienteID" class="btn btn-sm btn-outline-primary text-nowrap">
+                                            <i class="fa-solid fa-inbox me-1"></i>Bandeja cliente
+                                        </a>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-5">No se procesaron archivos.</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="d-flex justify-content-end mt-4">
+        <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-main">
+            <i class="fa-solid fa-arrow-left me-1"></i> Volver a Releases
+        </a>
+    </div>
+</div>
+</body>
+</html>
