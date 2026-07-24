@@ -616,17 +616,14 @@
                                         <th>Fecha carga</th>
                                         <th>Fecha requerida</th>
                                         <th>Req.</th>
-                                        <th>PT disp.</th>
-                                        <th>Prod. pend.</th>
+                                        
+                                        
                                         <th>Desde PT</th>
                                         <th>A producir</th>
-                                        <th>MP req.</th>
-                                        <th>MP disp.</th>
-                                        <th>Emb. req.</th>
-                                        <th>Emb. disp.</th>
+                                        
                                         <th>Horas</th>
                                         <th>Fin estimado</th>
-                                        <th>Resultado</th>
+                                      
                                     </tr>
                                 </thead>
 
@@ -641,33 +638,14 @@
                                             <td>@Fecha(d.FechaCarga)</td>
                                             <td>@d.FechaRequerida.ToString("dd/MM/yyyy")</td>
                                             <td>@d.CantidadRequerida.ToString("N0")</td>
-                                            <td>@Entero(d.PTDisponibleAlCalcular)</td>
-                                            <td>@Entero(d.ProduccionProgramadaPendiente)</td>
+                                            
+                                            
                                             <td><strong>@Entero(d.PiezasDesdePT)</strong></td>
                                             <td><strong>@Entero(d.PiezasAProducir)</strong></td>
-                                            <td>@Decimal4(d.MPRequeridaKg)</td>
-                                            <td>@Decimal4(d.MPDisponibleKg)</td>
-                                            <td>@Decimal4(d.EmbalajeRequerido)</td>
-                                            <td>@Decimal4(d.EmbalajeDisponible)</td>
+                                           
                                             <td>@Decimal2(d.HorasNecesarias)</td>
                                             <td>@FechaHora(d.FechaFinEstimada)</td>
-                                            <td>
-                                                <span class="badge-calc @(d.ProgramaProduccionID.HasValue ? "badge-programado" : ClaseTiempo(d.DaTiempo))">
-                                                    @(d.ProgramaProduccionID.HasValue ? "Programado" : TextoTiempo(d.DaTiempo))
-                                                </span>
-
-                                                <div class="small-muted mt-1">
-                                                    @Valor(d.MensajeCapacidad)
-                                                </div>
-
-                                                <a asp-controller="PlaneacionRelease"
-                                                   asp-action="ProgramacionEntrega"
-                                                   asp-route-releaseDetalleId="@d.ReleaseDetalleID"
-                                                   class="btn-entrega-programacion">
-                                                    <i class="fa-solid @(d.ProgramaProduccionID.HasValue ? "fa-calendar-check" : "fa-calendar-plus")"></i>
-                                                    @(d.ProgramaProduccionID.HasValue ? "Ver programación" : "Programar entrega")
-                                                </a>
-                                            </td>
+                                           
                                         </tr>
                                     }
                                 </tbody>

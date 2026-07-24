@@ -131,6 +131,20 @@
         return fecha + " · Entrada " + item.ReleaseDetalleID.ToString();
     }
 
+    public static string ReleaseKey(PlaneacionProgramaNecesidadVm item)
+    {
+        return string.IsNullOrWhiteSpace(item.FolioRelease)
+            ? "SIN_RELEASE"
+            : item.FolioRelease.Replace(" ", "_").Replace("/", "_").Replace(".", "_").Replace("-", "_");
+    }
+
+    public static string ReleaseTexto(PlaneacionProgramaNecesidadVm item)
+    {
+        return string.IsNullOrWhiteSpace(item.FolioRelease)
+            ? "Sin release"
+            : item.FolioRelease!;
+    }
+
     public sealed class SeccionUi
     {
         public string Titulo { get; set; } = "";
@@ -486,10 +500,76 @@
             background: #fbfdff;
         }
 
+        .release-toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            overflow-x: auto;
+            padding: 0 0 12px 0;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #e6eef9;
+        }
+
+        .release-toolbar-label {
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            padding: 7px 0;
+        }
+
+        .release-btn {
+            flex: 0 0 auto;
+            border: 1px solid #cfe0ff;
+            background: #ffffff;
+            color: var(--azul2);
+            border-radius: 999px;
+            padding: 7px 10px;
+            font-size: .75rem;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+            .release-btn:hover,
+            .release-btn.active {
+                background: var(--azul);
+                border-color: var(--azul);
+                color: #ffffff;
+            }
+
+        .release-count {
+            border-radius: 999px;
+            padding: 2px 7px;
+            font-size: .68rem;
+            font-weight: 950;
+            background: rgba(255,255,255,.75);
+            color: inherit;
+            border: 1px solid rgba(255,255,255,.55);
+        }
+
+        .release-summary {
+            margin-left: auto;
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 850;
+            padding: 7px 0;
+            white-space: nowrap;
+        }
+
+        .hidden-by-release {
+            display: none !important;
+        }
+
         .cards-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill,minmax(260px,1fr));
-            gap: 10px
+            grid-template-columns: repeat(auto-fill,minmax(205px,1fr));
+            gap: 9px
         }
 
         .need-card {
@@ -501,7 +581,7 @@
             position: relative;
             overflow: hidden;
             transition: .16s ease;
-            min-height: 214px
+            min-height: 154px
         }
 
             .need-card:hover {
@@ -623,7 +703,7 @@
         .data-value {
             margin-top: 2px;
             color: #111827;
-            font-size: .84rem;
+            font-size: .80rem;
             font-weight: 950;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -665,7 +745,7 @@
             color: #35517a;
             font-size: .74rem;
             font-weight: 650;
-            margin-top: 8px;
+            margin-top: 6px;
             min-height: 18px;
             white-space: nowrap;
             overflow: hidden;
@@ -685,7 +765,7 @@
 
         .btn-card-main, .btn-card-light {
             border-radius: 12px;
-            padding: 8px 10px;
+            padding: 7px 9px;
             font-size: .78rem;
             font-weight: 950;
             text-decoration: none;
@@ -750,14 +830,14 @@
             display: grid;
             grid-template-columns: repeat(3,minmax(0,1fr));
             gap: 6px;
-            margin-top: 9px
+            margin-top: 7px
         }
 
         .mini-metric {
             border: 1px solid #edf1f7;
             background: #fbfdff;
             border-radius: 12px;
-            padding: 7px;
+            padding: 6px;
             min-width: 0
         }
 
@@ -771,7 +851,7 @@
 
         .mini-metric-value {
             color: #111827;
-            font-size: .84rem;
+            font-size: .80rem;
             font-weight: 950;
             margin-top: 2px;
             overflow: hidden;
@@ -783,7 +863,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-top: 8px
+            margin-top: 6px
         }
 
         .compact-chip {
@@ -951,7 +1031,7 @@
             }
 
             .client-panel.is-fullscreen .need-card {
-                min-height: 198px;
+                min-height: 154px;
             }
 
             .client-panel.is-fullscreen .modal {
@@ -964,7 +1044,7 @@
 
         @@media(max-width:1200px) {
             .cards-grid {
-                grid-template-columns: repeat(auto-fill,minmax(250px,1fr))
+                grid-template-columns: repeat(auto-fill,minmax(205px,1fr))
             }
         }
 
@@ -993,6 +1073,13 @@
             <h1><i class="fa-solid fa-list-check me-2"></i>Programa de Planeación</h1>
             <p>Vista por tarjetas: cada necesidad se revisa rápido, y el envío a Programa Cambio de Molde se confirma en modal antes de continuar.</p>
             <div class="hero-actions">
+                <a asp-controller="Menu"
+                   asp-action="Grupo"
+                   asp-route-id="3"
+                   class="btn btn-light rounded-4 fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i>
+                    Volver
+                </a>
                 <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn-glass"><i class="fa-solid fa-inbox"></i>Releases</a>
                 <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-glass"><i class="fa-solid fa-gears"></i>Máquinas / Cambio de Molde</a>
                 <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass"><i class="fa-solid fa-chart-line"></i>Panorama</a>
@@ -1090,6 +1177,25 @@
                                     var primerItemCliente = clienteItems.First();
                                     var partesCliente = clienteItems.Select(ParteClave).Distinct().Count();
 
+                                    var releasesCliente = clienteItems
+                                    .GroupBy(ReleaseKey)
+                                    .Select(g => new
+                                    {
+                                        Key = g.Key,
+                                        Texto = ReleaseTexto(g.First()),
+                                        Items = g.OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList(),
+                                        FechaPrioridad = g.Min(PrioridadFecha),
+                                        EntradaPrioridad = g.Min(PrioridadEntrada),
+                                        TotalRequerido = g.Sum(x => x.CantidadRequerida),
+                                        TotalPT = g.Sum(x => x.PiezasDesdePT ?? 0),
+                                        TotalProgramado = g.Sum(x => x.ProduccionProgramadaPendiente ?? 0)
+                                    })
+                                    .OrderBy(g => g.FechaPrioridad)
+                                    .ThenBy(g => g.EntradaPrioridad)
+                                    .ToList();
+
+                                    var releaseInicial = releasesCliente.First().Key;
+
                                     <article class="client-panel" data-client data-search="@clienteGrupo.Cliente @string.Join(" ", clienteItems.Select(DataSearch))">
                                         <button type="button"
                                                 class="client-panel-head"
@@ -1118,12 +1224,34 @@
 
                                         <div id="@clienteCollapseId" class="collapse" data-collapse-level="client">
                                             <div class="client-body">
+                                                <div class="release-toolbar" data-release-toolbar>
+                                                    <span class="release-toolbar-label">Release</span>
+
+                                                    @foreach (var rel in releasesCliente)
+                                                    {
+                                                        <button type="button"
+                                                                class="release-btn @(rel.Key == releaseInicial ? "active" : "")"
+                                                                data-release-btn
+                                                                data-release-key="@rel.Key">
+                                                            <i class="fa-solid fa-layer-group"></i>
+                                                            @rel.Texto
+                                                            <span class="release-count">@rel.Items.Count</span>
+                                                        </button>
+                                                    }
+
+                                                    <span class="release-summary" data-release-summary>
+                                                        @releasesCliente.First().TotalRequerido.ToString("N0") requerido ·
+                                                        @releasesCliente.First().TotalPT.ToString("N0") PT apartado ·
+                                                        @releasesCliente.First().TotalProgramado.ToString("N0") programado
+                                                    </span>
+                                                </div>
+
                                                 <div class="cards-grid">
                                                     @foreach (var item in clienteItems)
                                                     {
                                                         var modalId = ModalId(item);
 
-                                                        <article class="need-card @CardClase(item)" data-row data-search="@DataSearch(item)">
+                                                        <article class="need-card @CardClase(item) @(ReleaseKey(item) == releaseInicial ? "" : "hidden-by-release")" data-row data-release-key="@ReleaseKey(item)" data-requerido="@item.CantidadRequerida" data-pt="@(item.PiezasDesdePT ?? 0)" data-programado="@(item.ProduccionProgramadaPendiente ?? 0)" data-search="@DataSearch(item)">
                                                             <div class="need-head">
                                                                 <div>
                                                                     <div class="need-title">@ParteClave(item)</div>
@@ -1154,7 +1282,6 @@
                                                             <div class="compact-line">
                                                                 <span class="compact-chip"><i class="fa-solid fa-industry"></i>@Txt(item.MaquinaSugeridaCodigo)</span>
                                                                 <span class="compact-chip"><i class="fa-solid fa-shapes"></i>@Txt(item.MoldeCodigo)</span>
-                                                                <span class="compact-chip"><i class="fa-solid fa-boxes-stacked"></i>Prog. @N0(item.ProduccionProgramadaPendiente)</span>
                                                                 <span class="compact-chip"><i class="fa-solid fa-clock"></i>@D2(item.HorasNecesarias) hrs</span>
                                                             </div>
 
@@ -1310,6 +1437,11 @@
                 document.body.classList.add("client-focus");
                 section.classList.add("has-focus");
                 client.classList.add("is-fullscreen");
+
+                const activeRelease = client.querySelector("[data-release-btn].active") || client.querySelector("[data-release-btn]");
+                if (activeRelease) {
+                    filtrarReleaseCliente(client, activeRelease.dataset.releaseKey);
+                }
             }
 
             function normalize(value) {
@@ -1321,6 +1453,44 @@
                 const instance = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
                 show ? instance.show() : instance.hide();
             }
+
+            function actualizarResumenRelease(client, releaseKey) {
+                const btn = client.querySelector(`[data-release-btn][data-release-key="${releaseKey}"]`);
+                const summary = client.querySelector("[data-release-summary]");
+
+                if (!btn || !summary) return;
+
+                const cards = Array.from(client.querySelectorAll(`[data-row][data-release-key="${releaseKey}"]`));
+                let requerido = 0;
+                let pt = 0;
+                let programado = 0;
+
+                cards.forEach(card => {
+                    requerido += parseInt(card.dataset.requerido || "0", 10);
+                    pt += parseInt(card.dataset.pt || "0", 10);
+                    programado += parseInt(card.dataset.programado || "0", 10);
+                });
+
+                summary.textContent =
+                    requerido.toLocaleString("es-MX") + " requerido · " +
+                    pt.toLocaleString("es-MX") + " PT apartado · " +
+                    programado.toLocaleString("es-MX") + " programado";
+            }
+
+            function filtrarReleaseCliente(client, releaseKey) {
+                if (!client || !releaseKey) return;
+
+                client.querySelectorAll("[data-release-btn]").forEach(btn => {
+                    btn.classList.toggle("active", btn.dataset.releaseKey === releaseKey);
+                });
+
+                client.querySelectorAll("[data-row]").forEach(row => {
+                    row.classList.toggle("hidden-by-release", row.dataset.releaseKey !== releaseKey);
+                });
+
+                actualizarResumenRelease(client, releaseKey);
+            }
+
 
             function aplicarBusqueda() {
                 const q = normalize(buscar?.value || "");
@@ -1345,6 +1515,16 @@
                     if (q && visibleClients) setCollapse(section.querySelector("[data-collapse-level='section']"), true);
                 });
             }
+
+            document.querySelectorAll("[data-release-btn]").forEach(btn => {
+                btn.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const client = btn.closest("[data-client]");
+                    filtrarReleaseCliente(client, btn.dataset.releaseKey);
+                });
+            });
 
             document.querySelectorAll(".modal").forEach(modal => {
                 modal.addEventListener("click", function (event) {
