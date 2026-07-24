@@ -231,6 +231,36 @@
             border-color: #fed7aa;
         }
 
+        /* RELEASE_RESULTADO_PROGRAMACION_V1_0_1 */
+        .badge-programado {
+            background: #eef4ff;
+            color: #004aad;
+            border-color: #b2ccff;
+        }
+
+        .btn-entrega-programacion {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 6px 9px;
+            border: 1px solid #b2ccff;
+            border-radius: 10px;
+            background: #f5f8ff;
+            color: #004aad;
+            text-decoration: none;
+            font-size: .75rem;
+            font-weight: 850;
+            white-space: nowrap;
+        }
+
+        .btn-entrega-programacion:hover {
+            background: #004aad;
+            border-color: #004aad;
+            color: white;
+        }
+
         .renglon-card {
             border: 1px solid var(--erp-border);
             border-radius: 18px;
@@ -448,7 +478,15 @@
                         </a>
                     }
 
-                    <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+                                        @* RELEASE_EDIT_BUTTON_V1_0_1 *@
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Editar"
+                       asp-route-id="@Model.ReleaseID"
+                       class="btn btn-warning fw-bold rounded-3">
+                        <i class="fa-solid fa-pen-to-square me-1"></i>
+                        Editar Release
+                    </a>
+<a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
                         <i class="fa-solid fa-arrow-left me-1"></i>
                         Volver
                     </a>
@@ -614,8 +652,21 @@
                                             <td>@Decimal2(d.HorasNecesarias)</td>
                                             <td>@FechaHora(d.FechaFinEstimada)</td>
                                             <td>
-                                                <span class="badge-calc @ClaseTiempo(d.DaTiempo)">@TextoTiempo(d.DaTiempo)</span>
-                                                <div class="small-muted mt-1">@Valor(d.MensajeCapacidad)</div>
+                                                <span class="badge-calc @(d.ProgramaProduccionID.HasValue ? "badge-programado" : ClaseTiempo(d.DaTiempo))">
+                                                    @(d.ProgramaProduccionID.HasValue ? "Programado" : TextoTiempo(d.DaTiempo))
+                                                </span>
+
+                                                <div class="small-muted mt-1">
+                                                    @Valor(d.MensajeCapacidad)
+                                                </div>
+
+                                                <a asp-controller="PlaneacionRelease"
+                                                   asp-action="ProgramacionEntrega"
+                                                   asp-route-releaseDetalleId="@d.ReleaseDetalleID"
+                                                   class="btn-entrega-programacion">
+                                                    <i class="fa-solid @(d.ProgramaProduccionID.HasValue ? "fa-calendar-check" : "fa-calendar-plus")"></i>
+                                                    @(d.ProgramaProduccionID.HasValue ? "Ver programación" : "Programar entrega")
+                                                </a>
                                             </td>
                                         </tr>
                                     }

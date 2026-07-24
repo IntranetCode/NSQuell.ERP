@@ -372,6 +372,11 @@
             display: none;
         }
 
+        /* RELEASE_ARCHIVO_SOLO_PANEL_V2_2 */
+        body.modo-carga-archivo .manual-only {
+            display: none !important;
+        }
+
         .file-zone {
             border: 1px dashed #84adff;
             border-radius: 20px;
@@ -469,7 +474,7 @@
                     </h1>
 
                     <p>
-                        Registra la demanda recibida del cliente. Puedes capturarla manualmente o leer un archivo; los campos de archivo solo aparecen cuando eliges cargar documento.
+                        Registra la demanda recibida del cliente. Puedes capturarla manualmente o analizar varios documentos antes de guardarlos.
                     </p>
                 </div>
 
@@ -487,7 +492,7 @@
             <div>
                 <div class="fw-bold">Primero elige cómo vas a capturar el release.</div>
                 <div class="small">
-                    En captura manual solo verás campos manuales. En carga por documento se muestran archivo, plantilla detectada y archivo leído.
+                    La captura manual conserva todos sus campos. En carga por documento puedes seleccionar varios archivos, validarlos y guardar únicamente los correctos.
                 </div>
             </div>
         </div>
@@ -555,9 +560,9 @@
                                 <div class="capture-icon">
                                     <i class="fa-solid fa-file-import"></i>
                                 </div>
-                                <div class="capture-title">Cargar documento</div>
+                                <div class="capture-title">Cargar documentos</div>
                                 <p class="capture-text">
-                                    Muestra el selector de archivo para leer PDF, Excel o CSV del cliente.
+                                    Selecciona uno o varios PDF/Excel para analizarlos antes de guardar.
                                 </p>
                             </div>
                         </label>
@@ -569,7 +574,7 @@
                     </div>
 
                     <div class="row g-3">
-                        <div class="col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3 manual-only">
                             <label asp-for="ClienteID" class="erp-label required-label">Cliente</label>
                             <select asp-for="ClienteID"
                                     class="form-select"
@@ -586,7 +591,7 @@
                             </div>
                         </div>
 
-                        <div class="col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3 manual-only">
                             <label asp-for="FolioRelease" class="erp-label">Folio interno</label>
                             <input asp-for="FolioRelease"
                                    class="form-control"
@@ -597,7 +602,7 @@
                             </div>
                         </div>
 
-                        <div class="col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3 manual-only">
                             <label asp-for="FolioCliente" class="erp-label">Folio cliente / Schedule / Contrato</label>
                             <input asp-for="FolioCliente"
                                    class="form-control"
@@ -608,14 +613,14 @@
                             </div>
                         </div>
 
-                        <div class="col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3 manual-only">
                             <label asp-for="FechaRecepcion" class="erp-label required-label">Fecha de recepción</label>
                             <input asp-for="FechaRecepcion"
                                    type="date"
                                    class="form-control" />
                         </div>
 
-                        <div class="col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3 manual-only">
                             <label asp-for="VersionRelease" class="erp-label">Semana</label>
                             <input asp-for="VersionRelease"
                                    class="form-control"
@@ -634,80 +639,57 @@
                                     <div>
                                         <div class="fw-bold text-primary">
                                             <i class="fa-solid fa-file-import me-2"></i>
-                                            Carga de documento
+                                            Carga múltiple de documentos
                                         </div>
                                         <div class="text-muted small">
-                                            Esta sección solo aparece cuando eliges “Cargar documento”.
+                                            Esta sección solo aparece cuando eliges “Cargar documentos”.
                                         </div>
                                     </div>
                                     <span class="summary-chip">
-                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                        Lectura asistida
+                                        <i class="fa-solid fa-shield-halved"></i>
+                                        Validación previa
                                     </span>
                                 </div>
 
-                                <div class="row g-3">
-                                    <div class="col-lg-6">
-                                        <label asp-for="ArchivoRelease" class="erp-label">Archivo Release</label>
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-lg-9">
+                                        <label for="ArchivosRelease" class="erp-label">
+                                            Documentos de Release
+                                        </label>
 
-                                        <div class="input-group">
-                                            <input asp-for="ArchivoRelease"
-                                                   type="file"
-                                                   class="form-control"
-                                                   id="ArchivoRelease"
-                                                   accept=".pdf,.xlsx,.xls,.csv" />
+                                        <input id="ArchivosRelease"
+                                               name="archivos"
+                                               type="file"
+                                               multiple
+                                               class="form-control"
+                                               accept=".pdf,.xlsx,.xls,.xlsm" />
 
-                                            <button type="submit"
-                                                    class="btn btn-erp-light"
-                                                    id="btnLeerArchivo"
-                                                    formaction="@Url.Action("LeerArchivoRelease", "PlaneacionRelease")"
-                                                    formmethod="post"
-                                                    formenctype="multipart/form-data"
-                                                    formnovalidate>
-                                                <i class="fa-solid fa-file-import me-1"></i>
-                                                <span class="btn-label">Leer archivo</span>
-                                            </button>
-                                        </div>
-
-                                        <input asp-for="ArchivoOrigenNombre" type="hidden" />
-                                        <input asp-for="PlantillaImportacion" type="hidden" />
-                                        <input asp-for="ImportadoDesdeArchivo" type="hidden" />
-
-                                        <div class="small-help">
-                                            Primero selecciona el archivo y luego presiona Leer archivo. El archivo no se almacena; solo se usa para llenar el formulario.
+                                        <div class="small-help" id="archivosReleaseResumen">
+                                            Puedes mezclar PDF HUF/VERITAS y Excel GOLDE/NORMA/AIR THERMAL. Máximo 25 archivos y 10 MB por archivo.
                                         </div>
                                     </div>
 
-                                    <div class="col-lg-3">
-                                        <div class="detected-card">
-                                            <div class="detected-label">Plantilla detectada</div>
-                                            <input value="@(Model.PlantillaImportacion ?? "")"
-                                                   class="form-control"
-                                                   readonly
-                                                   placeholder="Pendiente" />
-                                            <div class="small-help">
-                                                Ejemplo: HUF_SUPPLIER_SCHEDULE.
-                                            </div>
-                                        </div>
+                                    <div class="col-lg-3 d-grid">
+                                        <button type="submit"
+                                                class="btn btn-erp-primary"
+                                                id="btnValidarArchivos"
+                                                formaction="@Url.Action("ValidarDocumentosPreparados", "PlaneacionRelease")"
+                                                formmethod="post"
+                                                formenctype="multipart/form-data"
+                                                formnovalidate>
+                                            <i class="fa-solid fa-magnifying-glass-chart me-1"></i>
+                                            <span class="btn-label">Analizar documentos</span>
+                                        </button>
                                     </div>
+                                </div>
 
-                                    <div class="col-lg-3">
-                                        <div class="detected-card">
-                                            <div class="detected-label">Archivo leído</div>
-                                            <input value="@(Model.ArchivoOrigenNombre ?? "")"
-                                                   class="form-control"
-                                                   readonly
-                                                   placeholder="Pendiente" />
-                                            <div class="small-help">
-                                                Solo se guarda el nombre al guardar el Release.
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div class="alert alert-light border rounded-4 mt-3 mb-0 small fw-semibold">
+                                    <i class="fa-solid fa-circle-info text-primary me-2"></i>
+                                    Analizar no crea Releases ni cierra versiones. Después podrás validar números de parte, seleccionar los documentos correctos y confirmar el guardado.
                                 </div>
                             </div>
                         </div>
-
-                        <div class="col-md-12">
+                        <div class="col-md-12 manual-only">
                             <label asp-for="Observaciones" class="erp-label">Observaciones</label>
                             <textarea asp-for="Observaciones"
                                       class="form-control"
@@ -719,7 +701,7 @@
                 </div>
             </div>
 
-            <div class="erp-card">
+            <div class="erp-card manual-only">
                 <div class="erp-card-header">
                     <div class="d-flex align-items-center gap-3">
                         <span class="section-number">2</span>
@@ -915,7 +897,7 @@
                 </div>
             </div>
 
-            <div class="sticky-actions">
+            <div class="sticky-actions manual-only">
                 <div class="d-flex justify-content-end gap-2">
                     <a asp-controller="PlaneacionRelease"
                        asp-action="Index"
@@ -946,14 +928,14 @@
         const formError = document.getElementById('formError');
         const formErrorText = document.getElementById('formErrorText');
         const btnGuardar = document.getElementById('btnGuardar');
-        const btnLeerArchivo = document.getElementById('btnLeerArchivo');
+        const btnValidarArchivos = document.getElementById('btnValidarArchivos');
 
         let clientePartesCargado = null;
         let partesClienteActual = [];
 
         const modoManualRadio = document.getElementById('modoManual');
         const modoArchivoRadio = document.getElementById('modoArchivo');
-        const archivoInput = document.getElementById('ArchivoRelease');
+        const archivoInput = document.getElementById('ArchivosRelease');
         const fechaRecepcionInput = document.getElementById('FechaRecepcion');
         const versionReleaseInput = document.getElementById('VersionRelease');
 
@@ -1527,16 +1509,16 @@
             btnGuardar.querySelector('.btn-label').textContent = 'Guardando ...';
         }
 
-        function bloquearLecturaArchivo() {
-            if (!btnLeerArchivo) return;
+        function bloquearValidacionArchivos() {
+            if (!btnValidarArchivos) return;
 
-            btnLeerArchivo.disabled = true;
+            btnValidarArchivos.disabled = true;
 
-            const icono = btnLeerArchivo.querySelector('i');
-            const etiqueta = btnLeerArchivo.querySelector('.btn-label');
+            const icono = btnValidarArchivos.querySelector('i');
+            const etiqueta = btnValidarArchivos.querySelector('.btn-label');
 
             if (icono) icono.className = 'fa-solid fa-spinner fa-spin me-1';
-            if (etiqueta) etiqueta.textContent = 'Leyendo archivo...';
+            if (etiqueta) etiqueta.textContent = 'Analizando documentos...';
         }
 
         document.getElementById('btnAgregarRenglon')
@@ -1591,20 +1573,20 @@
         formRelease.addEventListener('submit', event => {
             const submitter = event.submitter;
 
-            if (submitter && submitter.id === 'btnLeerArchivo') {
+            if (submitter && submitter.id === 'btnValidarArchivos') {
                 if (modoArchivoRadio) modoArchivoRadio.checked = true;
                 aplicarModoCaptura();
-                const archivo = document.getElementById('ArchivoRelease');
+                const archivo = document.getElementById('ArchivosRelease');
 
                 if (!archivo || !archivo.files || archivo.files.length === 0) {
                     event.preventDefault();
-                    mostrarError('Selecciona un archivo de Release para leer.');
+                    mostrarError('Selecciona al menos un documento de Release para analizar.');
                     archivo?.focus();
                     return;
                 }
 
                 ocultarError();
-                bloquearLecturaArchivo();
+                bloquearValidacionArchivos();
                 return;
             }
 
@@ -1624,6 +1606,15 @@
         });
 
 
+        archivoInput?.addEventListener('change', () => {
+            const resumen = document.getElementById('archivosReleaseResumen');
+            if (!resumen) return;
+
+            const total = archivoInput.files?.length || 0;
+            resumen.textContent = total > 0
+                ? `${total} documento(s) seleccionado(s). Máximo 25 archivos y 10 MB por archivo.`
+                : 'Puedes mezclar PDF HUF/VERITAS y Excel GOLDE/NORMA/AIR THERMAL. Máximo 25 archivos y 10 MB por archivo.';
+        });
         document.addEventListener('DOMContentLoaded', async () => {
             aplicarModoCaptura();
             actualizarVersionAutomatica();
