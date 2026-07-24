@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -310,6 +310,7 @@ LEFT JOIN dbo.ERP_ParteDatosTecnicos t
    AND t.Activo = 1
 WHERE d.Activo = 1
   AND r.Activo = 1
+  AND r.EstatusID NOT IN (9, 99)
   AND d.FechaRequerida >= @FechaDesde
   AND d.FechaRequerida <= @FechaHasta
   AND (@ClienteID IS NULL OR r.ClienteID = @ClienteID)

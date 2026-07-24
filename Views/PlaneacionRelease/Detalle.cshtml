@@ -534,6 +534,7 @@
             </div>
         }
 
+<<<<<<< HEAD
         <div class="flow-note">
             <i class="fa-solid fa-circle-info mt-1"></i>
             <div>
@@ -542,6 +543,32 @@
                     Para calcular necesidades, stock, MP, embalaje y viabilidad, entra al módulo Programa de Planeación.
                 </div>
             </div>
+=======
+        @if (Model.ImportadoDesdeArchivo &&
+             Model.EstatusID == ERP.NSQuell.Models.PlaneacionReleaseEstatus.Capturado)
+        {
+            <div class="alert alert-warning rounded-4 fw-semibold d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                <div>
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                    Este Release fue conservado, pero tiene datos pendientes de vincular. No debe pasar a Planeacion hasta completar sus partes.
+                </div>
+                <a asp-controller="PlaneacionRelease"
+                   asp-action="VincularPartes"
+                   asp-route-id="@Model.ReleaseID"
+                   class="btn btn-warning fw-bold rounded-3">
+                    <i class="fa-solid fa-link me-1"></i>
+                    Vincular partes
+                </a>
+            </div>
+        }
+        <div class="row g-3 mb-3">
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Renglones</div><div class="metric-value">@grupos.Count.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Entregas</div><div class="metric-value">@totalEntregas.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Requeridas</div><div class="metric-value">@Model.TotalPiezasRequeridas.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Desde PT</div><div class="metric-value">@Model.TotalPiezasDesdePT.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">A producir</div><div class="metric-value">@Model.TotalPiezasAProducir.ToString("N0")</div></div></div>
+            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Horas</div><div class="metric-value">@Model.TotalHorasNecesarias.ToString("N2")</div></div></div>
+>>>>>>> origin/Adrian-lectura-PDF
         </div>
 
         <section class="row g-3 mb-3">

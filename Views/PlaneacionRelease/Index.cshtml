@@ -618,6 +618,62 @@
             </div>
         }
 
+        @* HUF_MULTI_UPLOAD_PANEL_V1 *@
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="h5 fw-bold text-primary m-0">
+                        <i class="fa-solid fa-file-arrow-up me-2"></i>
+                        Carga multiple de documentos
+                    </h2>
+                    <div class="text-muted small">
+                        Sube los Releases recibidos durante el dia. El sistema identifica automaticamente la estructura de cada documento. Puedes mezclar PDF HUF/VERITAS y Excel GOLDEN/NORMA en el mismo lote; cada archivo valido crea su Release.
+                    </div>
+                </div>
+                <span class="pill pill-success">
+                    <i class="fa-solid fa-circle-check"></i>
+                    PDF HUF/VERITAS + Excel GOLDEN/NORMA
+                </span>
+            </div>
+
+            <div class="panel-body">
+                <form asp-controller="PlaneacionRelease"
+                      asp-action="ImportarDocumentos"
+                      method="post"
+                      enctype="multipart/form-data"
+                      class="row g-3 align-items-end">
+                    @Html.AntiForgeryToken()
+
+                    <div class="col-lg-9">
+                        <label for="archivosRelease" class="form-label small fw-bold text-muted">
+                            Documentos de Release
+                        </label>
+                        <input id="archivosRelease"
+                               name="archivos"
+                               type="file"
+                               multiple
+                               accept=".pdf,.xlsx,.xls,.csv"
+                               class="form-control input-modern"
+                               required />
+                        <div class="form-text">
+                            Maximo 25 archivos por lote y 10 MB por archivo. Se detectan automaticamente PDF HUF/VERITAS y Excel GOLDEN/NORMA antes de vincular cliente, partes, fechas y cantidades.
+                        </div>
+                    </div>
+
+                    <div class="col-lg-3 d-grid">
+                        <button type="submit" class="btn btn-main justify-content-center py-3">
+                            <i class="fa-solid fa-gears me-1"></i>
+                            Leer y crear Releases
+                        </button>
+                    </div>
+                </form>
+
+                <div class="alert alert-light border rounded-4 mt-3 mb-0 small fw-semibold">
+                    <i class="fa-solid fa-calendar-day text-primary me-2"></i>
+                    Operacion diaria: cada documento equivale a un Release. HUF reemplaza la parte activa; VERITAS el contrato activo; GOLDEN y NORMA reemplazan la matriz semanal activa del cliente. Las versiones anteriores quedan cerradas para no duplicar necesidades.
+                </div>
+            </div>
+        </section>
         <section class="panel">
             <div class="panel-header">
                 <div>
