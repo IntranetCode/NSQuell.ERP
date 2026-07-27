@@ -8,38 +8,52 @@ public sealed class AlmacenMPIndexVm
     public string? MensajeConfiguracion { get; set; }
     public string? Busqueda { get; set; }
     public string? Estado { get; set; }
+
     public int TotalMateriales { get; set; }
     public int Criticos { get; set; }
     public int Advertencias { get; set; }
     public int Disponibles { get; set; }
     public int PendientesConfiguracion { get; set; }
     public decimal SaldoTotal { get; set; }
+
+    // INVENTARIO_SOLICITADO_MP_EMB_V1_1
+    public decimal SolicitadoPendiente { get; set; }
+    public int OFPendientes { get; set; }
+    public int RecepcionesHoy { get; set; }
+    public decimal CantidadRecibidaHoy { get; set; }
+    public decimal SalidasHoy { get; set; }
+
     public List<AlmacenMPExistenciaVm> Existencias { get; set; } = new();
     public List<AlmacenMPMovimientoListaVm> Movimientos { get; set; } = new();
 }
-
 public sealed class AlmacenMPExistenciaVm
 {
     public int MaterialID { get; set; }
     public string Codigo { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
     public string Unidad { get; set; } = string.Empty;
+
     public decimal Entradas { get; set; }
     public decimal Salidas { get; set; }
     public decimal Saldo { get; set; }
+
+    // Cantidad requerida por OF que todavía no ha sido entregada.
+    public decimal Solicitado { get; set; }
+
     public decimal StockMinimo { get; set; }
     public decimal StockAviso { get; set; }
     public string Semaforo { get; set; } = "SIN_CONFIGURAR";
     public bool StockConfigurado { get; set; }
+
     public bool TieneCosto { get; set; }
     public decimal CostoUnitario { get; set; }
     public string MonedaCosto { get; set; } = string.Empty;
     public string UnidadCosto { get; set; } = string.Empty;
     public string FuenteCosto { get; set; } = string.Empty;
     public DateTime? FechaCosto { get; set; }
+
     public DateTime? UltimoMovimiento { get; set; }
 }
-
 public sealed class AlmacenMPMovimientoListaVm
 {
     public long MovimientoID { get; set; }
@@ -62,9 +76,9 @@ public sealed class AlmacenMaterialFormVm
 {
     public int? MaterialID { get; set; }
 
-    [Required(ErrorMessage = "El código es obligatorio.")]
+    [Required(ErrorMessage = "El cÃ³digo es obligatorio.")]
     [StringLength(80)]
-    [Display(Name = "Código")]
+    [Display(Name = "CÃ³digo")]
     public string Codigo { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "El nombre es obligatorio.")]
@@ -83,8 +97,8 @@ public sealed class AlmacenMaterialFormVm
     [Display(Name = "Requiere lote")]
     public bool RequiereLote { get; set; } = true;
 
-    [Range(0, 999999999, ErrorMessage = "El stock mínimo no puede ser negativo.")]
-    [Display(Name = "Stock mínimo")]
+    [Range(0, 999999999, ErrorMessage = "El stock mÃ­nimo no puede ser negativo.")]
+    [Display(Name = "Stock mÃ­nimo")]
     public decimal StockMinimo { get; set; }
 
     [Range(0, 999999999, ErrorMessage = "El stock de aviso no puede ser negativo.")]
@@ -114,11 +128,11 @@ public sealed class AlmacenMPMovimientoFormVm
     [StringLength(120)]
     public string Lote { get; set; } = "S/L";
 
-    [Display(Name = "Ubicación")]
+    [Display(Name = "UbicaciÃ³n")]
     public int? UbicacionID { get; set; }
 
     [StringLength(80)]
-    [Display(Name = "Orden de fabricación")]
+    [Display(Name = "Orden de fabricaciÃ³n")]
     public string? NumeroOF { get; set; }
 
     [StringLength(800)]
@@ -129,13 +143,13 @@ public sealed class AlmacenMPMovimientoFormVm
 
     public bool EsEntregaOF { get; set; }
 
-    [Display(Name = "Solicitud de producción")]
+    [Display(Name = "Solicitud de producciÃ³n")]
     public int? SolicitudProduccionID { get; set; }
 
     [Display(Name = "Cantidad pendiente de la OF")]
     public decimal CantidadPendienteOF { get; set; }
 
-    [Required(ErrorMessage = "La operación no tiene un identificador válido.")]
+    [Required(ErrorMessage = "La operaciÃ³n no tiene un identificador vÃ¡lido.")]
     [StringLength(32, MinimumLength = 32)]
     public string OperacionToken { get; set; } = System.Guid.NewGuid().ToString("N");
 
@@ -160,6 +174,13 @@ public sealed class AlmacenPTIndexVm
     public int PiezasDisponibles { get; set; }
     public List<AlmacenPTExistenciaVm> Existencias { get; set; } = new();
     public List<AlmacenPTMovimientoListaVm> Movimientos { get; set; } = new();
+
+    // ALMACEN_PT_SOLICITADO_V1_0
+    public long PiezasSolicitadasPendientes { get; set; }
+    public int OFPendientesRecepcion { get; set; }
+    public int CajasRecibidasHoy { get; set; }
+    public long PiezasRecibidasHoy { get; set; }
+    public long PiezasSalidasHoy { get; set; }
 }
 
 public sealed class AlmacenPTExistenciaVm
@@ -185,6 +206,9 @@ public sealed class AlmacenPTExistenciaVm
     public string FuentePrecioVenta { get; set; } = string.Empty;
     public DateTime? FechaPrecioVenta { get; set; }
     public DateTime? UltimoMovimiento { get; set; }
+
+    // ALMACEN_PT_SOLICITADO_DETALLE_V1_0
+    public long Solicitado { get; set; }
 }
 
 public sealed class AlmacenPTMovimientoListaVm
@@ -210,7 +234,7 @@ public sealed class AlmacenPTMovimientoListaVm
 public sealed class AlmacenPTEntradaFormVm
 {
     [Required]
-    [Display(Name = "Número de parte")]
+    [Display(Name = "NÃºmero de parte")]
     public int ParteID { get; set; }
 
     [Required]
@@ -218,7 +242,7 @@ public sealed class AlmacenPTEntradaFormVm
     public string Etiqueta { get; set; } = string.Empty;
 
     [Range(1, int.MaxValue)]
-    [Display(Name = "Número de caja")]
+    [Display(Name = "NÃºmero de caja")]
     public int NumeroCaja { get; set; } = 1;
 
     [Range(1, int.MaxValue)]
@@ -229,7 +253,7 @@ public sealed class AlmacenPTEntradaFormVm
     public string? LoteEtiqueta { get; set; }
 
     [StringLength(80)]
-    [Display(Name = "Orden de fabricación")]
+    [Display(Name = "Orden de fabricaciÃ³n")]
     public string? NumeroOF { get; set; }
 
     [Required]
@@ -237,7 +261,7 @@ public sealed class AlmacenPTEntradaFormVm
     [Display(Name = "Estado de calidad")]
     public string EstadoCalidad { get; set; } = "Liberado";
 
-    [Display(Name = "Ubicación")]
+    [Display(Name = "UbicaciÃ³n")]
     public int? UbicacionID { get; set; }
 
     [StringLength(800)]
@@ -254,13 +278,13 @@ public sealed class AlmacenPTEntradaFormVm
 
     public bool EsEntregaOF { get; set; }
 
-    [Display(Name = "Solicitud de producción")]
+    [Display(Name = "Solicitud de producciÃ³n")]
     public int? SolicitudProduccionID { get; set; }
 
     [Display(Name = "Cantidad pendiente de la OF")]
     public decimal CantidadPendienteOF { get; set; }
 
-    [Required(ErrorMessage = "La operación no tiene un identificador válido.")]
+    [Required(ErrorMessage = "La operaciÃ³n no tiene un identificador vÃ¡lido.")]
     [StringLength(32, MinimumLength = 32)]
     public string OperacionToken { get; set; } = System.Guid.NewGuid().ToString("N");
 
@@ -273,7 +297,7 @@ public sealed class AlmacenPTEntradaFormVm
 public sealed class AlmacenPTEntradaLoteVm
 {
     [StringLength(50000)]
-    [Display(Name = "Códigos escaneados")]
+    [Display(Name = "CÃ³digos escaneados")]
     public string CodigosEscaneados { get; set; } = string.Empty;
 
     [Required]
@@ -281,7 +305,7 @@ public sealed class AlmacenPTEntradaLoteVm
     [Display(Name = "Estado de calidad")]
     public string EstadoCalidad { get; set; } = "Liberado";
 
-    [Display(Name = "Ubicación")]
+    [Display(Name = "UbicaciÃ³n")]
     public int? UbicacionID { get; set; }
 
     [StringLength(800)]
@@ -289,7 +313,7 @@ public sealed class AlmacenPTEntradaLoteVm
 
     public bool EsEntregaOF { get; set; }
 
-    [Display(Name = "Solicitud de producción")]
+    [Display(Name = "Solicitud de producciÃ³n")]
     public int? SolicitudProduccionID { get; set; }
 
     public int? ParteIDEsperada { get; set; }
@@ -303,7 +327,7 @@ public sealed class AlmacenPTEntradaLoteVm
 
     public decimal CantidadPendienteOF { get; set; }
 
-    [Required(ErrorMessage = "La operación no tiene un identificador válido.")]
+    [Required(ErrorMessage = "La operaciÃ³n no tiene un identificador vÃ¡lido.")]
     [StringLength(32, MinimumLength = 32)]
     public string OperacionToken { get; set; } =
         System.Guid.NewGuid().ToString("N");
@@ -389,11 +413,11 @@ public sealed class AlmacenPTCodigoBarrasVm
 public sealed class AlmacenPTMovimientoFormVm
 {
     [Required]
-    [Display(Name = "Número de parte")]
+    [Display(Name = "NÃºmero de parte")]
     public int ParteID { get; set; }
 
-    [Required(ErrorMessage = "Selecciona la caja física que se utilizará.")]
-    [Range(1, int.MaxValue, ErrorMessage = "Selecciona una caja válida.")]
+    [Required(ErrorMessage = "Selecciona la caja fÃ­sica que se utilizarÃ¡.")]
+    [Range(1, int.MaxValue, ErrorMessage = "Selecciona una caja vÃ¡lida.")]
     [Display(Name = "Caja")]
     public int? CajaID { get; set; }
 
@@ -404,11 +428,11 @@ public sealed class AlmacenPTMovimientoFormVm
     [Range(1, int.MaxValue)]
     public int Cantidad { get; set; }
 
-    [Display(Name = "Ubicación")]
+    [Display(Name = "UbicaciÃ³n")]
     public int? UbicacionID { get; set; }
 
     [StringLength(80)]
-    [Display(Name = "Orden de fabricación")]
+    [Display(Name = "Orden de fabricaciÃ³n")]
     public string? NumeroOF { get; set; }
 
     [StringLength(30)]
@@ -432,7 +456,7 @@ public sealed class AlmacenPTStockFormVm
     public string Descripcion { get; set; } = string.Empty;
 
     [Range(0, int.MaxValue)]
-    [Display(Name = "Stock mínimo")]
+    [Display(Name = "Stock mÃ­nimo")]
     public int StockMinimo { get; set; }
 
     [Range(0, int.MaxValue)]
@@ -465,7 +489,7 @@ public sealed class AlmacenUbicacionVm
 
     public bool Activo { get; set; } = true;
 
-    public string Display => string.Join(" · ", new[] { Almacen, Rack, Nivel, Posicion }.Where(x => !string.IsNullOrWhiteSpace(x)));
+    public string Display => string.Join(" Â· ", new[] { Almacen, Rack, Nivel, Posicion }.Where(x => !string.IsNullOrWhiteSpace(x)));
 }
 
 public sealed class AlmacenSelectVm
@@ -494,8 +518,8 @@ public sealed class AlmacenStockNivelItemVm
     public string Unidad { get; set; } = string.Empty;
     public decimal Disponible { get; set; }
 
-    [Range(typeof(decimal), "0", "999999999", ErrorMessage = "El stock mínimo no puede ser negativo.")]
-    [Display(Name = "Stock mínimo")]
+    [Range(typeof(decimal), "0", "999999999", ErrorMessage = "El stock mÃ­nimo no puede ser negativo.")]
+    [Display(Name = "Stock mÃ­nimo")]
     public decimal StockMinimo { get; set; }
 
     [Range(typeof(decimal), "0", "999999999", ErrorMessage = "El stock de aviso no puede ser negativo.")]
@@ -543,8 +567,8 @@ public sealed class AlmacenDescuentoPTRequestVm
     [Range(1, int.MaxValue)]
     public int Cantidad { get; set; }
 
-    [Required(ErrorMessage = "La caja física es obligatoria para descontar PT.")]
-    [Range(1, int.MaxValue, ErrorMessage = "La caja física no es válida.")]
+    [Required(ErrorMessage = "La caja fÃ­sica es obligatoria para descontar PT.")]
+    [Range(1, int.MaxValue, ErrorMessage = "La caja fÃ­sica no es vÃ¡lida.")]
     public int? CajaID { get; set; }
 
     [Required]

@@ -44,22 +44,117 @@ public sealed class AlmacenPTController : AlmacenBaseController
             vm.MensajeConfiguracion = "Falta ejecutar Scripts/SQL/Almacen/04_Actualizar_Stock_e_Integracion_Almacen.sql.";
             return View(vm);
         }
-
+        // ALMACEN_PT_SOLICITADO_QUERY_V1_0
         const string sql = @"
+WITH RequeridoPT AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        d.ParteID,
+        COALESCE
+        (
+            NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), N''),
+            NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), N''),
+            CONCAT(N'OF-ID-', s.SolicitudProduccionID)
+        ) AS NumeroOF,
+        SUM(CONVERT(BIGINT, ISNULL(d.CantidadPiezas, 0))) AS Requerido
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle d
+        ON d.SolicitudProduccionID = s.SolicitudProduccionID
+       AND d.Activo = 1
+       AND d.ParteID IS NOT NULL
+       AND ISNULL(d.CantidadPiezas, 0) > 0
+    WHERE s.Activo = 1
+      AND s.EstatusID IN (8, 9)
+    GROUP BY
+        s.SolicitudProduccionID,
+        d.ParteID,
+        s.NumeroOFRecibida,
+        s.FolioSolicitud
+),
+PendientePT AS
+(
+    SELECT
+        r.ParteID,
+        SUM
+        (
+            CASE
+                WHEN r.Requerido - ISNULL(recibido.Entregado, 0) > 0
+                    THEN r.Requerido - ISNULL(recibido.Entregado, 0)
+                ELSE 0
+            END
+        ) AS Solicitado
+    FROM RequeridoPT r
+    OUTER APPLY
+    (
+        SELECT
+            SUM
+            (
+                CASE
+                    WHEN m.TipoMovimiento = N'Entrada'
+                        THEN CONVERT(BIGINT, m.Cantidad)
+                    ELSE 0
+                END
+            ) AS Entregado
+        FROM dbo.AlmacenPT_Movimientos m
+        WHERE m.Activo = 1
+          AND m.ParteID = r.ParteID
+          AND LTRIM(RTRIM(ISNULL(m.NumeroOF, N''))) =
+              LTRIM(RTRIM(r.NumeroOF))
+    ) recibido
+    GROUP BY r.ParteID
+)
 SELECT TOP (500)
-    ParteID, NumeroParte, Descripcion, Cliente, Cajas,
-    Entradas, Salidas, SaldoFisico, Retenido, Disponible,
-    StockMinimo, StockAviso, StockConfigurado,
-    CASE WHEN PrecioVentaUnitario IS NULL THEN 0 ELSE 1 END AS TienePrecioVenta,
-    PrecioVentaUnitario, MonedaPrecioVenta, UnidadPrecioVenta, FuentePrecioVenta, FechaPrecioVenta,
-    Semaforo, UltimoMovimiento
-FROM dbo.vw_AlmacenPTInventario
-WHERE (@Q IS NULL OR NumeroParte LIKE '%' + @Q + '%' OR Descripcion LIKE '%' + @Q + '%' OR Cliente LIKE '%' + @Q + '%')
-  AND (@Estado IS NULL OR Semaforo = @Estado)
-ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMARILLO' THEN 2 ELSE 3 END,
-         NumeroParte;";
+    inventario.ParteID,
+    inventario.NumeroParte,
+    inventario.Descripcion,
+    inventario.Cliente,
+    inventario.Cajas,
+    inventario.Entradas,
+    inventario.Salidas,
+    inventario.SaldoFisico,
+    inventario.Retenido,
+    inventario.Disponible,
+    CONVERT(BIGINT, ISNULL(pendiente.Solicitado, 0)) AS Solicitado,
+    inventario.StockMinimo,
+    inventario.StockAviso,
+    inventario.StockConfigurado,
+    CASE
+        WHEN inventario.PrecioVentaUnitario IS NULL THEN 0
+        ELSE 1
+    END AS TienePrecioVenta,
+    inventario.PrecioVentaUnitario,
+    inventario.MonedaPrecioVenta,
+    inventario.UnidadPrecioVenta,
+    inventario.FuentePrecioVenta,
+    inventario.FechaPrecioVenta,
+    inventario.Semaforo,
+    inventario.UltimoMovimiento
+FROM dbo.vw_AlmacenPTInventario inventario
+LEFT JOIN PendientePT pendiente
+    ON pendiente.ParteID = inventario.ParteID
+WHERE
+    (
+        @Q IS NULL
+        OR inventario.NumeroParte LIKE N'%' + @Q + N'%'
+        OR inventario.Descripcion LIKE N'%' + @Q + N'%'
+        OR inventario.Cliente LIKE N'%' + @Q + N'%'
+    )
+    AND
+    (
+        @Estado IS NULL
+        OR inventario.Semaforo = @Estado
+    )
+ORDER BY
+    CASE inventario.Semaforo
+        WHEN N'SIN_CONFIGURAR' THEN 0
+        WHEN N'ROJO' THEN 1
+        WHEN N'AMARILLO' THEN 2
+        ELSE 3
+    END,
+    inventario.NumeroParte;";
 
-        await using (var command = new SqlCommand(sql, connection))
+await using (var command = new SqlCommand(sql, connection))
         {
             command.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(vm.Busqueda) ? DBNull.Value : vm.Busqueda;
             command.Parameters.Add("@Estado", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(vm.Estado) ? DBNull.Value : vm.Estado;
@@ -77,7 +172,8 @@ ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMA
                     Salidas = Entero(reader, "Salidas"),
                     SaldoFisico = Entero(reader, "SaldoFisico"),
                     Retenido = Entero(reader, "Retenido"),
-                    Disponible = Entero(reader, "Disponible"),
+                    Disponible = Entero(reader, "Disponible"),
+                    Solicitado = EnteroLargo(reader, "Solicitado"),
                     StockMinimo = Entero(reader, "StockMinimo"),
                     StockAviso = Entero(reader, "StockAviso"),
                     Semaforo = Texto(reader, "Semaforo"),
@@ -143,8 +239,155 @@ ORDER BY m.FechaMovimiento DESC, m.MovimientoID DESC;";
                 });
             }
         }
+        // ALMACEN_PT_KPI_OPERATIVO_V1_0
+        const string resumenOperativoSql = @"
+WITH RequeridoPT AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        d.ParteID,
+        COALESCE
+        (
+            NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), N''),
+            NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), N''),
+            CONCAT(N'OF-ID-', s.SolicitudProduccionID)
+        ) AS NumeroOF,
+        SUM(CONVERT(BIGINT, ISNULL(d.CantidadPiezas, 0))) AS Requerido
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle d
+        ON d.SolicitudProduccionID = s.SolicitudProduccionID
+       AND d.Activo = 1
+       AND d.ParteID IS NOT NULL
+       AND ISNULL(d.CantidadPiezas, 0) > 0
+    WHERE s.Activo = 1
+      AND s.EstatusID IN (8, 9)
+    GROUP BY
+        s.SolicitudProduccionID,
+        d.ParteID,
+        s.NumeroOFRecibida,
+        s.FolioSolicitud
+),
+Pendientes AS
+(
+    SELECT
+        r.SolicitudProduccionID,
+        SUM
+        (
+            CASE
+                WHEN r.Requerido - ISNULL(recibido.Entregado, 0) > 0
+                    THEN r.Requerido - ISNULL(recibido.Entregado, 0)
+                ELSE 0
+            END
+        ) AS Pendiente
+    FROM RequeridoPT r
+    OUTER APPLY
+    (
+        SELECT
+            SUM
+            (
+                CASE
+                    WHEN m.TipoMovimiento = N'Entrada'
+                        THEN CONVERT(BIGINT, m.Cantidad)
+                    ELSE 0
+                END
+            ) AS Entregado
+        FROM dbo.AlmacenPT_Movimientos m
+        WHERE m.Activo = 1
+          AND m.ParteID = r.ParteID
+          AND LTRIM(RTRIM(ISNULL(m.NumeroOF, N''))) =
+              LTRIM(RTRIM(r.NumeroOF))
+    ) recibido
+    GROUP BY r.SolicitudProduccionID
+)
+SELECT
+    COUNT_BIG(CASE WHEN Pendiente > 0 THEN 1 END) AS OFPendientesRecepcion,
+    ISNULL
+    (
+        SUM
+        (
+            CASE
+                WHEN Pendiente > 0 THEN Pendiente
+                ELSE 0
+            END
+        ),
+        0
+    ) AS PiezasSolicitadasPendientes
+FROM Pendientes;
 
-        vm.TotalPartes = vm.Existencias.Count;
+SELECT
+    COUNT_BIG
+    (
+        DISTINCT
+        CASE
+            WHEN TipoMovimiento = N'Entrada'
+             AND CONVERT(DATE, FechaMovimiento) = CONVERT(DATE, GETDATE())
+                THEN CajaID
+            ELSE NULL
+        END
+    ) AS CajasRecibidasHoy,
+    ISNULL
+    (
+        SUM
+        (
+            CASE
+                WHEN TipoMovimiento = N'Entrada'
+                 AND CONVERT(DATE, FechaMovimiento) = CONVERT(DATE, GETDATE())
+                    THEN CONVERT(BIGINT, Cantidad)
+                ELSE 0
+            END
+        ),
+        0
+    ) AS PiezasRecibidasHoy,
+    ISNULL
+    (
+        SUM
+        (
+            CASE
+                WHEN TipoMovimiento IN (N'Salida', N'Embarque')
+                 AND CONVERT(DATE, FechaMovimiento) = CONVERT(DATE, GETDATE())
+                    THEN CONVERT(BIGINT, Cantidad)
+                ELSE 0
+            END
+        ),
+        0
+    ) AS PiezasSalidasHoy
+FROM dbo.AlmacenPT_Movimientos
+WHERE Activo = 1;";
+
+        await using (var resumenCommand =
+            new SqlCommand(resumenOperativoSql, connection))
+        await using (var resumenReader =
+            await resumenCommand.ExecuteReaderAsync(cancellationToken))
+        {
+            if (await resumenReader.ReadAsync(cancellationToken))
+            {
+                vm.OFPendientesRecepcion =
+                    Convert.ToInt32(
+                        resumenReader["OFPendientesRecepcion"]);
+
+                vm.PiezasSolicitadasPendientes =
+                    Convert.ToInt64(
+                        resumenReader["PiezasSolicitadasPendientes"]);
+            }
+
+            if (await resumenReader.NextResultAsync(cancellationToken)
+                && await resumenReader.ReadAsync(cancellationToken))
+            {
+                vm.CajasRecibidasHoy =
+                    Convert.ToInt32(
+                        resumenReader["CajasRecibidasHoy"]);
+
+                vm.PiezasRecibidasHoy =
+                    Convert.ToInt64(
+                        resumenReader["PiezasRecibidasHoy"]);
+
+                vm.PiezasSalidasHoy =
+                    Convert.ToInt64(
+                        resumenReader["PiezasSalidasHoy"]);
+            }
+        }
+
+vm.TotalPartes = vm.Existencias.Count;
         vm.Criticos = vm.Existencias.Count(x => x.Semaforo == "ROJO");
         vm.Advertencias = vm.Existencias.Count(x => x.Semaforo == "AMARILLO");
         vm.Disponibles = vm.Existencias.Count(x => x.Semaforo == "VERDE");
@@ -163,6 +406,7 @@ ORDER BY m.FechaMovimiento DESC, m.MovimientoID DESC;";
         string? numeroOF,
         string? responsable,
         string? etiquetaLote,
+        string? periodo,
         DateTime? desde,
         DateTime? hasta,
         int pagina = 1,
@@ -170,6 +414,21 @@ ORDER BY m.FechaMovimiento DESC, m.MovimientoID DESC;";
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
+
+        // ALMACEN_PT_HISTORIAL_PERIODOS_V2_0
+        var periodoNormalizado =
+            NormalizarPeriodoHistorialPT(
+                periodo,
+                desde,
+                hasta);
+
+        AplicarPeriodoHistorialPT(
+            periodoNormalizado,
+            ref desde,
+            ref hasta);
+
+        ViewData["PeriodoHistorialPT"] =
+            periodoNormalizado;
 
         if (desde.HasValue && hasta.HasValue && hasta.Value.Date < desde.Value.Date)
             (desde, hasta) = (hasta, desde);
@@ -278,12 +537,24 @@ OFFSET @Offset ROWS FETCH NEXT @Tamano ROWS ONLY;";
         string? numeroOF,
         string? responsable,
         string? etiquetaLote,
+        string? periodo,
         DateTime? desde,
         DateTime? hasta,
         CancellationToken cancellationToken = default)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
+
+        var periodoNormalizado =
+            NormalizarPeriodoHistorialPT(
+                periodo,
+                desde,
+                hasta);
+
+        AplicarPeriodoHistorialPT(
+            periodoNormalizado,
+            ref desde,
+            ref hasta);
 
         if (desde.HasValue && hasta.HasValue && hasta.Value.Date < desde.Value.Date)
             (desde, hasta) = (hasta, desde);
@@ -374,6 +645,86 @@ ORDER BY m.FechaMovimiento DESC, m.MovimientoID DESC;";
             "text/csv; charset=utf-8", $"Historial_PT_{DateTime.Now:yyyyMMdd_HHmm}.csv");
     }
 
+    private static string NormalizarPeriodoHistorialPT(
+        string? periodo,
+        DateTime? desde,
+        DateTime? hasta)
+    {
+        if (string.IsNullOrWhiteSpace(periodo))
+        {
+            return desde.HasValue || hasta.HasValue
+                ? "PERSONALIZADO"
+                : "SEMANA_ACTUAL";
+        }
+
+        var valor =
+            periodo.Trim().ToUpperInvariant();
+
+        return valor is
+            "SEMANA_ACTUAL"
+            or "SEMANA_ANTERIOR"
+            or "ULTIMOS_7_DIAS"
+            or "ULTIMOS_30_DIAS"
+            or "TODO"
+            or "PERSONALIZADO"
+                ? valor
+                : "SEMANA_ACTUAL";
+    }
+
+    private static void AplicarPeriodoHistorialPT(
+        string periodo,
+        ref DateTime? desde,
+        ref DateTime? hasta)
+    {
+        var hoy = DateTime.Today;
+        var diasDesdeLunes =
+            ((int)hoy.DayOfWeek + 6) % 7;
+        var inicioSemana =
+            hoy.AddDays(-diasDesdeLunes);
+
+        switch (periodo)
+        {
+            case "SEMANA_ANTERIOR":
+                desde = inicioSemana.AddDays(-7);
+                hasta = inicioSemana.AddDays(-1);
+                break;
+
+            case "ULTIMOS_7_DIAS":
+                desde = hoy.AddDays(-6);
+                hasta = hoy;
+                break;
+
+            case "ULTIMOS_30_DIAS":
+                desde = hoy.AddDays(-29);
+                hasta = hoy;
+                break;
+
+            case "TODO":
+                desde = null;
+                hasta = null;
+                break;
+
+            case "PERSONALIZADO":
+                if (!desde.HasValue && !hasta.HasValue)
+                {
+                    desde = inicioSemana;
+                    hasta = inicioSemana.AddDays(6);
+                }
+                break;
+
+            default:
+                desde = inicioSemana;
+                hasta = inicioSemana.AddDays(6);
+                break;
+        }
+
+        if (desde.HasValue
+            && hasta.HasValue
+            && hasta.Value.Date < desde.Value.Date)
+        {
+            (desde, hasta) = (hasta, desde);
+        }
+    }
     private static void AgregarParametrosHistorialPT(SqlCommand command, AlmacenPTHistorialVm filtro)
     {
         command.Parameters.Add("@Parte", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(filtro.FiltroParte) ? DBNull.Value : filtro.FiltroParte;
