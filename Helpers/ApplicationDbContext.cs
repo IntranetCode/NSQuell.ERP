@@ -28,7 +28,8 @@ namespace ERP.NSQuell.Models
         public DbSet<ERPParteDatoTecnico> ERPParteDatosTecnicos { get; set; } = null!;
         public DbSet<ERPMaterial> ERPMateriales { get; set; } = null!;
 
-      
+        public DbSet<CalidadInspeccion> CalidadInspecciones { get; set; } = null!;
+        public DbSet<CalidadInspeccionHistorial> CalidadInspeccionHistorial { get; set; } = null!;
 
         public DbSet<AuditoriaUsuario> AuditoriasUsuarios { get; set; }
         public DbSet<V_InformacionUsuarioCompleta> InformacionUsuariosCompletos { get; set; }

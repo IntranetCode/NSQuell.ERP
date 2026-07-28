@@ -1,0 +1,765 @@
+@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
+
+@{
+    ViewData["Title"] = "Detalle de inspección";
+}
+
+<div class="calidad-detalle-page">
+
+    <div class="detalle-header">
+        <div>
+            <h1>Detalle de inspección #@Model.InspeccionID</h1>
+            <p>Consulta de trazabilidad, estado, resultado, documentos e historial.</p>
+        </div>
+
+        <a asp-controller="Calidad" asp-action="Index" class="btn-light-calidad">
+            ← Volver
+        </a>
+    </div>
+
+    @if (TempData["Mensaje"] != null)
+    {
+        <div class="alert-success-calidad">
+            @TempData["Mensaje"]
+        </div>
+    }
+
+    <div class="detalle-layout">
+
+        <div class="detalle-main">
+
+            <div class="detalle-card">
+                <div class="card-title-row">
+                    <h2>Información general</h2>
+
+                    <span class="estado-pill estado-@Model.Estado.ToLower()">
+                        @Model.Estado
+                    </span>
+                </div>
+
+                <div class="info-grid">
+                    <div>
+                        <label>Código de barras</label>
+                        <strong>@(Model.CodigoBarras ?? "-")</strong>
+                    </div>
+
+                    <div>
+                        <label>Orden de trabajo</label>
+                        <strong>@(Model.OrdenTrabajo ?? "-")</strong>
+                    </div>
+
+                    <div>
+                        <label>Número de parte</label>
+                        <strong>@(Model.NumeroParte ?? "-")</strong>
+                    </div>
+
+                    <div>
+                        <label>Material</label>
+                        <strong>@(Model.Material ?? "-")</strong>
+                    </div>
+
+                    <div>
+                        <label>Proceso</label>
+                        <strong>@(Model.Proceso ?? "-")</strong>
+                    </div>
+
+                    <div>
+                        <label>Máquina</label>
+                        <strong>@(Model.Maquina ?? "-")</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detalle-card">
+                <h2>Cantidades</h2>
+
+                <div class="cantidad-grid">
+                    <div class="cantidad-box">
+                        <span>Total</span>
+                        <strong>@Model.CantidadTotal</strong>
+                    </div>
+
+                    <div class="cantidad-box">
+                        <span>Revisada</span>
+                        <strong>@Model.CantidadRevisada</strong>
+                    </div>
+
+                    <div class="cantidad-box">
+                        <span>Pendiente</span>
+                        <strong>@Model.CantidadPendiente</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detalle-card">
+                <h2>Validación documental</h2>
+
+                <div class="docs-grid">
+                    <div class="doc-item @(Model.ChecklistValidado ? "doc-ok" : "doc-pending")">
+                        <strong>Checklist validado</strong>
+                        <span>@(Model.ChecklistValidado ? "Validado" : "Pendiente")</span>
+                    </div>
+
+                    <div class="doc-item @(Model.HojaInspeccionProducto ? "doc-ok" : "doc-pending")">
+                        <strong>Hoja de inspección</strong>
+                        <span>@(Model.HojaInspeccionProducto ? "Validada" : "Pendiente")</span>
+                    </div>
+
+                    <div class="doc-item @(Model.HojaValidacionCalidad ? "doc-ok" : "doc-pending")">
+                        <strong>Hoja de validación</strong>
+                        <span>@(Model.HojaValidacionCalidad ? "Validada" : "Pendiente")</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detalle-card">
+                <h2>Resultado de calidad</h2>
+
+                <div class="resultado-detalle">
+                    @if (string.IsNullOrWhiteSpace(Model.Etiqueta))
+                    {
+                        <span class="badge badge-neutral">Sin etiqueta</span>
+                        <p>La inspección todavía no tiene resultado final asignado.</p>
+                    }
+                    else if (Model.Etiqueta == "VERDE")
+                    {
+                        <span class="badge badge-verde">Etiqueta verde</span>
+                        <p>Todo bien / proceso liberado.</p>
+                    }
+                    else if (Model.Etiqueta == "AMARILLA")
+                    {
+                        <span class="badge badge-amarilla">Etiqueta amarilla</span>
+                        <p>Se puede mejorar / requiere GPI2 o retrabajo.</p>
+                    }
+                    else if (Model.Etiqueta == "ROJA")
+                    {
+                        <span class="badge badge-roja">Etiqueta roja</span>
+                        <p>Scrap / rechazo / contención.</p>
+                    }
+                    else
+                    {
+                        <span class="badge badge-neutral">@Model.Etiqueta</span>
+                    }
+                </div>
+
+                <div class="flags-grid">
+                    <div class="flag-item @(Model.Liberado ? "flag-ok" : "")">
+                        Liberado: <strong>@(Model.Liberado ? "Sí" : "No")</strong>
+                    </div>
+
+                    <div class="flag-item @(Model.RequiereGPI2 ? "flag-warning" : "")">
+                        GPI2: <strong>@(Model.RequiereGPI2 ? "Sí" : "No")</strong>
+                    </div>
+
+                    <div class="flag-item @(Model.EnContencion ? "flag-warning" : "")">
+                        Contención: <strong>@(Model.EnContencion ? "Sí" : "No")</strong>
+                    </div>
+
+                    <div class="flag-item @(Model.EsScrap ? "flag-danger" : "")">
+                        Scrap: <strong>@(Model.EsScrap ? "Sí" : "No")</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detalle-card">
+                <h2>Observaciones</h2>
+
+                @if (string.IsNullOrWhiteSpace(Model.Observaciones))
+                {
+                    <p class="texto-muted">Sin observaciones registradas.</p>
+                }
+                else
+                {
+                    <p class="observaciones-texto">@Model.Observaciones</p>
+                }
+            </div>
+
+            <div class="detalle-card">
+                <h2>Historial de movimientos</h2>
+
+                <div class="historial-lista">
+                    @if (Model.Historial.Any())
+                    {
+                        foreach (var item in Model.Historial)
+                        {
+                            <div class="historial-item">
+                                <div class="historial-icon"></div>
+
+                                <div class="historial-content">
+                                    <div class="historial-top">
+                                        <strong>@item.Movimiento</strong>
+                                        <span>@item.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</span>
+                                    </div>
+
+                                    <div class="historial-body">
+                                        <span>
+                                            Estado:
+                                            <strong>@(item.EstadoAnterior ?? "-")</strong>
+                                            →
+                                            <strong>@(item.EstadoNuevo ?? "-")</strong>
+                                        </span>
+
+                                        @if (!string.IsNullOrWhiteSpace(item.Etiqueta))
+                                        {
+                                            <span>Etiqueta: <strong>@item.Etiqueta</strong></span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(item.Comentario))
+                                        {
+                                            <p>@item.Comentario</p>
+                                        }
+
+                                        <small>Usuario ID: @(item.UsuarioID?.ToString() ?? "-")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="texto-muted">No hay movimientos registrados.</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <aside class="detalle-sidebar">
+            <div class="detalle-card acciones-card">
+                <h2>Acciones</h2>
+
+                <p class="texto-muted">
+                    Cambia el estado de la inspección según el resultado de Calidad.
+                </p>
+
+                <form asp-controller="Calidad" asp-action="Liberar" asp-route-id="@Model.InspeccionID" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn-action btn-verde">
+                        Liberar / etiqueta verde
+                    </button>
+                </form>
+
+                <form asp-controller="Calidad" asp-action="EnviarGPI2" asp-route-id="@Model.InspeccionID" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn-action btn-amarillo">
+                        Enviar a GPI2 / etiqueta amarilla
+                    </button>
+                </form>
+
+                <form asp-controller="Calidad" asp-action="EnviarContencion" asp-route-id="@Model.InspeccionID" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn-action btn-naranja">
+                        Enviar a contención
+                    </button>
+                </form>
+
+                <form asp-controller="Calidad" asp-action="MarcarScrap" asp-route-id="@Model.InspeccionID" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn-action btn-rojo">
+                        Marcar como scrap / etiqueta roja
+                    </button>
+                </form>
+
+                <form asp-controller="Calidad" asp-action="Detener" asp-route-id="@Model.InspeccionID" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn-action btn-gris">
+                        Detener proceso
+                    </button>
+                </form>
+
+                <form asp-controller="Calidad" asp-action="Cerrar" asp-route-id="@Model.InspeccionID" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn-action btn-oscuro">
+                        Cerrar registro
+                    </button>
+                </form>
+            </div>
+
+            <div class="detalle-card">
+                <h2>Registro</h2>
+
+                <div class="meta-list">
+                    <div>
+                        <span>Creado por</span>
+                        <strong>@(Model.UsuarioCreacionID?.ToString() ?? "-")</strong>
+                    </div>
+
+                    <div>
+                        <span>Fecha creación</span>
+                        <strong>@Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</strong>
+                    </div>
+
+                    <div>
+                        <span>Modificado por</span>
+                        <strong>@(Model.UsuarioModificacionID?.ToString() ?? "-")</strong>
+                    </div>
+
+                    <div>
+                        <span>Fecha modificación</span>
+                        <strong>@(Model.FechaModificacion?.ToString("dd/MM/yyyy HH:mm") ?? "-")</strong>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<style>
+    .calidad-detalle-page {
+        padding: 24px;
+        color: #1f2937;
+    }
+
+    .detalle-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .detalle-header h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .detalle-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: 14px;
+    }
+
+    .detalle-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 20px;
+        align-items: start;
+    }
+
+    .detalle-main {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .detalle-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        position: sticky;
+        top: 20px;
+    }
+
+    .detalle-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+    }
+
+    .detalle-card h2 {
+        margin: 0 0 16px;
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .card-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .card-title-row h2 {
+        margin: 0;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .info-grid label,
+    .meta-list span {
+        display: block;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .info-grid strong,
+    .meta-list strong {
+        color: #0f172a;
+        font-size: 14px;
+        word-break: break-word;
+    }
+
+    .cantidad-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+    }
+
+    .cantidad-box {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 16px;
+    }
+
+    .cantidad-box span {
+        display: block;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .cantidad-box strong {
+        font-size: 24px;
+        color: #0f172a;
+    }
+
+    .docs-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+    }
+
+    .doc-item {
+        border-radius: 14px;
+        padding: 16px;
+        border: 1px solid #e2e8f0;
+    }
+
+    .doc-item strong {
+        display: block;
+        color: #0f172a;
+        font-size: 14px;
+        margin-bottom: 6px;
+    }
+
+    .doc-item span {
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .doc-ok {
+        background: #dcfce7;
+        border-color: #86efac;
+        color: #166534;
+    }
+
+    .doc-pending {
+        background: #f8fafc;
+        color: #64748b;
+    }
+
+    .resultado-detalle {
+        margin-bottom: 16px;
+    }
+
+    .resultado-detalle p {
+        margin: 10px 0 0;
+        color: #64748b;
+    }
+
+    .badge {
+        display: inline-flex;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .badge-neutral {
+        background: #e2e8f0;
+        color: #475569;
+    }
+
+    .badge-verde {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-amarilla {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .badge-roja {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .flags-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+    }
+
+    .flag-item {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px;
+        font-size: 13px;
+        color: #475569;
+    }
+
+    .flag-ok {
+        background: #dcfce7;
+        color: #166534;
+        border-color: #86efac;
+    }
+
+    .flag-warning {
+        background: #fef3c7;
+        color: #92400e;
+        border-color: #fcd34d;
+    }
+
+    .flag-danger {
+        background: #fee2e2;
+        color: #991b1b;
+        border-color: #fca5a5;
+    }
+
+    .texto-muted {
+        color: #64748b;
+        font-size: 14px;
+        margin: 0;
+    }
+
+    .observaciones-texto {
+        color: #334155;
+        line-height: 1.6;
+        margin: 0;
+        white-space: pre-line;
+    }
+
+    .historial-lista {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .historial-item {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: 12px;
+    }
+
+    .historial-icon {
+        width: 12px;
+        height: 12px;
+        background: #2563eb;
+        border-radius: 999px;
+        margin-top: 6px;
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, .12);
+    }
+
+    .historial-content {
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 14px;
+    }
+
+    .historial-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 6px;
+    }
+
+    .historial-top strong {
+        color: #0f172a;
+        font-size: 14px;
+    }
+
+    .historial-top span {
+        color: #64748b;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .historial-body {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: #475569;
+        font-size: 13px;
+    }
+
+    .historial-body p {
+        margin: 6px 0;
+        color: #334155;
+    }
+
+    .historial-body small {
+        color: #64748b;
+    }
+
+    .acciones-card form {
+        margin-bottom: 10px;
+    }
+
+    .acciones-card form:last-child {
+        margin-bottom: 0;
+    }
+
+    .btn-action {
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all .2s ease;
+        text-align: left;
+    }
+
+    .btn-action:hover {
+        transform: translateY(-1px);
+        filter: brightness(.98);
+    }
+
+    .btn-verde {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .btn-amarillo {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .btn-naranja {
+        background: #ffedd5;
+        color: #9a3412;
+    }
+
+    .btn-rojo {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .btn-gris {
+        background: #f1f5f9;
+        color: #334155;
+    }
+
+    .btn-oscuro {
+        background: #0f172a;
+        color: #ffffff;
+    }
+
+    .meta-list {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .estado-pill {
+        display: inline-flex;
+        background: #f1f5f9;
+        color: #334155;
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .estado-liberada {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .estado-gpi2 {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .estado-contencion {
+        background: #ffedd5;
+        color: #9a3412;
+    }
+
+    .estado-scrap {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .estado-cerrada {
+        background: #e2e8f0;
+        color: #334155;
+    }
+
+    .alert-success-calidad {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
+        padding: 12px 16px;
+        border-radius: 12px;
+        margin-bottom: 18px;
+        font-weight: 600;
+    }
+
+    .btn-light-calidad {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 16px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all .2s ease;
+        white-space: nowrap;
+        background: #f1f5f9;
+        color: #334155;
+    }
+
+    .btn-light-calidad:hover {
+        background: #e2e8f0;
+        color: #334155;
+    }
+
+    @@media (max-width: 1100px) {
+        .detalle-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .detalle-sidebar {
+            position: static;
+        }
+
+        .info-grid,
+        .docs-grid,
+        .cantidad-grid,
+        .flags-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .detalle-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .historial-top {
+            flex-direction: column;
+        }
+    }
+</style>

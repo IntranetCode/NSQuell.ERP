@@ -1,0 +1,490 @@
+@model ERP.NSQuell.Models.ViewModels.CalidadIndexViewModel
+
+@{
+    ViewData["Title"] = "Calidad";
+}
+
+<div class="calidad-page">
+
+    <div class="calidad-header">
+        <div>
+            <h1>Módulo de Calidad</h1>
+            <p>Seguimiento de inspecciones, liberación, GPI2, contención y scrap.</p>
+        </div>
+
+        <a asp-controller="Calidad" asp-action="Crear" class="btn-primary-calidad">
+            + Nueva inspección
+        </a>
+    </div>
+
+    @if (TempData["Mensaje"] != null)
+    {
+        <div class="alert-success-calidad">
+            @TempData["Mensaje"]
+        </div>
+    }
+
+    <div class="calidad-cards">
+        <a asp-action="Index" class="card-calidad">
+            <span>Total mostrados</span>
+            <strong>@Model.TotalMostrados</strong>
+        </a>
+
+        <a asp-action="Index" asp-route-estadoFiltro="ABIERTA" class="card-calidad">
+            <span>Abiertas</span>
+            <strong>@Model.TotalAbiertas</strong>
+        </a>
+
+        <a asp-action="Index" asp-route-estadoFiltro="LIBERADA" class="card-calidad card-verde">
+            <span>Liberadas</span>
+            <strong>@Model.TotalLiberadas</strong>
+        </a>
+
+        <a asp-action="Index" asp-route-estadoFiltro="GPI2" class="card-calidad card-amarilla">
+            <span>GPI2</span>
+            <strong>@Model.TotalGPI2</strong>
+        </a>
+
+        <a asp-action="Index" asp-route-estadoFiltro="CONTENCION" class="card-calidad card-naranja">
+            <span>Contención</span>
+            <strong>@Model.TotalContencion</strong>
+        </a>
+
+        <a asp-action="Index" asp-route-estadoFiltro="SCRAP" class="card-calidad card-roja">
+            <span>Scrap</span>
+            <strong>@Model.TotalScrap</strong>
+        </a>
+
+        <a asp-action="Index" asp-route-estadoFiltro="CERRADA" class="card-calidad">
+            <span>Cerradas</span>
+            <strong>@Model.TotalCerradas</strong>
+        </a>
+    </div>
+
+    <form asp-controller="Calidad" asp-action="Index" method="get" class="filtros-calidad">
+        <div class="filtro-grupo">
+            <label>Buscar</label>
+            <input type="text"
+                   name="busqueda"
+                   value="@Model.Busqueda"
+                   placeholder="Código, orden, parte, material, proceso o máquina..." />
+        </div>
+
+        <div class="filtro-grupo">
+            <label>Estado</label>
+            <select name="estadoFiltro">
+                <option value="">Todos</option>
+                <option value="ABIERTA" selected="@(Model.EstadoFiltro == "ABIERTA")">Abierta</option>
+                <option value="LIBERADA" selected="@(Model.EstadoFiltro == "LIBERADA")">Liberada</option>
+                <option value="GPI2" selected="@(Model.EstadoFiltro == "GPI2")">GPI2</option>
+                <option value="CONTENCION" selected="@(Model.EstadoFiltro == "CONTENCION")">Contención</option>
+                <option value="SCRAP" selected="@(Model.EstadoFiltro == "SCRAP")">Scrap</option>
+                <option value="CERRADA" selected="@(Model.EstadoFiltro == "CERRADA")">Cerrada</option>
+                <option value="DETENIDA" selected="@(Model.EstadoFiltro == "DETENIDA")">Detenida</option>
+            </select>
+        </div>
+
+        <div class="filtro-acciones">
+            <button type="submit" class="btn-secondary-calidad">Filtrar</button>
+            <a asp-action="Index" class="btn-light-calidad">Limpiar</a>
+        </div>
+    </form>
+
+    <div class="tabla-contenedor-calidad">
+        <table class="tabla-calidad">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Código barras</th>
+                    <th>Orden</th>
+                    <th>No. parte</th>
+                    <th>Material</th>
+                    <th>Proceso</th>
+                    <th>Máquina</th>
+                    <th>Cantidad</th>
+                    <th>Etiqueta</th>
+                    <th>Estado</th>
+                    <th>Fecha</th>
+                    <th></th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @if (Model.Inspecciones.Any())
+                {
+                    foreach (var item in Model.Inspecciones)
+                    {
+                        <tr>
+                            <td>@item.InspeccionID</td>
+                            <td>@(item.CodigoBarras ?? "-")</td>
+                            <td>@(item.OrdenTrabajo ?? "-")</td>
+                            <td>@(item.NumeroParte ?? "-")</td>
+                            <td>@(item.Material ?? "-")</td>
+                            <td>@(item.Proceso ?? "-")</td>
+                            <td>@(item.Maquina ?? "-")</td>
+                            <td>
+                                <div class="cantidad-info">
+                                    <span>Total: @item.CantidadTotal</span>
+                                    <span>Rev: @item.CantidadRevisada</span>
+                                    <span>Pend: @item.CantidadPendiente</span>
+                                </div>
+                            </td>
+                            <td>
+                                @if (string.IsNullOrWhiteSpace(item.Etiqueta))
+                                {
+                                    <span class="badge badge-neutral">Sin etiqueta</span>
+                                }
+                                else if (item.Etiqueta == "VERDE")
+                                {
+                                    <span class="badge badge-verde">Verde</span>
+                                }
+                                else if (item.Etiqueta == "AMARILLA")
+                                {
+                                    <span class="badge badge-amarilla">Amarilla</span>
+                                }
+                                else if (item.Etiqueta == "ROJA")
+                                {
+                                    <span class="badge badge-roja">Roja</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-neutral">@item.Etiqueta</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="estado-pill">@item.Estado</span>
+                            </td>
+                            <td>@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td class="acciones-tabla">
+                                <a asp-controller="Calidad"
+                                   asp-action="Detalle"
+                                   asp-route-id="@item.InspeccionID"
+                                   class="btn-table-calidad">
+                                    Ver
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="12" class="sin-registros">
+                            No hay inspecciones registradas con los filtros actuales.
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    .calidad-page {
+        padding: 24px;
+        color: #1f2937;
+    }
+
+    .calidad-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .calidad-header h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .calidad-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: 14px;
+    }
+
+    .btn-primary-calidad,
+    .btn-secondary-calidad,
+    .btn-light-calidad,
+    .btn-table-calidad {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 16px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all .2s ease;
+        white-space: nowrap;
+    }
+
+    .btn-primary-calidad {
+        background: #0f172a;
+        color: #ffffff;
+    }
+
+    .btn-primary-calidad:hover {
+        background: #1e293b;
+        color: #ffffff;
+    }
+
+    .btn-secondary-calidad {
+        background: #2563eb;
+        color: #ffffff;
+    }
+
+    .btn-secondary-calidad:hover {
+        background: #1d4ed8;
+    }
+
+    .btn-light-calidad {
+        background: #f1f5f9;
+        color: #334155;
+    }
+
+    .btn-light-calidad:hover {
+        background: #e2e8f0;
+        color: #334155;
+    }
+
+    .btn-table-calidad {
+        background: #eef2ff;
+        color: #3730a3;
+        padding: 7px 12px;
+        font-size: 13px;
+    }
+
+    .btn-table-calidad:hover {
+        background: #e0e7ff;
+        color: #312e81;
+    }
+
+    .alert-success-calidad {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
+        padding: 12px 16px;
+        border-radius: 12px;
+        margin-bottom: 18px;
+        font-weight: 600;
+    }
+
+    .calidad-cards {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(120px, 1fr));
+        gap: 12px;
+        margin-bottom: 22px;
+    }
+
+    .card-calidad {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 16px;
+        text-decoration: none;
+        color: #0f172a;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+        transition: all .2s ease;
+    }
+
+    .card-calidad:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.10);
+        color: #0f172a;
+    }
+
+    .card-calidad span {
+        display: block;
+        font-size: 12px;
+        color: #64748b;
+        margin-bottom: 8px;
+    }
+
+    .card-calidad strong {
+        font-size: 24px;
+        color: #0f172a;
+    }
+
+    .card-verde {
+        border-left: 5px solid #16a34a;
+    }
+
+    .card-amarilla {
+        border-left: 5px solid #f59e0b;
+    }
+
+    .card-naranja {
+        border-left: 5px solid #ea580c;
+    }
+
+    .card-roja {
+        border-left: 5px solid #dc2626;
+    }
+
+    .filtros-calidad {
+        display: grid;
+        grid-template-columns: 1fr 220px auto;
+        gap: 14px;
+        align-items: end;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 22px;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+    }
+
+    .filtro-grupo label {
+        display: block;
+        font-size: 13px;
+        font-weight: 700;
+        color: #334155;
+        margin-bottom: 6px;
+    }
+
+    .filtro-grupo input,
+    .filtro-grupo select {
+        width: 100%;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 14px;
+        outline: none;
+        background: #ffffff;
+    }
+
+    .filtro-grupo input:focus,
+    .filtro-grupo select:focus {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    }
+
+    .filtro-acciones {
+        display: flex;
+        gap: 8px;
+    }
+
+    .tabla-contenedor-calidad {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        overflow-x: auto;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+    }
+
+    .tabla-calidad {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 1180px;
+    }
+
+    .tabla-calidad th {
+        background: #f8fafc;
+        color: #334155;
+        text-align: left;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        padding: 13px 12px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .tabla-calidad td {
+        padding: 13px 12px;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 14px;
+        vertical-align: middle;
+    }
+
+    .tabla-calidad tr:hover td {
+        background: #f8fafc;
+    }
+
+    .cantidad-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 12px;
+        color: #475569;
+    }
+
+    .badge {
+        display: inline-flex;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .badge-neutral {
+        background: #f1f5f9;
+        color: #475569;
+    }
+
+    .badge-verde {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-amarilla {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .badge-roja {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .estado-pill {
+        display: inline-flex;
+        background: #f1f5f9;
+        color: #334155;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .acciones-tabla {
+        text-align: right;
+    }
+
+    .sin-registros {
+        text-align: center;
+        color: #64748b;
+        padding: 30px !important;
+        font-weight: 600;
+    }
+
+    @@media (max-width: 1200px) {
+        .calidad-cards {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .filtros-calidad {
+            grid-template-columns: 1fr;
+        }
+
+        .filtro-acciones {
+            justify-content: flex-start;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .calidad-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .calidad-cards {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
