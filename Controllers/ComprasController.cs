@@ -55,9 +55,9 @@ namespace ERP.NSQuell.Controllers
                 FROM dbo.ComprasOrdenes;
 
                 SELECT
-    ProveedoresActivos = COUNT(*)
-FROM dbo.ERP_Proveedores
-WHERE Activo = 1;
+                    ProveedoresActivos = COUNT(*)
+                FROM dbo.ERP_Proveedores
+                WHERE Activo = 1;
             ";
 
             using var command = new SqlCommand(query, connection);
@@ -226,7 +226,6 @@ WHERE Activo = 1;
         {
             model.OrigenSolicitud = "Almacen";
             model.AlmacenID = null;
-            model.TipoCompra = "Materia prima";
             model.PedidoClienteReferencia = null;
 
             model.Materiales ??= new List<Compras.SolicitudDetalleItemViewModel>();
@@ -235,7 +234,6 @@ WHERE Activo = 1;
                 .Where(k =>
                     k == "OrigenSolicitud" ||
                     k == "AlmacenID" ||
-                    k == "TipoCompra" ||
                     k == "PedidoClienteReferencia" ||
                     k.EndsWith(".DescripcionMaterial") ||
                     k.EndsWith(".UnidadMedida") ||
@@ -259,14 +257,19 @@ WHERE Activo = 1;
 
             if (!model.Materiales.Any())
             {
-                ModelState.AddModelError("", "Debe agregar al menos un material a la solicitud.");
+                ModelState.AddModelError("", "Debe agregar al menos un material o concepto a la solicitud.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.TipoCompra))
+            {
+                ModelState.AddModelError(nameof(model.TipoCompra), "Seleccione el tipo de compra.");
             }
 
             for (int i = 0; i < model.Materiales.Count; i++)
             {
                 if (!model.Materiales[i].ProductoID.HasValue || model.Materiales[i].ProductoID.Value <= 0)
                 {
-                    ModelState.AddModelError($"Materiales[{i}].ProductoID", "Seleccione un material.");
+                    ModelState.AddModelError($"Materiales[{i}].ProductoID", "Seleccione un material o concepto.");
                 }
 
                 if (model.Materiales[i].CantidadSolicitada <= 0)
@@ -399,14 +402,14 @@ WHERE Activo = 1;
                 {
                     if (!item.ProductoID.HasValue || item.ProductoID.Value <= 0)
                     {
-                        throw new InvalidOperationException("Uno de los materiales no tiene MaterialID.");
+                        throw new InvalidOperationException("Uno de los materiales o conceptos no tiene MaterialID.");
                     }
 
                     var material = await ObtenerMaterialCompraAsync(connection, item.ProductoID.Value, transaction);
 
                     if (material == null)
                     {
-                        throw new InvalidOperationException("No se encontró información del material seleccionado.");
+                        throw new InvalidOperationException("No se encontró información del material o concepto seleccionado.");
                     }
 
                     using var command = new SqlCommand(insertDetalle, connection, transaction);
@@ -535,7 +538,7 @@ WHERE Activo = 1;
                         PedidoClienteReferencia = null,
 
                         Prioridad = GetString(reader, "Prioridad"),
-                        TipoCompra = GetString(reader, "TipoCompra") ?? "Materia prima",
+                        TipoCompra = GetString(reader, "TipoCompra"),
 
                         Motivo = GetString(reader, "Motivo"),
 
@@ -608,7 +611,7 @@ WHERE Activo = 1;
                 return Json(new
                 {
                     ok = false,
-                    mensaje = "No se encontró el material seleccionado."
+                    mensaje = "No se encontró el material o concepto seleccionado."
                 });
             }
 
@@ -618,6 +621,7 @@ WHERE Activo = 1;
                 materialID = material.MaterialID,
                 codigoMaterial = material.CodigoMaterial,
                 material = material.Material,
+                tipoMaterial = material.TipoMaterial,
                 unidad = material.Unidad,
                 stockActual = material.StockActual,
                 stockMinimo = material.StockMinimo
@@ -2160,7 +2164,6 @@ WHERE Activo = 1;
         {
             model.OrigenSolicitud = "Almacen";
             model.AlmacenID = null;
-            model.TipoCompra = "Materia prima";
             model.PedidoClienteReferencia = null;
 
             if (string.IsNullOrWhiteSpace(model.Prioridad))
@@ -2178,7 +2181,12 @@ WHERE Activo = 1;
 
             model.TiposCompra = new List<SelectListItem>
             {
-                new SelectListItem { Value = "Materia prima", Text = "Materia prima" }
+                new SelectListItem { Value = "Materia prima", Text = "Materia prima" },
+                new SelectListItem { Value = "Refacciones", Text = "Refacciones" },
+                new SelectListItem { Value = "Herramientas", Text = "Herramientas" },
+                new SelectListItem { Value = "Consumibles", Text = "Consumibles" },
+                new SelectListItem { Value = "Servicios", Text = "Servicios" },
+                new SelectListItem { Value = "Otro", Text = "Otro" }
             };
 
             model.Departamentos = await ObtenerDepartamentosAsync();
@@ -2190,10 +2198,10 @@ WHERE Activo = 1;
                 new SelectListItem { Value = "Almacen", Text = "Almacén" }
             };
 
-            model.MaterialesCatalogo = await ObtenerMaterialesMateriaPrimaAsync();
+            model.MaterialesCatalogo = await ObtenerMaterialesCompraAsync();
         }
 
-        private async Task<List<SelectListItem>> ObtenerMaterialesMateriaPrimaAsync()
+        private async Task<List<SelectListItem>> ObtenerMaterialesCompraAsync()
         {
             var lista = new List<SelectListItem>
             {
@@ -2208,11 +2216,12 @@ WHERE Activo = 1;
                     MaterialID,
                     CodigoMaterial,
                     Material,
+                    TipoMaterial,
                     Unidad,
                     StockActual,
                     StockMinimo
-                FROM dbo.vw_Compras_MaterialesMP_Stock
-                ORDER BY Material;
+                FROM dbo.vw_Compras_Materiales_Stock
+                ORDER BY TipoMaterial, Material;
             ";
 
             using var command = new SqlCommand(query, connection);
@@ -2223,13 +2232,14 @@ WHERE Activo = 1;
                 var materialId = GetInt(reader, "MaterialID");
                 var codigo = GetString(reader, "CodigoMaterial") ?? "";
                 var material = GetString(reader, "Material") ?? "";
+                var tipoMaterial = GetString(reader, "TipoMaterial") ?? "";
                 var unidad = GetString(reader, "Unidad") ?? "";
                 var stockActual = GetDecimal(reader, "StockActual");
 
                 lista.Add(new SelectListItem
                 {
                     Value = materialId.ToString(),
-                    Text = $"{codigo} - {material} | Disp: {stockActual:0.####} {unidad}"
+                    Text = $"{codigo} - {material} | Tipo: {tipoMaterial} | Disp: {stockActual:0.####} {unidad}"
                 });
             }
 
@@ -2278,10 +2288,11 @@ WHERE Activo = 1;
                     MaterialID,
                     CodigoMaterial,
                     Material,
+                    TipoMaterial,
                     Unidad,
                     StockActual,
                     StockMinimo
-                FROM dbo.vw_Compras_MaterialesMP_Stock
+                FROM dbo.vw_Compras_Materiales_Stock
                 WHERE MaterialID = @MaterialID;
             ";
 
@@ -2300,6 +2311,7 @@ WHERE Activo = 1;
                 MaterialID = GetInt(reader, "MaterialID"),
                 CodigoMaterial = GetString(reader, "CodigoMaterial"),
                 Material = GetString(reader, "Material"),
+                TipoMaterial = HasColumn(reader, "TipoMaterial") ? GetString(reader, "TipoMaterial") : null,
                 Unidad = GetString(reader, "Unidad"),
                 StockActual = GetDecimal(reader, "StockActual"),
                 StockMinimo = GetDecimal(reader, "StockMinimo")
@@ -2708,6 +2720,7 @@ WHERE Activo = 1;
             public int MaterialID { get; set; }
             public string? CodigoMaterial { get; set; }
             public string? Material { get; set; }
+            public string? TipoMaterial { get; set; }
             public string? Unidad { get; set; }
             public decimal StockActual { get; set; }
             public decimal StockMinimo { get; set; }
@@ -2730,6 +2743,19 @@ WHERE Activo = 1;
             public decimal? Subtotal { get; set; }
             public decimal? IVA { get; set; }
             public decimal? Total { get; set; }
+        }
+
+        private static bool HasColumn(SqlDataReader reader, string column)
+        {
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                if (string.Equals(reader.GetName(i), column, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static int GetInt(SqlDataReader reader, string column)

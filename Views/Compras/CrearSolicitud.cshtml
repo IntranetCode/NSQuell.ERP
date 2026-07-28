@@ -377,7 +377,7 @@
                 <h1 class="page-title">Nueva solicitud de compra</h1>
 
                 <p class="page-subtitle">
-                    Registra la necesidad de materia prima con base en los materiales existentes en almacén.
+                    Registra la necesidad de compra con base en los materiales existentes en el catálogo.
                     El sistema generará automáticamente el folio de la solicitud.
                 </p>
             </div>
@@ -385,7 +385,7 @@
             <div class="col-12 col-lg-4">
                 <div class="help-box">
                     <strong>Flujo actual:</strong><br />
-                    La solicitud se registra como origen <strong>Almacén</strong>. Solo se selecciona el área que requiere el material.
+                    La solicitud se registra como origen <strong>Almacén</strong>. Selecciona el tipo de compra y el área que requiere el material o concepto.
                 </div>
             </div>
         </div>
@@ -396,7 +396,6 @@
 
         <input type="hidden" asp-for="OrigenSolicitud" value="Almacen" />
         <input type="hidden" asp-for="AlmacenID" value="" />
-        <input type="hidden" asp-for="TipoCompra" value="Materia prima" />
         <input type="hidden" asp-for="PedidoClienteReferencia" value="" />
 
         <div asp-validation-summary="ModelOnly"></div>
@@ -410,13 +409,21 @@
             </div>
 
             <div class="row g-3">
-                <div class="col-12 col-md-6">
-                    <label asp-for="DepartamentoID" class="form-label">Área que requiere el material</label>
+                <div class="col-12 col-md-4">
+                    <label asp-for="TipoCompra" class="form-label">Tipo de compra</label>
+                    <select asp-for="TipoCompra" asp-items="Model.TiposCompra" class="form-select">
+                        <option value="">Seleccione el tipo de compra</option>
+                    </select>
+                    <span asp-validation-for="TipoCompra" class="text-danger"></span>
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label asp-for="DepartamentoID" class="form-label">Área que requiere la compra</label>
                     <select asp-for="DepartamentoID" asp-items="Model.Departamentos" class="form-select"></select>
                     <span asp-validation-for="DepartamentoID" class="text-danger"></span>
                 </div>
 
-                <div class="col-12 col-md-6">
+                <div class="col-12 col-md-4">
                     <label asp-for="Prioridad" class="form-label">Prioridad</label>
                     <select asp-for="Prioridad" asp-items="Model.Prioridades" class="form-select">
                         <option value="">Seleccione prioridad</option>
@@ -441,9 +448,9 @@
         <section class="form-card">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                 <div>
-                    <h2 class="form-section-title">Materiales solicitados</h2>
+                    <h2 class="form-section-title">Materiales / conceptos solicitados</h2>
                     <p class="form-section-subtitle">
-                        Selecciona materiales registrados en almacén. El stock se carga automáticamente.
+                        Selecciona materiales registrados en el catálogo. El stock se carga automáticamente cuando exista movimiento de almacén.
                     </p>
                 </div>
 
@@ -461,7 +468,7 @@
                             <div class="material-header">
                                 <div>
                                     <span class="material-badge">Material #@(i + 1)</span>
-                                    <h3 class="material-title mt-2">Detalle del material</h3>
+                                    <h3 class="material-title mt-2">Detalle del material / concepto</h3>
                                 </div>
 
                                 <button type="button" class="btn-compras-danger btnEliminarMaterial">
@@ -488,7 +495,7 @@
                                         }
                                     </select>
                                     <span class="stock-hint">
-                                        Selecciona un material para cargar código, unidad y stock.
+                                        Selecciona un material para cargar código, unidad y stock cuando exista información disponible.
                                     </span>
                                 </div>
 
@@ -562,10 +569,10 @@
                                 </div>
 
                                 <div class="col-12">
-                                    <label class="form-label">Observaciones del material</label>
+                                    <label class="form-label">Observaciones del material / concepto</label>
                                     <textarea name="Materiales[@i].Observaciones"
                                               class="form-control"
-                                              placeholder="Notas específicas del material...">@Model.Materiales[i].Observaciones</textarea>
+                                              placeholder="Notas específicas del material o concepto...">@Model.Materiales[i].Observaciones</textarea>
                                 </div>
                             </div>
                         </div>
@@ -729,7 +736,7 @@
                     <div class="material-header">
                         <div>
                             <span class="material-badge">Material #${index + 1}</span>
-                            <h3 class="material-title mt-2">Detalle del material</h3>
+                            <h3 class="material-title mt-2">Detalle del material / concepto</h3>
                         </div>
 
                         <button type="button" class="btn-compras-danger btnEliminarMaterial">
@@ -747,7 +754,7 @@
                                 ${construirOptionsMateriales()}
                             </select>
                             <span class="stock-hint">
-                                Selecciona un material para cargar código, unidad y stock.
+                                Selecciona un material para cargar código, unidad y stock cuando exista información disponible.
                             </span>
                         </div>
 
@@ -814,10 +821,10 @@
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label">Observaciones del material</label>
+                            <label class="form-label">Observaciones del material / concepto</label>
                             <textarea name="Materiales[${index}].Observaciones"
                                       class="form-control"
-                                      placeholder="Notas específicas del material..."></textarea>
+                                      placeholder="Notas específicas del material o concepto..."></textarea>
                         </div>
                     </div>
                 `;
