@@ -169,10 +169,10 @@
                         </td>
 
                         <td class="pt-stock"
-                            title="Existencia física: @x.SaldoFisico · Disponible real: @x.Disponible">
+                            title="Existencia física: @x.SaldoFisico PZA · Disponible real: @x.Disponible PZA">
                             <span class="pt-stock-badge @x.Semaforo"
-                                  title="Existencia física: @x.SaldoFisico · Disponible real: @x.Disponible">
-                                <strong>@x.SaldoFisico</strong>
+                                  title="Existencia física: @x.SaldoFisico PZA · Disponible real: @x.Disponible PZA">
+                                <strong>@x.SaldoFisico.ToString("N0") PZA</strong>
                             </span>
                         </td>
 
@@ -180,12 +180,12 @@
                         <td class="pt-requested">
                             @if (x.Solicitado > 0)
                             {
-                                <strong>-@x.Solicitado.ToString("N0")</strong>
+                                <strong>-@x.Solicitado.ToString("N0") PZA</strong>
                                 <small>Pendiente</small>
                             }
                             else
                             {
-                                <span class="pt-empty-value">0</span>
+                                <span class="pt-empty-value">0 PZA</span>
                             }
                         </td>
                         <td class="pt-last-movement">
