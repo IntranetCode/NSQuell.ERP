@@ -1,8 +1,31 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+﻿// ============================================================================
+// MODELO UNIFICADO: PlaneacionRelease.cs
+//
+// BLOQUES INTEGRADOS EN ESTE ARCHIVO:
+//   1. PlaneacionRelease.cs
+//      Modelos principales de Releases, detalle, necesidades y estatus.
+//
+//   2. PlaneacionReleaseEditar.cs
+//      ViewModel utilizado para editar Releases existentes.
+//
+//   3. PlaneacionReleaseImportacion.cs
+//      Resultado y detalle de la importacion de documentos.
+//
+//   4. PlaneacionReleaseValidacion.cs
+//      Lotes, documentos y estados para la validacion previa a importar.
+//
+//   5. PlaneacionReleaseVinculacion.cs
+//      ViewModels para vincular partes pendientes a un Release.
+// ============================================================================
+
+using Microsoft.AspNetCore.Mvc.Rendering;
+using System.Text.Json.Serialization;
 using static ERP.NSQuell.Models.PlaneacionReleaseEstatus;
 
 namespace ERP.NSQuell.Models
 {
+    #region ORIGEN: PlaneacionRelease.cs - Modelos principales
+
     public class PlaneacionReleaseIndexVm
     {
         public int ReleaseID { get; set; }
@@ -56,6 +79,10 @@ namespace ERP.NSQuell.Models
         public string? Observaciones { get; set; }
 
         public int EstatusID { get; set; }
+
+        public string? NivelCriticidad { get; set; } = "NORMAL";
+
+        public string? ComentarioCriticidad { get; set; }
 
         public List<PlaneacionReleaseRenglonCrearVm> Renglones { get; set; } = new();
 
@@ -386,4 +413,182 @@ namespace ERP.NSQuell.Models
             public decimal HorasNecesarias { get; set; }
         }
     }
+
+    #endregion
+
+    #region ORIGEN: PlaneacionReleaseEditar.cs - Edicion de Releases
+
+    public sealed class PlaneacionReleaseEditarVm : PlaneacionReleaseCrearVm
+    {
+        public int ReleaseID { get; set; }
+        public bool ConfirmarImpacto { get; set; }
+
+        public bool TienePlaneacionVinculada { get; set; }
+        public bool TieneProgramaBloqueado { get; set; }
+        public int ProgramasVinculados { get; set; }
+    }
+
+    #endregion
+
+    #region ORIGEN: PlaneacionReleaseImportacion.cs - Importacion de documentos
+
+    public sealed class PlaneacionReleaseImportacionResultadoVm
+    {
+        public DateTime FechaProceso { get; set; } = DateTime.Now;
+        public string? ErrorGeneral { get; set; }
+        public string? NotaGeneral { get; set; }
+        public List<PlaneacionReleaseImportacionArchivoVm> Archivos { get; set; } = new();
+
+        public int TotalArchivos => Archivos.Count;
+        public int Exitosos => Archivos.Count(x => x.Estado == "CREADO");
+        public int Pendientes => Archivos.Count(x => x.Estado == "PENDIENTE");
+        public int Omitidos => Archivos.Count(x => x.Estado == "OMITIDO");
+        public int Errores => Archivos.Count(x => x.Estado == "ERROR" || x.Estado == "NO_SOPORTADO");
+        public int TotalEntregas => Archivos
+            .Where(x => x.Estado == "CREADO" || x.Estado == "PENDIENTE")
+            .Sum(x => x.TotalEntregas);
+        public int TotalPiezas => Archivos
+            .Where(x => x.Estado == "CREADO" || x.Estado == "PENDIENTE")
+            .Sum(x => x.TotalPiezas);
+    }
+
+    public sealed class PlaneacionReleaseImportacionArchivoVm
+    {
+        public string Archivo { get; set; } = string.Empty;
+        public string Estado { get; set; } = "PENDIENTE";
+        public string Mensaje { get; set; } = string.Empty;
+        public int? ReleaseID { get; set; }
+        public string? FolioRelease { get; set; }
+        public int? ClienteID { get; set; }
+        public string? Cliente { get; set; }
+        public string? Parte { get; set; }
+        public string? Descripcion { get; set; }
+        public string? Schedule { get; set; }
+        public string? OrdenCliente { get; set; }
+        public string? Version { get; set; }
+        public string? ArchivoGuardado { get; set; }
+        public bool RequiereVinculacion { get; set; }
+        public int TotalEntregas { get; set; }
+        public int TotalPiezas { get; set; }
+        public int VersionesAnterioresCerradas { get; set; }
+        public List<string> Advertencias { get; set; } = new();
+    }
+
+    #endregion
+
+    #region ORIGEN: PlaneacionReleaseValidacion.cs - Validacion previa a importar
+
+    public sealed class ReleaseValidacionLoteVm
+    {
+        public string LoteID { get; set; } = string.Empty;
+        public DateTime FechaProceso { get; set; } = DateTime.Now;
+        public int UsuarioID { get; set; }
+        public string? ErrorGeneral { get; set; }
+        public string? NotaGeneral { get; set; }
+        public List<ReleaseValidacionDocumentoVm> Documentos { get; set; } = new();
+
+        public int Total => Documentos.Count;
+        public int Validados => Documentos.Count(x => x.Estado == ReleaseValidacionEstados.Validado);
+        public int Pendientes => Documentos.Count(x => x.Estado == ReleaseValidacionEstados.Pendiente);
+        public int Omitidos => Documentos.Count(x => x.Estado == ReleaseValidacionEstados.Omitido);
+        public int Errores => Documentos.Count(x =>
+            x.Estado == ReleaseValidacionEstados.Error ||
+            x.Estado == ReleaseValidacionEstados.NoSoportado);
+        public int Guardados => Documentos.Count(x => x.Estado == ReleaseValidacionEstados.Guardado);
+    }
+
+    public sealed class ReleaseValidacionDocumentoVm
+    {
+        public string DocumentoID { get; set; } = Guid.NewGuid().ToString("N");
+        public string Archivo { get; set; } = string.Empty;
+        public string ArchivoTemporal { get; set; } = string.Empty;
+        public string Estado { get; set; } = ReleaseValidacionEstados.Pendiente;
+        public string Mensaje { get; set; } = string.Empty;
+
+        public string Plantilla { get; set; } = string.Empty;
+        public string Sha256 { get; set; } = string.Empty;
+        public DateTime? FechaDocumento { get; set; }
+
+        public int? ClienteID { get; set; }
+        public string? Cliente { get; set; }
+        public string? FolioCliente { get; set; }
+        public string? Version { get; set; }
+
+        public int TotalEntregas { get; set; }
+        public int TotalPiezas { get; set; }
+        public int? ReleaseID { get; set; }
+        public string? FolioRelease { get; set; }
+
+        public List<string> Advertencias { get; set; } = new();
+        public PlaneacionReleaseCrearVm ReleasePreparado { get; set; } = new();
+
+        [JsonIgnore]
+        public int PartesPendientes =>
+            ReleasePreparado.Renglones.Count(x => !x.ParteID.HasValue);
+
+        [JsonIgnore]
+        public string PartesTexto =>
+            string.Join(", ",
+                ReleasePreparado.Renglones
+                    .Select(x => x.NumeroParte ?? x.ReferenciaSAP)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    public sealed class ReleasePendientesValidarVm
+    {
+        public List<ReleaseValidacionLoteVm> Lotes { get; set; } = new();
+        public int TotalPendientes => Lotes.Sum(x => x.Pendientes);
+    }
+
+    public static class ReleaseValidacionEstados
+    {
+        public const string Validado = "VALIDADO";
+        public const string Pendiente = "PENDIENTE_VALIDACION";
+        public const string Omitido = "OMITIDO";
+        public const string Error = "ERROR";
+        public const string NoSoportado = "NO_SOPORTADO";
+        public const string Guardado = "GUARDADO";
+    }
+
+    #endregion
+
+    #region ORIGEN: PlaneacionReleaseVinculacion.cs - Vinculacion de partes
+
+    public sealed class PlaneacionReleaseVinculacionVm
+    {
+        public int ReleaseID { get; set; }
+        public string? FolioRelease { get; set; }
+        public int ClienteID { get; set; }
+        public string? ClienteNombre { get; set; }
+        public string? ArchivoOrigenNombre { get; set; }
+        public List<PlaneacionReleaseVinculacionRenglonVm> Renglones { get; set; } = new();
+        public List<SelectListItem> PartesActivas { get; set; } = new();
+    }
+
+    public sealed class PlaneacionReleaseVinculacionRenglonVm
+    {
+        public int ReleaseRenglonID { get; set; }
+        public int Renglon { get; set; }
+        public int? ParteID { get; set; }
+        public bool ParteActiva { get; set; }
+        public string? NumeroParteOriginal { get; set; }
+        public string? ReferenciaOriginal { get; set; }
+        public string? DescripcionOriginal { get; set; }
+    }
+
+    public sealed class PlaneacionReleaseVinculacionPostVm
+    {
+        public int ReleaseID { get; set; }
+        public List<PlaneacionReleaseVinculacionItemPostVm> Renglones { get; set; } = new();
+    }
+
+    public sealed class PlaneacionReleaseVinculacionItemPostVm
+    {
+        public int ReleaseRenglonID { get; set; }
+        public int? ParteID { get; set; }
+    }
+
+    #endregion
+
 }

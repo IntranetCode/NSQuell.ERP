@@ -81,6 +81,63 @@
             _ => "status-info"
         };
     }
+
+    public static string TipoOFNormalizado(string? tipoOF)
+    {
+        if (string.IsNullOrWhiteSpace(tipoOF))
+            return "RELEASE";
+
+        var valor = tipoOF.Trim().ToUpperInvariant()
+            .Replace("Á", "A")
+            .Replace("É", "E")
+            .Replace("Í", "I")
+            .Replace("Ó", "O")
+            .Replace("Ú", "U");
+
+        return valor switch
+        {
+            "RELEASE" => "RELEASE",
+            "ENSAMBLE" => "ENSAMBLE",
+            "PRUEBA" => "PRUEBA",
+            "MP EXTRA" => "MP EXTRA",
+            "MPEXTRA" => "MP EXTRA",
+            "MP_EXTRA" => "MP EXTRA",
+            _ => "RELEASE"
+        };
+    }
+
+    public static string TextoTipoOF(string? tipoOF)
+    {
+        return TipoOFNormalizado(tipoOF) switch
+        {
+            "ENSAMBLE" => "Ensamble",
+            "PRUEBA" => "Prueba",
+            "MP EXTRA" => "MP extra",
+            _ => "Release"
+        };
+    }
+
+    public static string ClaseTipoOF(string? tipoOF)
+    {
+        return TipoOFNormalizado(tipoOF) switch
+        {
+            "ENSAMBLE" => "type-ensamble",
+            "PRUEBA" => "type-prueba",
+            "MP EXTRA" => "type-mp-extra",
+            _ => "type-release"
+        };
+    }
+
+    public static string IconoTipoOF(string? tipoOF)
+    {
+        return TipoOFNormalizado(tipoOF) switch
+        {
+            "ENSAMBLE" => "fa-layer-group",
+            "PRUEBA" => "fa-flask-vial",
+            "MP EXTRA" => "fa-boxes-stacked",
+            _ => "fa-industry"
+        };
+    }
 }
 
 @{
@@ -93,11 +150,28 @@
     var pendientesGenerarOF = lista.Count(x => x.SolicitudProduccionID < 0);
     var ofGeneradas = lista.Count(x => x.SolicitudProduccionID > 0);
     var totalPiezas = lista.Sum(x => x.TotalPiezas);
-    var vencidas = lista.Count(x => x.FechaRequerida.HasValue && x.FechaRequerida.Value.Date < DateTime.Today);
+    var vencidas = lista.Count(x =>
+        x.FechaRequerida.HasValue &&
+        x.FechaRequerida.Value.Date < DateTime.Today);
 
-    var clientes = lista
-        .GroupBy(x => Texto(x.Cliente))
-        .OrderBy(x => x.Key)
+    var releaseCount = lista.Count(x => TipoOFNormalizado(x.TipoOF) == "RELEASE");
+    var ensambleCount = lista.Count(x => TipoOFNormalizado(x.TipoOF) == "ENSAMBLE");
+    var pruebaCount = lista.Count(x => TipoOFNormalizado(x.TipoOF) == "PRUEBA");
+    var mpExtraCount = lista.Count(x => TipoOFNormalizado(x.TipoOF) == "MP EXTRA");
+
+    var maquinas = lista
+        .GroupBy(x => new
+        {
+            Codigo = string.IsNullOrWhiteSpace(x.MaquinaCodigo)
+                ? "SIN MAQUINA"
+                : x.MaquinaCodigo.Trim(),
+            Nombre = string.IsNullOrWhiteSpace(x.MaquinaNombre)
+                ? "Sin asignacion de maquina"
+                : x.MaquinaNombre.Trim()
+        })
+        .OrderBy(x => x.Key.Codigo == "SIN MAQUINA" ? 1 : 0)
+        .ThenBy(x => x.Key.Codigo)
+        .ThenBy(x => x.Key.Nombre)
         .ToList();
 }
 
@@ -275,7 +349,7 @@
                 background: #f0f5fb;
             }
 
-        .client-section {
+        .machine-section {
             background: #fff;
             border: 1px solid var(--border);
             border-radius: 22px;
@@ -284,7 +358,7 @@
             margin-bottom: 18px;
         }
 
-        .client-header {
+        .machine-header {
             width: 100%;
             padding: 16px 18px;
             border: 0;
@@ -299,16 +373,16 @@
             cursor: pointer;
         }
 
-            .client-header:hover {
+            .machine-header:hover {
                 background: linear-gradient(180deg, #fff, #f1f7ff);
             }
 
-            .client-header:focus-visible {
+            .machine-header:focus-visible {
                 outline: 3px solid rgba(0, 74, 173, .18);
                 outline-offset: -3px;
             }
 
-        .client-header-main {
+        .machine-header-main {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -317,7 +391,7 @@
             min-width: 0;
         }
 
-        .client-toggle {
+        .machine-toggle {
             width: 34px;
             height: 34px;
             flex: 0 0 34px;
@@ -329,27 +403,27 @@
             transition: transform .2s ease, background .2s ease;
         }
 
-        .client-section.is-open .client-toggle {
+        .machine-section.is-open .machine-toggle {
             transform: rotate(180deg);
             background: #dcecff;
         }
 
-        .client-body {
+        .machine-body {
             display: none;
             border-top: 1px solid var(--border);
         }
 
-        .client-section.is-open .client-body {
+        .machine-section.is-open .machine-body {
             display: block;
         }
 
-        .client-identification {
+        .machine-identification {
             display: flex;
             align-items: center;
             gap: 12px;
         }
 
-        .client-icon {
+        .machine-icon {
             width: 42px;
             height: 42px;
             border-radius: 13px;
@@ -359,20 +433,20 @@
             color: var(--blue);
         }
 
-        .client-title {
+        .machine-title {
             margin: 0;
             color: var(--blue-dark);
             font-size: 1.05rem;
             font-weight: 950;
         }
 
-        .client-subtitle {
+        .machine-subtitle {
             color: var(--muted);
             font-size: .82rem;
             margin-top: 2px;
         }
 
-        .client-summary {
+        .machine-summary {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
@@ -504,6 +578,49 @@
             color: #9a5a00;
             background: #fff4df;
             border: 1px solid #f1d09c;
+        }
+
+        .type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 5px 8px;
+            font-size: .68rem;
+            font-weight: 900;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .type-release {
+            color: #0758b5;
+            background: #edf5ff;
+            border-color: #c3dcfb;
+        }
+
+        .type-ensamble {
+            color: #6540b4;
+            background: #f1edff;
+            border-color: #d7cdfb;
+        }
+
+        .type-prueba {
+            color: #9a5a00;
+            background: #fff4df;
+            border-color: #f1d09c;
+        }
+
+        .type-mp-extra {
+            color: #147a4b;
+            background: #effaf5;
+            border-color: #bee6d2;
+        }
+
+        .badge-stack {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
         }
 
         .folio {
@@ -677,6 +794,100 @@
             padding: 32px 18px;
         }
 
+
+        .machine-filter-wrap {
+            flex: 0 1 320px;
+            min-width: 260px;
+        }
+
+        .type-filter-wrap {
+            flex: 0 1 240px;
+            min-width: 220px;
+        }
+
+        .machine-filter-label {
+            display: block;
+            margin: 0 0 5px 2px;
+            color: var(--muted);
+            font-size: .68rem;
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .machine-select {
+            width: 100%;
+            min-height: 44px;
+            padding: 10px 38px 10px 13px;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            outline: none;
+            color: var(--text);
+            background-color: #fff;
+        }
+
+            .machine-select:focus {
+                border-color: #8fb9ee;
+                box-shadow: 0 0 0 4px rgba(0, 74, 173, .08);
+            }
+
+        .data-box-wide {
+            grid-column: 1 / -1;
+        }
+
+        .modal-confirm-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 17px;
+            display: grid;
+            place-items: center;
+            color: var(--blue);
+            background: var(--blue-soft);
+            font-size: 1.25rem;
+        }
+
+        .modal-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .modal-detail-item {
+            padding: 10px 11px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #f8fafc;
+            min-width: 0;
+        }
+
+        .modal-detail-label {
+            color: var(--muted);
+            font-size: .65rem;
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .modal-detail-value {
+            margin-top: 2px;
+            color: var(--text);
+            font-size: .86rem;
+            font-weight: 850;
+            overflow-wrap: anywhere;
+        }
+
+        .modal-warning-note {
+            margin-top: 14px;
+            padding: 11px 12px;
+            border-radius: 12px;
+            color: #805100;
+            background: #fff8e8;
+            border: 1px solid #f1d09c;
+            font-size: .8rem;
+            font-weight: 700;
+        }
+
         @@media (max-width: 980px) {
             .hero-stats {
                 grid-template-columns: repeat(2, minmax(125px, 1fr));
@@ -717,8 +928,19 @@
                 grid-template-columns: 1fr;
             }
 
-            .client-header {
+            .machine-header {
                 align-items: flex-start;
+            }
+
+            .machine-filter-wrap,
+            .type-filter-wrap {
+                width: 100%;
+                min-width: 0;
+                flex-basis: 100%;
+            }
+
+            .modal-detail-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -729,13 +951,13 @@
             <div class="hero-layout">
                 <div>
                     <h1><i class="fa-solid fa-industry me-2"></i>Órdenes de Fabricación</h1>
-                    <p>OF organizadas por cliente y prioridad, ordenadas por la fecha de entrega más próxima.</p>
+                    <p>OF organizadas por máquina y prioridad, ordenadas por la fecha de entrega más próxima.</p>
                 </div>
 
                 <div class="hero-stats">
                     <div class="stat"><div class="stat-value">@ofGeneradas.ToString("N0")</div><div class="stat-label">OF generadas</div></div>
                     <div class="stat"><div class="stat-value">@pendientesGenerarOF.ToString("N0")</div><div class="stat-label">Pendientes de generar</div></div>
-                    <div class="stat"><div class="stat-value">@totalPiezas.ToString("N0")</div><div class="stat-label">Piezas totales</div></div>
+
                     <div class="stat"><div class="stat-value">@vencidas.ToString("N0")</div><div class="stat-label">Entregas vencidas</div></div>
                 </div>
             </div>
@@ -761,13 +983,49 @@
             <div class="toolbar-layout">
                 <div class="search-wrap">
                     <i class="fa-solid fa-magnifying-glass"></i>
-                    <input id="txtBuscar" class="search-input" type="search" autocomplete="off"
-                           placeholder="Buscar cliente, folio, OF, responsable, prioridad o estatus..." />
+                    <input id="txtBuscar"
+                           class="search-input"
+                           type="search"
+                           autocomplete="off"
+                           placeholder="Buscar máquina, cliente, folio, OF, tipo de OF, responsable, prioridad o estatus..." />
+                </div>
+
+                <div class="machine-filter-wrap">
+                    <label class="machine-filter-label" for="selectMaquina">Filtrar por máquina</label>
+                    <select id="selectMaquina" class="machine-select">
+                        <option value="">Todas las máquinas</option>
+                        @foreach (var maquina in maquinas)
+                        {
+                            var etiquetaMaquina = string.IsNullOrWhiteSpace(maquina.Key.Nombre) ||
+                            string.Equals(maquina.Key.Codigo, maquina.Key.Nombre, StringComparison.OrdinalIgnoreCase)
+                            ? maquina.Key.Codigo
+                            : $"{maquina.Key.Codigo} | {maquina.Key.Nombre}";
+
+                            <option value="@maquina.Key.Codigo">@etiquetaMaquina</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="type-filter-wrap">
+                    <label class="machine-filter-label" for="selectTipoOF">Filtrar por tipo de OF</label>
+                    <select id="selectTipoOF" class="machine-select">
+                        <option value="">Todos los tipos</option>
+                        <option value="RELEASE">Release (@releaseCount.ToString("N0"))</option>
+                        <option value="ENSAMBLE">Ensamble (@ensambleCount.ToString("N0"))</option>
+                        <option value="PRUEBA">Prueba (@pruebaCount.ToString("N0"))</option>
+                        <option value="MP EXTRA">MP extra (@mpExtraCount.ToString("N0"))</option>
+                    </select>
                 </div>
 
                 <div class="toolbar-actions d-flex gap-2 flex-wrap">
-                    <a href="/Menu/Grupo/3" class="btn-erp btn-erp-light"><i class="fa-solid fa-arrow-left"></i>Volver</a>
-                    <a asp-controller="Planeacion" asp-action="Crear" class="btn-erp btn-erp-primary"><i class="fa-solid fa-plus"></i>Nueva OF manual</a>
+                    <a href="/Menu/Grupo/3" class="btn-erp btn-erp-light">
+                        <i class="fa-solid fa-arrow-left"></i>Volver
+                    </a>
+                    <a asp-controller="Planeacion"
+                       asp-action="Crear"
+                       class="btn-erp btn-erp-primary">
+                        <i class="fa-solid fa-plus"></i>Nueva OF manual
+                    </a>
                 </div>
             </div>
         </section>
@@ -778,7 +1036,9 @@
                 <i class="fa-regular fa-folder-open"></i>
                 <h5 class="fw-bold">No hay órdenes de fabricación</h5>
                 <p class="mb-3">Cuando exista una OF o un programa de máquina pendiente, aparecerá en esta bandeja.</p>
-                <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-erp btn-erp-primary">
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Index"
+                   class="btn-erp btn-erp-primary">
                     <i class="fa-solid fa-list-check"></i>Ir al programa de planeación
                 </a>
             </section>
@@ -786,53 +1046,95 @@
         else
         {
             <div id="contenedorOF">
-                @foreach (var cliente in clientes)
+                @{
+                    var maquinaIndex = 0;
+                }
+
+                @foreach (var maquina in maquinas)
                 {
-                    var ordenesCliente = cliente
+                    maquinaIndex++;
+
+                    var ordenesMaquina = maquina
                     .OrderBy(x => OrdenPrioridad(x.Prioridad))
                     .ThenBy(x => x.FechaRequerida ?? DateTime.MaxValue)
                     .ThenBy(x => x.FolioSolicitud)
                     .ToList();
 
-                    var piezasCliente = ordenesCliente.Sum(x => x.TotalPiezas);
-                    var pendientesCliente = ordenesCliente.Count(x => x.SolicitudProduccionID < 0);
+                    var piezasMaquina = ordenesMaquina.Sum(x => x.TotalPiezas);
+                    var pendientesMaquina = ordenesMaquina.Count(x => x.SolicitudProduccionID < 0);
+                    var clientesMaquina = ordenesMaquina
+                    .Select(x => Texto(x.Cliente))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count();
 
-                    var clienteDomId = $"cliente-{Math.Abs(cliente.Key.GetHashCode())}";
+                    var maquinaDomId = $"maquina-{maquinaIndex}";
 
-                    <section class="client-section" data-client-section>
-                        <button type="button" class="client-header" data-client-toggle aria-expanded="false" aria-controls="@clienteDomId">
-                            <div class="client-header-main">
-                                <div class="client-identification">
-                                    <div class="client-icon"><i class="fa-solid fa-building"></i></div>
+                    <section class="machine-section"
+                             data-machine-section
+                             data-machine="@maquina.Key.Codigo">
+                        <button type="button"
+                                class="machine-header"
+                                data-machine-toggle
+                                aria-expanded="false"
+                                aria-controls="@maquinaDomId">
+                            <div class="machine-header-main">
+                                <div class="machine-identification">
+                                    <div class="machine-icon">
+                                        <i class="fa-solid fa-gears"></i>
+                                    </div>
                                     <div>
-                                        <h2 class="client-title">@cliente.Key</h2>
-                                        <div class="client-subtitle">Haz clic para consultar prioridades y órdenes</div>
+                                        <h2 class="machine-title">@maquina.Key.Codigo</h2>
+                                        <div class="machine-subtitle">
+                                            @maquina.Key.Nombre · Haz clic para consultar prioridades y órdenes
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div class="client-summary">
-                                    <span class="summary-chip"><i class="fa-solid fa-file-lines me-1"></i>@ordenesCliente.Count.ToString("N0") registro(s)</span>
-                                    <span class="summary-chip"><i class="fa-solid fa-cubes me-1"></i>@piezasCliente.ToString("N0") piezas</span>
-                                    @if (pendientesCliente > 0)
+                                <div class="machine-summary">
+                                    <span class="summary-chip">
+                                        <i class="fa-solid fa-file-lines me-1"></i>
+                                        @ordenesMaquina.Count.ToString("N0") registro(s)
+                                    </span>
+                                    <span class="summary-chip">
+                                        <i class="fa-solid fa-cubes me-1"></i>
+                                        @piezasMaquina.ToString("N0") piezas
+                                    </span>
+                                    <span class="summary-chip">
+                                        <i class="fa-solid fa-building me-1"></i>
+                                        @clientesMaquina cliente(s)
+                                    </span>
+                                    <span class="summary-chip">
+                                        <i class="fa-solid fa-tags me-1"></i>
+                                        @ordenesMaquina.Select(x => TipoOFNormalizado(x.TipoOF)).Distinct().Count().ToString("N0") tipo(s) OF
+                                    </span>
+                                    @if (pendientesMaquina > 0)
                                     {
-                                        <span class="summary-chip"><i class="fa-solid fa-gears me-1"></i>@pendientesCliente pendiente(s)</span>
+                                        <span class="summary-chip">
+                                            <i class="fa-solid fa-gears me-1"></i>
+                                            @pendientesMaquina pendiente(s)
+                                        </span>
                                     }
                                 </div>
                             </div>
-                            <span class="client-toggle" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+                            <span class="machine-toggle" aria-hidden="true">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </span>
                         </button>
 
-                        <div class="client-body" id="@clienteDomId" data-client-body>
-                            @foreach (var prioridad in ordenesCliente
+                        <div class="machine-body" id="@maquinaDomId" data-machine-body>
+                            @foreach (var prioridad in ordenesMaquina
                                                 .GroupBy(x => PrioridadNormalizada(x.Prioridad))
                                                 .OrderBy(x => OrdenPrioridad(x.Key)))
                             {
                                 <div class="priority-group" data-priority-group>
                                     <div class="priority-heading">
                                         <span class="priority-label @ClasePrioridad(prioridad.Key)">
-                                            <i class="fa-solid @IconoPrioridad(prioridad.Key)"></i>@prioridad.Key
+                                            <i class="fa-solid @IconoPrioridad(prioridad.Key)"></i>
+                                            @prioridad.Key
                                         </span>
-                                        <span class="priority-count">@prioridad.Count().ToString("N0") orden(es)</span>
+                                        <span class="priority-count">
+                                            @prioridad.Count().ToString("N0") orden(es)
+                                        </span>
                                     </div>
 
                                     <div class="of-grid">
@@ -842,29 +1144,52 @@
                                         {
                                             var esPendientePrograma = item.SolicitudProduccionID < 0;
                                             var programaProduccionId = Math.Abs(item.SolicitudProduccionID);
+                                            var formGenerarId = $"form-generar-of-{programaProduccionId}";
+                                            var tipoOF = TipoOFNormalizado(item.TipoOF);
+                                            var tipoOFTexto = TextoTipoOF(item.TipoOF);
+
                                             var textoBusqueda = string.Join(" ", new[]
                                             {
-                                                        cliente.Key,
+                                                        maquina.Key.Codigo,
+                                                        maquina.Key.Nombre,
+                                                        item.Cliente,
                                                         item.FolioSolicitud,
                                                         item.NumeroOFRecibida,
                                                         item.Prioridad,
+                                                        item.TipoOF,
+                                                        TextoTipoOF(item.TipoOF),
+                                                        item.MotivoTipoOF,
                                                         item.EstatusNombre,
                                                         item.ResponsablePlaneacionNombre,
                                                         Fecha(item.FechaRequerida)
                                                         }).ToLowerInvariant();
 
                                             <article class="of-card @(esPendientePrograma ? "is-program" : "")"
-                                                     data-of-card data-search="@textoBusqueda">
+                                                     data-of-card
+                                                     data-type="@tipoOF"
+                                                     data-search="@textoBusqueda">
                                                 <div class="card-top">
                                                     <div>
-                                                        @if (esPendientePrograma)
-                                                        {
-                                                            <span class="origin-badge origin-program"><i class="fa-solid fa-gears"></i>Programa</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="origin-badge origin-of"><i class="fa-solid fa-file-lines"></i>OF</span>
-                                                        }
+                                                        <div class="badge-stack">
+                                                            @if (esPendientePrograma)
+                                                            {
+                                                                <span class="origin-badge origin-program">
+                                                                    <i class="fa-solid fa-gears"></i>Programa
+                                                                </span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="origin-badge origin-of">
+                                                                    <i class="fa-solid fa-file-lines"></i>OF
+                                                                </span>
+                                                            }
+
+                                                            <span class="type-badge @ClaseTipoOF(item.TipoOF)"
+                                                                  title="@Texto(item.MotivoTipoOF)">
+                                                                <i class="fa-solid @IconoTipoOF(item.TipoOF)"></i>
+                                                                @tipoOFTexto
+                                                            </span>
+                                                        </div>
 
                                                         <div class="folio">@Texto(item.FolioSolicitud)</div>
                                                         <div class="of-number">
@@ -880,40 +1205,86 @@
                                                     </div>
 
                                                     <span class="status-pill @ClaseEstatus(item.EstatusID)">
-                                                        <i class="fa-solid fa-circle"></i>@Texto(item.EstatusNombre)
+                                                        <i class="fa-solid fa-circle"></i>
+                                                        @Texto(item.EstatusNombre)
                                                     </span>
                                                 </div>
 
                                                 <div class="date-banner @ClaseFecha(item.FechaRequerida)">
-                                                    <span><i class="fa-regular fa-calendar me-1"></i>@TextoFechaEntrega(item.FechaRequerida)</span>
+                                                    <span>
+                                                        <i class="fa-regular fa-calendar me-1"></i>
+                                                        @TextoFechaEntrega(item.FechaRequerida)
+                                                    </span>
                                                     <strong>@Fecha(item.FechaRequerida)</strong>
                                                 </div>
 
                                                 <div class="data-row">
-                                                    <div class="data-box"><div class="data-label">Piezas</div><div class="data-value">@item.TotalPiezas.ToString("N0")</div></div>
-                                                    <div class="data-box"><div class="data-label">Renglones</div><div class="data-value">@item.TotalRenglones.ToString("N0")</div></div>
-                                                    <div class="data-box"><div class="data-label">Inicio planeado</div><div class="data-value">@FechaHora(item.FechaInicioPlaneada)</div></div>
-                                                    <div class="data-box"><div class="data-label">Fin planeado</div><div class="data-value">@FechaHora(item.FechaFinPlaneada)</div></div>
+                                                    <div class="data-box data-box-wide">
+                                                        <div class="data-label">Cliente</div>
+                                                        <div class="data-value">@Texto(item.Cliente)</div>
+                                                    </div>
+                                                    <div class="data-box">
+                                                        <div class="data-label">Tipo de OF</div>
+                                                        <div class="data-value">@tipoOFTexto</div>
+                                                    </div>
+                                                    <div class="data-box">
+                                                        <div class="data-label">Piezas</div>
+                                                        <div class="data-value">@item.TotalPiezas.ToString("N0")</div>
+                                                    </div>
+                                                    <div class="data-box">
+                                                        <div class="data-label">Renglones</div>
+                                                        <div class="data-value">@item.TotalRenglones.ToString("N0")</div>
+                                                    </div>
+                                                    <div class="data-box">
+                                                        <div class="data-label">Inicio planeado</div>
+                                                        <div class="data-value">@FechaHora(item.FechaInicioPlaneada)</div>
+                                                    </div>
+                                                    <div class="data-box">
+                                                        <div class="data-label">Fin planeado</div>
+                                                        <div class="data-value">@FechaHora(item.FechaFinPlaneada)</div>
+                                                    </div>
                                                 </div>
 
                                                 <footer class="card-footer-custom">
-                                                    <div class="responsible" title="@Texto(item.ResponsablePlaneacionNombre)">
-                                                        <i class="fa-regular fa-user me-1"></i>@Texto(item.ResponsablePlaneacionNombre)
+                                                    <div class="responsible"
+                                                         title="@Texto(item.ResponsablePlaneacionNombre)">
+                                                        <i class="fa-regular fa-user me-1"></i>
+                                                        @Texto(item.ResponsablePlaneacionNombre)
                                                     </div>
 
                                                     @if (esPendientePrograma)
                                                     {
-                                                        <form asp-controller="PlaneacionPrograma" asp-action="GenerarOF" method="post" class="m-0">
+                                                        <form id="@formGenerarId"
+                                                              asp-controller="PlaneacionPrograma"
+                                                              asp-action="GenerarOF"
+                                                              method="post"
+                                                              class="m-0">
                                                             @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="programaProduccionId" value="@programaProduccionId" />
-                                                            <button type="submit" class="btn-erp btn-erp-primary card-action">
-                                                                <i class="fa-solid fa-file-circle-plus"></i>Generar OF
+                                                            <input type="hidden"
+                                                                   name="programaProduccionId"
+                                                                   value="@programaProduccionId" />
+
+                                                            <button type="button"
+                                                                    class="btn-erp btn-erp-primary card-action"
+                                                                    data-generar-of
+                                                                    data-form-id="@formGenerarId"
+                                                                    data-programa="@programaProduccionId"
+                                                                    data-folio="@Texto(item.FolioSolicitud)"
+                                                                    data-cliente="@Texto(item.Cliente)"
+                                                                    data-maquina="@maquina.Key.Codigo"
+                                                                    data-tipo-of="@tipoOFTexto"
+                                                                    data-piezas="@item.TotalPiezas.ToString("N0")"
+                                                                    data-fecha="@Fecha(item.FechaRequerida)">
+                                                                <i class="fa-solid fa-file-circle-plus"></i>
+                                                                Generar OF
                                                             </button>
                                                         </form>
                                                     }
                                                     else
                                                     {
-                                                        <a asp-controller="Planeacion" asp-action="Detalle" asp-route-id="@item.SolicitudProduccionID"
+                                                        <a asp-controller="Planeacion"
+                                                           asp-action="Detalle"
+                                                           asp-route-id="@item.SolicitudProduccionID"
                                                            class="btn-erp btn-erp-light card-action">
                                                             <i class="fa-regular fa-eye"></i>Ver
                                                         </a>
@@ -932,75 +1303,242 @@
             <section id="sinResultados" class="no-results">
                 <i class="fa-solid fa-magnifying-glass mb-2 fs-3"></i>
                 <h5 class="fw-bold">No encontramos coincidencias</h5>
-                <div>Prueba con otro cliente, folio, responsable, prioridad o estatus.</div>
+                <div>Prueba con otra máquina, cliente, folio, responsable, prioridad o estatus.</div>
             </section>
         }
     </main>
+
+    <div class="modal fade"
+         id="modalGenerarOF"
+         tabindex="-1"
+         aria-labelledby="modalGenerarOFLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="modal-confirm-icon">
+                            <i class="fa-solid fa-file-circle-plus"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold text-primary" id="modalGenerarOFLabel">
+                                Confirmar generación de OF
+                            </h5>
+                            <div class="text-muted small">
+                                Revisa la información antes de continuar.
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body pt-3">
+                    <p class="mb-0">
+                        Se generará automáticamente una Orden de Fabricación para el programa seleccionado.
+                    </p>
+
+                    <div class="modal-detail-grid">
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">Programa</div>
+                            <div class="modal-detail-value" id="confirmPrograma">-</div>
+                        </div>
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">Folio</div>
+                            <div class="modal-detail-value" id="confirmFolio">-</div>
+                        </div>
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">Cliente</div>
+                            <div class="modal-detail-value" id="confirmCliente">-</div>
+                        </div>
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">Máquina</div>
+                            <div class="modal-detail-value" id="confirmMaquina">-</div>
+                        </div>
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">Tipo de OF</div>
+                            <div class="modal-detail-value" id="confirmTipoOF">-</div>
+                        </div>
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">Piezas</div>
+                            <div class="modal-detail-value" id="confirmPiezas">-</div>
+                        </div>
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">Fecha requerida</div>
+                            <div class="modal-detail-value" id="confirmFecha">-</div>
+                        </div>
+                    </div>
+
+                    <div class="modal-warning-note">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                        Al confirmar se crearán el encabezado, el detalle y la asignación de máquina de la OF.
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button"
+                            class="btn-erp btn-erp-light"
+                            data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button"
+                            id="btnConfirmarGenerarOF"
+                            class="btn-erp btn-erp-primary">
+                        <i class="fa-solid fa-check"></i>
+                        Sí, generar OF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         (() => {
             const input = document.getElementById('txtBuscar');
+            const selectMaquina = document.getElementById('selectMaquina');
+            const selectTipoOF = document.getElementById('selectTipoOF');
             const cards = [...document.querySelectorAll('[data-of-card]')];
-            const clientSections = [...document.querySelectorAll('[data-client-section]')];
+            const machineSections = [...document.querySelectorAll('[data-machine-section]')];
             const noResults = document.getElementById('sinResultados');
-            const clientToggles = [...document.querySelectorAll('[data-client-toggle]')];
+            const machineToggles = [...document.querySelectorAll('[data-machine-toggle]')];
 
-            const setClientOpen = (section, open) => {
-                const toggle = section.querySelector('[data-client-toggle]');
+            const modalElement = document.getElementById('modalGenerarOF');
+            const modalGenerarOF = modalElement
+                ? bootstrap.Modal.getOrCreateInstance(modalElement)
+                : null;
+
+            const confirmButton = document.getElementById('btnConfirmarGenerarOF');
+            let pendingForm = null;
+
+            const setMachineOpen = (section, open) => {
+                const toggle = section.querySelector('[data-machine-toggle]');
                 section.classList.toggle('is-open', open);
-                if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                }
             };
 
-            clientToggles.forEach(toggle => {
+            machineToggles.forEach(toggle => {
                 toggle.addEventListener('click', () => {
-                    const section = toggle.closest('[data-client-section]');
+                    const section = toggle.closest('[data-machine-section]');
                     if (!section) return;
-                    setClientOpen(section, !section.classList.contains('is-open'));
+                    setMachineOpen(section, !section.classList.contains('is-open'));
                 });
             });
 
-            if (!input || cards.length === 0) return;
-
             const normalize = value => (value || '')
+                .toString()
                 .toLowerCase()
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
                 .trim();
 
             const applyFilter = () => {
-                const query = normalize(input.value);
+                const query = normalize(input?.value);
+                const selectedMachine = selectMaquina?.value || '';
+                const selectedTipoOF = selectTipoOF?.value || '';
                 let visibleCards = 0;
 
-                cards.forEach(card => {
-                    const searchableText = normalize(`${card.dataset.search || ''} ${card.innerText || ''}`);
-                    const visible = searchableText.includes(query);
-                    card.style.display = visible ? '' : 'none';
-                    if (visible) visibleCards++;
-                });
+                machineSections.forEach(section => {
+                    const machineMatches = !selectedMachine ||
+                        section.dataset.machine === selectedMachine;
 
-                document.querySelectorAll('[data-priority-group]').forEach(group => {
-                    const hasVisibleCard = [...group.querySelectorAll('[data-of-card]')]
-                        .some(card => card.style.display !== 'none');
-                    group.style.display = hasVisibleCard ? '' : 'none';
-                });
+                    const sectionCards = [...section.querySelectorAll('[data-of-card]')];
 
-                clientSections.forEach(section => {
+                    sectionCards.forEach(card => {
+                        const searchableText = normalize(
+                            `${card.dataset.search || ''} ${card.innerText || ''}`);
+
+                        const typeMatches = !selectedTipoOF ||
+                            card.dataset.type === selectedTipoOF;
+
+                        const visible = machineMatches &&
+                            typeMatches &&
+                            (!query || searchableText.includes(query));
+
+                        card.style.display = visible ? '' : 'none';
+                        if (visible) visibleCards++;
+                    });
+
+                    section.querySelectorAll('[data-priority-group]').forEach(group => {
+                        const hasVisibleCard = [...group.querySelectorAll('[data-of-card]')]
+                            .some(card => card.style.display !== 'none');
+                        group.style.display = hasVisibleCard ? '' : 'none';
+                    });
+
                     const hasVisibleGroup = [...section.querySelectorAll('[data-priority-group]')]
                         .some(group => group.style.display !== 'none');
+
                     section.style.display = hasVisibleGroup ? '' : 'none';
 
-                    if (query && hasVisibleGroup) {
-                        setClientOpen(section, true);
-                    } else if (!query) {
-                        setClientOpen(section, false);
+                    if ((query || selectedMachine || selectedTipoOF) && hasVisibleGroup) {
+                        setMachineOpen(section, true);
+                    } else if (!query && !selectedMachine && !selectedTipoOF) {
+                        setMachineOpen(section, false);
                     }
                 });
 
-                if (noResults) noResults.style.display = visibleCards === 0 ? 'block' : 'none';
+                if (noResults) {
+                    noResults.style.display = visibleCards === 0 ? 'block' : 'none';
+                }
             };
 
-            input.addEventListener('input', applyFilter);
+            input?.addEventListener('input', applyFilter);
+            selectMaquina?.addEventListener('change', applyFilter);
+            selectTipoOF?.addEventListener('change', applyFilter);
+
+            document.querySelectorAll('[data-generar-of]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const formId = button.dataset.formId;
+                    pendingForm = formId ? document.getElementById(formId) : null;
+
+                    document.getElementById('confirmPrograma').textContent =
+                        button.dataset.programa || '-';
+                    document.getElementById('confirmFolio').textContent =
+                        button.dataset.folio || '-';
+                    document.getElementById('confirmCliente').textContent =
+                        button.dataset.cliente || '-';
+                    document.getElementById('confirmMaquina').textContent =
+                        button.dataset.maquina || '-';
+                    document.getElementById('confirmTipoOF').textContent =
+                        button.dataset.tipoOf || '-';
+                    document.getElementById('confirmPiezas').textContent =
+                        button.dataset.piezas || '-';
+                    document.getElementById('confirmFecha').textContent =
+                        button.dataset.fecha || '-';
+
+                    if (confirmButton) {
+                        confirmButton.disabled = false;
+                        confirmButton.innerHTML =
+                            '<i class="fa-solid fa-check"></i> Sí, generar OF';
+                    }
+
+                    modalGenerarOF?.show();
+                });
+            });
+
+            confirmButton?.addEventListener('click', () => {
+                if (!pendingForm) return;
+
+                confirmButton.disabled = true;
+                confirmButton.innerHTML =
+                    '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Generando...';
+
+                pendingForm.submit();
+            });
+
+            modalElement?.addEventListener('hidden.bs.modal', () => {
+                pendingForm = null;
+
+                if (confirmButton) {
+                    confirmButton.disabled = false;
+                    confirmButton.innerHTML =
+                        '<i class="fa-solid fa-check"></i> Sí, generar OF';
+                }
+            });
         })();
     </script>
 </body>

@@ -56,6 +56,9 @@ namespace ERP.NSQuell.Models
         public TimeSpan? Cambio { get; set; }
         public TimeSpan? Arranque { get; set; }
 
+        public string? TipoOF { get; set; } = "RELEASE";
+        public string? MotivoTipoOF { get; set; }
+
         public bool TieneOF => SolicitudProduccionID.HasValue;
 
         public bool PuedeGenerarOF =>
@@ -138,6 +141,16 @@ namespace ERP.NSQuell.Models
 
         public TimeSpan? Cambio { get; set; }
         public TimeSpan? Arranque { get; set; }
+
+
+        public string? TipoOF { get; set; } = "RELEASE";
+        public string? MotivoTipoOF { get; set; }
+
+        public int? OperadorPrincipalID { get; set; }
+        public int? OperadorAuxiliarID { get; set; }
+
+        public List<SelectListItem> Operadores { get; set; } = new();
+
 
         public List<SelectListItem> Maquinas { get; set; } = new();
         public List<SelectListItem> Moldes { get; set; } = new();

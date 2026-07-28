@@ -1253,9 +1253,7 @@ END;";
 
             vm.CantidadProgramada = vm.PiezasAProducir;
 
-            // Inicio programado = hora real en que se abre Programa Cambio de Molde,
-            // redondeada al siguiente bloque operativo de 15 minutos.
-            var horaBase = RedondearSiguienteBloque(DateTime.Now, 15);
+            var horaBase = RedondearSiguienteHora(DateTime.Now);
             vm.FechaInicioProgramada = horaBase;
 
             if (vm.MaquinaID.HasValue)
@@ -1296,11 +1294,21 @@ END;";
         }
 
 
+
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Crear(PlaneacionProgramaCrearDesdeNecesidadVm vm)
         {
             var usuarioId = ObtenerUsuarioID();
+
+            vm.TipoOF = "RELEASE";
+            vm.MotivoTipoOF = null;
+
+            if (usuarioId <= 0)
+            {
+                ModelState.AddModelError("", "No se pudo identificar el usuario de la sesión.");
+            }
 
             if (vm.ReleaseDetalleID <= 0)
                 ModelState.AddModelError("", "No se recibió el renglón de release.");
@@ -1329,6 +1337,19 @@ END;";
             if (!vm.HorasProgramadas.HasValue || vm.HorasProgramadas.Value <= 0)
                 ModelState.AddModelError(nameof(vm.HorasProgramadas), "Las horas programadas deben ser mayores a cero.");
 
+            if (!vm.OperadorPrincipalID.HasValue || vm.OperadorPrincipalID.Value <= 0)
+            {
+                ModelState.AddModelError(nameof(vm.OperadorPrincipalID), "Selecciona el operador principal.");
+            }
+
+            if (vm.OperadorAuxiliarID.HasValue &&
+                vm.OperadorAuxiliarID.Value > 0 &&
+                vm.OperadorPrincipalID.HasValue &&
+                vm.OperadorAuxiliarID.Value == vm.OperadorPrincipalID.Value)
+            {
+                ModelState.AddModelError(nameof(vm.OperadorAuxiliarID), "El operador auxiliar debe ser diferente al operador principal.");
+            }
+
             if (vm.FechaInicioProgramada.HasValue && vm.Cambio.HasValue)
             {
                 // La fecha/hora de inicio del programa representa la hora de cambio.
@@ -1339,6 +1360,7 @@ END;";
             }
 
             var minimoPermitido = RedondearSiguienteBloque(DateTime.Now, 15);
+
             if (vm.FechaInicioProgramada.HasValue && vm.FechaInicioProgramada.Value < minimoPermitido)
             {
                 ModelState.AddModelError(
@@ -1513,9 +1535,43 @@ END;";
                     );
                 }
 
+                var requiereRecursoCambio = vm.Cambio.HasValue &&
+                                            vm.Arranque.HasValue &&
+                                            vm.Cambio.Value != vm.Arranque.Value;
+
+                if (requiereRecursoCambio)
+                {
+                    var cambioOcupado = await CambioMoldeTieneCruceAsync(
+                        vm.FechaInicioProgramada!.Value,
+                        cn,
+                        (SqlTransaction)tx
+                    );
+
+                    if (cambioOcupado)
+                    {
+                        await tx.RollbackAsync();
+
+                        ModelState.AddModelError(
+                            nameof(vm.Cambio),
+                            "Ya existe un cambio de molde programado en esa misma hora. Solo se cuenta con un recurso para cambio de molde."
+                        );
+
+                        await CargarCatalogosAsync(vm);
+                        return View(vm);
+                    }
+                }
+
                 await CompletarDatosProgramaAsync(vm, cn, (SqlTransaction)tx);
 
                 var programaId = await InsertarProgramaAsync(
+                    vm,
+                    usuarioId,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                await InsertarOperadoresProgramaAsync(
+                    programaId,
                     vm,
                     usuarioId,
                     cn,
@@ -1554,8 +1610,6 @@ END;";
                 return View(vm);
             }
         }
-
-
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1849,7 +1903,7 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
             if (piezasAProducir > 0 && objetivoHora.HasValue && objetivoHora.Value > 0)
                 horasProgramadas = Math.Ceiling(piezasAProducir / (decimal)objetivoHora.Value);
 
-            var fechaInicio = RedondearSiguienteBloque(DateTime.Now, 15);
+           var fechaInicio = RedondearSiguienteHora(DateTime.Now);
 
             DateTime? fechaFin = null;
             if (horasProgramadas > 0)
@@ -1860,6 +1914,9 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
                 ReleaseDetalleID = Convert.ToInt32(rd["ReleaseDetalleID"]),
                 ReleaseID = rd["ReleaseID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseID"]),
                 FolioRelease = rd["FolioRelease"] as string,
+
+                TipoOF = "RELEASE",
+                MotivoTipoOF = null,
 
                 ClienteID = rd["ClienteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ClienteID"]),
                 ClienteNombre = rd["ClienteNombre"] as string,
@@ -1977,11 +2034,7 @@ WHERE MoldeID = @MoldeID;";
             }
         }
 
-        private async Task<int> InsertarProgramaAsync(
-            PlaneacionProgramaCrearDesdeNecesidadVm vm,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task<int> InsertarProgramaAsync(  PlaneacionProgramaCrearDesdeNecesidadVm vm, int usuarioId,SqlConnection cn, SqlTransaction tx)
         {
             var secuencia = await ObtenerSiguienteSecuenciaMaquinaAsync(
                 vm.MaquinaID,
@@ -2018,6 +2071,8 @@ Color,
     MoldeCodigo,
 
     CondicionProduccion,
+TipoOF,
+MotivoTipoOF,
     SecuenciaMaquina,
 
     FechaInicioProgramada,
@@ -2076,6 +2131,8 @@ VALUES
     @MoldeCodigo,
 
     @CondicionProduccion,
+@TipoOF,
+@MotivoTipoOF,
     @SecuenciaMaquina,
 
     @FechaInicioProgramada,
@@ -2134,6 +2191,9 @@ VALUES
             cmd.Parameters.Add("@MoldeCodigo", SqlDbType.NVarChar, 100).Value = (object?)vm.MoldeCodigo ?? DBNull.Value;
 
             cmd.Parameters.Add("@CondicionProduccion", SqlDbType.NVarChar, 20).Value = (object?)vm.CondicionProduccion ?? DBNull.Value;
+            cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value = "RELEASE";
+
+            cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value = DBNull.Value;
             cmd.Parameters.Add("@SecuenciaMaquina", SqlDbType.Int).Value = (object?)secuencia ?? DBNull.Value;
 
             cmd.Parameters.Add("@FechaInicioProgramada", SqlDbType.DateTime).Value = (object?)vm.FechaInicioProgramada ?? DBNull.Value;
@@ -2468,6 +2528,7 @@ ORDER BY
             var inicio = vm.FechaInicioProgramada ?? RedondearSiguienteBloque(DateTime.Now, 15);
 
             DateTime fin;
+
             if (vm.FechaFinProgramada.HasValue && vm.FechaFinProgramada.Value > inicio)
             {
                 fin = vm.FechaFinProgramada.Value;
@@ -2494,14 +2555,92 @@ ORDER BY
             vm.Moldes = await CargarSelectAsync(
                 cn,
                 @"SELECT 
-            MoldeID AS Id,
-            CodigoMolde AS Texto
+              MoldeID AS Id,
+              CodigoMolde AS Texto
           FROM dbo.ERP_Moldes
           WHERE Activo = 1
           ORDER BY CodigoMolde;"
             );
 
+            vm.Operadores = await CargarSelectAsync(
+                cn,
+                @"SELECT 
+              PersonaID AS Id,
+              LTRIM(RTRIM(
+                  ISNULL(Nombre, '') + ' ' +
+                  ISNULL(ApellidoPaterno, '') + ' ' +
+                  ISNULL(ApellidoMaterno, '')
+              )) AS Texto
+          FROM dbo.Persona
+          WHERE EsColaboradorActivo = 1
+            AND UPPER(LTRIM(RTRIM(Puesto))) = 'OPERADOR'
+          ORDER BY Nombre, ApellidoPaterno, ApellidoMaterno;"
+            );
+
             vm.Condiciones = PlaneacionProgramaCondicion.SelectList();
+        }
+
+        private async Task InsertarOperadoresProgramaAsync(
+    int programaProduccionId,
+    PlaneacionProgramaCrearDesdeNecesidadVm vm,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            const string sqlDesactivar = @"
+UPDATE dbo.Planeacion_ProgramaOperadores
+SET
+    Activo = 0,
+    UsuarioModificacionID = @UsuarioModificacionID,
+    FechaModificacion = GETDATE()
+WHERE ProgramaProduccionID = @ProgramaProduccionID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlDesactivar, cn, tx))
+            {
+                cmd.Parameters.Add("@UsuarioModificacionID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlInsert = @"
+INSERT INTO dbo.Planeacion_ProgramaOperadores
+(
+    ProgramaProduccionID,
+    PersonaID,
+    RolOperador,
+    Activo,
+    UsuarioCreacionID,
+    FechaCreacion
+)
+VALUES
+(
+    @ProgramaProduccionID,
+    @PersonaID,
+    @RolOperador,
+    1,
+    @UsuarioCreacionID,
+    GETDATE()
+);";
+
+            async Task InsertarUnoAsync(int? personaId, string rol)
+            {
+                if (!personaId.HasValue || personaId.Value <= 0)
+                    return;
+
+                await using var cmd = new SqlCommand(sqlInsert, cn, tx);
+
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId.Value;
+                cmd.Parameters.Add("@RolOperador", SqlDbType.NVarChar, 30).Value = rol;
+                cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await InsertarUnoAsync(vm.OperadorPrincipalID, "PRINCIPAL");
+            await InsertarUnoAsync(vm.OperadorAuxiliarID, "AUXILIAR");
         }
 
         private async Task<List<SelectListItem>> CargarMaquinasConEstadoAsync(
@@ -2565,6 +2704,31 @@ ORDER BY m.Codigo;";
 
             return lista;
         }
+
+        private static async Task<bool> CambioMoldeTieneCruceAsync(
+    DateTime fechaCambio,
+    SqlConnection cn,
+    SqlTransaction? tx)
+{
+    const string sql = @"
+SELECT TOP 1 1
+FROM dbo.Planeacion_ProgramaProduccion pp
+WHERE pp.Activo = 1
+  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
+  AND pp.Cambio IS NOT NULL
+  AND pp.Arranque IS NOT NULL
+  AND pp.Cambio <> pp.Arranque
+  AND CAST(pp.FechaInicioProgramada AS DATE) = CAST(@FechaCambio AS DATE)
+  AND DATEPART(HOUR, pp.FechaInicioProgramada) = DATEPART(HOUR, @FechaCambio);";
+
+    await using var cmd = new SqlCommand(sql, cn, tx);
+    cmd.Parameters.Add("@FechaCambio", SqlDbType.DateTime).Value = fechaCambio;
+
+    var result = await cmd.ExecuteScalarAsync();
+    return result != null && result != DBNull.Value;
+}
+
+
 
         private static async Task<bool> MoldeTieneCruceAsync(
             int moldeId,
@@ -2731,9 +2895,9 @@ WHERE pp.Activo = 1
 
 
         private async Task<ProgramaParaOFVm?> ObtenerProgramaParaGenerarOFAsync(
-    int programaProduccionId,
-    SqlConnection cn,
-    SqlTransaction tx)
+     int programaProduccionId,
+     SqlConnection cn,
+     SqlTransaction tx)
         {
             const string sql = @"
 SELECT
@@ -2753,6 +2917,9 @@ SELECT
     pp.ReferenciaSAP,
     pp.DesignacionDescripcionSAP,
 
+    ISNULL(NULLIF(pp.TipoOF, ''), 'RELEASE') AS TipoOF,
+    pp.MotivoTipoOF,
+
     pp.CantidadRequerida,
     pp.PiezasDesdePT,
     pp.CantidadProgramada,
@@ -2770,15 +2937,15 @@ SELECT
     pp.FechaInicioProgramada,
     pp.FechaFinProgramada,
     pp.HorasProgramadas,
-pp.Cambio,
-pp.Arranque,
+    pp.Cambio,
+    pp.Arranque,
 
     COALESCE(pp.ObjetivoHora, t.ObjetivoHora) AS ObjetivoHora,
     COALESCE(pp.Ciclo, t.Ciclo) AS Ciclo,
     COALESCE(pp.Cavidades, t.Cavidades) AS Cavidades,
     COALESCE(pp.PesoBrutoPieza, t.PesoBrutoPieza) AS PesoBrutoPieza,
 
-   COALESCE(NULLIF(pp.Color, ''), t.Color) AS Color,
+    COALESCE(NULLIF(pp.Color, ''), t.Color) AS Color,
     t.PiezasPorCaja,
     t.TipoSecado,
     t.HorasSecado,
@@ -2827,6 +2994,12 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                 ReferenciaSAP = rd["ReferenciaSAP"] as string,
                 DesignacionDescripcionSAP = rd["DesignacionDescripcionSAP"] as string,
 
+                TipoOF = rd["TipoOF"] == DBNull.Value
+                    ? "RELEASE"
+                    : NormalizarTipoOF(rd["TipoOF"] as string),
+
+                MotivoTipoOF = rd["MotivoTipoOF"] as string,
+
                 CantidadRequerida = Convert.ToInt32(rd["CantidadRequerida"]),
                 PiezasDesdePT = Convert.ToInt32(rd["PiezasDesdePT"]),
                 CantidadProgramada = Convert.ToInt32(rd["CantidadProgramada"]),
@@ -2867,16 +3040,20 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                 Color = rd["Color"] as string,
 
                 PiezasPorCaja = rd["PiezasPorCaja"] == DBNull.Value
-    ? null
-    : Convert.ToInt32(rd["PiezasPorCaja"]),
+                    ? null
+                    : Convert.ToInt32(rd["PiezasPorCaja"]),
 
                 TipoSecado = rd["TipoSecado"] as string,
 
                 HorasSecado = rd["HorasSecado"] == DBNull.Value
-    ? null
-    : Convert.ToDecimal(rd["HorasSecado"])
+                    ? null
+                    : Convert.ToDecimal(rd["HorasSecado"])
             };
         }
+
+
+
+
 
         private async Task<string> GenerarFolioOFAsync(SqlConnection cn, SqlTransaction tx)
         {
@@ -2894,6 +3071,7 @@ WHERE NumeroOFRecibida LIKE 'OF-[0-9][0-9][0-9][0-9]/' + @YY;";
 
             return $"OF-{consecutivo:0000}/{yy}";
         }
+
 
         private async Task<int> InsertarOFDedeProgramaAsync(
     ProgramaParaOFVm p,
@@ -2913,6 +3091,8 @@ INSERT INTO dbo.SolicitudesProduccion
     ClienteNombre,
     OrigenSolicitud,
     Prioridad,
+    TipoOF,
+    MotivoTipoOF,
     EstatusID,
     NotasGenerales,
     UsuarioCreacionID,
@@ -2944,6 +3124,8 @@ VALUES
     @ClienteNombre,
     @OrigenSolicitud,
     @Prioridad,
+    @TipoOF,
+    @MotivoTipoOF,
     @EstatusID,
     @NotasGenerales,
     @UsuarioCreacionID,
@@ -2982,6 +3164,10 @@ VALUES
             cmd.Parameters.Add("@OrigenSolicitud", SqlDbType.NVarChar, 50).Value = "Planeación Programa";
             cmd.Parameters.Add("@Prioridad", SqlDbType.NVarChar, 30).Value = "Normal";
 
+            cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value = "RELEASE";
+
+            cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value = DBNull.Value;
+
             cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = PlaneacionOFEstatus.PendienteValidacionMP;
 
             cmd.Parameters.Add("@NotasGenerales", SqlDbType.NVarChar, 500).Value =
@@ -3014,6 +3200,7 @@ VALUES
 
             return Convert.ToInt32(await cmd.ExecuteScalarAsync());
         }
+
 
         private async Task<int> InsertarDetalleOFDedeProgramaAsync(
     int solicitudProduccionId,
@@ -3354,23 +3541,96 @@ ORDER BY
             };
         }
 
-        private static DateTime RedondearSiguienteBloque(DateTime fecha, int minutosBloque)
+
+        private static string NormalizarTipoOF(string? tipoOF)
         {
-            if (minutosBloque <= 0)
-                return fecha;
+            if (string.IsNullOrWhiteSpace(tipoOF))
+                return "RELEASE";
 
-            var minutos = fecha.Minute;
-            var residuo = minutos % minutosBloque;
+            var valor = tipoOF.Trim().ToUpperInvariant();
 
-            var redondeada = fecha
-                .AddSeconds(-fecha.Second)
-                .AddMilliseconds(-fecha.Millisecond);
+            valor = valor
+                .Replace("Á", "A")
+                .Replace("É", "E")
+                .Replace("Í", "I")
+                .Replace("Ó", "O")
+                .Replace("Ú", "U");
 
-            if (residuo == 0)
-                return redondeada;
-
-            return redondeada.AddMinutes(minutosBloque - residuo);
+            return valor switch
+            {
+                "RELEASE" => "RELEASE",
+                "ENSAMBLE" => "ENSAMBLE",
+                "PRUEBA" => "PRUEBA",
+                "MP EXTRA" => "MP EXTRA",
+                "MPEXTRA" => "MP EXTRA",
+                "MP_EXTRA" => "MP EXTRA",
+                _ => "RELEASE"
+            };
         }
+
+        private static bool TipoOFRequiereMotivo(string? tipoOF)
+        {
+            var valor = NormalizarTipoOF(tipoOF);
+
+            return valor == "PRUEBA" ||
+                   valor == "MP EXTRA";
+        }
+
+        private void ValidarTipoOF(string? tipoOF, string? motivoTipoOF, string campoMotivo)
+        {
+            var valor = NormalizarTipoOF(tipoOF);
+
+            if (valor != "RELEASE" &&
+                valor != "ENSAMBLE" &&
+                valor != "PRUEBA" &&
+                valor != "MP EXTRA")
+            {
+                ModelState.AddModelError(nameof(PlaneacionProgramaCrearDesdeNecesidadVm.TipoOF), "Selecciona un tipo de OF válido.");
+            }
+
+            if (TipoOFRequiereMotivo(valor) &&
+                string.IsNullOrWhiteSpace(motivoTipoOF))
+            {
+                ModelState.AddModelError(campoMotivo, "Captura el motivo para este tipo de OF.");
+            }
+        }
+
+
+
+        private static DateTime RedondearSiguienteHora(DateTime fecha)
+{
+    var redondeada = new DateTime(
+        fecha.Year,
+        fecha.Month,
+        fecha.Day,
+        fecha.Hour,
+        0,
+        0
+    );
+
+    if (fecha.Minute == 0 &&
+        fecha.Second == 0 &&
+        fecha.Millisecond == 0)
+    {
+        return redondeada;
+    }
+
+    return redondeada.AddHours(1);
+}
+
+private static DateTime RedondearSiguienteBloque(DateTime fecha, int minutosBloque)
+{
+    
+    // hora completa, sin minutos.
+    return RedondearSiguienteHora(fecha);
+}
+
+private static bool EsHoraCompleta(TimeSpan hora)
+{
+    return hora.Minutes == 0 &&
+           hora.Seconds == 0 &&
+           hora.Milliseconds == 0;
+}
 
         private static DateTime CalcularFechaHoraDesdeHora(DateTime fechaBase, TimeSpan? hora)
         {
@@ -3729,6 +3989,9 @@ WHERE ReleaseDetalleID = @ReleaseDetalleID;";
 
             public TimeSpan? Cambio { get; set; }
             public TimeSpan? Arranque { get; set; }
+
+            public string? TipoOF { get; set; } = "RELEASE";
+            public string? MotivoTipoOF { get; set; }
 
 
         }

@@ -690,13 +690,70 @@
                             </div>
                         </div>
                         <div class="col-md-12 manual-only">
-                            <label asp-for="Observaciones" class="erp-label">Observaciones</label>
-                            <textarea asp-for="Observaciones"
-                                      class="form-control"
-                                      maxlength="500"
-                                      rows="2"
-                                      placeholder="Notas, cambios de versión o indicaciones del cliente..."></textarea>
-                        </div>
+    <div class="border rounded-4 p-3 bg-light">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+                <div class="fw-bold text-primary">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                    Criticidad del release manual
+                </div>
+                <div class="text-muted small">
+                    Clasifica el release como normal, crítico o urgente.
+                </div>
+            </div>
+
+            <span class="summary-chip">
+                <i class="fa-solid fa-clipboard-check"></i>
+                Control interno
+            </span>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label asp-for="NivelCriticidad" class="erp-label required-label">
+                    Nivel de criticidad
+                </label>
+
+                <select asp-for="NivelCriticidad"
+                        id="NivelCriticidad"
+                        class="form-select">
+                    <option value="NORMAL">Normal</option>
+                    <option value="CRITICO">Crítico</option>
+                    <option value="URGENTE">Urgente</option>
+                </select>
+
+                <span asp-validation-for="NivelCriticidad" class="text-danger small fw-semibold"></span>
+
+                <div class="small-help">
+                    Si seleccionas urgente, el comentario será obligatorio.
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <label asp-for="ComentarioCriticidad" class="erp-label">
+                    Comentario de criticidad
+                </label>
+
+                <input asp-for="ComentarioCriticidad"
+                       id="ComentarioCriticidad"
+                       class="form-control"
+                       maxlength="300"
+                       placeholder="Ej. release urgente sin documentación por solicitud directa del cliente..." />
+
+                <span asp-validation-for="ComentarioCriticidad" class="text-danger small fw-semibold"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="col-md-12 manual-only">
+    <label asp-for="Observaciones" class="erp-label">Observaciones generales</label>
+    <textarea asp-for="Observaciones"
+              class="form-control"
+              maxlength="500"
+              rows="2"
+              placeholder="Notas, cambios de versión o indicaciones del cliente..."></textarea>
+</div>
                     </div>
                 </div>
             </div>
@@ -751,11 +808,7 @@
                                     </div>
 
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <button type="button"
-                                                class="btn btn-sm btn-erp-light btn-agregar-entrega">
-                                            <i class="fa-solid fa-calendar-plus me-1"></i>
-                                            Agregar entrega
-                                        </button>
+                                        
 
                                         <button type="button"
                                                 class="btn btn-sm btn-erp-danger btn-quitar-renglon">
@@ -882,6 +935,15 @@
                                                 </div>
                                             }
                                         </div>
+
+                                        <div class="mt-3 d-flex justify-content-end">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-erp-primary btn-agregar-entrega"
+                                                    title="Agregar entrega">
+                                                <i class="fa-solid fa-plus"></i>
+                                            </button>
+                                        </div>
+
                                     </div>
                                 </div>
                             </div>
@@ -938,6 +1000,8 @@
         const archivoInput = document.getElementById('ArchivosRelease');
         const fechaRecepcionInput = document.getElementById('FechaRecepcion');
         const versionReleaseInput = document.getElementById('VersionRelease');
+        const nivelCriticidadInput = document.getElementById('NivelCriticidad');
+const comentarioCriticidadInput = document.getElementById('ComentarioCriticidad');
 
         function obtenerSemanaISO(fecha) {
             const temp = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));
@@ -968,7 +1032,24 @@
             }
         }
 
+function validarCriticidadManual() {
+    const modoArchivo = modoArchivoRadio?.checked === true;
 
+    if (modoArchivo) {
+        return true;
+    }
+
+    const nivel = (nivelCriticidadInput?.value || 'NORMAL').toUpperCase();
+    const comentario = (comentarioCriticidadInput?.value || '').trim();
+
+    if (nivel === 'URGENTE' && comentario.length < 5) {
+        mostrarErrorFormulario('Captura un comentario para el release urgente.');
+        comentarioCriticidadInput?.focus();
+        return false;
+    }
+
+    return true;
+}
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -1119,11 +1200,7 @@
                         </div>
 
                         <div class="d-flex gap-2 flex-wrap">
-                            <button type="button"
-                                    class="btn btn-sm btn-erp-light btn-agregar-entrega">
-                                <i class="fa-solid fa-calendar-plus me-1"></i>
-                                Agregar entrega
-                            </button>
+                           
 
                             <button type="button"
                                     class="btn btn-sm btn-erp-danger btn-quitar-renglon">
@@ -1195,6 +1272,15 @@
                             <div class="entregas-contenedor">
                                 ${crearHtmlEntrega(index, 0)}
                             </div>
+
+                                    <div class="mt-3 d-flex justify-content-end">
+            <button type="button"
+                    class="btn btn-sm btn-erp-primary btn-agregar-entrega"
+                    title="Agregar entrega">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+
                         </div>
                     </div>
                 </div>`;
@@ -1601,6 +1687,11 @@
                 event.preventDefault();
                 return;
             }
+            
+            if (!validarCriticidadManual()) {
+    event.preventDefault();
+    return;
+}
 
             bloquearGuardado();
         });

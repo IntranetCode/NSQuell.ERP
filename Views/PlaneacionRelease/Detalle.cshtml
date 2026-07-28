@@ -5,28 +5,75 @@
 
     string Valor(string? valor) => string.IsNullOrWhiteSpace(valor) ? "-" : valor;
     string Fecha(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy") : "-";
-    string FechaHora(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy HH:mm") : "-";
-    string Entero(int? valor) => valor.HasValue ? valor.Value.ToString("N0") : "-";
-    string Decimal2(decimal? valor) => valor.HasValue ? valor.Value.ToString("N2") : "-";
-    string Decimal4(decimal? valor) => valor.HasValue ? valor.Value.ToString("N4") : "-";
-
-    string ClaseTiempo(bool? daTiempo)
-    {
-        if (daTiempo == true) return "badge-ok";
-        if (daTiempo == false) return "badge-no";
-        return "badge-warn";
-    }
-
-    string TextoTiempo(bool? daTiempo)
-    {
-        if (daTiempo == true) return "Sí da tiempo";
-        if (daTiempo == false) return "No da tiempo";
-        return "Sin validar";
-    }
-
     string TextoImportado(bool importado) => importado ? "Desde archivo" : "Captura manual";
 
-    var grupos = (Model.Detalles ?? new List<ERP.NSQuell.Models.PlaneacionReleaseDetalleRenglonVm>())
+    string Unidad(string? unidad)
+    {
+        return string.IsNullOrWhiteSpace(unidad) ? "pzas" : unidad.Trim();
+    }
+
+    int NumeroSemana(DateTime fecha)
+    {
+        return System.Globalization.CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(
+            fecha,
+            System.Globalization.CalendarWeekRule.FirstFourDayWeek,
+            DayOfWeek.Monday
+        );
+    }
+
+    DateTime InicioSemana(DateTime fecha)
+    {
+        var diasDesdeLunes = ((int)fecha.DayOfWeek + 6) % 7;
+        return fecha.Date.AddDays(-diasDesdeLunes);
+    }
+
+    string TextoSemana(DateTime fecha)
+    {
+        return "Semana " + NumeroSemana(fecha).ToString("00") + " / " + fecha.Year.ToString();
+    }
+
+    string SugerenciaEntrega(ERP.NSQuell.Models.PlaneacionReleaseDetalleRenglonVm entrega)
+    {
+        if (entrega.CantidadRequerida <= 0)
+            return "Revisar cantidad requerida.";
+
+        if (entrega.FechaRequerida.Date < DateTime.Today)
+            return "Fecha requerida vencida; revisar prioridad.";
+
+        if (string.IsNullOrWhiteSpace(entrega.UnidadMedidaCliente))
+            return "Capturar unidad de medida.";
+
+        if (!entrega.ParteID.HasValue || entrega.ParteID.Value <= 0)
+            return "Vincular parte antes de continuar.";
+
+        return "Entrega capturada correctamente.";
+    }
+
+    string SugerenciaRenglon(IEnumerable<ERP.NSQuell.Models.PlaneacionReleaseDetalleRenglonVm> entregasRenglon)
+    {
+        var lista = entregasRenglon.ToList();
+
+        if (!lista.Any())
+            return "Sin entregas capturadas.";
+
+        if (lista.Any(x => x.CantidadRequerida <= 0))
+            return "Hay entregas con cantidad en cero; revisar captura.";
+
+        if (lista.Any(x => x.FechaRequerida.Date < DateTime.Today))
+            return "Tiene entregas vencidas; revisar prioridad.";
+
+        if (lista.Any(x => string.IsNullOrWhiteSpace(x.UnidadMedidaCliente)))
+            return "Falta unidad de medida en una o más entregas.";
+
+        if (lista.Any(x => !x.ParteID.HasValue || x.ParteID.Value <= 0))
+            return "Falta vincular parte en el renglón.";
+
+        return "Renglón completo para consulta de demanda.";
+    }
+
+    var detalles = Model.Detalles ?? new List<ERP.NSQuell.Models.PlaneacionReleaseDetalleRenglonVm>();
+
+    var grupos = detalles
         .GroupBy(x => new
         {
             x.ReleaseRenglonID,
@@ -41,7 +88,35 @@
         .OrderBy(g => g.Key.Renglon)
         .ToList();
 
-    var totalEntregas = Model.Detalles?.Count ?? 0;
+    var totalEntregas = detalles.Count;
+    var totalPiezasRelease = detalles.Sum(x => x.CantidadRequerida);
+    var renglonesSinUnidad = detalles.Count(x => string.IsNullOrWhiteSpace(x.UnidadMedidaCliente));
+    var entregasVencidas = detalles.Count(x => x.FechaRequerida.Date < DateTime.Today);
+    var renglonesSinParte = detalles.Count(x => !x.ParteID.HasValue || x.ParteID.Value <= 0);
+
+    var semanaBase = detalles.Any()
+        ? InicioSemana(detalles.Min(x => x.FechaRequerida))
+        : InicioSemana(Model.FechaRecepcion);
+
+    var semanaBaseFin = semanaBase.AddDays(6);
+
+    var piezasSemanaRelease = detalles
+        .Where(x => InicioSemana(x.FechaRequerida) == semanaBase)
+        .Sum(x => x.CantidadRequerida);
+
+    var entregasSemanaRelease = detalles
+        .Count(x => InicioSemana(x.FechaRequerida) == semanaBase);
+
+    var unidadesSemanaRelease = detalles
+        .Where(x => InicioSemana(x.FechaRequerida) == semanaBase)
+        .Select(x => Unidad(x.UnidadMedidaCliente))
+        .Distinct()
+        .ToList();
+
+    var unidadSemanaTexto = unidadesSemanaRelease.Count == 1
+        ? unidadesSemanaRelease.First()
+        : "pzas";
+
     var esPdfOriginal = Model.ImportadoDesdeArchivo &&
         !string.IsNullOrWhiteSpace(Model.ArchivoOrigenNombre) &&
         Model.ArchivoOrigenNombre.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
@@ -68,9 +143,11 @@
             --erp-green: #107c41;
             --erp-red: #b42318;
             --erp-orange: #b54708;
+            --erp-purple: #6941c6;
         }
 
         body {
+            margin: 0;
             background: var(--erp-gray);
             color: var(--erp-text);
             font-family: "Segoe UI", Arial, sans-serif;
@@ -83,274 +160,14 @@
         }
 
         .erp-header {
+            position: relative;
+            overflow: hidden;
             background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
             color: white;
             border-radius: 22px;
             padding: 28px 32px;
             box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
             margin-bottom: 22px;
-        }
-
-            .erp-header h1 {
-                font-size: 1.65rem;
-                margin: 0;
-                font-weight: 900;
-            }
-
-            .erp-header p {
-                margin: 7px 0 0 0;
-                opacity: .92;
-            }
-
-        .header-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            background: rgba(255,255,255,.16);
-            color: white;
-            border: 1px solid rgba(255,255,255,.28);
-            border-radius: 999px;
-            padding: 7px 12px;
-            font-size: .82rem;
-            font-weight: 800;
-            margin-top: 12px;
-            margin-right: 6px;
-        }
-
-        .erp-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 20px;
-            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-
-        .erp-card-header {
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--erp-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 14px;
-            flex-wrap: wrap;
-        }
-
-        .erp-card-body {
-            padding: 22px;
-        }
-
-        .erp-label {
-            font-weight: 800;
-            color: #33465f;
-            font-size: .78rem;
-            text-transform: uppercase;
-            letter-spacing: .035em;
-            margin-bottom: 4px;
-        }
-
-        .erp-value {
-            color: #263238;
-            font-weight: 650;
-            min-height: 24px;
-        }
-
-        .metric-card {
-            background: white;
-            border: 1px solid var(--erp-border);
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 8px 20px rgba(30, 55, 90, .07);
-            height: 100%;
-        }
-
-        .metric-label {
-            color: var(--erp-muted);
-            font-size: .78rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
-        .metric-value {
-            font-size: 1.35rem;
-            font-weight: 900;
-            color: var(--erp-blue-dark);
-        }
-
-        .btn-erp-primary {
-            background: var(--erp-blue);
-            border-color: var(--erp-blue);
-            color: white;
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
-
-            .btn-erp-primary:hover {
-                background: var(--erp-blue-dark);
-                border-color: var(--erp-blue-dark);
-                color: white;
-            }
-
-        .btn-erp-light {
-            background: white;
-            border: 1px solid var(--erp-border);
-            color: var(--erp-blue-dark);
-            font-weight: 800;
-            border-radius: 13px;
-            padding: 10px 15px;
-        }
-
-        .badge-calc {
-            display: inline-flex;
-            align-items: center;
-            border-radius: 999px;
-            padding: 7px 12px;
-            font-size: .78rem;
-            font-weight: 900;
-            border: 1px solid transparent;
-            white-space: nowrap;
-        }
-
-        .badge-ok {
-            background: #ecfdf3;
-            color: #027a48;
-            border-color: #abefc6;
-        }
-
-        .badge-no {
-            background: #fef3f2;
-            color: #b42318;
-            border-color: #fecdca;
-        }
-
-        .badge-warn {
-            background: #fff7ed;
-            color: #b54708;
-            border-color: #fed7aa;
-        }
-
-        /* RELEASE_RESULTADO_PROGRAMACION_V1_0_1 */
-        .badge-programado {
-            background: #eef4ff;
-            color: #004aad;
-            border-color: #b2ccff;
-        }
-
-        .btn-entrega-programacion {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            margin-top: 8px;
-            padding: 6px 9px;
-            border: 1px solid #b2ccff;
-            border-radius: 10px;
-            background: #f5f8ff;
-            color: #004aad;
-            text-decoration: none;
-            font-size: .75rem;
-            font-weight: 850;
-            white-space: nowrap;
-        }
-
-        .btn-entrega-programacion:hover {
-            background: #004aad;
-            border-color: #004aad;
-            color: white;
-        }
-
-        .renglon-card {
-            border: 1px solid var(--erp-border);
-            border-radius: 18px;
-            background: #fff;
-            overflow: hidden;
-            margin-bottom: 18px;
-        }
-
-        .renglon-header {
-            background: #eef3fb;
-            border-bottom: 1px solid var(--erp-border);
-            padding: 16px 18px;
-            display: flex;
-            justify-content: space-between;
-            gap: 14px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .renglon-title {
-            font-weight: 900;
-            color: var(--erp-blue-dark);
-            font-size: 1rem;
-        }
-
-        .renglon-body {
-            padding: 18px;
-        }
-
-        .summary-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            padding: 7px 11px;
-            border: 1px solid var(--erp-border);
-            border-radius: 999px;
-            background: white;
-            color: #475467;
-            font-size: .78rem;
-            font-weight: 800;
-        }
-
-        .table thead th {
-            background: #eef3fb;
-            color: #00347a;
-            font-size: .76rem;
-            white-space: nowrap;
-            text-transform: uppercase;
-            letter-spacing: .03em;
-            vertical-align: middle;
-        }
-
-        .table td {
-            font-size: .84rem;
-            vertical-align: middle;
-        }
-
-        .small-muted {
-            color: var(--erp-muted);
-            font-size: .78rem;
-        }
-
-        .sticky-actions {
-            position: sticky;
-            bottom: 0;
-            background: rgba(243, 245, 248, .92);
-            backdrop-filter: blur(10px);
-            padding: 14px 0;
-            z-index: 20;
-        }
-
-        @@media (max-width: 767.98px) {
-            .erp-shell {
-                padding: 16px;
-            }
-
-            .erp-header {
-                padding: 22px;
-                border-radius: 18px;
-            }
-
-            .erp-card-body {
-                padding: 17px;
-            }
-        }
-    
-        /* RELEASE_DETAIL_RESTORED_V1_7 */
-        .erp-header {
-            position: relative;
-            overflow: hidden;
         }
 
         .erp-header::after {
@@ -370,24 +187,170 @@
             z-index: 2;
         }
 
-        .metric-card {
-            position: relative;
-            overflow: hidden;
-            border-radius: 20px;
+        .erp-header h1 {
+            font-size: 1.65rem;
+            margin: 0;
+            font-weight: 900;
         }
 
-        .metric-card::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 5px;
-            background: linear-gradient(180deg, #004aad, #2f80ed);
+        .erp-header p {
+            margin: 7px 0 0 0;
+            opacity: .92;
+        }
+
+        .header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: rgba(255,255,255,.16);
+            color: white;
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: .82rem;
+            font-weight: 800;
+            margin-top: 12px;
+            margin-right: 6px;
+        }
+
+        .btn-erp-primary,
+        .btn-erp-light {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            font-weight: 850;
+            border-radius: 13px;
+            padding: 10px 15px;
+            text-decoration: none;
+        }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border: 1px solid var(--erp-blue);
+            color: white;
+        }
+
+        .btn-erp-primary:hover {
+            background: var(--erp-blue-dark);
+            border-color: var(--erp-blue-dark);
+            color: white;
+        }
+
+        .btn-erp-light {
+            background: white;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+        }
+
+        .btn-erp-light:hover {
+            background: #eef4ff;
+            color: var(--erp-blue-dark);
+        }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 22px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .erp-card-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            background: linear-gradient(180deg, #fff, #f8fbff);
+        }
+
+        .erp-card-body {
+            padding: 22px;
+        }
+
+        .erp-label {
+            font-weight: 850;
+            color: #33465f;
+            font-size: .76rem;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+            margin-bottom: 4px;
+        }
+
+        .erp-value {
+            color: #263238;
+            font-weight: 650;
+            min-height: 24px;
+        }
+
+        .suggestion-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .suggestion-card {
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            padding: 14px;
+            background: #fbfdff;
+            min-height: 112px;
+        }
+
+        .suggestion-card.ok {
+            border-color: #abefc6;
+            background: #ecfdf3;
+            color: #027a48;
+        }
+
+        .suggestion-card.warn {
+            border-color: #fed7aa;
+            background: #fff7ed;
+            color: #b54708;
+        }
+
+        .suggestion-card.info {
+            border-color: #b2ccff;
+            background: #eef4ff;
+            color: #00347a;
+        }
+
+        .suggestion-card.week {
+            border-color: #d6bbfb;
+            background: #f4ebff;
+            color: var(--erp-purple);
+        }
+
+        .suggestion-card .k {
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            opacity: .75;
+        }
+
+        .suggestion-card .v {
+            margin-top: 5px;
+            font-size: 1.08rem;
+            font-weight: 950;
+        }
+
+        .suggestion-card .s {
+            margin-top: 6px;
+            font-size: .78rem;
+            font-weight: 700;
         }
 
         .renglon-card {
+            border: 1px solid var(--erp-border);
             border-radius: 24px;
+            background: #fff;
+            overflow: hidden;
+            margin-bottom: 18px;
             box-shadow: 0 14px 34px rgba(31, 63, 104, .09);
         }
 
@@ -396,10 +359,48 @@
             background:
                 radial-gradient(circle at 92% 10%, rgba(0,74,173,.10), transparent 26%),
                 linear-gradient(135deg, #eef5ff, #ffffff);
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .renglon-title {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            font-size: 1rem;
         }
 
         .renglon-body {
             padding: 22px;
+        }
+
+        .summary-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 11px;
+            border: 1px solid var(--erp-border);
+            border-radius: 999px;
+            background: white;
+            color: #475467;
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+        .suggestion-strip {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 13px 15px;
+            margin-bottom: 16px;
+            border: 1px solid #b2ccff;
+            border-radius: 16px;
+            background: #eef4ff;
+            color: #00347a;
+            font-weight: 750;
         }
 
         .table-responsive {
@@ -416,10 +417,18 @@
             padding: 13px 10px;
             background: linear-gradient(135deg, #e8f1ff, #eef4fd);
             border-bottom: 2px solid #c9d8eb;
+            color: #00347a;
+            font-size: .76rem;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            vertical-align: middle;
         }
 
         .table tbody td {
             padding: 12px 9px;
+            font-size: .84rem;
+            vertical-align: middle;
         }
 
         .table tbody tr:nth-child(even) td {
@@ -436,8 +445,63 @@
             color: #00347a;
         }
 
-        .badge-calc {
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,.55);
+        .badge-soft {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: .76rem;
+            font-weight: 850;
+            border: 1px solid #dbe4f0;
+            background: #fff;
+            color: #475467;
+            white-space: nowrap;
+        }
+
+        .badge-week {
+            background: #f4ebff;
+            color: var(--erp-purple);
+            border-color: #d6bbfb;
+        }
+
+        .small-muted {
+            color: var(--erp-muted);
+            font-size: .78rem;
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 0;
+            background: rgba(243, 245, 248, .92);
+            backdrop-filter: blur(10px);
+            padding: 14px 0;
+            z-index: 20;
+        }
+
+        @@media (max-width: 1100px) {
+            .suggestion-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @@media (max-width: 767.98px) {
+            .erp-shell {
+                padding: 16px;
+            }
+
+            .erp-header {
+                padding: 22px;
+                border-radius: 18px;
+            }
+
+            .erp-card-body {
+                padding: 17px;
+            }
+
+            .suggestion-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -453,7 +517,7 @@
                     </h1>
 
                     <p>
-                        Consulta la demanda capturada por renglón y sus entregas, con fecha de carga, fecha requerida y cálculo inicial.
+                        Consulta la demanda capturada por renglón y entrega. El cálculo operativo se realiza en Programa de Planeación.
                     </p>
 
                     <div>
@@ -478,7 +542,6 @@
                         </a>
                     }
 
-                                        @* RELEASE_EDIT_BUTTON_V1_0_1 *@
                     <a asp-controller="PlaneacionRelease"
                        asp-action="Editar"
                        asp-route-id="@Model.ReleaseID"
@@ -486,19 +549,11 @@
                         <i class="fa-solid fa-pen-to-square me-1"></i>
                         Editar Release
                     </a>
-<a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
+
+                    <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light fw-bold rounded-3">
                         <i class="fa-solid fa-arrow-left me-1"></i>
                         Volver
                     </a>
-
-                    <form asp-controller="PlaneacionRelease" asp-action="Recalcular" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@Model.ReleaseID" />
-                        <button type="submit" class="btn btn-light fw-bold rounded-3">
-                            <i class="fa-solid fa-rotate me-1"></i>
-                            Recalcular
-                        </button>
-                    </form>
                 </div>
             </div>
         </div>
@@ -525,7 +580,7 @@
             <div class="alert alert-warning rounded-4 fw-semibold d-flex justify-content-between align-items-center gap-3 flex-wrap">
                 <div>
                     <i class="fa-solid fa-triangle-exclamation me-2"></i>
-                    Este Release fue conservado, pero tiene datos pendientes de vincular. No debe pasar a Planeacion hasta completar sus partes.
+                    Este release fue conservado, pero tiene datos pendientes de vincular. No debe avanzar hasta completar sus partes.
                 </div>
                 <a asp-controller="PlaneacionRelease"
                    asp-action="VincularPartes"
@@ -536,19 +591,65 @@
                 </a>
             </div>
         }
-        <div class="row g-3 mb-3">
-            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Renglones</div><div class="metric-value">@grupos.Count.ToString("N0")</div></div></div>
-            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Entregas</div><div class="metric-value">@totalEntregas.ToString("N0")</div></div></div>
-            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Requeridas</div><div class="metric-value">@Model.TotalPiezasRequeridas.ToString("N0")</div></div></div>
-            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Desde PT</div><div class="metric-value">@Model.TotalPiezasDesdePT.ToString("N0")</div></div></div>
-            <div class="col-md-2"><div class="metric-card"><div class="metric-label">A producir</div><div class="metric-value">@Model.TotalPiezasAProducir.ToString("N0")</div></div></div>
-            <div class="col-md-2"><div class="metric-card"><div class="metric-label">Horas</div><div class="metric-value">@Model.TotalHorasNecesarias.ToString("N2")</div></div></div>
+
+        <div class="erp-card">
+            <div class="erp-card-header">
+                <div>
+                    <h2 class="h5 fw-bold m-0 text-primary">
+                        <i class="fa-solid fa-lightbulb me-2"></i>
+                        Sugerencias del release
+                    </h2>
+                    <div class="text-muted small">
+                        Las piezas por semana se calculan aquí solo como resumen visual del release.
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card-body">
+                <div class="suggestion-grid">
+                    <div class="suggestion-card week">
+                        <div class="k">Piezas requeridas de la semana</div>
+                        <div class="v">@piezasSemanaRelease.ToString("N0") @unidadSemanaTexto</div>
+                        <div class="s">@TextoSemana(semanaBase) · @semanaBase.ToString("dd/MM/yyyy") al @semanaBaseFin.ToString("dd/MM/yyyy") · @entregasSemanaRelease.ToString("N0") entrega(s)</div>
+                    </div>
+
+                    <div class="suggestion-card info">
+                        <div class="k">Demanda total release</div>
+                        <div class="v">@totalPiezasRelease.ToString("N0") pzas</div>
+                        <div class="s">@grupos.Count.ToString("N0") renglón(es) · @totalEntregas.ToString("N0") entrega(s)</div>
+                    </div>
+
+                   
+
+                    <div class="suggestion-card @(entregasVencidas > 0 || renglonesSinParte > 0 ? "warn" : "ok")">
+                        <div class="k">Acción sugerida</div>
+                        <div class="v">
+                            @if (renglonesSinParte > 0)
+                            {
+                                @:Vincular partes
+                            }
+                            else if (entregasVencidas > 0)
+                            {
+                                @:Revisar fechas
+                            }
+                            else
+                            {
+                                @:Listo para consulta
+                            }
+                        </div>
+                        <div class="s">El cálculo operativo se revisa en Programa de Planeación.</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="erp-card">
             <div class="erp-card-header">
                 <div>
-                    <h2 class="h5 fw-bold m-0 text-primary"><i class="fa-solid fa-file-lines me-2"></i>Encabezado</h2>
+                    <h2 class="h5 fw-bold m-0 text-primary">
+                        <i class="fa-solid fa-file-lines me-2"></i>
+                        Encabezado
+                    </h2>
                     <div class="text-muted small">Información general del release recibido.</div>
                 </div>
             </div>
@@ -573,15 +674,13 @@
             foreach (var grupo in grupos)
             {
                 var entregas = grupo
-                .OrderBy(x => x.SecuenciaEntrega ?? 9999)
-                .ThenBy(x => x.FechaRequerida)
-                .ToList();
+                    .OrderBy(x => x.SecuenciaEntrega ?? 9999)
+                    .ThenBy(x => x.FechaRequerida)
+                    .ToList();
 
                 var totalReqGrupo = entregas.Sum(x => x.CantidadRequerida);
-                var totalPTGrupo = entregas.Sum(x => x.PiezasDesdePT ?? 0);
-                var totalProdGrupo = entregas.Sum(x => x.PiezasAProducir ?? 0);
-                var totalMPGrupo = entregas.Sum(x => x.MPRequeridaKg ?? 0);
-                var totalHorasGrupo = entregas.Sum(x => x.HorasNecesarias ?? 0);
+                var unidadGrupo = Unidad(grupo.Key.UnidadMedidaCliente);
+                var sugerenciaRenglon = SugerenciaRenglon(entregas);
 
                 <div class="renglon-card">
                     <div class="renglon-header">
@@ -591,19 +690,26 @@
                         </div>
 
                         <div class="d-flex gap-2 flex-wrap">
-                            <span class="summary-chip"><i class="fa-solid fa-ruler"></i>UM: @Valor(grupo.Key.UnidadMedidaCliente)</span>
+                            <span class="summary-chip"><i class="fa-solid fa-ruler"></i>UM: @unidadGrupo</span>
                             <span class="summary-chip"><i class="fa-solid fa-file-contract"></i>Contrato: @Valor(grupo.Key.ContratoCliente)</span>
                             <span class="summary-chip"><i class="fa-solid fa-truck"></i>@entregas.Count entrega(s)</span>
-                            <span class="summary-chip"><i class="fa-solid fa-cubes"></i>Req: @totalReqGrupo.ToString("N0")</span>
-                            <span class="summary-chip"><i class="fa-solid fa-industry"></i>A producir: @totalProdGrupo.ToString("N0")</span>
+                            <span class="summary-chip"><i class="fa-solid fa-cubes"></i>Req: @totalReqGrupo.ToString("N0") @unidadGrupo</span>
                         </div>
                     </div>
 
                     <div class="renglon-body">
+                        <div class="suggestion-strip">
+                            <i class="fa-solid fa-lightbulb mt-1"></i>
+                            <div>
+                                <div class="fw-bold">Sugerencia del renglón</div>
+                                <div>@sugerenciaRenglon</div>
+                            </div>
+                        </div>
+
                         <div class="row g-3 mb-3">
                             <div class="col-md-3"><div class="erp-label">No. parte</div><div class="erp-value">@Valor(grupo.Key.NumeroParte)</div></div>
                             <div class="col-md-3"><div class="erp-label">Referencia SAP / cliente</div><div class="erp-value">@Valor(grupo.Key.ReferenciaSAP)</div></div>
-                            <div class="col-md-3"><div class="erp-label">Unidad cliente</div><div class="erp-value">@Valor(grupo.Key.UnidadMedidaCliente)</div></div>
+                            <div class="col-md-3"><div class="erp-label">Unidad cliente</div><div class="erp-value">@unidadGrupo</div></div>
                             <div class="col-md-3"><div class="erp-label">Contrato / orden cliente</div><div class="erp-value">@Valor(grupo.Key.ContratoCliente)</div></div>
                             <div class="col-md-12"><div class="erp-label">Designación / descripción</div><div class="erp-value">@Valor(grupo.Key.DesignacionDescripcionSAP)</div></div>
                         </div>
@@ -615,15 +721,9 @@
                                         <th>Entrega</th>
                                         <th>Fecha carga</th>
                                         <th>Fecha requerida</th>
-                                        <th>Req.</th>
-                                        
-                                        
-                                        <th>Desde PT</th>
-                                        <th>A producir</th>
-                                        
-                                        <th>Horas</th>
-                                        <th>Fin estimado</th>
-                                      
+                                        <th>Cantidad requerida</th>
+                                        <th>Unidad</th>
+                                        <th>Sugerencia</th>
                                     </tr>
                                 </thead>
 
@@ -632,38 +732,25 @@
                                     {
                                         var d = entregas[i];
                                         var secuencia = d.SecuenciaEntrega ?? (i + 1);
+                                        var unidadEntrega = Unidad(d.UnidadMedidaCliente);
 
                                         <tr>
                                             <td><strong>@secuencia</strong></td>
                                             <td>@Fecha(d.FechaCarga)</td>
                                             <td>@d.FechaRequerida.ToString("dd/MM/yyyy")</td>
-                                            <td>@d.CantidadRequerida.ToString("N0")</td>
-                                            
-                                            
-                                            <td><strong>@Entero(d.PiezasDesdePT)</strong></td>
-                                            <td><strong>@Entero(d.PiezasAProducir)</strong></td>
-                                           
-                                            <td>@Decimal2(d.HorasNecesarias)</td>
-                                            <td>@FechaHora(d.FechaFinEstimada)</td>
-                                           
+                                            <td><strong>@d.CantidadRequerida.ToString("N0")</strong></td>
+                                            <td>@unidadEntrega</td>
+                                            <td>@SugerenciaEntrega(d)</td>
                                         </tr>
                                     }
                                 </tbody>
 
                                 <tfoot>
                                     <tr class="fw-bold">
-                                        <td colspan="3" class="text-end">Totales renglón</td>
+                                        <td colspan="3" class="text-end">Total renglón</td>
                                         <td>@totalReqGrupo.ToString("N0")</td>
+                                        <td>@unidadGrupo</td>
                                         <td></td>
-                                        <td></td>
-                                        <td>@totalPTGrupo.ToString("N0")</td>
-                                        <td>@totalProdGrupo.ToString("N0")</td>
-                                        <td>@totalMPGrupo.ToString("N4")</td>
-                                        <td></td>
-                                        <td></td>
-                                        <td></td>
-                                        <td>@totalHorasGrupo.ToString("N2")</td>
-                                        <td colspan="2"></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -689,21 +776,13 @@
                     Volver a Releases
                 </a>
 
-                <div class="d-flex gap-2 flex-wrap">
-                    <form asp-controller="PlaneacionRelease" asp-action="Recalcular" method="post">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@Model.ReleaseID" />
-                        <button type="submit" class="btn btn-erp-light">
-                            <i class="fa-solid fa-rotate me-1"></i>
-                            Recalcular
-                        </button>
-                    </form>
-
-                    <a asp-controller="PlaneacionRelease" asp-action="Calculadora" asp-route-clienteId="@Model.ClienteID" class="btn btn-erp-primary">
-                        <i class="fa-solid fa-list-check me-1"></i>
-                        Ir a Programa de Planeación
-                    </a>
-                </div>
+                <a asp-controller="PlaneacionRelease"
+                   asp-action="Editar"
+                   asp-route-id="@Model.ReleaseID"
+                   class="btn btn-erp-primary">
+                    <i class="fa-solid fa-pen-to-square me-1"></i>
+                    Editar Release
+                </a>
             </div>
         </div>
     </div>
