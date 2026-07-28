@@ -12,6 +12,17 @@
     var partesJson = System.Text.Json.JsonSerializer.Serialize(partesData);
     var moldesJson = System.Text.Json.JsonSerializer.Serialize(moldesData);
     var maquinasJson = System.Text.Json.JsonSerializer.Serialize(maquinasData);
+
+    var tipoOFActual = string.IsNullOrWhiteSpace(Model.TipoOF)
+        ? "RELEASE"
+        : Model.TipoOF.Trim().ToUpperInvariant();
+
+    if (tipoOFActual == "MPEXTRA" || tipoOFActual == "MP_EXTRA")
+    {
+        tipoOFActual = "MP EXTRA";
+    }
+
+    var requiereMotivoInicial = tipoOFActual == "PRUEBA" || tipoOFActual == "MP EXTRA";
 }
 
 <!DOCTYPE html>
@@ -253,6 +264,90 @@
             color: #758397;
         }
 
+        .tipo-of-panel {
+            border: 1px solid #d9e1ec;
+            border-radius: 18px;
+            padding: 16px;
+            background: linear-gradient(180deg, #ffffff, #f8fbff);
+        }
+
+        .tipo-of-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .tipo-of-option {
+            position: relative;
+        }
+
+            .tipo-of-option input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none;
+            }
+
+        .tipo-of-card {
+            height: 100%;
+            min-height: 112px;
+            border: 1px solid #d9e1ec;
+            border-radius: 16px;
+            background: #fff;
+            padding: 14px;
+            cursor: pointer;
+            transition: all .18s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+        }
+
+            .tipo-of-card:hover {
+                border-color: #9dbce4;
+                box-shadow: 0 10px 20px rgba(30, 55, 90, .08);
+                transform: translateY(-1px);
+            }
+
+        .tipo-of-option input:checked + .tipo-of-card {
+            border-color: var(--erp-blue);
+            background: #edf5ff;
+            box-shadow: 0 0 0 4px rgba(0, 74, 173, .10);
+        }
+
+        .tipo-of-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 11px;
+            display: grid;
+            place-items: center;
+            background: #edf5ff;
+            color: var(--erp-blue);
+        }
+
+        .tipo-of-name {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+        }
+
+        .tipo-of-desc {
+            color: #687789;
+            font-size: .78rem;
+            line-height: 1.25;
+        }
+
+        .motivo-tipo-box {
+            margin-top: 14px;
+            display: none;
+        }
+
+            .motivo-tipo-box.visible {
+                display: block;
+            }
+
+        .required-hint {
+            color: #b42318;
+            font-weight: 800;
+        }
+
         @@media (max-width: 768px) {
             .erp-shell {
                 padding: 16px;
@@ -262,9 +357,13 @@
                 padding: 20px;
             }
 
-                .erp-header h1 {
-                    font-size: 1.25rem;
-                }
+            .tipo-of-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .erp-header h1 {
+                font-size: 1.25rem;
+            }
         }
     </style>
 </head>
@@ -295,7 +394,7 @@
             </div>
         </div>
 
-        <form asp-controller="Planeacion"   asp-action="@(Model.EsEdicion ? "Editar" : "Crear")" method="post" id="formCrearOF">
+        <form asp-controller="Planeacion" asp-action="@(Model.EsEdicion ? "Editar" : "Crear")" method="post" id="formCrearOF">
             @Html.AntiForgeryToken()
 
             <input type="hidden" asp-for="SolicitudProduccionID" />
@@ -343,6 +442,107 @@
                             <input asp-for="FechaRequerida"
                                    type="date"
                                    class="form-control erp-input" />
+                        </div>
+
+                        <div class="col-12">
+                            <div class="tipo-of-panel">
+                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                                    <div>
+                                        <label class="erp-label mb-1">Tipo de OF</label>
+                                        <div class="small-help">
+                                            Selecciona qué tipo de orden se va a cargar. Este dato se guarda en la OF.
+                                        </div>
+                                    </div>
+                                    <span class="small-help">
+                                        <i class="fa-solid fa-circle-info me-1"></i>
+                                        Prueba y MP extra requieren motivo.
+                                    </span>
+                                </div>
+
+                                <div class="tipo-of-grid">
+                                    <label class="tipo-of-option">
+                                        <input type="radio"
+                                               asp-for="TipoOF"
+                                               value="RELEASE"
+                                               checked="@(tipoOFActual == "RELEASE")"
+                                               data-tipo-of />
+                                        <span class="tipo-of-card">
+                                            <span class="tipo-of-icon">
+                                                <i class="fa-solid fa-industry"></i>
+                                            </span>
+                                            <span class="tipo-of-name">Release</span>
+                                            <span class="tipo-of-desc">Producción normal ligada a requerimiento de cliente.</span>
+                                        </span>
+                                    </label>
+
+                                    <label class="tipo-of-option">
+                                        <input type="radio"
+                                               asp-for="TipoOF"
+                                               value="ENSAMBLE"
+                                               checked="@(tipoOFActual == "ENSAMBLE")"
+                                               data-tipo-of />
+                                        <span class="tipo-of-card">
+                                            <span class="tipo-of-icon">
+                                                <i class="fa-solid fa-layer-group"></i>
+                                            </span>
+                                            <span class="tipo-of-name">Ensamble</span>
+                                            <span class="tipo-of-desc">Orden para armar o integrar componentes.</span>
+                                        </span>
+                                    </label>
+
+                                    <label class="tipo-of-option">
+                                        <input type="radio"
+                                               asp-for="TipoOF"
+                                               value="PRUEBA"
+                                               checked="@(tipoOFActual == "PRUEBA")"
+                                               data-tipo-of />
+                                        <span class="tipo-of-card">
+                                            <span class="tipo-of-icon">
+                                                <i class="fa-solid fa-flask-vial"></i>
+                                            </span>
+                                            <span class="tipo-of-name">Prueba</span>
+                                            <span class="tipo-of-desc">Corrida de prueba, muestra o validación técnica.</span>
+                                        </span>
+                                    </label>
+
+                                    <label class="tipo-of-option">
+                                        <input type="radio"
+                                               asp-for="TipoOF"
+                                               value="MP EXTRA"
+                                               checked="@(tipoOFActual == "MP EXTRA")"
+                                               data-tipo-of />
+                                        <span class="tipo-of-card">
+                                            <span class="tipo-of-icon">
+                                                <i class="fa-solid fa-boxes-stacked"></i>
+                                            </span>
+                                            <span class="tipo-of-name">MP extra</span>
+                                            <span class="tipo-of-desc">Orden que requiere justificar material adicional.</span>
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div id="motivoTipoOFBox"
+                                     class="motivo-tipo-box @(requiereMotivoInicial ? "visible" : "")">
+                                    <label class="erp-label">
+                                        Motivo del tipo de OF
+                                        <span id="motivoTipoOFRequired"
+                                              class="required-hint @(requiereMotivoInicial ? "" : "d-none")">
+                                            *
+                                        </span>
+                                    </label>
+                                    <textarea asp-for="MotivoTipoOF"
+                                              id="MotivoTipoOF"
+                                              class="form-control erp-textarea"
+                                              rows="2"
+                                              maxlength="500"
+                                              placeholder="Ej. prueba solicitada por ingeniería, corrida piloto, MP extra por ajuste de proceso..."></textarea>
+                                    <div id="motivoTipoOFHelp" class="small-help mt-1">
+                                        @(requiereMotivoInicial
+                                                                                ? "Este tipo de OF requiere motivo obligatorio."
+                                                                                : "Motivo opcional para aclaraciones internas.")
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="col-md-4">
@@ -450,7 +650,7 @@
 
                                         <div class="col-md-3">
                                             <label class="erp-label">Referencia SAP</label>
-                                            <input name="Detalles[@i].ReferenciaSAP" value="@Model.Detalles[i].ReferenciaSAP"class="form-control erp-input referencia-input" />
+                                            <input name="Detalles[@i].ReferenciaSAP" value="@Model.Detalles[i].ReferenciaSAP" class="form-control erp-input referencia-input" />
                                         </div>
 
                                         <div class="col-md-3">
@@ -729,6 +929,12 @@
                 const urlValidarAlmacen = '@Url.Action("ValidarDisponibilidadAlmacen", "Planeacion")';
                 const urlPartesPorCliente = '@Url.Action("ObtenerPartesPorCliente", "Planeacion")';
 
+                const tipoOFInputs = [...document.querySelectorAll('[data-tipo-of]')];
+                const motivoTipoOFInput = document.getElementById('MotivoTipoOF');
+                const motivoTipoOFBox = document.getElementById('motivoTipoOFBox');
+                const motivoTipoOFRequired = document.getElementById('motivoTipoOFRequired');
+                const motivoTipoOFHelp = document.getElementById('motivoTipoOFHelp');
+
                 function escapeHtml(value) {
                     return String(value ?? '')
                         .replaceAll('&', '&amp;')
@@ -748,6 +954,55 @@
 
                     return html;
                 }
+
+                function getTipoOFSeleccionado() {
+                    const seleccionado = tipoOFInputs.find(x => x.checked);
+                    return (seleccionado?.value || 'RELEASE').toUpperCase();
+                }
+
+                function tipoOFRequiereMotivo(tipoOF) {
+                    return tipoOF === 'PRUEBA' || tipoOF === 'MP EXTRA';
+                }
+
+                function aplicarVisualTipoOF() {
+                    const tipo = getTipoOFSeleccionado();
+                    const requiereMotivo = tipoOFRequiereMotivo(tipo);
+
+                    if (motivoTipoOFBox) {
+                        motivoTipoOFBox.classList.toggle('visible', requiereMotivo || !!motivoTipoOFInput?.value?.trim());
+                    }
+
+                    if (motivoTipoOFRequired) {
+                        motivoTipoOFRequired.classList.toggle('d-none', !requiereMotivo);
+                    }
+
+                    if (motivoTipoOFHelp) {
+                        motivoTipoOFHelp.textContent = requiereMotivo
+                            ? 'Este tipo de OF requiere motivo obligatorio.'
+                            : 'Motivo opcional para aclaraciones internas.';
+                    }
+                }
+
+                function validarTipoOFAntesDeGuardar() {
+                    const tipo = getTipoOFSeleccionado();
+                    const motivo = (motivoTipoOFInput?.value || '').trim();
+
+                    if (tipoOFRequiereMotivo(tipo) && motivo.length < 5) {
+                        alert('Captura el motivo para el tipo de OF seleccionado.');
+                        motivoTipoOFBox?.classList.add('visible');
+                        motivoTipoOFInput?.focus();
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                tipoOFInputs.forEach(input => {
+                    input.addEventListener('change', aplicarVisualTipoOF);
+                });
+
+                motivoTipoOFInput?.addEventListener('input', aplicarVisualTipoOF);
+                aplicarVisualTipoOF();
 
                 const moldesOptions = crearOptions(moldesData, '-- Selecciona molde --');
                 const maquinasOptions = crearOptions(maquinasData, '-- Selecciona máquina --');
@@ -1052,7 +1307,6 @@
                 const card = e.target.closest('.renglon-item');
 
                 calcularRenglon(card);
-                limpiarValidacionAlmacen(card);
 
                 if (e.target.classList.contains('cantidad-input')) {
                     const asignada = card.querySelector('.cantidad-asignada-input');
@@ -1062,7 +1316,6 @@
                     }
                 }
 
-                programarValidacionAutomatica(card);
             }
         });
 
@@ -1152,12 +1405,6 @@
                         }
 
                                 await calcularRenglon(card);
-
-        const cantidad = getValue(card, '.cantidad-input');
-
-        if (cantidad && Number(cantidad) > 0) {
-            await validarAlmacenRenglon(card, false);
-        }
                     } catch (err) {
                         console.error(err);
                         alert('No se pudo cargar la información técnica de la parte.');
@@ -1642,6 +1889,10 @@
                     formCrearOF.addEventListener('submit', async function (e) {
                         e.preventDefault();
 
+                        if (!validarTipoOFAntesDeGuardar()) {
+                            return;
+                        }
+
                         const renglones = document.querySelectorAll('.renglon-item');
 
                         if (!renglones.length) {
@@ -1660,23 +1911,6 @@
 
                             if (!cantidad || Number(cantidad) <= 0) {
                                 alert('Todos los renglones deben tener cantidad mayor a cero.');
-                                return;
-                            }
-
-                            const validado = getValue(card, '.almacen-validado-input');
-
-                            if (validado !== 'true') {
-                                const resultado = await validarAlmacenRenglon(card, true);
-
-                                if (!resultado) {
-                                    return;
-                                }
-                            }
-
-                            const origen = getValue(card, '.origen-surtido-input');
-
-                            if (!origen) {
-                                alert('No se pudo determinar el origen de surtido del renglón. Vuelve a validar almacén.');
                                 return;
                             }
                         }

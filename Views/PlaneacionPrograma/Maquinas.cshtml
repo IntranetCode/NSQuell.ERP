@@ -782,7 +782,7 @@
 
         .machine-layout {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 410px;
+            grid-template-columns: minmax(0, 1fr) 390px;
             gap: 22px;
             align-items: start;
         }
@@ -870,7 +870,7 @@
 
         .timeline-track {
             position: relative;
-            height: 96px;
+            height: 246px;
             border-radius: 0 0 18px 18px;
             background: white;
             border: 1px solid var(--border);
@@ -909,16 +909,18 @@
 
         .timeline-item {
             position: absolute;
-            top: 34px;
-            height: 42px;
-            border-radius: 999px;
+            min-width: 138px;
+            max-width: 240px;
+            height: 38px;
+            border-radius: 12px;
             color: white;
-            font-size: .74rem;
+            font-size: .72rem;
             font-weight: 950;
             display: flex;
-            align-items: center;
+            flex-direction: column;
+            align-items: flex-start;
             justify-content: center;
-            padding: 0 12px;
+            padding: 6px 10px;
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
@@ -926,11 +928,26 @@
             z-index: 3;
         }
 
+            .timeline-item .timeline-ref {
+                display: block;
+                width: 100%;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+                line-height: 1.05;
+            }
+
             .timeline-item small {
-                font-size: .68rem;
+                display: block;
+                width: 100%;
+                font-size: .64rem;
                 font-weight: 800;
                 opacity: .95;
-                margin-left: 6px;
+                margin-left: 0;
+                margin-top: 2px;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
             }
 
         .timeline-now-line {
@@ -1048,6 +1065,118 @@
             font-weight: 850;
             margin-top: 8px;
         }
+
+        .production-map-panel {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: linear-gradient(135deg, #FFFFFF, #F8FBFF);
+            padding: 16px;
+            margin-top: 18px;
+        }
+
+        .production-map-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .production-map-title {
+            color: var(--blue-dark);
+            font-size: .98rem;
+            font-weight: 950;
+            margin: 0;
+        }
+
+        .production-map-sub {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 700;
+            margin-top: 3px;
+        }
+
+        .production-map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+        }
+
+        .production-map-card {
+            border: 1px solid #E4EBF5;
+            border-radius: 16px;
+            background: white;
+            padding: 12px;
+            box-shadow: 0 6px 14px rgba(16,24,40,.045);
+        }
+
+        .production-map-card.is-current {
+            border-color: #ABEFC6;
+            background: linear-gradient(135deg, #ECFDF3, #FFFFFF);
+        }
+
+        .production-map-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .production-map-part {
+            color: var(--text);
+            font-size: .86rem;
+            font-weight: 950;
+            line-height: 1.15;
+        }
+
+        .production-map-desc {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 700;
+            margin-top: 2px;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .production-map-values {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 7px;
+            margin-top: 10px;
+        }
+
+        .production-map-value {
+            border: 1px solid #EDF2F7;
+            border-radius: 12px;
+            background: #FBFDFF;
+            padding: 8px;
+        }
+
+        .production-map-label {
+            color: var(--muted);
+            font-size: .62rem;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            font-weight: 950;
+        }
+
+        .production-map-number {
+            color: var(--blue-dark);
+            font-size: .9rem;
+            font-weight: 950;
+            margin-top: 2px;
+        }
+
+        .production-map-actions {
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
 
         .program-list {
             display: grid;
@@ -1200,7 +1329,7 @@
                 </div>
                 <div class="hero-actions d-flex gap-2 flex-wrap">
                     <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-glass"><i class="fa-solid fa-arrow-left"></i> Volver</a>
-                    <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass"><i class="fa-solid fa-chart-line"></i> Panorama</a>
+                  @*  <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass"><i class="fa-solid fa-chart-line"></i> Panorama</a>*@
                     <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-glass"><i class="fa-solid fa-list"></i> Programa general</a>
                 </div>
             </div>
@@ -1329,17 +1458,13 @@
                             <div class="modal-body-pro">
                                 @if (maq.Programas.Any())
                                 {
-                                    <div class="modal-kpis">
-                                        <div class="modal-kpi"><div class="kpi-label">Programas</div><div class="kpi-value">@maq.Programas.Count.ToString("N0")</div></div>
-                                        <div class="modal-kpi"><div class="kpi-label">Programadas</div><div class="kpi-value">@maq.Programas.Sum(x => x.CantidadProgramada).ToString("N0")</div></div>
-                                        <div class="modal-kpi"><div class="kpi-label">Pendientes</div><div class="kpi-value">@maq.Programas.Sum(x => x.CantidadPendiente).ToString("N0")</div></div>
-                                        <div class="modal-kpi"><div class="kpi-label">Horas</div><div class="kpi-value">@maq.Programas.Sum(x => x.HorasProgramadas ?? 0).ToString("N2")</div></div>
-                                    </div>
-
                                     <div class="machine-layout">
                                         <main>
                                             <div class="stage-panel">
-                                                <div class="stage-head"><h3 class="stage-title">Timeline operativo</h3><div class="stage-desc">Carga completa de la máquina dentro del rango seleccionado.</div></div>
+                                                <div class="stage-head">
+                                                    <h3 class="stage-title">Timeline operativo</h3>
+                                                    <div class="stage-desc">Carga de la máquina dentro del rango seleccionado. El mapa compacto queda debajo y el panel operativo se mantiene a la derecha.</div>
+                                                </div>
                                                 <div class="stage-body">
                                                     <div class="timeline-panel">
                                                         @{
@@ -1357,7 +1482,7 @@
                                                             <span class="pill pill-success"><i class="fa-solid fa-play"></i> En producción</span>
                                                             <span class="pill pill-warning"><i class="fa-solid fa-wrench"></i> Preparación</span>
                                                             <span class="pill pill-danger"><i class="fa-solid fa-pause"></i> Pausado</span>
-                                                            <span class="pill pill-muted"><i class="fa-solid fa-calendar"></i> La barra muestra inicio, fin y duración dentro del rango</span>
+                                                            <span class="pill pill-muted"><i class="fa-solid fa-map"></i> El mapa compacto reemplaza el detalle largo</span>
                                                         </div>
 
                                                         <div class="timeline-scale" style="grid-template-columns: repeat(@columnasTimeline, minmax(120px, 1fr));">
@@ -1384,13 +1509,17 @@
                                                                 <span class="timeline-now-label">Ahora</span>
                                                             </div>
 
-                                                            @foreach (var p in programasOrdenados)
+                                                            @for (var idxTimeline = 0; idxTimeline < programasOrdenados.Count; idxTimeline++)
                                                             {
+                                                                var p = programasOrdenados[idxTimeline];
+                                                                var carrilTimeline = idxTimeline % 5;
+                                                                var topTimeline = 18 + (carrilTimeline * 42);
+
                                                                 <div class="timeline-item @TimelineClass(p)"
-                                                                     style="@TimelineStyle(p)"
+                                                                     style="@TimelineStyle(p) top:@(topTimeline)px;"
                                                                      title="@Valor(p.ReferenciaSAP ?? p.NumeroParte) · @FechaHora(p.FechaInicioProgramada) - @FechaHora(p.FechaFinProgramada)">
-                                                                    @Valor(p.ReferenciaSAP ?? p.NumeroParte)
-                                                                    <small>@InicioVisible(p).ToString("HH:mm") - @FinVisible(p).ToString("HH:mm")</small>
+                                                                    <span class="timeline-ref">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</span>
+                                                                    <small>@InicioVisible(p).ToString("dd/MM HH:mm") - @FinVisible(p).ToString("dd/MM HH:mm")</small>
                                                                 </div>
                                                             }
                                                         </div>
@@ -1400,116 +1529,179 @@
                                                             <span>Fin del rango: @Model.FechaHasta.ToString("dd/MM/yyyy 23:59")</span>
                                                         </div>
 
-                                                        <div class="timeline-day-detail">
-                                                            @foreach (var dia in diasTimeline)
-                                                            {
-                                                                var programasDia = programasOrdenados.Where(p => ProgramaCruzaDia(p, dia)).ToList();
-
-                                                                <div class="timeline-day-card">
-                                                                    <div class="timeline-day-title">
-                                                                        <i class="fa-regular fa-calendar me-1"></i>
-                                                                        @dia.ToString("dddd dd/MM", new System.Globalization.CultureInfo("es-MX"))
+                                                        <div class="production-map-panel">
+                                                            <div class="production-map-head">
+                                                                <div>
+                                                                    <h4 class="production-map-title">
+                                                                        <i class="fa-solid fa-map-location-dot me-2"></i>
+                                                                        Mapa compacto de producción
+                                                                    </h4>
+                                                                    <div class="production-map-sub">
+                                                                        Resumen por programa: pieza, horario, molde y cálculo de piezas necesarias.
                                                                     </div>
+                                                                </div>
 
-                                                                    @if (!programasDia.Any())
-                                                                    {
-                                                                        <div class="timeline-day-empty">Sin carga programada</div>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        foreach (var pDia in programasDia)
+                                                                <div class="chip-row">
+                                                                    <span class="pill pill-primary">@programasOrdenados.Count.ToString("N0") programas</span>
+                                                                    <span class="pill pill-warning">@programasOrdenados.Sum(x => x.CantidadPendiente).ToString("N0") pzas necesarias</span>
+                                                                    <span class="pill pill-success">@programasOrdenados.Count(x => x.TieneOF).ToString("N0") con OF</span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="production-map-grid">
+                                                                @foreach (var p in programasOrdenados)
+                                                                {
+                                                                    var esActual = maq.Actual?.ProgramaProduccionID == p.ProgramaProduccionID;
+                                                                    var piezasNecesarias = p.CantidadPendiente > 0 ? p.CantidadPendiente : p.CantidadProgramada;
+                                                                    var claseActual = esActual ? "is-current" : "";
+
+                                                                    <div class="production-map-card @claseActual">
+                                                                        <div class="production-map-top">
+                                                                            <div>
+                                                                                <div class="production-map-part">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</div>
+                                                                                <div class="production-map-desc">@Valor(p.DesignacionDescripcionSAP)</div>
+                                                                            </div>
+
+                                                                            <span class="pill @ClaseEstatus(p.EstatusID)">
+                                                                                @p.EstatusNombre
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div class="chip-row">
+                                                                            @if (esActual)
+                                                                            {
+                                                                                <span class="pill pill-success"><i class="fa-solid fa-play"></i> Actual</span>
+                                                                            }
+                                                                            <span class="pill pill-primary">@Valor(p.CondicionProduccion)</span>
+                                                                            <span class="pill pill-purple">Molde @Valor(p.MoldeCodigo)</span>
+                                                                        </div>
+
+                                                                        <div class="production-map-values">
+                                                                            <div class="production-map-value">
+                                                                                <div class="production-map-label">Necesarias</div>
+                                                                                <div class="production-map-number">@piezasNecesarias.ToString("N0")</div>
+                                                                            </div>
+                                                                            <div class="production-map-value">
+                                                                                <div class="production-map-label">Programadas</div>
+                                                                                <div class="production-map-number">@p.CantidadProgramada.ToString("N0")</div>
+                                                                            </div>
+                                                                            <div class="production-map-value">
+                                                                                <div class="production-map-label">Pendientes</div>
+                                                                                <div class="production-map-number">@p.CantidadPendiente.ToString("N0")</div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div class="text-muted small fw-semibold mt-2">
+                                                                            @FechaHora(p.FechaInicioProgramada) - @FechaHora(p.FechaFinProgramada)
+                                                                        </div>
+
+                                                                        @if (p.PuedeGenerarOF || p.TieneOF)
                                                                         {
-                                                                            <div class="timeline-day-program">
-                                                                                <div class="timeline-day-program-title">
-                                                                                    @Valor(pDia.ReferenciaSAP ?? pDia.NumeroParte)
-                                                                                </div>
-                                                                                <div class="timeline-day-program-sub">
-                                                                                    @RangoVisibleTexto(pDia) · @pDia.CantidadProgramada.ToString("N0") pzas.
-                                                                                </div>
+                                                                            <div class="production-map-actions">
+                                                                                @if (p.PuedeGenerarOF)
+                                                                                {
+                                                                                    <button type="button"
+                                                                                            class="btn btn-sm btn-main btn-generar-of"
+                                                                                            data-programa-id="@p.ProgramaProduccionID"
+                                                                                            data-referencia="@Valor(p.ReferenciaSAP ?? p.NumeroParte)"
+                                                                                            data-designacion="@Valor(p.DesignacionDescripcionSAP)"
+                                                                                            data-maquina="@Valor(p.MaquinaCodigo)"
+                                                                                            data-molde="@Valor(p.MoldeCodigo)"
+                                                                                            data-cantidad="@p.CantidadProgramada.ToString("N0")">
+                                                                                        <i class="fa-solid fa-file-circle-plus me-1"></i>
+                                                                                        Generar OF
+                                                                                    </button>
+                                                                                }
+                                                                                else if (p.TieneOF)
+                                                                                {
+                                                                                    <a asp-controller="Planeacion"
+                                                                                       asp-action="Detalle"
+                                                                                       asp-route-id="@p.SolicitudProduccionID"
+                                                                                       class="btn btn-sm btn-success rounded-4 fw-bold">
+                                                                                        <i class="fa-solid fa-circle-check me-1"></i>
+                                                                                        Ver OF
+                                                                                    </a>
+                                                                                }
                                                                             </div>
                                                                         }
-                                                                    }
-                                                                </div>
-                                                            }
+                                                                    </div>
+                                                                }
+                                                            </div>
                                                         </div>
                                                     </div>
-
-                                                    <div class="program-list">
-                                                        @foreach (var p in programasOrdenados)
-                                                        {
-                                                            var featured = maq.Actual?.ProgramaProduccionID == p.ProgramaProduccionID ? "featured" : "";
-                                                            <div class="program-card @featured">
-                                                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                                                                    <div>
-                                                                        <div class="d-flex gap-2 flex-wrap mb-2">
-                                                                            <span class="pill @ClaseEstatus(p.EstatusID)"><i class="fa-solid fa-circle" style="font-size:.45rem;"></i>@p.EstatusNombre</span><span class="pill pill-primary">@Valor(p.CondicionProduccion)</span>@if (maq.Actual?.ProgramaProduccionID == p.ProgramaProduccionID){
-                                                                            <span class="pill pill-success"><i class="fa-solid fa-play"></i>Actual</span>
-                                                                        }
-                                                                    </div>
-                                                                    <div class="program-title">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</div>
-                                                                    <div class="program-desc">@Valor(p.DesignacionDescripcionSAP)</div>
-                                                                </div>
-                                                                <div class="d-flex gap-2 flex-wrap">
-                                                                    @if (p.PuedeGenerarOF)
-                                                                    {
-                                                                        <button type="button" class="btn btn-sm btn-main btn-generar-of" data-programa-id="@p.ProgramaProduccionID" data-referencia="@Valor(p.ReferenciaSAP ?? p.NumeroParte)" data-designacion="@Valor(p.DesignacionDescripcionSAP)" data-maquina="@Valor(p.MaquinaCodigo)" data-molde="@Valor(p.MoldeCodigo)" data-cantidad="@p.CantidadProgramada.ToString("N0")"><i class="fa-solid fa-file-circle-plus me-1"></i>Generar OF</button>
-                                                                    }
-                                                                    else if (p.TieneOF)
-                                                                    {
-                                                                        <a asp-controller="Planeacion" asp-action="Detalle" asp-route-id="@p.SolicitudProduccionID" class="btn btn-sm btn-success rounded-4 fw-bold"><i class="fa-solid fa-circle-check me-1"></i>Ver OF</a>
-                                                                    }
-                                                                </div>
-                                                            </div>
-                                                            <div class="program-grid">
-                                                                <div class="mini-box"><div class="mini-label">Cliente</div><div class="mini-value">@Valor(p.ClienteNombre)</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Molde</div><div class="mini-value">@Valor(p.MoldeCodigo)</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Color</div><div class="mini-value">@Valor(p.Color)</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Cambio</div><div class="mini-value">@(p.Cambio?.ToString(@"hh\:mm") ?? "-")</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Arranque</div><div class="mini-value">@(p.Arranque?.ToString(@"hh\:mm") ?? "-")</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Inicio</div><div class="mini-value">@FechaHora(p.FechaInicioProgramada)</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Fin</div><div class="mini-value">@FechaHora(p.FechaFinProgramada)</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Secuencia</div><div class="mini-value">@(p.SecuenciaMaquina?.ToString() ?? "-")</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Programadas</div><div class="mini-value">@p.CantidadProgramada.ToString("N0")</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Pendientes</div><div class="mini-value">@p.CantidadPendiente.ToString("N0")</div></div>
-                                                                <div class="mini-box"><div class="mini-label">Horas</div><div class="mini-value">@Decimal2(p.HorasProgramadas)</div></div>
-                                                                <div class="mini-box"><div class="mini-label">OF</div><div class="mini-value">@(p.TieneOF ? "Generada" : "Pendiente")</div></div>
-                                                            </div>
-                                                        </div>
-                                                    }
                                                 </div>
                                             </div>
-                                        </div>
-                                    </main>
-                                    <aside class="side-panel">
-                                        <div class="side-card">
-                                            <div class="side-title"><i class="fa-solid fa-play text-success me-2"></i>Programa actual</div>@if (maq.Actual != null){var actual = maq.Actual;
-                                            <div class="queue-item"><div class="fw-bold">@Valor(actual.ReferenciaSAP ?? actual.NumeroParte)</div><div class="text-muted small">@Valor(actual.DesignacionDescripcionSAP)</div><div class="chip-row mt-2"><span class="pill pill-success">@actual.EstatusNombre</span><span class="pill pill-primary">@Valor(actual.MoldeCodigo)</span></div></div>
-                                        }else
-                                        {
+                                        </main>
 
-                                            <div class="text-muted small">No hay programa marcado como actual.</div>
-                                        }
-                                    </div>
-                                    <div class="side-card">
-                                        <div class="side-title"><i class="fa-solid fa-forward-step text-primary me-2"></i>Siguiente carga</div>@if (maq.Siguiente != null){var sig = maq.Siguiente;
-                                        <div class="queue-item"><div class="fw-bold">@Valor(sig.ReferenciaSAP ?? sig.NumeroParte)</div><div class="text-muted small">@Valor(sig.DesignacionDescripcionSAP)</div><div class="chip-row mt-2"><span class="pill pill-primary">@FechaHora(sig.FechaInicioProgramada)</span><span class="pill pill-purple">@Valor(sig.MoldeCodigo)</span></div></div>
-                                                                                }else
-                                        {
+                                        <aside class="side-panel">
+                                            <div class="side-card">
+                                                <div class="side-title">
+                                                    <i class="fa-solid fa-play text-success me-2"></i>
+                                                    Programa actual
+                                                </div>
 
-                                            <div class="text-muted small">No hay siguiente programa identificado.</div>
-                                        }
+                                                @if (maq.Actual != null)
+                                                {
+                                                    var actual = maq.Actual;
+                                                    var piezasNecesariasActual = actual.CantidadPendiente > 0
+                                                        ? actual.CantidadPendiente
+                                                        : actual.CantidadProgramada;
+
+                                                    <div class="queue-item">
+                                                        <div class="fw-bold">@Valor(actual.ReferenciaSAP ?? actual.NumeroParte)</div>
+                                                        <div class="text-muted small">@Valor(actual.DesignacionDescripcionSAP)</div>
+
+                                                        <div class="chip-row mt-2">
+                                                            <span class="pill pill-success">@actual.EstatusNombre</span>
+                                                            <span class="pill pill-primary">@Valor(actual.MoldeCodigo)</span>
+                                                            <span class="pill pill-warning">@piezasNecesariasActual.ToString("N0") pzas necesarias</span>
+                                                        </div>
+
+                                                        <div class="text-muted small fw-semibold mt-2">
+                                                            @FechaHora(actual.FechaInicioProgramada) - @FechaHora(actual.FechaFinProgramada)
+                                                        </div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="text-muted small">No hay programa marcado como actual.</div>
+                                                }
+                                            </div>
+
+                                            <div class="side-card">
+                                                <div class="side-title">
+                                                    <i class="fa-solid fa-forward-step text-primary me-2"></i>
+                                                    Siguiente producción
+                                                </div>
+
+                                                @if (maq.Siguiente != null)
+                                                {
+                                                    var sig = maq.Siguiente;
+                                                    var piezasNecesariasSiguiente = sig.CantidadPendiente > 0
+                                                        ? sig.CantidadPendiente
+                                                        : sig.CantidadProgramada;
+
+                                                    <div class="queue-item">
+                                                        <div class="fw-bold">@Valor(sig.ReferenciaSAP ?? sig.NumeroParte)</div>
+                                                        <div class="text-muted small">@Valor(sig.DesignacionDescripcionSAP)</div>
+
+                                                        <div class="chip-row mt-2">
+                                                            <span class="pill pill-primary">@FechaHora(sig.FechaInicioProgramada)</span>
+                                                            <span class="pill pill-purple">@Valor(sig.MoldeCodigo)</span>
+                                                            <span class="pill pill-warning">@piezasNecesariasSiguiente.ToString("N0") pzas necesarias</span>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="text-muted small">No hay siguiente producción identificada.</div>
+                                                }
+                                            </div>
+
+                                           
+                                        </aside>
                                     </div>
-                                    <div class="side-card">
-                                        <div class="side-title"><i class="fa-solid fa-list-ol text-primary me-2"></i>Cola resumida</div>@foreach (var p in programasOrdenados.Take(6)){
-                                        <div class="queue-item"><div class="fw-bold">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</div><div class="text-muted small">@FechaHora(p.FechaInicioProgramada)</div><div class="chip-row mt-2"><span class="pill @ClaseEstatus(p.EstatusID)">@p.EstatusNombre</span><span class="pill pill-muted">@p.CantidadProgramada.ToString("N0") pzas.</span></div></div>
-                                                                                }
-                                        @if (programasOrdenados.Count > 6)
-                                        {
-                                            <div class="text-muted small fw-bold">+ @(programasOrdenados.Count - 6) programas más.</div>
-                                        }
-                                    </div>
-                                </aside>
-                            </div>
+                         
                                                         }
                                                         else
                             {

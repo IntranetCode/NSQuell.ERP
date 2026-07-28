@@ -56,6 +56,9 @@ namespace ERP.NSQuell.Models
         public TimeSpan? Cambio { get; set; }
         public TimeSpan? Arranque { get; set; }
 
+        public string? TipoOF { get; set; } = "RELEASE";
+        public string? MotivoTipoOF { get; set; }
+
         public bool TieneOF => SolicitudProduccionID.HasValue;
 
         public bool PuedeGenerarOF =>
@@ -81,6 +84,12 @@ namespace ERP.NSQuell.Models
 
         public int CantidadRequerida { get; set; }
         public int PiezasDesdePT { get; set; }
+
+        // Apartado de PT generado desde Programa de Planeación.
+        public int PTDisponibleAlCalcular { get; set; }
+        public int PTApartadoOtros { get; set; }
+        public int PTDisponibleNeto { get; set; }
+
         public int PiezasAProducir { get; set; }
 
         public int CantidadProgramada { get; set; }
@@ -132,6 +141,16 @@ namespace ERP.NSQuell.Models
 
         public TimeSpan? Cambio { get; set; }
         public TimeSpan? Arranque { get; set; }
+
+
+        public string? TipoOF { get; set; } = "RELEASE";
+        public string? MotivoTipoOF { get; set; }
+
+        public int? OperadorPrincipalID { get; set; }
+        public int? OperadorAuxiliarID { get; set; }
+
+        public List<SelectListItem> Operadores { get; set; } = new();
+
 
         public List<SelectListItem> Maquinas { get; set; } = new();
         public List<SelectListItem> Moldes { get; set; } = new();
@@ -211,6 +230,8 @@ namespace ERP.NSQuell.Models
         public int CantidadRequerida { get; set; }
 
         public int? PTDisponibleAlCalcular { get; set; }
+        public int? PTApartadoOtros { get; set; }
+        public int? PTDisponibleNeto { get; set; }
         public int? ProduccionProgramadaPendiente { get; set; }
 
         public int? PiezasDesdePT { get; set; }

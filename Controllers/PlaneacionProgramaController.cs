@@ -45,6 +45,10 @@ namespace ERP.NSQuell.Controllers
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
+            // Reserva automática de PT al abrir Programa de Planeación.
+            // Esto evita que varios releases usen el mismo stock disponible.
+            await SincronizarApartadosPTAsync(cn);
+
             vm.Clientes = await CargarSelectAsync(
                 cn,
                 "SELECT ClienteID AS Id, Nombre AS Texto FROM dbo.ERP_Clientes WHERE Activo = 1 ORDER BY Nombre;"
@@ -120,7 +124,9 @@ SELECT
     ISNULL(mp.Saldo, 0) AS MPDisponible,
     ISNULL(emb.Saldo, 0) AS EmbalajeDisponible,
 
-    ISNULL(prog.ProgramadoPendiente, 0) AS ProgramadoPendiente
+    ISNULL(prog.ProgramadoPendiente, 0) AS ProgramadoPendiente,
+    ISNULL(aptPropio.CantidadApartada, 0) AS PTApartadoPropio,
+    ISNULL(aptOtros.CantidadApartada, 0) AS PTApartadoOtros
 
 FROM dbo.Planeacion_ReleaseDetalle d
 INNER JOIN dbo.Planeacion_Releases r
@@ -174,6 +180,25 @@ OUTER APPLY
       AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
 ) prog
 
+OUTER APPLY
+(
+    SELECT ISNULL(SUM(a.CantidadApartada), 0) AS CantidadApartada
+    FROM dbo.Planeacion_PT_Apartado a
+    WHERE a.ReleaseDetalleID = d.ReleaseDetalleID
+      AND a.Activo = 1
+      AND a.EstatusID = 1
+) aptPropio
+
+OUTER APPLY
+(
+    SELECT ISNULL(SUM(a.CantidadApartada), 0) AS CantidadApartada
+    FROM dbo.Planeacion_PT_Apartado a
+    WHERE a.ParteID = d.ParteID
+      AND a.ReleaseDetalleID <> d.ReleaseDetalleID
+      AND a.Activo = 1
+      AND a.EstatusID = 1
+) aptOtros
+
 WHERE r.Activo = 1
   AND d.Activo = 1
   AND (@ClienteID IS NULL OR r.ClienteID = @ClienteID)
@@ -207,9 +232,18 @@ ORDER BY
             {
                 var cantidadRequerida = rd["CantidadRequerida"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadRequerida"]);
                 var stockDisponible = rd["PTDisponible"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PTDisponible"]);
+                var ptApartadoPropio = rd["PTApartadoPropio"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PTApartadoPropio"]);
+                var ptApartadoOtros = rd["PTApartadoOtros"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PTApartadoOtros"]);
                 var programadoPendiente = rd["ProgramadoPendiente"] == DBNull.Value ? 0 : Convert.ToInt32(rd["ProgramadoPendiente"]);
 
-                var piezasDesdeStock = Math.Min(stockDisponible, cantidadRequerida);
+                var ptDisponibleNeto = Math.Max(0, stockDisponible - ptApartadoOtros);
+
+                // El PT usado por este release ya viene apartado por FIFO.
+                // Si por alguna razón aún no hay apartado, se calcula contra el neto disponible.
+                var piezasDesdeStock = ptApartadoPropio > 0
+                    ? Math.Min(ptApartadoPropio, cantidadRequerida)
+                    : Math.Min(ptDisponibleNeto, cantidadRequerida);
+
                 var piezasAProducir = Math.Max(0, cantidadRequerida - piezasDesdeStock - programadoPendiente);
 
                 var pesoBrutoPieza = rd["PesoBrutoPieza"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["PesoBrutoPieza"]);
@@ -218,7 +252,7 @@ ORDER BY
 
                 decimal mpRequeridaKg = 0;
                 if (piezasAProducir > 0 && pesoBrutoPieza.HasValue && pesoBrutoPieza.Value > 0)
-                    mpRequeridaKg = Math.Round(piezasAProducir * pesoBrutoPieza.Value, 4);
+                    mpRequeridaKg = Math.Round((piezasAProducir * pesoBrutoPieza.Value) / 1000m, 4); // PesoBrutoPieza está en gramos; resultado en kg.
 
                 decimal embalajeRequerido = 0;
                 if (piezasAProducir > 0 && piezasPorEmbalaje.HasValue && piezasPorEmbalaje.Value > 0)
@@ -226,7 +260,7 @@ ORDER BY
 
                 decimal horasProgramadas = 0;
                 if (piezasAProducir > 0 && objetivoHora.HasValue && objetivoHora.Value > 0)
-                    horasProgramadas = Math.Round(piezasAProducir / (decimal)objetivoHora.Value, 2);
+                    horasProgramadas = Math.Ceiling(piezasAProducir / (decimal)objetivoHora.Value);
 
                 int? qtyPorDia = null;
                 if (objetivoHora.HasValue && objetivoHora.Value > 0)
@@ -317,6 +351,8 @@ ORDER BY
                     CantidadRequerida = cantidadRequerida,
 
                     PTDisponibleAlCalcular = stockDisponible,
+                    PTApartadoOtros = ptApartadoOtros,
+                    PTDisponibleNeto = ptDisponibleNeto,
                     ProduccionProgramadaPendiente = programadoPendiente,
                     PiezasDesdePT = piezasDesdeStock,
                     PiezasAProducir = piezasAProducir,
@@ -400,6 +436,160 @@ ORDER BY
         }
 
 
+        private async Task SincronizarApartadosPTAsync(SqlConnection cn)
+        {
+            const string sql = @"
+IF OBJECT_ID('dbo.Planeacion_PT_Apartado', 'U') IS NULL
+    RETURN;
+
+DECLARE @Reservas TABLE
+(
+    ReleaseID INT NULL,
+    ReleaseDetalleID INT NOT NULL PRIMARY KEY,
+    ClienteID INT NULL,
+    ParteID INT NOT NULL,
+    CantidadRequerida INT NOT NULL,
+    StockFisico INT NOT NULL,
+    RequeridoAnterior INT NOT NULL,
+    CantidadApartadaNueva INT NOT NULL
+);
+
+;WITH Base AS
+(
+    SELECT
+        r.ReleaseID,
+        d.ReleaseDetalleID,
+        r.ClienteID,
+        d.ParteID,
+        ISNULL(d.CantidadRequerida, 0) AS CantidadRequerida,
+        ISNULL(pt.Disponible, 0) AS StockFisico,
+        d.FechaRequerida
+    FROM dbo.Planeacion_ReleaseDetalle d
+    INNER JOIN dbo.Planeacion_Releases r
+        ON r.ReleaseID = d.ReleaseID
+    OUTER APPLY
+    (
+        SELECT TOP 1 ISNULL(Disponible, 0) AS Disponible
+        FROM dbo.vw_AlmacenPTInventario
+        WHERE ParteID = d.ParteID
+    ) pt
+    WHERE r.Activo = 1
+      AND d.Activo = 1
+      AND d.ParteID IS NOT NULL
+      AND ISNULL(d.CantidadRequerida, 0) > 0
+      AND ISNULL(d.EstatusID, 1) NOT IN (9, 99)
+), Calc AS
+(
+    SELECT
+        ReleaseID,
+        ReleaseDetalleID,
+        ClienteID,
+        ParteID,
+        CantidadRequerida,
+        StockFisico,
+        ISNULL
+        (
+            SUM(CantidadRequerida) OVER
+            (
+                PARTITION BY ParteID
+                ORDER BY FechaRequerida, ReleaseDetalleID
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ),
+            0
+        ) AS RequeridoAnterior
+    FROM Base
+)
+INSERT INTO @Reservas
+(
+    ReleaseID,
+    ReleaseDetalleID,
+    ClienteID,
+    ParteID,
+    CantidadRequerida,
+    StockFisico,
+    RequeridoAnterior,
+    CantidadApartadaNueva
+)
+SELECT
+    ReleaseID,
+    ReleaseDetalleID,
+    ClienteID,
+    ParteID,
+    CantidadRequerida,
+    StockFisico,
+    RequeridoAnterior,
+    CASE
+        WHEN StockFisico - RequeridoAnterior <= 0 THEN 0
+        WHEN StockFisico - RequeridoAnterior >= CantidadRequerida THEN CantidadRequerida
+        ELSE StockFisico - RequeridoAnterior
+    END AS CantidadApartadaNueva
+FROM Calc;
+
+MERGE dbo.Planeacion_PT_Apartado AS tgt
+USING
+(
+    SELECT *
+    FROM @Reservas
+    WHERE CantidadApartadaNueva > 0
+) AS src
+ON tgt.ReleaseDetalleID = src.ReleaseDetalleID
+   AND tgt.Activo = 1
+   AND tgt.EstatusID = 1
+WHEN MATCHED THEN
+    UPDATE SET
+        tgt.ReleaseID = src.ReleaseID,
+        tgt.ClienteID = src.ClienteID,
+        tgt.ParteID = src.ParteID,
+        tgt.CantidadApartada = src.CantidadApartadaNueva,
+        tgt.FechaModificacion = GETDATE(),
+        tgt.Observaciones = 'Apartado recalculado automáticamente desde Programa de Planeación.'
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT
+    (
+        ReleaseID,
+        ReleaseDetalleID,
+        ClienteID,
+        ParteID,
+        CantidadApartada,
+        FechaApartado,
+        EstatusID,
+        Activo,
+        Observaciones
+    )
+    VALUES
+    (
+        src.ReleaseID,
+        src.ReleaseDetalleID,
+        src.ClienteID,
+        src.ParteID,
+        src.CantidadApartadaNueva,
+        GETDATE(),
+        1,
+        1,
+        'Apartado creado automáticamente desde Programa de Planeación.'
+    );
+
+UPDATE a
+SET
+    a.Activo = 0,
+    a.EstatusID = 9,
+    a.FechaModificacion = GETDATE(),
+    a.Observaciones = 'Apartado liberado automáticamente: ya no hay PT disponible o el release dejó de aplicar.'
+FROM dbo.Planeacion_PT_Apartado a
+LEFT JOIN @Reservas r
+    ON r.ReleaseDetalleID = a.ReleaseDetalleID
+WHERE a.Activo = 1
+  AND a.EstatusID = 1
+  AND
+  (
+        r.ReleaseDetalleID IS NULL
+     OR r.CantidadApartadaNueva <= 0
+  );";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.CommandTimeout = 120;
+            await cmd.ExecuteNonQueryAsync();
+        }
 
         // CALENDARIO_MAQUINAS_V1_0
         [HttpGet]
@@ -1063,43 +1253,39 @@ END;";
 
             vm.CantidadProgramada = vm.PiezasAProducir;
 
-            var horaBase = DateTime.Now;
-
-            // Redondea hacia el siguiente bloque de 15 minutos para que no proponga horas raras como 08:07.
-            horaBase = RedondearSiguienteBloque(horaBase, 15);
-
-            if (!vm.FechaInicioProgramada.HasValue)
-                vm.FechaInicioProgramada = horaBase;
+            var horaBase = RedondearSiguienteHora(DateTime.Now);
+            vm.FechaInicioProgramada = horaBase;
 
             if (vm.MaquinaID.HasValue)
             {
-                var horaCambioSugerida = await ObtenerSiguienteCambioDisponibleAsync(
+                var sugerencia = await ObtenerSiguienteCambioDisponibleAsync(
                     vm.MaquinaID.Value,
-                    vm.FechaInicioProgramada.Value
+                    horaBase,
+                    vm.ParteID,
+                    vm.MoldeID
                 );
 
-                vm.FechaInicioProgramada = horaCambioSugerida;
-                vm.Cambio = horaCambioSugerida.TimeOfDay;
-
-                var horaArranqueSugerida = horaCambioSugerida.AddHours(1);
-                vm.Arranque = horaArranqueSugerida.TimeOfDay;
+                vm.FechaInicioProgramada = sugerencia.Cambio;
+                vm.Cambio = sugerencia.Cambio.TimeOfDay;
+                vm.Arranque = sugerencia.Arranque.TimeOfDay;
 
                 if (vm.HorasProgramadas.HasValue && vm.HorasProgramadas.Value > 0)
-                    vm.FechaFinProgramada = horaArranqueSugerida.AddHours((double)vm.HorasProgramadas.Value);
+                    vm.FechaFinProgramada = sugerencia.Arranque.AddHours((double)vm.HorasProgramadas.Value);
+
+                if (sugerencia.OmiteHoraCambio)
+                {
+                    vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones)
+                        ? sugerencia.Motivo
+                        : vm.Observaciones + Environment.NewLine + sugerencia.Motivo;
+                }
             }
             else
             {
-                if (!vm.Cambio.HasValue && vm.FechaInicioProgramada.HasValue)
-                    vm.Cambio = vm.FechaInicioProgramada.Value.TimeOfDay;
-
-                if (!vm.Arranque.HasValue && vm.FechaInicioProgramada.HasValue)
-                    vm.Arranque = vm.FechaInicioProgramada.Value.AddHours(1).TimeOfDay;
+                vm.Cambio = horaBase.TimeOfDay;
+                vm.Arranque = horaBase.AddHours(1).TimeOfDay;
 
                 if (vm.HorasProgramadas.HasValue && vm.HorasProgramadas.Value > 0)
-                {
-                    var arranque = CalcularFechaHoraDesdeHora(vm.FechaInicioProgramada.Value.Date, vm.Arranque);
-                    vm.FechaFinProgramada = arranque.AddHours((double)vm.HorasProgramadas.Value);
-                }
+                    vm.FechaFinProgramada = horaBase.AddHours(1).AddHours((double)vm.HorasProgramadas.Value);
             }
 
             await CargarCatalogosAsync(vm);
@@ -1108,11 +1294,21 @@ END;";
         }
 
 
+
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Crear(PlaneacionProgramaCrearDesdeNecesidadVm vm)
         {
             var usuarioId = ObtenerUsuarioID();
+
+            vm.TipoOF = "RELEASE";
+            vm.MotivoTipoOF = null;
+
+            if (usuarioId <= 0)
+            {
+                ModelState.AddModelError("", "No se pudo identificar el usuario de la sesión.");
+            }
 
             if (vm.ReleaseDetalleID <= 0)
                 ModelState.AddModelError("", "No se recibió el renglón de release.");
@@ -1141,12 +1337,35 @@ END;";
             if (!vm.HorasProgramadas.HasValue || vm.HorasProgramadas.Value <= 0)
                 ModelState.AddModelError(nameof(vm.HorasProgramadas), "Las horas programadas deben ser mayores a cero.");
 
+            if (!vm.OperadorPrincipalID.HasValue || vm.OperadorPrincipalID.Value <= 0)
+            {
+                ModelState.AddModelError(nameof(vm.OperadorPrincipalID), "Selecciona el operador principal.");
+            }
+
+            if (vm.OperadorAuxiliarID.HasValue &&
+                vm.OperadorAuxiliarID.Value > 0 &&
+                vm.OperadorPrincipalID.HasValue &&
+                vm.OperadorAuxiliarID.Value == vm.OperadorPrincipalID.Value)
+            {
+                ModelState.AddModelError(nameof(vm.OperadorAuxiliarID), "El operador auxiliar debe ser diferente al operador principal.");
+            }
+
             if (vm.FechaInicioProgramada.HasValue && vm.Cambio.HasValue)
             {
                 // La fecha/hora de inicio del programa representa la hora de cambio.
                 vm.FechaInicioProgramada = CalcularFechaHoraDesdeHora(
                     vm.FechaInicioProgramada.Value.Date,
                     vm.Cambio
+                );
+            }
+
+            var minimoPermitido = RedondearSiguienteBloque(DateTime.Now, 15);
+
+            if (vm.FechaInicioProgramada.HasValue && vm.FechaInicioProgramada.Value < minimoPermitido)
+            {
+                ModelState.AddModelError(
+                    nameof(vm.FechaInicioProgramada),
+                    $"No puedes seleccionar una hora que ya pasó. Selecciona {minimoPermitido:dd/MM/yyyy HH:mm} o posterior."
                 );
             }
 
@@ -1159,8 +1378,9 @@ END;";
                     vm.Arranque
                 );
 
-                // Si el arranque quedó menor o igual al cambio, se entiende como día siguiente.
-                if (fechaArranque.Value <= vm.FechaInicioProgramada.Value)
+                // Si el arranque quedó menor al cambio, se entiende como día siguiente.
+                // Si es igual, se permite: significa que se ahorró la hora de cambio.
+                if (fechaArranque.Value < vm.FechaInicioProgramada.Value)
                     fechaArranque = fechaArranque.Value.AddDays(1);
             }
 
@@ -1196,21 +1416,23 @@ END;";
                 {
                     var sugerida = await ObtenerSiguienteCambioDisponibleAsync(
                         vm.MaquinaID.Value,
-                        vm.FechaInicioProgramada.Value
+                        vm.FechaInicioProgramada.Value,
+                        vm.ParteID,
+                        vm.MoldeID
                     );
 
-                    vm.FechaInicioProgramada = sugerida;
-                    vm.Cambio = sugerida.TimeOfDay;
-                    vm.Arranque = sugerida.AddHours(1).TimeOfDay;
+                    vm.FechaInicioProgramada = sugerida.Cambio;
+                    vm.Cambio = sugerida.Cambio.TimeOfDay;
+                    vm.Arranque = sugerida.Arranque.TimeOfDay;
 
                     if (vm.HorasProgramadas.HasValue && vm.HorasProgramadas.Value > 0)
-                        vm.FechaFinProgramada = sugerida.AddHours(1).AddHours((double)vm.HorasProgramadas.Value);
+                        vm.FechaFinProgramada = sugerida.Arranque.AddHours((double)vm.HorasProgramadas.Value);
 
                     ModelState.AddModelError(
                         nameof(vm.MaquinaID),
-                        "Seleccionaste T.P. Para terminar producción, la máquina debe estar libre en ese horario. " +
-                        $"La siguiente hora disponible sugerida es {sugerida:dd/MM/yyyy HH:mm}. " +
-                        "Se actualizó la hora de cambio y el arranque automáticamente. También puedes seleccionar I.P si realmente se va a interrumpir la producción actual."
+                        "Seleccionaste T.P. Para terminar producción, la máquina debe respetar la cola actual. " +
+                        $"La siguiente hora disponible sugerida es {sugerida.Cambio:dd/MM/yyyy HH:mm}. " +
+                        sugerida.Motivo + " También puedes seleccionar I.P si realmente se va a interrumpir la producción actual."
                     );
 
                     await CargarCatalogosAsync(vm);
@@ -1255,23 +1477,50 @@ END;";
 
                         var sugerida = await ObtenerSiguienteCambioDisponibleAsync(
                             vm.MaquinaID.Value,
-                            vm.FechaInicioProgramada.Value
+                            vm.FechaInicioProgramada.Value,
+                            vm.ParteID,
+                            vm.MoldeID
                         );
 
-                        vm.FechaInicioProgramada = sugerida;
-                        vm.Cambio = sugerida.TimeOfDay;
-                        vm.Arranque = sugerida.AddHours(1).TimeOfDay;
+                        vm.FechaInicioProgramada = sugerida.Cambio;
+                        vm.Cambio = sugerida.Cambio.TimeOfDay;
+                        vm.Arranque = sugerida.Arranque.TimeOfDay;
 
                         if (vm.HorasProgramadas.HasValue && vm.HorasProgramadas.Value > 0)
-                            vm.FechaFinProgramada = sugerida.AddHours(1).AddHours((double)vm.HorasProgramadas.Value);
+                            vm.FechaFinProgramada = sugerida.Arranque.AddHours((double)vm.HorasProgramadas.Value);
 
                         ModelState.AddModelError(
                             nameof(vm.MaquinaID),
-                            $"La máquina se ocupó mientras estabas programando. La siguiente hora disponible sugerida es {sugerida:dd/MM/yyyy HH:mm}."
+                            $"La máquina se ocupó mientras estabas programando. La siguiente hora disponible sugerida es {sugerida.Cambio:dd/MM/yyyy HH:mm}. {sugerida.Motivo}"
                         );
 
                         await CargarCatalogosAsync(vm);
                         return View(vm);
+                    }
+
+                    if (vm.MoldeID.HasValue)
+                    {
+                        var moldeOcupado = await MoldeTieneCruceAsync(
+                            vm.MoldeID.Value,
+                            vm.FechaInicioProgramada!.Value,
+                            vm.FechaFinProgramada!.Value,
+                            vm.MaquinaID,
+                            cn,
+                            (SqlTransaction)tx
+                        );
+
+                        if (moldeOcupado)
+                        {
+                            await tx.RollbackAsync();
+
+                            ModelState.AddModelError(
+                                nameof(vm.MoldeID),
+                                "Ese molde ya está programado en otra máquina dentro del horario seleccionado."
+                            );
+
+                            await CargarCatalogosAsync(vm);
+                            return View(vm);
+                        }
                     }
                 }
                 else
@@ -1286,9 +1535,43 @@ END;";
                     );
                 }
 
+                var requiereRecursoCambio = vm.Cambio.HasValue &&
+                                            vm.Arranque.HasValue &&
+                                            vm.Cambio.Value != vm.Arranque.Value;
+
+                if (requiereRecursoCambio)
+                {
+                    var cambioOcupado = await CambioMoldeTieneCruceAsync(
+                        vm.FechaInicioProgramada!.Value,
+                        cn,
+                        (SqlTransaction)tx
+                    );
+
+                    if (cambioOcupado)
+                    {
+                        await tx.RollbackAsync();
+
+                        ModelState.AddModelError(
+                            nameof(vm.Cambio),
+                            "Ya existe un cambio de molde programado en esa misma hora. Solo se cuenta con un recurso para cambio de molde."
+                        );
+
+                        await CargarCatalogosAsync(vm);
+                        return View(vm);
+                    }
+                }
+
                 await CompletarDatosProgramaAsync(vm, cn, (SqlTransaction)tx);
 
                 var programaId = await InsertarProgramaAsync(
+                    vm,
+                    usuarioId,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                await InsertarOperadoresProgramaAsync(
+                    programaId,
                     vm,
                     usuarioId,
                     cn,
@@ -1299,6 +1582,13 @@ END;";
                     vm.ReleaseDetalleID,
                     programaId,
                     usuarioId,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                await VincularApartadoPTAProgramaAsync(
+                    vm.ReleaseDetalleID,
+                    programaId,
                     cn,
                     (SqlTransaction)tx
                 );
@@ -1320,7 +1610,6 @@ END;";
                 return View(vm);
             }
         }
-
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1411,6 +1700,14 @@ END;";
                         cn,
                         (SqlTransaction)tx
                     );
+
+                    await VincularApartadoPTAOFAsync(
+                        programa.ReleaseDetalleID.Value,
+                        programaProduccionId,
+                        solicitudProduccionId,
+                        cn,
+                        (SqlTransaction)tx
+                    );
                 }
 
                 await tx.CommitAsync();
@@ -1484,7 +1781,9 @@ SELECT
     ISNULL(pt.Disponible, 0) AS PTDisponible,
     ISNULL(mp.Saldo, 0) AS MPDisponible,
     ISNULL(emb.Saldo, 0) AS EmbalajeDisponible,
-    ISNULL(prog.ProgramadoPendiente, 0) AS ProgramadoPendiente
+    ISNULL(prog.ProgramadoPendiente, 0) AS ProgramadoPendiente,
+    ISNULL(aptPropio.CantidadApartada, 0) AS PTApartadoPropio,
+    ISNULL(aptOtros.CantidadApartada, 0) AS PTApartadoOtros
 
 FROM dbo.Planeacion_ReleaseDetalle d
 INNER JOIN dbo.Planeacion_Releases r
@@ -1535,12 +1834,33 @@ OUTER APPLY
       AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
 ) prog
 
+OUTER APPLY
+(
+    SELECT ISNULL(SUM(a.CantidadApartada), 0) AS CantidadApartada
+    FROM dbo.Planeacion_PT_Apartado a
+    WHERE a.ReleaseDetalleID = d.ReleaseDetalleID
+      AND a.Activo = 1
+      AND a.EstatusID = 1
+) aptPropio
+
+OUTER APPLY
+(
+    SELECT ISNULL(SUM(a.CantidadApartada), 0) AS CantidadApartada
+    FROM dbo.Planeacion_PT_Apartado a
+    WHERE a.ParteID = d.ParteID
+      AND a.ReleaseDetalleID <> d.ReleaseDetalleID
+      AND a.Activo = 1
+      AND a.EstatusID = 1
+) aptOtros
+
 WHERE d.ReleaseDetalleID = @ReleaseDetalleID
   AND d.Activo = 1
   AND r.Activo = 1;";
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
+            await SincronizarApartadosPTAsync(cn);
 
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId;
@@ -1555,9 +1875,16 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
 
             var cantidadRequerida = rd["CantidadRequerida"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadRequerida"]);
             var stockDisponible = rd["PTDisponible"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PTDisponible"]);
+            var ptApartadoPropio = rd["PTApartadoPropio"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PTApartadoPropio"]);
+            var ptApartadoOtros = rd["PTApartadoOtros"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PTApartadoOtros"]);
             var programadoPendiente = rd["ProgramadoPendiente"] == DBNull.Value ? 0 : Convert.ToInt32(rd["ProgramadoPendiente"]);
 
-            var piezasDesdeStock = Math.Min(stockDisponible, cantidadRequerida);
+            var ptDisponibleNeto = Math.Max(0, stockDisponible - ptApartadoOtros);
+
+            var piezasDesdeStock = ptApartadoPropio > 0
+                ? Math.Min(ptApartadoPropio, cantidadRequerida)
+                : Math.Min(ptDisponibleNeto, cantidadRequerida);
+
             var piezasAProducir = Math.Max(0, cantidadRequerida - piezasDesdeStock - programadoPendiente);
 
             var pesoBrutoPieza = rd["PesoBrutoPieza"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["PesoBrutoPieza"]);
@@ -1566,7 +1893,7 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
 
             decimal cantidadMpKg = 0;
             if (piezasAProducir > 0 && pesoBrutoPieza.HasValue && pesoBrutoPieza.Value > 0)
-                cantidadMpKg = Math.Round(piezasAProducir * pesoBrutoPieza.Value, 4);
+                cantidadMpKg = Math.Round((piezasAProducir * pesoBrutoPieza.Value) / 1000m, 4); // PesoBrutoPieza está en gramos; resultado en kg.
 
             decimal cantidadEmbalajes = 0;
             if (piezasAProducir > 0 && piezasPorEmbalaje.HasValue && piezasPorEmbalaje.Value > 0)
@@ -1574,9 +1901,9 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
 
             decimal horasProgramadas = 0;
             if (piezasAProducir > 0 && objetivoHora.HasValue && objetivoHora.Value > 0)
-                horasProgramadas = Math.Round(piezasAProducir / (decimal)objetivoHora.Value, 2);
+                horasProgramadas = Math.Ceiling(piezasAProducir / (decimal)objetivoHora.Value);
 
-            var fechaInicio = DateTime.Today.AddHours(8);
+           var fechaInicio = RedondearSiguienteHora(DateTime.Now);
 
             DateTime? fechaFin = null;
             if (horasProgramadas > 0)
@@ -1587,6 +1914,9 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
                 ReleaseDetalleID = Convert.ToInt32(rd["ReleaseDetalleID"]),
                 ReleaseID = rd["ReleaseID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseID"]),
                 FolioRelease = rd["FolioRelease"] as string,
+
+                TipoOF = "RELEASE",
+                MotivoTipoOF = null,
 
                 ClienteID = rd["ClienteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ClienteID"]),
                 ClienteNombre = rd["ClienteNombre"] as string,
@@ -1600,6 +1930,9 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
 
                 CantidadRequerida = cantidadRequerida,
                 PiezasDesdePT = piezasDesdeStock,
+                PTDisponibleAlCalcular = stockDisponible,
+                PTApartadoOtros = ptApartadoOtros,
+                PTDisponibleNeto = ptDisponibleNeto,
                 PiezasAProducir = piezasAProducir,
 
                 MaterialID = rd["MaterialID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaterialID"]),
@@ -1685,18 +2018,23 @@ WHERE MoldeID = @MoldeID;";
             }
 
             if (vm.FechaInicioProgramada.HasValue &&
+                vm.Arranque.HasValue &&
                 vm.HorasProgramadas.HasValue &&
                 vm.HorasProgramadas.Value > 0)
             {
-                vm.FechaFinProgramada = vm.FechaInicioProgramada.Value.AddHours((double)vm.HorasProgramadas.Value);
+                var fechaArranque = CalcularFechaHoraDesdeHora(
+                    vm.FechaInicioProgramada.Value.Date,
+                    vm.Arranque
+                );
+
+                if (fechaArranque < vm.FechaInicioProgramada.Value)
+                    fechaArranque = fechaArranque.AddDays(1);
+
+                vm.FechaFinProgramada = fechaArranque.AddHours((double)vm.HorasProgramadas.Value);
             }
         }
 
-        private async Task<int> InsertarProgramaAsync(
-            PlaneacionProgramaCrearDesdeNecesidadVm vm,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task<int> InsertarProgramaAsync(  PlaneacionProgramaCrearDesdeNecesidadVm vm, int usuarioId,SqlConnection cn, SqlTransaction tx)
         {
             var secuencia = await ObtenerSiguienteSecuenciaMaquinaAsync(
                 vm.MaquinaID,
@@ -1733,6 +2071,8 @@ Color,
     MoldeCodigo,
 
     CondicionProduccion,
+TipoOF,
+MotivoTipoOF,
     SecuenciaMaquina,
 
     FechaInicioProgramada,
@@ -1791,6 +2131,8 @@ VALUES
     @MoldeCodigo,
 
     @CondicionProduccion,
+@TipoOF,
+@MotivoTipoOF,
     @SecuenciaMaquina,
 
     @FechaInicioProgramada,
@@ -1849,6 +2191,9 @@ VALUES
             cmd.Parameters.Add("@MoldeCodigo", SqlDbType.NVarChar, 100).Value = (object?)vm.MoldeCodigo ?? DBNull.Value;
 
             cmd.Parameters.Add("@CondicionProduccion", SqlDbType.NVarChar, 20).Value = (object?)vm.CondicionProduccion ?? DBNull.Value;
+            cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value = "RELEASE";
+
+            cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value = DBNull.Value;
             cmd.Parameters.Add("@SecuenciaMaquina", SqlDbType.Int).Value = (object?)secuencia ?? DBNull.Value;
 
             cmd.Parameters.Add("@FechaInicioProgramada", SqlDbType.DateTime).Value = (object?)vm.FechaInicioProgramada ?? DBNull.Value;
@@ -1954,6 +2299,60 @@ WHERE ReleaseDetalleID = @ReleaseDetalleID;";
             cmd.Parameters.Add("@UsuarioProgramoID", SqlDbType.Int).Value = usuarioId;
             cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId;
 
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+
+        private async Task VincularApartadoPTAProgramaAsync(
+            int releaseDetalleId,
+            int programaProduccionId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+IF OBJECT_ID('dbo.Planeacion_PT_Apartado', 'U') IS NULL
+    RETURN;
+
+UPDATE dbo.Planeacion_PT_Apartado
+SET
+    ProgramaProduccionID = @ProgramaProduccionID,
+    FechaModificacion = GETDATE(),
+    Observaciones = 'Apartado vinculado al Programa de Producción.'
+WHERE ReleaseDetalleID = @ReleaseDetalleID
+  AND Activo = 1
+  AND EstatusID = 1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private async Task VincularApartadoPTAOFAsync(
+            int releaseDetalleId,
+            int programaProduccionId,
+            int solicitudProduccionId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+IF OBJECT_ID('dbo.Planeacion_PT_Apartado', 'U') IS NULL
+    RETURN;
+
+UPDATE dbo.Planeacion_PT_Apartado
+SET
+    ProgramaProduccionID = @ProgramaProduccionID,
+    SolicitudProduccionID = @SolicitudProduccionID,
+    FechaModificacion = GETDATE(),
+    Observaciones = 'Apartado vinculado a la OF. Sigue reservado hasta que Almacén confirme salida/consumo.'
+WHERE ReleaseDetalleID = @ReleaseDetalleID
+  AND Activo = 1
+  AND EstatusID = 1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+            cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId;
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -2126,9 +2525,10 @@ ORDER BY
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
-            var inicio = vm.FechaInicioProgramada ?? DateTime.Today.AddHours(8);
+            var inicio = vm.FechaInicioProgramada ?? RedondearSiguienteBloque(DateTime.Now, 15);
 
             DateTime fin;
+
             if (vm.FechaFinProgramada.HasValue && vm.FechaFinProgramada.Value > inicio)
             {
                 fin = vm.FechaFinProgramada.Value;
@@ -2155,14 +2555,92 @@ ORDER BY
             vm.Moldes = await CargarSelectAsync(
                 cn,
                 @"SELECT 
-            MoldeID AS Id,
-            CodigoMolde AS Texto
+              MoldeID AS Id,
+              CodigoMolde AS Texto
           FROM dbo.ERP_Moldes
           WHERE Activo = 1
           ORDER BY CodigoMolde;"
             );
 
+            vm.Operadores = await CargarSelectAsync(
+                cn,
+                @"SELECT 
+              PersonaID AS Id,
+              LTRIM(RTRIM(
+                  ISNULL(Nombre, '') + ' ' +
+                  ISNULL(ApellidoPaterno, '') + ' ' +
+                  ISNULL(ApellidoMaterno, '')
+              )) AS Texto
+          FROM dbo.Persona
+          WHERE EsColaboradorActivo = 1
+            AND UPPER(LTRIM(RTRIM(Puesto))) = 'OPERADOR'
+          ORDER BY Nombre, ApellidoPaterno, ApellidoMaterno;"
+            );
+
             vm.Condiciones = PlaneacionProgramaCondicion.SelectList();
+        }
+
+        private async Task InsertarOperadoresProgramaAsync(
+    int programaProduccionId,
+    PlaneacionProgramaCrearDesdeNecesidadVm vm,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            const string sqlDesactivar = @"
+UPDATE dbo.Planeacion_ProgramaOperadores
+SET
+    Activo = 0,
+    UsuarioModificacionID = @UsuarioModificacionID,
+    FechaModificacion = GETDATE()
+WHERE ProgramaProduccionID = @ProgramaProduccionID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlDesactivar, cn, tx))
+            {
+                cmd.Parameters.Add("@UsuarioModificacionID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlInsert = @"
+INSERT INTO dbo.Planeacion_ProgramaOperadores
+(
+    ProgramaProduccionID,
+    PersonaID,
+    RolOperador,
+    Activo,
+    UsuarioCreacionID,
+    FechaCreacion
+)
+VALUES
+(
+    @ProgramaProduccionID,
+    @PersonaID,
+    @RolOperador,
+    1,
+    @UsuarioCreacionID,
+    GETDATE()
+);";
+
+            async Task InsertarUnoAsync(int? personaId, string rol)
+            {
+                if (!personaId.HasValue || personaId.Value <= 0)
+                    return;
+
+                await using var cmd = new SqlCommand(sqlInsert, cn, tx);
+
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId.Value;
+                cmd.Parameters.Add("@RolOperador", SqlDbType.NVarChar, 30).Value = rol;
+                cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await InsertarUnoAsync(vm.OperadorPrincipalID, "PRINCIPAL");
+            await InsertarUnoAsync(vm.OperadorAuxiliarID, "AUXILIAR");
         }
 
         private async Task<List<SelectListItem>> CargarMaquinasConEstadoAsync(
@@ -2225,6 +2703,63 @@ ORDER BY m.Codigo;";
             }
 
             return lista;
+        }
+
+        private static async Task<bool> CambioMoldeTieneCruceAsync(
+    DateTime fechaCambio,
+    SqlConnection cn,
+    SqlTransaction? tx)
+{
+    const string sql = @"
+SELECT TOP 1 1
+FROM dbo.Planeacion_ProgramaProduccion pp
+WHERE pp.Activo = 1
+  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
+  AND pp.Cambio IS NOT NULL
+  AND pp.Arranque IS NOT NULL
+  AND pp.Cambio <> pp.Arranque
+  AND CAST(pp.FechaInicioProgramada AS DATE) = CAST(@FechaCambio AS DATE)
+  AND DATEPART(HOUR, pp.FechaInicioProgramada) = DATEPART(HOUR, @FechaCambio);";
+
+    await using var cmd = new SqlCommand(sql, cn, tx);
+    cmd.Parameters.Add("@FechaCambio", SqlDbType.DateTime).Value = fechaCambio;
+
+    var result = await cmd.ExecuteScalarAsync();
+    return result != null && result != DBNull.Value;
+}
+
+
+
+        private static async Task<bool> MoldeTieneCruceAsync(
+            int moldeId,
+            DateTime inicio,
+            DateTime fin,
+            int? maquinaActualId,
+            SqlConnection cn,
+            SqlTransaction? tx)
+        {
+            const string sql = @"
+SELECT TOP 1 1
+FROM dbo.Planeacion_ProgramaProduccion pp
+WHERE pp.Activo = 1
+  AND pp.MoldeID = @MoldeID
+  AND (@MaquinaActualID IS NULL OR ISNULL(pp.MaquinaID, 0) <> @MaquinaActualID)
+  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
+  AND pp.FechaInicioProgramada < @Fin
+  AND ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(MINUTE, CAST(CEILING(ISNULL(pp.HorasProgramadas, 1) * 60) AS INT), pp.FechaInicioProgramada)
+      ) > @Inicio;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value = moldeId;
+            cmd.Parameters.Add("@MaquinaActualID", SqlDbType.Int).Value =
+                (object?)maquinaActualId ?? DBNull.Value;
+            cmd.Parameters.Add("@Inicio", SqlDbType.DateTime).Value = inicio;
+            cmd.Parameters.Add("@Fin", SqlDbType.DateTime).Value = fin;
+
+            var result = await cmd.ExecuteScalarAsync();
+            return result != null && result != DBNull.Value;
         }
 
         private async Task<bool> MaquinaTieneCruceAsync(
@@ -2360,9 +2895,9 @@ WHERE pp.Activo = 1
 
 
         private async Task<ProgramaParaOFVm?> ObtenerProgramaParaGenerarOFAsync(
-    int programaProduccionId,
-    SqlConnection cn,
-    SqlTransaction tx)
+     int programaProduccionId,
+     SqlConnection cn,
+     SqlTransaction tx)
         {
             const string sql = @"
 SELECT
@@ -2382,6 +2917,9 @@ SELECT
     pp.ReferenciaSAP,
     pp.DesignacionDescripcionSAP,
 
+    ISNULL(NULLIF(pp.TipoOF, ''), 'RELEASE') AS TipoOF,
+    pp.MotivoTipoOF,
+
     pp.CantidadRequerida,
     pp.PiezasDesdePT,
     pp.CantidadProgramada,
@@ -2399,15 +2937,15 @@ SELECT
     pp.FechaInicioProgramada,
     pp.FechaFinProgramada,
     pp.HorasProgramadas,
-pp.Cambio,
-pp.Arranque,
+    pp.Cambio,
+    pp.Arranque,
 
     COALESCE(pp.ObjetivoHora, t.ObjetivoHora) AS ObjetivoHora,
     COALESCE(pp.Ciclo, t.Ciclo) AS Ciclo,
     COALESCE(pp.Cavidades, t.Cavidades) AS Cavidades,
     COALESCE(pp.PesoBrutoPieza, t.PesoBrutoPieza) AS PesoBrutoPieza,
 
-   COALESCE(NULLIF(pp.Color, ''), t.Color) AS Color,
+    COALESCE(NULLIF(pp.Color, ''), t.Color) AS Color,
     t.PiezasPorCaja,
     t.TipoSecado,
     t.HorasSecado,
@@ -2456,6 +2994,12 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                 ReferenciaSAP = rd["ReferenciaSAP"] as string,
                 DesignacionDescripcionSAP = rd["DesignacionDescripcionSAP"] as string,
 
+                TipoOF = rd["TipoOF"] == DBNull.Value
+                    ? "RELEASE"
+                    : NormalizarTipoOF(rd["TipoOF"] as string),
+
+                MotivoTipoOF = rd["MotivoTipoOF"] as string,
+
                 CantidadRequerida = Convert.ToInt32(rd["CantidadRequerida"]),
                 PiezasDesdePT = Convert.ToInt32(rd["PiezasDesdePT"]),
                 CantidadProgramada = Convert.ToInt32(rd["CantidadProgramada"]),
@@ -2496,16 +3040,20 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                 Color = rd["Color"] as string,
 
                 PiezasPorCaja = rd["PiezasPorCaja"] == DBNull.Value
-    ? null
-    : Convert.ToInt32(rd["PiezasPorCaja"]),
+                    ? null
+                    : Convert.ToInt32(rd["PiezasPorCaja"]),
 
                 TipoSecado = rd["TipoSecado"] as string,
 
                 HorasSecado = rd["HorasSecado"] == DBNull.Value
-    ? null
-    : Convert.ToDecimal(rd["HorasSecado"])
+                    ? null
+                    : Convert.ToDecimal(rd["HorasSecado"])
             };
         }
+
+
+
+
 
         private async Task<string> GenerarFolioOFAsync(SqlConnection cn, SqlTransaction tx)
         {
@@ -2523,6 +3071,7 @@ WHERE NumeroOFRecibida LIKE 'OF-[0-9][0-9][0-9][0-9]/' + @YY;";
 
             return $"OF-{consecutivo:0000}/{yy}";
         }
+
 
         private async Task<int> InsertarOFDedeProgramaAsync(
     ProgramaParaOFVm p,
@@ -2542,6 +3091,8 @@ INSERT INTO dbo.SolicitudesProduccion
     ClienteNombre,
     OrigenSolicitud,
     Prioridad,
+    TipoOF,
+    MotivoTipoOF,
     EstatusID,
     NotasGenerales,
     UsuarioCreacionID,
@@ -2573,6 +3124,8 @@ VALUES
     @ClienteNombre,
     @OrigenSolicitud,
     @Prioridad,
+    @TipoOF,
+    @MotivoTipoOF,
     @EstatusID,
     @NotasGenerales,
     @UsuarioCreacionID,
@@ -2611,6 +3164,10 @@ VALUES
             cmd.Parameters.Add("@OrigenSolicitud", SqlDbType.NVarChar, 50).Value = "Planeación Programa";
             cmd.Parameters.Add("@Prioridad", SqlDbType.NVarChar, 30).Value = "Normal";
 
+            cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value = "RELEASE";
+
+            cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value = DBNull.Value;
+
             cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = PlaneacionOFEstatus.PendienteValidacionMP;
 
             cmd.Parameters.Add("@NotasGenerales", SqlDbType.NVarChar, 500).Value =
@@ -2643,6 +3200,7 @@ VALUES
 
             return Convert.ToInt32(await cmd.ExecuteScalarAsync());
         }
+
 
         private async Task<int> InsertarDetalleOFDedeProgramaAsync(
     int solicitudProduccionId,
@@ -2859,9 +3417,19 @@ VALUES
 
 
 
-        private async Task<DateTime> ObtenerSiguienteCambioDisponibleAsync(
-    int maquinaId,
-    DateTime fechaBase)
+        private sealed class CambioMoldeSugerencia
+        {
+            public DateTime Cambio { get; set; }
+            public DateTime Arranque { get; set; }
+            public bool OmiteHoraCambio { get; set; }
+            public string Motivo { get; set; } = "Se considera 1 hora de preparación entre cambio y arranque.";
+        }
+
+        private async Task<CambioMoldeSugerencia> ObtenerSiguienteCambioDisponibleAsync(
+            int maquinaId,
+            DateTime fechaBase,
+            int? parteId,
+            int? moldeId)
         {
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
@@ -2869,67 +3437,200 @@ VALUES
             return await ObtenerSiguienteCambioDisponibleAsync(
                 maquinaId,
                 fechaBase,
+                parteId,
+                moldeId,
                 cn,
                 null
             );
         }
 
-        private static async Task<DateTime> ObtenerSiguienteCambioDisponibleAsync(
+        private static async Task<CambioMoldeSugerencia> ObtenerSiguienteCambioDisponibleAsync(
             int maquinaId,
             DateTime fechaBase,
+            int? parteId,
+            int? moldeId,
             SqlConnection cn,
             SqlTransaction? tx)
         {
+            var baseRedondeada = RedondearSiguienteBloque(fechaBase, 15);
+
             const string sql = @"
-SELECT
-    MAX(
-        ISNULL(
-            pp.FechaFinProgramada,
-            DATEADD(MINUTE, CAST(CEILING(ISNULL(pp.HorasProgramadas, 1) * 60) AS INT), pp.FechaInicioProgramada)
-        )
-    ) AS SiguienteLibre
+SELECT TOP (1)
+    pp.ProgramaProduccionID,
+    pp.ParteID,
+    pp.NumeroParte,
+    pp.ReferenciaSAP,
+    pp.MoldeID,
+    pp.MoldeCodigo,
+    ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(MINUTE, CAST(CEILING(ISNULL(pp.HorasProgramadas, 1) * 60) AS INT), pp.FechaInicioProgramada)
+    ) AS FechaFinProgramada
 FROM dbo.Planeacion_ProgramaProduccion pp
 WHERE pp.Activo = 1
   AND pp.MaquinaID = @MaquinaID
   AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
-  AND pp.FechaInicioProgramada <= @FechaBase
   AND ISNULL(
         pp.FechaFinProgramada,
         DATEADD(MINUTE, CAST(CEILING(ISNULL(pp.HorasProgramadas, 1) * 60) AS INT), pp.FechaInicioProgramada)
-      ) > @FechaBase;";
+      ) >= @FechaBase
+ORDER BY
+    ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(MINUTE, CAST(CEILING(ISNULL(pp.HorasProgramadas, 1) * 60) AS INT), pp.FechaInicioProgramada)
+    ) DESC,
+    pp.ProgramaProduccionID DESC;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
-            cmd.Parameters.Add("@FechaBase", SqlDbType.DateTime).Value = fechaBase;
+            cmd.Parameters.Add("@FechaBase", SqlDbType.DateTime).Value = baseRedondeada;
 
-            var result = await cmd.ExecuteScalarAsync();
+            await using var rd = await cmd.ExecuteReaderAsync();
 
-            if (result == null || result == DBNull.Value)
-                return RedondearSiguienteBloque(fechaBase, 15);
+            if (!await rd.ReadAsync())
+            {
+                var cambioLibre = baseRedondeada;
+                return new CambioMoldeSugerencia
+                {
+                    Cambio = cambioLibre,
+                    Arranque = cambioLibre.AddHours(1),
+                    OmiteHoraCambio = false,
+                    Motivo = "Máquina libre. Se considera 1 hora de preparación antes del arranque."
+                };
+            }
 
-            var siguiente = Convert.ToDateTime(result);
+            var finCola = Convert.ToDateTime(rd["FechaFinProgramada"]);
+            var cambio = RedondearSiguienteBloque(finCola > baseRedondeada ? finCola : baseRedondeada, 15);
 
-            // Se redondea hacia arriba por limpieza operativa.
-            return RedondearSiguienteBloque(siguiente, 15);
+            var parteAnteriorId = rd["ParteID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["ParteID"]);
+            var moldeAnteriorId = rd["MoldeID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["MoldeID"]);
+            var parteAnterior = (rd["ReferenciaSAP"] as string) ?? (rd["NumeroParte"] as string) ?? "la pieza anterior";
+            var moldeAnterior = (rd["MoldeCodigo"] as string) ?? "el molde anterior";
+
+            var mismaParte = parteId.HasValue && parteAnteriorId.HasValue && parteId.Value == parteAnteriorId.Value;
+            var mismoMolde = moldeId.HasValue && moldeAnteriorId.HasValue && moldeId.Value == moldeAnteriorId.Value;
+
+            if (mismaParte)
+            {
+                return new CambioMoldeSugerencia
+                {
+                    Cambio = cambio,
+                    Arranque = cambio,
+                    OmiteHoraCambio = true,
+                    Motivo = $"La máquina continúa con la misma pieza ({parteAnterior}); se omite la hora de cambio."
+                };
+            }
+
+            if (mismoMolde)
+            {
+                return new CambioMoldeSugerencia
+                {
+                    Cambio = cambio,
+                    Arranque = cambio,
+                    OmiteHoraCambio = true,
+                    Motivo = $"La máquina conserva el mismo molde ({moldeAnterior}); se omite la hora de cambio."
+                };
+            }
+
+            return new CambioMoldeSugerencia
+            {
+                Cambio = cambio,
+                Arranque = cambio.AddHours(1),
+                OmiteHoraCambio = false,
+                Motivo = "La máquina tiene cola o requiere preparación; se considera 1 hora entre cambio y arranque."
+            };
         }
 
-        private static DateTime RedondearSiguienteBloque(DateTime fecha, int minutosBloque)
+
+        private static string NormalizarTipoOF(string? tipoOF)
         {
-            if (minutosBloque <= 0)
-                return fecha;
+            if (string.IsNullOrWhiteSpace(tipoOF))
+                return "RELEASE";
 
-            var minutos = fecha.Minute;
-            var residuo = minutos % minutosBloque;
+            var valor = tipoOF.Trim().ToUpperInvariant();
 
-            var redondeada = fecha
-                .AddSeconds(-fecha.Second)
-                .AddMilliseconds(-fecha.Millisecond);
+            valor = valor
+                .Replace("Á", "A")
+                .Replace("É", "E")
+                .Replace("Í", "I")
+                .Replace("Ó", "O")
+                .Replace("Ú", "U");
 
-            if (residuo == 0)
-                return redondeada;
-
-            return redondeada.AddMinutes(minutosBloque - residuo);
+            return valor switch
+            {
+                "RELEASE" => "RELEASE",
+                "ENSAMBLE" => "ENSAMBLE",
+                "PRUEBA" => "PRUEBA",
+                "MP EXTRA" => "MP EXTRA",
+                "MPEXTRA" => "MP EXTRA",
+                "MP_EXTRA" => "MP EXTRA",
+                _ => "RELEASE"
+            };
         }
+
+        private static bool TipoOFRequiereMotivo(string? tipoOF)
+        {
+            var valor = NormalizarTipoOF(tipoOF);
+
+            return valor == "PRUEBA" ||
+                   valor == "MP EXTRA";
+        }
+
+        private void ValidarTipoOF(string? tipoOF, string? motivoTipoOF, string campoMotivo)
+        {
+            var valor = NormalizarTipoOF(tipoOF);
+
+            if (valor != "RELEASE" &&
+                valor != "ENSAMBLE" &&
+                valor != "PRUEBA" &&
+                valor != "MP EXTRA")
+            {
+                ModelState.AddModelError(nameof(PlaneacionProgramaCrearDesdeNecesidadVm.TipoOF), "Selecciona un tipo de OF válido.");
+            }
+
+            if (TipoOFRequiereMotivo(valor) &&
+                string.IsNullOrWhiteSpace(motivoTipoOF))
+            {
+                ModelState.AddModelError(campoMotivo, "Captura el motivo para este tipo de OF.");
+            }
+        }
+
+
+
+        private static DateTime RedondearSiguienteHora(DateTime fecha)
+{
+    var redondeada = new DateTime(
+        fecha.Year,
+        fecha.Month,
+        fecha.Day,
+        fecha.Hour,
+        0,
+        0
+    );
+
+    if (fecha.Minute == 0 &&
+        fecha.Second == 0 &&
+        fecha.Millisecond == 0)
+    {
+        return redondeada;
+    }
+
+    return redondeada.AddHours(1);
+}
+
+private static DateTime RedondearSiguienteBloque(DateTime fecha, int minutosBloque)
+{
+    
+    // hora completa, sin minutos.
+    return RedondearSiguienteHora(fecha);
+}
+
+private static bool EsHoraCompleta(TimeSpan hora)
+{
+    return hora.Minutes == 0 &&
+           hora.Seconds == 0 &&
+           hora.Milliseconds == 0;
+}
 
         private static DateTime CalcularFechaHoraDesdeHora(DateTime fechaBase, TimeSpan? hora)
         {
@@ -3288,6 +3989,9 @@ WHERE ReleaseDetalleID = @ReleaseDetalleID;";
 
             public TimeSpan? Cambio { get; set; }
             public TimeSpan? Arranque { get; set; }
+
+            public string? TipoOF { get; set; } = "RELEASE";
+            public string? MotivoTipoOF { get; set; }
 
 
         }

@@ -422,67 +422,240 @@
             background: #FBFDFF;
         }
 
-        .release-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-            gap: 14px;
-        }
-
-        .release-card {
+        /* RELEASES COMO FILAS COMPACTAS */
+        .release-list {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            overflow: hidden;
             background: white;
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            box-shadow: 0 8px 22px rgba(16, 24, 40, .06);
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
         }
 
-            .release-card.hidden-by-filter,
-            .client-card.hidden-by-filter {
-                display: none !important;
-            }
-
-        .release-title {
-            color: var(--text);
-            font-size: 1rem;
-            font-weight: 950;
-            margin: 0;
-        }
-
-        .release-sub {
-            color: var(--muted);
-            font-size: .8rem;
-            font-weight: 650;
-            margin-top: 4px;
-        }
-
-        .release-meta {
+        .release-list-header,
+        .release-row {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
+            grid-template-columns:
+                minmax(175px, 1.15fr)
+                minmax(135px, .90fr)
+                105px
+                100px
+                minmax(190px, 1.30fr)
+                135px
+                105px
+                96px;
+            gap: 12px;
+            align-items: center;
         }
 
-        .mini-box {
-            border: 1px solid var(--border);
-            background: #FBFDFF;
-            border-radius: 16px;
-            padding: 11px;
-        }
-
-        .mini-label {
+        .release-list-header {
+            padding: 11px 14px;
+            background: #F5F7FA;
+            border-bottom: 1px solid var(--border);
             color: var(--muted);
             font-size: .68rem;
-            letter-spacing: .05em;
+            font-weight: 900;
             text-transform: uppercase;
-            font-weight: 950;
+            letter-spacing: .04em;
         }
 
-        .mini-value {
+        .release-row {
+            min-width: 0;
+            padding: 12px 14px;
+            border-bottom: 1px solid #EAECF0;
+            background: white;
+            transition: background-color .15s ease, box-shadow .15s ease;
+        }
+
+        .release-row:last-child {
+            border-bottom: none;
+        }
+
+        .release-row:hover {
+            background: #F8FBFF;
+            box-shadow: inset 3px 0 0 var(--blue);
+        }
+
+        .release-row.hidden-by-filter,
+        .client-card.hidden-by-filter {
+            display: none !important;
+        }
+
+        .release-cell {
+            min-width: 0;
             color: var(--text);
-            font-size: .92rem;
-            font-weight: 950;
+            font-size: .82rem;
+        }
+
+        .release-main-title {
+            color: var(--blue-dark);
+            font-size: .88rem;
+            font-weight: 900;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .release-main-subtitle {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: .70rem;
+            font-weight: 650;
+        }
+
+        .release-value {
+            font-weight: 750;
+            overflow-wrap: anywhere;
+        }
+
+        .release-template,
+        .release-file {
+            display: block;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .release-template {
+            color: var(--text);
+            font-weight: 750;
+        }
+
+        .release-file {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: .70rem;
+            font-weight: 650;
+        }
+
+        .release-row-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+
+        .release-action-btn {
+            width: 36px;
+            height: 34px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: white;
+            color: var(--blue-dark);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+        }
+
+        .release-action-btn:hover {
+            border-color: var(--blue);
+            background: var(--blue);
+            color: white;
+        }
+
+        .release-action-btn.primary {
+            border-color: var(--blue);
+            background: var(--blue);
+            color: white;
+        }
+
+        .release-action-btn.primary:hover {
+            border-color: var(--blue-dark);
+            background: var(--blue-dark);
+        }
+
+        @@media (max-width: 1380px) {
+            .release-list {
+                overflow-x: auto;
+            }
+
+            .release-list-header,
+            .release-row {
+                min-width: 1120px;
+            }
+        }
+
+        @@media (max-width: 768px) {
+            .release-list {
+                border: none;
+                border-radius: 0;
+                overflow: visible;
+                background: transparent;
+            }
+
+            .release-list-header {
+                display: none;
+            }
+
+            .release-row {
+                min-width: 0;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px 14px;
+                margin-bottom: 9px;
+                padding: 13px;
+                border: 1px solid var(--border);
+                border-radius: 14px;
+            }
+
+            .release-row:last-child {
+                border-bottom: 1px solid var(--border);
+            }
+
+            .release-cell::before {
+                display: block;
+                margin-bottom: 2px;
+                color: var(--muted);
+                font-size: .62rem;
+                font-weight: 900;
+                text-transform: uppercase;
+            }
+
+            .release-cell-release,
+            .release-cell-plantilla {
+                grid-column: 1 / -1;
+            }
+
+            .release-cell-release::before {
+                content: "Release";
+            }
+
+            .release-cell-folio::before {
+                content: "Folio cliente";
+            }
+
+            .release-cell-recepcion::before {
+                content: "Recepción";
+            }
+
+            .release-cell-semana::before {
+                content: "Semana";
+            }
+
+            .release-cell-plantilla::before {
+                content: "Plantilla / archivo";
+            }
+
+            .release-cell-creado::before {
+                content: "Creado";
+            }
+
+            .release-cell-origen::before {
+                content: "Origen";
+            }
+
+            .release-cell-acciones {
+                display: flex;
+                align-items: flex-end;
+                justify-content: flex-end;
+            }
+
+            .release-row-actions {
+                width: 100%;
+            }
+
+            .release-action-btn {
+                flex: 1;
+            }
         }
 
         .empty-state {
@@ -528,47 +701,8 @@
                     font-size: 1.55rem;
                 }
 
-            .release-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .release-meta {
-                grid-template-columns: 1fr;
-            }
         }
     
-        /* RELEASE_GRID_ROWS_FIX_V1_0_1 */
-        .release-grid {
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)) !important;
-            align-items: stretch;
-        }
-
-        .release-card {
-            min-width: 0;
-            height: 100%;
-        }
-
-        .release-actions {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px;
-            margin-top: auto;
-        }
-
-        .mini-box,
-        .mini-value,
-        .release-card .text-muted,
-        .release-card .release-sub {
-            min-width: 0;
-            overflow-wrap: anywhere;
-            word-break: break-word;
-        }
-
-        @@media (max-width: 620px) {
-            .release-actions {
-                grid-template-columns: 1fr;
-            }
-        }
 </style>
 </head>
 
@@ -589,7 +723,7 @@
                     </h1>
 
                     <p>
-                        Bandeja de releases capturados por cliente. Aquí solo se consulta y se abre el detalle; el análisis visual de demanda se revisa en Panorama.
+                        Bandeja de releases capturados por cliente.
                     </p>
 
                     <div class="d-flex gap-2 flex-wrap mt-3">
@@ -615,14 +749,14 @@
                             <i class="fa-solid fa-arrow-left"></i>
                             Volver
                         </a>
-
+@*
                         <a asp-controller="PlaneacionPanorama"
                            asp-action="Index"
                            class="btn-glass">
                             <i class="fa-solid fa-chart-line"></i>
                             Panorama
                         </a>
-
+*@
                         <a asp-controller="PlaneacionPrograma"
                            asp-action="Index"
                            class="btn-glass">
@@ -770,7 +904,18 @@
 
                                 <div id="@collapseId" class="collapse">
                                     <div class="client-body">
-                                        <div class="release-grid">
+                                        <div class="release-list">
+                                            <div class="release-list-header">
+                                                <div>Release</div>
+                                                <div>Folio cliente</div>
+                                                <div>Recepción</div>
+                                                <div>Semana</div>
+                                                <div>Plantilla / archivo</div>
+                                                <div>Creado</div>
+                                                <div>Origen</div>
+                                                <div class="text-end">Acciones</div>
+                                            </div>
+
                                             @foreach (var item in releasesCliente)
                                             {
                                                 var versionTexto = SemanaRelease(item.FechaRecepcion);
@@ -778,73 +923,86 @@
                                                 var originIcon = IconoOrigen(item.ImportadoDesdeArchivo);
                                                 var searchableText = DataSearch(item) + " " + versionTexto.ToLowerInvariant();
 
-                                                <div class="release-card"
+                                                <div class="release-row"
                                                      data-release-card
                                                      data-search="@searchableText">
 
-                                                    <div class="d-flex justify-content-between align-items-start gap-3">
-                                                        <div>
-                                                            <h4 class="release-title">
-                                                                @(item.FolioRelease ?? "-")
-                                                            </h4>
-
-                                                            <div class="release-sub">
-                                                                Folio cliente: @(item.FolioCliente ?? "-") · ID @item.ReleaseID
-                                                            </div>
+                                                    <div class="release-cell release-cell-release">
+                                                        <div class="release-main-title">
+                                                            @(item.FolioRelease ?? "-")
                                                         </div>
+                                                        <div class="release-main-subtitle">
+                                                            ID @item.ReleaseID
+                                                        </div>
+                                                    </div>
 
+                                                    <div class="release-cell release-cell-folio">
+                                                        <div class="release-value">
+                                                            @(item.FolioCliente ?? "-")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-recepcion">
+                                                        <div class="release-value">
+                                                            @item.FechaRecepcion.ToString("dd/MM/yyyy")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-semana">
+                                                        <div class="release-value">
+                                                            @versionTexto
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-plantilla">
+                                                        <span class="release-template"
+                                                              title="@Valor(item.PlantillaImportacion)">
+                                                            @Valor(item.PlantillaImportacion)
+                                                        </span>
+
+                                                        @if (!string.IsNullOrWhiteSpace(item.ArchivoOrigenNombre))
+                                                        {
+                                                            <span class="release-file"
+                                                                  title="@item.ArchivoOrigenNombre">
+                                                                <i class="fa-regular fa-file-lines me-1"></i>
+                                                                @item.ArchivoOrigenNombre
+                                                            </span>
+                                                        }
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-creado">
+                                                        <div class="release-value">
+                                                            @item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-origen">
                                                         <span class="pill @(item.ImportadoDesdeArchivo ? "pill-success" : "pill-muted")">
                                                             <i class="fa-solid @originIcon"></i>
                                                             @originText
                                                         </span>
                                                     </div>
 
-                                                    <div class="release-meta">
-                                                        <div class="mini-box">
-                                                            <div class="mini-label">Recepción</div>
-                                                            <div class="mini-value">@item.FechaRecepcion.ToString("dd/MM/yyyy")</div>
+                                                    <div class="release-cell release-cell-acciones">
+                                                        <div class="release-row-actions">
+                                                            <a asp-controller="PlaneacionRelease"
+                                                               asp-action="Detalle"
+                                                               asp-route-id="@item.ReleaseID"
+                                                               class="release-action-btn primary"
+                                                               title="Ver detalle"
+                                                               aria-label="Ver detalle del release">
+                                                                <i class="fa-solid fa-eye"></i>
+                                                            </a>
+
+                                                            <a asp-controller="PlaneacionRelease"
+                                                               asp-action="Editar"
+                                                               asp-route-id="@item.ReleaseID"
+                                                               class="release-action-btn"
+                                                               title="Editar"
+                                                               aria-label="Editar release">
+                                                                <i class="fa-solid fa-pen-to-square"></i>
+                                                            </a>
                                                         </div>
-
-                                                        <div class="mini-box">
-                                                            <div class="mini-label">Semana</div>
-                                                            <div class="mini-value">@versionTexto</div>
-                                                        </div>
-
-                                                        <div class="mini-box">
-                                                            <div class="mini-label">Plantilla</div>
-                                                            <div class="mini-value">@Valor(item.PlantillaImportacion)</div>
-                                                        </div>
-
-                                                        <div class="mini-box">
-                                                            <div class="mini-label">Creado</div>
-                                                            <div class="mini-value">@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</div>
-                                                        </div>
-                                                    </div>
-
-                                                    @if (!string.IsNullOrWhiteSpace(item.ArchivoOrigenNombre))
-                                                    {
-                                                        <div class="text-muted small fw-semibold">
-                                                            <i class="fa-regular fa-file-lines me-1"></i>
-                                                            @item.ArchivoOrigenNombre
-                                                        </div>
-                                                    }
-
-                                                                                                        <div class="release-actions">
-                                                        <a asp-controller="PlaneacionRelease"
-                                                           asp-action="Detalle"
-                                                           asp-route-id="@item.ReleaseID"
-                                                           class="btn btn-main justify-content-center">
-                                                            <i class="fa-solid fa-eye me-1"></i>
-                                                            Ver detalle
-                                                        </a>
-
-                                                        <a asp-controller="PlaneacionRelease"
-                                                           asp-action="Editar"
-                                                           asp-route-id="@item.ReleaseID"
-                                                           class="btn btn-light-main justify-content-center">
-                                                            <i class="fa-solid fa-pen-to-square me-1"></i>
-                                                            Editar
-                                                        </a>
                                                     </div>
                                                 </div>
                                             }
@@ -891,6 +1049,7 @@
                     <i class="fa-solid fa-arrow-left me-1"></i>
                     Volver
                 </a>
+                @*
 
                 <div class="d-flex gap-2 flex-wrap">
                     <a asp-controller="PlaneacionPanorama"
@@ -898,7 +1057,7 @@
                        class="btn btn-light-main">
                         <i class="fa-solid fa-chart-line me-1"></i>
                         Panorama
-                    </a>
+                    </a>*@
 
                     <a asp-controller="PlaneacionPrograma"
                        asp-action="Index"

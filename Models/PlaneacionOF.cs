@@ -28,6 +28,30 @@ namespace ERP.NSQuell.Models
         public int TotalPiezas { get; set; }
 
         public string? ResponsablePlaneacionNombre { get; set; }
+
+        public int? MaquinaID { get; set; }
+        public string? MaquinaCodigo { get; set; }
+        public string? MaquinaNombre { get; set; }
+
+        public string TipoOF { get; set; } = "RELEASE";
+        public string? MotivoTipoOF { get; set; }
+
+        public string MaquinaTexto
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(MaquinaCodigo))
+                    return "SIN MAQUINA";
+
+                if (string.IsNullOrWhiteSpace(MaquinaNombre) ||
+                    string.Equals(MaquinaCodigo, MaquinaNombre, StringComparison.OrdinalIgnoreCase))
+                {
+                    return MaquinaCodigo;
+                }
+
+                return $"{MaquinaCodigo} | {MaquinaNombre}";
+            }
+        }
     }
 
     public class PlaneacionOFCrearVm
@@ -53,6 +77,10 @@ namespace ERP.NSQuell.Models
         public bool EsEdicion { get; set; }
 
         public int EstatusID { get; set; }
+
+        public string TipoOF { get; set; } = "RELEASE";
+        public string? MotivoTipoOF { get; set; }
+
         public List<PlaneacionOFDetalleCrearVm> Detalles { get; set; } = new();
 
         public List<SelectListItem> Clientes { get; set; } = new();
@@ -190,6 +218,16 @@ namespace ERP.NSQuell.Models
 
         public bool PuedeEditar { get; set; }
         public string? MotivoNoEditable { get; set; }
+
+        public string TipoOF { get; set; } = "RELEASE";
+        public string? MotivoTipoOF { get; set; }
+
+        public int? ReleaseID { get; set; }
+        public int? ReleaseDetalleID { get; set; }
+        public int? ProgramaProduccionID { get; set; }
+        public string? OrigenOF { get; set; }
+
+        public bool PermiteEditarOF { get; set; }
 
         public List<PlaneacionOFDetalleRenglonVm> Detalles { get; set; } = new();
         public List<PlaneacionOFHistorialVm> Historial { get; set; } = new();
@@ -356,7 +394,7 @@ namespace ERP.NSQuell.Models
         public const int ListaProduccion = 8;
         public const int EnProduccion = 9;
         public const int Cerrada = 10;
-        public const int Cancelada = 11;
+        public const int Cancelada = 99;
 
         public static string Nombre(int estatusID)
         {

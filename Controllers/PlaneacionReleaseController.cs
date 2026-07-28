@@ -1,4 +1,6 @@
-﻿using ERP.NSQuell.Models;
+﻿// CONTROLADOR UNIFICADO: PlaneacionReleaseController
+
+using ERP.NSQuell.Models;
 using ERP.NSQuell.Servicios.Releases;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -7,12 +9,16 @@ using System.Data;
 using UglyToad.PdfPig;
 using System.Text.RegularExpressions;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
 using static ERP.NSQuell.Models.PlaneacionReleaseEstatus;
 
 namespace ERP.NSQuell.Controllers
 {
     public partial class PlaneacionReleaseController : Controller
     {
+        #region ORIGEN: PlaneacionReleaseController.cs - Controlador principal original
+
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;
 
@@ -128,11 +134,12 @@ ORDER BY r.FechaCreacion DESC;";
         public async Task<IActionResult> Crear()
         {
             var vm = new PlaneacionReleaseCrearVm
-            {
-                FolioRelease = await GenerarFolioReleaseSugeridoAsync(),
-                FechaRecepcion = DateTime.Today,
-                EstatusID = PlaneacionReleaseEstatus.Capturado
-            };
+{
+    FolioRelease = await GenerarFolioReleaseSugeridoAsync(),
+    FechaRecepcion = DateTime.Today,
+    EstatusID = PlaneacionReleaseEstatus.Capturado,
+    NivelCriticidad = "NORMAL"
+};
 
             vm.Renglones.Add(new PlaneacionReleaseRenglonCrearVm
             {
@@ -158,6 +165,25 @@ ORDER BY r.FechaCreacion DESC;";
         public async Task<IActionResult> Crear(PlaneacionReleaseCrearVm vm)
         {
             var usuarioId = ObtenerUsuarioID();
+
+            vm.NivelCriticidad = string.IsNullOrWhiteSpace(vm.NivelCriticidad)
+    ? "NORMAL"
+    : vm.NivelCriticidad.Trim().ToUpperInvariant();
+
+vm.ComentarioCriticidad = vm.ComentarioCriticidad?.Trim();
+
+if (vm.NivelCriticidad != "NORMAL" &&
+    vm.NivelCriticidad != "CRITICO" &&
+    vm.NivelCriticidad != "URGENTE")
+{
+    ModelState.AddModelError(nameof(vm.NivelCriticidad), "Selecciona un nivel de criticidad válido.");
+}
+
+if (vm.NivelCriticidad == "URGENTE" &&
+    string.IsNullOrWhiteSpace(vm.ComentarioCriticidad))
+{
+    ModelState.AddModelError(nameof(vm.ComentarioCriticidad), "Captura un comentario para el release urgente.");
+}
 
             vm.Renglones = vm.Renglones
                 .Where(r =>
@@ -273,12 +299,7 @@ ORDER BY r.FechaCreacion DESC;";
                             entrega
                         );
 
-                        /*
-                            IMPORTANTE:
-                            Aquí NO se calcula stock, MP, embalaje, horas ni máquina.
-                            Release solo guarda la demanda del cliente.
-                            El cálculo se hará después en Programa de Planeación.
-                        */
+                     
 
                         await InsertarReleaseDetalleAsync(
                             releaseId,
@@ -296,10 +317,7 @@ ORDER BY r.FechaCreacion DESC;";
                     renglonNumero++;
                 }
 
-                /*
-                    No cambiamos a Calculado.
-                    Se queda en Capturado porque todavía no pasó por Programa de Planeación.
-                */
+               
 
                 await tx.CommitAsync();
 
@@ -1905,14 +1923,14 @@ WHERE rr.ReleaseID = @ReleaseID
             }
         }
 
-        private async Task<int> InsertarReleaseAsync(
-            PlaneacionReleaseCrearVm vm,
-            string? clienteNombre,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
-        {
-            const string sql = @"
+       private async Task<int> InsertarReleaseAsync(
+    PlaneacionReleaseCrearVm vm,
+    string? clienteNombre,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+{
+    const string sql = @"
 INSERT INTO dbo.Planeacion_Releases
 (
     FolioRelease,
@@ -1924,6 +1942,8 @@ INSERT INTO dbo.Planeacion_Releases
     ArchivoOrigenNombre,
     PlantillaImportacion,
     ImportadoDesdeArchivo,
+    NivelCriticidad,
+    ComentarioCriticidad,
     Observaciones,
     EstatusID,
     UsuarioCreacionID,
@@ -1942,6 +1962,8 @@ VALUES
     @ArchivoOrigenNombre,
     @PlantillaImportacion,
     @ImportadoDesdeArchivo,
+    @NivelCriticidad,
+    @ComentarioCriticidad,
     @Observaciones,
     @EstatusID,
     @UsuarioCreacionID,
@@ -1949,42 +1971,54 @@ VALUES
     1
 );";
 
-            await using var cmd = new SqlCommand(sql, cn, tx);
+    await using var cmd = new SqlCommand(sql, cn, tx);
 
-            cmd.Parameters.Add("@FolioRelease", SqlDbType.NVarChar, 40).Value =
-                (object?)vm.FolioRelease ?? DBNull.Value;
+    cmd.Parameters.Add("@FolioRelease", SqlDbType.NVarChar, 40).Value =
+        (object?)vm.FolioRelease ?? DBNull.Value;
 
-            cmd.Parameters.Add("@FolioCliente", SqlDbType.NVarChar, 100).Value =
-                (object?)vm.FolioCliente ?? DBNull.Value;
+    cmd.Parameters.Add("@FolioCliente", SqlDbType.NVarChar, 100).Value =
+        (object?)vm.FolioCliente ?? DBNull.Value;
 
-            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
-                (object?)vm.ClienteID ?? DBNull.Value;
+    cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
+        (object?)vm.ClienteID ?? DBNull.Value;
 
-            cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value =
-                (object?)clienteNombre ?? DBNull.Value;
+    cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value =
+        (object?)clienteNombre ?? DBNull.Value;
 
-            cmd.Parameters.Add("@FechaRecepcion", SqlDbType.Date).Value = vm.FechaRecepcion.Date;
+    cmd.Parameters.Add("@FechaRecepcion", SqlDbType.Date).Value =
+        vm.FechaRecepcion.Date;
 
-            cmd.Parameters.Add("@VersionRelease", SqlDbType.NVarChar, 50).Value =
-                (object?)vm.VersionRelease ?? DBNull.Value;
+    cmd.Parameters.Add("@VersionRelease", SqlDbType.NVarChar, 50).Value =
+        (object?)vm.VersionRelease ?? DBNull.Value;
 
-            cmd.Parameters.Add("@ArchivoOrigenNombre", SqlDbType.NVarChar, 255).Value =
-                (object?)vm.ArchivoOrigenNombre ?? DBNull.Value;
+    cmd.Parameters.Add("@ArchivoOrigenNombre", SqlDbType.NVarChar, 255).Value =
+        (object?)vm.ArchivoOrigenNombre ?? DBNull.Value;
 
-            cmd.Parameters.Add("@PlantillaImportacion", SqlDbType.NVarChar, 100).Value =
-                (object?)vm.PlantillaImportacion ?? DBNull.Value;
+    cmd.Parameters.Add("@PlantillaImportacion", SqlDbType.NVarChar, 100).Value =
+        (object?)vm.PlantillaImportacion ?? DBNull.Value;
 
-            cmd.Parameters.Add("@ImportadoDesdeArchivo", SqlDbType.Bit).Value =
-                vm.ImportadoDesdeArchivo;
+    cmd.Parameters.Add("@ImportadoDesdeArchivo", SqlDbType.Bit).Value =
+        vm.ImportadoDesdeArchivo;
 
-            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
-                (object?)vm.Observaciones ?? DBNull.Value;
+    cmd.Parameters.Add("@NivelCriticidad", SqlDbType.NVarChar, 20).Value =
+        string.IsNullOrWhiteSpace(vm.NivelCriticidad)
+            ? "NORMAL"
+            : vm.NivelCriticidad.Trim().ToUpperInvariant();
 
-            cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = PlaneacionReleaseEstatus.Capturado;
-            cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
+    cmd.Parameters.Add("@ComentarioCriticidad", SqlDbType.NVarChar, 300).Value =
+        (object?)vm.ComentarioCriticidad ?? DBNull.Value;
 
-            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
-        }
+    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
+        (object?)vm.Observaciones ?? DBNull.Value;
+
+    cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value =
+        PlaneacionReleaseEstatus.Capturado;
+
+    cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value =
+        usuarioId;
+
+    return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+}
 
         private async Task InsertarReleaseDetalleAsync(
     int releaseId,
@@ -4087,5 +4121,1759 @@ ORDER BY ParteID;";
                 HorasNecesarias = lista.Sum(x => x.HorasNecesarias ?? 0)
             };
         }
+
+        #endregion
+
+        #region ORIGEN: PlaneacionReleaseEdicionController.cs - Edicion de Releases existentes
+
+        // ============================================================
+        // ORIGEN: PlaneacionReleaseEdicionController.cs
+        // FUNCION: Editar Releases guardados y controlar el impacto sobre
+        // programas de produccion vinculados.
+        // ============================================================
+        // RELEASE_EDICION_FLUJO_V1_0
+        [HttpGet]
+        public async Task<IActionResult> Editar(int id)
+        {
+            var detalle = await ObtenerReleaseDetalleAsync(id);
+            if (detalle == null)
+                return NotFound();
+
+            var vm = new PlaneacionReleaseEditarVm
+            {
+                ReleaseID = detalle.ReleaseID,
+                ClienteID = detalle.ClienteID,
+                ClienteNombre = detalle.ClienteNombre,
+                FolioRelease = detalle.FolioRelease,
+                FolioCliente = detalle.FolioCliente,
+                FechaRecepcion = detalle.FechaRecepcion,
+                VersionRelease = detalle.VersionRelease,
+                ArchivoOrigenNombre = detalle.ArchivoOrigenNombre,
+                PlantillaImportacion = detalle.PlantillaImportacion,
+                ImportadoDesdeArchivo = detalle.ImportadoDesdeArchivo,
+                Observaciones = detalle.Observaciones,
+                EstatusID = detalle.EstatusID
+            };
+
+            vm.Renglones = detalle.Detalles
+                .GroupBy(x => new
+                {
+                    x.ReleaseRenglonID,
+                    x.Renglon,
+                    x.ParteID,
+                    x.NumeroParte,
+                    x.ReferenciaSAP,
+                    x.DesignacionDescripcionSAP,
+                    x.UnidadMedidaCliente,
+                    x.ContratoCliente
+                })
+                .OrderBy(x => x.Key.Renglon)
+                .Select(group => new PlaneacionReleaseRenglonCrearVm
+                {
+                    Renglon = group.Key.Renglon,
+                    ParteID = group.Key.ParteID,
+                    NumeroParte = group.Key.NumeroParte,
+                    ReferenciaSAP = group.Key.ReferenciaSAP,
+                    DesignacionDescripcionSAP =
+                        group.Key.DesignacionDescripcionSAP,
+                    UnidadMedidaCliente = group.Key.UnidadMedidaCliente,
+                    ContratoCliente = group.Key.ContratoCliente,
+                    Entregas = group
+                        .OrderBy(x => x.SecuenciaEntrega ?? int.MaxValue)
+                        .ThenBy(x => x.FechaRequerida)
+                        .Select((x, index) =>
+                            new PlaneacionReleaseEntregaCrearVm
+                            {
+                                SecuenciaEntrega =
+                                    x.SecuenciaEntrega ?? index + 1,
+                                FechaCarga = x.FechaCarga,
+                                FechaRequerida = x.FechaRequerida,
+                                CantidadRequerida = x.CantidadRequerida
+                            })
+                        .ToList()
+                })
+                .ToList();
+
+            if (vm.Renglones.Count == 0)
+            {
+                vm.Renglones.Add(new PlaneacionReleaseRenglonCrearVm
+                {
+                    Renglon = 1,
+                    Entregas = new List<PlaneacionReleaseEntregaCrearVm>
+                    {
+                        new()
+                        {
+                            SecuenciaEntrega = 1,
+                            FechaRequerida = DateTime.Today
+                        }
+                    }
+                });
+            }
+
+            var impacto =
+                await ObtenerImpactoEdicionReleaseAsync(id);
+
+            vm.TienePlaneacionVinculada =
+                impacto.ProgramasVinculados > 0;
+
+            vm.TieneProgramaBloqueado =
+                impacto.ProgramasBloqueados > 0;
+
+            vm.ProgramasVinculados =
+                impacto.ProgramasVinculados;
+
+            await CargarCatalogosAsync(vm);
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Editar(
+            PlaneacionReleaseEditarVm vm)
+        {
+            var usuarioId = ObtenerUsuarioID();
+
+            LimpiarModeloEdicionRelease(vm);
+
+            if (!vm.ConfirmarImpacto)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "Debes confirmar que comprendes el impacto sobre la planeación.");
+            }
+
+            if (!vm.ClienteID.HasValue &&
+                string.IsNullOrWhiteSpace(vm.ClienteNombre))
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "Selecciona el cliente del Release.");
+            }
+
+            if (vm.Renglones.Count == 0)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "Debes conservar al menos un renglón.");
+            }
+
+            foreach (var renglon in vm.Renglones)
+            {
+                if (!renglon.ParteID.HasValue)
+                {
+                    ModelState.AddModelError(
+                        string.Empty,
+                        $"El renglón {renglon.Renglon} no tiene parte seleccionada.");
+                }
+
+                if (renglon.Entregas.Count == 0)
+                {
+                    ModelState.AddModelError(
+                        string.Empty,
+                        $"El renglón {renglon.Renglon} debe tener al menos una entrega.");
+                }
+
+                foreach (var entrega in renglon.Entregas)
+                {
+                    if (!entrega.FechaRequerida.HasValue)
+                    {
+                        ModelState.AddModelError(
+                            string.Empty,
+                            $"El renglón {renglon.Renglon} tiene una entrega sin fecha requerida.");
+                    }
+
+                    if (entrega.CantidadRequerida <= 0)
+                    {
+                        ModelState.AddModelError(
+                            string.Empty,
+                            $"El renglón {renglon.Renglon} tiene una cantidad menor o igual a cero.");
+                    }
+                }
+            }
+
+            var impacto =
+                await ObtenerImpactoEdicionReleaseAsync(vm.ReleaseID);
+
+            vm.TienePlaneacionVinculada =
+                impacto.ProgramasVinculados > 0;
+
+            vm.TieneProgramaBloqueado =
+                impacto.ProgramasBloqueados > 0;
+
+            vm.ProgramasVinculados =
+                impacto.ProgramasVinculados;
+
+            if (vm.TieneProgramaBloqueado)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "Este Release tiene producción en proceso, terminada o cerrada. No puede editarse porque alteraría información productiva ya ejecutada.");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                await CargarCatalogosAsync(vm);
+                return View(vm);
+            }
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync();
+
+            try
+            {
+                const string sqlLock = @"
+    SELECT EstatusID
+    FROM dbo.Planeacion_Releases WITH (UPDLOCK, ROWLOCK)
+    WHERE ReleaseID = @ReleaseID
+      AND Activo = 1;";
+
+                await using (var cmd =
+                    new SqlCommand(sqlLock, cn, tx))
+                {
+                    cmd.Parameters.Add(
+                        "@ReleaseID",
+                        SqlDbType.Int).Value = vm.ReleaseID;
+
+                    var exists = await cmd.ExecuteScalarAsync();
+                    if (exists == null || exists == DBNull.Value)
+                    {
+                        await tx.RollbackAsync();
+                        return NotFound();
+                    }
+                }
+
+                var bloqueados =
+                    await ContarProgramasBloqueadosEdicionAsync(
+                        vm.ReleaseID,
+                        cn,
+                        tx);
+
+                if (bloqueados > 0)
+                {
+                    await tx.RollbackAsync();
+
+                    ModelState.AddModelError(
+                        string.Empty,
+                        "La edición fue cancelada porque el Release ya tiene producción en proceso, terminada o cerrada.");
+
+                    vm.TieneProgramaBloqueado = true;
+                    await CargarCatalogosAsync(vm);
+                    return View(vm);
+                }
+
+                await InvalidarPlaneacionPendienteReleaseAsync(
+                    vm.ReleaseID,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                const string sqlDesactivarFuente = @"
+    UPDATE dbo.Planeacion_ReleaseDetalle
+    SET Activo = 0
+    WHERE ReleaseID = @ReleaseID
+      AND Activo = 1;
+
+    UPDATE dbo.Planeacion_ReleaseRenglones
+    SET Activo = 0
+    WHERE ReleaseID = @ReleaseID
+      AND Activo = 1;";
+
+                await using (var cmd =
+                    new SqlCommand(sqlDesactivarFuente, cn, tx))
+                {
+                    cmd.Parameters.Add(
+                        "@ReleaseID",
+                        SqlDbType.Int).Value = vm.ReleaseID;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                var clienteNombre = vm.ClienteNombre;
+
+                if (vm.ClienteID.HasValue)
+                {
+                    clienteNombre =
+                        await ObtenerClienteNombreAsync(
+                            vm.ClienteID.Value,
+                            cn,
+                            tx);
+                }
+
+                const string sqlActualizarRelease = @"
+    UPDATE dbo.Planeacion_Releases
+    SET
+        FolioRelease = @FolioRelease,
+        FolioCliente = @FolioCliente,
+        ClienteID = @ClienteID,
+        ClienteNombre = @ClienteNombre,
+        FechaRecepcion = @FechaRecepcion,
+        VersionRelease = @VersionRelease,
+        Observaciones = @Observaciones,
+        EstatusID = @EstatusID,
+        UsuarioModificacionID = @UsuarioID,
+        FechaModificacion = GETDATE()
+    WHERE ReleaseID = @ReleaseID
+      AND Activo = 1;";
+
+                await using (var cmd =
+                    new SqlCommand(sqlActualizarRelease, cn, tx))
+                {
+                    cmd.Parameters.Add(
+                        "@ReleaseID",
+                        SqlDbType.Int).Value = vm.ReleaseID;
+
+                    cmd.Parameters.Add(
+                        "@FolioRelease",
+                        SqlDbType.NVarChar,
+                        40).Value =
+                        (object?)vm.FolioRelease ?? DBNull.Value;
+
+                    cmd.Parameters.Add(
+                        "@FolioCliente",
+                        SqlDbType.NVarChar,
+                        100).Value =
+                        (object?)vm.FolioCliente ?? DBNull.Value;
+
+                    cmd.Parameters.Add(
+                        "@ClienteID",
+                        SqlDbType.Int).Value =
+                        (object?)vm.ClienteID ?? DBNull.Value;
+
+                    cmd.Parameters.Add(
+                        "@ClienteNombre",
+                        SqlDbType.NVarChar,
+                        200).Value =
+                        (object?)clienteNombre ?? DBNull.Value;
+
+                    cmd.Parameters.Add(
+                        "@FechaRecepcion",
+                        SqlDbType.Date).Value =
+                        vm.FechaRecepcion.Date;
+
+                    cmd.Parameters.Add(
+                        "@VersionRelease",
+                        SqlDbType.NVarChar,
+                        50).Value =
+                        (object?)vm.VersionRelease ?? DBNull.Value;
+
+                    cmd.Parameters.Add(
+                        "@Observaciones",
+                        SqlDbType.NVarChar,
+                        500).Value =
+                        (object?)vm.Observaciones ?? DBNull.Value;
+
+                    cmd.Parameters.Add(
+                        "@EstatusID",
+                        SqlDbType.Int).Value =
+                        PlaneacionReleaseEstatus.Calculado;
+
+                    cmd.Parameters.Add(
+                        "@UsuarioID",
+                        SqlDbType.Int).Value = usuarioId;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                var renglonNumero = 1;
+
+                foreach (var renglon in vm.Renglones)
+                {
+                    renglon.Renglon = renglonNumero;
+
+                    await CompletarRenglonDesdeParteAsync(
+                        renglon,
+                        cn,
+                        tx);
+
+                    var releaseRenglonId =
+                        await InsertarReleaseRenglonAsync(
+                            vm.ReleaseID,
+                            renglon,
+                            usuarioId,
+                            cn,
+                            tx);
+
+                    var secuencia = 1;
+
+                    foreach (var entrega in renglon.Entregas)
+                    {
+                        // RELEASE_FECHA_CARGA_AUTO_EDICION_V1_0
+                        if (vm.ImportadoDesdeArchivo &&
+                            !entrega.FechaCarga.HasValue &&
+                            entrega.FechaRequerida.HasValue)
+                        {
+                            entrega.FechaCarga =
+                                entrega.FechaRequerida.Value.Date.AddDays(-1);
+                        }
+                        entrega.SecuenciaEntrega = secuencia;
+
+                        var detalle =
+                            CrearDetalleDesdeRenglonEntrega(
+                                renglon,
+                                entrega);
+
+                        await CompletarDetalleDesdeParteAsync(
+                            detalle,
+                            cn,
+                            tx);
+
+                        await CalcularNecesidadAsync(
+                            detalle,
+                            cn,
+                            tx);
+
+                        await InsertarReleaseDetalleAsync(
+                            vm.ReleaseID,
+                            releaseRenglonId,
+                            secuencia,
+                            detalle,
+                            usuarioId,
+                            cn,
+                            tx);
+
+                        secuencia++;
+                    }
+
+                    renglonNumero++;
+                }
+
+                await ActualizarEstatusReleaseAsync(
+                    vm.ReleaseID,
+                    PlaneacionReleaseEstatus.Calculado,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                await tx.CommitAsync();
+
+                TempData["Success"] =
+                    impacto.ProgramasVinculados > 0
+                        ? "Release actualizado. La programación pendiente relacionada fue cancelada para que el flujo se genere nuevamente con los datos corregidos."
+                        : "Release actualizado y recalculado correctamente.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = vm.ReleaseID });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+
+                ModelState.AddModelError(
+                    string.Empty,
+                    "No fue posible editar el Release: " +
+                    ex.Message);
+
+                await CargarCatalogosAsync(vm);
+                return View(vm);
+            }
+        }
+
+        private static void LimpiarModeloEdicionRelease(
+            PlaneacionReleaseEditarVm vm)
+        {
+            vm.Renglones ??=
+                new List<PlaneacionReleaseRenglonCrearVm>();
+
+            vm.Renglones = vm.Renglones
+                .Where(x =>
+                    x.ParteID.HasValue ||
+                    !string.IsNullOrWhiteSpace(x.NumeroParte) ||
+                    !string.IsNullOrWhiteSpace(x.ReferenciaSAP))
+                .ToList();
+
+            foreach (var renglon in vm.Renglones)
+            {
+                renglon.Entregas ??=
+                    new List<PlaneacionReleaseEntregaCrearVm>();
+
+                renglon.Entregas = renglon.Entregas
+                    .Where(x =>
+                        x.FechaRequerida.HasValue ||
+                        x.CantidadRequerida > 0)
+                    .ToList();
+            }
+
+            vm.Renglones = vm.Renglones
+                .Where(x => x.Entregas.Count > 0)
+                .ToList();
+
+            for (var i = 0; i < vm.Renglones.Count; i++)
+            {
+                vm.Renglones[i].Renglon = i + 1;
+
+                for (var j = 0;
+                     j < vm.Renglones[i].Entregas.Count;
+                     j++)
+                {
+                    vm.Renglones[i]
+                        .Entregas[j]
+                        .SecuenciaEntrega = j + 1;
+                }
+            }
+        }
+
+        private async Task<(
+            int ProgramasVinculados,
+            int ProgramasBloqueados)>
+            ObtenerImpactoEdicionReleaseAsync(int releaseId)
+        {
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            const string sql = @"
+    SELECT
+        COUNT(DISTINCT pp.ProgramaProduccionID) AS TotalProgramas,
+        COUNT(DISTINCT CASE
+            WHEN pp.EstatusID IN (
+                @EnProduccion,
+                @Terminado,
+                @Cerrado
+            )
+            THEN pp.ProgramaProduccionID
+        END) AS Bloqueados
+    FROM dbo.Planeacion_ReleaseDetalle d
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+        ON pp.ReleaseDetalleID = d.ReleaseDetalleID
+       AND pp.Activo = 1
+    WHERE d.ReleaseID = @ReleaseID
+      AND d.Activo = 1;";
+
+            await using var cmd =
+                new SqlCommand(sql, cn);
+
+            cmd.Parameters.Add(
+                "@ReleaseID",
+                SqlDbType.Int).Value = releaseId;
+
+            cmd.Parameters.Add(
+                "@EnProduccion",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.EnProduccion;
+
+            cmd.Parameters.Add(
+                "@Terminado",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.Terminado;
+
+            cmd.Parameters.Add(
+                "@Cerrado",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.Cerrado;
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return (0, 0);
+
+            return (
+                rd["TotalProgramas"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["TotalProgramas"]),
+
+                rd["Bloqueados"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["Bloqueados"]));
+        }
+
+        private static async Task<int>
+            ContarProgramasBloqueadosEdicionAsync(
+                int releaseId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            const string sql = @"
+    SELECT COUNT(DISTINCT pp.ProgramaProduccionID)
+    FROM dbo.Planeacion_ReleaseDetalle d
+    INNER JOIN dbo.Planeacion_ProgramaProduccion pp
+        ON pp.ReleaseDetalleID = d.ReleaseDetalleID
+       AND pp.Activo = 1
+    WHERE d.ReleaseID = @ReleaseID
+      AND d.Activo = 1
+      AND pp.EstatusID IN (
+          @EnProduccion,
+          @Terminado,
+          @Cerrado
+      );";
+
+            await using var cmd =
+                new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add(
+                "@ReleaseID",
+                SqlDbType.Int).Value = releaseId;
+
+            cmd.Parameters.Add(
+                "@EnProduccion",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.EnProduccion;
+
+            cmd.Parameters.Add(
+                "@Terminado",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.Terminado;
+
+            cmd.Parameters.Add(
+                "@Cerrado",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.Cerrado;
+
+            return Convert.ToInt32(
+                await cmd.ExecuteScalarAsync());
+        }
+
+        private static async Task
+            InvalidarPlaneacionPendienteReleaseAsync(
+                int releaseId,
+                int usuarioId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            const string sql = @"
+    DECLARE @SolicitudesDetalle TABLE
+    (
+        SolicitudProduccionDetalleID INT PRIMARY KEY
+    );
+
+    INSERT INTO @SolicitudesDetalle
+    (
+        SolicitudProduccionDetalleID
+    )
+    SELECT DISTINCT pp.SolicitudProduccionDetalleID
+    FROM dbo.Planeacion_ProgramaProduccion pp
+    INNER JOIN dbo.Planeacion_ReleaseDetalle d
+        ON d.ReleaseDetalleID = pp.ReleaseDetalleID
+    WHERE d.ReleaseID = @ReleaseID
+      AND d.Activo = 1
+      AND pp.Activo = 1
+      AND pp.SolicitudProduccionDetalleID IS NOT NULL
+      AND pp.EstatusID NOT IN (
+          @EnProduccion,
+          @Terminado,
+          @Cerrado
+      );
+
+    UPDATE pp
+    SET
+        pp.EstatusID = @Cancelado,
+        pp.Activo = 0,
+        pp.UsuarioModificacionID = @UsuarioID,
+        pp.FechaModificacion = GETDATE()
+    FROM dbo.Planeacion_ProgramaProduccion pp
+    INNER JOIN dbo.Planeacion_ReleaseDetalle d
+        ON d.ReleaseDetalleID = pp.ReleaseDetalleID
+    WHERE d.ReleaseID = @ReleaseID
+      AND d.Activo = 1
+      AND pp.Activo = 1
+      AND pp.EstatusID NOT IN (
+          @EnProduccion,
+          @Terminado,
+          @Cerrado
+      );
+
+    IF OBJECT_ID(
+        'dbo.SolicitudesProduccionAsignacionMaquina',
+        'U') IS NOT NULL
+    BEGIN
+        UPDATE asignacion
+        SET asignacion.Activo = 0
+        FROM dbo.SolicitudesProduccionAsignacionMaquina asignacion
+        INNER JOIN @SolicitudesDetalle ids
+            ON ids.SolicitudProduccionDetalleID =
+               asignacion.SolicitudProduccionDetalleID
+        WHERE asignacion.Activo = 1;
+    END;
+
+    IF OBJECT_ID(
+        'dbo.SolicitudesProduccionDetalle',
+        'U') IS NOT NULL
+    BEGIN
+        UPDATE detalle
+        SET detalle.Activo = 0
+        FROM dbo.SolicitudesProduccionDetalle detalle
+        INNER JOIN @SolicitudesDetalle ids
+            ON ids.SolicitudProduccionDetalleID =
+               detalle.SolicitudProduccionDetalleID
+        WHERE detalle.Activo = 1;
+    END;";
+
+            await using var cmd =
+                new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add(
+                "@ReleaseID",
+                SqlDbType.Int).Value = releaseId;
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value = usuarioId;
+
+            cmd.Parameters.Add(
+                "@EnProduccion",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.EnProduccion;
+
+            cmd.Parameters.Add(
+                "@Terminado",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.Terminado;
+
+            cmd.Parameters.Add(
+                "@Cerrado",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.Cerrado;
+
+            cmd.Parameters.Add(
+                "@Cancelado",
+                SqlDbType.Int).Value =
+                PlaneacionProgramaEstatus.Cancelado;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+        #endregion
+
+        #region ORIGEN: PlaneacionReleaseValidacionEdicionController.cs - Edicion de documentos preparados
+
+        // ============================================================
+        // ORIGEN: PlaneacionReleaseValidacionEdicionController.cs
+        // FUNCION: Modificar cliente, partes y entregas de un documento
+        // preparado antes de su importacion definitiva.
+        // ============================================================
+
+        [HttpGet]
+        public async Task<IActionResult> ObtenerClientesValidacionEdicion()
+        {
+            const string sql = @"
+SELECT ClienteID, Nombre
+FROM dbo.ERP_Clientes
+WHERE Activo = 1
+ORDER BY Nombre;";
+
+            var clientes = new List<object>();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                clientes.Add(new
+                {
+                    id = Convert.ToInt32(rd["ClienteID"]),
+                    text = rd["Nombre"] as string ?? "Cliente"
+                });
+            }
+
+            return Json(new { ok = true, clientes });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuardarEdicionDocumentoPreparado(
+            ReleaseDocumentoPreparadoEditarRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.LoteID) ||
+                string.IsNullOrWhiteSpace(request.DocumentoID))
+            {
+                TempData["Error"] = "No se recibio el lote o documento.";
+                return RedirectToAction(nameof(PendientesValidar));
+            }
+
+            var lote = await CargarLoteValidacionAsync(request.LoteID);
+            if (lote == null)
+                return NotFound();
+
+            var documento = lote.Documentos.FirstOrDefault(x =>
+                string.Equals(x.DocumentoID, request.DocumentoID, StringComparison.OrdinalIgnoreCase));
+
+            if (documento == null)
+                return NotFound();
+
+            if (documento.Estado == ReleaseValidacionEstados.Guardado)
+            {
+                TempData["Error"] = "El documento ya fue guardado y no puede editarse.";
+                return RedirectToAction(nameof(ValidacionLote), new { loteId = request.LoteID });
+            }
+
+            if (!request.ClienteID.HasValue || request.ClienteID.Value <= 0)
+            {
+                TempData["Error"] = "Selecciona un cliente valido.";
+                return RedirectToAction(nameof(ValidacionLote), new { loteId = request.LoteID });
+            }
+
+            if (request.Renglones == null || request.Renglones.Count == 0)
+            {
+                TempData["Error"] = "El documento debe conservar al menos una parte.";
+                return RedirectToAction(nameof(ValidacionLote), new { loteId = request.LoteID });
+            }
+
+            const string sqlCliente = @"
+SELECT TOP (1) Nombre
+FROM dbo.ERP_Clientes
+WHERE ClienteID = @ClienteID
+  AND Activo = 1;";
+
+            string? clienteNombre;
+
+            await using (var cn = new SqlConnection(ConnectionString))
+            {
+                await cn.OpenAsync();
+                await using var cmd = new SqlCommand(sqlCliente, cn);
+                cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = request.ClienteID.Value;
+                clienteNombre = await cmd.ExecuteScalarAsync() as string;
+            }
+
+            if (string.IsNullOrWhiteSpace(clienteNombre))
+            {
+                TempData["Error"] = "El cliente seleccionado no existe o esta inactivo.";
+                return RedirectToAction(nameof(ValidacionLote), new { loteId = request.LoteID });
+            }
+
+            var nuevosRenglones = new List<PlaneacionReleaseRenglonCrearVm>();
+
+            for (var i = 0; i < request.Renglones.Count; i++)
+            {
+                var source = request.Renglones[i];
+
+                if (source.Entregas == null || source.Entregas.Count == 0)
+                {
+                    TempData["Error"] = $"La parte {i + 1} debe conservar al menos una entrega.";
+                    return RedirectToAction(nameof(ValidacionLote), new { loteId = request.LoteID });
+                }
+
+                var referenciaBusqueda =
+                    !string.IsNullOrWhiteSpace(source.NumeroParte)
+                        ? source.NumeroParte
+                        : source.ReferenciaSAP;
+
+                var match = await BuscarParteActivaValidacionAsync(
+                    referenciaBusqueda ?? string.Empty,
+                    request.ClienteID.Value);
+
+                var entregas = new List<PlaneacionReleaseEntregaCrearVm>();
+
+                for (var j = 0; j < source.Entregas.Count; j++)
+                {
+                    var e = source.Entregas[j];
+
+                    if (!e.FechaRequerida.HasValue || e.CantidadRequerida <= 0)
+                    {
+                        TempData["Error"] =
+                            $"Revisa fecha y cantidad de la entrega {j + 1} en la parte {i + 1}.";
+
+                        return RedirectToAction(nameof(ValidacionLote), new { loteId = request.LoteID });
+                    }
+
+                    entregas.Add(new PlaneacionReleaseEntregaCrearVm
+                    {
+                        SecuenciaEntrega = j + 1,
+                        FechaRequerida = e.FechaRequerida.Value.Date,
+                        FechaCarga = e.FechaCarga?.Date,
+                        CantidadRequerida = e.CantidadRequerida
+                    });
+                }
+
+                var numero = TextoValidacionEdicion(source.NumeroParte, 150);
+                var referencia = TextoValidacionEdicion(source.ReferenciaSAP, 150);
+                var descripcion = TextoValidacionEdicion(source.DesignacionDescripcionSAP, 300);
+                int? parteId = null;
+
+                if (match.HasValue)
+                {
+                    parteId = match.Value.ParteID;
+                    numero ??= match.Value.NumeroParte;
+                    referencia ??= match.Value.ReferenciaSAP;
+                    descripcion ??= match.Value.Descripcion;
+                }
+
+                if (string.IsNullOrWhiteSpace(numero) && string.IsNullOrWhiteSpace(referencia))
+                {
+                    TempData["Error"] = $"La parte {i + 1} necesita numero de parte o referencia SAP.";
+                    return RedirectToAction(nameof(ValidacionLote), new { loteId = request.LoteID });
+                }
+
+                nuevosRenglones.Add(new PlaneacionReleaseRenglonCrearVm
+                {
+                    Renglon = i + 1,
+                    ParteID = parteId,
+                    NumeroParte = numero,
+                    ReferenciaSAP = referencia,
+                    DesignacionDescripcionSAP = descripcion,
+                    UnidadMedidaCliente = TextoValidacionEdicion(source.UnidadMedidaCliente, 100),
+                    ContratoCliente = TextoValidacionEdicion(source.ContratoCliente, 150),
+                    Observaciones = TextoValidacionEdicion(source.Observaciones, 1000),
+                    Entregas = entregas
+                });
+            }
+
+            var preparado = documento.ReleasePreparado ?? new PlaneacionReleaseCrearVm();
+
+            preparado.ClienteID = request.ClienteID.Value;
+            preparado.ClienteNombre = clienteNombre;
+            preparado.FolioCliente = TextoValidacionEdicion(request.FolioCliente, 150);
+            preparado.VersionRelease = TextoValidacionEdicion(request.Version, 100);
+            preparado.FechaRecepcion =
+                request.FechaRecepcion == default ? DateTime.Today : request.FechaRecepcion.Date;
+            preparado.Observaciones = TextoValidacionEdicion(request.Observaciones, 2000);
+            preparado.ArchivoOrigenNombre = documento.Archivo;
+            preparado.PlantillaImportacion = documento.Plantilla;
+            preparado.ImportadoDesdeArchivo = true;
+            preparado.EstatusID = PlaneacionReleaseEstatus.Capturado;
+            preparado.Renglones = nuevosRenglones;
+
+            documento.ReleasePreparado = preparado;
+            documento.ClienteID = request.ClienteID.Value;
+            documento.Cliente = clienteNombre;
+            documento.FolioCliente = preparado.FolioCliente;
+            documento.Version = preparado.VersionRelease;
+            documento.FechaDocumento = request.FechaDocumento?.Date;
+            documento.TotalEntregas = nuevosRenglones.Sum(x => x.Entregas.Count);
+            documento.TotalPiezas = nuevosRenglones.Sum(x => x.Entregas.Sum(e => e.CantidadRequerida));
+
+            DefinirEstadoDocumentoPreparado(documento);
+            await GuardarLoteValidacionAsync(lote);
+
+            TempData["Success"] = "Cambios guardados en el documento preparado.";
+            return RedirectToAction(nameof(ValidacionLote), new { loteId = request.LoteID });
+        }
+
+        private static string? TextoValidacionEdicion(string? value, int max)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var text = value.Trim();
+            return text.Length <= max ? text : text[..max];
+        }
+
+        #endregion
+
+
+        // ============================================================
+        // ORIGEN: PlaneacionReleaseValidacionController.cs
+        // VERSION: RELEASE_VALIDACION_LOTES_V2_0
+        // FUNCION: Crear lotes temporales, analizar PDF/Excel, validar partes,
+        // conservar pendientes y confirmar la importacion definitiva.
+        // ============================================================
+        #region ORIGEN: PlaneacionReleaseValidacionController.cs - Validacion por lotes
+
+            private static readonly JsonSerializerOptions ReleaseValidacionJsonOptions = new()
+            {
+                WriteIndented = true,
+                PropertyNameCaseInsensitive = true
+            };
+
+            [HttpPost]
+            [ValidateAntiForgeryToken]
+            [RequestSizeLimit(268435456)]
+            public async Task<IActionResult> ValidarDocumentosPreparados(List<IFormFile>? archivos)
+            {
+                var usuarioId = ObtenerUsuarioID();
+                var lote = new ReleaseValidacionLoteVm
+                {
+                    LoteID = Guid.NewGuid().ToString("N"),
+                    FechaProceso = DateTime.Now,
+                    UsuarioID = usuarioId
+                };
+
+                if (usuarioId <= 0)
+                {
+                    lote.ErrorGeneral = "No se pudo identificar el usuario de la sesión.";
+                    return View("Validacion", lote);
+                }
+
+                if (archivos == null || archivos.Count == 0)
+                {
+                    lote.ErrorGeneral = "Selecciona al menos un documento.";
+                    return View("Validacion", lote);
+                }
+
+                const int maxFiles = 25;
+                const long maxFileBytes = 10L * 1024L * 1024L;
+
+                if (archivos.Count > maxFiles)
+                    lote.NotaGeneral = $"Solo se analizaron los primeros {maxFiles} archivos.";
+
+                var loteRoot = ObtenerRutaLoteValidacion(lote.LoteID);
+                Directory.CreateDirectory(loteRoot);
+
+                foreach (var archivo in archivos.Take(maxFiles))
+                {
+                    var documento = new ReleaseValidacionDocumentoVm
+                    {
+                        Archivo = Path.GetFileName(archivo.FileName)
+                    };
+                    lote.Documentos.Add(documento);
+
+                    try
+                    {
+                        if (archivo.Length <= 0)
+                            throw new InvalidOperationException("El archivo está vacío.");
+
+                        if (archivo.Length > maxFileBytes)
+                            throw new InvalidOperationException("El archivo supera el límite de 10 MB.");
+
+                        using var memory = new MemoryStream();
+                        await archivo.CopyToAsync(memory);
+                        var bytes = memory.ToArray();
+
+                        var extension = Path.GetExtension(documento.Archivo).ToLowerInvariant();
+                        var temporalName = $"{documento.DocumentoID}{extension}";
+                        var temporalPath = Path.Combine(loteRoot, temporalName);
+
+                        await System.IO.File.WriteAllBytesAsync(temporalPath, bytes);
+                        documento.ArchivoTemporal = temporalName;
+                        documento.Sha256 = Convert.ToHexString(SHA256.HashData(bytes));
+
+                        await AnalizarDocumentoValidacionAsync(documento, bytes);
+                    }
+                    catch (Exception ex)
+                    {
+                        documento.Estado = ReleaseValidacionEstados.Error;
+                        documento.Mensaje = ex.Message;
+                    }
+                }
+
+                await GuardarLoteValidacionAsync(lote);
+                return View("Validacion", lote);
+            }
+
+            [HttpGet]
+            public async Task<IActionResult> ValidacionLote(string loteId)
+            {
+                var lote = await CargarLoteValidacionAsync(loteId);
+                if (lote == null)
+                    return NotFound();
+
+                return View("Validacion", lote);
+            }
+
+            [HttpGet]
+            public async Task<IActionResult> PendientesValidar()
+            {
+                var vm = new ReleasePendientesValidarVm();
+                var root = ObtenerRutaRaizValidaciones();
+
+                if (Directory.Exists(root))
+                {
+                    foreach (var loteDirectory in Directory.GetDirectories(root))
+                    {
+                        var loteId = Path.GetFileName(loteDirectory);
+                        var lote = await CargarLoteValidacionAsync(loteId);
+
+                        if (lote != null && lote.Documentos.Any(x =>
+                            x.Estado == ReleaseValidacionEstados.Pendiente))
+                        {
+                            vm.Lotes.Add(lote);
+                        }
+                    }
+                }
+
+                vm.Lotes = vm.Lotes.OrderByDescending(x => x.FechaProceso).ToList();
+                return View(vm);
+            }
+
+            [HttpPost]
+            [ValidateAntiForgeryToken]
+            public async Task<IActionResult> VincularPartePendiente(
+                string loteId,
+                string documentoId,
+                int renglonIndex,
+                string numeroParte)
+            {
+                var lote = await CargarLoteValidacionAsync(loteId);
+                if (lote == null)
+                    return NotFound();
+
+                var documento = lote.Documentos.FirstOrDefault(x => x.DocumentoID == documentoId);
+                if (documento == null)
+                    return NotFound();
+
+                if (renglonIndex < 0 || renglonIndex >= documento.ReleasePreparado.Renglones.Count)
+                {
+                    TempData["Error"] = "El renglón seleccionado no es válido.";
+                    return RedirectToAction(nameof(ValidacionLote), new { loteId });
+                }
+
+                if (!documento.ClienteID.HasValue)
+                {
+                    TempData["Error"] = "El documento no tiene un cliente válido.";
+                    return RedirectToAction(nameof(ValidacionLote), new { loteId });
+                }
+
+                var parte = await BuscarParteActivaValidacionAsync(numeroParte, documento.ClienteID.Value);
+                if (parte == null)
+                {
+                    TempData["Error"] = $"No se encontró una parte activa para '{numeroParte}' dentro del cliente detectado.";
+                    return RedirectToAction(nameof(ValidacionLote), new { loteId });
+                }
+
+                var renglon = documento.ReleasePreparado.Renglones[renglonIndex];
+                renglon.ParteID = parte.Value.ParteID;
+                renglon.NumeroParte = parte.Value.NumeroParte;
+                renglon.ReferenciaSAP = parte.Value.ReferenciaSAP;
+                renglon.DesignacionDescripcionSAP = parte.Value.Descripcion;
+
+                DefinirEstadoDocumentoPreparado(documento);
+                await GuardarLoteValidacionAsync(lote);
+
+                TempData["Success"] = "Parte vinculada correctamente.";
+                return RedirectToAction(nameof(ValidacionLote), new { loteId });
+            }
+
+            [HttpPost]
+            [ValidateAntiForgeryToken]
+            public async Task<IActionResult> ConfirmarImportacionValidada(
+                string loteId,
+                List<string>? documentosSeleccionados)
+            {
+                var lote = await CargarLoteValidacionAsync(loteId);
+                if (lote == null)
+                    return NotFound();
+
+                documentosSeleccionados ??= new List<string>();
+
+                var seleccionados = lote.Documentos
+                    .Where(x => documentosSeleccionados.Contains(x.DocumentoID) &&
+                                x.Estado == ReleaseValidacionEstados.Validado)
+                    .ToList();
+
+                if (seleccionados.Count == 0)
+                {
+                    lote.ErrorGeneral = "Selecciona al menos un documento validado.";
+                    return View("Validacion", lote);
+                }
+
+                var usuarioId = ObtenerUsuarioID();
+                var resultado = new PlaneacionReleaseImportacionResultadoVm();
+
+                foreach (var documento in seleccionados)
+                {
+                    var item = new PlaneacionReleaseImportacionArchivoVm
+                    {
+                        Archivo = documento.Archivo,
+                        ClienteID = documento.ClienteID,
+                        Cliente = documento.Cliente,
+                        Parte = documento.PartesTexto,
+                        Descripcion = documento.ReleasePreparado.Renglones.Count == 1
+                            ? documento.ReleasePreparado.Renglones[0].DesignacionDescripcionSAP
+                            : $"{documento.ReleasePreparado.Renglones.Count} partes",
+                        Schedule = documento.Version,
+                        OrdenCliente = documento.FolioCliente,
+                        Version = documento.Version,
+                        TotalEntregas = documento.TotalEntregas,
+                        TotalPiezas = documento.TotalPiezas,
+                        Advertencias = documento.Advertencias.ToList()
+                    };
+                    resultado.Archivos.Add(item);
+
+                    await using var cn = new SqlConnection(ConnectionString);
+                    await cn.OpenAsync();
+                    await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
+                    try
+                    {
+                        var temporalPath = Path.Combine(
+                            ObtenerRutaLoteValidacion(lote.LoteID),
+                            documento.ArchivoTemporal);
+
+                        if (!System.IO.File.Exists(temporalPath))
+                            throw new FileNotFoundException("No se encontró el archivo temporal.", temporalPath);
+
+                        var bytes = await System.IO.File.ReadAllBytesAsync(temporalPath);
+
+                        var duplicado = documento.Plantilla == "HUF_SUPPLIER_SCHEDULE"
+                            ? await ExisteDocumentoHufImportadoAsync(documento.Sha256, cn, tx)
+                            : await ExisteDocumentoImportadoAsync(documento.Plantilla, documento.Sha256, cn, tx);
+
+                        if (duplicado)
+                        {
+                            await tx.RollbackAsync();
+                            documento.Estado = ReleaseValidacionEstados.Omitido;
+                            documento.Mensaje = "El documento ya había sido importado.";
+                            item.Estado = "OMITIDO";
+                            item.Mensaje = documento.Mensaje;
+                            continue;
+                        }
+
+                        if (documento.ReleasePreparado.Renglones.Any(x => !x.ParteID.HasValue))
+                            throw new InvalidOperationException("El documento todavía contiene partes sin validar.");
+
+                        var archivoGuardado = await GuardarDocumentoOriginalReleaseAsync(bytes, documento.Archivo);
+                        var vm = documento.ReleasePreparado;
+
+                        vm.FolioRelease = await GenerarFolioReleaseAsync(cn, tx);
+                        vm.ArchivoOrigenNombre = documento.Archivo;
+                        vm.PlantillaImportacion = documento.Plantilla;
+                        vm.ImportadoDesdeArchivo = true;
+                        vm.FechaRecepcion = DateTime.Today;
+                        vm.EstatusID = PlaneacionReleaseEstatus.Capturado;
+                        vm.Observaciones =
+                            $"IMPORTACION_VALIDADA;PLANTILLA:{documento.Plantilla};" +
+                            $"SHA256:{documento.Sha256};ARCHIVO:{archivoGuardado};LOTE:{lote.LoteID}";
+
+                        var versionesCerradas = 0;
+
+                        if (documento.Plantilla == "HUF_SUPPLIER_SCHEDULE")
+                        {
+                            versionesCerradas = await CerrarVersionesHufAnterioresAsync(
+                                vm.ClienteID!.Value,
+                                vm.Renglones[0].ParteID!.Value,
+                                usuarioId,
+                                cn,
+                                tx);
+                        }
+                        else if (documento.Plantilla == "VERITAS_SCHEDULE")
+                        {
+                            versionesCerradas = await CerrarVersionesVeritasAnterioresAsync(
+                                vm.ClienteID!.Value,
+                                vm.FolioCliente ?? string.Empty,
+                                usuarioId,
+                                cn,
+                                tx);
+                        }
+                        else if (documento.Plantilla == "GOLDEN_WEEKLY_RELEASE" ||
+                                 documento.Plantilla == "NORMA_WEEKLY_RELEASE" ||
+                                 documento.Plantilla == "AIR_THERMAL_MATERIAL_RELEASE")
+                        {
+                            versionesCerradas = await CerrarVersionesExcelAnterioresAsync(
+                                vm.ClienteID!.Value,
+                                documento.Plantilla,
+                                usuarioId,
+                                cn,
+                                tx);
+                        }
+
+                        var clienteNombre = await ObtenerClienteNombreAsync(vm.ClienteID!.Value, cn, tx)
+                            ?? documento.Cliente
+                            ?? "Cliente";
+
+                        var releaseId = await GuardarReleaseImportadoFlexibleAsync(
+                            vm,
+                            clienteNombre,
+                            usuarioId,
+                            cn,
+                            tx,
+                            false);
+
+                        await tx.CommitAsync();
+
+                        documento.Estado = ReleaseValidacionEstados.Guardado;
+                        documento.ReleaseID = releaseId;
+                        documento.FolioRelease = vm.FolioRelease;
+                        documento.Mensaje = "Release guardado correctamente.";
+
+                        item.Estado = "CREADO";
+                        item.ReleaseID = releaseId;
+                        item.FolioRelease = vm.FolioRelease;
+                        item.ArchivoGuardado = archivoGuardado;
+                        item.VersionesAnterioresCerradas = versionesCerradas;
+                        item.Mensaje = documento.Mensaje;
+                    }
+                    catch (Exception ex)
+                    {
+                        await tx.RollbackAsync();
+                        item.Estado = "ERROR";
+                        item.Mensaje = ex.Message;
+                        documento.Mensaje = ex.Message;
+                    }
+                }
+
+                await GuardarLoteValidacionAsync(lote);
+                return View("Importacion", resultado);
+            }
+
+            private async Task AnalizarDocumentoValidacionAsync(
+                ReleaseValidacionDocumentoVm documento,
+                byte[] bytes)
+            {
+                var extension = Path.GetExtension(documento.Archivo).ToLowerInvariant();
+
+                await using var cn = new SqlConnection(ConnectionString);
+                await cn.OpenAsync();
+                await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
+                try
+                {
+                    if (extension == ".pdf")
+                    {
+                        var template = ReleasePdfDocumentDetector.Detect(bytes);
+
+                        if (template == ReleasePdfTemplate.HufSupplierSchedule)
+                            await PrepararHufValidacionAsync(documento, bytes, cn, tx);
+                        else if (template == ReleasePdfTemplate.VeritasSchedule)
+                            await PrepararVeritasValidacionAsync(documento, bytes, cn, tx);
+                        else
+                        {
+                            documento.Estado = ReleaseValidacionEstados.NoSoportado;
+                            documento.Mensaje = "PDF no soportado. Se reconocen HUF y VERITAS.";
+                        }
+                    }
+                    else if (extension == ".xlsx" || extension == ".xls" || extension == ".xlsm")
+                    {
+                        var template = ReleaseExcelDocumentDetector.Detect(bytes);
+
+                        ReleaseExcelDocument? parsed = template switch
+                        {
+                            ReleaseExcelTemplate.GoldenWeeklyMatrix => ReleaseExcelDocumentDetector.ParseGolden(bytes),
+                            ReleaseExcelTemplate.NormaWeeklyMatrix => ReleaseExcelDocumentDetector.ParseNorma(bytes),
+                            ReleaseExcelTemplate.AirThermalMaterialRelease => ReleaseExcelDocumentDetector.ParseAirThermal(bytes, documento.Archivo),
+                            _ => null
+                        };
+
+                        if (parsed == null)
+                        {
+                            documento.Estado = ReleaseValidacionEstados.NoSoportado;
+                            documento.Mensaje = "Excel no soportado. Se reconocen GOLDEN, NORMA y AIR THERMAL.";
+                        }
+                        else
+                        {
+                            await PrepararExcelValidacionAsync(documento, parsed, cn, tx);
+                        }
+                    }
+                    else
+                    {
+                        documento.Estado = ReleaseValidacionEstados.NoSoportado;
+                        documento.Mensaje = "Formato no soportado. Usa PDF, XLSX, XLS o XLSM.";
+                    }
+
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                    await tx.RollbackAsync();
+                    throw;
+                }
+            }
+
+            private async Task PrepararHufValidacionAsync(
+                ReleaseValidacionDocumentoVm documento,
+                byte[] bytes,
+                SqlConnection cn,
+                SqlTransaction tx)
+            {
+                var parsed = HufReleasePdfParser.Parse(bytes, DateTime.Today);
+                var clienteId = await ObtenerClienteHufParaImportacionAsync(cn, tx);
+
+                if (!clienteId.HasValue)
+                    throw new InvalidOperationException("No existe un cliente activo compatible con HUF.");
+
+                var clienteNombre = await ObtenerClienteNombreAsync(clienteId.Value, cn, tx)
+                    ?? parsed.ClienteNombre;
+
+                var match = await BuscarParteImportacionIncluyendoInactivasAsync(
+                    parsed.PartNumber!, clienteId.Value, cn, tx);
+
+                var parteId = match?.Activa == true ? match.ParteID : (int?)null;
+
+                documento.Plantilla = "HUF_SUPPLIER_SCHEDULE";
+                documento.FechaDocumento = parsed.DocumentDate;
+                documento.ClienteID = clienteId.Value;
+                documento.Cliente = clienteNombre;
+                documento.FolioCliente = parsed.ScheduleNumber;
+                documento.Version = parsed.VersionText;
+                documento.TotalEntregas = parsed.Deliveries.Count;
+                documento.TotalPiezas = parsed.Deliveries.Sum(x => x.RequiredQuantity);
+                documento.Advertencias.AddRange(parsed.Warnings);
+
+                documento.ReleasePreparado = new PlaneacionReleaseCrearVm
+                {
+                    ClienteID = clienteId.Value,
+                    ClienteNombre = clienteNombre,
+                    FolioCliente = parsed.ScheduleNumber,
+                    FechaRecepcion = DateTime.Today,
+                    VersionRelease = parsed.VersionText,
+                    ArchivoOrigenNombre = documento.Archivo,
+                    PlantillaImportacion = documento.Plantilla,
+                    ImportadoDesdeArchivo = true,
+                    EstatusID = PlaneacionReleaseEstatus.Capturado,
+                    Renglones = new List<PlaneacionReleaseRenglonCrearVm>
+                    {
+                        new()
+                        {
+                            Renglon = 1,
+                            ParteID = parteId,
+                            NumeroParte = parsed.PartNumber,
+                            ReferenciaSAP = parsed.PartNumber,
+                            DesignacionDescripcionSAP = parsed.PartDescription,
+                            UnidadMedidaCliente = parsed.Uom,
+                            ContratoCliente = parsed.OrderNumber,
+                            Entregas = parsed.Deliveries.Select(x => new PlaneacionReleaseEntregaCrearVm
+                            {
+                                SecuenciaEntrega = x.Sequence,
+                                FechaCarga = x.LoadingDate,
+                                FechaRequerida = x.RequiredDate,
+                                CantidadRequerida = x.RequiredQuantity
+                            }).ToList()
+                        }
+                    }
+                };
+
+                if (await ExisteDocumentoHufImportadoAsync(documento.Sha256, cn, tx))
+                {
+                    documento.Estado = ReleaseValidacionEstados.Omitido;
+                    documento.Mensaje = "El mismo documento HUF ya fue importado.";
+                    return;
+                }
+
+                if (parteId.HasValue)
+                {
+                    var fechaActiva = await ObtenerFechaVersionHufActivaAsync(
+                        clienteId.Value, parteId.Value, cn, tx);
+
+                    if (parsed.DocumentDate.HasValue &&
+                        fechaActiva.HasValue &&
+                        parsed.DocumentDate.Value.Date < fechaActiva.Value.Date)
+                    {
+                        documento.Estado = ReleaseValidacionEstados.Omitido;
+                        documento.Mensaje = $"Documento anterior a la versión activa del {fechaActiva.Value:dd/MM/yyyy}.";
+                        return;
+                    }
+                }
+
+                DefinirEstadoDocumentoPreparado(documento);
+            }
+
+            private async Task PrepararVeritasValidacionAsync(
+                ReleaseValidacionDocumentoVm documento,
+                byte[] bytes,
+                SqlConnection cn,
+                SqlTransaction tx)
+            {
+                var parsed = VeritasReleasePdfParser.Parse(bytes);
+                var clienteId = await ObtenerClienteVeritasParaImportacionAsync(cn, tx);
+
+                if (!clienteId.HasValue)
+                    throw new InvalidOperationException("No existe un cliente activo compatible con VERITAS.");
+
+                var clienteNombre = await ObtenerClienteNombreAsync(clienteId.Value, cn, tx)
+                    ?? parsed.ClienteNombre;
+
+                var groups = parsed.Deliveries
+                    .GroupBy(x => x.PartNumber, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x.Key)
+                    .ToList();
+
+                var vm = new PlaneacionReleaseCrearVm
+                {
+                    ClienteID = clienteId.Value,
+                    ClienteNombre = clienteNombre,
+                    FolioCliente = parsed.ContractNumber,
+                    FechaRecepcion = DateTime.Today,
+                    VersionRelease = parsed.VersionText,
+                    ArchivoOrigenNombre = documento.Archivo,
+                    PlantillaImportacion = "VERITAS_SCHEDULE",
+                    ImportadoDesdeArchivo = true,
+                    EstatusID = PlaneacionReleaseEstatus.Capturado
+                };
+
+                var rowNumber = 1;
+                foreach (var group in groups)
+                {
+                    var first = group.First();
+                    var match = await BuscarParteImportacionIncluyendoInactivasAsync(
+                        group.Key, clienteId.Value, cn, tx);
+
+                    vm.Renglones.Add(new PlaneacionReleaseRenglonCrearVm
+                    {
+                        Renglon = rowNumber++,
+                        ParteID = match?.Activa == true ? match.ParteID : null,
+                        NumeroParte = group.Key,
+                        ReferenciaSAP = group.Key,
+                        DesignacionDescripcionSAP = first.PartDescription,
+                        UnidadMedidaCliente = first.Uom,
+                        ContratoCliente = parsed.ContractNumber,
+                        Entregas = group
+                            .OrderBy(x => x.RequiredDate)
+                            .ThenBy(x => x.ItemNumber)
+                            .Select((x, index) => new PlaneacionReleaseEntregaCrearVm
+                            {
+                                SecuenciaEntrega = index + 1,
+                                FechaCarga = null,
+                                FechaRequerida = x.RequiredDate,
+                                CantidadRequerida = x.RequiredQuantity
+                            }).ToList()
+                    });
+                }
+
+                documento.Plantilla = "VERITAS_SCHEDULE";
+                documento.FechaDocumento = parsed.DocumentDate;
+                documento.ClienteID = clienteId.Value;
+                documento.Cliente = clienteNombre;
+                documento.FolioCliente = parsed.ContractNumber;
+                documento.Version = parsed.VersionText;
+                documento.TotalEntregas = parsed.Deliveries.Count;
+                documento.TotalPiezas = parsed.Deliveries.Sum(x => x.RequiredQuantity);
+                documento.Advertencias.AddRange(parsed.Warnings);
+                documento.ReleasePreparado = vm;
+
+                if (await ExisteDocumentoImportadoAsync(documento.Plantilla, documento.Sha256, cn, tx))
+                {
+                    documento.Estado = ReleaseValidacionEstados.Omitido;
+                    documento.Mensaje = "El mismo documento VERITAS ya fue importado.";
+                    return;
+                }
+
+                if (vm.Renglones.All(x => x.ParteID.HasValue))
+                {
+                    var fechaActiva = await ObtenerFechaVersionVeritasActivaAsync(
+                        clienteId.Value, parsed.ContractNumber!, cn, tx);
+
+                    if (parsed.DocumentDate.HasValue &&
+                        fechaActiva.HasValue &&
+                        parsed.DocumentDate.Value.Date < fechaActiva.Value.Date)
+                    {
+                        documento.Estado = ReleaseValidacionEstados.Omitido;
+                        documento.Mensaje = $"Documento anterior a la versión activa del {fechaActiva.Value:dd/MM/yyyy}.";
+                        return;
+                    }
+                }
+
+                DefinirEstadoDocumentoPreparado(documento);
+            }
+
+            private async Task PrepararExcelValidacionAsync(
+                ReleaseValidacionDocumentoVm documento,
+                ReleaseExcelDocument parsed,
+                SqlConnection cn,
+                SqlTransaction tx)
+            {
+                var clienteId = await ObtenerClienteExcelParaImportacionAsync(parsed.TemplateCode, cn, tx);
+                if (!clienteId.HasValue)
+                    throw new InvalidOperationException($"No existe un cliente activo compatible con {parsed.ClienteNombre}.");
+
+                var clienteNombre = await ObtenerClienteNombreAsync(clienteId.Value, cn, tx)
+                    ?? parsed.ClienteNombre;
+
+                var vm = new PlaneacionReleaseCrearVm
+                {
+                    ClienteID = clienteId.Value,
+                    ClienteNombre = clienteNombre,
+                    FolioCliente = parsed.FolioCliente,
+                    FechaRecepcion = DateTime.Today,
+                    VersionRelease = parsed.VersionText,
+                    ArchivoOrigenNombre = documento.Archivo,
+                    PlantillaImportacion = parsed.TemplateCode,
+                    ImportadoDesdeArchivo = true,
+                    EstatusID = PlaneacionReleaseEstatus.Capturado
+                };
+
+                var rowNumber = 1;
+                foreach (var sourceRow in parsed.Rows)
+                {
+                    var match = parsed.TemplateCode == "AIR_THERMAL_MATERIAL_RELEASE"
+                        ? await BuscarParteAirThermalIncluyendoRevisionesAsync(
+                            sourceRow.PartNumber, clienteId.Value, cn, tx)
+                        : await BuscarParteImportacionIncluyendoInactivasAsync(
+                            sourceRow.PartNumber, clienteId.Value, cn, tx);
+
+                    vm.Renglones.Add(new PlaneacionReleaseRenglonCrearVm
+                    {
+                        Renglon = rowNumber++,
+                        ParteID = match?.Activa == true ? match.ParteID : null,
+                        NumeroParte = sourceRow.PartNumber,
+                        ReferenciaSAP = sourceRow.PartNumber,
+                        DesignacionDescripcionSAP = sourceRow.PartDescription,
+                        UnidadMedidaCliente = sourceRow.Uom,
+                        ContratoCliente = sourceRow.SourceReference,
+                        Entregas = sourceRow.Deliveries
+                            .OrderBy(x => x.RequiredDate)
+                            .ThenBy(x => x.Sequence)
+                            .Select((x, index) => new PlaneacionReleaseEntregaCrearVm
+                            {
+                                SecuenciaEntrega = index + 1,
+                                FechaCarga = null,
+                                FechaRequerida = x.RequiredDate,
+                                CantidadRequerida = x.RequiredQuantity
+                            }).ToList()
+                    });
+                }
+
+                documento.Plantilla = parsed.TemplateCode;
+                documento.FechaDocumento = parsed.DocumentDate;
+                documento.ClienteID = clienteId.Value;
+                documento.Cliente = clienteNombre;
+                documento.FolioCliente = parsed.FolioCliente;
+                documento.Version = parsed.VersionText;
+                documento.TotalEntregas = parsed.Rows.Sum(x => x.Deliveries.Count);
+                documento.TotalPiezas = parsed.Rows.Sum(x => x.Deliveries.Sum(d => d.RequiredQuantity));
+                documento.Advertencias.AddRange(parsed.Warnings);
+                documento.ReleasePreparado = vm;
+
+                if (await ExisteDocumentoImportadoAsync(documento.Plantilla, documento.Sha256, cn, tx))
+                {
+                    documento.Estado = ReleaseValidacionEstados.Omitido;
+                    documento.Mensaje = "El mismo documento Excel ya fue importado.";
+                    return;
+                }
+
+                DefinirEstadoDocumentoPreparado(documento);
+            }
+
+            private static void DefinirEstadoDocumentoPreparado(ReleaseValidacionDocumentoVm documento)
+            {
+                var pendientes = documento.ReleasePreparado.Renglones.Count(x => !x.ParteID.HasValue);
+
+                if (pendientes > 0)
+                {
+                    documento.Estado = ReleaseValidacionEstados.Pendiente;
+                    documento.Mensaje = $"Falta validar {pendientes} número(s) de parte.";
+                }
+                else
+                {
+                    documento.Estado = ReleaseValidacionEstados.Validado;
+                    documento.Mensaje = "Documento validado y listo para guardar.";
+                }
+            }
+
+            private async Task<(int ParteID, string NumeroParte, string ReferenciaSAP, string Descripcion)?>
+                BuscarParteActivaValidacionAsync(string numeroParte, int clienteId)
+            {
+                if (string.IsNullOrWhiteSpace(numeroParte))
+                    return null;
+
+                const string sql = @"
+        DECLARE @Normalizada NVARCHAR(150) = UPPER(
+            REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(@Referencia)), '-', ''), '.', ''), ' ', ''), '/', '')
+        );
+
+        SELECT TOP (1)
+            ParteID,
+            NumeroParte,
+            ISNULL(ReferenciaSAP, NumeroParte) AS ReferenciaSAP,
+            COALESCE(NULLIF(Designacion, ''), NULLIF(Descripcion, ''), NumeroParte) AS Descripcion
+        FROM dbo.ERP_Partes
+        WHERE Activo = 1
+          AND ClienteID = @ClienteID
+          AND
+          (
+                UPPER(LTRIM(RTRIM(ISNULL(NumeroParte, '')))) = UPPER(LTRIM(RTRIM(@Referencia)))
+             OR UPPER(LTRIM(RTRIM(ISNULL(ReferenciaSAP, '')))) = UPPER(LTRIM(RTRIM(@Referencia)))
+             OR UPPER(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(NumeroParte, ''), '-', ''), '.', ''), ' ', ''), '/', '')) = @Normalizada
+             OR UPPER(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(ReferenciaSAP, ''), '-', ''), '.', ''), ' ', ''), '/', '')) = @Normalizada
+          )
+        ORDER BY
+            CASE
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(NumeroParte, '')))) = UPPER(LTRIM(RTRIM(@Referencia))) THEN 0
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(ReferenciaSAP, '')))) = UPPER(LTRIM(RTRIM(@Referencia))) THEN 1
+                ELSE 2
+            END,
+            ParteID;";
+
+                await using var cn = new SqlConnection(ConnectionString);
+                await cn.OpenAsync();
+
+                await using var cmd = new SqlCommand(sql, cn);
+                cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 150).Value = numeroParte.Trim();
+                cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = clienteId;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (!await rd.ReadAsync())
+                    return null;
+
+                return (
+                    Convert.ToInt32(rd["ParteID"]),
+                    rd["NumeroParte"] as string ?? numeroParte.Trim(),
+                    rd["ReferenciaSAP"] as string ?? numeroParte.Trim(),
+                    rd["Descripcion"] as string ?? numeroParte.Trim());
+            }
+
+            private string ObtenerRutaRaizValidaciones()
+            {
+                return Path.Combine(
+                    _environment.ContentRootPath,
+                    "App_Data",
+                    "Releases",
+                    "PendientesValidar");
+            }
+
+            private string ObtenerRutaLoteValidacion(string loteId)
+            {
+                var safe = new string((loteId ?? string.Empty)
+                    .Where(char.IsLetterOrDigit)
+                    .Take(64)
+                    .ToArray());
+
+                if (string.IsNullOrWhiteSpace(safe))
+                    throw new InvalidOperationException("Identificador de lote inválido.");
+
+                return Path.Combine(ObtenerRutaRaizValidaciones(), safe);
+            }
+
+            private async Task GuardarLoteValidacionAsync(ReleaseValidacionLoteVm lote)
+            {
+                var root = ObtenerRutaLoteValidacion(lote.LoteID);
+                Directory.CreateDirectory(root);
+
+                var json = JsonSerializer.Serialize(lote, ReleaseValidacionJsonOptions);
+                await System.IO.File.WriteAllTextAsync(Path.Combine(root, "lote.json"), json);
+            }
+
+            private async Task<ReleaseValidacionLoteVm?> CargarLoteValidacionAsync(string loteId)
+            {
+                if (string.IsNullOrWhiteSpace(loteId))
+                    return null;
+
+                var path = Path.Combine(ObtenerRutaLoteValidacion(loteId), "lote.json");
+                if (!System.IO.File.Exists(path))
+                    return null;
+
+                var json = await System.IO.File.ReadAllTextAsync(path);
+                return JsonSerializer.Deserialize<ReleaseValidacionLoteVm>(
+                    json,
+                    ReleaseValidacionJsonOptions);
+            }
+
+        #endregion
+
+        #region ORIGEN: PlaneacionReleaseFechaCargaController.cs - Autocompletado de FechaCarga
+
+        // ============================================================
+        // ORIGEN: PlaneacionReleaseFechaCargaController.cs
+        // VERSION: RELEASE_FECHA_CARGA_AUTO_V1_0
+        // FUNCION: Completar FechaCarga en entregas importadas cuando
+        // no existe, usando un dia calendario antes de FechaRequerida.
+        // ============================================================
+
+        private async Task<int> AutocompletarFechasCargaImportadasAsync()
+        {
+            const string sql = @"
+UPDATE detalle
+SET detalle.FechaCarga =
+    DATEADD(DAY, -1, CONVERT(DATE, detalle.FechaRequerida))
+FROM dbo.Planeacion_ReleaseDetalle detalle
+INNER JOIN dbo.Planeacion_Releases release
+    ON release.ReleaseID = detalle.ReleaseID
+WHERE release.Activo = 1
+  AND detalle.Activo = 1
+  AND ISNULL(release.ImportadoDesdeArchivo, 0) = 1
+  AND detalle.FechaCarga IS NULL
+  AND detalle.FechaRequerida IS NOT NULL;
+
+SELECT @@ROWCOUNT;";
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            await using var cmd =
+                new SqlCommand(sql, cn);
+
+            return Convert.ToInt32(
+                await cmd.ExecuteScalarAsync());
+        }
+
+        #endregion
+
     }
 }
