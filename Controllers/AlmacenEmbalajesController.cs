@@ -16,12 +16,15 @@ public sealed class AlmacenEmbalajesController : AlmacenBaseController
     };
 
     public AlmacenEmbalajesController(IConfiguration configuration) : base(configuration) { }
-
     [HttpGet]
-    public async Task<IActionResult> Index(string? q, string? estado, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(
+        string? q,
+        string? estado,
+        CancellationToken cancellationToken)
     {
         var sesion = ValidarSesion();
-        if (sesion != null) return sesion;
+        if (sesion != null)
+            return sesion;
 
         var vm = new AlmacenMPIndexVm
         {
@@ -29,99 +32,583 @@ public sealed class AlmacenEmbalajesController : AlmacenBaseController
             Estado = estado?.Trim().ToUpperInvariant()
         };
 
-        await using var connection = await AbrirConexionAsync(cancellationToken);
-        if (!await ExisteObjetoAsync(connection, "dbo.ERP_Embalajes", "U", cancellationToken)
-            || !await ExisteObjetoAsync(connection, "dbo.AlmacenEmbalajes_Movimientos", "U", cancellationToken)
-            || !await ExisteObjetoAsync(connection, "dbo.vw_AlmacenEmbalajesInventario", "V", cancellationToken)
-            || !await ExisteColumnaAsync(connection, "dbo.vw_AlmacenEmbalajesInventario", "CostoUnitario", cancellationToken))
+        await using var connection =
+            await AbrirConexionAsync(cancellationToken);
+
+        if (!await ExisteObjetoAsync(
+                connection,
+                "dbo.ERP_Embalajes",
+                "U",
+                cancellationToken)
+            || !await ExisteObjetoAsync(
+                connection,
+                "dbo.AlmacenEmbalajes_Movimientos",
+                "U",
+                cancellationToken)
+            || !await ExisteObjetoAsync(
+                connection,
+                "dbo.vw_AlmacenEmbalajesInventario",
+                "V",
+                cancellationToken)
+            || !await ExisteColumnaAsync(
+                connection,
+                "dbo.vw_AlmacenEmbalajesInventario",
+                "StockConfigurado",
+                cancellationToken))
         {
             vm.Configurado = false;
-            vm.MensajeConfiguracion = "Ejecuta Scripts/SQL/Almacen/10_Separar_Embalajes_de_MP.sql para habilitar el almacén de embalajes.";
+            vm.MensajeConfiguracion =
+                "No está completa la instalación del almacén de embalajes.";
+
             return View(vm);
         }
 
+        // SOLICITADO EMBALAJE:
+        // requerido por Planeación menos lo ya entregado a la misma OF.
         const string sql = @"
+WITH Requerido AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        s.FolioSolicitud,
+        s.NumeroOFRecibida,
+        embalaje.EmbalajeID,
+        SUM
+        (
+            CONVERT
+            (
+                DECIMAL(18,4),
+                ISNULL(detalle.CantidadEmbalajes, 0)
+            )
+        ) AS CantidadRequerida
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle detalle
+        ON detalle.SolicitudProduccionID =
+           s.SolicitudProduccionID
+       AND detalle.Activo = 1
+    INNER JOIN dbo.ERP_Embalajes embalaje
+        ON embalaje.Activo = 1
+       AND UPPER
+           (
+               LTRIM
+               (
+                   RTRIM
+                   (
+                       ISNULL(detalle.EmbalajeCodigo, N'')
+                   )
+               )
+           ) =
+           UPPER(LTRIM(RTRIM(embalaje.Codigo)))
+    WHERE s.Activo = 1
+      AND ISNULL(detalle.CantidadEmbalajes, 0) > 0
+    GROUP BY
+        s.SolicitudProduccionID,
+        s.FolioSolicitud,
+        s.NumeroOFRecibida,
+        embalaje.EmbalajeID
+),
+PendientePorEmbalaje AS
+(
+    SELECT
+        requerido.EmbalajeID,
+        SUM
+        (
+            CASE
+                WHEN requerido.CantidadRequerida
+                     - ISNULL(entregado.CantidadEntregada, 0) > 0
+                    THEN requerido.CantidadRequerida
+                         - ISNULL(entregado.CantidadEntregada, 0)
+                ELSE 0
+            END
+        ) AS Solicitado
+    FROM Requerido requerido
+    OUTER APPLY
+    (
+        SELECT
+            SUM
+            (
+                CASE
+                    WHEN movimiento.TipoMovimiento IN
+                         (
+                             N'Salida',
+                             N'Consumo'
+                         )
+                        THEN movimiento.Cantidad
+                    WHEN movimiento.TipoMovimiento = N'Retorno'
+                        THEN -movimiento.Cantidad
+                    ELSE 0
+                END
+            ) AS CantidadEntregada
+        FROM dbo.AlmacenEmbalajes_Movimientos movimiento
+        WHERE movimiento.Activo = 1
+          AND movimiento.EmbalajeID =
+              requerido.EmbalajeID
+          AND
+          (
+              (
+                  NULLIF
+                  (
+                      LTRIM(RTRIM(requerido.FolioSolicitud)),
+                      N''
+                  ) IS NOT NULL
+                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                      LTRIM(RTRIM(requerido.FolioSolicitud))
+              )
+              OR
+              (
+                  NULLIF
+                  (
+                      LTRIM(RTRIM(requerido.NumeroOFRecibida)),
+                      N''
+                  ) IS NOT NULL
+                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                      LTRIM(RTRIM(requerido.NumeroOFRecibida))
+              )
+          )
+    ) entregado
+    GROUP BY requerido.EmbalajeID
+)
 SELECT TOP (500)
-    EmbalajeID AS MaterialID, Codigo, Nombre, Unidad,
-    Entradas, Salidas, Saldo, StockMinimo, StockAviso,
-    StockConfigurado,
-    CASE WHEN CostoUnitario IS NULL THEN 0 ELSE 1 END AS TieneCosto,
-    CostoUnitario, MonedaCosto, UnidadCosto, FuenteCosto, FechaCosto,
-    Semaforo, UltimoMovimiento
-FROM dbo.vw_AlmacenEmbalajesInventario
-WHERE (@Q IS NULL OR Codigo LIKE '%' + @Q + '%' OR Nombre LIKE '%' + @Q + '%')
-  AND (@Estado IS NULL OR Semaforo = @Estado)
-ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMARILLO' THEN 2 ELSE 3 END,
-         Nombre;";
+    inventario.EmbalajeID AS MaterialID,
+    inventario.Codigo,
+    inventario.Nombre,
+    inventario.Unidad,
+    inventario.Entradas,
+    inventario.Salidas,
+    inventario.Saldo,
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL(pendiente.Solicitado, 0)
+    ) AS Solicitado,
+    inventario.StockMinimo,
+    inventario.StockAviso,
+    inventario.StockConfigurado,
+    inventario.Semaforo,
+    inventario.UltimoMovimiento
+FROM dbo.vw_AlmacenEmbalajesInventario inventario
+LEFT JOIN PendientePorEmbalaje pendiente
+    ON pendiente.EmbalajeID =
+       inventario.EmbalajeID
+WHERE
+    (
+        @Q IS NULL
+        OR inventario.Codigo LIKE N'%' + @Q + N'%'
+        OR inventario.Nombre LIKE N'%' + @Q + N'%'
+    )
+    AND
+    (
+        @Estado IS NULL
+        OR inventario.Semaforo = @Estado
+    )
+ORDER BY
+    CASE inventario.Semaforo
+        WHEN N'SIN_CONFIGURAR' THEN 0
+        WHEN N'ROJO' THEN 1
+        WHEN N'AMARILLO' THEN 2
+        ELSE 3
+    END,
+    inventario.Nombre;";
 
-        await using (var command = new SqlCommand(sql, connection))
+        await using (var command =
+            new SqlCommand(sql, connection))
         {
-            command.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(vm.Busqueda) ? DBNull.Value : vm.Busqueda;
-            command.Parameters.Add("@Estado", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(vm.Estado) ? DBNull.Value : vm.Estado;
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            command.Parameters.Add(
+                "@Q",
+                SqlDbType.NVarChar,
+                250).Value =
+                string.IsNullOrWhiteSpace(vm.Busqueda)
+                    ? DBNull.Value
+                    : vm.Busqueda;
+
+            command.Parameters.Add(
+                "@Estado",
+                SqlDbType.NVarChar,
+                20).Value =
+                string.IsNullOrWhiteSpace(vm.Estado)
+                    ? DBNull.Value
+                    : vm.Estado;
+
+            await using var reader =
+                await command.ExecuteReaderAsync(cancellationToken);
+
             while (await reader.ReadAsync(cancellationToken))
             {
-                vm.Existencias.Add(new AlmacenMPExistenciaVm
-                {
-                    MaterialID = Entero(reader, "MaterialID"),
-                    Codigo = Texto(reader, "Codigo"),
-                    Nombre = Texto(reader, "Nombre"),
-                    Unidad = Texto(reader, "Unidad"),
-                    Entradas = DecimalValor(reader, "Entradas"),
-                    Salidas = DecimalValor(reader, "Salidas"),
-                    Saldo = DecimalValor(reader, "Saldo"),
-                    StockMinimo = DecimalValor(reader, "StockMinimo"),
-                    StockAviso = DecimalValor(reader, "StockAviso"),
-                    Semaforo = Texto(reader, "Semaforo"),
-                    StockConfigurado = Convert.ToBoolean(reader["StockConfigurado"]),
-                    TieneCosto = Convert.ToBoolean(reader["TieneCosto"]),
-                    CostoUnitario = DecimalValor(reader, "CostoUnitario"),
-                    MonedaCosto = Texto(reader, "MonedaCosto"),
-                    UnidadCosto = Texto(reader, "UnidadCosto"),
-                    FuenteCosto = Texto(reader, "FuenteCosto"),
-                    FechaCosto = Fecha(reader, "FechaCosto"),
-                    UltimoMovimiento = Fecha(reader, "UltimoMovimiento")
-                });
+                vm.Existencias.Add(
+                    new AlmacenMPExistenciaVm
+                    {
+                        MaterialID =
+                            Entero(reader, "MaterialID"),
+                        Codigo =
+                            Texto(reader, "Codigo"),
+                        Nombre =
+                            Texto(reader, "Nombre"),
+                        Unidad =
+                            Texto(reader, "Unidad"),
+                        Entradas =
+                            DecimalValor(reader, "Entradas"),
+                        Salidas =
+                            DecimalValor(reader, "Salidas"),
+                        Saldo =
+                            DecimalValor(reader, "Saldo"),
+                        Solicitado =
+                            DecimalValor(reader, "Solicitado"),
+                        StockMinimo =
+                            DecimalValor(reader, "StockMinimo"),
+                        StockAviso =
+                            DecimalValor(reader, "StockAviso"),
+                        Semaforo =
+                            Texto(reader, "Semaforo"),
+                        StockConfigurado =
+                            Convert.ToBoolean(
+                                reader["StockConfigurado"]),
+                        UltimoMovimiento =
+                            Fecha(reader, "UltimoMovimiento")
+                    });
             }
         }
 
         const string movimientosSql = @"
 SELECT TOP (60)
-    mm.MovimientoID, mm.FechaMovimiento, mm.EmbalajeID AS MaterialID,
-    e.Codigo, e.Nombre AS Material, mm.TipoMovimiento,
-    mm.Cantidad, mm.Unidad, mm.Lote,
-    CONCAT(u.Almacen, ' / ', u.Rack,
-        CASE WHEN u.Nivel IS NULL THEN '' ELSE ' / ' + u.Nivel END,
-        CASE WHEN u.Posicion IS NULL THEN '' ELSE ' / ' + u.Posicion END) AS Ubicacion,
-    ISNULL(mm.NumeroOF, '') AS NumeroOF,
-    COALESCE(mm.EntregadoPorNombre, p.Nombre + ' ' + ISNULL(p.ApellidoPaterno, ''), mm.CreadoPor, '') AS Responsable,
-    ISNULL(mm.Seguimiento, '') AS Observaciones,
-    ISNULL(mm.ReferenciaOperacion, '') AS ReferenciaOperacion
-FROM dbo.AlmacenEmbalajes_Movimientos mm
-INNER JOIN dbo.ERP_Embalajes e ON e.EmbalajeID = mm.EmbalajeID
-LEFT JOIN dbo.ERP_Ubicaciones u ON u.UbicacionID = mm.UbicacionID
-LEFT JOIN dbo.Usuarios us ON us.UsuarioID = mm.ResponsableUsuarioID
-LEFT JOIN dbo.Persona p ON p.PersonaID = us.PersonaID
-WHERE mm.Activo = 1
-ORDER BY mm.FechaMovimiento DESC, mm.MovimientoID DESC;";
+    movimiento.MovimientoID,
+    movimiento.FechaMovimiento,
+    movimiento.EmbalajeID AS MaterialID,
+    embalaje.Codigo,
+    embalaje.Nombre AS Material,
+    movimiento.TipoMovimiento,
+    movimiento.Cantidad,
+    movimiento.Unidad,
+    movimiento.Lote,
+    CONCAT
+    (
+        ubicacion.Almacen,
+        N' / ',
+        ubicacion.Rack,
+        CASE
+            WHEN ubicacion.Nivel IS NULL
+                THEN N''
+            ELSE N' / ' + ubicacion.Nivel
+        END,
+        CASE
+            WHEN ubicacion.Posicion IS NULL
+                THEN N''
+            ELSE N' / ' + ubicacion.Posicion
+        END
+    ) AS Ubicacion,
+    ISNULL(movimiento.NumeroOF, N'') AS NumeroOF,
+    COALESCE
+    (
+        movimiento.EntregadoPorNombre,
+        persona.Nombre + N' '
+            + ISNULL(persona.ApellidoPaterno, N''),
+        movimiento.CreadoPor,
+        N''
+    ) AS Responsable,
+    ISNULL(movimiento.Seguimiento, N'') AS Observaciones,
+    ISNULL
+    (
+        movimiento.ReferenciaOperacion,
+        N''
+    ) AS ReferenciaOperacion
+FROM dbo.AlmacenEmbalajes_Movimientos movimiento
+INNER JOIN dbo.ERP_Embalajes embalaje
+    ON embalaje.EmbalajeID =
+       movimiento.EmbalajeID
+LEFT JOIN dbo.ERP_Ubicaciones ubicacion
+    ON ubicacion.UbicacionID =
+       movimiento.UbicacionID
+LEFT JOIN dbo.Usuarios usuario
+    ON usuario.UsuarioID =
+       movimiento.ResponsableUsuarioID
+LEFT JOIN dbo.Persona persona
+    ON persona.PersonaID =
+       usuario.PersonaID
+WHERE movimiento.Activo = 1
+ORDER BY
+    movimiento.FechaMovimiento DESC,
+    movimiento.MovimientoID DESC;";
 
-        await using (var command = new SqlCommand(movimientosSql, connection))
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        await using (var command =
+            new SqlCommand(movimientosSql, connection))
+        await using (var reader =
+            await command.ExecuteReaderAsync(cancellationToken))
         {
             while (await reader.ReadAsync(cancellationToken))
-                vm.Movimientos.Add(LeerMovimiento(reader));
+            {
+                vm.Movimientos.Add(
+                    new AlmacenMPMovimientoListaVm
+                    {
+                        MovimientoID =
+                            EnteroLargo(reader, "MovimientoID"),
+                        FechaMovimiento =
+                            Fecha(reader, "FechaMovimiento")
+                            ?? DateTime.MinValue,
+                        MaterialID =
+                            Entero(reader, "MaterialID"),
+                        Codigo =
+                            Texto(reader, "Codigo"),
+                        Material =
+                            Texto(reader, "Material"),
+                        TipoMovimiento =
+                            Texto(reader, "TipoMovimiento"),
+                        Cantidad =
+                            DecimalValor(reader, "Cantidad"),
+                        Unidad =
+                            Texto(reader, "Unidad"),
+                        Lote =
+                            Texto(reader, "Lote"),
+                        Ubicacion =
+                            Texto(reader, "Ubicacion"),
+                        NumeroOF =
+                            Texto(reader, "NumeroOF"),
+                        Responsable =
+                            Texto(reader, "Responsable"),
+                        Observaciones =
+                            Texto(reader, "Observaciones"),
+                        ReferenciaOperacion =
+                            Texto(reader, "ReferenciaOperacion")
+                    });
+            }
         }
 
-        vm.TotalMateriales = vm.Existencias.Count;
-        vm.Criticos = vm.Existencias.Count(x => x.Semaforo == "ROJO");
-        vm.Advertencias = vm.Existencias.Count(x => x.Semaforo == "AMARILLO");
-        vm.Disponibles = vm.Existencias.Count(x => x.Semaforo == "VERDE");
-        vm.PendientesConfiguracion = vm.Existencias.Count(x => !x.StockConfigurado);
-        vm.SaldoTotal = vm.Existencias.Sum(x => x.Saldo);
+        // Misma estructura operativa utilizada en Inventario PT.
+        const string resumenSql = @"
+WITH Requerido AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        s.FolioSolicitud,
+        s.NumeroOFRecibida,
+        embalaje.EmbalajeID,
+        SUM
+        (
+            CONVERT
+            (
+                DECIMAL(18,4),
+                ISNULL(detalle.CantidadEmbalajes, 0)
+            )
+        ) AS CantidadRequerida
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle detalle
+        ON detalle.SolicitudProduccionID =
+           s.SolicitudProduccionID
+       AND detalle.Activo = 1
+    INNER JOIN dbo.ERP_Embalajes embalaje
+        ON embalaje.Activo = 1
+       AND UPPER
+           (
+               LTRIM
+               (
+                   RTRIM
+                   (
+                       ISNULL(detalle.EmbalajeCodigo, N'')
+                   )
+               )
+           ) =
+           UPPER(LTRIM(RTRIM(embalaje.Codigo)))
+    WHERE s.Activo = 1
+      AND ISNULL(detalle.CantidadEmbalajes, 0) > 0
+    GROUP BY
+        s.SolicitudProduccionID,
+        s.FolioSolicitud,
+        s.NumeroOFRecibida,
+        embalaje.EmbalajeID
+),
+Pendiente AS
+(
+    SELECT
+        requerido.SolicitudProduccionID,
+        requerido.EmbalajeID,
+        CASE
+            WHEN requerido.CantidadRequerida
+                 - ISNULL(entregado.CantidadEntregada, 0) > 0
+                THEN requerido.CantidadRequerida
+                     - ISNULL(entregado.CantidadEntregada, 0)
+            ELSE 0
+        END AS CantidadPendiente
+    FROM Requerido requerido
+    OUTER APPLY
+    (
+        SELECT
+            SUM
+            (
+                CASE
+                    WHEN movimiento.TipoMovimiento IN
+                         (
+                             N'Salida',
+                             N'Consumo'
+                         )
+                        THEN movimiento.Cantidad
+                    WHEN movimiento.TipoMovimiento = N'Retorno'
+                        THEN -movimiento.Cantidad
+                    ELSE 0
+                END
+            ) AS CantidadEntregada
+        FROM dbo.AlmacenEmbalajes_Movimientos movimiento
+        WHERE movimiento.Activo = 1
+          AND movimiento.EmbalajeID =
+              requerido.EmbalajeID
+          AND
+          (
+              (
+                  NULLIF
+                  (
+                      LTRIM(RTRIM(requerido.FolioSolicitud)),
+                      N''
+                  ) IS NOT NULL
+                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                      LTRIM(RTRIM(requerido.FolioSolicitud))
+              )
+              OR
+              (
+                  NULLIF
+                  (
+                      LTRIM(RTRIM(requerido.NumeroOFRecibida)),
+                      N''
+                  ) IS NOT NULL
+                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                      LTRIM(RTRIM(requerido.NumeroOFRecibida))
+              )
+          )
+    ) entregado
+)
+SELECT
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            SUM(CantidadPendiente),
+            0
+        )
+    ) AS SolicitadoPendiente,
+    CONVERT
+    (
+        INT,
+        COUNT(DISTINCT SolicitudProduccionID)
+    ) AS OFPendientes
+FROM Pendiente
+WHERE CantidadPendiente > 0.0005;
+
+SELECT
+    CONVERT
+    (
+        INT,
+        COUNT
+        (
+            CASE
+                WHEN TipoMovimiento = N'Entrada'
+                    THEN 1
+                ELSE NULL
+            END
+        )
+    ) AS RecepcionesHoy,
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            SUM
+            (
+                CASE
+                    WHEN TipoMovimiento = N'Entrada'
+                        THEN Cantidad
+                    ELSE 0
+                END
+            ),
+            0
+        )
+    ) AS CantidadRecibidaHoy,
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            SUM
+            (
+                CASE
+                    WHEN TipoMovimiento IN
+                         (
+                             N'Salida',
+                             N'Consumo',
+                             N'Scrap',
+                             N'AjusteNegativo'
+                         )
+                        THEN Cantidad
+                    ELSE 0
+                END
+            ),
+            0
+        )
+    ) AS SalidasHoy
+FROM dbo.AlmacenEmbalajes_Movimientos
+WHERE Activo = 1
+  AND FechaMovimiento >= CONVERT(DATE, GETDATE())
+  AND FechaMovimiento <
+      DATEADD
+      (
+          DAY,
+          1,
+          CONVERT(DATE, GETDATE())
+      );";
+
+        await using (var command =
+            new SqlCommand(resumenSql, connection))
+        await using (var reader =
+            await command.ExecuteReaderAsync(cancellationToken))
+        {
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                vm.SolicitadoPendiente =
+                    DecimalValor(
+                        reader,
+                        "SolicitadoPendiente");
+
+                vm.OFPendientes =
+                    Entero(reader, "OFPendientes");
+            }
+
+            if (await reader.NextResultAsync(cancellationToken)
+                && await reader.ReadAsync(cancellationToken))
+            {
+                vm.RecepcionesHoy =
+                    Entero(reader, "RecepcionesHoy");
+
+                vm.CantidadRecibidaHoy =
+                    DecimalValor(
+                        reader,
+                        "CantidadRecibidaHoy");
+
+                vm.SalidasHoy =
+                    DecimalValor(reader, "SalidasHoy");
+            }
+        }
+
+        vm.TotalMateriales =
+            vm.Existencias.Count;
+
+        vm.Criticos =
+            vm.Existencias.Count(
+                item => item.Semaforo == "ROJO");
+
+        vm.Advertencias =
+            vm.Existencias.Count(
+                item => item.Semaforo == "AMARILLO");
+
+        vm.Disponibles =
+            vm.Existencias.Count(
+                item => item.Semaforo == "VERDE");
+
+        vm.PendientesConfiguracion =
+            vm.Existencias.Count(
+                item => !item.StockConfigurado);
+
+        vm.SaldoTotal =
+            vm.Existencias.Sum(item => item.Saldo);
+
         return View(vm);
     }
-
-    [HttpGet]
+[HttpGet]
     public async Task<IActionResult> Historial(string? embalaje, string? q, string? tipo,
         string? numeroOF, string? responsable, string? lote, DateTime? desde, DateTime? hasta,
         int pagina = 1, CancellationToken cancellationToken = default)
