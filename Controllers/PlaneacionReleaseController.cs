@@ -14,7 +14,7 @@ using static ERP.NSQuell.Models.PlaneacionReleaseEstatus;
 
 namespace ERP.NSQuell.Controllers
 {
-    public class PlaneacionReleaseController : Controller
+    public partial class PlaneacionReleaseController : Controller
     {
 
         private readonly IConfiguration _configuration;
