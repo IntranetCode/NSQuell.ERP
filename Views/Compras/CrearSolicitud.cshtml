@@ -411,7 +411,7 @@
             <div class="row g-3">
                 <div class="col-12 col-md-4">
                     <label asp-for="TipoCompra" class="form-label">Tipo de compra</label>
-                    <select asp-for="TipoCompra" asp-items="Model.TiposCompra" class="form-select">
+                    <select asp-for="TipoCompra" asp-items="Model.TiposCompra" class="form-select" id="tipoCompraSelect">
                         <option value="">Seleccione el tipo de compra</option>
                     </select>
                     <span asp-validation-for="TipoCompra" class="text-danger"></span>
@@ -455,7 +455,7 @@
                 </div>
 
                 <button type="button" class="btn-compras-secondary" id="btnAgregarMaterial">
-                    + Agregar material
+                    + Agregar material / concepto
                 </button>
             </div>
 
@@ -479,7 +479,18 @@
                             <input type="hidden" name="Materiales[@i].SolicitudDetalleID" value="@Model.Materiales[i].SolicitudDetalleID" />
 
                             <div class="row g-3">
-                                <div class="col-12 col-lg-6">
+                                <div class="col-12 col-lg-6 campo-concepto-manual d-none">
+                                    <label class="form-label">Descripción / concepto</label>
+                                    <input name="Materiales[@i].DescripcionMaterial"
+                                           value="@Model.Materiales[i].DescripcionMaterial"
+                                           class="form-control descripcion-manual"
+                                           placeholder="Ej. Servicio de mantenimiento, herramienta, refacción, consumible..." />
+                                    <span class="stock-hint">
+                                        Para compras que no sean materia prima, captura manualmente el concepto solicitado.
+                                    </span>
+                                </div>
+
+                                <div class="col-12 col-lg-6 campo-material-catalogo">
                                     <label class="form-label">Material</label>
                                     <select name="Materiales[@i].ProductoID" class="form-select material-select">
                                         @foreach (var material in Model.MaterialesCatalogo)
@@ -499,7 +510,7 @@
                                     </span>
                                 </div>
 
-                                <div class="col-12 col-md-6 col-lg-3">
+                                <div class="col-12 col-md-6 col-lg-3 campo-catalogo-only">
                                     <label class="form-label">Código</label>
                                     <input name="Materiales[@i].CodigoMaterial"
                                            value="@Model.Materiales[i].CodigoMaterial"
@@ -515,7 +526,7 @@
                                            readonly />
                                 </div>
 
-                                <div class="col-12 col-md-6 col-lg-3">
+                                <div class="col-12 col-md-6 col-lg-3 campo-catalogo-only">
                                     <label class="form-label">Stock actual</label>
                                     <input name="Materiales[@i].StockActual"
                                            value="@Model.Materiales[i].StockActual"
@@ -523,7 +534,7 @@
                                            readonly />
                                 </div>
 
-                                <div class="col-12 col-md-6 col-lg-3">
+                                <div class="col-12 col-md-6 col-lg-3 campo-catalogo-only">
                                     <label class="form-label">Stock mínimo</label>
                                     <input name="Materiales[@i].StockMinimo"
                                            value="@Model.Materiales[i].StockMinimo"
@@ -581,7 +592,7 @@
             </div>
 
             <div id="sinMateriales" class="help-box mt-3 d-none">
-                No hay materiales agregados. Presiona <strong>Agregar material</strong> para capturar el primero.
+                No hay materiales o conceptos agregados. Presiona <strong>Agregar material</strong> para capturar el primero.
             </div>
         </section>
 
@@ -619,6 +630,78 @@
             const container = document.getElementById('materialesContainer');
             const btnAgregar = document.getElementById('btnAgregarMaterial');
             const sinMateriales = document.getElementById('sinMateriales');
+            const tipoCompraSelect = document.getElementById('tipoCompraSelect');
+
+            function esMateriaPrima() {
+                const valor = (tipoCompraSelect?.value || '').trim().toLowerCase();
+                return valor === '' || valor === 'materia prima';
+            }
+
+            function aplicarModoTipoCompra() {
+                const modoMateriaPrima = esMateriaPrima();
+                const cards = container.querySelectorAll('.material-card');
+
+                cards.forEach(card => {
+                    const campoCatalogo = card.querySelector('.campo-material-catalogo');
+                    const campoManual = card.querySelector('.campo-concepto-manual');
+                    const camposCatalogoOnly = card.querySelectorAll('.campo-catalogo-only');
+
+                    const materialSelect = card.querySelector('.material-select');
+                    const descripcionManual = card.querySelector('.descripcion-manual');
+                    const codigoInput = card.querySelector('.codigo-material');
+                    const unidadInput = card.querySelector('.unidad-material');
+                    const stockActualInput = card.querySelector('.stock-actual');
+                    const stockMinimoInput = card.querySelector('.stock-minimo');
+                    const warningBox = card.querySelector('.stock-warning');
+
+                    if (campoCatalogo) {
+                        campoCatalogo.classList.toggle('d-none', !modoMateriaPrima);
+                    }
+
+                    if (campoManual) {
+                        campoManual.classList.toggle('d-none', modoMateriaPrima);
+                    }
+
+                    camposCatalogoOnly.forEach(field => {
+                        field.classList.toggle('d-none', !modoMateriaPrima);
+                    });
+
+                    if (materialSelect) {
+                        materialSelect.required = modoMateriaPrima;
+
+                        if (!modoMateriaPrima) {
+                            materialSelect.value = '';
+                        }
+                    }
+
+                    if (descripcionManual) {
+                        descripcionManual.required = !modoMateriaPrima;
+                    }
+
+                    if (unidadInput) {
+                        unidadInput.readOnly = modoMateriaPrima;
+
+                        if (!modoMateriaPrima) {
+                            unidadInput.placeholder = 'Ej. pza, servicio, lote, caja...';
+                        } else {
+                            unidadInput.placeholder = '';
+                        }
+                    }
+
+                    if (!modoMateriaPrima) {
+                        if (codigoInput) codigoInput.value = '';
+                        if (stockActualInput) stockActualInput.value = '';
+                        if (stockMinimoInput) stockMinimoInput.value = '';
+
+                        if (warningBox) {
+                            warningBox.textContent = '';
+                            warningBox.classList.remove('is-visible');
+                        }
+                    } else if (materialSelect && materialSelect.value) {
+                        cargarDatosMaterial(materialSelect);
+                    }
+                });
+            }
 
             function construirOptionsMateriales() {
                 return materialesCatalogo.map(item => {
@@ -660,6 +743,10 @@
             }
 
             async function cargarDatosMaterial(select) {
+                if (!esMateriaPrima()) {
+                    return;
+                }
+
                 const materialId = select.value;
                 const card = select.closest('.material-card');
 
@@ -703,6 +790,10 @@
             }
 
             function validarStockCard(card) {
+                if (!esMateriaPrima()) {
+                    return;
+                }
+
                 const stockActualInput = card.querySelector('.stock-actual');
                 const stockMinimoInput = card.querySelector('.stock-minimo');
                 const cantidadInput = card.querySelector('.cantidad-solicitada');
@@ -747,7 +838,17 @@
                     <input type="hidden" name="Materiales[${index}].SolicitudDetalleID" value="0" />
 
                     <div class="row g-3">
-                        <div class="col-12 col-lg-6">
+                        <div class="col-12 col-lg-6 campo-concepto-manual d-none">
+                            <label class="form-label">Descripción / concepto</label>
+                            <input name="Materiales[${index}].DescripcionMaterial"
+                                   class="form-control descripcion-manual"
+                                   placeholder="Ej. Servicio de mantenimiento, herramienta, refacción, consumible..." />
+                            <span class="stock-hint">
+                                Para compras que no sean materia prima, captura manualmente el concepto solicitado.
+                            </span>
+                        </div>
+
+                        <div class="col-12 col-lg-6 campo-material-catalogo">
                             <label class="form-label">Material</label>
                             <select name="Materiales[${index}].ProductoID"
                                     class="form-select material-select">
@@ -758,7 +859,7 @@
                             </span>
                         </div>
 
-                        <div class="col-12 col-md-6 col-lg-3">
+                        <div class="col-12 col-md-6 col-lg-3 campo-catalogo-only">
                             <label class="form-label">Código</label>
                             <input name="Materiales[${index}].CodigoMaterial"
                                    class="form-control codigo-material"
@@ -772,14 +873,14 @@
                                    readonly />
                         </div>
 
-                        <div class="col-12 col-md-6 col-lg-3">
+                        <div class="col-12 col-md-6 col-lg-3 campo-catalogo-only">
                             <label class="form-label">Stock actual</label>
                             <input name="Materiales[${index}].StockActual"
                                    class="form-control stock-actual"
                                    readonly />
                         </div>
 
-                        <div class="col-12 col-md-6 col-lg-3">
+                        <div class="col-12 col-md-6 col-lg-3 campo-catalogo-only">
                             <label class="form-label">Stock mínimo</label>
                             <input name="Materiales[${index}].StockMinimo"
                                    class="form-control stock-minimo"
@@ -838,6 +939,7 @@
 
                 container.appendChild(nuevo);
                 actualizarIndices();
+                aplicarModoTipoCompra();
 
                 nuevo.scrollIntoView({
                     behavior: 'smooth',
@@ -862,6 +964,7 @@
                 if (card) {
                     card.remove();
                     actualizarIndices();
+                    aplicarModoTipoCompra();
                 }
             });
 
@@ -888,9 +991,14 @@
             }
 
             actualizarIndices();
+            aplicarModoTipoCompra();
+
+            if (tipoCompraSelect) {
+                tipoCompraSelect.addEventListener('change', aplicarModoTipoCompra);
+            }
 
             container.querySelectorAll('.material-select').forEach(select => {
-                if (select.value) {
+                if (esMateriaPrima() && select.value) {
                     cargarDatosMaterial(select);
                 }
             });
