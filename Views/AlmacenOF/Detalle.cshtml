@@ -1,0 +1,155 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFDetalleVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = $"Detalle {Model.NumeroOFClave}";
+    var numeroOf = !string.IsNullOrWhiteSpace(Model.NumeroOFRecibida)
+        ? Model.NumeroOFRecibida
+        : Model.FolioSolicitud;
+}
+
+<link rel="stylesheet" href="~/css/Almacen/almacen-of-v4.css" asp-append-version="true" />
+
+<section class="alm-hero of4-detail-hero">
+    <div>
+        <small>ALMACÉN · DETALLE DE OF</small>
+        <h1>@Model.NumeroOFClave</h1>
+        <p>Información operativa para surtimiento, avances parciales y trazabilidad de entregas de materiales.</p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn secondary" asp-controller="AlmacenOF" asp-action="Index">
+            <i class="fa-solid fa-arrow-left"></i> Volver a Material OF
+        </a>        <!-- ALMACEN_OF_DETALLE_HISTORICO_V4_2 -->
+        <a class="alm-btn secondary" asp-controller="AlmacenOF" asp-action="Historico">
+            <i class="fa-solid fa-clock-rotate-left"></i> Histórico OF
+        </a>
+    </div>
+</section>
+
+<section class="alm-grid of4-detail-kpis of5-detail-kpis">
+    <div class="alm-kpi"><small>MP requerida</small><strong>@Model.MpRequerida.ToString("N3") KG</strong></div>
+    <div class="alm-kpi"><small>MP pendiente</small><strong>@Model.MpPendiente.ToString("N3") KG</strong></div>
+    <div class="alm-kpi"><small>Embalaje requerido</small><strong>@Model.EmbalajeRequerido.ToString("N0") PZA</strong></div>
+    <div class="alm-kpi"><small>Embalaje pendiente</small><strong>@Model.EmbalajePendiente.ToString("N0") PZA</strong></div>
+    <div class="alm-kpi of5-pt-kpi"><small>PT solicitado</small><strong>@Model.PtRequerida.ToString("N0") PZA</strong></div>
+    <div class="alm-kpi of5-pt-kpi"><small>PT disponible</small><strong>@Model.PtDisponible.ToString("N0") PZA</strong></div>
+</section>
+
+<section class="alm-card of4-detail-summary">
+    <header><span>Datos necesarios para Almacén</span><span class="of-status">@Model.EstatusNombre</span></header>
+    <div class="of4-info-grid">
+        <div><small>Cliente</small><strong>@(string.IsNullOrWhiteSpace(Model.Cliente) ? "Sin cliente" : Model.Cliente)</strong></div>
+        <div class="of5-machine-info"><small>Máquina asignada</small><strong>@(string.IsNullOrWhiteSpace(Model.Maquina) ? "Sin maquina asignada" : Model.Maquina)</strong></div>
+        <div><small>Prioridad</small><strong>@Model.Prioridad</strong></div>
+        <div><small>Responsable de Planeación</small><strong>@(string.IsNullOrWhiteSpace(Model.ResponsablePlaneacion) ? "Sin responsable" : Model.ResponsablePlaneacion)</strong></div>
+        <div><small>Fecha de solicitud</small><strong>@Model.FechaSolicitud.ToString("dd/MM/yyyy")</strong></div>
+        <div><small>Fecha requerida</small><strong>@(Model.FechaRequerida?.ToString("dd/MM/yyyy") ?? "Sin fecha")</strong></div>
+        <div><small>Inicio planeado</small><strong>@(Model.FechaInicioPlaneada?.ToString("dd/MM/yyyy HH:mm") ?? "Sin fecha")</strong></div>
+        <div><small>Fin planeado</small><strong>@(Model.FechaFinPlaneada?.ToString("dd/MM/yyyy HH:mm") ?? "Sin fecha")</strong></div>
+    </div>
+</section>
+
+<section class="alm-card of4-detail-lines">
+    <header><span>Materiales solicitados por renglón</span><span>@Model.Renglones.Count renglón(es)</span></header>
+    <div class="of4-line-list">
+        @foreach (var row in Model.Renglones)
+        {
+            var hasMp = row.MpRequerida > 0 || !string.IsNullOrWhiteSpace(row.MaterialCodigo);
+            var hasPackaging = row.EmbalajeRequerido > 0 || !string.IsNullOrWhiteSpace(row.EmbalajeCodigo);
+            var hasPt = row.PtRequerida > 0;
+            var mpPercent = row.MpRequerida <= 0 ? 0 : Math.Min(100m, row.MpEntregada / row.MpRequerida * 100m);
+            var packagingPercent = row.EmbalajeRequerido <= 0 ? 0 : Math.Min(100m, row.EmbalajeEntregado / row.EmbalajeRequerido * 100m);
+            var ptPercent = row.PtRequerida <= 0 ? 0 : Math.Min(100m, row.PtEntregada / row.PtRequerida * 100m);
+
+            <article class="of4-line-card">
+                <div class="of4-line-context">
+                    <span>Renglón @row.Renglon</span>
+                    <strong>@(string.IsNullOrWhiteSpace(row.NumeroParte) ? "Sin número de parte" : row.NumeroParte)</strong>
+                    <small>@row.DescripcionParte</small>
+                    <em>@row.CantidadPiezas.ToString("N0") pieza(s)</em>
+                </div>
+
+                <div class="of4-line-materials of5-line-materials">
+                    @if (hasMp)
+                    {
+                        <div class="of4-detail-material">
+                            <div class="of4-detail-material-head">
+                                <span><i class="fa-solid fa-flask"></i> Materia prima</span>
+                                @if (row.MaterialID > 0 && row.MpPendiente > 0)
+                                {
+                                    <a asp-controller="AlmacenMP" asp-action="Movimiento" asp-route-materialId="@row.MaterialID"
+                                       asp-route-solicitudProduccionId="@Model.SolicitudProduccionID" asp-route-entregaOF="true">Entregar</a>
+                                }
+                            </div>
+                            <strong>@row.MaterialCodigo</strong><small>@row.MaterialDescripcion</small>
+                            <div class="of4-detail-flow"><span><b>@row.MpEntregada.ToString("N3") / @row.MpRequerida.ToString("N3") KG</b><em>Pendiente @row.MpPendiente.ToString("N3") KG</em></span><i><b style="width:@mpPercent%"></b></i></div>
+                        </div>
+                    }
+
+                    @if (hasPackaging)
+                    {
+                        <div class="of4-detail-material">
+                            <div class="of4-detail-material-head">
+                                <span><i class="fa-solid fa-box-open"></i> Embalaje</span>
+                                @if (row.EmbalajeID > 0 && row.EmbalajePendiente > 0)
+                                {
+                                    <a asp-controller="AlmacenEmbalajes" asp-action="Movimiento" asp-route-embalajeId="@row.EmbalajeID"
+                                       asp-route-solicitudProduccionId="@Model.SolicitudProduccionID" asp-route-entregaOF="true">Entregar</a>
+                                }
+                            </div>
+                            <strong>@row.EmbalajeCodigo</strong><small>@row.EmbalajeDescripcion</small>
+                            <div class="of4-detail-flow"><span><b>@row.EmbalajeEntregado.ToString("N0") / @row.EmbalajeRequerido.ToString("N0") PZA</b><em>Pendiente @row.EmbalajePendiente.ToString("N0") PZA</em></span><i><b style="width:@packagingPercent%"></b></i></div>
+                        </div>
+                    }
+
+                    @if (hasPt)
+                    {
+                        var cantidadSugerida = Convert.ToInt32(Math.Min(row.PtPendiente, row.PtDisponible));
+                        <div class="of4-detail-material of5-detail-pt">
+                            <div class="of4-detail-material-head">
+                                <span><i class="fa-solid fa-boxes-stacked"></i> Producto terminado</span>
+                                @if (row.ParteID > 0 && row.PtPendiente > 0 && cantidadSugerida > 0)
+                                {
+                                    <a asp-controller="AlmacenPT" asp-action="Movimiento" asp-route-parteId="@row.ParteID"
+                                       asp-route-tipo="Salida" asp-route-numeroOF="@numeroOf" asp-route-cantidad="@cantidadSugerida">Surtir PT</a>
+                                }
+                            </div>
+                            <strong>@row.NumeroParte</strong>
+                            <small>Disponible actual: @row.PtDisponible.ToString("N0") PZA</small>
+                            <div class="of4-detail-flow"><span><b>@row.PtEntregada.ToString("N0") / @row.PtRequerida.ToString("N0") PZA</b><em>Pendiente @row.PtPendiente.ToString("N0") PZA</em></span><i><b style="width:@ptPercent%"></b></i></div>
+                            @if (row.PtPendiente > 0 && row.PtDisponible <= 0)
+                            {
+                                <div class="of5-no-stock"><i class="fa-solid fa-triangle-exclamation"></i> Sin PT disponible para surtir.</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </article>
+        }
+
+        @if (!Model.Renglones.Any())
+        {
+            <div class="alm-empty">La OF no tiene renglones activos.</div>
+        }
+    </div>
+</section>
+
+<section class="alm-card of4-history">
+    <header><span>Historial de trazabilidad de entregas</span><span>@Model.Entregas.Count movimiento(s)</span></header>
+    <div class="of4-history-list">
+        @foreach (var delivery in Model.Entregas)
+        {
+            <article class="of4-history-row">
+                <div class="of4-history-date"><strong>@delivery.Fecha.ToString("dd/MM/yyyy")</strong><small>@delivery.Fecha.ToString("HH:mm")</small></div>
+                <div class="of4-history-type"><span>@delivery.Area</span><strong>@delivery.TipoMovimiento</strong></div>
+                <div class="of4-history-material"><strong>@delivery.Codigo</strong><small>@delivery.Descripcion</small></div>
+                <div class="of4-history-quantity"><strong>@delivery.Cantidad.ToString("N3") @delivery.Unidad</strong></div>
+                <div class="of4-history-people"><span>Entregó</span><strong>@(string.IsNullOrWhiteSpace(delivery.Responsable) ? "Usuario no registrado" : delivery.Responsable)</strong><span>Recibió</span><strong>@(string.IsNullOrWhiteSpace(delivery.Recibio) ? "Persona no registrada" : delivery.Recibio)</strong></div>
+                @if (!string.IsNullOrWhiteSpace(delivery.Observaciones)) { <div class="of4-history-notes">@delivery.Observaciones</div> }
+            </article>
+        }
+        @if (!Model.Entregas.Any())
+        {
+            <div class="alm-empty">Todavía no existen movimientos de MP, embalajes o PT asociados a esta OF.</div>
+        }
+    </div>
+</section>

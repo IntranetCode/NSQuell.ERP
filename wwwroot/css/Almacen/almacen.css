@@ -1232,3 +1232,22 @@ body {
 }
 /* RESPONSIVE_ALMACEN_V8_END */
 
+
+/* ALMACEN_INVENTARIOS_FILAS_COMPACTAS_V1_0 */
+.mp-stock-state {
+    display: none !important;
+}
+
+@media (min-width: 769px) {
+    .pt-client-table tbody td {
+        padding-top: 8px;
+        padding-bottom: 8px;
+        vertical-align: middle;
+    }
+
+    .pt-client-table .pt-stock,
+    .pt-client-table .pt-requested,
+    .pt-client-table .pt-last-movement {
+        vertical-align: middle;
+    }
+}

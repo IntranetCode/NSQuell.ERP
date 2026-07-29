@@ -2012,7 +2012,14 @@ ORDER BY ParteID;";
     }
 
     [HttpGet]
-    public async Task<IActionResult> Movimiento(int? parteId, int? cajaId, string? tipo, CancellationToken cancellationToken)
+    // ALMACEN_PT_PREFILL_OF_V4_1
+    public async Task<IActionResult> Movimiento(
+        int? parteId,
+        int? cajaId,
+        string? tipo,
+        string? numeroOF,
+        int? cantidad,
+        CancellationToken cancellationToken)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
@@ -2020,7 +2027,12 @@ ORDER BY ParteID;";
         {
             ParteID = parteId.GetValueOrDefault(),
             CajaID = cajaId,
-            TipoMovimiento = TiposPermitidos.Contains(tipo ?? string.Empty) ? tipo! : "Salida"
+            TipoMovimiento = TiposPermitidos.Contains(tipo ?? string.Empty) ? tipo! : "Salida",
+            NumeroOF = numeroOF?.Trim(),
+            Cantidad = cantidad.GetValueOrDefault() > 0 ? cantidad.GetValueOrDefault() : 0,
+            Observaciones = !string.IsNullOrWhiteSpace(numeroOF)
+                ? $"Surtimiento de producto terminado para la OF {numeroOF.Trim()}."
+                : null
         };
         await CargarMovimientoAsync(vm, cancellationToken);
         return View(vm);

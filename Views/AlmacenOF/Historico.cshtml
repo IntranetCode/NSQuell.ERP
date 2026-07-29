@@ -1,0 +1,172 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Histórico de OF entregadas";
+
+    string NombreMaquina(string? maquina) =>
+        string.IsNullOrWhiteSpace(maquina)
+            ? "Sin máquina asignada"
+            : maquina.Trim();
+
+    var ordenesCompletadas = Model.Ordenes
+        .Where(x => x.EntregaCompletaAlmacen)
+        .OrderByDescending(x => x.FechaSolicitud)
+        .ThenByDescending(x => x.SolicitudProduccionID)
+        .ToList();
+
+    var gruposMaquina = ordenesCompletadas
+        .GroupBy(x => NombreMaquina(x.Maquina), System.StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x.Key.Equals("Sin máquina asignada", System.StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+        .ThenBy(x => x.Key)
+        .ToList();
+}
+
+<link rel="stylesheet" href="~/css/Almacen/almacen-of-v4.css" asp-append-version="true" />
+
+<section class="alm-hero of4-hero">
+    <div>
+        <small>ALMACÉN · TRAZABILIDAD</small>
+        <h1>Histórico de OF entregadas</h1>
+        <p>
+            Órdenes cuyo surtimiento de materia prima, embalajes y producto terminado ya fue completado.
+            El detalle conserva la trazabilidad completa de cada entrega.
+        </p>
+    </div>
+
+    <div class="alm-actions">
+        <a class="alm-btn" asp-controller="AlmacenOF" asp-action="Index">
+            <i class="fa-solid fa-list-check"></i> Entregas pendientes
+        </a>
+        <a class="alm-btn secondary" asp-controller="AlmacenMP" asp-action="Index">
+            <i class="fa-solid fa-flask"></i> Inventario MP
+        </a>
+        <a class="alm-btn secondary" asp-controller="AlmacenPT" asp-action="Index">
+            <i class="fa-solid fa-boxes-stacked"></i> Inventario PT
+        </a>
+    </div>
+</section>
+
+@if (!Model.Configurado)
+{
+    <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
+}
+else
+{
+    <section class="alm-grid of4-kpis of6-history-kpis">
+        <div class="alm-kpi"><small>OF entregadas</small><strong>@ordenesCompletadas.Count</strong></div>
+        <div class="alm-kpi"><small>Máquinas</small><strong>@gruposMaquina.Count</strong></div>
+        <div class="alm-kpi"><small>Piezas planeadas</small><strong>@(ordenesCompletadas.Sum(x => (long)x.TotalPiezas).ToString("N0"))</strong></div>
+    </section>
+
+    <section class="alm-card of4-catalog of6-history-catalog">
+        <header class="of4-card-header">
+            <div>
+                <strong>OF con entrega completa</strong>
+                <small>Máximo 500 órdenes recientes por consulta</small>
+            </div>
+        </header>
+
+        <form method="get" asp-controller="AlmacenOF" asp-action="Historico" class="of4-filter of6-history-filter">
+            <div class="alm-field of4-search">
+                <label for="q">Buscar OF, cliente, parte o material</label>
+                <input id="q" class="alm-input" type="search" name="q" value="@Model.Busqueda"
+                       placeholder="Folio, OF, cliente, parte o material" />
+            </div>
+
+            <div class="alm-field">
+                <label for="desde">Desde</label>
+                <input id="desde" class="alm-input" type="date" name="desde" value="@Model.Desde?.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <div class="alm-field">
+                <label for="hasta">Hasta</label>
+                <input id="hasta" class="alm-input" type="date" name="hasta" value="@Model.Hasta?.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <div class="of4-filter-actions">
+                <button class="alm-btn" type="submit"><i class="fa-solid fa-magnifying-glass"></i> Consultar</button>
+                <a class="alm-btn secondary" asp-controller="AlmacenOF" asp-action="Historico">
+                    <i class="fa-solid fa-filter-circle-xmark"></i> Limpiar
+                </a>
+            </div>
+        </form>
+
+        <div class="of5-machine-list of6-history-machine-list">
+            @foreach (var grupo in gruposMaquina)
+            {
+                var ordenesMaquina = grupo.ToList();
+
+                <details class="of5-machine-group of6-history-machine">
+                    <summary class="of5-machine-head">
+                        <span class="of5-machine-title">
+                            <span class="of5-machine-icon"><i class="fa-solid fa-industry"></i></span>
+                            <span>
+                                <small>Máquina</small>
+                                <strong>@grupo.Key</strong>
+                            </span>
+                        </span>
+
+                        <span class="of5-machine-metrics">
+                            <span class="is-complete"><small>OF entregadas</small><strong>@ordenesMaquina.Count</strong></span>
+                            <i class="fa-solid fa-chevron-down of5-machine-chevron"></i>
+                        </span>
+                    </summary>
+
+                    <div class="of6-history-orders">
+                        @foreach (var x in ordenesMaquina)
+                        {
+                            <article class="of6-history-row">
+                                <div class="of6-history-of">
+                                    <span class="of4-icon"><i class="fa-solid fa-circle-check"></i></span>
+                                    <div>
+                                        <a asp-controller="AlmacenOF" asp-action="Detalle" asp-route-id="@x.SolicitudProduccionID">
+                                            @x.NumeroOFClave
+                                        </a>
+                                        <small>@(string.IsNullOrWhiteSpace(x.FolioSolicitud) ? "Folio no asignado" : x.FolioSolicitud)</small>
+                                    </div>
+                                </div>
+
+                                <div class="of6-history-client">
+                                    <small>Cliente</small>
+                                    <strong title="@x.Cliente">@(string.IsNullOrWhiteSpace(x.Cliente) ? "Sin cliente" : x.Cliente)</strong>
+                                </div>
+
+                                <div class="of6-history-date">
+                                    <small>Solicitud</small>
+                                    <strong>@x.FechaSolicitud.ToString("dd/MM/yyyy")</strong>
+                                    <span>Requerida: @(x.FechaRequerida?.ToString("dd/MM/yyyy") ?? "Sin fecha")</span>
+                                </div>
+
+                                <div class="of6-history-summary">
+                                    <span><i class="fa-solid fa-flask"></i> @x.MaterialesEntrega.Count MP</span>
+                                    <span><i class="fa-solid fa-box-open"></i> @x.EmbalajesEntrega.Count embalaje(s)</span>
+                                    @if (x.PartesEntrega.Any())
+                                    {
+                                        <span><i class="fa-solid fa-boxes-stacked"></i> @x.PartesEntrega.Count PT</span>
+                                    }
+                                </div>
+
+                                <div class="of6-history-state">
+                                    <span class="of6-complete-badge"><i class="fa-solid fa-check"></i> Entrega completa</span>
+                                    <small>@x.EstatusNombre</small>
+                                </div>
+
+                                <a class="of4-detail-btn" asp-controller="AlmacenOF" asp-action="Detalle"
+                                   asp-route-id="@x.SolicitudProduccionID" title="Ver trazabilidad de la OF">
+                                    <i class="fa-solid fa-eye"></i><span>Ver detalle</span>
+                                </a>
+                            </article>
+                        }
+                    </div>
+                </details>
+            }
+
+            @if (!ordenesCompletadas.Any())
+            {
+                <div class="alm-empty of4-empty">
+                    No existen OF con entrega completa para los filtros seleccionados.
+                </div>
+            }
+        </div>
+    </section>
+}

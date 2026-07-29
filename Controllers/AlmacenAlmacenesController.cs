@@ -1,0 +1,17 @@
+﻿using ERP.NSQuell.Models.ViewModels.Almacen;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using System.Data;
+using System.Security.Claims;
+
+namespace ERP.NSQuell.Controllers;
+
+public sealed class AlmacenAlmacenesController : Controller
+{
+    private readonly IConfiguration _configuration;
+    public AlmacenAlmacenesController(IConfiguration configuration)=>_configuration=configuration;
+    private string ConnectionString=>_configuration.GetConnectionString("DefaultConnection")??throw new InvalidOperationException("No se encontro DefaultConnection.");
+    private string UsuarioNombre=>User.Identity?.Name??User.FindFirstValue(ClaimTypes.Name)??"Usuario ERP";
+    [HttpGet] public async Task<IActionResult> Index(CancellationToken ct){var rows=new List<AlmacenMaestroVm>();await using var cn=new SqlConnection(ConnectionString);await cn.OpenAsync(ct);await using var cmd=new SqlCommand("SELECT AlmacenID,Codigo,Nombre,TipoAlmacen,Descripcion,PermiteNegativos,Activo FROM dbo.ERP_Almacenes ORDER BY Activo DESC,Nombre",cn);await using var rd=await cmd.ExecuteReaderAsync(ct);while(await rd.ReadAsync(ct))rows.Add(new(){AlmacenID=Convert.ToInt32(rd["AlmacenID"]),Codigo=Convert.ToString(rd["Codigo"])??"",Nombre=Convert.ToString(rd["Nombre"])??"",TipoAlmacen=Convert.ToString(rd["TipoAlmacen"])??"OTRO",Descripcion=Convert.ToString(rd["Descripcion"]),PermiteNegativos=Convert.ToBoolean(rd["PermiteNegativos"]),Activo=Convert.ToBoolean(rd["Activo"])});return View(rows);}
+    [HttpPost,ValidateAntiForgeryToken] public async Task<IActionResult> Guardar(AlmacenMaestroVm model,CancellationToken ct){if(!ModelState.IsValid){TempData["AlmacenError"]="Revisa los datos del almacen.";return RedirectToAction(nameof(Index));}model.Codigo=model.Codigo.Trim().ToUpperInvariant();model.Nombre=model.Nombre.Trim();var permitidos=new[]{"GENERAL","MP","EMBALAJES","PT","REFACCIONES","INSUMOS","EPP","OTRO"};if(!permitidos.Contains(model.TipoAlmacen))model.TipoAlmacen="OTRO";await using var cn=new SqlConnection(ConnectionString);await cn.OpenAsync(ct);const string sql=@"IF @Id IS NULL INSERT dbo.ERP_Almacenes(Codigo,Nombre,TipoAlmacen,Descripcion,PermiteNegativos,Activo,CreadoPor) VALUES(@Codigo,@Nombre,@Tipo,@Descripcion,@Permite,@Activo,@Usuario) ELSE UPDATE dbo.ERP_Almacenes SET Codigo=@Codigo,Nombre=@Nombre,TipoAlmacen=@Tipo,Descripcion=@Descripcion,PermiteNegativos=@Permite,Activo=@Activo,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario WHERE AlmacenID=@Id;";await using var cmd=new SqlCommand(sql,cn);cmd.Parameters.Add("@Id",SqlDbType.Int).Value=model.AlmacenID.HasValue?model.AlmacenID.Value:DBNull.Value;cmd.Parameters.Add("@Codigo",SqlDbType.NVarChar,30).Value=model.Codigo;cmd.Parameters.Add("@Nombre",SqlDbType.NVarChar,120).Value=model.Nombre;cmd.Parameters.Add("@Tipo",SqlDbType.NVarChar,30).Value=model.TipoAlmacen;cmd.Parameters.Add("@Descripcion",SqlDbType.NVarChar,300).Value=string.IsNullOrWhiteSpace(model.Descripcion)?DBNull.Value:model.Descripcion;cmd.Parameters.Add("@Permite",SqlDbType.Bit).Value=model.PermiteNegativos;cmd.Parameters.Add("@Activo",SqlDbType.Bit).Value=model.Activo;cmd.Parameters.Add("@Usuario",SqlDbType.NVarChar,120).Value=UsuarioNombre;try{await cmd.ExecuteNonQueryAsync(ct);TempData["AlmacenOk"]="Almacen guardado.";}catch(SqlException ex)when(ex.Number is 2601 or 2627){TempData["AlmacenError"]="Ya existe ese codigo de almacen.";}return RedirectToAction(nameof(Index));}
+}

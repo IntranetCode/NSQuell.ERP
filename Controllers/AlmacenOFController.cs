@@ -7,7 +7,7 @@ using System.Data;
 namespace ERP.NSQuell.Controllers;
 
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AlmacenOFController : AlmacenBaseController
+public sealed partial class AlmacenOFController : AlmacenBaseController
 {
     private static readonly string[] AreasPermitidas =
     {
@@ -44,7 +44,8 @@ public sealed class AlmacenOFController : AlmacenBaseController
             Desde = desde?.Date,
             Hasta = hasta?.Date,
             Pagina = Math.Max(1, pagina),
-            TamanoPagina = 50
+            // ALMACEN_OF_CARGA_AMPLIA_V4_2
+            TamanoPagina = 500
         };
 
         vm.EstatusDisponibles = Enumerable.Range(1, 11)
@@ -454,6 +455,9 @@ FETCH NEXT @TamanoPagina ROWS ONLY;";
         }
 
         await CargarEntregablesAsync(connection, vm.Ordenes, cancellationToken);
+        // ALMACEN_OF_MAQUINAS_PT_V4_1
+        await CargarMaquinasAlmacenAsync(connection, vm.Ordenes, cancellationToken);
+        await CargarProductoTerminadoSolicitadoAsync(connection, vm.Ordenes, cancellationToken);
         return View(vm);
     }
 
