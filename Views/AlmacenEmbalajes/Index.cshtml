@@ -257,3 +257,23 @@
         }
     </div>
 </section>
+
+<!-- ALMACEN_COMPRA_EMB_V3_START -->
+<script>
+(() => {
+  document.querySelectorAll('.pt-actions').forEach(actions => {
+    if (actions.querySelector('[data-alm-buy]')) return;
+    const movement = actions.querySelector('a[href*="embalajeId="]');
+    if (!movement) return;
+    const source = new URL(movement.href, location.origin);
+    const id = source.searchParams.get('embalajeId');
+    if (!id) return;
+    const link = document.createElement('a');
+    link.className='pt-action'; link.dataset.almBuy='1'; link.title='Solicitar compra';
+    link.href=`/AlmacenCompras/Confirmar?modulo=EMBALAJES&catalogoID=${encodeURIComponent(id)}&returnUrl=${encodeURIComponent(location.pathname+location.search)}`;
+    link.innerHTML='<i class="fa-solid fa-cart-plus"></i>';
+    actions.appendChild(link);
+  });
+})();
+</script>
+<!-- ALMACEN_COMPRA_EMB_V3_END -->

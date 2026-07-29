@@ -7,7 +7,7 @@ using System.Data;
 namespace ERP.NSQuell.Controllers;
 
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AlmacenOFController : AlmacenBaseController
+public sealed partial class AlmacenOFController : AlmacenBaseController
 {
     private static readonly string[] AreasPermitidas =
     {

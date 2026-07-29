@@ -1,27 +1,39 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
-    ViewData["Title"] = "Órdenes de fabricación";
+    ViewData["Title"] = "Material OF Solicitados";
+
+    string BuildPageUrl(int page)
+    {
+        return Url.Action("Index", "AlmacenOF", new
+        {
+            q = Model.Busqueda,
+            estatus = Model.EstatusID,
+            area = Model.Area,
+            desde = Model.Desde?.ToString("yyyy-MM-dd"),
+            hasta = Model.Hasta?.ToString("yyyy-MM-dd"),
+            pagina = page
+        }) ?? "#";
+    }
 }
 
-<section class="alm-hero">
+<link rel="stylesheet" href="~/css/Almacen/almacen-of-v4.css" asp-append-version="true" />
+
+<section class="alm-hero of4-hero">
     <div>
-        <small>ALMACÉN · CONTROL DE OF</small>
-        <h1>Órdenes de fabricación</h1>
+        <small>ALMACÉN · MATERIALES POR OF</small>
+        <h1>Material OF Solicitados</h1>
         <p>
-            Consulta rápida de las OF creadas por Planeación y del avance registrado por Almacén
-            para la entrega de materia prima, embalajes y producto terminado.
+            Seguimiento compacto de materia prima y embalajes requeridos por cada orden de fabricación,
+            con avance de entregas y acceso a un detalle exclusivo para Almacén.
         </p>
     </div>
     <div class="alm-actions">
         <a class="alm-btn secondary" asp-controller="AlmacenMP" asp-action="Index">
-            <i class="fa-solid fa-flask"></i> MP
+            <i class="fa-solid fa-flask"></i> Inventario MP
         </a>
         <a class="alm-btn secondary" asp-controller="AlmacenEmbalajes" asp-action="Index">
             <i class="fa-solid fa-box-open"></i> Embalajes
-        </a>
-        <a class="alm-btn secondary" asp-controller="AlmacenPT" asp-action="Index">
-            <i class="fa-solid fa-box"></i> PT
         </a>
     </div>
 </section>
@@ -32,7 +44,7 @@
 }
 else
 {
-    <section class="alm-grid of-kpi-grid">
+    <section class="alm-grid of4-kpis">
         <div class="alm-kpi"><small>OF visibles</small><strong>@Model.TotalRegistros</strong></div>
         <div class="alm-kpi"><small>Piezas planeadas</small><strong>@Model.TotalPiezas.ToString("N0")</strong></div>
         <div class="alm-kpi"><small>MP pendiente</small><strong>@Model.PendientesMP</strong></div>
@@ -40,37 +52,32 @@ else
         <div class="alm-kpi"><small>Con movimientos</small><strong>@Model.OFConMovimientos</strong></div>
     </section>
 
-    <section class="alm-card">
-        <header>
-            <span>OF creadas</span>
-            <span>Página @Model.Pagina de @Model.TotalPaginas</span>
+    <section class="alm-card of4-catalog">
+        <header class="of4-card-header">
+            <div>
+                <strong>Órdenes con materiales solicitados</strong>
+                <small>@Model.TotalRegistros registro(s) · página @Model.Pagina de @Model.TotalPaginas</small>
+            </div>
         </header>
 
-        <form method="get" class="of-filter">
-            <div class="alm-field">
+        <form method="get" class="of4-filter">
+            <div class="alm-field of4-search">
                 <label for="q">Buscar OF, cliente, parte, MP o embalaje</label>
                 <input id="q"
                        class="alm-input"
                        type="search"
                        name="q"
                        value="@Model.Busqueda"
-                       placeholder="Folio, OF, cliente, número de parte, material..." />
+                       placeholder="Folio, OF, cliente, parte o material" />
             </div>
 
             <div class="alm-field">
-                <label for="estatus">Estatus de OF</label>
+                <label for="estatus">Estatus</label>
                 <select id="estatus" class="alm-select" name="estatus">
                     <option value="">Todos</option>
                     @foreach (var estado in Model.EstatusDisponibles)
                     {
-                        if (Model.EstatusID == estado.EstatusID)
-                        {
-                            <option value="@estado.EstatusID" selected>@estado.Nombre</option>
-                        }
-                        else
-                        {
-                            <option value="@estado.EstatusID">@estado.Nombre</option>
-                        }
+                        <option value="@estado.EstatusID" selected="@(Model.EstatusID == estado.EstatusID)">@estado.Nombre</option>
                     }
                 </select>
             </div>
@@ -79,14 +86,10 @@ else
                 <label for="area">Atención de Almacén</label>
                 <select id="area" class="alm-select" name="area">
                     <option value="">Todas</option>
-                    @if (Model.Area == "PENDIENTES") { <option value="PENDIENTES" selected>Con pendientes</option> }
-                    else { <option value="PENDIENTES">Con pendientes</option> }
-                    @if (Model.Area == "CON_MOVIMIENTOS") { <option value="CON_MOVIMIENTOS" selected>Con movimientos</option> }
-                    else { <option value="CON_MOVIMIENTOS">Con movimientos</option> }
-                    @if (Model.Area == "MP") { <option value="MP" selected>Requiere MP</option> }
-                    else { <option value="MP">Requiere MP</option> }
-                    @if (Model.Area == "EMBALAJE") { <option value="EMBALAJE" selected>Requiere embalaje</option> }
-                    else { <option value="EMBALAJE">Requiere embalaje</option> }
+                    <option value="PENDIENTES" selected="@(Model.Area == "PENDIENTES")">Con pendientes</option>
+                    <option value="CON_MOVIMIENTOS" selected="@(Model.Area == "CON_MOVIMIENTOS")">Con movimientos</option>
+                    <option value="MP" selected="@(Model.Area == "MP")">Requiere MP</option>
+                    <option value="EMBALAJE" selected="@(Model.Area == "EMBALAJE")">Requiere embalaje</option>
                 </select>
             </div>
 
@@ -100,75 +103,79 @@ else
                 <input id="hasta" class="alm-input" type="date" name="hasta" value="@Model.Hasta?.ToString("yyyy-MM-dd")" />
             </div>
 
-            <button class="alm-btn" type="submit">
-                <i class="fa-solid fa-filter"></i>
-                Filtrar
-            </button>
+            <div class="of4-filter-actions">
+                <button class="alm-btn" type="submit">
+                    <i class="fa-solid fa-filter"></i> Filtrar
+                </button>
+                <a class="alm-btn secondary" asp-controller="AlmacenOF" asp-action="Index">
+                    <i class="fa-solid fa-filter-circle-xmark"></i> Limpiar
+                </a>
+            </div>
         </form>
 
-        <div class="of-table-wrap">
-            <table class="of-table alm-table">
-                <colgroup>
-                    <col class="of-col-of" />
-                    <col class="of-col-client" />
-                    <col class="of-col-date" />
-                    <col class="of-col-flow" />
-                    <col class="of-col-flow" />
-                    <col class="of-col-flow" />
-                    <col class="of-col-status" />
-                    <col class="of-col-actions" />
-                </colgroup>
+        <div class="of4-list">
+            @foreach (var x in Model.Ordenes)
+            {
+                var hasMp = x.MaterialesEntrega.Any();
+                var hasPackaging = x.EmbalajesEntrega.Any();
+                var completed =
+                    (!hasMp || x.MaterialesEntrega.All(i => i.Requerido <= i.Entregado + 0.0005m))
+                    && (!hasPackaging || x.EmbalajesEntrega.All(i => i.Requerido <= i.Entregado + 0.0005m));
 
-                <thead>
-                    <tr>
-                        <th>OF</th>
-                        <th>Cliente</th>
-                        <th>Fechas</th>
-                        <th>MP a entregar</th>
-                        <th>Embalaje a entregar</th>
-                        <th>PT a entregar</th>
-                        <th>Estatus</th>
-                        <th></th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @foreach (var x in Model.Ordenes)
-                    {
-                        <tr>
-                            <td>
-                                <a class="of-link"
-                                   asp-controller="Planeacion"
+                <article class="of4-row @(completed ? "is-complete" : string.Empty)">
+                    <header class="of4-row-head">
+                        <div class="of4-identity">
+                            <span class="of4-icon"><i class="fa-solid fa-industry"></i></span>
+                            <div>
+                                <a class="of4-of-link"
+                                   asp-controller="AlmacenOF"
                                    asp-action="Detalle"
-                                   asp-route-id="@x.SolicitudProduccionID"
-                                   title="Abrir detalle de la OF">
+                                   asp-route-id="@x.SolicitudProduccionID">
                                     @x.NumeroOFClave
                                 </a>
-                                <small class="of-sub">
-                                    @(string.IsNullOrWhiteSpace(x.FolioSolicitud)
-                                        ? $"ID {x.SolicitudProduccionID}"
-                                        : x.FolioSolicitud)
+                                <small>
+                                    @(string.IsNullOrWhiteSpace(x.FolioSolicitud) ? "Folio no asignado" : x.FolioSolicitud)
+                                    · @x.TotalRenglones renglón(es)
                                 </small>
-                            </td>
+                            </div>
+                        </div>
 
-                            <td>
-                                <span class="of-link" title="@x.Cliente">
-                                    @(string.IsNullOrWhiteSpace(x.Cliente) ? "Sin cliente" : x.Cliente)
-                                </span>
-                                <small class="of-sub">
-                                    @x.TotalRenglones renglón(es)
-                                </small>
-                            </td>
+                        <div class="of4-client">
+                            <span>Cliente</span>
+                            <strong title="@x.Cliente">@(string.IsNullOrWhiteSpace(x.Cliente) ? "Sin cliente" : x.Cliente)</strong>
+                        </div>
 
-                            <td>
-                                <strong>@x.FechaSolicitud.ToString("dd/MM/yyyy")</strong>
-                                <small class="of-sub">
-                                    Requerida:
-                                    @(x.FechaRequerida?.ToString("dd/MM/yyyy") ?? "Sin fecha")
-                                </small>
-                            </td>
-                            <td>
-                                <div class="of-delivery-list">
+                        <div class="of4-dates">
+                            <span>Solicitud</span>
+                            <strong>@x.FechaSolicitud.ToString("dd/MM/yyyy")</strong>
+                            <small>Requerida: @(x.FechaRequerida?.ToString("dd/MM/yyyy") ?? "Sin fecha")</small>
+                        </div>
+
+                        <div class="of4-state-block">
+                            <span class="of-status">@x.EstatusNombre</span>
+                            <span class="of-priority @x.PrioridadClase">@x.Prioridad</span>
+                        </div>
+
+                        <a class="of4-detail-btn"
+                           asp-controller="AlmacenOF"
+                           asp-action="Detalle"
+                           asp-route-id="@x.SolicitudProduccionID"
+                           title="Ver detalle para Almacén">
+                            <i class="fa-solid fa-eye"></i>
+                            <span>Ver detalle</span>
+                        </a>
+                    </header>
+
+                    <div class="of4-material-grid @(hasMp && hasPackaging ? "two-columns" : "one-column")">
+                        @if (hasMp)
+                        {
+                            <section class="of4-material-section">
+                                <div class="of4-section-title">
+                                    <span><i class="fa-solid fa-flask"></i> Materia prima</span>
+                                    <small>@x.MaterialesEntrega.Count material(es)</small>
+                                </div>
+
+                                <div class="of4-items">
                                     @foreach (var item in x.MaterialesEntrega)
                                     {
                                         var puedeEntregar = item.PuedeEntregar && x.TieneNumeroOF;
@@ -181,27 +188,35 @@ else
                                             })
                                             : null;
 
-                                        <a class="of-delivery-item @(!puedeEntregar ? "disabled" : "")"
+                                        <a class="of4-item @item.Clase @(!puedeEntregar ? "disabled" : string.Empty)"
                                            href="@url"
-                                           title="@(puedeEntregar ? "Registrar entrega de MP" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : item.CatalogoID <= 0 ? "Material no localizado en ERP_Materiales" : "Entrega completa")" aria-disabled="@(!puedeEntregar)">
-                                            <span class="of-delivery-name">@item.Codigo · @item.Descripcion</span>
-                                            <span class="of-flow @item.Clase">
-                                                <span class="of-flow-top">
+                                           aria-disabled="@(!puedeEntregar)">
+                                            <span class="of4-item-copy">
+                                                <strong>@item.Codigo</strong>
+                                                <small title="@item.Descripcion">@item.Descripcion</small>
+                                            </span>
+                                            <span class="of4-item-progress">
+                                                <span>
                                                     <strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong>
-                                                    <span class="of-state @item.Clase">@item.Estado</span>
+                                                    <em>@item.Estado</em>
                                                 </span>
-                                                <span class="of-progress"><i style="width:@item.Porcentaje%"></i></span>
+                                                <i><b style="width:@item.Porcentaje%"></b></i>
                                             </span>
                                         </a>
                                     }
-                                    @if (!x.MaterialesEntrega.Any())
-                                    {
-                                        <span class="of-sub">Sin MP registrada</span>
-                                    }
                                 </div>
-                            </td>
-                            <td>
-                                <div class="of-delivery-list">
+                            </section>
+                        }
+
+                        @if (hasPackaging)
+                        {
+                            <section class="of4-material-section">
+                                <div class="of4-section-title">
+                                    <span><i class="fa-solid fa-box-open"></i> Embalajes</span>
+                                    <small>@x.EmbalajesEntrega.Count embalaje(s)</small>
+                                </div>
+
+                                <div class="of4-items">
                                     @foreach (var item in x.EmbalajesEntrega)
                                     {
                                         var puedeEntregar = item.PuedeEntregar && x.TieneNumeroOF;
@@ -214,144 +229,66 @@ else
                                             })
                                             : null;
 
-                                        <a class="of-delivery-item @(!puedeEntregar ? "disabled" : "")"
+                                        <a class="of4-item @item.Clase @(!puedeEntregar ? "disabled" : string.Empty)"
                                            href="@url"
-                                           title="@(puedeEntregar ? "Registrar entrega de embalaje" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : item.CatalogoID <= 0 ? "Embalaje no localizado en ERP_Embalajes" : "Entrega completa")" aria-disabled="@(!puedeEntregar)">
-                                            <span class="of-delivery-name">@item.Codigo · @item.Descripcion</span>
-                                            <span class="of-flow @item.Clase">
-                                                <span class="of-flow-top">
+                                           aria-disabled="@(!puedeEntregar)">
+                                            <span class="of4-item-copy">
+                                                <strong>@item.Codigo</strong>
+                                                <small title="@item.Descripcion">@item.Descripcion</small>
+                                            </span>
+                                            <span class="of4-item-progress">
+                                                <span>
                                                     <strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong>
-                                                    <span class="of-state @item.Clase">@item.Estado</span>
+                                                    <em>@item.Estado</em>
                                                 </span>
-                                                <span class="of-progress"><i style="width:@item.Porcentaje%"></i></span>
+                                                <i><b style="width:@item.Porcentaje%"></b></i>
                                             </span>
                                         </a>
                                     }
-                                    @if (!x.EmbalajesEntrega.Any())
-                                    {
-                                        <span class="of-sub">Sin embalaje registrado</span>
-                                    }
                                 </div>
-                            </td>
+                            </section>
+                        }
 
-                            <td>
-                                <div class="of-delivery-list">
-                                    @foreach (var item in x.PartesEntrega)
-                                    {
-                                        var puedeEntregarPT =
-                                            item.PuedeEntregar
-                                            && x.TieneNumeroOF;
+                        @if (!hasMp && !hasPackaging)
+                        {
+                            <div class="of4-empty-materials">
+                                <i class="fa-solid fa-circle-info"></i>
+                                Esta OF no tiene materia prima ni embalajes registrados para entrega.
+                            </div>
+                        }
+                    </div>
+                </article>
+            }
 
-                                        var urlPT = puedeEntregarPT
-                                            ? Url.Action(
-                                                "Entrada",
-                                                "AlmacenPT",
-                                                new
-                                                {
-                                                    parteId =
-                                                        item.CatalogoID,
-                                                    solicitudProduccionId =
-                                                        x.SolicitudProduccionID,
-                                                    entregaOF = true
-                                                })
-                                            : null;
-
-                                        <a class="of-delivery-item @(!puedeEntregarPT ? "disabled" : "")"
-                                           href="@urlPT"
-                                           title="@(puedeEntregarPT ? "Registrar entrega de producto terminado" : !x.TieneNumeroOF ? "Planeación todavía no asigna un número de OF" : "Entrega completa")"
-                                           aria-disabled="@(!puedeEntregarPT)">
-                                            <span class="of-delivery-name">
-                                                @item.Codigo · @item.Descripcion
-                                            </span>
-                                            <span class="of-flow @item.Clase">
-                                                <span class="of-flow-top">
-                                                    <strong>
-                                                        @item.Entregado.ToString("0")
-                                                        /
-                                                        @item.Requerido.ToString("0")
-                                                        @item.Unidad
-                                                    </strong>
-                                                    <span class="of-state @item.Clase">
-                                                        @item.Estado
-                                                    </span>
-                                                </span>
-                                                <span class="of-progress">
-                                                    <i style="width:@item.Porcentaje%"></i>
-                                                </span>
-                                            </span>
-                                        </a>
-                                    }
-
-                                    @if (!x.PartesEntrega.Any())
-                                    {
-                                        <span class="of-sub">
-                                            No aplica · Sin PT validado
-                                        </span>
-                                    }
-                                </div>
-                            </td>
-                            <td class="of-center">
-                                <span class="of-status">@x.EstatusNombre</span>
-                                <span class="of-priority @x.PrioridadClase">@x.Prioridad</span>
-                            </td>
-
-                            <td>
-                                <div class="of-actions">
-                                    <a class="of-action"
-                                       asp-controller="Planeacion"
-                                       asp-action="Detalle"
-                                       asp-route-id="@x.SolicitudProduccionID"
-                                       title="Ver detalle de la OF"
-                                       aria-label="Ver detalle de la OF">
-                                        <i class="fa-solid fa-eye"></i>
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-
-                    @if (!Model.Ordenes.Any())
-                    {
-                        <tr>
-                            <td colspan="8" class="alm-empty">
-                                No hay órdenes de fabricación que coincidan con los filtros.
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            @if (!Model.Ordenes.Any())
+            {
+                <div class="alm-empty of4-empty">
+                    No hay órdenes de fabricación que coincidan con los filtros.
+                </div>
+            }
         </div>
 
-        <div class="of-pagination">
-            <span>
-                @Model.TotalRegistros registro(s) · máximo @Model.TamanoPagina por página
-            </span>
+        <footer class="of4-pagination">
+            <span>@Model.TotalRegistros registro(s) · máximo @Model.TamanoPagina por página</span>
+            <div>
+                @if (Model.Pagina > 1)
+                {
+                    <a class="alm-btn secondary" href="@BuildPageUrl(Model.Pagina - 1)">Anterior</a>
+                }
+                else
+                {
+                    <span class="alm-btn secondary disabled">Anterior</span>
+                }
 
-            <div class="of-pagination__actions">
-                <a class="alm-btn secondary small @(Model.Pagina <= 1 ? "disabled" : "")"
-                   asp-action="Index"
-                   asp-route-q="@Model.Busqueda"
-                   asp-route-estatus="@Model.EstatusID"
-                   asp-route-area="@Model.Area"
-                   asp-route-desde="@Model.Desde?.ToString("yyyy-MM-dd")"
-                   asp-route-hasta="@Model.Hasta?.ToString("yyyy-MM-dd")"
-                   asp-route-pagina="@(Model.Pagina - 1)">
-                    Anterior
-                </a>
-
-                <a class="alm-btn secondary small @(Model.Pagina >= Model.TotalPaginas ? "disabled" : "")"
-                   asp-action="Index"
-                   asp-route-q="@Model.Busqueda"
-                   asp-route-estatus="@Model.EstatusID"
-                   asp-route-area="@Model.Area"
-                   asp-route-desde="@Model.Desde?.ToString("yyyy-MM-dd")"
-                   asp-route-hasta="@Model.Hasta?.ToString("yyyy-MM-dd")"
-                   asp-route-pagina="@(Model.Pagina + 1)">
-                    Siguiente
-                </a>
+                @if (Model.Pagina < Model.TotalPaginas)
+                {
+                    <a class="alm-btn secondary" href="@BuildPageUrl(Model.Pagina + 1)">Siguiente</a>
+                }
+                else
+                {
+                    <span class="alm-btn secondary disabled">Siguiente</span>
+                }
             </div>
-        </div>
+        </footer>
     </section>
 }
-
-
