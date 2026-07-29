@@ -26,8 +26,17 @@ public sealed partial class AlmacenOFController
         if (vm == null)
             return NotFound();
 
+        // ALMACEN_OF_DETALLE_MAQUINA_PT_V4_1
+        vm.Maquina = await CargarNombreMaquinaAlmacenAsync(
+            connection,
+            vm.SolicitudProduccionID,
+            cancellationToken);
+
         await CargarRenglonesAsync(connection, vm, cancellationToken);
+        await CargarProductoTerminadoDetalleAsync(connection, vm, cancellationToken);
         await CargarEntregasAsync(connection, vm, cancellationToken);
+        await CargarHistorialPTAlmacenAsync(connection, vm, cancellationToken);
+        vm.Entregas = vm.Entregas.OrderByDescending(x => x.Fecha).ToList();
 
         return View("~/Views/AlmacenOF/Detalle.cshtml", vm);
     }

@@ -189,8 +189,19 @@
                 @TempData["AlmacenMensaje"]
             </div>
         }
-
         @RenderBody()
+
+        <!-- ALMACEN_OCULTAR_INFOGRAFIAS_V1_0 -->
+        <script>
+            (() => {
+                document.querySelectorAll('.alm-grid').forEach(grid => {
+                    if (grid.querySelector('.alm-kpi')) {
+                        grid.hidden = true;
+                        grid.setAttribute('aria-hidden', 'true');
+                    }
+                });
+            })();
+        </script>
     </main>
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
@@ -392,9 +403,3 @@
 <!-- ALMACEN_REVISION_V8_END -->
 </body>
 </html>
-
-
-
-
-
-

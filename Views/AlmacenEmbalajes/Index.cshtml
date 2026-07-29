@@ -2,6 +2,7 @@
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = "Inventario de embalajes";
+    // ALMACEN_EMB_STOCK_COMPACTO_V1_0
 
     string Categoria(string? codigo, string? nombre)
     {
@@ -194,8 +195,7 @@
                                                 </td>
                                                 <td class="pt-stock" data-label="Existencia">
                                                     <span class="pt-stock-badge @x.Semaforo"><strong>@x.Saldo.ToString("0.###") @x.Unidad</strong></span>
-                                                    <small class="mp-stock-state">@Html.Raw(EstadoTexto(x.Semaforo))</small>
-                                                </td>
+                                                    </td>
                                                 <td class="pt-requested" data-label="Solicitado">
                                                     @if (x.Solicitado > 0.0005m)
                                                     {

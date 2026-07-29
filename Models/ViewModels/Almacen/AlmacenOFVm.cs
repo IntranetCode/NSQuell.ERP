@@ -45,6 +45,8 @@ public sealed class AlmacenOFItemVm
     public DateTime? FechaInicioPlaneada { get; set; }
     public DateTime? FechaFinPlaneada { get; set; }
 
+    // ALMACEN_OF_MAQUINA_ITEM_V4_1
+    public string Maquina { get; set; } = string.Empty;
     public string Cliente { get; set; } = string.Empty;
     public string Prioridad { get; set; } = "Normal";
     public int EstatusID { get; set; }
@@ -86,6 +88,20 @@ public sealed class AlmacenOFItemVm
     public bool TieneActividad =>
         MovimientosMP + MovimientosEmbalaje > 0;
 
+    // ALMACEN_OF_ESTADO_ENTREGA_V4_2
+    public bool TieneRequerimientosAlmacen =>
+        MaterialesEntrega.Any(x => x.Requerido > 0.0005m)
+        || EmbalajesEntrega.Any(x => x.Requerido > 0.0005m)
+        || PartesEntrega.Any(x => x.Requerido > 0.0005m);
+
+    public bool TienePendientesAlmacen =>
+        MaterialesEntrega.Any(x => x.Pendiente > 0.0005m)
+        || EmbalajesEntrega.Any(x => x.Pendiente > 0.0005m)
+        || PartesEntrega.Any(x => x.Pendiente > 0.0005m);
+
+    public bool EntregaCompletaAlmacen =>
+        TieneRequerimientosAlmacen
+        && !TienePendientesAlmacen;
     public string PrioridadClase =>
         Prioridad.Trim().ToUpperInvariant() switch
         {
@@ -144,6 +160,10 @@ public sealed class AlmacenOFEntregableVm
     public decimal Requerido { get; set; }
     public decimal Entregado { get; set; }
 
+    // ALMACEN_OF_PT_DISPONIBLE_V4_1
+    public decimal DisponibleInventario { get; set; }
+    public bool RequiereInventarioDisponible { get; set; }
+
     public decimal Pendiente => Math.Max(0m, Requerido - Entregado);
 
 
@@ -179,8 +199,10 @@ public sealed class AlmacenOFEntregableVm
         }
     }
 
-    public bool PuedeEntregar => CatalogoID > 0 && Pendiente > 0;
+
+
+    public bool PuedeEntregar =>
+        CatalogoID > 0
+        && Pendiente > 0
+        && (!RequiereInventarioDisponible || DisponibleInventario > 0);
 }
-
-
-

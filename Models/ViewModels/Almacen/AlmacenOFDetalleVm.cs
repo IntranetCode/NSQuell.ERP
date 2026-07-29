@@ -25,11 +25,18 @@ public sealed class AlmacenOFDetalleVm
     public decimal EmbalajeRequerido => Renglones.Sum(x => x.EmbalajeRequerido);
     public decimal EmbalajeEntregado => Renglones.Sum(x => x.EmbalajeEntregado);
     public decimal EmbalajePendiente => Math.Max(0m, EmbalajeRequerido - EmbalajeEntregado);
+
+    // ALMACEN_OF_DETALLE_PT_V4_1
+    public decimal PtRequerida => Renglones.Sum(x => x.PtRequerida);
+    public decimal PtEntregada => Renglones.Sum(x => x.PtEntregada);
+    public decimal PtPendiente => Math.Max(0m, PtRequerida - PtEntregada);
+    public decimal PtDisponible => Renglones.Sum(x => x.PtDisponible);
 }
 
 public sealed class AlmacenOFDetalleRenglonVm
 {
     public int Renglon { get; set; }
+    public int ParteID { get; set; }
     public string NumeroParte { get; set; } = string.Empty;
     public string DescripcionParte { get; set; } = string.Empty;
     public decimal CantidadPiezas { get; set; }
@@ -45,6 +52,11 @@ public sealed class AlmacenOFDetalleRenglonVm
     public decimal EmbalajeRequerido { get; set; }
     public decimal EmbalajeEntregado { get; set; }
     public decimal EmbalajePendiente => Math.Max(0m, EmbalajeRequerido - EmbalajeEntregado);
+
+    public decimal PtRequerida { get; set; }
+    public decimal PtEntregada { get; set; }
+    public decimal PtDisponible { get; set; }
+    public decimal PtPendiente => Math.Max(0m, PtRequerida - PtEntregada);
 }
 
 public sealed class AlmacenOFEntregaHistorialVm

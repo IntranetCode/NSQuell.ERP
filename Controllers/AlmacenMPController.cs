@@ -326,7 +326,129 @@ ORDER BY
                     });
             }
         }
+        // ALMACEN_MP_SOLICITADO_POR_MATERIAL_V1_0
+        // Mientras Planeacion no distinga VIRGEN y MOLIDO, la demanda de OF
+        // se presenta solamente en VIRGEN para no duplicar el solicitado.
+        const string solicitadoPorMaterialSql = @"
+WITH Requerido AS
+(
+    SELECT
+        solicitud.SolicitudProduccionID,
+        solicitud.FolioSolicitud,
+        solicitud.NumeroOFRecibida,
+        material.MaterialID,
+        SUM
+        (
+            CONVERT
+            (
+                DECIMAL(18,4),
+                ISNULL(detalle.CantidadMpKg, 0)
+            )
+        ) AS CantidadRequerida
+    FROM dbo.SolicitudesProduccion solicitud
+    INNER JOIN dbo.SolicitudesProduccionDetalle detalle
+        ON detalle.SolicitudProduccionID = solicitud.SolicitudProduccionID
+       AND detalle.Activo = 1
+    INNER JOIN dbo.ERP_Materiales material
+        ON material.Activo = 1
+       AND
+       (
+           detalle.MaterialID = material.MaterialID
+           OR
+           (
+               detalle.MaterialID IS NULL
+               AND UPPER(LTRIM(RTRIM(ISNULL(detalle.MaterialCodigo, N'')))) =
+                   UPPER(LTRIM(RTRIM(material.Codigo)))
+           )
+       )
+    WHERE solicitud.Activo = 1
+      AND ISNULL(detalle.CantidadMpKg, 0) > 0
+    GROUP BY
+        solicitud.SolicitudProduccionID,
+        solicitud.FolioSolicitud,
+        solicitud.NumeroOFRecibida,
+        material.MaterialID
+),
+Pendiente AS
+(
+    SELECT
+        requerido.MaterialID,
+        CASE
+            WHEN requerido.CantidadRequerida
+                 - ISNULL(entregado.CantidadEntregada, 0) > 0
+                THEN requerido.CantidadRequerida
+                     - ISNULL(entregado.CantidadEntregada, 0)
+            ELSE 0
+        END AS CantidadPendiente
+    FROM Requerido requerido
+    OUTER APPLY
+    (
+        SELECT
+            SUM
+            (
+                CASE
+                    WHEN movimiento.TipoMovimiento IN (N'Salida', N'Consumo')
+                        THEN movimiento.Cantidad
+                    WHEN movimiento.TipoMovimiento = N'Retorno'
+                        THEN -movimiento.Cantidad
+                    ELSE 0
+                END
+            ) AS CantidadEntregada
+        FROM dbo.AlmacenMP_Movimientos movimiento
+        WHERE movimiento.Activo = 1
+          AND movimiento.MaterialID = requerido.MaterialID
+          AND
+          (
+              (
+                  NULLIF(LTRIM(RTRIM(requerido.FolioSolicitud)), N'') IS NOT NULL
+                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                      LTRIM(RTRIM(requerido.FolioSolicitud))
+              )
+              OR
+              (
+                  NULLIF(LTRIM(RTRIM(requerido.NumeroOFRecibida)), N'') IS NOT NULL
+                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                      LTRIM(RTRIM(requerido.NumeroOFRecibida))
+              )
+          )
+    ) entregado
+)
+SELECT
+    MaterialID,
+    CONVERT(DECIMAL(18,4), SUM(CantidadPendiente)) AS Solicitado
+FROM Pendiente
+WHERE CantidadPendiente > 0.0005
+GROUP BY MaterialID;";
 
+        var solicitadoPorMaterial = new Dictionary<int, decimal>();
+
+        await using (var solicitadoCommand =
+            new SqlCommand(solicitadoPorMaterialSql, connection))
+        await using (var solicitadoReader =
+            await solicitadoCommand.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await solicitadoReader.ReadAsync(cancellationToken))
+            {
+                solicitadoPorMaterial[
+                    Entero(solicitadoReader, "MaterialID")] =
+                    DecimalValor(solicitadoReader, "Solicitado");
+            }
+        }
+
+        foreach (var existencia in vm.Existencias)
+        {
+            decimal solicitado;
+            existencia.Solicitado =
+                string.Equals(
+                    existencia.TipoMP,
+                    "VIRGEN",
+                    StringComparison.OrdinalIgnoreCase)
+                && solicitadoPorMaterial.TryGetValue(
+                    existencia.MaterialID,
+                    out solicitado)
+                    ? solicitado
+                    : 0m;
+        }
         // Misma estructura operativa utilizada en Inventario PT.
         const string resumenSql = @"
 WITH Requerido AS
@@ -1687,6 +1809,3 @@ ORDER BY Almacen, Rack, Nivel, Posicion;";
         return rows;
     }
 }
-
-
-

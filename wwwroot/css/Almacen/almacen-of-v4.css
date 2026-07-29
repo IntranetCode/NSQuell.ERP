@@ -675,3 +675,458 @@ html[data-nsq-theme="dark"] .of4-history-type span {
         justify-content: center;
     }
 }
+
+/* ALMACEN_OF_MAQUINAS_PT_V4_1_START */
+.of5-machine-list {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+}
+
+.of5-machine-group {
+    border: 1px solid var(--alm-border, #d8e1ed);
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--alm-panel, #fff);
+}
+
+.of5-machine-head {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 15px 17px;
+    cursor: pointer;
+    background: var(--alm-panel-strong, #f7f9fc);
+    border-bottom: 1px solid transparent;
+}
+
+.of5-machine-group[open] > .of5-machine-head {
+    border-bottom-color: var(--alm-border, #d8e1ed);
+}
+
+.of5-machine-head::-webkit-details-marker {
+    display: none;
+}
+
+.of5-machine-title {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.of5-machine-title > span:last-child {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.of5-machine-title small,
+.of5-machine-metrics small {
+    color: var(--alm-muted, #64748b);
+    font-size: .7rem;
+    font-weight: 850;
+    text-transform: uppercase;
+    letter-spacing: .045em;
+}
+
+.of5-machine-title strong {
+    color: var(--alm-text, #0f172a);
+    font-size: 1.02rem;
+    font-weight: 950;
+}
+
+.of5-machine-icon {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    color: #fff;
+    background: linear-gradient(135deg, #ff6a00, #ef3f20);
+    box-shadow: 0 10px 22px rgba(239, 63, 32, .2);
+}
+
+.of5-machine-metrics {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.of5-machine-metrics > span {
+    min-width: 82px;
+    display: grid;
+    gap: 1px;
+    padding: 7px 10px;
+    border: 1px solid var(--alm-border, #d8e1ed);
+    border-radius: 12px;
+    background: var(--alm-panel, #fff);
+    text-align: center;
+}
+
+.of5-machine-metrics > span.is-warning {
+    border-color: rgba(239, 68, 68, .35);
+}
+
+.of5-machine-metrics > span.is-pt {
+    border-color: rgba(14, 165, 233, .38);
+    background: rgba(14, 165, 233, .08);
+}
+
+.of5-machine-chevron {
+    color: var(--alm-muted, #64748b);
+    transition: transform .2s ease;
+}
+
+.of5-machine-group[open] .of5-machine-chevron {
+    transform: rotate(180deg);
+}
+
+.of5-machine-orders {
+    padding: 14px;
+}
+
+.of5-material-grid,
+.of5-line-materials {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+    gap: 12px;
+}
+
+.of5-pt-section,
+.of5-detail-pt {
+    border-color: rgba(14, 165, 233, .35) !important;
+}
+
+.of5-pt-item {
+    background: rgba(14, 165, 233, .055);
+}
+
+.of5-pt-available {
+    color: var(--alm-muted, #64748b);
+    font-weight: 750;
+}
+
+.of5-detail-kpis {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.of5-pt-kpi {
+    border-top-color: #0ea5e9 !important;
+}
+
+.of5-machine-info {
+    border-color: rgba(255, 90, 0, .34) !important;
+    background: rgba(255, 90, 0, .045) !important;
+}
+
+.of5-no-stock {
+    margin-top: 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: #b42318;
+    background: rgba(239, 68, 68, .09);
+    font-size: .78rem;
+    font-weight: 800;
+}
+
+html[data-nsq-theme="dark"] .of5-machine-group,
+html[data-nsq-theme="dark"] .of5-machine-metrics > span {
+    background: var(--alm-panel, #0d1929);
+}
+
+html[data-nsq-theme="dark"] .of5-machine-head {
+    background: var(--alm-panel-strong, #101d2d);
+}
+
+html[data-nsq-theme="dark"] .of5-pt-item,
+html[data-nsq-theme="dark"] .of5-pt-kpi {
+    background: rgba(14, 165, 233, .08);
+}
+
+@media (max-width: 1100px) {
+    .of5-detail-kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .of5-machine-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .of5-machine-metrics {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 700px) {
+    .of5-machine-list {
+        padding: 10px;
+    }
+
+    .of5-machine-head {
+        padding: 13px;
+    }
+
+    .of5-machine-metrics > span {
+        min-width: calc(50% - 5px);
+        flex: 1 1 calc(50% - 5px);
+    }
+
+    .of5-detail-kpis {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .of5-material-grid,
+    .of5-line-materials {
+        grid-template-columns: 1fr !important;
+    }
+}
+/* ALMACEN_OF_MAQUINAS_PT_V4_1_END */
+
+/* ALMACEN_OF_HISTORICO_V4_2_START */
+.alm-main,
+.of4-catalog,
+.of5-machine-list,
+.of5-machine-group,
+.of5-machine-orders,
+.of4-list,
+.of4-row,
+.of4-row-head,
+.of4-material-grid,
+.of4-material-section,
+.of4-items,
+.of4-item,
+.of6-history-catalog,
+.of6-history-machine-list,
+.of6-history-machine,
+.of6-history-orders,
+.of6-history-row {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.alm-main {
+    overflow-x: clip;
+}
+
+.of5-machine-head,
+.of4-row-head,
+.of5-material-grid,
+.of6-history-row {
+    width: 100%;
+}
+
+.of5-machine-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.of5-machine-title {
+    min-width: 0;
+    flex: 1 1 240px;
+}
+
+.of5-machine-title strong,
+.of4-client strong,
+.of4-item-copy strong,
+.of4-item-copy small,
+.of6-history-client strong,
+.of6-history-of a {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.of5-machine-metrics {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.of5-machine-orders,
+.of4-list {
+    overflow: visible !important;
+}
+
+.of4-row-head {
+    grid-template-columns:
+        minmax(210px, 1.35fr)
+        minmax(170px, 1fr)
+        minmax(135px, .72fr)
+        minmax(125px, auto)
+        minmax(118px, auto) !important;
+    gap: 12px !important;
+}
+
+.of5-material-grid,
+.of4-material-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)) !important;
+    align-items: start;
+}
+
+.of6-history-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.of6-history-filter {
+    grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(150px, .35fr)) auto !important;
+}
+
+.of6-history-orders {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+}
+
+.of6-history-row {
+    display: grid;
+    grid-template-columns:
+        minmax(210px, 1.25fr)
+        minmax(170px, 1fr)
+        minmax(145px, .72fr)
+        minmax(190px, 1fr)
+        minmax(145px, auto)
+        minmax(118px, auto);
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border: 1px solid var(--alm-border);
+    border-radius: 14px;
+    background: var(--alm-surface-soft);
+}
+
+.of6-history-of {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.of6-history-of > div,
+.of6-history-client,
+.of6-history-date,
+.of6-history-state {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.of6-history-of a {
+    color: var(--alm-text);
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.of6-history-of small,
+.of6-history-client small,
+.of6-history-date small,
+.of6-history-date span,
+.of6-history-state small {
+    color: var(--alm-muted);
+    font-size: .76rem;
+}
+
+.of6-history-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.of6-history-summary span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border: 1px solid var(--alm-border);
+    border-radius: 999px;
+    font-size: .75rem;
+    white-space: normal;
+}
+
+.of6-complete-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: fit-content;
+    max-width: 100%;
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: rgba(34, 197, 94, .14);
+    color: #22c55e;
+    font-size: .76rem;
+    font-weight: 800;
+}
+
+@media (max-width: 1280px) {
+    .of4-row-head {
+        grid-template-columns: minmax(200px, 1.3fr) minmax(165px, 1fr) minmax(135px, .75fr) auto !important;
+    }
+
+    .of4-state-block {
+        justify-self: start;
+    }
+
+    .of4-detail-btn {
+        justify-self: stretch;
+    }
+
+    .of6-history-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 980px) {
+    .of4-row-head,
+    .of6-history-row,
+    .of6-history-filter,
+    .of6-history-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .of4-identity,
+    .of6-history-of,
+    .of4-detail-btn,
+    .of4-filter-actions {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 640px) {
+    .of4-row-head,
+    .of6-history-row,
+    .of6-history-filter,
+    .of6-history-kpis,
+    .of5-material-grid,
+    .of4-material-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .of5-machine-metrics {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .of5-machine-metrics > span {
+        flex: 1 1 105px;
+        min-width: 0;
+    }
+
+    .of4-detail-btn,
+    .of4-filter-actions {
+        grid-column: auto;
+    }
+}
+/* ALMACEN_OF_HISTORICO_V4_2_END */
