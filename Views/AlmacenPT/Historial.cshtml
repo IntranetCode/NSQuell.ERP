@@ -1,23 +1,51 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTHistorialVm
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTHistorialVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = "Historial PT";
+
     var anterior = Math.Max(1, Model.Pagina - 1);
     var siguiente = Math.Min(Model.TotalPaginas, Model.Pagina + 1);
+
+    var periodo = Context.Request.Query["periodo"].ToString();
+
+    if (string.IsNullOrWhiteSpace(periodo))
+    {
+        periodo =
+            ViewData["PeriodoHistorialPT"]?.ToString()
+            ?? "SEMANA_ACTUAL";
+    }
+
+    periodo = periodo.Trim().ToUpperInvariant();
 }
 
-<section class="alm-hero">
+<section class="alm-hero pt-history-hero">
     <div>
         <small>TRAZABILIDAD DE PRODUCTO TERMINADO</small>
         <h1>Historial PT</h1>
-        <p>Auditoría por número de parte, caja y etiqueta. Incluye entradas, salidas, retenciones, liberaciones, retornos, scrap y ajustes.</p>
-        @if (!string.IsNullOrWhiteSpace(Model.FiltroParte))
+        <p>
+            Consulta entradas, salidas, embarques, retornos,
+            scrap y ajustes por parte, OF, responsable o etiqueta.
+        </p>
+
+        @if (Model.Desde.HasValue || Model.Hasta.HasValue)
         {
-            <span class="alm-focus-chip"><i class="fa-solid fa-filter"></i> Número de parte filtrado: @Model.FiltroParte</span>
+            <span class="alm-focus-chip">
+                <i class="fa-solid fa-calendar-week"></i>
+                Periodo:
+                @(Model.Desde?.ToString("dd/MM/yyyy") ?? "Inicio")
+                al
+                @(Model.Hasta?.ToString("dd/MM/yyyy") ?? "Hoy")
+            </span>
         }
     </div>
+
     <div class="alm-actions">
-        <a class="alm-btn" asp-action="Entrada"><i class="fa-solid fa-box"></i>Nueva entrada</a>
+        <a class="alm-btn"
+           asp-action="Entrada">
+            <i class="fa-solid fa-box"></i>
+            Nueva entrada
+        </a>
+
         <a class="alm-btn secondary"
            asp-action="ExportarHistorialCsv"
            asp-route-parte="@Model.FiltroParte"
@@ -26,40 +54,111 @@
            asp-route-numeroOF="@Model.NumeroOF"
            asp-route-responsable="@Model.Responsable"
            asp-route-etiquetaLote="@Model.EtiquetaLote"
+           asp-route-periodo="@periodo"
            asp-route-desde="@(Model.Desde?.ToString("yyyy-MM-dd"))"
            asp-route-hasta="@(Model.Hasta?.ToString("yyyy-MM-dd"))">
-            <i class="fa-solid fa-file-csv"></i>Exportar CSV
+            <i class="fa-solid fa-file-csv"></i>
+            Exportar CSV
         </a>
     </div>
 </section>
 
 <section class="alm-card">
     <header>
-        <span>Filtros de auditoría</span>
+        <span>Filtros rapidos</span>
         <span>@Model.TotalRegistros registro(s)</span>
     </header>
-    <form method="get" class="alm-filter alm-filter-history">
+
+    <form method="get"
+          class="pt-history-filter"
+          id="ptHistoryFilter">
+
         <div class="alm-field">
-            <label for="parte">Número de parte</label>
-            <input id="parte" class="alm-input" type="search" name="parte" value="@Model.FiltroParte"
-                   list="partes-pt-filtro" placeholder="Escribe o selecciona una parte" autocomplete="off" />
-            <datalist id="partes-pt-filtro">
-                @foreach (var item in Model.PartesFiltro)
+            <label for="periodo">Periodo</label>
+            <select id="periodo"
+                    class="alm-select"
+                    name="periodo">
+                @if (periodo == "SEMANA_ACTUAL")
                 {
-                    <option value="@item.Extra">@item.Texto</option>
+                    <option value="SEMANA_ACTUAL" selected>Semana actual</option>
                 }
-            </datalist>
-            <small class="alm-filter-hint">Puedes elegir un número de parte o escribir libremente.</small>
+                else
+                {
+                    <option value="SEMANA_ACTUAL">Semana actual</option>
+                }
+
+                @if (periodo == "SEMANA_ANTERIOR")
+                {
+                    <option value="SEMANA_ANTERIOR" selected>Semana anterior</option>
+                }
+                else
+                {
+                    <option value="SEMANA_ANTERIOR">Semana anterior</option>
+                }
+
+                @if (periodo == "ULTIMOS_7_DIAS")
+                {
+                    <option value="ULTIMOS_7_DIAS" selected>&Uacute;ltimos 7 d&iacute;as</option>
+                }
+                else
+                {
+                    <option value="ULTIMOS_7_DIAS">&Uacute;ltimos 7 d&iacute;as</option>
+                }
+
+                @if (periodo == "ULTIMOS_30_DIAS")
+                {
+                    <option value="ULTIMOS_30_DIAS" selected>&Uacute;ltimos 30 d&iacute;as</option>
+                }
+                else
+                {
+                    <option value="ULTIMOS_30_DIAS">&Uacute;ltimos 30 d&iacute;as</option>
+                }
+
+                @if (periodo == "TODO")
+                {
+                    <option value="TODO" selected>Todo el historial</option>
+                }
+                else
+                {
+                    <option value="TODO">Todo el historial</option>
+                }
+
+                @if (periodo == "PERSONALIZADO")
+                {
+                    <option value="PERSONALIZADO" selected>Fechas personalizadas</option>
+                }
+                else
+                {
+                    <option value="PERSONALIZADO">Fechas personalizadas</option>
+                }
+            </select>
         </div>
+
         <div class="alm-field">
-            <label for="q">Búsqueda libre</label>
-            <input id="q" class="alm-input" type="search" name="q" value="@Model.Busqueda"
-                   placeholder="Cliente, observación o referencia" />
+            <label for="desde">Desde</label>
+            <input id="desde"
+                   class="alm-input"
+                   type="date"
+                   name="desde"
+                   value="@(Model.Desde?.ToString("yyyy-MM-dd"))" />
         </div>
+
+        <div class="alm-field">
+            <label for="hasta">Hasta</label>
+            <input id="hasta"
+                   class="alm-input"
+                   type="date"
+                   name="hasta"
+                   value="@(Model.Hasta?.ToString("yyyy-MM-dd"))" />
+        </div>
+
         <div class="alm-field">
             <label for="tipo">Movimiento</label>
-            <select id="tipo" class="alm-select" name="tipo">
-                <option value="">Todos</option>
+            <select id="tipo"
+                    class="alm-select"
+                    name="tipo">
+                <option value="">Todos los movimientos</option>
+
                 @foreach (var tipo in Model.TiposMovimiento)
                 {
                     if (Model.TipoMovimiento == tipo)
@@ -73,50 +172,120 @@
                 }
             </select>
         </div>
+
         <div class="alm-field">
-            <label for="numeroOF">Orden de fabricación</label>
-            <input id="numeroOF" class="alm-input" type="search" name="numeroOF" value="@Model.NumeroOF"
-                   list="ordenes-pt-filtro" placeholder="Escribe o selecciona una OF" autocomplete="off" />
-            <datalist id="ordenes-pt-filtro">
+            <label for="parte">N&uacute;mero de parte</label>
+            <select id="parte"
+                    class="alm-select"
+                    name="parte">
+                <option value="">Todos los n&uacute;meros de parte</option>
+
+                @foreach (var item in Model.PartesFiltro)
+                {
+                    if (Model.FiltroParte == item.Extra)
+                    {
+                        <option value="@item.Extra" selected>@item.Texto</option>
+                    }
+                    else
+                    {
+                        <option value="@item.Extra">@item.Texto</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="alm-field">
+            <label for="numeroOF">Orden de fabricaci&oacute;n</label>
+            <select id="numeroOF"
+                    class="alm-select"
+                    name="numeroOF">
+                <option value="">Todas las OF</option>
+
                 @foreach (var item in Model.OrdenesFiltro)
                 {
-                    <option value="@item"></option>
+                    if (Model.NumeroOF == item)
+                    {
+                        <option value="@item" selected>@item</option>
+                    }
+                    else
+                    {
+                        <option value="@item">@item</option>
+                    }
                 }
-            </datalist>
+            </select>
         </div>
+
         <div class="alm-field">
             <label for="responsable">Responsable</label>
-            <input id="responsable" class="alm-input" type="search" name="responsable" value="@Model.Responsable"
-                   list="responsables-pt-filtro" placeholder="Escribe o selecciona un responsable" autocomplete="off" />
-            <datalist id="responsables-pt-filtro">
+            <select id="responsable"
+                    class="alm-select"
+                    name="responsable">
+                <option value="">Todos los responsables</option>
+
                 @foreach (var item in Model.ResponsablesFiltro)
                 {
-                    <option value="@item"></option>
+                    if (Model.Responsable == item)
+                    {
+                        <option value="@item" selected>@item</option>
+                    }
+                    else
+                    {
+                        <option value="@item">@item</option>
+                    }
                 }
-            </datalist>
+            </select>
         </div>
+
         <div class="alm-field">
             <label for="etiquetaLote">Etiqueta o lote</label>
-            <input id="etiquetaLote" class="alm-input" type="search" name="etiquetaLote" value="@Model.EtiquetaLote"
-                   list="etiquetas-pt-filtro" placeholder="Escribe o selecciona una etiqueta" autocomplete="off" />
-            <datalist id="etiquetas-pt-filtro">
+            <select id="etiquetaLote"
+                    class="alm-select"
+                    name="etiquetaLote">
+                <option value="">Todas las etiquetas y lotes</option>
+
                 @foreach (var item in Model.EtiquetasLotesFiltro)
                 {
-                    <option value="@item"></option>
+                    if (Model.EtiquetaLote == item)
+                    {
+                        <option value="@item" selected>@item</option>
+                    }
+                    else
+                    {
+                        <option value="@item">@item</option>
+                    }
                 }
-            </datalist>
+            </select>
         </div>
-        <div class="alm-field">
-            <label for="desde">Desde</label>
-            <input id="desde" class="alm-input" type="date" name="desde" value="@(Model.Desde?.ToString("yyyy-MM-dd"))" />
+
+        <div class="alm-field pt-history-search">
+            <label for="q">B&uacute;squeda libre</label>
+            <input id="q"
+                   class="alm-input"
+                   type="search"
+                   name="q"
+                   value="@Model.Busqueda"
+                   placeholder="Cliente, observaci&oacute;n o referencia" />
         </div>
-        <div class="alm-field">
-            <label for="hasta">Hasta</label>
-            <input id="hasta" class="alm-input" type="date" name="hasta" value="@(Model.Hasta?.ToString("yyyy-MM-dd"))" />
-        </div>
-        <div class="alm-filter-actions">
-            <button class="alm-btn" type="submit"><i class="fa-solid fa-filter"></i>Filtrar</button>
-            <a class="alm-btn secondary" asp-action="Historial">Limpiar</a>
+
+        <div class="alm-filter-actions pt-history-filter-actions">
+            <button class="alm-btn"
+                    type="submit">
+                <i class="fa-solid fa-filter"></i>
+                Aplicar filtros
+            </button>
+
+            <a class="alm-btn secondary"
+               asp-action="Historial">
+                <i class="fa-solid fa-calendar-week"></i>
+                Semana actual
+            </a>
+
+            <a class="alm-btn secondary"
+               asp-action="Historial"
+               asp-route-periodo="TODO">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                Ver todo
+            </a>
         </div>
     </form>
 </section>
@@ -124,50 +293,152 @@
 <section class="alm-card">
     <header>
         <span>Movimientos PT</span>
-        <span>Página @Model.Pagina de @Model.TotalPaginas</span>
+        <span>P&aacute;gina @Model.Pagina de @Model.TotalPaginas</span>
     </header>
-    <div class="alm-table-wrap">
-        <table class="alm-table alm-table-history alm-table-history-pt">
+
+    <div class="pt-history-table-wrap">
+        <table class="alm-table pt-history-table-v3">
+            <colgroup>
+                <col class="pt-h-col-date" />
+                <col class="pt-h-col-part" />
+                <col class="pt-h-col-box" />
+                <col class="pt-h-col-qty" />
+                <col class="pt-h-col-location" />
+                <col class="pt-h-col-detail" />
+            </colgroup>
+
             <thead>
                 <tr>
-                    <th>Fecha</th>
+                    <th>Fecha / movimiento</th>
                     <th>Parte</th>
-                    <th>Caja / etiqueta</th>
-                    <th>Movimiento</th>
+                    <th>Caja / etiqueta / lote</th>
                     <th>Cantidad</th>
-                    <th>Calidad</th>
-                    <th>Ubicación</th>
-                    <th>OF</th>
-                    <th>Responsable</th>
-                    <th>Referencia</th>
-                    <th>Observaciones</th>
+                    <th>OF / ubicaci&oacute;n</th>
+                    <th>Responsable / referencia / observaciones</th>
                 </tr>
             </thead>
+
             <tbody>
                 @foreach (var x in Model.Movimientos)
                 {
-                    var claseTipo = x.TipoMovimiento is "Entrada" or "Retorno" or "Liberacion" or "AjustePositivo" ? "entrada" : "salida";
+                    var claseTipo =
+                        x.TipoMovimiento is
+                            "Entrada"
+                            or "Retorno"
+                            or "Liberacion"
+                            or "AjustePositivo"
+                                ? "entrada"
+                                : x.TipoMovimiento is
+                                    "Salida"
+                                    or "Embarque"
+                                    or "Scrap"
+                                    or "AjusteNegativo"
+                                        ? "salida"
+                                        : "neutral";
+
+                    var cantidadTexto =
+                        claseTipo == "entrada"
+                            ? $"+{x.Cantidad:N0}"
+                            : claseTipo == "salida"
+                                ? $"-{x.Cantidad:N0}"
+                                : x.Cantidad.ToString("N0");
+
                     <tr>
-                        <td>@x.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
-                        <td>
-                            <a class="alm-trace-link" asp-action="Historial" asp-route-parte="@x.NumeroParte" title="Ver solamente la trazabilidad de @x.NumeroParte">
-                                <strong>@x.NumeroParte</strong><small class="alm-subtext">@x.Descripcion</small>
+                        <td data-label="Fecha / movimiento">
+                            <strong class="pt-h-date">
+                                @x.FechaMovimiento.ToString("dd/MM/yyyy")
+                            </strong>
+                            <small class="pt-h-time">
+                                @x.FechaMovimiento.ToString("HH:mm")
+                            </small>
+                            <span class="alm-movement-type @claseTipo">
+                                @x.TipoMovimiento
+                            </span>
+                        </td>
+
+                        <td data-label="Parte">
+                            <a class="alm-trace-link"
+                               asp-action="Historial"
+                               asp-route-parte="@x.NumeroParte"
+                               asp-route-periodo="@periodo"
+                               asp-route-desde="@(Model.Desde?.ToString("yyyy-MM-dd"))"
+                               asp-route-hasta="@(Model.Hasta?.ToString("yyyy-MM-dd"))">
+                                <strong>@x.NumeroParte</strong>
+                                <small class="alm-subtext">@x.Descripcion</small>
                             </a>
                         </td>
-                        <td><strong>@x.Etiqueta</strong><small class="alm-subtext">Caja @x.NumeroCaja · Lote @x.LoteEtiqueta</small></td>
-                        <td><span class="alm-movement-type @claseTipo">@x.TipoMovimiento</span></td>
-                        <td class="alm-number">@x.Cantidad</td>
-                        <td>@x.EstadoCalidad</td>
-                        <td>@x.Ubicacion</td>
-                        <td>@x.NumeroOF</td>
-                        <td>@x.Responsable</td>
-                        <td>@x.ReferenciaOperacion</td>
-                        <td class="alm-history-note">@x.Observaciones</td>
+
+                        <td data-label="Caja / etiqueta / lote">
+                            <strong class="pt-h-value">
+                                @(string.IsNullOrWhiteSpace(x.Etiqueta)
+                                    ? "Sin etiqueta"
+                                    : x.Etiqueta)
+                            </strong>
+
+                            <small class="alm-subtext">
+                                @if (x.NumeroCaja > 0)
+                                {
+                                    <span>Caja @x.NumeroCaja</span>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(x.LoteEtiqueta))
+                                {
+                                    <span>Lote @x.LoteEtiqueta</span>
+                                }
+                            </small>
+                        </td>
+
+                        <td class="pt-h-qty @claseTipo"
+                            data-label="Cantidad">
+                            <strong>@cantidadTexto</strong>
+                            <small>pzs</small>
+                        </td>
+
+                        <td data-label="OF / ubicacion">
+                            <strong class="pt-h-value">
+                                @(string.IsNullOrWhiteSpace(x.NumeroOF)
+                                    ? "Sin OF"
+                                    : x.NumeroOF)
+                            </strong>
+                            <small class="alm-subtext">
+                                @(string.IsNullOrWhiteSpace(x.Ubicacion)
+                                    ? "Sin ubicaci&oacute;n"
+                                    : x.Ubicacion)
+                            </small>
+                        </td>
+
+                        <td data-label="Detalle">
+                            <strong class="pt-h-value">
+                                @(string.IsNullOrWhiteSpace(x.Responsable)
+                                    ? "Sin responsable"
+                                    : x.Responsable)
+                            </strong>
+
+                            @if (!string.IsNullOrWhiteSpace(x.ReferenciaOperacion))
+                            {
+                                <small class="alm-subtext">
+                                    Ref. @x.ReferenciaOperacion
+                                </small>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(x.Observaciones))
+                            {
+                                <small class="pt-h-note">
+                                    @x.Observaciones
+                                </small>
+                            }
+                        </td>
                     </tr>
                 }
+
                 @if (!Model.Movimientos.Any())
                 {
-                    <tr><td colspan="11" class="alm-empty">No se encontraron movimientos con los filtros seleccionados.</td></tr>
+                    <tr>
+                        <td colspan="6"
+                            class="alm-empty">
+                            No se encontraron movimientos con los filtros seleccionados.
+                        </td>
+                    </tr>
                 }
             </tbody>
         </table>
@@ -175,22 +446,78 @@
 
     @if (Model.TotalPaginas > 1)
     {
-        <nav class="alm-pager" aria-label="Paginación del historial PT">
+        <nav class="alm-pager"
+             aria-label="Paginacion del historial PT">
+
             <a class="alm-btn secondary small @(Model.Pagina <= 1 ? "disabled" : "")"
-               asp-action="Historial" asp-route-pagina="@anterior"
+               asp-action="Historial"
+               asp-route-pagina="@anterior"
                asp-route-parte="@Model.FiltroParte"
-               asp-route-q="@Model.Busqueda" asp-route-tipo="@Model.TipoMovimiento"
-               asp-route-numeroOF="@Model.NumeroOF" asp-route-responsable="@Model.Responsable"
-               asp-route-etiquetaLote="@Model.EtiquetaLote" asp-route-desde="@(Model.Desde?.ToString("yyyy-MM-dd"))"
-               asp-route-hasta="@(Model.Hasta?.ToString("yyyy-MM-dd"))">Anterior</a>
-            <span>Página <strong>@Model.Pagina</strong> de <strong>@Model.TotalPaginas</strong></span>
+               asp-route-q="@Model.Busqueda"
+               asp-route-tipo="@Model.TipoMovimiento"
+               asp-route-numeroOF="@Model.NumeroOF"
+               asp-route-responsable="@Model.Responsable"
+               asp-route-etiquetaLote="@Model.EtiquetaLote"
+               asp-route-periodo="@periodo"
+               asp-route-desde="@(Model.Desde?.ToString("yyyy-MM-dd"))"
+               asp-route-hasta="@(Model.Hasta?.ToString("yyyy-MM-dd"))">
+                Anterior
+            </a>
+
+            <span>
+                P&aacute;gina
+                <strong>@Model.Pagina</strong>
+                de
+                <strong>@Model.TotalPaginas</strong>
+            </span>
+
             <a class="alm-btn secondary small @(Model.Pagina >= Model.TotalPaginas ? "disabled" : "")"
-               asp-action="Historial" asp-route-pagina="@siguiente"
+               asp-action="Historial"
+               asp-route-pagina="@siguiente"
                asp-route-parte="@Model.FiltroParte"
-               asp-route-q="@Model.Busqueda" asp-route-tipo="@Model.TipoMovimiento"
-               asp-route-numeroOF="@Model.NumeroOF" asp-route-responsable="@Model.Responsable"
-               asp-route-etiquetaLote="@Model.EtiquetaLote" asp-route-desde="@(Model.Desde?.ToString("yyyy-MM-dd"))"
-               asp-route-hasta="@(Model.Hasta?.ToString("yyyy-MM-dd"))">Siguiente</a>
+               asp-route-q="@Model.Busqueda"
+               asp-route-tipo="@Model.TipoMovimiento"
+               asp-route-numeroOF="@Model.NumeroOF"
+               asp-route-responsable="@Model.Responsable"
+               asp-route-etiquetaLote="@Model.EtiquetaLote"
+               asp-route-periodo="@periodo"
+               asp-route-desde="@(Model.Desde?.ToString("yyyy-MM-dd"))"
+               asp-route-hasta="@(Model.Hasta?.ToString("yyyy-MM-dd"))">
+                Siguiente
+            </a>
         </nav>
     }
 </section>
+
+@section Scripts {
+    <script>
+        (() => {
+            const periodo =
+                document.getElementById("periodo");
+            const desde =
+                document.getElementById("desde");
+            const hasta =
+                document.getElementById("hasta");
+
+            if (!periodo || !desde || !hasta) {
+                return;
+            }
+
+            const useCustomDates = () => {
+                periodo.value = "PERSONALIZADO";
+            };
+
+            desde.addEventListener("change", useCustomDates);
+            hasta.addEventListener("change", useCustomDates);
+
+            periodo.addEventListener(
+                "change",
+                () => {
+                    if (periodo.value !== "PERSONALIZADO") {
+                        desde.value = "";
+                        hasta.value = "";
+                    }
+                });
+        })();
+    </script>
+}

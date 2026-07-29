@@ -659,7 +659,7 @@ WHERE a.Activo = 1
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ReprogramarCalendario(
-            [FromBody] CalendarioMaquinasMoverRequest request)
+      [FromBody] CalendarioMaquinasMoverRequest request)
         {
             if (request == null ||
                 request.ProgramaProduccionID <= 0 ||
@@ -673,6 +673,7 @@ WHERE a.Activo = 1
             }
 
             var usuarioId = ObtenerUsuarioID();
+
             if (usuarioId <= 0)
             {
                 return Json(new
@@ -684,7 +685,8 @@ WHERE a.Activo = 1
 
             var inicioSolicitado = DateTime.SpecifyKind(
                 request.Inicio,
-                DateTimeKind.Unspecified);
+                DateTimeKind.Unspecified
+            );
 
             inicioSolicitado = new DateTime(
                 inicioSolicitado.Year,
@@ -692,7 +694,8 @@ WHERE a.Activo = 1
                 inicioSolicitado.Day,
                 inicioSolicitado.Hour,
                 inicioSolicitado.Minute,
-                0);
+                0
+            );
 
             if (!EsInstanteOperativoCalendario(inicioSolicitado))
             {
@@ -705,6 +708,7 @@ WHERE a.Activo = 1
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
 
             try
@@ -715,6 +719,7 @@ WHERE a.Activo = 1
                 int? moldeId;
                 int? solicitudProduccionId;
                 int? solicitudProduccionDetalleId;
+                int? releaseDetalleId;
                 int estatusId;
                 DateTime inicioAnterior;
                 DateTime finAnterior;
@@ -730,6 +735,7 @@ SELECT
     pp.MaquinaCodigo,
     pp.ParteID,
     pp.MoldeID,
+    pp.ReleaseDetalleID,
     pp.SolicitudProduccionID,
     pp.SolicitudProduccionDetalleID,
     pp.EstatusID,
@@ -752,9 +758,11 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                     cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = request.ProgramaProduccionID;
 
                     await using var rd = await cmd.ExecuteReaderAsync();
+
                     if (!await rd.ReadAsync())
                     {
                         await tx.RollbackAsync();
+
                         return Json(new
                         {
                             ok = false,
@@ -765,32 +773,47 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                     maquinaAnteriorId = rd["MaquinaID"] == DBNull.Value
                         ? null
                         : Convert.ToInt32(rd["MaquinaID"]);
+
                     maquinaAnteriorCodigo = rd["MaquinaCodigo"] as string;
+
                     parteId = rd["ParteID"] == DBNull.Value
                         ? null
                         : Convert.ToInt32(rd["ParteID"]);
+
                     moldeId = rd["MoldeID"] == DBNull.Value
                         ? null
                         : Convert.ToInt32(rd["MoldeID"]);
+
+                    releaseDetalleId = rd["ReleaseDetalleID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(rd["ReleaseDetalleID"]);
+
                     solicitudProduccionId = rd["SolicitudProduccionID"] == DBNull.Value
                         ? null
                         : Convert.ToInt32(rd["SolicitudProduccionID"]);
+
                     solicitudProduccionDetalleId = rd["SolicitudProduccionDetalleID"] == DBNull.Value
                         ? null
                         : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]);
+
                     estatusId = Convert.ToInt32(rd["EstatusID"]);
+
                     inicioAnterior = Convert.ToDateTime(rd["FechaInicioProgramada"]);
                     finAnterior = Convert.ToDateTime(rd["FechaFinProgramada"]);
                     horasProduccionAnteriores = Convert.ToDecimal(rd["HorasProgramadas"]);
+
                     cambioAnterior = rd["Cambio"] == DBNull.Value
                         ? null
                         : (TimeSpan)rd["Cambio"];
+
                     arranqueAnterior = rd["Arranque"] == DBNull.Value
                         ? null
                         : (TimeSpan)rd["Arranque"];
+
                     maquinaPrincipalId = rd["MaquinaPrincipalID"] == DBNull.Value
                         ? null
                         : Convert.ToInt32(rd["MaquinaPrincipalID"]);
+
                     maquinaSustitutaId = rd["MaquinaSustitutaID"] == DBNull.Value
                         ? null
                         : Convert.ToInt32(rd["MaquinaSustitutaID"]);
@@ -802,6 +825,7 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                     estatusId == 99)
                 {
                     await tx.RollbackAsync();
+
                     return Json(new
                     {
                         ok = false,
@@ -813,7 +837,9 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                 string maquinaNuevaNombre;
 
                 const string sqlMaquina = @"
-SELECT TOP (1) Codigo, Nombre
+SELECT TOP (1)
+    Codigo,
+    Nombre
 FROM dbo.ERP_Maquinas
 WHERE MaquinaID = @MaquinaID
   AND Activo = 1;";
@@ -821,11 +847,13 @@ WHERE MaquinaID = @MaquinaID
                 await using (var cmd = new SqlCommand(sqlMaquina, cn, tx))
                 {
                     cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = request.MaquinaID;
+
                     await using var rd = await cmd.ExecuteReaderAsync();
 
                     if (!await rd.ReadAsync())
                     {
                         await tx.RollbackAsync();
+
                         return Json(new
                         {
                             ok = false,
@@ -842,21 +870,24 @@ WHERE MaquinaID = @MaquinaID
                     maquinaPrincipalId == request.MaquinaID ||
                     maquinaSustitutaId == request.MaquinaID;
 
-                if (!maquinaCompatible && !request.ForzarMaquina)
+                if (!maquinaCompatible)
                 {
                     await tx.RollbackAsync();
+
                     return Json(new
                     {
                         ok = false,
                         requiereConfirmacion = true,
-                        mensaje = $"La máquina {maquinaNuevaCodigo} no está configurada como principal ni sustituta para esta parte. ¿Deseas conservar el cambio de todas formas?"
+                        mensaje = $"No puedes mover este programa a la máquina {maquinaNuevaCodigo}, porque no está configurada como máquina principal ni sustituta para esta parte."
                     });
                 }
 
                 var horasPreparacion = 0m;
+
                 if (cambioAnterior.HasValue && arranqueAnterior.HasValue)
                 {
                     var fechaCambioAnterior = inicioAnterior.Date.Add(cambioAnterior.Value);
+
                     if (fechaCambioAnterior < inicioAnterior.AddDays(-1) ||
                         fechaCambioAnterior > inicioAnterior.AddDays(1))
                     {
@@ -864,12 +895,14 @@ WHERE MaquinaID = @MaquinaID
                     }
 
                     var fechaArranqueAnterior = fechaCambioAnterior.Date.Add(arranqueAnterior.Value);
+
                     if (fechaArranqueAnterior <= fechaCambioAnterior)
                         fechaArranqueAnterior = fechaArranqueAnterior.AddDays(1);
 
                     horasPreparacion = CalcularHorasOperativasCalendario(
                         fechaCambioAnterior,
-                        fechaArranqueAnterior);
+                        fechaArranqueAnterior
+                    );
                 }
 
                 if (horasPreparacion < 0)
@@ -877,7 +910,8 @@ WHERE MaquinaID = @MaquinaID
 
                 var duracionBloqueAnterior = CalcularHorasOperativasCalendario(
                     inicioAnterior,
-                    finAnterior);
+                    finAnterior
+                );
 
                 if (duracionBloqueAnterior <= 0)
                     duracionBloqueAnterior = horasProduccionAnteriores + horasPreparacion;
@@ -889,6 +923,7 @@ WHERE MaquinaID = @MaquinaID
                 if (duracionBloqueNueva <= 0 || duracionBloqueNueva > 744)
                 {
                     await tx.RollbackAsync();
+
                     return Json(new
                     {
                         ok = false,
@@ -902,11 +937,13 @@ WHERE MaquinaID = @MaquinaID
 
                 var finNuevo = SumarHorasOperativasCalendario(
                     inicioSolicitado,
-                    duracionBloqueNueva);
+                    duracionBloqueNueva
+                );
 
                 var arranqueNuevo = SumarHorasOperativasCalendario(
                     inicioSolicitado,
-                    horasPreparacion);
+                    horasPreparacion
+                );
 
                 const string sqlCruceMaquina = @"
 SELECT TOP (1)
@@ -929,10 +966,13 @@ ORDER BY FechaInicioProgramada;";
                     cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value = finNuevo;
 
                     await using var rd = await cmd.ExecuteReaderAsync();
+
                     if (await rd.ReadAsync())
                     {
                         var parteCruce = rd["Parte"] as string ?? "otro programa";
+
                         await tx.RollbackAsync();
+
                         return Json(new
                         {
                             ok = false,
@@ -958,17 +998,21 @@ WHERE MoldeID = @MoldeID
 ORDER BY FechaInicioProgramada;";
 
                     await using var cmd = new SqlCommand(sqlCruceMolde, cn, tx);
+
                     cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value = moldeId.Value;
                     cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = request.ProgramaProduccionID;
                     cmd.Parameters.Add("@FechaInicio", SqlDbType.DateTime).Value = inicioSolicitado;
                     cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value = finNuevo;
 
                     await using var rd = await cmd.ExecuteReaderAsync();
+
                     if (await rd.ReadAsync())
                     {
                         var maquinaCruce = rd["MaquinaCodigo"] as string ?? "otra máquina";
                         var parteCruce = rd["Parte"] as string ?? "otro programa";
+
                         await tx.RollbackAsync();
+
                         return Json(new
                         {
                             ok = false,
@@ -1036,6 +1080,7 @@ WHERE SolicitudProduccionDetalleID = @SolicitudProduccionDetalleID
   AND Activo = 1;";
 
                     await using var cmd = new SqlCommand(sqlSincronizarDetalle, cn, tx);
+
                     cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = request.MaquinaID;
 
                     var horasParam = cmd.Parameters.Add("@HorasProgramadas", SqlDbType.Decimal);
@@ -1049,6 +1094,7 @@ WHERE SolicitudProduccionDetalleID = @SolicitudProduccionDetalleID
                     cmd.Parameters.Add("@HoraInicio", SqlDbType.Time).Value = inicioSolicitado.TimeOfDay;
                     cmd.Parameters.Add("@HoraFin", SqlDbType.Time).Value = finNuevo.TimeOfDay;
                     cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value = solicitudProduccionDetalleId.Value;
+
                     await cmd.ExecuteNonQueryAsync();
                 }
 
@@ -1062,11 +1108,48 @@ SET
 WHERE SolicitudProduccionID = @SolicitudProduccionID;";
 
                     await using var cmd = new SqlCommand(sqlSincronizarOF, cn, tx);
+
                     cmd.Parameters.Add("@FechaInicio", SqlDbType.DateTime).Value = inicioSolicitado;
                     cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value = finNuevo;
                     cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId.Value;
+
                     await cmd.ExecuteNonQueryAsync();
                 }
+
+                await SincronizarReleaseDesdeReprogramacionAsync(
+                    request.ProgramaProduccionID,
+                    releaseDetalleId,
+                    inicioSolicitado,
+                    finNuevo,
+                    usuarioId,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                await InsertarHistorialReprogramacionProgramaAsync(
+                    request.ProgramaProduccionID,
+                    maquinaAnteriorId,
+                    request.MaquinaID,
+                    inicioAnterior,
+                    inicioSolicitado,
+                    finAnterior,
+                    finNuevo,
+                    horasProduccionAnteriores,
+                    horasProduccionNuevas,
+                    cambioAnterior,
+                    inicioSolicitado.TimeOfDay,
+                    arranqueAnterior,
+                    arranqueNuevo.TimeOfDay,
+                    releaseDetalleId,
+                    solicitudProduccionId,
+                    solicitudProduccionDetalleId,
+                    usuarioId,
+                    request.Redimensionado
+                        ? "Reprogramación desde calendario semanal con ajuste de duración."
+                        : $"Reprogramación desde calendario semanal. Máquina anterior: {maquinaAnteriorCodigo ?? "sin máquina"}, nueva máquina: {maquinaNuevaCodigo}.",
+                    cn,
+                    (SqlTransaction)tx
+                );
 
                 const string sqlReordenar = @"
 ;WITH OrdenMaquinas AS
@@ -1096,72 +1179,9 @@ INNER JOIN OrdenMaquinas om
                 await using (var cmd = new SqlCommand(sqlReordenar, cn, tx))
                 {
                     cmd.Parameters.Add("@MaquinaNuevaID", SqlDbType.Int).Value = request.MaquinaID;
+
                     cmd.Parameters.Add("@MaquinaAnteriorID", SqlDbType.Int).Value =
                         (object?)maquinaAnteriorId ?? DBNull.Value;
-                    await cmd.ExecuteNonQueryAsync();
-                }
-
-                const string sqlHistorialOpcional = @"
-IF OBJECT_ID('dbo.Planeacion_ProgramaReprogramacionHistorial', 'U') IS NOT NULL
-BEGIN
-    INSERT INTO dbo.Planeacion_ProgramaReprogramacionHistorial
-    (
-        ProgramaProduccionID,
-        MaquinaAnteriorID,
-        MaquinaNuevaID,
-        InicioAnterior,
-        InicioNuevo,
-        FinAnterior,
-        FinNuevo,
-        HorasAnteriores,
-        HorasNuevas,
-        UsuarioID,
-        FechaCambio,
-        Motivo
-    )
-    VALUES
-    (
-        @ProgramaProduccionID,
-        @MaquinaAnteriorID,
-        @MaquinaNuevaID,
-        @InicioAnterior,
-        @InicioNuevo,
-        @FinAnterior,
-        @FinNuevo,
-        @HorasAnteriores,
-        @HorasNuevas,
-        @UsuarioID,
-        GETDATE(),
-        @Motivo
-    );
-END;";
-
-                await using (var cmd = new SqlCommand(sqlHistorialOpcional, cn, tx))
-                {
-                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = request.ProgramaProduccionID;
-                    cmd.Parameters.Add("@MaquinaAnteriorID", SqlDbType.Int).Value =
-                        (object?)maquinaAnteriorId ?? DBNull.Value;
-                    cmd.Parameters.Add("@MaquinaNuevaID", SqlDbType.Int).Value = request.MaquinaID;
-                    cmd.Parameters.Add("@InicioAnterior", SqlDbType.DateTime).Value = inicioAnterior;
-                    cmd.Parameters.Add("@InicioNuevo", SqlDbType.DateTime).Value = inicioSolicitado;
-                    cmd.Parameters.Add("@FinAnterior", SqlDbType.DateTime).Value = finAnterior;
-                    cmd.Parameters.Add("@FinNuevo", SqlDbType.DateTime).Value = finNuevo;
-
-                    var horasAnteriorParam = cmd.Parameters.Add("@HorasAnteriores", SqlDbType.Decimal);
-                    horasAnteriorParam.Precision = 18;
-                    horasAnteriorParam.Scale = 2;
-                    horasAnteriorParam.Value = horasProduccionAnteriores;
-
-                    var horasNuevaParam = cmd.Parameters.Add("@HorasNuevas", SqlDbType.Decimal);
-                    horasNuevaParam.Precision = 18;
-                    horasNuevaParam.Scale = 2;
-                    horasNuevaParam.Value = Math.Round(horasProduccionNuevas, 2);
-
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                    cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 300).Value =
-                        request.Redimensionado
-                            ? "Ajuste de horario desde calendario semanal."
-                            : $"Movimiento desde {maquinaAnteriorCodigo ?? "sin máquina"} hacia {maquinaNuevaCodigo}.";
 
                     await cmd.ExecuteNonQueryAsync();
                 }
@@ -1183,6 +1203,7 @@ END;";
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
+
                 return Json(new
                 {
                     ok = false,
@@ -1190,6 +1211,280 @@ END;";
                 });
             }
         }
+
+        private async Task SincronizarReleaseDesdeReprogramacionAsync(
+    int programaProduccionId,
+    int? releaseDetalleId,
+    DateTime inicioNuevo,
+    DateTime finNuevo,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            if (!releaseDetalleId.HasValue || releaseDetalleId.Value <= 0)
+                return;
+
+            DateTime? fechaRequeridaCliente = null;
+
+            const string sqlObtenerReleaseDetalle = @"
+SELECT TOP 1
+    FechaRequerida
+FROM dbo.Planeacion_ReleaseDetalle
+WHERE ReleaseDetalleID = @ReleaseDetalleID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlObtenerReleaseDetalle, cn, tx))
+            {
+                cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId.Value;
+
+                var result = await cmd.ExecuteScalarAsync();
+
+                if (result != null && result != DBNull.Value)
+                    fechaRequeridaCliente = Convert.ToDateTime(result).Date;
+            }
+
+            bool? daTiempo = null;
+            string mensajeCapacidad;
+
+            if (fechaRequeridaCliente.HasValue)
+            {
+                daTiempo = finNuevo.Date <= fechaRequeridaCliente.Value.Date;
+
+                mensajeCapacidad = daTiempo.Value
+                    ? $"Programación actualizada: termina el {finNuevo:dd/MM/yyyy HH:mm}, dentro de la fecha requerida del cliente ({fechaRequeridaCliente:dd/MM/yyyy})."
+                    : $"Programación actualizada: termina el {finNuevo:dd/MM/yyyy HH:mm}, posterior a la fecha requerida del cliente ({fechaRequeridaCliente:dd/MM/yyyy}).";
+            }
+            else
+            {
+                mensajeCapacidad = $"Programación actualizada: inicio {inicioNuevo:dd/MM/yyyy HH:mm}, fin {finNuevo:dd/MM/yyyy HH:mm}.";
+            }
+
+            const string sqlActualizarReleaseDetalle = @"
+UPDATE dbo.Planeacion_ReleaseDetalle
+SET
+    DaTiempo = @DaTiempo,
+    FechaInicioSugerida = @FechaInicioProgramada,
+    FechaFinEstimada = @FechaFinProgramada,
+    MensajeCapacidad = @MensajeCapacidad,
+    FechaModificacion = GETDATE(),
+    UsuarioModificacionID = @UsuarioModificacionID
+WHERE ReleaseDetalleID = @ReleaseDetalleID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlActualizarReleaseDetalle, cn, tx))
+            {
+                cmd.Parameters.Add("@DaTiempo", SqlDbType.Bit).Value =
+                    daTiempo.HasValue ? daTiempo.Value : DBNull.Value;
+
+                cmd.Parameters.Add("@FechaInicioProgramada", SqlDbType.DateTime).Value = inicioNuevo;
+                cmd.Parameters.Add("@FechaFinProgramada", SqlDbType.DateTime).Value = finNuevo;
+                cmd.Parameters.Add("@MensajeCapacidad", SqlDbType.NVarChar, 500).Value = mensajeCapacidad;
+                cmd.Parameters.Add("@UsuarioModificacionID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId.Value;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlActualizarReleasePadre = @"
+UPDATE r
+SET
+    r.FechaModificacion = GETDATE(),
+    r.UsuarioModificacionID = @UsuarioModificacionID
+FROM dbo.Planeacion_Releases r
+INNER JOIN dbo.Planeacion_ReleaseDetalle d
+    ON d.ReleaseID = r.ReleaseID
+WHERE d.ReleaseDetalleID = @ReleaseDetalleID
+  AND r.Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlActualizarReleasePadre, cn, tx))
+            {
+                cmd.Parameters.Add("@UsuarioModificacionID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId.Value;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        private async Task InsertarHistorialReprogramacionProgramaAsync(
+    int programaProduccionId,
+    int? maquinaAnteriorId,
+    int? maquinaNuevaId,
+    DateTime inicioAnterior,
+    DateTime inicioNuevo,
+    DateTime finAnterior,
+    DateTime finNuevo,
+    decimal horasAnteriores,
+    decimal horasNuevas,
+    TimeSpan? cambioAnterior,
+    TimeSpan? cambioNuevo,
+    TimeSpan? arranqueAnterior,
+    TimeSpan? arranqueNuevo,
+    int? releaseDetalleId,
+    int? solicitudProduccionId,
+    int? solicitudProduccionDetalleId,
+    int usuarioId,
+    string? motivo,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            DateTime? fechaRequeridaCliente = null;
+            bool? daTiempoDespues = null;
+
+            if (releaseDetalleId.HasValue && releaseDetalleId.Value > 0)
+            {
+                const string sqlFechaRequerida = @"
+SELECT TOP 1
+    FechaRequerida
+FROM dbo.Planeacion_ReleaseDetalle
+WHERE ReleaseDetalleID = @ReleaseDetalleID
+  AND Activo = 1;";
+
+                await using var cmdFecha = new SqlCommand(sqlFechaRequerida, cn, tx);
+                cmdFecha.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId.Value;
+
+                var result = await cmdFecha.ExecuteScalarAsync();
+
+                if (result != null && result != DBNull.Value)
+                {
+                    fechaRequeridaCliente = Convert.ToDateTime(result).Date;
+                    daTiempoDespues = finNuevo.Date <= fechaRequeridaCliente.Value.Date;
+                }
+            }
+
+            const string sql = @"
+INSERT INTO dbo.Planeacion_ProgramaReprogramacionHistorial
+(
+    ProgramaProduccionID,
+
+    MaquinaAnteriorID,
+    MaquinaNuevaID,
+
+    InicioAnterior,
+    InicioNuevo,
+
+    FinAnterior,
+    FinNuevo,
+
+    HorasAnteriores,
+    HorasNuevas,
+
+    CambioAnterior,
+    CambioNuevo,
+
+    ArranqueAnterior,
+    ArranqueNuevo,
+
+    ReleaseDetalleID,
+    SolicitudProduccionID,
+    SolicitudProduccionDetalleID,
+
+    DaTiempoDespues,
+    FechaRequeridaCliente,
+
+    UsuarioID,
+    FechaCambio,
+
+    Motivo
+)
+VALUES
+(
+    @ProgramaProduccionID,
+
+    @MaquinaAnteriorID,
+    @MaquinaNuevaID,
+
+    @InicioAnterior,
+    @InicioNuevo,
+
+    @FinAnterior,
+    @FinNuevo,
+
+    @HorasAnteriores,
+    @HorasNuevas,
+
+    @CambioAnterior,
+    @CambioNuevo,
+
+    @ArranqueAnterior,
+    @ArranqueNuevo,
+
+    @ReleaseDetalleID,
+    @SolicitudProduccionID,
+    @SolicitudProduccionDetalleID,
+
+    @DaTiempoDespues,
+    @FechaRequeridaCliente,
+
+    @UsuarioID,
+    GETDATE(),
+
+    @Motivo
+);";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+
+            cmd.Parameters.Add("@MaquinaAnteriorID", SqlDbType.Int).Value =
+                (object?)maquinaAnteriorId ?? DBNull.Value;
+
+            cmd.Parameters.Add("@MaquinaNuevaID", SqlDbType.Int).Value =
+                (object?)maquinaNuevaId ?? DBNull.Value;
+
+            cmd.Parameters.Add("@InicioAnterior", SqlDbType.DateTime).Value = inicioAnterior;
+            cmd.Parameters.Add("@InicioNuevo", SqlDbType.DateTime).Value = inicioNuevo;
+
+            cmd.Parameters.Add("@FinAnterior", SqlDbType.DateTime).Value = finAnterior;
+            cmd.Parameters.Add("@FinNuevo", SqlDbType.DateTime).Value = finNuevo;
+
+            var horasAnterioresParam = cmd.Parameters.Add("@HorasAnteriores", SqlDbType.Decimal);
+            horasAnterioresParam.Precision = 18;
+            horasAnterioresParam.Scale = 2;
+            horasAnterioresParam.Value = Math.Round(horasAnteriores, 2);
+
+            var horasNuevasParam = cmd.Parameters.Add("@HorasNuevas", SqlDbType.Decimal);
+            horasNuevasParam.Precision = 18;
+            horasNuevasParam.Scale = 2;
+            horasNuevasParam.Value = Math.Round(horasNuevas, 2);
+
+            cmd.Parameters.Add("@CambioAnterior", SqlDbType.Time).Value =
+                (object?)cambioAnterior ?? DBNull.Value;
+
+            cmd.Parameters.Add("@CambioNuevo", SqlDbType.Time).Value =
+                (object?)cambioNuevo ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ArranqueAnterior", SqlDbType.Time).Value =
+                (object?)arranqueAnterior ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ArranqueNuevo", SqlDbType.Time).Value =
+                (object?)arranqueNuevo ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value =
+                (object?)releaseDetalleId ?? DBNull.Value;
+
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+                (object?)solicitudProduccionId ?? DBNull.Value;
+
+            cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value =
+                (object?)solicitudProduccionDetalleId ?? DBNull.Value;
+
+            cmd.Parameters.Add("@DaTiempoDespues", SqlDbType.Bit).Value =
+                daTiempoDespues.HasValue ? daTiempoDespues.Value : DBNull.Value;
+
+            cmd.Parameters.Add("@FechaRequeridaCliente", SqlDbType.Date).Value =
+                fechaRequeridaCliente.HasValue ? fechaRequeridaCliente.Value.Date : DBNull.Value;
+
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
+            cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500).Value =
+                string.IsNullOrWhiteSpace(motivo)
+                    ? DBNull.Value
+                    : motivo.Trim();
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+
         [HttpGet]
         public async Task<IActionResult> Maquinas(DateTime? fechaDesde, DateTime? fechaHasta)
         {

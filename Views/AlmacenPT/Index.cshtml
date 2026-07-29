@@ -1,6 +1,6 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTIndexVm
 @{
-    Layout = "~/Views/Shared/_Layout.cshtml";
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = "Inventario PT";
 }
 
@@ -8,10 +8,7 @@
     <div>
         <small>PRODUCTO TERMINADO</small>
         <h1>Inventario PT</h1>
-        <p>
-            Inventario por número de parte. La existencia representa las piezas físicamente registradas;
-            las piezas retenidas permanecen bloqueadas por calidad.
-        </p>
+        <p>Inventario por numero de parte. La existencia representa las piezas fisicamente registradas en Almacen PT.</p>
     </div>
 
     <div class="alm-actions">
@@ -38,13 +35,51 @@
     <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
 }
 
+<!-- ALMACEN_PT_KPIS_OPERATIVOS_V1_0 -->
 <section class="alm-grid alm-grid-6">
-    <div class="alm-kpi"><small>Números de parte</small><strong>@Model.TotalPartes</strong></div>
-    <div class="alm-kpi"><small>Existencia total</small><strong>@Model.PiezasFisicas</strong></div>
-    <div class="alm-kpi"><small>Retenido por calidad</small><strong>@Model.PiezasRetenidas</strong></div>
-    <div class="alm-kpi"><small>Stock disponible</small><strong>@Model.PiezasDisponibles</strong></div>
-    <div class="alm-kpi"><small>Crítico / aviso</small><strong>@Model.Criticos / @Model.Advertencias</strong></div>
-    <div class="alm-kpi"><small>Sin configurar</small><strong>@Model.PendientesConfiguracion</strong></div>
+    <div class="alm-kpi alm-kpi-demand">
+        <small>Solicitado pendiente</small>
+        <strong>
+            @(Model.PiezasSolicitadasPendientes > 0
+                ? $"-{Model.PiezasSolicitadasPendientes:N0}"
+                : "0")
+        </strong>
+        <span class="alm-kpi-note">Piezas de OF programadas todavía no recibidas.</span>
+    </div>
+
+    <div class="alm-kpi">
+        <small>OF pendientes PT</small>
+        <strong>@Model.OFPendientesRecepcion.ToString("N0")</strong>
+        <span class="alm-kpi-note">Órdenes con producto pendiente de ingresar.</span>
+    </div>
+
+    <div class="alm-kpi">
+        <small>Cajas recibidas hoy</small>
+        <strong>@Model.CajasRecibidasHoy.ToString("N0")</strong>
+        <span class="alm-kpi-note">Cajas escaneadas con movimiento de entrada.</span>
+    </div>
+
+    <div class="alm-kpi">
+        <small>Piezas recibidas hoy</small>
+        <strong>@Model.PiezasRecibidasHoy.ToString("N0")</strong>
+        <span class="alm-kpi-note">Total ingresado desde Producción.</span>
+    </div>
+
+    <div class="alm-kpi alm-kpi-out">
+        <small>Salidas de hoy</small>
+        <strong>
+            @(Model.PiezasSalidasHoy > 0
+                ? $"-{Model.PiezasSalidasHoy:N0}"
+                : "0")
+        </strong>
+        <span class="alm-kpi-note">Salidas y embarques registrados hoy.</span>
+    </div>
+
+    <div class="alm-kpi alm-kpi-critical">
+        <small>Partes críticas</small>
+        <strong>@Model.Criticos.ToString("N0")</strong>
+        <span class="alm-kpi-note">Partes en semáforo rojo.</span>
+    </div>
 </section>
 
 <section class="alm-card">
@@ -91,8 +126,7 @@
                 <col class="pt2-col-description" />
                 <col class="pt2-col-client" />
                 <col class="pt2-col-stock" />
-                <col class="pt2-col-retained" />
-                <col class="pt2-col-price" />
+                <col class="pt2-col-requested" /><col class="pt2-col-price" />
                 <col class="pt2-col-actions" />
             </colgroup>
 
@@ -102,8 +136,7 @@
                     <th>Descripción</th>
                     <th>Cliente</th>
                     <th>Existencia</th>
-                    <th>Retenido</th>
-                    <th>Precio venta</th>
+                    <th>Solicitado</th><th>Último movimiento</th>
                     <th aria-label="Acciones"></th>
                 </tr>
             </thead>
@@ -136,31 +169,36 @@
                         </td>
 
                         <td class="pt-stock"
-                            title="Existencia física: @x.SaldoFisico · Disponible real: @x.Disponible">
+                            title="Existencia física: @x.SaldoFisico PZA · Disponible real: @x.Disponible PZA">
                             <span class="pt-stock-badge @x.Semaforo"
-                                  title="Existencia física: @x.SaldoFisico · Disponible real: @x.Disponible">
-                                <strong>@x.SaldoFisico</strong>
+                                  title="Existencia física: @x.SaldoFisico PZA · Disponible real: @x.Disponible PZA">
+                                <strong>@x.SaldoFisico.ToString("N0") PZA</strong>
                             </span>
                         </td>
 
-                        <td class="pt-number">@x.Retenido</td>
-
-                        <td class="pt-price"
-                            title="@(x.TienePrecioVenta
-                                ? $"Unidad: {x.UnidadPrecioVenta} · Fuente: {x.FuentePrecioVenta}"
-                                : "Sin precio asignado")">
-                            @if (x.TienePrecioVenta)
+                        <!-- ALMACEN_PT_SOLICITADO_CELDA_V1_0 -->
+                        <td class="pt-requested">
+                            @if (x.Solicitado > 0)
                             {
-                                <strong>@x.PrecioVentaUnitario.ToString("N2")</strong>
-                                <small>@x.MonedaPrecioVenta</small>
+                                <strong>-@x.Solicitado.ToString("N0") PZA</strong>
+                                <small>Pendiente</small>
                             }
                             else
                             {
-                                <span class="pt-empty-value">—</span>
+                                <span class="pt-empty-value">0 PZA</span>
                             }
                         </td>
-
-                        <td>
+                        <td class="pt-last-movement">
+                            @if (x.UltimoMovimiento.HasValue)
+                            {
+                                <strong>@x.UltimoMovimiento.Value.ToString("dd/MM/yyyy")</strong>
+                                <small>@x.UltimoMovimiento.Value.ToString("HH:mm")</small>
+                            }
+                            else
+                            {
+                                <span class="pt-empty-value">Sin movimientos</span>
+                            }
+                        </td>                        <td>
                             <div class="pt-actions">
                                 <a class="pt-action"
                                    asp-action="Movimiento"
@@ -241,12 +279,13 @@
                 @if (!Model.Movimientos.Any())
                 {
                     <tr>
-                        <td colspan="8" class="alm-empty">No hay movimientos PT.</td>
+                        <td colspan="7" class="alm-empty">No hay movimientos PT.</td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
 </section>
+
 
 
