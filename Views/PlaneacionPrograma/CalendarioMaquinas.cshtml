@@ -243,6 +243,15 @@
             box-shadow: 0 7px 16px rgba(16,24,40,.15);
         }
 
+        if (!maquinaCompatible) {
+            await tx.RollbackAsync();
+            return Json(new {
+                ok = false,
+                requiereConfirmacion = true,
+                mensaje = $"No puedes mover este programa a la máquina {maquinaNuevaCodigo}, porque no está configurada como máquina principal ni sustituta para esta parte."
+            });
+        }
+
         .vis-item .vis-item-content { padding: 6px 9px; }
         .vis-item.programa-programado { background: linear-gradient(90deg, #175cd3, #2e90fa); }
         .vis-item.programa-preparacion { background: linear-gradient(90deg, #dc6803, #f79009); }
@@ -254,6 +263,24 @@
         .vis-item.turno-1 { background: rgba(23,92,211,.055); border: 0; box-shadow: none; }
         .vis-item.turno-2 { background: rgba(247,144,9,.055); border: 0; box-shadow: none; }
         .vis-item.turno-3 { background: rgba(127,86,217,.055); border: 0; box-shadow: none; }
+
+        .vis-item.programa-programado,
+        .vis-item.programa-preparacion,
+        .vis-item.programa-pausado {
+            cursor: grab !important;
+            pointer-events: auto !important;
+        }
+
+            .vis-item.programa-programado:active,
+            .vis-item.programa-preparacion:active,
+            .vis-item.programa-pausado:active {
+                cursor: grabbing !important;
+            }
+
+        .vis-item.vis-readonly {
+            cursor: not-allowed !important;
+            opacity: .75;
+        }
 
         .grupo-sin-asignar { background: #fff7ed !important; }
 
@@ -491,11 +518,22 @@
             }
 
             const groups = new vis.DataSet(rawGroups);
-            const programItems = rawPrograms.map(item => ({
+                   const programItems = rawPrograms.map(item => {
+            const puedeMover = item.editable === true || item.editable === "true";
+
+            return {
                 ...item,
                 start: parseLocalDate(item.start),
-                end: parseLocalDate(item.end)
-            }));
+                end: parseLocalDate(item.end),
+                editable: puedeMover
+                    ? {
+                        updateTime: true,
+                        updateGroup: true,
+                        remove: false
+                    }
+                    : false
+            };
+        });
 
             const items = new vis.DataSet([
                 ...buildShiftBackgrounds(),
@@ -521,13 +559,19 @@
                 hiddenDates: [
                     { start: saturdayClose, end: weekEnd }
                 ],
-                editable: {
-                    add: false,
-                    remove: false,
-                    updateTime: true,
-                    updateGroup: true,
-                    overrideItems: false
-                },
+                        editable: {
+            add: false,
+            remove: false,
+            updateTime: true,
+            updateGroup: true,
+            overrideItems: false
+        },
+        itemsAlwaysDraggable: {
+            item: true,
+            range: true
+        },
+        selectable: true,
+        multiselect: false,
                 snap: date => {
                     const ms = snapMinutes * 60 * 1000;
                     return new Date(Math.round(date.getTime() / ms) * ms);
@@ -578,17 +622,11 @@
                     try {
                         let result = await saveMove(payload);
 
-                        if (result.requiereConfirmacion) {
-                            const accepted = window.confirm(result.mensaje);
-                            if (!accepted) {
-                                setStatus('Movimiento cancelado.', '');
-                                callback(null);
-                                return;
-                            }
-
-                            payload.forzarMaquina = true;
-                            result = await saveMove(payload);
-                        }
+                               if (result.requiereConfirmacion) {
+            setStatus(result.mensaje || 'No puedes mover este programa a esa máquina porque no es principal ni sustituta.', 'error');
+            callback(null);
+            return;
+        }
 
                         if (!result.ok) {
                             setStatus(result.mensaje || 'No fue posible guardar el movimiento.', 'error');

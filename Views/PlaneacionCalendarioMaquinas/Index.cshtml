@@ -4,20 +4,85 @@
 @{
     Layout = null;
 
-    var semanaAnterior = Model.InicioSemana.AddDays(-7);
-    var semanaSiguiente = Model.InicioSemana.AddDays(7);
-    var totalMinutos = (Model.FinSemana - Model.InicioSemana).TotalMinutes;
+    var cultura = new CultureInfo("es-MX");
+
+    var inicioPeriodo = Model.InicioPeriodo;
+    var finPeriodo = Model.FinPeriodo;
+
+    if (finPeriodo <= inicioPeriodo)
+    {
+        finPeriodo = inicioPeriodo.AddDays(7);
+    }
+
+    var totalMinutos = (finPeriodo - inicioPeriodo).TotalMinutes;
+    var totalDias = Math.Max(1, Model.TotalDiasPeriodo);
+
+    var anchoDias = totalDias <= 1
+        ? 1250
+        : Math.Max(1250, totalDias * 150);
+
+    var timelineMinWidth = anchoDias + 280;
 
     string Pct(double value) =>
         value.ToString("0.####", CultureInfo.InvariantCulture);
 
     var ahoraVisible =
-        Model.Ahora >= Model.InicioSemana &&
-        Model.Ahora < Model.FinSemana;
+        Model.Ahora >= inicioPeriodo &&
+        Model.Ahora < finPeriodo;
 
     var ahoraLeft = ahoraVisible
-        ? (Model.Ahora - Model.InicioSemana).TotalMinutes / totalMinutos * 100
+        ? (Model.Ahora - inicioPeriodo).TotalMinutes / totalMinutos * 100
         : 0;
+
+    var periodoAnterior = Model.PeriodoAnterior;
+    var periodoSiguiente = Model.PeriodoSiguiente;
+
+    var rangoFinVisible = Model.RangoFin?.ToString("yyyy-MM-dd")
+        ?? Model.FinPeriodo.AddDays(-1).ToString("yyyy-MM-dd");
+
+    var rangoInicioVisible = Model.RangoInicio?.ToString("yyyy-MM-dd")
+        ?? Model.InicioPeriodo.ToString("yyyy-MM-dd");
+
+    string ClaseVista(string vista) =>
+        Model.VistaNormalizada == vista
+            ? "btn btn-primary fw-bold"
+            : "btn btn-outline-primary fw-bold";
+
+    string TextoPeriodoAnterior()
+    {
+        if (Model.EsVistaDia) return "Día anterior";
+        if (Model.EsVistaMes) return "Mes anterior";
+        if (Model.EsVistaRango) return "Rango anterior";
+        return "Semana anterior";
+    }
+
+    string TextoPeriodoSiguiente()
+    {
+        if (Model.EsVistaDia) return "Día siguiente";
+        if (Model.EsVistaMes) return "Mes siguiente";
+        if (Model.EsVistaRango) return "Rango siguiente";
+        return "Semana siguiente";
+    }
+
+    string UrlPeriodo(DateTime fecha)
+    {
+        if (Model.EsVistaRango)
+        {
+            var finRango = fecha.AddDays(totalDias - 1).ToString("yyyy-MM-dd");
+            return Url.Action("Index", "PlaneacionCalendarioMaquinas", new
+            {
+                vista = "rango",
+                rangoInicio = fecha.ToString("yyyy-MM-dd"),
+                rangoFin = finRango
+            }) ?? "#";
+        }
+
+        return Url.Action("Index", "PlaneacionCalendarioMaquinas", new
+        {
+            vista = Model.VistaNormalizada,
+            fecha = fecha.ToString("yyyy-MM-dd")
+        }) ?? "#";
+    }
 }
 
 <!DOCTYPE html>
@@ -25,273 +90,919 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Calendario Maquinas | Planeacion</title>
+    <title>Calendario Máquinas | Planeación</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
 
     <style>
-        :root{
-            --blue:#004aad;
-            --blue-dark:#063875;
-            --bg:#eef3f9;
-            --border:#d7e1ee;
-            --text:#1f2937;
-            --muted:#667085;
-            --machine-width:210px;
+        :root {
+            --blue: #004aad;
+            --blue-dark: #063875;
+            --bg: #eef3f9;
+            --border: #d7e1ee;
+            --text: #1f2937;
+            --muted: #667085;
+            --machine-width: 280px;
+            --dias-periodo: @totalDias;
+            --horas-periodo: @(Math.Max(1, totalDias * 24));
         }
 
-        *{box-sizing:border-box}
-        body{margin:0;background:var(--bg);font-family:"Segoe UI",Arial,sans-serif;color:var(--text)}
-        .page{max-width:1920px;margin:0 auto;padding:24px}
-        .hero{padding:25px 28px;border-radius:26px;color:#fff;background:linear-gradient(135deg,var(--blue),var(--blue-dark));box-shadow:0 18px 42px rgba(0,74,173,.22)}
-        .hero h1{font-size:1.7rem;font-weight:950;margin:0}
-        .hero p{margin:8px 0 0;color:rgba(255,255,255,.86)}
-        .btn-glass{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:1px solid rgba(255,255,255,.35);border-radius:13px;background:rgba(255,255,255,.13);color:#fff;text-decoration:none;font-weight:850}
-        .btn-glass:hover{background:#fff;color:var(--blue)}
+        * {
+            box-sizing: border-box;
+        }
 
-        .toolbar,.calendar-card{margin-top:18px;border:1px solid var(--border);border-radius:20px;background:#fff;box-shadow:0 10px 28px rgba(16,24,40,.07)}
-        .toolbar{padding:14px}
-        .calendar-card{overflow:hidden}
+        body {
+            margin: 0;
+            background: var(--bg);
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--text);
+            font-size: 14px;
+        }
 
-        .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
-        .metric{padding:14px 16px;border:1px solid var(--border);border-radius:17px;background:#fff}
-        .metric span{display:block;color:var(--muted);font-size:.72rem;font-weight:850;text-transform:uppercase}
-        .metric strong{font-size:1.55rem;color:var(--blue-dark)}
+        .page {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            padding: 12px 16px;
+        }
 
-        .timeline-scroll{overflow:auto}
-        .timeline{min-width:1250px}
-        .timeline-header,.machine-row{display:grid;grid-template-columns:var(--machine-width) minmax(1000px,1fr)}
-        .machine-head{position:sticky;left:0;z-index:12;padding:13px 14px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:#f8fbff;color:var(--blue-dark);font-weight:900}
-        .days{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border)}
-        .day{padding:10px 8px;border-left:1px solid var(--border);text-align:center;background:#f8fbff}
-        .day strong{display:block;color:var(--blue-dark);font-size:.78rem}
-        .day span{color:var(--muted);font-size:.7rem}
+        .hero {
+            padding: 15px 22px;
+            border-radius: 26px;
+            color: #fff;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            box-shadow: 0 18px 42px rgba(0,74,173,.22);
+        }
 
-        .machine-row{border-bottom:1px solid #edf1f6}
-        .machine-info{position:sticky;left:0;z-index:10;padding:12px 14px;border-right:1px solid var(--border);background:#fff}
-        .machine-info strong{display:block;color:var(--blue-dark)}
-        .machine-info span{display:block;color:var(--muted);font-size:.72rem}
-        .machine-info em{display:inline-block;margin-top:6px;font-size:.68rem;font-style:normal;font-weight:800;color:#475467}
+            .hero h1 {
+                font-size: 1.35rem;
+                font-weight: 950;
+                margin: 0;
+            }
 
-        .track{position:relative;min-height:72px;background-color:#fff;background-image:linear-gradient(to right,rgba(148,163,184,.18) 1px,transparent 1px),linear-gradient(to right,rgba(71,84,103,.28) 1px,transparent 1px);background-size:calc(100% / 168) 100%,calc(100% / 7) 100%}
-        .now-line{position:absolute;top:0;bottom:0;width:2px;background:#d92d20;z-index:6;pointer-events:none}
-        .block{position:absolute;height:40px;padding:5px 8px;border:0;border-radius:9px;color:#fff;text-align:left;overflow:hidden;box-shadow:0 5px 12px rgba(16,24,40,.18);cursor:pointer}
-        .block strong,.block span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .block strong{font-size:.71rem}
-        .block span{font-size:.64rem;opacity:.92}
-        .bloque-programado{background:#175cd3}
-        .bloque-preparacion{background:#dc6803}
-        .bloque-produccion{background:#067647}
-        .bloque-pausado{background:#b42318}
-        .bloque-terminado{background:#667085}
-        .empty-row{display:flex;align-items:center;padding:15px;color:#98a2b3;font-size:.75rem;font-weight:750}
+            .hero p {
+                margin: 4px 0 0;
+                color: rgba(255,255,255,.86);
+            }
 
-        .legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:.75rem;font-weight:750}
-        .legend i{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:4px}
+        .btn-glass {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 10px 14px;
+            border: 1px solid rgba(255,255,255,.35);
+            border-radius: 13px;
+            background: rgba(255,255,255,.13);
+            color: #fff;
+            text-decoration: none;
+            font-weight: 850;
+        }
 
-        @@media(max-width:800px){
-            .page{padding:13px}
-            .metrics{grid-template-columns:1fr}
-            :root{--machine-width:170px}
+            .btn-glass:hover {
+                background: #fff;
+                color: var(--blue);
+            }
+
+        .toolbar,
+        .calendar-card {
+            margin-top: 10px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: #fff;
+            box-shadow: 0 10px 28px rgba(16,24,40,.07);
+        }
+
+        .toolbar {
+            padding: 10px 12px;
+        }
+
+        .calendar-card {
+            overflow: visible;
+            display: block;
+            height: auto;
+            min-height: 0;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .metric {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 17px;
+            background: #fff;
+        }
+
+            .metric span {
+                display: block;
+                color: var(--muted);
+                font-size: .74rem;
+                font-weight: 850;
+                text-transform: uppercase;
+            }
+
+            .metric strong {
+                font-size: 1.22rem;
+                color: var(--blue-dark);
+            }
+
+        .calendar-status {
+            margin-top: 10px;
+            padding: 9px 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--muted);
+            font-weight: 800;
+        }
+
+            .calendar-status.success {
+                background: #ecfdf3;
+                border-color: #abefc6;
+                color: #067647;
+            }
+
+            .calendar-status.error {
+                background: #fef3f2;
+                border-color: #fecdca;
+                color: #b42318;
+            }
+
+            .calendar-status.working {
+                background: #eef6ff;
+                border-color: #b2ddff;
+                color: #175cd3;
+            }
+
+        .timeline-scroll {
+            overflow: visible;
+        }
+
+        .timeline {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .timeline-header,
+        .machine-row {
+            display: grid;
+            grid-template-columns: var(--machine-width) minmax(0,1fr);
+        }
+
+        .timeline-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: #fff;
+        }
+
+        .machine-head {
+            position: sticky;
+            left: 0;
+            z-index: 12;
+            padding: 10px 12px;
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: #f8fbff;
+            color: var(--blue-dark);
+            font-weight: 900;
+        }
+
+        .days {
+            display: grid;
+            grid-template-columns: repeat( @totalDias,1fr);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .day {
+            padding: 7px 6px;
+            border-left: 1px solid var(--border);
+            text-align: center;
+            background: #f8fbff;
+        }
+
+            .day strong {
+                display: block;
+                color: var(--blue-dark);
+                font-size: .75rem;
+            }
+
+            .day span {
+                color: var(--muted);
+                font-size: .7rem;
+            }
+
+        .machine-row {
+            border-bottom: 1px solid #edf1f6;
+        }
+
+        .machine-info {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            padding: 7px 10px;
+            border-right: 1px solid var(--border);
+            background: #fff;
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .machine-inline {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .machine-code {
+            color: var(--blue-dark);
+            font-size: .90rem;
+            font-weight: 950;
+            flex: 0 0 auto;
+        }
+
+        .machine-name {
+            color: var(--muted);
+            font-size: .74rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .machine-count {
+            flex: 0 0 auto;
+            font-size: .64rem;
+            font-style: normal;
+            font-weight: 850;
+            color: #344054;
+            background: #f8fbff;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 2px 7px;
+        }
+
+        .track {
+            position: relative;
+            min-height: 48px;
+            background-color: #fff;
+            background-image: linear-gradient(to right,rgba(148,163,184,.18) 1px,transparent 1px), linear-gradient(to right,rgba(71,84,103,.28) 1px,transparent 1px);
+            background-size: calc(100% / var(--horas-periodo)) 100%, calc(100% / var(--dias-periodo)) 100%;
+        }
+
+            .track.drag-over {
+                outline: 3px dashed rgba(0,74,173,.35);
+                outline-offset: -6px;
+                background-color: #f8fbff;
+            }
+
+        .now-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #d92d20;
+            z-index: 6;
+            pointer-events: none;
+        }
+
+        .block {
+            position: absolute;
+            height: 32px;
+            padding: 4px 8px;
+            border: 0;
+            border-radius: 9px;
+            color: #fff;
+            text-align: left;
+            overflow: hidden;
+            box-shadow: 0 5px 12px rgba(16,24,40,.18);
+            cursor: grab;
+            user-select: none;
+            z-index: 5;
+        }
+
+            .block:active {
+                cursor: grabbing;
+            }
+
+            .block.no-drag {
+                cursor: not-allowed;
+                opacity: .78;
+            }
+
+            .block strong,
+            .block span {
+                display: block;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .block strong {
+                font-size: .68rem;
+            }
+
+            .block span {
+                font-size: .60rem;
+                opacity: .92;
+            }
+
+        .bloque-timeline {
+            background: #175cd3;
+        }
+
+        .bloque-produciendo {
+            background: #fdb022;
+            color: #111827;
+        }
+
+        .bloque-producido {
+            background: #12b76a;
+        }
+
+        .bloque-cerrado {
+            background: #667085;
+        }
+
+        .bloque-error {
+            background: #b42318;
+        }
+
+        .empty-row {
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            color: #98a2b3;
+            font-size: .75rem;
+            font-weight: 750;
+        }
+
+        .legend {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 750;
+        }
+
+            .legend i {
+                width: 11px;
+                height: 11px;
+                border-radius: 3px;
+                display: inline-block;
+                margin-right: 4px;
+            }
+
+        .range-panel {
+            display: none;
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 15px;
+            background: #f8fbff;
+            border: 1px solid var(--border);
+        }
+
+            .range-panel.active {
+                display: block;
+            }
+
+        @@media(max-width:800px) {
+            .page {
+                padding: 13px;
+            }
+
+            .metrics {
+                grid-template-columns: 1fr;
+            }
+
+            :root {
+                --machine-width: 210px;
+            }
         }
     </style>
 </head>
 <body>
-<div class="page">
-    <section class="hero">
-        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-            <div>
-                <div class="small fw-bold text-uppercase opacity-75 mb-2">Planeacion / Solo lectura</div>
-                <h1><i class="fa-solid fa-calendar-days me-2"></i>CALENDARIO MAQUINAS</h1>
-                <p>Consulta semanal de maquinas, OF, parte, molde, cambio, arranque y horas programadas. Este modulo no modifica ninguna OF.</p>
-            </div>
+    <div class="page">
+        <section class="hero">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <div class="small fw-bold text-uppercase opacity-75 mb-2">
+                        Planeación / Calendario editable
+                    </div>
 
-            <a asp-controller="PlaneacionPrograma"
-               asp-action="Index"
-               class="btn-glass">
-                <i class="fa-solid fa-arrow-left"></i>
-                Volver a Planeacion
-            </a>
-        </div>
-    </section>
+                    <h1>
+                        <i class="fa-solid fa-calendar-days me-2"></i>
+                        CALENDARIO MÁQUINAS
+                    </h1>
 
-    <section class="metrics">
-        <div class="metric"><span>Maquinas</span><strong>@Model.TotalMaquinas</strong></div>
-        <div class="metric"><span>OF / programas visibles</span><strong>@Model.TotalBloques</strong></div>
-        <div class="metric"><span>Trabajando ahora</span><strong>@Model.TrabajandoAhora</strong></div>
-    </section>
+                    <p>
+                        Visualiza por día, semana, mes o rango. Arrastra un bloque azul hacia otra máquina y confirma el movimiento antes de guardarlo.
+                    </p>
+                </div>
 
-    <section class="toolbar">
-        <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
-            <div class="d-flex gap-2 flex-wrap">
-                <a asp-action="Index"
-                   asp-route-semana="@semanaAnterior.ToString("yyyy-MM-dd")"
-                   class="btn btn-outline-primary fw-bold">
-                    <i class="fa-solid fa-chevron-left"></i>
-                    Semana anterior
-                </a>
-
-                <a asp-action="Index"
-                   class="btn btn-primary fw-bold">
-                    Hoy
-                </a>
-
-                <a asp-action="Index"
-                   asp-route-semana="@semanaSiguiente.ToString("yyyy-MM-dd")"
-                   class="btn btn-outline-primary fw-bold">
-                    Semana siguiente
-                    <i class="fa-solid fa-chevron-right"></i>
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Index"
+                   class="btn-glass">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Volver a Planeación
                 </a>
             </div>
+        </section>
 
-            <div style="min-width:280px">
-                <label class="form-label fw-bold mb-1">Buscar maquina, OF, cliente o parte</label>
-                <input id="calendarSearch"
-                       class="form-control"
-                       type="search"
-                       placeholder="Ej. 500-T, OF 24, GOLDE, 100234..." />
+        <section class="metrics">
+            <div class="metric">
+                <span>Máquinas</span>
+                <strong>@Model.TotalMaquinas</strong>
             </div>
-        </div>
-    </section>
 
-    <section class="calendar-card">
-        <div class="p-3 border-bottom d-flex justify-content-between gap-3 flex-wrap">
-            <div>
-                <strong class="text-primary">
-                    Semana @Model.InicioSemana.ToString("dd/MM/yyyy")
-                    al @Model.FinSemana.AddDays(-1).ToString("dd/MM/yyyy")
-                </strong>
-                <div class="small text-muted">
-                    Los bloques son informativos y no se pueden arrastrar ni editar.
+            <div class="metric">
+                <span>OF / programas visibles</span>
+                <strong>@Model.TotalBloques</strong>
+            </div>
+
+            <div class="metric">
+                <span>Trabajando ahora</span>
+                <strong>@Model.TrabajandoAhora</strong>
+            </div>
+        </section>
+
+        <section class="toolbar">
+            <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="@UrlPeriodo(periodoAnterior)"
+                       class="btn btn-outline-primary fw-bold">
+                        <i class="fa-solid fa-chevron-left"></i>
+                        @TextoPeriodoAnterior()
+                    </a>
+
+                    <a asp-action="Index"
+                       asp-route-vista="@Model.VistaNormalizada"
+                       asp-route-fecha="@DateTime.Today.ToString("yyyy-MM-dd")"
+                       class="btn btn-primary fw-bold">
+                        Hoy
+                    </a>
+
+                    <a href="@UrlPeriodo(periodoSiguiente)"
+                       class="btn btn-outline-primary fw-bold">
+                        @TextoPeriodoSiguiente()
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </a>
+                </div>
+
+                <div style="min-width:280px">
+                    <label class="form-label fw-bold mb-1">
+                        Buscar máquina, OF, cliente o parte
+                    </label>
+
+                    <input id="calendarSearch"
+                           class="form-control"
+                           type="search"
+                           placeholder="Ej. 500-T, OF 24, GOLDE, 100234..." />
                 </div>
             </div>
 
-            <div class="legend">
-                <span><i style="background:#175cd3"></i>Programado</span>
-                <span><i style="background:#dc6803"></i>Preparacion</span>
-                <span><i style="background:#067647"></i>Produccion</span>
-                <span><i style="background:#b42318"></i>Pausado</span>
-                <span><i style="background:#667085"></i>Terminado</span>
+            <div class="d-flex gap-2 flex-wrap mt-3">
+                <a asp-action="Index"
+                   asp-route-vista="dia"
+                   asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
+                   class="@ClaseVista("dia")">
+                    Día
+                </a>
+
+                <a asp-action="Index"
+                   asp-route-vista="semana"
+                   asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
+                   class="@ClaseVista("semana")">
+                    Semana
+                </a>
+
+                <a asp-action="Index"
+                   asp-route-vista="mes"
+                   asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
+                   class="@ClaseVista("mes")">
+                    Mes
+                </a>
+
+                <button type="button"
+                        id="btnMostrarRango"
+                        class="@ClaseVista("rango")">
+                    Rango
+                </button>
             </div>
+
+            <form id="formRangoCalendario"
+                  class="range-panel @(Model.EsVistaRango ? "active" : "")"
+                  asp-action="Index"
+                  method="get">
+                <input type="hidden" name="vista" value="rango" />
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Fecha inicio</label>
+                        <input id="rangoInicio"
+                               name="rangoInicio"
+                               class="form-control"
+                               type="date"
+                               value="@rangoInicioVisible" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Fecha fin</label>
+                        <input id="rangoFin"
+                               name="rangoFin"
+                               class="form-control"
+                               type="date"
+                               value="@rangoFinVisible" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <button type="submit"
+                                class="btn btn-primary fw-bold w-100">
+                            Aplicar rango
+                        </button>
+                    </div>
+
+                    <div class="col-12">
+                        <small class="text-muted fw-bold">
+                            El rango no puede ser mayor a 31 días.
+                        </small>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        @if (TempData["CalendarioError"] is string errorCalendario && !string.IsNullOrWhiteSpace(errorCalendario))
+        {
+            <div class="calendar-status error">
+                @errorCalendario
+            </div>
+        }
+
+        <div id="calendarStatus" class="calendar-status">
+            Arrastra un bloque azul hacia otra máquina. El sistema calculará line time, cola, molde y cambio antes de pedir confirmación.
         </div>
 
-        <div class="timeline-scroll">
-            <div class="timeline">
-                <div class="timeline-header">
-                    <div class="machine-head">MAQUINA</div>
+        <div id="antiForgeryToken" class="d-none">
+            @Html.AntiForgeryToken()
+        </div>
 
-                    <div class="days">
-                        @for (var day = 0; day < 7; day++)
-                        {
-                            var fecha = Model.InicioSemana.AddDays(day);
+        <section class="calendar-card">
+            <div class="p-2 border-bottom d-flex justify-content-between gap-3 flex-wrap">
+                <div>
+                    <strong class="text-primary">
+                        @Model.TituloPeriodo
+                    </strong>
 
-                            <div class="day">
-                                <strong>@fecha.ToString("dddd", new CultureInfo("es-MX")).ToUpperInvariant()</strong>
-                                <span>@fecha.ToString("dd/MM")</span>
-                            </div>
-                        }
+                    <div class="small text-muted">
+                        Vista: @Model.TextoVista. Azul = timeline y se puede mover. Amarillo = produciendo/en línea y no se mueve. Verde = ya producido. Gris = cerrado o cancelado.
                     </div>
                 </div>
 
-                @foreach (var maquina in Model.Maquinas)
-                {
-                    var rowHeight = Math.Max(72, 12 + maquina.Carriles * 48);
-                    var search = string.Join(" ",
+                <div class="legend">
+                    <span><i style="background:#175cd3"></i>Timeline</span>
+                    <span><i style="background:#fdb022"></i>Produciendo / en línea</span>
+                    <span><i style="background:#12b76a"></i>Ya producido</span>
+                    <span><i style="background:#667085"></i>Cerrado / cancelado</span>
+                </div>
+            </div>
+
+            <div class="timeline-scroll">
+                <div class="timeline">
+                    <div class="timeline-header">
+                        <div class="machine-head">MÁQUINA / BLOQUES</div>
+
+                        <div class="days">
+                            @for (var day = 0; day < totalDias; day++)
+                            {
+                                var fecha = inicioPeriodo.AddDays(day);
+
+                                <div class="day">
+                                    <strong>@fecha.ToString("ddd", cultura).ToUpperInvariant()</strong>
+                                    <span>@fecha.ToString("dd/MM")</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @foreach (var maquina in Model.Maquinas)
+                    {
+                        var rowHeight = Math.Max(48, 8 + maquina.Carriles * 36);
+
+                        var search = string.Join(" ",
                         maquina.Codigo,
                         maquina.Nombre,
                         string.Join(" ", maquina.Bloques.Select(x =>
-                            $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo}")))
+                        $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo} {x.MaquinaSugeridaTexto} {x.EstadoSemaforoTexto}")))
                         .ToLowerInvariant();
 
-                    <div class="machine-row calendar-machine-row"
-                         data-search="@search">
-                        <div class="machine-info" style="min-height:@(rowHeight)px">
-                            <strong>@maquina.Codigo</strong>
-                            <span>@maquina.Nombre</span>
-                            <em>@maquina.Bloques.Count bloque(s)</em>
-                        </div>
+                        <div class="machine-row calendar-machine-row"
+                             data-search="@search">
+                            <div class="machine-info" style="height:@(rowHeight)px">
+                                <div class="machine-inline" title="@maquina.Codigo - @maquina.Nombre">
+                                    <span class="machine-code">@maquina.Codigo</span>
+                                    <span class="machine-name">@maquina.Nombre</span>
+                                    <span class="machine-count">@maquina.Bloques.Count</span>
+                                </div>
+                            </div>
 
-                        <div class="track" style="height:@(rowHeight)px">
-                            @if (ahoraVisible)
-                            {
-                                <div class="now-line"
-                                     style="left:@Pct(ahoraLeft)%"
-                                     title="Hora actual"></div>
-                            }
+                            <div class="track"
+                                 data-maquina-id="@maquina.MaquinaID"
+                                 style="height:@(rowHeight)px">
+                                @if (ahoraVisible)
+                                {
+                                    <div class="now-line"
+                                         style="left:@Pct(ahoraLeft)%"
+                                         title="Hora actual"></div>
+                                }
 
-                            @if (!maquina.Bloques.Any())
-                            {
-                                <div class="empty-row">Sin OF programada durante esta semana.</div>
-                            }
+                                @if (!maquina.Bloques.Any())
+                                {
+                                    <div class="empty-row">Sin OF programada durante este periodo.</div>
+                                }
 
-                            @foreach (var bloque in maquina.Bloques)
-                            {
-                                var visibleInicio = bloque.Inicio < Model.InicioSemana
-                                    ? Model.InicioSemana
+                                @foreach (var bloque in maquina.Bloques)
+                                {
+                                    var visibleInicio = bloque.Inicio < inicioPeriodo
+                                    ? inicioPeriodo
                                     : bloque.Inicio;
 
-                                var visibleFin = bloque.Fin > Model.FinSemana
-                                    ? Model.FinSemana
+                                    var visibleFin = bloque.Fin > finPeriodo
+                                    ? finPeriodo
                                     : bloque.Fin;
 
-                                var left = (visibleInicio - Model.InicioSemana).TotalMinutes / totalMinutos * 100;
-                                var width = Math.Max(
+                                    var left = (visibleInicio - inicioPeriodo).TotalMinutes / totalMinutos * 100;
+
+                                    var width = Math.Max(
                                     .35,
                                     (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
 
-                                var top = 8 + bloque.Carril * 48;
+                                    var top = 8 + bloque.Carril * 36;
 
-                                <button type="button"
-                                        class="block @bloque.ClaseEstado"
-                                        style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
-                                        title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm")">
-                                    <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
-                                    <span>@(bloque.ClienteNombre ?? "Sin cliente")</span>
-                                </button>
-                            }
+                                    var puedeMover = bloque.PuedeMoverCalendario;
+
+                                    var tituloBloqueo = puedeMover
+                                    ? "Arrastra para mandar a cola de otra máquina compatible."
+                                    : bloque.MotivoBloqueoMovimiento;
+
+                                    <button type="button"
+                                            class="block @bloque.ClaseSemaforoCalendario @(puedeMover ? "" : "no-drag")"
+                                            draggable="@(puedeMover ? "true" : "false")"
+                                            style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
+                                            data-programa-id="@bloque.ProgramaProduccionID"
+                                            data-maquina-id="@bloque.MaquinaID"
+                                            data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                            data-fin="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                            data-puede-mover="@(puedeMover ? "true" : "false")"
+                                            data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
+                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @tituloBloqueo">
+                                        <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
+                                        <span>@(bloque.ClienteNombre ?? "Sin cliente") · @bloque.EstadoSemaforoTexto</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+    </div>
+
+    @foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
+    {
+        <div class="modal fade"
+             id="ofModal_@bloque.ProgramaProduccionID"
+             tabindex="-1"
+             aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 rounded-4 shadow">
+                    <div class="modal-header border-0">
+                        <div>
+                            <div class="small text-muted fw-bold text-uppercase">
+                                Detalle de producción
+                            </div>
+
+                            <h2 class="modal-title h5 fw-bold text-primary">
+                                @bloque.OFTexto
+                            </h2>
+                        </div>
+
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Máquina actual</small>
+                                    <strong class="d-block">@bloque.MaquinaCodigo</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Máquina principal</small>
+                                    <strong class="d-block">@(bloque.MaquinaPrincipalCodigo ?? "Sin máquina principal")</strong>
+                                    <span class="small">@bloque.MaquinaPrincipalNombre</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Máquina sustituta</small>
+                                    <strong class="d-block">@(bloque.MaquinaSustitutaCodigo ?? "Sin máquina sustituta")</strong>
+                                    <span class="small">@bloque.MaquinaSustitutaNombre</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Estatus</small>
+                                    <strong class="d-block">@bloque.EstatusTexto</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Semáforo</small>
+                                    <strong class="d-block">@bloque.EstadoSemaforoTexto</strong>
+
+                                    @if (!bloque.PuedeMoverCalendario)
+                                    {
+                                        <span class="small text-danger fw-bold">
+                                            @bloque.MotivoBloqueoMovimiento
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Molde</small>
+                                    <strong class="d-block">@(bloque.MoldeCodigo ?? "-")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Horas a producir</small>
+                                    <strong class="d-block">@bloque.HorasProgramadas.ToString("N2")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Cliente</small>
+                                    <strong class="d-block">@(bloque.ClienteNombre ?? "-")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Parte</small>
+                                    <strong class="d-block">@bloque.ParteTexto</strong>
+                                    <span class="small">@bloque.Descripcion</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Cambio de molde</small>
+                                    <strong class="d-block">@(bloque.Cambio?.ToString(@"hh\:mm") ?? "-")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Arranque</small>
+                                    <strong class="d-block">@(bloque.Arranque?.ToString(@"hh\:mm") ?? "-")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Inicio</small>
+                                    <strong class="d-block">@bloque.Inicio.ToString("dd/MM/yyyy HH:mm")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Fin</small>
+                                    <strong class="d-block">@bloque.Fin.ToString("dd/MM/yyyy HH:mm")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Programadas</small>
+                                    <strong class="d-block">@bloque.CantidadProgramada.ToString("N0")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Producidas</small>
+                                    <strong class="d-block">@bloque.CantidadProducida.ToString("N0")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="border rounded-3 p-3">
+                                    <small class="text-muted">Pendientes</small>
+                                    <strong class="d-block">@bloque.CantidadPendiente.ToString("N0")</strong>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                }
+
+                    <div class="modal-footer border-0">
+                        <button type="button"
+                                class="btn btn-outline-secondary fw-bold"
+                                data-bs-dismiss="modal">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-    </section>
-</div>
+    }
 
-@foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
-{
-    <div class="modal fade"
-         id="ofModal_@bloque.ProgramaProduccionID"
-         tabindex="-1"
-         aria-hidden="true">
-
-        <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal fade" id="modalConfirmarMovimientoCalendario" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content border-0 rounded-4 shadow">
-                <div class="modal-header border-0">
-                    <div>
-                        <div class="small text-muted fw-bold text-uppercase">Detalle de produccion · Solo lectura</div>
-                        <h2 class="modal-title h5 fw-bold text-primary">@bloque.OFTexto</h2>
-                    </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header border-0 bg-primary text-white rounded-top-4">
+                    <h5 class="modal-title fw-bold">
+                        Confirmar movimiento de programa
+                    </h5>
+
+                    <button type="button"
+                            class="btn-close btn-close-white"
+                            data-bs-dismiss="modal"></button>
                 </div>
 
                 <div class="modal-body">
+                    <div class="alert alert-primary rounded-3 fw-bold mb-3">
+                        El sistema calculó dónde quedará el programa si aceptas este movimiento.
+                    </div>
+
                     <div class="row g-3">
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Maquina</small><strong class="d-block">@bloque.MaquinaCodigo</strong></div></div>
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Estatus</small><strong class="d-block">@bloque.EstatusTexto</strong></div></div>
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Molde</small><strong class="d-block">@(bloque.MoldeCodigo ?? "-")</strong></div></div>
-                        <div class="col-md-6"><div class="border rounded-3 p-3"><small class="text-muted">Cliente</small><strong class="d-block">@(bloque.ClienteNombre ?? "-")</strong></div></div>
-                        <div class="col-md-6"><div class="border rounded-3 p-3"><small class="text-muted">Parte</small><strong class="d-block">@bloque.ParteTexto</strong><span class="small">@bloque.Descripcion</span></div></div>
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Cambio de molde</small><strong class="d-block">@(bloque.Cambio?.ToString(@"hh\:mm") ?? "-")</strong></div></div>
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Arranque</small><strong class="d-block">@(bloque.Arranque?.ToString(@"hh\:mm") ?? "-")</strong></div></div>
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Horas a producir</small><strong class="d-block">@bloque.HorasProgramadas.ToString("N2")</strong></div></div>
-                        <div class="col-md-6"><div class="border rounded-3 p-3"><small class="text-muted">Inicio</small><strong class="d-block">@bloque.Inicio.ToString("dd/MM/yyyy HH:mm")</strong></div></div>
-                        <div class="col-md-6"><div class="border rounded-3 p-3"><small class="text-muted">Fin</small><strong class="d-block">@bloque.Fin.ToString("dd/MM/yyyy HH:mm")</strong></div></div>
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Programadas</small><strong class="d-block">@bloque.CantidadProgramada.ToString("N0")</strong></div></div>
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Producidas</small><strong class="d-block">@bloque.CantidadProducida.ToString("N0")</strong></div></div>
-                        <div class="col-md-4"><div class="border rounded-3 p-3"><small class="text-muted">Pendientes</small><strong class="d-block">@bloque.CantidadPendiente.ToString("N0")</strong></div></div>
+                        <div class="col-md-6">
+                            <div class="border rounded-3 p-3">
+                                <small class="text-muted">Máquina destino</small>
+                                <strong id="confirmarMaquinaDestino" class="d-block">-</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="border rounded-3 p-3">
+                                <small class="text-muted">Horas programadas</small>
+                                <strong id="confirmarHoras" class="d-block">-</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3">
+                                <small class="text-muted">Cambio</small>
+                                <strong id="confirmarCambio" class="d-block">-</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3">
+                                <small class="text-muted">Arranque</small>
+                                <strong id="confirmarArranque" class="d-block">-</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3">
+                                <small class="text-muted">Fin estimado</small>
+                                <strong id="confirmarFin" class="d-block">-</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="border rounded-3 p-3 bg-light">
+                                <small class="text-muted">Qué va a pasar</small>
+                                <div id="confirmarMotivo" class="fw-bold mt-1">
+                                    -
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -299,28 +1010,401 @@
                     <button type="button"
                             class="btn btn-outline-secondary fw-bold"
                             data-bs-dismiss="modal">
-                        Cerrar
+                        Cancelar
+                    </button>
+
+                    <button type="button"
+                            id="btnConfirmarMovimientoCalendario"
+                            class="btn btn-primary fw-bold">
+                        Sí, aplicar movimiento
                     </button>
                 </div>
             </div>
         </div>
     </div>
-}
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    const search = document.getElementById('calendarSearch');
+    <div class="modal fade" id="modalCalendarioMensaje" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header border-0 bg-danger text-white rounded-top-4">
+                    <h5 class="modal-title fw-bold" id="modalCalendarioMensajeTitulo">
+                        Movimiento no permitido
+                    </h5>
 
-    search?.addEventListener('input', () => {
-        const value = search.value.trim().toLowerCase();
+                    <button type="button"
+                            class="btn-close btn-close-white"
+                            data-bs-dismiss="modal"></button>
+                </div>
 
-        for (const row of document.querySelectorAll('.calendar-machine-row')) {
-            row.style.display =
-                !value || (row.dataset.search || '').includes(value)
-                    ? ''
-                    : 'none';
+                <div class="modal-body">
+                    <div class="d-flex gap-3">
+                        <div class="fs-3 text-danger">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+
+                        <div>
+                            <div class="fw-bold mb-1">
+                                No se pudo mover el programa.
+                            </div>
+
+                            <div id="modalCalendarioMensajeTexto" class="text-muted">
+                                La máquina seleccionada no es válida.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0">
+                    <button type="button"
+                            class="btn btn-primary fw-bold rounded-3"
+                            data-bs-dismiss="modal">
+                        Entendido
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const search = document.getElementById('calendarSearch');
+        const statusBox = document.getElementById('calendarStatus');
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+        const inicioPeriodo = new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+        const finPeriodo = new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+        const totalMinutosPeriodo = (finPeriodo - inicioPeriodo) / 60000;
+
+        let draggedBlock = null;
+        let dragStarted = false;
+        let payloadPendienteConfirmacion = null;
+
+        function setStatus(message, type) {
+            if (!statusBox) return;
+
+            statusBox.className = `calendar-status ${type || ''}`.trim();
+            statusBox.textContent = message;
         }
-    });
-</script>
+
+        function mostrarModalCalendario(titulo, mensaje) {
+            document.getElementById('modalCalendarioMensajeTitulo').textContent =
+                titulo || 'Movimiento no permitido';
+
+            document.getElementById('modalCalendarioMensajeTexto').textContent =
+                mensaje || 'No fue posible realizar el movimiento.';
+
+            const modalElement = document.getElementById('modalCalendarioMensaje');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+            modal.show();
+        }
+
+        function localIso(value) {
+            const pad = number => String(number).padStart(2, '0');
+
+            return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:00`;
+        }
+
+        function snapToMinutes(date, minutes) {
+            const ms = minutes * 60 * 1000;
+            return new Date(Math.round(date.getTime() / ms) * ms);
+        }
+
+        function getDropDate(track, event) {
+            const rect = track.getBoundingClientRect();
+            const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
+            const porcentaje = x / rect.width;
+            const minutos = porcentaje * totalMinutosPeriodo;
+
+            const fecha = new Date(inicioPeriodo.getTime() + minutos * 60000);
+            return snapToMinutes(fecha, 30);
+        }
+
+        function puedeArrastrar(block) {
+            return block.dataset.puedeMover === 'true';
+        }
+
+        function abrirModalConfirmacionMovimiento(result, payload) {
+            payloadPendienteConfirmacion = {
+                ...payload,
+                confirmarMovimiento: true
+            };
+
+            document.getElementById('confirmarMaquinaDestino').textContent =
+                `${result.maquinaCodigo || '-'} ${result.maquinaNombre || ''}`.trim();
+
+            document.getElementById('confirmarHoras').textContent =
+                `${result.horasProgramadas || 0} h`;
+
+            document.getElementById('confirmarCambio').textContent =
+                result.cambioTexto || '-';
+
+            document.getElementById('confirmarArranque').textContent =
+                result.arranqueTexto || '-';
+
+            document.getElementById('confirmarFin').textContent =
+                result.finTexto || '-';
+
+            document.getElementById('confirmarMotivo').textContent =
+                result.resumen || result.motivo || 'El movimiento será aplicado.';
+
+            const modalElement = document.getElementById('modalConfirmarMovimientoCalendario');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+            modal.show();
+        }
+
+        async function aplicarMovimientoConfirmado() {
+            if (!payloadPendienteConfirmacion) {
+                mostrarModalCalendario(
+                    'Movimiento no disponible',
+                    'No hay un movimiento pendiente por confirmar.'
+                );
+                return;
+            }
+
+            const btn = document.getElementById('btnConfirmarMovimientoCalendario');
+
+            try {
+                btn.disabled = true;
+                btn.textContent = 'Aplicando...';
+
+                setStatus('Aplicando movimiento confirmado...', 'working');
+
+                const response = await fetch('/PlaneacionCalendarioMaquinas/ReprogramarCalendario', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify(payloadPendienteConfirmacion)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.ok) {
+                    const mensaje = result.mensaje || 'No fue posible aplicar el movimiento.';
+                    setStatus(mensaje, 'error');
+                    mostrarModalCalendario('No se pudo mover el programa', mensaje);
+                    return;
+                }
+
+                const modalElement = document.getElementById('modalConfirmarMovimientoCalendario');
+                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+                modal.hide();
+
+                payloadPendienteConfirmacion = null;
+
+                setStatus(result.mensaje || 'Programa actualizado correctamente.', 'success');
+
+                setTimeout(() => {
+                    window.location.reload();
+                }, 650);
+            }
+            catch (error) {
+                const mensaje = 'Error al aplicar el movimiento: ' + error.message;
+
+                setStatus(mensaje, 'error');
+                mostrarModalCalendario('Error al guardar', mensaje);
+            }
+            finally {
+                btn.disabled = false;
+                btn.textContent = 'Sí, aplicar movimiento';
+            }
+        }
+
+        document.getElementById('btnConfirmarMovimientoCalendario')
+            ?.addEventListener('click', aplicarMovimientoConfirmado);
+
+        document.getElementById('btnMostrarRango')
+            ?.addEventListener('click', () => {
+                document.getElementById('formRangoCalendario')?.classList.toggle('active');
+            });
+
+        document.getElementById('formRangoCalendario')
+            ?.addEventListener('submit', event => {
+                const inicio = document.getElementById('rangoInicio')?.value;
+                const fin = document.getElementById('rangoFin')?.value;
+
+                if (!inicio || !fin) {
+                    event.preventDefault();
+                    mostrarModalCalendario('Rango incompleto', 'Selecciona fecha inicio y fecha fin.');
+                    return;
+                }
+
+                const inicioDate = new Date(`${inicio}T00:00:00`);
+                const finDate = new Date(`${fin}T00:00:00`);
+                const dias = (finDate - inicioDate) / 86400000 + 1;
+
+                if (finDate < inicioDate) {
+                    event.preventDefault();
+                    mostrarModalCalendario('Rango inválido', 'La fecha fin no puede ser menor que la fecha inicio.');
+                    return;
+                }
+
+                if (dias > 31) {
+                    event.preventDefault();
+                    mostrarModalCalendario('Rango inválido', 'El rango no puede ser mayor a 31 días.');
+                    return;
+                }
+            });
+
+        search?.addEventListener('input', () => {
+            const value = search.value.trim().toLowerCase();
+
+            for (const row of document.querySelectorAll('.calendar-machine-row')) {
+                row.style.display =
+                    !value || (row.dataset.search || '').includes(value)
+                        ? ''
+                        : 'none';
+            }
+        });
+
+        document.querySelectorAll('.block').forEach(block => {
+            block.addEventListener('dragstart', event => {
+                if (!puedeArrastrar(block)) {
+                    event.preventDefault();
+
+                    const motivo = block.dataset.motivoBloqueo ||
+                        'Este bloque no puede moverse desde el calendario.';
+
+                    setStatus(motivo, 'error');
+                    mostrarModalCalendario('Movimiento bloqueado', motivo);
+
+                    return;
+                }
+
+                draggedBlock = block;
+                dragStarted = true;
+
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', block.dataset.programaId);
+
+                setStatus('Arrastrando programa. Suéltalo sobre otra máquina compatible.', 'working');
+
+                setTimeout(() => {
+                    dragStarted = false;
+                }, 400);
+            });
+
+            block.addEventListener('dragend', () => {
+                document.querySelectorAll('.track.drag-over').forEach(track => {
+                    track.classList.remove('drag-over');
+                });
+            });
+
+            block.addEventListener('click', event => {
+                if (dragStarted) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            });
+        });
+
+        document.querySelectorAll('.track').forEach(track => {
+            track.addEventListener('dragover', event => {
+                if (!draggedBlock) return;
+
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                track.classList.add('drag-over');
+            });
+
+            track.addEventListener('dragleave', () => {
+                track.classList.remove('drag-over');
+            });
+
+            track.addEventListener('drop', async event => {
+                event.preventDefault();
+                track.classList.remove('drag-over');
+
+                if (!draggedBlock) return;
+
+                const programaId = Number(draggedBlock.dataset.programaId);
+                const maquinaId = Number(track.dataset.maquinaId);
+                const inicioNuevo = getDropDate(track, event);
+
+                if (!Number.isFinite(programaId) || programaId <= 0) {
+                    setStatus('No se pudo identificar el programa a mover.', 'error');
+                    draggedBlock = null;
+                    return;
+                }
+
+                if (!Number.isFinite(maquinaId) || maquinaId <= 0) {
+                    setStatus('No se pudo identificar la máquina destino.', 'error');
+                    draggedBlock = null;
+                    return;
+                }
+
+                const payload = {
+                    programaProduccionID: programaId,
+                    maquinaID: maquinaId,
+                    inicio: localIso(inicioNuevo),
+                    duracionBloqueHoras: 0,
+                    redimensionado: false,
+                    forzarMaquina: false,
+                    confirmarMovimiento: false
+                };
+
+                try {
+                    setStatus('Validando máquina, line time, cola, molde y cambio...', 'working');
+
+                    const response = await fetch('/PlaneacionCalendarioMaquinas/ReprogramarCalendario', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': token
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (!result.ok) {
+                        const mensaje = result.mensaje ||
+                            'No puedes mover este programa a esa máquina porque no es principal ni sustituta.';
+
+                        setStatus(mensaje, 'error');
+                        mostrarModalCalendario('Movimiento no permitido', mensaje);
+
+                        draggedBlock = null;
+                        return;
+                    }
+
+                    if (result.requiereConfirmacion) {
+                        setStatus(result.mensaje || 'Confirma el movimiento propuesto.', 'working');
+                        abrirModalConfirmacionMovimiento(result, payload);
+
+                        draggedBlock = null;
+                        return;
+                    }
+
+                    setStatus(result.mensaje || 'Programa actualizado correctamente.', 'success');
+
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 650);
+                }
+                catch (error) {
+                    const mensaje = 'Error al guardar el movimiento: ' + error.message;
+
+                    setStatus(mensaje, 'error');
+                    mostrarModalCalendario('Error al guardar', mensaje);
+                }
+                finally {
+                    draggedBlock = null;
+                }
+            });
+        });
+    </script>
 </body>
 </html>

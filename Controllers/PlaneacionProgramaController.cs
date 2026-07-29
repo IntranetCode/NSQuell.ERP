@@ -870,7 +870,7 @@ WHERE MaquinaID = @MaquinaID
                     maquinaPrincipalId == request.MaquinaID ||
                     maquinaSustitutaId == request.MaquinaID;
 
-                if (!maquinaCompatible && !request.ForzarMaquina)
+                if (!maquinaCompatible)
                 {
                     await tx.RollbackAsync();
 
@@ -878,7 +878,7 @@ WHERE MaquinaID = @MaquinaID
                     {
                         ok = false,
                         requiereConfirmacion = true,
-                        mensaje = $"La máquina {maquinaNuevaCodigo} no está configurada como principal ni sustituta para esta parte. ¿Deseas conservar el cambio de todas formas?"
+                        mensaje = $"No puedes mover este programa a la máquina {maquinaNuevaCodigo}, porque no está configurada como máquina principal ni sustituta para esta parte."
                     });
                 }
 
