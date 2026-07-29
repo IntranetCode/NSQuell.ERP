@@ -269,7 +269,7 @@ ORDER BY
         }
 
         const string movimientosSql = @"
-SELECT TOP (60)
+SELECT TOP (5)
     movimiento.MovimientoID,
     movimiento.FechaMovimiento,
     movimiento.EmbalajeID AS MaterialID,

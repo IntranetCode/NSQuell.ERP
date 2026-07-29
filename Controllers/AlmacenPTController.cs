@@ -172,7 +172,8 @@ await using (var command = new SqlCommand(sql, connection))
                     Salidas = Entero(reader, "Salidas"),
                     SaldoFisico = Entero(reader, "SaldoFisico"),
                     Retenido = Entero(reader, "Retenido"),
-                    Disponible = Entero(reader, "Disponible"),
+                    Disponible = Entero(reader, "Disponible"),
+
                     Solicitado = EnteroLargo(reader, "Solicitado"),
                     StockMinimo = Entero(reader, "StockMinimo"),
                     StockAviso = Entero(reader, "StockAviso"),
@@ -190,7 +191,7 @@ await using (var command = new SqlCommand(sql, connection))
         }
 
         const string movimientosSql = @"
-SELECT TOP (60)
+SELECT TOP (5)
     m.MovimientoID, m.FechaMovimiento, m.ParteID,
     p.NumeroParte, p.Descripcion, ISNULL(c.Etiqueta,'') AS Etiqueta,
     m.TipoMovimiento, m.Cantidad,
@@ -654,7 +655,7 @@ ORDER BY m.FechaMovimiento DESC, m.MovimientoID DESC;";
         {
             return desde.HasValue || hasta.HasValue
                 ? "PERSONALIZADO"
-                : "SEMANA_ACTUAL";
+                : "TODO";
         }
 
         var valor =
@@ -668,7 +669,7 @@ ORDER BY m.FechaMovimiento DESC, m.MovimientoID DESC;";
             or "TODO"
             or "PERSONALIZADO"
                 ? valor
-                : "SEMANA_ACTUAL";
+                : "TODO";
     }
 
     private static void AplicarPeriodoHistorialPT(

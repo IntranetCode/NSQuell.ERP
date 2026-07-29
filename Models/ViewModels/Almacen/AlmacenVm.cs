@@ -28,6 +28,7 @@ public sealed class AlmacenMPIndexVm
 }
 public sealed class AlmacenMPExistenciaVm
 {
+    public string TipoMP { get; set; } = "VIRGEN";
     public int MaterialID { get; set; }
     public string Codigo { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
@@ -110,6 +111,7 @@ public sealed class AlmacenMaterialFormVm
 
 public sealed class AlmacenMPMovimientoFormVm
 {
+    public string TipoMP { get; set; } = "VIRGEN";
     [Required]
     [Display(Name = "Material")]
     public int MaterialID { get; set; }

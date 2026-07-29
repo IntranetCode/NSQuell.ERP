@@ -12,7 +12,7 @@
     {
         periodo =
             ViewData["PeriodoHistorialPT"]?.ToString()
-            ?? "SEMANA_ACTUAL";
+            ?? "TODO";
     }
 
     periodo = periodo.Trim().ToUpperInvariant();
@@ -275,7 +275,8 @@
             </button>
 
             <a class="alm-btn secondary"
-               asp-action="Historial">
+               asp-action="Historial"
+               asp-route-periodo="SEMANA_ACTUAL">
                 <i class="fa-solid fa-calendar-week"></i>
                 Semana actual
             </a>

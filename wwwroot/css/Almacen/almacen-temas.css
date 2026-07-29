@@ -964,3 +964,117 @@ html[data-nsq-theme="dark"] .alm-field-error {
         justify-content: center;
     }
 }
+/* ALMACEN_NAVBAR_COLOR_V1_4_START
+   La barra superior usa la misma superficie solida que los paneles
+   principales del modulo. No utiliza gradiente ni transparencia.
+*/
+html[data-nsq-theme="light"] .alm-shell-navbar,
+html[data-nsq-theme="dark"] .alm-shell-navbar {
+    background-color: var(--alm-panel-strong) !important;
+    background-image: none !important;
+    border-color: var(--alm-border) !important;
+    box-shadow: var(--alm-shadow-soft) !important;
+}
+
+html[data-nsq-theme="dark"] .alm-shell-navbar {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+/* ALMACEN_NAVBAR_COLOR_V1_4_END */
+/* ALMACEN_HERO_COLOR_V1_5_START
+   En modo oscuro el encabezado principal usa exactamente la misma
+   superficie solida de los paneles del modulo, sin gradiente azul claro.
+*/
+html[data-nsq-theme="dark"] .alm-hero {
+    background-color: var(--alm-panel-strong) !important;
+    background-image: none !important;
+    border-color: var(--alm-border) !important;
+    box-shadow: var(--alm-shadow-soft) !important;
+}
+
+html[data-nsq-theme="dark"] .alm-hero::before {
+    background: rgba(255, 130, 0, .10) !important;
+    box-shadow: 0 0 0 50px rgba(255, 255, 255, .015) !important;
+}
+
+html[data-nsq-theme="dark"] .alm-hero::after {
+    background: linear-gradient(115deg, transparent 55%, rgba(255, 255, 255, .018)) !important;
+}
+/* ALMACEN_HERO_COLOR_V1_5_END */
+/* ALMACEN_LIGHT_COMPACT_V2_0_START */
+html[data-nsq-theme="light"] .pt-client-card,
+html[data-nsq-theme="light"] .pt-client-head,
+html[data-nsq-theme="light"] .pt-client-body,
+html[data-nsq-theme="light"] .inv2-recent-item,
+html[data-nsq-theme="light"] .mp-form-summary > div,
+html[data-nsq-theme="light"] .mp-movement-help {
+    color: #0D1929 !important;
+    border-color: #D4E0EC !important;
+    background: #F7F9FC !important;
+}
+
+html[data-nsq-theme="light"] .pt-client-head {
+    background:
+        radial-gradient(circle at 92% 0%, rgba(0, 83, 155, .09), transparent 34%),
+        linear-gradient(135deg, #FFFFFF, #F3F7FB) !important;
+}
+
+html[data-nsq-theme="light"] .pt-client-copy strong,
+html[data-nsq-theme="light"] .pt-client-pill strong,
+html[data-nsq-theme="light"] .mp-form-summary strong,
+html[data-nsq-theme="light"] .inv2-recent-item strong {
+    color: #0D1929 !important;
+}
+
+html[data-nsq-theme="light"] .pt-client-copy small,
+html[data-nsq-theme="light"] .pt-client-pill small,
+html[data-nsq-theme="light"] .mp-form-summary small,
+html[data-nsq-theme="light"] .mp-movement-help,
+html[data-nsq-theme="light"] .inv2-recent-item small,
+html[data-nsq-theme="light"] .inv2-recent-item span,
+html[data-nsq-theme="light"] .mp-stock-state {
+    color: #5C7088 !important;
+}
+
+html[data-nsq-theme="light"] .pt-client-pill,
+html[data-nsq-theme="light"] .pt-client-chevron,
+html[data-nsq-theme="light"] .pt-client-table-wrap,
+html[data-nsq-theme="light"] .pt-action {
+    color: #0D1929 !important;
+    border-color: #D4E0EC !important;
+    background: #FFFFFF !important;
+}
+
+html[data-nsq-theme="light"] .pt-client-table tbody tr {
+    color: #0D1929 !important;
+    background: #FFFFFF !important;
+}
+
+html[data-nsq-theme="light"] .pt-client-table tbody tr:nth-child(even) {
+    background: #F7F9FC !important;
+}
+
+html[data-nsq-theme="light"] .pt-client-table thead th {
+    color: #41566F !important;
+    background: #EEF3F8 !important;
+}
+
+html[data-nsq-theme="light"] .pt-truncate-link,
+html[data-nsq-theme="light"] .pt-part-link,
+html[data-nsq-theme="light"] .pt-part-link strong,
+html[data-nsq-theme="light"] .inv2-recent-item a {
+    color: #00539B !important;
+}
+
+html[data-nsq-theme="light"] .pt-empty-value,
+html[data-nsq-theme="light"] .pt-last-movement small,
+html[data-nsq-theme="light"] .pt-part-link small {
+    color: #63748A !important;
+}
+
+html[data-nsq-theme="light"] .mp-type-note {
+    color: #17324F !important;
+    border-color: #B9D2EA !important;
+    background: #EAF4FD !important;
+}
+/* ALMACEN_LIGHT_COMPACT_V2_0_END */
