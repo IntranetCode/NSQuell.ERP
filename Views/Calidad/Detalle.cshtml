@@ -1,765 +1,1946 @@
 @model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
+@using ERP.NSQuell.Models
 
 @{
-    ViewData["Title"] = "Detalle de inspección";
+    ViewData["Title"] = "Detalle de Calidad";
+
+    string Mostrar(string? valor)
+    {
+        return string.IsNullOrWhiteSpace(valor)
+            ? "—"
+            : valor;
+    }
+
+    string ResultadoNullable(bool? valor)
+    {
+        return valor switch
+        {
+            true => "Cumple",
+            false => "No cumple",
+            _ => "No aplica / pendiente"
+        };
+    }
+
+    string ClaseResultadoNullable(bool? valor)
+    {
+        return valor switch
+        {
+            true => "quality-result-ok",
+            false => "quality-result-nok",
+            _ => "quality-result-na"
+        };
+    }
+
+    var estado = (Model.Estado ?? string.Empty)
+        .Trim()
+        .ToUpperInvariant();
+
+    var estadoTexto = estado switch
+    {
+        CalidadEstados.PendientePrearranque =>
+            "Pendiente de prearranque",
+
+        CalidadEstados.DevueltoPrearranque =>
+            "Devuelto a Producción",
+
+        CalidadEstados.ArranqueAutorizado =>
+            "Arranque autorizado",
+
+        CalidadEstados.PendientePrimerasPiezas =>
+            "Primeras piezas en revisión",
+
+        CalidadEstados.AjustesSolicitados =>
+            "Ajustes solicitados",
+
+        CalidadEstados.ProduccionLiberada =>
+            "Producción liberada",
+
+        CalidadEstados.PendienteGP12 =>
+            "Pendiente de GP12",
+
+        CalidadEstados.EnGP12 =>
+            "En GP12",
+
+        CalidadEstados.MaterialLiberado =>
+            "Material liberado",
+
+        CalidadEstados.MaterialNoConforme =>
+            "Material no conforme",
+
+        CalidadEstados.Cerrada =>
+            "Cerrada",
+
+        CalidadEstados.LegacyAbierta =>
+            "Inspección abierta",
+
+        CalidadEstados.LegacyLiberada =>
+            "Liberada",
+
+        CalidadEstados.LegacyGPI2 =>
+            "GPI2 / registro anterior",
+
+        CalidadEstados.LegacyContencion =>
+            "Contención",
+
+        CalidadEstados.LegacyScrap =>
+            "Scrap / registro anterior",
+
+        CalidadEstados.LegacyDetenida =>
+            "Detenida",
+
+        _ => string.IsNullOrWhiteSpace(estado)
+            ? "Sin estado"
+            : estado.Replace("_", " ")
+    };
+
+    var estadoClase = estado switch
+    {
+        CalidadEstados.PendientePrearranque =>
+            "quality-state-warning",
+
+        CalidadEstados.DevueltoPrearranque =>
+            "quality-state-danger",
+
+        CalidadEstados.ArranqueAutorizado =>
+            "quality-state-info",
+
+        CalidadEstados.PendientePrimerasPiezas =>
+            "quality-state-info",
+
+        CalidadEstados.AjustesSolicitados =>
+            "quality-state-danger",
+
+        CalidadEstados.ProduccionLiberada =>
+            "quality-state-success",
+
+        CalidadEstados.MaterialLiberado =>
+            "quality-state-success",
+
+        CalidadEstados.PendienteGP12 =>
+            "quality-state-warning",
+
+        CalidadEstados.EnGP12 =>
+            "quality-state-warning",
+
+        CalidadEstados.MaterialNoConforme =>
+            "quality-state-danger",
+
+        CalidadEstados.Cerrada =>
+            "quality-state-dark",
+
+        _ => "quality-state-neutral"
+    };
+
+    var puedePrearranque =
+        !Model.ConfiguracionInvalidada &&
+        (
+            estado == CalidadEstados.PendientePrearranque ||
+            estado == CalidadEstados.DevueltoPrearranque
+        );
+
+    var puedeRegistrarPrimerasPiezas =
+        !Model.ConfiguracionInvalidada &&
+        (
+            estado == CalidadEstados.ArranqueAutorizado ||
+            estado == CalidadEstados.PendientePrimerasPiezas ||
+            estado == CalidadEstados.AjustesSolicitados
+        );
+
+    var puedeLiberarProduccion =
+        !Model.ConfiguracionInvalidada &&
+        (
+            estado == CalidadEstados.PendientePrimerasPiezas ||
+            estado == CalidadEstados.AjustesSolicitados ||
+            estado == CalidadEstados.LegacyAbierta
+        );
+
+    var datosSuficientesLiberacion =
+        Model.CincoDisparosSegregados &&
+        Model.CantidadDisparosConformes >= 3 &&
+        Model.ValidacionDimensional == true &&
+        Model.ValidacionApariencia == true &&
+        Model.ValidacionGauge != false &&
+        Model.ValidacionConductividad != false;
+
+    var puedeTomarDisposicion =
+        !Model.ConfiguracionInvalidada &&
+        estado != CalidadEstados.Cerrada &&
+        (
+            puedeRegistrarPrimerasPiezas ||
+            puedeLiberarProduccion ||
+            estado == CalidadEstados.ProduccionLiberada ||
+            estado == CalidadEstados.LegacyLiberada
+        );
+
+    var puedeCerrar =
+        estado == CalidadEstados.ProduccionLiberada ||
+        estado == CalidadEstados.MaterialLiberado ||
+        estado == CalidadEstados.MaterialNoConforme ||
+        estado == CalidadEstados.LegacyLiberada ||
+        estado == CalidadEstados.LegacyContencion ||
+        estado == CalidadEstados.LegacyScrap;
+
+    var hayValidacionPrimerasPiezas =
+        Model.FechaValidacionPrimerasPiezas.HasValue ||
+        Model.CincoDisparosSegregados ||
+        Model.CantidadDisparosConformes > 0 ||
+        Model.ValidacionDimensional.HasValue ||
+        Model.ValidacionApariencia.HasValue ||
+        Model.ValidacionGauge.HasValue ||
+        Model.ValidacionConductividad.HasValue;
+
+    var pasoActual = 1;
+
+    if (estado == CalidadEstados.DevueltoPrearranque ||
+        estado == CalidadEstados.ArranqueAutorizado)
+    {
+        pasoActual = 2;
+    }
+
+    if (estado == CalidadEstados.PendientePrimerasPiezas ||
+        estado == CalidadEstados.AjustesSolicitados)
+    {
+        pasoActual = 3;
+    }
+
+    if (estado == CalidadEstados.ProduccionLiberada ||
+        estado == CalidadEstados.PendienteGP12 ||
+        estado == CalidadEstados.EnGP12 ||
+        estado == CalidadEstados.MaterialLiberado ||
+        estado == CalidadEstados.MaterialNoConforme ||
+        estado == CalidadEstados.Cerrada ||
+        estado == CalidadEstados.LegacyLiberada)
+    {
+        pasoActual = 4;
+    }
+
+    var pasos = new[]
+    {
+        "Notificación",
+        "Prearranque",
+        "Primeras piezas",
+        "Liberación"
+    };
 }
 
-<div class="calidad-detalle-page">
-
-    <div class="detalle-header">
-        <div>
-            <h1>Detalle de inspección #@Model.InspeccionID</h1>
-            <p>Consulta de trazabilidad, estado, resultado, documentos e historial.</p>
-        </div>
-
-        <a asp-controller="Calidad" asp-action="Index" class="btn-light-calidad">
-            ← Volver
-        </a>
-    </div>
-
-    @if (TempData["Mensaje"] != null)
-    {
-        <div class="alert-success-calidad">
-            @TempData["Mensaje"]
-        </div>
-    }
-
-    <div class="detalle-layout">
-
-        <div class="detalle-main">
-
-            <div class="detalle-card">
-                <div class="card-title-row">
-                    <h2>Información general</h2>
-
-                    <span class="estado-pill estado-@Model.Estado.ToLower()">
-                        @Model.Estado
-                    </span>
-                </div>
-
-                <div class="info-grid">
-                    <div>
-                        <label>Código de barras</label>
-                        <strong>@(Model.CodigoBarras ?? "-")</strong>
-                    </div>
-
-                    <div>
-                        <label>Orden de trabajo</label>
-                        <strong>@(Model.OrdenTrabajo ?? "-")</strong>
-                    </div>
-
-                    <div>
-                        <label>Número de parte</label>
-                        <strong>@(Model.NumeroParte ?? "-")</strong>
-                    </div>
-
-                    <div>
-                        <label>Material</label>
-                        <strong>@(Model.Material ?? "-")</strong>
-                    </div>
-
-                    <div>
-                        <label>Proceso</label>
-                        <strong>@(Model.Proceso ?? "-")</strong>
-                    </div>
-
-                    <div>
-                        <label>Máquina</label>
-                        <strong>@(Model.Maquina ?? "-")</strong>
-                    </div>
-                </div>
-            </div>
-
-            <div class="detalle-card">
-                <h2>Cantidades</h2>
-
-                <div class="cantidad-grid">
-                    <div class="cantidad-box">
-                        <span>Total</span>
-                        <strong>@Model.CantidadTotal</strong>
-                    </div>
-
-                    <div class="cantidad-box">
-                        <span>Revisada</span>
-                        <strong>@Model.CantidadRevisada</strong>
-                    </div>
-
-                    <div class="cantidad-box">
-                        <span>Pendiente</span>
-                        <strong>@Model.CantidadPendiente</strong>
-                    </div>
-                </div>
-            </div>
-
-            <div class="detalle-card">
-                <h2>Validación documental</h2>
-
-                <div class="docs-grid">
-                    <div class="doc-item @(Model.ChecklistValidado ? "doc-ok" : "doc-pending")">
-                        <strong>Checklist validado</strong>
-                        <span>@(Model.ChecklistValidado ? "Validado" : "Pendiente")</span>
-                    </div>
-
-                    <div class="doc-item @(Model.HojaInspeccionProducto ? "doc-ok" : "doc-pending")">
-                        <strong>Hoja de inspección</strong>
-                        <span>@(Model.HojaInspeccionProducto ? "Validada" : "Pendiente")</span>
-                    </div>
-
-                    <div class="doc-item @(Model.HojaValidacionCalidad ? "doc-ok" : "doc-pending")">
-                        <strong>Hoja de validación</strong>
-                        <span>@(Model.HojaValidacionCalidad ? "Validada" : "Pendiente")</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="detalle-card">
-                <h2>Resultado de calidad</h2>
-
-                <div class="resultado-detalle">
-                    @if (string.IsNullOrWhiteSpace(Model.Etiqueta))
-                    {
-                        <span class="badge badge-neutral">Sin etiqueta</span>
-                        <p>La inspección todavía no tiene resultado final asignado.</p>
-                    }
-                    else if (Model.Etiqueta == "VERDE")
-                    {
-                        <span class="badge badge-verde">Etiqueta verde</span>
-                        <p>Todo bien / proceso liberado.</p>
-                    }
-                    else if (Model.Etiqueta == "AMARILLA")
-                    {
-                        <span class="badge badge-amarilla">Etiqueta amarilla</span>
-                        <p>Se puede mejorar / requiere GPI2 o retrabajo.</p>
-                    }
-                    else if (Model.Etiqueta == "ROJA")
-                    {
-                        <span class="badge badge-roja">Etiqueta roja</span>
-                        <p>Scrap / rechazo / contención.</p>
-                    }
-                    else
-                    {
-                        <span class="badge badge-neutral">@Model.Etiqueta</span>
-                    }
-                </div>
-
-                <div class="flags-grid">
-                    <div class="flag-item @(Model.Liberado ? "flag-ok" : "")">
-                        Liberado: <strong>@(Model.Liberado ? "Sí" : "No")</strong>
-                    </div>
-
-                    <div class="flag-item @(Model.RequiereGPI2 ? "flag-warning" : "")">
-                        GPI2: <strong>@(Model.RequiereGPI2 ? "Sí" : "No")</strong>
-                    </div>
-
-                    <div class="flag-item @(Model.EnContencion ? "flag-warning" : "")">
-                        Contención: <strong>@(Model.EnContencion ? "Sí" : "No")</strong>
-                    </div>
-
-                    <div class="flag-item @(Model.EsScrap ? "flag-danger" : "")">
-                        Scrap: <strong>@(Model.EsScrap ? "Sí" : "No")</strong>
-                    </div>
-                </div>
-            </div>
-
-            <div class="detalle-card">
-                <h2>Observaciones</h2>
-
-                @if (string.IsNullOrWhiteSpace(Model.Observaciones))
-                {
-                    <p class="texto-muted">Sin observaciones registradas.</p>
-                }
-                else
-                {
-                    <p class="observaciones-texto">@Model.Observaciones</p>
-                }
-            </div>
-
-            <div class="detalle-card">
-                <h2>Historial de movimientos</h2>
-
-                <div class="historial-lista">
-                    @if (Model.Historial.Any())
-                    {
-                        foreach (var item in Model.Historial)
-                        {
-                            <div class="historial-item">
-                                <div class="historial-icon"></div>
-
-                                <div class="historial-content">
-                                    <div class="historial-top">
-                                        <strong>@item.Movimiento</strong>
-                                        <span>@item.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</span>
-                                    </div>
-
-                                    <div class="historial-body">
-                                        <span>
-                                            Estado:
-                                            <strong>@(item.EstadoAnterior ?? "-")</strong>
-                                            →
-                                            <strong>@(item.EstadoNuevo ?? "-")</strong>
-                                        </span>
-
-                                        @if (!string.IsNullOrWhiteSpace(item.Etiqueta))
-                                        {
-                                            <span>Etiqueta: <strong>@item.Etiqueta</strong></span>
-                                        }
-
-                                        @if (!string.IsNullOrWhiteSpace(item.Comentario))
-                                        {
-                                            <p>@item.Comentario</p>
-                                        }
-
-                                        <small>Usuario ID: @(item.UsuarioID?.ToString() ?? "-")</small>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    }
-                    else
-                    {
-                        <p class="texto-muted">No hay movimientos registrados.</p>
-                    }
-                </div>
-            </div>
-        </div>
-
-        <aside class="detalle-sidebar">
-            <div class="detalle-card acciones-card">
-                <h2>Acciones</h2>
-
-                <p class="texto-muted">
-                    Cambia el estado de la inspección según el resultado de Calidad.
-                </p>
-
-                <form asp-controller="Calidad" asp-action="Liberar" asp-route-id="@Model.InspeccionID" method="post">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="btn-action btn-verde">
-                        Liberar / etiqueta verde
-                    </button>
-                </form>
-
-                <form asp-controller="Calidad" asp-action="EnviarGPI2" asp-route-id="@Model.InspeccionID" method="post">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="btn-action btn-amarillo">
-                        Enviar a GPI2 / etiqueta amarilla
-                    </button>
-                </form>
-
-                <form asp-controller="Calidad" asp-action="EnviarContencion" asp-route-id="@Model.InspeccionID" method="post">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="btn-action btn-naranja">
-                        Enviar a contención
-                    </button>
-                </form>
-
-                <form asp-controller="Calidad" asp-action="MarcarScrap" asp-route-id="@Model.InspeccionID" method="post">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="btn-action btn-rojo">
-                        Marcar como scrap / etiqueta roja
-                    </button>
-                </form>
-
-                <form asp-controller="Calidad" asp-action="Detener" asp-route-id="@Model.InspeccionID" method="post">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="btn-action btn-gris">
-                        Detener proceso
-                    </button>
-                </form>
-
-                <form asp-controller="Calidad" asp-action="Cerrar" asp-route-id="@Model.InspeccionID" method="post">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="btn-action btn-oscuro">
-                        Cerrar registro
-                    </button>
-                </form>
-            </div>
-
-            <div class="detalle-card">
-                <h2>Registro</h2>
-
-                <div class="meta-list">
-                    <div>
-                        <span>Creado por</span>
-                        <strong>@(Model.UsuarioCreacionID?.ToString() ?? "-")</strong>
-                    </div>
-
-                    <div>
-                        <span>Fecha creación</span>
-                        <strong>@Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</strong>
-                    </div>
-
-                    <div>
-                        <span>Modificado por</span>
-                        <strong>@(Model.UsuarioModificacionID?.ToString() ?? "-")</strong>
-                    </div>
-
-                    <div>
-                        <span>Fecha modificación</span>
-                        <strong>@(Model.FechaModificacion?.ToString("dd/MM/yyyy HH:mm") ?? "-")</strong>
-                    </div>
-                </div>
-            </div>
-        </aside>
-    </div>
-</div>
-
 <style>
-    .calidad-detalle-page {
-        padding: 24px;
-        color: #1f2937;
+    .quality-detail-page {
+        --quality-orange: #f97316;
+        --quality-orange-dark: #c2410c;
+        --quality-navy: #14213d;
+        --quality-text: #1e293b;
+        --quality-muted: #64748b;
+        --quality-border: #dfe5ec;
+        --quality-bg: #f4f6f8;
+        --quality-card: #ffffff;
+        padding: 24px 12px 50px;
+        color: var(--quality-text);
     }
 
-    .detalle-header {
+    .quality-detail-shell {
+        max-width: 1500px;
+        margin: 0 auto;
+    }
+
+    .quality-detail-header {
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        margin-bottom: 24px;
+        align-items: flex-start;
+        gap: 24px;
+        padding: 28px;
+        margin-bottom: 20px;
+        border: 1px solid var(--quality-border);
+        border-radius: 18px;
+        background: var(--quality-card);
+        box-shadow: 0 12px 35px rgba(15, 23, 42, .07);
     }
 
-    .detalle-header h1 {
-        margin: 0;
-        font-size: 28px;
-        font-weight: 700;
-        color: #0f172a;
+    .quality-detail-header-main {
+        display: flex;
+        align-items: flex-start;
+        gap: 18px;
+        min-width: 0;
     }
 
-    .detalle-header p {
-        margin: 6px 0 0;
-        color: #64748b;
-        font-size: 14px;
-    }
-
-    .detalle-layout {
+    .quality-detail-icon {
+        width: 58px;
+        height: 58px;
+        flex: 0 0 58px;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 340px;
+        place-items: center;
+        border-radius: 16px;
+        background: #fff2e7;
+        color: var(--quality-orange);
+        font-size: 25px;
+    }
+
+    .quality-detail-title {
+        margin: 0;
+        color: var(--quality-navy);
+        font-size: clamp(1.45rem, 2.2vw, 2rem);
+        font-weight: 800;
+    }
+
+    .quality-detail-subtitle {
+        margin: 8px 0 0;
+        color: var(--quality-muted);
+        font-size: .95rem;
+    }
+
+    .quality-header-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .quality-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-size: .82rem;
+        font-weight: 800;
+        letter-spacing: .02em;
+        text-transform: uppercase;
+    }
+
+    .quality-state-warning {
+        background: #fff7dc;
+        color: #92400e;
+        border-color: #fde68a;
+    }
+
+    .quality-state-danger {
+        background: #fff0f0;
+        color: #b91c1c;
+        border-color: #fecaca;
+    }
+
+    .quality-state-info {
+        background: #eaf5ff;
+        color: #075985;
+        border-color: #bae6fd;
+    }
+
+    .quality-state-success {
+        background: #eafbf1;
+        color: #166534;
+        border-color: #bbf7d0;
+    }
+
+    .quality-state-dark {
+        background: #e5e7eb;
+        color: #1f2937;
+        border-color: #cbd5e1;
+    }
+
+    .quality-state-neutral {
+        background: #f1f5f9;
+        color: #475569;
+        border-color: #dbe3ec;
+    }
+
+    .quality-btn {
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 9px 15px;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        font-size: .88rem;
+        font-weight: 750;
+        text-decoration: none;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+    .quality-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .quality-btn-light {
+        background: #fff;
+        color: #334155;
+        border-color: var(--quality-border);
+    }
+
+    .quality-btn-primary {
+        background: var(--quality-orange);
+        color: #fff;
+        border-color: var(--quality-orange);
+    }
+
+    .quality-btn-success {
+        background: #15803d;
+        color: #fff;
+        border-color: #15803d;
+    }
+
+    .quality-btn-warning {
+        background: #d97706;
+        color: #fff;
+        border-color: #d97706;
+    }
+
+    .quality-btn-danger {
+        background: #b91c1c;
+        color: #fff;
+        border-color: #b91c1c;
+    }
+
+    .quality-btn-dark {
+        background: var(--quality-navy);
+        color: #fff;
+        border-color: var(--quality-navy);
+    }
+
+    .quality-btn:disabled {
+        cursor: not-allowed;
+        opacity: .48;
+        transform: none;
+    }
+
+    .quality-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 15px 17px;
+        margin-bottom: 18px;
+        border-radius: 12px;
+        border: 1px solid;
+    }
+
+    .quality-alert-success {
+        background: #effcf4;
+        color: #166534;
+        border-color: #bbf7d0;
+    }
+
+    .quality-alert-danger {
+        background: #fff1f1;
+        color: #991b1b;
+        border-color: #fecaca;
+    }
+
+    .quality-alert-warning {
+        background: #fff8e6;
+        color: #92400e;
+        border-color: #fde68a;
+    }
+
+    .quality-progress {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+        padding: 22px;
+        margin-bottom: 20px;
+        border: 1px solid var(--quality-border);
+        border-radius: 16px;
+        background: var(--quality-card);
+    }
+
+    .quality-progress-step {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        color: #94a3b8;
+        text-align: center;
+        font-size: .78rem;
+        font-weight: 700;
+    }
+
+    .quality-progress-step:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: 17px;
+        left: calc(50% + 22px);
+        width: calc(100% - 44px);
+        height: 3px;
+        border-radius: 999px;
+        background: #e2e8f0;
+    }
+
+    .quality-progress-circle {
+        position: relative;
+        z-index: 2;
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #e2e8f0;
+        color: #64748b;
+        font-weight: 850;
+    }
+
+    .quality-progress-step.is-done,
+    .quality-progress-step.is-active {
+        color: var(--quality-navy);
+    }
+
+    .quality-progress-step.is-done .quality-progress-circle {
+        background: #15803d;
+        color: #fff;
+    }
+
+    .quality-progress-step.is-done:not(:last-child)::after {
+        background: #86efac;
+    }
+
+    .quality-progress-step.is-active .quality-progress-circle {
+        background: var(--quality-orange);
+        color: #fff;
+        box-shadow: 0 0 0 5px rgba(249, 115, 22, .14);
+    }
+
+    .quality-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.8fr) minmax(320px, .8fr);
         gap: 20px;
         align-items: start;
     }
 
-    .detalle-main {
-        display: flex;
-        flex-direction: column;
-        gap: 18px;
+    .quality-column {
+        min-width: 0;
     }
 
-    .detalle-sidebar {
-        display: flex;
-        flex-direction: column;
-        gap: 18px;
-        position: sticky;
-        top: 20px;
-    }
-
-    .detalle-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
+    .quality-card {
+        margin-bottom: 20px;
+        overflow: hidden;
+        border: 1px solid var(--quality-border);
         border-radius: 16px;
-        padding: 20px;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+        background: var(--quality-card);
+        box-shadow: 0 8px 25px rgba(15, 23, 42, .045);
     }
 
-    .detalle-card h2 {
-        margin: 0 0 16px;
-        font-size: 18px;
-        font-weight: 700;
-        color: #0f172a;
-    }
-
-    .card-title-row {
+    .quality-card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 16px;
+        gap: 14px;
+        padding: 17px 20px;
+        border-bottom: 1px solid var(--quality-border);
+        background: #fbfcfd;
     }
 
-    .card-title-row h2 {
+    .quality-card-header h2 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         margin: 0;
-    }
-
-    .info-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-    }
-
-    .info-grid label,
-    .meta-list span {
-        display: block;
-        color: #64748b;
-        font-size: 12px;
-        font-weight: 700;
-        margin-bottom: 4px;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-    }
-
-    .info-grid strong,
-    .meta-list strong {
-        color: #0f172a;
-        font-size: 14px;
-        word-break: break-word;
-    }
-
-    .cantidad-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 14px;
-    }
-
-    .cantidad-box {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        padding: 16px;
-    }
-
-    .cantidad-box span {
-        display: block;
-        color: #64748b;
-        font-size: 12px;
-        font-weight: 700;
-        margin-bottom: 8px;
-    }
-
-    .cantidad-box strong {
-        font-size: 24px;
-        color: #0f172a;
-    }
-
-    .docs-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 14px;
-    }
-
-    .doc-item {
-        border-radius: 14px;
-        padding: 16px;
-        border: 1px solid #e2e8f0;
-    }
-
-    .doc-item strong {
-        display: block;
-        color: #0f172a;
-        font-size: 14px;
-        margin-bottom: 6px;
-    }
-
-    .doc-item span {
-        font-size: 13px;
-        font-weight: 700;
-    }
-
-    .doc-ok {
-        background: #dcfce7;
-        border-color: #86efac;
-        color: #166534;
-    }
-
-    .doc-pending {
-        background: #f8fafc;
-        color: #64748b;
-    }
-
-    .resultado-detalle {
-        margin-bottom: 16px;
-    }
-
-    .resultado-detalle p {
-        margin: 10px 0 0;
-        color: #64748b;
-    }
-
-    .badge {
-        display: inline-flex;
-        padding: 6px 12px;
-        border-radius: 999px;
-        font-size: 12px;
+        color: var(--quality-navy);
+        font-size: 1rem;
         font-weight: 800;
     }
 
-    .badge-neutral {
-        background: #e2e8f0;
-        color: #475569;
+    .quality-card-header h2 i {
+        color: var(--quality-orange);
     }
 
-    .badge-verde {
-        background: #dcfce7;
-        color: #166534;
+    .quality-card-body {
+        padding: 20px;
     }
 
-    .badge-amarilla {
-        background: #fef3c7;
-        color: #92400e;
-    }
-
-    .badge-roja {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .flags-grid {
+    .quality-data-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .quality-data-item {
+        min-width: 0;
+        padding: 14px;
+        border: 1px solid #e9edf2;
+        border-radius: 12px;
+        background: #fbfcfe;
+    }
+
+    .quality-data-item.wide {
+        grid-column: span 2;
+    }
+
+    .quality-data-label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--quality-muted);
+        font-size: .72rem;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .quality-data-value {
+        display: block;
+        overflow-wrap: anywhere;
+        color: var(--quality-text);
+        font-size: .92rem;
+        font-weight: 700;
+    }
+
+    .quality-doc-list,
+    .quality-validation-list {
+        display: grid;
         gap: 10px;
     }
 
-    .flag-item {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 10px;
-        font-size: 13px;
-        color: #475569;
-    }
-
-    .flag-ok {
-        background: #dcfce7;
-        color: #166534;
-        border-color: #86efac;
-    }
-
-    .flag-warning {
-        background: #fef3c7;
-        color: #92400e;
-        border-color: #fcd34d;
-    }
-
-    .flag-danger {
-        background: #fee2e2;
-        color: #991b1b;
-        border-color: #fca5a5;
-    }
-
-    .texto-muted {
-        color: #64748b;
-        font-size: 14px;
-        margin: 0;
-    }
-
-    .observaciones-texto {
-        color: #334155;
-        line-height: 1.6;
-        margin: 0;
-        white-space: pre-line;
-    }
-
-    .historial-lista {
+    .quality-doc-item,
+    .quality-validation-item {
         display: flex;
-        flex-direction: column;
-        gap: 14px;
-    }
-
-    .historial-item {
-        display: grid;
-        grid-template-columns: 18px 1fr;
-        gap: 12px;
-    }
-
-    .historial-icon {
-        width: 12px;
-        height: 12px;
-        background: #2563eb;
-        border-radius: 999px;
-        margin-top: 6px;
-        box-shadow: 0 0 0 4px rgba(37, 99, 235, .12);
-    }
-
-    .historial-content {
-        border-bottom: 1px solid #e2e8f0;
-        padding-bottom: 14px;
-    }
-
-    .historial-top {
-        display: flex;
+        align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 6px;
-    }
-
-    .historial-top strong {
-        color: #0f172a;
-        font-size: 14px;
-    }
-
-    .historial-top span {
-        color: #64748b;
-        font-size: 12px;
-        white-space: nowrap;
-    }
-
-    .historial-body {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        color: #475569;
-        font-size: 13px;
-    }
-
-    .historial-body p {
-        margin: 6px 0;
-        color: #334155;
-    }
-
-    .historial-body small {
-        color: #64748b;
-    }
-
-    .acciones-card form {
-        margin-bottom: 10px;
-    }
-
-    .acciones-card form:last-child {
-        margin-bottom: 0;
-    }
-
-    .btn-action {
-        width: 100%;
-        border: none;
-        border-radius: 10px;
-        padding: 10px 12px;
-        font-weight: 700;
-        font-size: 13px;
-        cursor: pointer;
-        transition: all .2s ease;
-        text-align: left;
-    }
-
-    .btn-action:hover {
-        transform: translateY(-1px);
-        filter: brightness(.98);
-    }
-
-    .btn-verde {
-        background: #dcfce7;
-        color: #166534;
-    }
-
-    .btn-amarillo {
-        background: #fef3c7;
-        color: #92400e;
-    }
-
-    .btn-naranja {
-        background: #ffedd5;
-        color: #9a3412;
-    }
-
-    .btn-rojo {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    .btn-gris {
-        background: #f1f5f9;
-        color: #334155;
-    }
-
-    .btn-oscuro {
-        background: #0f172a;
-        color: #ffffff;
-    }
-
-    .meta-list {
-        display: flex;
-        flex-direction: column;
         gap: 14px;
+        padding: 12px 14px;
+        border: 1px solid #e8edf2;
+        border-radius: 10px;
+        background: #fbfcfd;
     }
 
-    .estado-pill {
-        display: inline-flex;
-        background: #f1f5f9;
+    .quality-doc-name {
+        display: flex;
+        align-items: center;
+        gap: 9px;
         color: #334155;
-        border-radius: 999px;
-        padding: 6px 12px;
-        font-size: 12px;
+        font-size: .88rem;
+        font-weight: 700;
+    }
+
+    .quality-check {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .78rem;
         font-weight: 800;
     }
 
-    .estado-liberada {
-        background: #dcfce7;
-        color: #166534;
+    .quality-check-ok {
+        color: #15803d;
     }
 
-    .estado-gpi2 {
-        background: #fef3c7;
-        color: #92400e;
+    .quality-check-pending {
+        color: #b45309;
     }
 
-    .estado-contencion {
-        background: #ffedd5;
-        color: #9a3412;
+    .quality-result-ok {
+        color: #15803d;
     }
 
-    .estado-scrap {
-        background: #fee2e2;
-        color: #991b1b;
+    .quality-result-nok {
+        color: #b91c1c;
     }
 
-    .estado-cerrada {
-        background: #e2e8f0;
+    .quality-result-na {
+        color: #64748b;
+    }
+
+    .quality-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 15px;
+    }
+
+    .quality-field-full {
+        grid-column: 1 / -1;
+    }
+
+    .quality-form-label {
+        display: block;
+        margin-bottom: 6px;
         color: #334155;
+        font-size: .82rem;
+        font-weight: 750;
     }
 
-    .alert-success-calidad {
-        background: #dcfce7;
-        color: #166534;
-        border: 1px solid #86efac;
-        padding: 12px 16px;
-        border-radius: 12px;
-        margin-bottom: 18px;
-        font-weight: 600;
+    .quality-form-control,
+    .quality-form-select {
+        width: 100%;
+        min-height: 44px;
+        padding: 9px 12px;
+        border: 1px solid #cfd8e3;
+        border-radius: 9px;
+        background: #fff;
+        color: #1e293b;
+        outline: none;
     }
 
-    .btn-light-calidad {
-        border: none;
-        border-radius: 10px;
-        padding: 10px 16px;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 14px;
-        display: inline-flex;
+    textarea.quality-form-control {
+        min-height: 92px;
+        resize: vertical;
+    }
+
+    .quality-form-control:focus,
+    .quality-form-select:focus {
+        border-color: var(--quality-orange);
+        box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
+    }
+
+    .quality-form-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+    }
+
+    .quality-form-check {
+        min-height: 46px;
+        display: flex;
         align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all .2s ease;
-        white-space: nowrap;
-        background: #f1f5f9;
-        color: #334155;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid #dbe3eb;
+        border-radius: 9px;
+        background: #fbfcfe;
     }
 
-    .btn-light-calidad:hover {
-        background: #e2e8f0;
-        color: #334155;
+    .quality-form-check input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--quality-orange);
+    }
+
+    .quality-help {
+        margin-top: 8px;
+        color: var(--quality-muted);
+        font-size: .78rem;
+        line-height: 1.45;
+    }
+
+    .quality-side-action {
+        padding: 16px;
+        margin-bottom: 12px;
+        border: 1px solid #e6ebf1;
+        border-radius: 12px;
+        background: #fbfcfd;
+    }
+
+    .quality-side-action h3 {
+        margin: 0 0 7px;
+        color: var(--quality-navy);
+        font-size: .91rem;
+        font-weight: 800;
+    }
+
+    .quality-side-action p {
+        margin: 0 0 12px;
+        color: var(--quality-muted);
+        font-size: .8rem;
+        line-height: 1.5;
+    }
+
+    .quality-side-action .quality-btn {
+        width: 100%;
+    }
+
+    .quality-history-wrap {
+        overflow-x: auto;
+    }
+
+    .quality-history-table {
+        width: 100%;
+        min-width: 850px;
+        border-collapse: collapse;
+    }
+
+    .quality-history-table th,
+    .quality-history-table td {
+        padding: 12px 14px;
+        border-bottom: 1px solid #e8edf2;
+        text-align: left;
+        vertical-align: top;
+        font-size: .82rem;
+    }
+
+    .quality-history-table th {
+        background: #f7f9fb;
+        color: #475569;
+        font-size: .72rem;
+        font-weight: 850;
+        letter-spacing: .03em;
+        text-transform: uppercase;
+    }
+
+    .quality-history-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .quality-history-movement {
+        color: var(--quality-navy);
+        font-weight: 800;
+    }
+
+    .quality-empty {
+        padding: 34px 20px;
+        color: var(--quality-muted);
+        text-align: center;
+    }
+
+    html[data-nsq-theme="dark"] .quality-detail-page {
+        --quality-text: #e5e7eb;
+        --quality-muted: #94a3b8;
+        --quality-border: rgba(255, 255, 255, .10);
+        --quality-bg: #0b1220;
+        --quality-card: #111c2d;
+        background: #0b1220;
+    }
+
+    html[data-nsq-theme="dark"] .quality-detail-header,
+    html[data-nsq-theme="dark"] .quality-progress,
+    html[data-nsq-theme="dark"] .quality-card {
+        background: #111c2d;
+        border-color: rgba(255, 255, 255, .10);
+    }
+
+    html[data-nsq-theme="dark"] .quality-card-header,
+    html[data-nsq-theme="dark"] .quality-data-item,
+    html[data-nsq-theme="dark"] .quality-doc-item,
+    html[data-nsq-theme="dark"] .quality-validation-item,
+    html[data-nsq-theme="dark"] .quality-form-check,
+    html[data-nsq-theme="dark"] .quality-side-action,
+    html[data-nsq-theme="dark"] .quality-history-table th {
+        background: #0e1828;
+        border-color: rgba(255, 255, 255, .08);
+    }
+
+    html[data-nsq-theme="dark"] .quality-detail-title,
+    html[data-nsq-theme="dark"] .quality-card-header h2,
+    html[data-nsq-theme="dark"] .quality-data-value,
+    html[data-nsq-theme="dark"] .quality-doc-name,
+    html[data-nsq-theme="dark"] .quality-form-label,
+    html[data-nsq-theme="dark"] .quality-side-action h3,
+    html[data-nsq-theme="dark"] .quality-history-movement {
+        color: #f8fafc;
+    }
+
+    html[data-nsq-theme="dark"] .quality-form-control,
+    html[data-nsq-theme="dark"] .quality-form-select {
+        background: #0b1422;
+        color: #f8fafc;
+        border-color: rgba(255, 255, 255, .13);
+    }
+
+    html[data-nsq-theme="dark"] .quality-history-table td {
+        border-bottom-color: rgba(255, 255, 255, .08);
     }
 
     @@media (max-width: 1100px) {
-        .detalle-layout {
+        .quality-grid {
             grid-template-columns: 1fr;
         }
 
-        .detalle-sidebar {
-            position: static;
-        }
-
-        .info-grid,
-        .docs-grid,
-        .cantidad-grid,
-        .flags-grid {
-            grid-template-columns: 1fr;
+        .quality-data-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
 
-    @@media (max-width: 768px) {
-        .detalle-header {
-            flex-direction: column;
-            align-items: flex-start;
+    @@media (max-width: 720px) {
+        .quality-detail-page {
+            padding-left: 4px;
+            padding-right: 4px;
         }
 
-        .historial-top {
+        .quality-detail-header {
             flex-direction: column;
+            padding: 20px;
+        }
+
+        .quality-header-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
+        .quality-progress {
+            padding: 18px 8px;
+        }
+
+        .quality-progress-step {
+            font-size: .68rem;
+        }
+
+        .quality-progress-circle {
+            width: 31px;
+            height: 31px;
+        }
+
+        .quality-progress-step:not(:last-child)::after {
+            top: 15px;
+            left: calc(50% + 18px);
+            width: calc(100% - 36px);
+        }
+
+        .quality-data-grid,
+        .quality-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .quality-data-item.wide {
+            grid-column: auto;
+        }
+
+        .quality-card-body {
+            padding: 15px;
+        }
+
+        .quality-form-actions {
+            flex-direction: column;
+        }
+
+        .quality-form-actions .quality-btn {
+            width: 100%;
         }
     }
 </style>
+
+<div class="quality-detail-page">
+    <div class="quality-detail-shell">
+
+        @if (TempData["Mensaje"] != null)
+        {
+            <div class="quality-alert quality-alert-success" role="alert">
+                <i class="fa-solid fa-circle-check mt-1"></i>
+                <div>@TempData["Mensaje"]</div>
+            </div>
+        }
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="quality-alert quality-alert-danger" role="alert">
+                <i class="fa-solid fa-triangle-exclamation mt-1"></i>
+                <div>@TempData["Error"]</div>
+            </div>
+        }
+
+        @if (Model.ConfiguracionInvalidada)
+        {
+            <div class="quality-alert quality-alert-danger">
+                <i class="fa-solid fa-ban mt-1"></i>
+                <div>
+                    <strong>La configuración validada fue invalidada.</strong>
+                    <div class="mt-1">
+                        @Mostrar(Model.MotivoInvalidacion)
+                    </div>
+
+                    @if (Model.FechaInvalidacion.HasValue)
+                    {
+                        <div class="mt-1 small">
+                            Fecha:
+                            @Model.FechaInvalidacion.Value.ToString("dd/MM/yyyy HH:mm")
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <header class="quality-detail-header">
+            <div class="quality-detail-header-main">
+                <div class="quality-detail-icon">
+                    <i class="fa-solid fa-microscope"></i>
+                </div>
+
+                <div>
+                    <h1 class="quality-detail-title">
+                        Liberación de corrida
+                    </h1>
+
+                    <p class="quality-detail-subtitle">
+                        Inspección #@Model.InspeccionID
+                        · @(Model.ProgramaProduccionID.HasValue
+                        ? $"Programa {Model.ProgramaProduccionID.Value}"
+                        : "Registro anterior sin vínculo a Planeación")
+                        · OF @Mostrar(Model.OrdenTrabajo)
+                    </p>
+                </div>
+            </div>
+
+            <div class="quality-header-actions">
+                <span class="quality-state @estadoClase">
+                    <i class="fa-solid fa-circle"></i>
+                    @estadoTexto
+                </span>
+
+                <a asp-controller="Calidad"
+                   asp-action="Index"
+                   class="quality-btn quality-btn-light">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Volver
+                </a>
+            </div>
+        </header>
+
+        <section class="quality-progress" aria-label="Avance de liberación">
+            @for (var i = 0; i < pasos.Length; i++)
+            {
+                var numeroPaso = i + 1;
+
+                var clasePaso = numeroPaso < pasoActual
+                    ? "is-done"
+                    : numeroPaso == pasoActual
+                        ? "is-active"
+                        : "";
+
+                <div class="quality-progress-step @clasePaso">
+                    <div class="quality-progress-circle">
+                        @if (numeroPaso < pasoActual)
+                        {
+                            <i class="fa-solid fa-check"></i>
+                        }
+                        else
+                        {
+                            @numeroPaso
+                        }
+                    </div>
+
+                    <span>@pasos[i]</span>
+                </div>
+            }
+        </section>
+
+        <div class="quality-grid">
+            <main class="quality-column">
+
+                <section class="quality-card">
+                    <div class="quality-card-header">
+                        <h2>
+                            <i class="fa-solid fa-industry"></i>
+                            Información de la corrida
+                        </h2>
+                    </div>
+
+                    <div class="quality-card-body">
+                        <div class="quality-data-grid">
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Programa</span>
+                                <span class="quality-data-value">
+                                    @(Model.ProgramaProduccionID?.ToString() ?? "—")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Orden de fabricación</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.OrdenTrabajo)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Cliente</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.ClienteNombre)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Número de parte</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.NumeroParte)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item wide">
+                                <span class="quality-data-label">Material</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.Material)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Máquina</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.Maquina)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Molde</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.Molde)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Proceso</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.Proceso)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Inicio programado</span>
+                                <span class="quality-data-value">
+                                    @(Model.FechaInicioProgramada?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Fin programado</span>
+                                <span class="quality-data-value">
+                                    @(Model.FechaFinProgramada?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Cantidad programada</span>
+                                <span class="quality-data-value">
+                                    @Model.CantidadTotal.ToString("N0")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="quality-card">
+                    <div class="quality-card-header">
+                        <h2>
+                            <i class="fa-solid fa-users-gear"></i>
+                            Personal asignado
+                        </h2>
+                    </div>
+
+                    <div class="quality-card-body">
+                        <div class="quality-data-grid">
+                            <div class="quality-data-item wide">
+                                <span class="quality-data-label">Operador principal</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.OperadorPrincipalNombre)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">ID persona</span>
+                                <span class="quality-data-value">
+                                    @(Model.OperadorPrincipalPersonaID?.ToString() ?? "—")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item wide">
+                                <span class="quality-data-label">Operador auxiliar</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.OperadorAuxiliarNombre)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">ID persona auxiliar</span>
+                                <span class="quality-data-value">
+                                    @(Model.OperadorAuxiliarPersonaID?.ToString() ?? "—")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="quality-card">
+                    <div class="quality-card-header">
+                        <h2>
+                            <i class="fa-solid fa-file-circle-check"></i>
+                            Documentación y preparación
+                        </h2>
+                    </div>
+
+                    <div class="quality-card-body">
+                        <div class="quality-doc-list">
+                            <div class="quality-doc-item">
+                                <span class="quality-doc-name">
+                                    <i class="fa-solid fa-list-check"></i>
+                                    Checklist de Producción
+                                </span>
+
+                                @if (Model.ChecklistValidado)
+                                {
+                                    <span class="quality-check quality-check-ok">
+                                        <i class="fa-solid fa-check"></i>
+                                        Validado
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="quality-check quality-check-pending">
+                                        <i class="fa-solid fa-clock"></i>
+                                        Pendiente
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="quality-doc-item">
+                                <span class="quality-doc-name">
+                                    <i class="fa-solid fa-clipboard-check"></i>
+                                    Hoja de inspección del producto
+                                </span>
+
+                                @if (Model.HojaInspeccionProducto)
+                                {
+                                    <span class="quality-check quality-check-ok">
+                                        <i class="fa-solid fa-check"></i>
+                                        Disponible
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="quality-check quality-check-pending">
+                                        <i class="fa-solid fa-clock"></i>
+                                        Pendiente
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="quality-doc-item">
+                                <span class="quality-doc-name">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                    Hoja de validación de Calidad
+                                </span>
+
+                                @if (Model.HojaValidacionCalidad)
+                                {
+                                    <span class="quality-check quality-check-ok">
+                                        <i class="fa-solid fa-check"></i>
+                                        Disponible
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="quality-check quality-check-pending">
+                                        <i class="fa-solid fa-clock"></i>
+                                        Pendiente
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                @if (puedePrearranque)
+                {
+                    <section class="quality-card">
+                        <div class="quality-card-header">
+                            <h2>
+                                <i class="fa-solid fa-power-off"></i>
+                                Decisión de prearranque
+                            </h2>
+                        </div>
+
+                        <div class="quality-card-body">
+                            <div class="quality-alert quality-alert-warning">
+                                <i class="fa-solid fa-circle-info mt-1"></i>
+                                <div>
+                                    Verifica que la OF, máquina, molde, material,
+                                    documentación y personal correspondan con la corrida.
+                                </div>
+                            </div>
+
+                            <div class="quality-form-grid">
+                                <form asp-controller="Calidad"
+                                      asp-action="AutorizarPrearranque"
+                                      method="post"
+                                      class="quality-side-action"
+                                      data-confirm="¿Confirmas que la máquina está lista para realizar el arranque controlado?">
+
+                                    @Html.AntiForgeryToken()
+
+                                    <input type="hidden"
+                                           name="InspeccionID"
+                                           value="@Model.InspeccionID" />
+
+                                    <h3>Autorizar arranque</h3>
+
+                                    <p>
+                                        Permite a Producción poner en funcionamiento la máquina
+                                        para generar las primeras piezas.
+                                    </p>
+
+                                    <label class="quality-form-label">
+                                        Comentario opcional
+                                    </label>
+
+                                    <textarea name="Motivo"
+                                              class="quality-form-control"
+                                              placeholder="Observaciones de la autorización..."></textarea>
+
+                                    <button type="submit"
+                                            class="quality-btn quality-btn-success mt-3">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                        Autorizar prearranque
+                                    </button>
+                                </form>
+
+                                <form asp-controller="Calidad"
+                                      asp-action="DevolverPrearranque"
+                                      method="post"
+                                      class="quality-side-action"
+                                      data-confirm="¿Confirmas que deseas devolver esta revisión a Producción?">
+
+                                    @Html.AntiForgeryToken()
+
+                                    <input type="hidden"
+                                           name="InspeccionID"
+                                           value="@Model.InspeccionID" />
+
+                                    <h3>Devolver a Producción</h3>
+
+                                    <p>
+                                        Utiliza esta acción cuando exista información,
+                                        documentación o preparación pendiente.
+                                    </p>
+
+                                    <label class="quality-form-label">
+                                        Motivo obligatorio
+                                    </label>
+
+                                    <textarea name="Motivo"
+                                              class="quality-form-control"
+                                              required
+                                              maxlength="1000"
+                                              placeholder="Describe exactamente qué debe corregirse...">@Model.MotivoDevolucion</textarea>
+
+                                    <button type="submit"
+                                            class="quality-btn quality-btn-danger mt-3">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                        Devolver revisión
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+                }
+
+                @if (puedeRegistrarPrimerasPiezas)
+                {
+                    <section class="quality-card">
+                        <div class="quality-card-header">
+                            <h2>
+                                <i class="fa-solid fa-vial-circle-check"></i>
+                                Validación de primeras piezas
+                            </h2>
+                        </div>
+
+                        <div class="quality-card-body">
+                            <form method="post">
+                                @Html.AntiForgeryToken()
+
+                                <input type="hidden"
+                                       name="InspeccionID"
+                                       value="@Model.InspeccionID" />
+
+                                <div class="quality-form-grid">
+                                    <div class="quality-field-full">
+                                        <div class="quality-form-check">
+                                            <input asp-for="CincoDisparosSegregados"
+                                                   class="form-check-input" />
+
+                                            <label asp-for="CincoDisparosSegregados">
+                                                Confirmo que los primeros cinco disparos fueron segregados
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label asp-for="CantidadDisparosConformes"
+                                               class="quality-form-label">
+                                            Disparos conformes presentados
+                                        </label>
+
+                                        <input asp-for="CantidadDisparosConformes"
+                                               type="number"
+                                               min="0"
+                                               max="5"
+                                               class="quality-form-control" />
+
+                                        <div class="quality-help">
+                                            Se requieren al menos tres disparos conformes
+                                            para liberar la producción.
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="quality-form-label">
+                                            Validación dimensional
+                                        </label>
+
+                                        <select name="ValidacionDimensional"
+                                                class="quality-form-select">
+                                            <option value=""
+                                                    selected="@(Model.ValidacionDimensional is null ? "selected" : null)">
+                                                Pendiente / no aplica
+                                            </option>
+                                            <option value="true"
+                                                    selected="@(Model.ValidacionDimensional == true ? "selected" : null)">
+                                                Cumple
+                                            </option>
+                                            <option value="false"
+                                                    selected="@(Model.ValidacionDimensional == false ? "selected" : null)">
+                                                No cumple
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="quality-form-label">
+                                            Apariencia
+                                        </label>
+
+                                        <select name="ValidacionApariencia"
+                                                class="quality-form-select">
+                                            <option value=""
+                                                    selected="@(Model.ValidacionApariencia is null ? "selected" : null)">
+                                                Pendiente / no aplica
+                                            </option>
+                                            <option value="true"
+                                                    selected="@(Model.ValidacionApariencia == true ? "selected" : null)">
+                                                Cumple
+                                            </option>
+                                            <option value="false"
+                                                    selected="@(Model.ValidacionApariencia == false ? "selected" : null)">
+                                                No cumple
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="quality-form-label">
+                                            Gauge
+                                        </label>
+
+                                        <select name="ValidacionGauge"
+                                                class="quality-form-select">
+                                            <option value=""
+                                                    selected="@(Model.ValidacionGauge is null ? "selected" : null)">
+                                                No aplica / pendiente
+                                            </option>
+                                            <option value="true"
+                                                    selected="@(Model.ValidacionGauge == true ? "selected" : null)">
+                                                Cumple
+                                            </option>
+                                            <option value="false"
+                                                    selected="@(Model.ValidacionGauge == false ? "selected" : null)">
+                                                No cumple
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="quality-form-label">
+                                            Conductividad
+                                        </label>
+
+                                        <select name="ValidacionConductividad"
+                                                class="quality-form-select">
+                                            <option value=""
+                                                    selected="@(Model.ValidacionConductividad is null ? "selected" : null)">
+                                                No aplica / pendiente
+                                            </option>
+                                            <option value="true"
+                                                    selected="@(Model.ValidacionConductividad == true ? "selected" : null)">
+                                                Cumple
+                                            </option>
+                                            <option value="false"
+                                                    selected="@(Model.ValidacionConductividad == false ? "selected" : null)">
+                                                No cumple
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <div class="quality-field-full">
+                                        <label class="quality-form-label">
+                                            Observaciones
+                                        </label>
+
+                                        <textarea name="Observaciones"
+                                                  class="quality-form-control"
+                                                  maxlength="1000"
+                                                  placeholder="Registra mediciones, irregularidades o ajustes necesarios...">@Model.Observaciones</textarea>
+                                    </div>
+                                </div>
+
+                                <div class="quality-form-actions">
+                                    <button type="submit"
+                                            formaction="@Url.Action("SolicitarAjustes", "Calidad")"
+                                            class="quality-btn quality-btn-danger"
+                                            data-submit-confirm="¿Confirmas que deseas solicitar ajustes a Producción?">
+                                        <i class="fa-solid fa-screwdriver-wrench"></i>
+                                        Solicitar ajustes
+                                    </button>
+
+                                    <button type="submit"
+                                            formaction="@Url.Action("RegistrarPrimerasPiezas", "Calidad")"
+                                            class="quality-btn quality-btn-primary"
+                                            data-submit-confirm="¿Confirmas que deseas guardar esta validación?">
+                                        <i class="fa-solid fa-floppy-disk"></i>
+                                        Guardar validación
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                }
+
+                @if (hayValidacionPrimerasPiezas)
+                {
+                    <section class="quality-card">
+                        <div class="quality-card-header">
+                            <h2>
+                                <i class="fa-solid fa-chart-simple"></i>
+                                Resultado de primeras piezas
+                            </h2>
+                        </div>
+
+                        <div class="quality-card-body">
+                            <div class="quality-validation-list">
+                                <div class="quality-validation-item">
+                                    <span>Primeros cinco disparos segregados</span>
+                                    <strong class="@(Model.CincoDisparosSegregados ? "quality-result-ok" : "quality-result-nok")">
+                                        @(Model.CincoDisparosSegregados ? "Sí" : "No")
+                                    </strong>
+                                </div>
+
+                                <div class="quality-validation-item">
+                                    <span>Disparos conformes</span>
+                                    <strong class="@(Model.CantidadDisparosConformes >= 3 ? "quality-result-ok" : "quality-result-nok")">
+                                        @Model.CantidadDisparosConformes de 5
+                                    </strong>
+                                </div>
+
+                                <div class="quality-validation-item">
+                                    <span>Dimensional</span>
+                                    <strong class="@ClaseResultadoNullable(Model.ValidacionDimensional)">
+                                        @ResultadoNullable(Model.ValidacionDimensional)
+                                    </strong>
+                                </div>
+
+                                <div class="quality-validation-item">
+                                    <span>Apariencia</span>
+                                    <strong class="@ClaseResultadoNullable(Model.ValidacionApariencia)">
+                                        @ResultadoNullable(Model.ValidacionApariencia)
+                                    </strong>
+                                </div>
+
+                                <div class="quality-validation-item">
+                                    <span>Gauge</span>
+                                    <strong class="@ClaseResultadoNullable(Model.ValidacionGauge)">
+                                        @ResultadoNullable(Model.ValidacionGauge)
+                                    </strong>
+                                </div>
+
+                                <div class="quality-validation-item">
+                                    <span>Conductividad</span>
+                                    <strong class="@ClaseResultadoNullable(Model.ValidacionConductividad)">
+                                        @ResultadoNullable(Model.ValidacionConductividad)
+                                    </strong>
+                                </div>
+                            </div>
+
+                            @if (Model.FechaValidacionPrimerasPiezas.HasValue)
+                            {
+                                <div class="quality-help mt-3">
+                                    Última validación:
+                                    @Model.FechaValidacionPrimerasPiezas.Value.ToString("dd/MM/yyyy HH:mm")
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <section class="quality-card">
+                    <div class="quality-card-header">
+                        <h2>
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            Historial del proceso
+                        </h2>
+                    </div>
+
+                    @if (Model.Historial != null && Model.Historial.Any())
+                    {
+                        <div class="quality-history-wrap">
+                            <table class="quality-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Movimiento</th>
+                                        <th>Estado anterior</th>
+                                        <th>Estado nuevo</th>
+                                        <th>Resultado</th>
+                                        <th>Comentario</th>
+                                        <th>Usuario</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @foreach (var item in Model.Historial)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @item.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")
+                                            </td>
+
+                                            <td class="quality-history-movement">
+                                                @Mostrar(item.Movimiento)
+                                            </td>
+
+                                            <td>
+                                                @Mostrar(item.EstadoAnterior)
+                                            </td>
+
+                                            <td>
+                                                @Mostrar(item.EstadoNuevo)
+                                            </td>
+
+                                            <td>
+                                                @Mostrar(item.ResultadoCalidad)
+                                            </td>
+
+                                            <td>
+                                                @Mostrar(item.Comentario)
+                                            </td>
+
+                                            <td>
+                                                @(item.UsuarioID?.ToString() ?? "—")
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="quality-empty">
+                            <i class="fa-regular fa-clock fa-2x mb-3"></i>
+                            <div>No existen movimientos registrados.</div>
+                        </div>
+                    }
+                </section>
+            </main>
+
+            <aside class="quality-column">
+                <section class="quality-card">
+                    <div class="quality-card-header">
+                        <h2>
+                            <i class="fa-solid fa-sliders"></i>
+                            Acciones
+                        </h2>
+                    </div>
+
+                    <div class="quality-card-body">
+                        @if (Model.ConfiguracionInvalidada)
+                        {
+                            <div class="quality-side-action">
+                                <h3>Revisión invalidada</h3>
+                                <p>
+                                    Producción debe corregir la configuración y generar
+                                    una nueva solicitud de Calidad.
+                                </p>
+                            </div>
+                        }
+                        else if (estado == CalidadEstados.Cerrada)
+                        {
+                            <div class="quality-side-action">
+                                <h3>Proceso cerrado</h3>
+                                <p>
+                                    Este registro se encuentra protegido y disponible
+                                    únicamente para consulta.
+                                </p>
+                            </div>
+                        }
+                        else
+                        {
+                            @if (puedeLiberarProduccion)
+                            {
+                                <div class="quality-side-action">
+                                    <h3>Liberar producción</h3>
+
+                                    <p>
+                                        Asigna etiqueta verde y permite continuar
+                                        con la producción normal.
+                                    </p>
+
+                                    <form asp-controller="Calidad"
+                                          asp-action="LiberarProduccion"
+                                          method="post"
+                                          data-confirm="¿Confirmas que las primeras piezas cumplen y deseas liberar la producción?">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="id"
+                                               value="@Model.InspeccionID" />
+
+                                        <button type="submit"
+                                                class="quality-btn quality-btn-success"
+                                                disabled="@(!datosSuficientesLiberacion)">
+                                            <i class="fa-solid fa-circle-check"></i>
+                                            Liberar con etiqueta verde
+                                        </button>
+                                    </form>
+
+                                    @if (!datosSuficientesLiberacion)
+                                    {
+                                        <div class="quality-help">
+                                            Para liberar se requieren cinco disparos segregados,
+                                            tres conformes, dimensional y apariencia aprobados,
+                                            sin resultados NOK en gauge o conductividad.
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (puedeTomarDisposicion)
+                            {
+                                <div class="quality-side-action">
+                                    <h3>Enviar a GP12</h3>
+
+                                    <p>
+                                        Mantiene el material bloqueado y lo dirige
+                                        a inspección reforzada.
+                                    </p>
+
+                                    <form asp-controller="Calidad"
+                                          asp-action="EnviarGP12"
+                                          method="post"
+                                          data-confirm="¿Confirmas el envío del material a GP12?">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="id"
+                                               value="@Model.InspeccionID" />
+
+                                        <textarea name="comentario"
+                                                  class="quality-form-control mb-3"
+                                                  maxlength="1000"
+                                                  placeholder="Motivo del envío a GP12..."></textarea>
+
+                                        <button type="submit"
+                                                class="quality-btn quality-btn-warning">
+                                            <i class="fa-solid fa-magnifying-glass-plus"></i>
+                                            Enviar a GP12
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <div class="quality-side-action">
+                                    <h3>Material no conforme</h3>
+
+                                    <p>
+                                        Bloquea el material mediante etiqueta roja.
+                                        Esta acción no lo convierte automáticamente en scrap.
+                                    </p>
+
+                                    <form asp-controller="Calidad"
+                                          asp-action="EnviarContencion"
+                                          method="post"
+                                          data-confirm="¿Confirmas que el material debe identificarse como no conforme?">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="id"
+                                               value="@Model.InspeccionID" />
+
+                                        <textarea name="comentario"
+                                                  class="quality-form-control mb-3"
+                                                  maxlength="1000"
+                                                  placeholder="Describe la no conformidad..."></textarea>
+
+                                        <button type="submit"
+                                                class="quality-btn quality-btn-danger">
+                                            <i class="fa-solid fa-ban"></i>
+                                            Bloquear material
+                                        </button>
+                                    </form>
+                                </div>
+                            }
+
+                            @if (puedeCerrar)
+                            {
+                                <div class="quality-side-action">
+                                    <h3>Cerrar registro</h3>
+
+                                    <p>
+                                        Finaliza el proceso y deja el registro
+                                        disponible únicamente para consulta.
+                                    </p>
+
+                                    <form asp-controller="Calidad"
+                                          asp-action="Cerrar"
+                                          method="post"
+                                          data-confirm="¿Confirmas que deseas cerrar definitivamente este registro?">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="id"
+                                               value="@Model.InspeccionID" />
+
+                                        <button type="submit"
+                                                class="quality-btn quality-btn-dark">
+                                            <i class="fa-solid fa-lock"></i>
+                                            Cerrar proceso
+                                        </button>
+                                    </form>
+                                </div>
+                            }
+
+                            @if (!puedePrearranque &&
+                                 !puedeRegistrarPrimerasPiezas &&
+                                 !puedeLiberarProduccion &&
+                                 !puedeTomarDisposicion &&
+                                 !puedeCerrar)
+                            {
+                                <div class="quality-side-action">
+                                    <h3>Sin acciones disponibles</h3>
+
+                                    <p>
+                                        El estado actual no permite realizar
+                                        otra transición desde esta pantalla.
+                                    </p>
+                                </div>
+                            }
+                        }
+                    </div>
+                </section>
+
+                <section class="quality-card">
+                    <div class="quality-card-header">
+                        <h2>
+                            <i class="fa-solid fa-flag"></i>
+                            Resultado actual
+                        </h2>
+                    </div>
+
+                    <div class="quality-card-body">
+                        <div class="quality-data-grid"
+                             style="grid-template-columns: 1fr;">
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Resultado</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.ResultadoCalidad)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Etiqueta</span>
+                                <span class="quality-data-value">
+                                    @Mostrar(Model.Etiqueta)
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Requiere GP12</span>
+                                <span class="quality-data-value">
+                                    @(Model.RequiereGP12 ? "Sí" : "No")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">En contención</span>
+                                <span class="quality-data-value">
+                                    @(Model.EnContencion ? "Sí" : "No")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Fecha de liberación</span>
+                                <span class="quality-data-value">
+                                    @(Model.FechaLiberacionProduccion?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
+                {
+                    <section class="quality-card">
+                        <div class="quality-card-header">
+                            <h2>
+                                <i class="fa-solid fa-note-sticky"></i>
+                                Observaciones
+                            </h2>
+                        </div>
+
+                        <div class="quality-card-body">
+                            <div style="white-space: pre-wrap; overflow-wrap: anywhere;">
+                                @Model.Observaciones
+                            </div>
+                        </div>
+                    </section>
+                }
+
+                <section class="quality-card">
+                    <div class="quality-card-header">
+                        <h2>
+                            <i class="fa-solid fa-circle-info"></i>
+                            Auditoría
+                        </h2>
+                    </div>
+
+                    <div class="quality-card-body">
+                        <div class="quality-data-grid"
+                             style="grid-template-columns: 1fr;">
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Creación</span>
+                                <span class="quality-data-value">
+                                    @Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Usuario creador</span>
+                                <span class="quality-data-value">
+                                    @(Model.UsuarioCreacionID?.ToString() ?? "—")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Última modificación</span>
+                                <span class="quality-data-value">
+                                    @(Model.FechaModificacion?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                </span>
+                            </div>
+
+                            <div class="quality-data-item">
+                                <span class="quality-data-label">Usuario modificación</span>
+                                <span class="quality-data-value">
+                                    @(Model.UsuarioModificacionID?.ToString() ?? "—")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    const message = form.dataset.confirm;
+
+                    if (message && !window.confirm(message)) {
+                        event.preventDefault();
+                    }
+                });
+            });
+
+            document.querySelectorAll('[data-submit-confirm]').forEach(function (button) {
+                button.addEventListener('click', function (event) {
+                    const message = button.dataset.submitConfirm;
+
+                    if (message && !window.confirm(message)) {
+                        event.preventDefault();
+                    }
+                });
+            });
+        });
+    </script>
+}

@@ -20,6 +20,9 @@ namespace ERP.NSQuell.Models.ViewModels
 
         public int TotalStockConfigurado { get; set; }
 
+        public List<SelectListItem> Maquinas { get; set; } = new();
+        public List<SelectListItem> Moldes { get; set; } = new();
+
         public List<ParteListadoItemViewModel> Partes { get; set; } = new();
     }
 
@@ -48,13 +51,21 @@ namespace ERP.NSQuell.Models.ViewModels
         public bool Activo { get; set; }
 
         public bool TieneDatosTecnicos { get; set; }
+
+        public string? Color { get; set; }
+
+        public int? Cavidades { get; set; }
+
+        public decimal? ObjetivoHora { get; set; }
+
+        public string? Material { get; set; }
     }
 
     public class ParteFormViewModel
     {
         public int? ParteID { get; set; }
 
-        [Required(ErrorMessage = "Debe seleccionar un cliente.")]
+        [Range(1, int.MaxValue, ErrorMessage = "Debe seleccionar un cliente.")]
         public int ClienteID { get; set; }
 
         [Required(ErrorMessage = "El numero de parte es obligatorio.")]
@@ -71,29 +82,20 @@ namespace ERP.NSQuell.Models.ViewModels
         [StringLength(200)]
         public string? Designacion { get; set; }
 
-        [StringLength(80)]
-        public string? Color { get; set; }
-
-        public int? Cavidades { get; set; }
-
-        public int? ObjetivoHora { get; set; }
-
-        public int? PiezasPorCaja { get; set; }
+      
 
         public bool RequiereGP12 { get; set; }
 
         public bool RequiereCertificado { get; set; }
 
-        public int? MaquinaPrincipalID { get; set; }
-
-        public int? MaquinaSustitutaID { get; set; }
-
-        public int? MoldePrincipalID { get; set; }
+     
 
         public bool Activo { get; set; } = true;
 
+        [Range(0, int.MaxValue, ErrorMessage = "El stock mínimo no puede ser negativo.")]
         public int StockMinimo { get; set; }
 
+        [Range(0, int.MaxValue, ErrorMessage = "El stock de aviso no puede ser negativo.")]
         public int StockAviso { get; set; }
 
         public bool StockConfigurado { get; set; }
@@ -101,11 +103,31 @@ namespace ERP.NSQuell.Models.ViewModels
         [ValidateNever]
         public List<SelectListItem> Clientes { get; set; } = new();
 
-        [ValidateNever]
-        public List<SelectListItem> Maquinas { get; set; } = new();
 
-        [ValidateNever]
-        public List<SelectListItem> Moldes { get; set; } = new();
+        [StringLength(1000, ErrorMessage = "Las notas no pueden superar los 1000 caracteres.")]
+        public string? Notas { get; set; }
+
+        [Range(typeof(decimal), "0", "9999999999999999",
+            ErrorMessage = "El precio de venta no puede ser negativo.")]
+        public decimal? PrecioVentaUnitario { get; set; }
+
+        [StringLength(10)]
+        public string? MonedaPrecioVenta { get; set; }
+
+        [StringLength(50)]
+        public string? UnidadPrecioVenta { get; set; }
+
+        [StringLength(50)]
+        public string? FuentePrecioVenta { get; set; }
+
+        [StringLength(100)]
+        public string? ClavePrecioVentaOrigen { get; set; }
+
+        [StringLength(250)]
+        public string? DescripcionPrecioVentaOrigen { get; set; }
+
+        [DataType(DataType.Date)]
+        public DateTime? FechaPrecioVenta { get; set; }
 
         public bool EsModoCrear => !ParteID.HasValue || ParteID.Value <= 0;
     }
@@ -149,5 +171,23 @@ namespace ERP.NSQuell.Models.ViewModels
         public int? MaterialID { get; set; }
 
         public bool Activo { get; set; } = true;
+
+
+        public string? Color { get; set; }
+
+        [Range(0, int.MaxValue)]
+        public int? Cavidades { get; set; }
+
+        [Range(0, double.MaxValue)]
+        public decimal? ObjetivoHora { get; set; }
+
+        [Range(0, int.MaxValue)]
+        public int? PiezasPorCaja { get; set; }
+
+        public int? MaquinaPrincipalID { get; set; }
+        public int? MaquinaSustitutaID { get; set; }
+        public int? MoldePrincipalID { get; set; }
+
+
     }
 }
