@@ -556,6 +556,114 @@ namespace ERP.NSQuell.Models
             );
         }
 
+
+        public class SeguimientoDireccionViewModel
+        {
+            public int? FiltroEstatusID { get; set; }
+            public string? FiltroDepartamento { get; set; }
+            public string? FiltroComprador { get; set; }
+            public bool SoloRetrasadas { get; set; }
+
+            public List<SelectListItem> EstatusCatalogo { get; set; } = new();
+            public List<SelectListItem> DepartamentosCatalogo { get; set; } = new();
+            public List<SelectListItem> CompradoresCatalogo { get; set; } = new();
+
+            public List<SeguimientoDireccionItemViewModel> Solicitudes { get; set; } = new();
+            public List<CompradorCargaViewModel> CargaCompradores { get; set; } = new();
+
+            public int TotalSolicitudes => Solicitudes.Count;
+
+            public int TotalActivas => Solicitudes.Count(x =>
+                x.EstatusID != 10 &&
+                x.EstatusID != 11 &&
+                x.EstatusID != 12
+            );
+
+            public int TotalCerradas => Solicitudes.Count(x => x.EstatusID == 10);
+            public int TotalRechazadas => Solicitudes.Count(x => x.EstatusID == 11);
+            public int TotalCanceladas => Solicitudes.Count(x => x.EstatusID == 12);
+            public int TotalRetrasadas => Solicitudes.Count(x => x.EsRetrasada);
+
+            public decimal MontoTotalCotizado => Solicitudes.Sum(x => x.MontoCotizado ?? 0);
+        }
+
+        public class SeguimientoDireccionItemViewModel
+        {
+            public int SolicitudCompraID { get; set; }
+            public string? Folio { get; set; }
+
+            public DateTime FechaSolicitud { get; set; }
+
+            public string? Solicitante { get; set; }
+            public string? Departamento { get; set; }
+
+            public int? CompradorAsignadoUsuarioID { get; set; }
+            public string? CompradorAsignado { get; set; }
+
+            public string? Prioridad { get; set; }
+            public string? TipoCompra { get; set; }
+
+            public int EstatusID { get; set; }
+            public string? EstatusNombre { get; set; }
+            public string? ResponsableActual { get; set; }
+
+            public DateTime? FechaUltimoMovimiento { get; set; }
+            public int DiasEnEstatus { get; set; }
+            public int DiasTotales { get; set; }
+            public int DiasPermitidos { get; set; }
+
+            public int TotalCotizaciones { get; set; }
+            public decimal? MontoCotizado { get; set; }
+
+            public int DiasDireccion { get; set; }
+            public int DiasCompras { get; set; }
+            public int DiasOC { get; set; }
+            public int DiasProveedor { get; set; }
+            public int DiasAlmacen { get; set; }
+
+            public string SemaforoTexto { get; set; } = "A tiempo";
+            public string SemaforoCss { get; set; } = "badge-semaforo badge-verde";
+
+            public bool EsFinal => EstatusID == 10 || EstatusID == 11 || EstatusID == 12;
+
+            public bool EsRetrasada =>
+                !EsFinal &&
+                DiasPermitidos > 0 &&
+                DiasEnEstatus > DiasPermitidos;
+
+            public int PorcentajeAvance => EstatusID switch
+            {
+                1 => 10,
+                2 => 20,
+                3 => 30,
+                4 => 40,
+                5 => 50,
+                6 => 60,
+                7 => 70,
+                8 => 80,
+                9 => 90,
+                10 => 100,
+                11 => 100,
+                12 => 100,
+                _ => 0
+            };
+        }
+
+        public class CompradorCargaViewModel
+        {
+            public int? CompradorUsuarioID { get; set; }
+            public string Comprador { get; set; } = "Sin asignar";
+
+            public int TotalAsignadas { get; set; }
+            public int Pendientes { get; set; }
+            public int Cotizando { get; set; }
+            public int Ordenes { get; set; }
+            public int Cerradas { get; set; }
+            public int Retrasadas { get; set; }
+
+            public decimal MontoTotal { get; set; }
+        }
+
         // =========================================================
         // APROBACIONES
         // =========================================================
