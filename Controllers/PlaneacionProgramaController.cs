@@ -1632,18 +1632,14 @@ VALUES
             if (!vm.HorasProgramadas.HasValue || vm.HorasProgramadas.Value <= 0)
                 ModelState.AddModelError(nameof(vm.HorasProgramadas), "Las horas programadas deben ser mayores a cero.");
 
-            if (!vm.OperadorPrincipalID.HasValue || vm.OperadorPrincipalID.Value <= 0)
-            {
-                ModelState.AddModelError(nameof(vm.OperadorPrincipalID), "Selecciona el operador principal.");
-            }
+            // Los operadores ya no se capturan manualmente.
+            // Se asignan automáticamente desde RRHH / Escala según máquina, fecha y turno.
+            ModelState.Remove(nameof(vm.OperadorPrincipalID));
+            ModelState.Remove(nameof(vm.OperadorAuxiliarID));
 
-            if (vm.OperadorAuxiliarID.HasValue &&
-                vm.OperadorAuxiliarID.Value > 0 &&
-                vm.OperadorPrincipalID.HasValue &&
-                vm.OperadorAuxiliarID.Value == vm.OperadorPrincipalID.Value)
-            {
-                ModelState.AddModelError(nameof(vm.OperadorAuxiliarID), "El operador auxiliar debe ser diferente al operador principal.");
-            }
+            vm.OperadorPrincipalID = null;
+            vm.OperadorAuxiliarID = null;
+
 
             if (vm.FechaInicioProgramada.HasValue && vm.Cambio.HasValue)
             {
@@ -1755,6 +1751,44 @@ VALUES
                     TempData["Error"] = "Ese renglón de release ya fue programado.";
                     return RedirectToAction(nameof(Index));
                 }
+
+                var operadoresEscala = await ObtenerOperadoresEscalaPorMaquinaFechaAsync(
+    vm.MaquinaID!.Value,
+    vm.FechaInicioProgramada!.Value,
+    cn,
+    (SqlTransaction)tx
+);
+
+                if (!operadoresEscala.Any())
+                {
+                    await tx.RollbackAsync();
+
+                    ModelState.AddModelError(
+                        nameof(vm.MaquinaID),
+                        "No hay operador asignado en la escala de RRHH para esta máquina y horario. " +
+                        "Revisa el módulo de turnos antes de programar."
+                    );
+
+                    await CargarCatalogosAsync(vm);
+                    return View(vm);
+                }
+
+                var operadorPrincipal = operadoresEscala[0];
+                var operadorAuxiliar = operadoresEscala
+                    .Skip(1)
+                    .FirstOrDefault();
+
+                vm.OperadorPrincipalID = operadorPrincipal.PersonaID;
+                vm.OperadorAuxiliarID = operadorAuxiliar?.PersonaID;
+
+                var textoOperadorEscala =
+                    $"Operador asignado automáticamente desde RRHH: {operadorPrincipal.NombreCompleto}" +
+                    (operadorAuxiliar != null ? $" | Auxiliar: {operadorAuxiliar.NombreCompleto}" : "") +
+                    $" | Turno: {operadorPrincipal.TurnoNombre}.";
+
+                vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones)
+                    ? textoOperadorEscala
+                    : vm.Observaciones.Trim() + Environment.NewLine + textoOperadorEscala;
 
                 if (!esInterrupcion)
                 {
@@ -4021,6 +4055,62 @@ VALUES
             await cmd.ExecuteNonQueryAsync();
         }
 
+        [HttpGet]
+        public async Task<IActionResult> OperadoresPorMaquinaFecha(
+    int maquinaId,
+    DateTime fechaHora)
+        {
+            if (maquinaId <= 0 || fechaHora == default)
+            {
+                return Json(new
+                {
+                    ok = false,
+                    mensaje = "Selecciona máquina y fecha/hora de cambio."
+                });
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            var operadores = await ObtenerOperadoresEscalaPorMaquinaFechaAsync(
+                maquinaId,
+                fechaHora,
+                cn
+            );
+
+            if (!operadores.Any())
+            {
+                return Json(new
+                {
+                    ok = false,
+                    mensaje =
+                        "No hay operador asignado en RRHH para esta máquina y horario."
+                });
+            }
+
+            var principal = operadores[0];
+            var auxiliar = operadores.Skip(1).FirstOrDefault();
+
+            return Json(new
+            {
+                ok = true,
+
+                operadorPrincipalID = principal.PersonaID,
+                operadorPrincipalNombre = principal.NombreCompleto,
+
+                operadorAuxiliarID = auxiliar?.PersonaID,
+                operadorAuxiliarNombre = auxiliar?.NombreCompleto,
+
+                turnoNombre = principal.TurnoNombre,
+                turnoColor = principal.TurnoColor,
+                escalaAsignacionID = principal.EscalaAsignacionID,
+
+                mensaje =
+                    $"Operador: {principal.NombreCompleto}" +
+                    (auxiliar != null ? $" | Auxiliar: {auxiliar.NombreCompleto}" : "") +
+                    $" | Turno: {principal.TurnoNombre}"
+            });
+        }
         private async Task MarcarProgramaConOFAsync(
     int programaProduccionId,
     int solicitudProduccionId,
@@ -4164,6 +4254,132 @@ WHERE ReleaseDetalleID = @ReleaseDetalleID;";
             return cursor;
         }
 
+        private static async Task<List<OperadorEscalaProgramaVm>> ObtenerOperadoresEscalaPorMaquinaFechaAsync(
+    int maquinaId,
+    DateTime fechaHora,
+    SqlConnection cn,
+    SqlTransaction? tx = null)
+        {
+            var operadores = new List<OperadorEscalaProgramaVm>();
+
+            const string sql = @"
+SELECT TOP (2)
+    a.AsignacionID AS EscalaAsignacionID,
+    a.PersonalID AS PersonaID,
+
+    LTRIM(RTRIM(
+        ISNULL(p.Nombre, '') + ' ' +
+        ISNULL(p.ApellidoPaterno, '') + ' ' +
+        ISNULL(p.ApellidoMaterno, '')
+    )) AS NombreCompleto,
+
+    et.EscalaTurnoID,
+    et.Nombre AS TurnoNombre,
+    et.Color AS TurnoColor,
+
+    a.MaquinaID
+
+FROM dbo.RRHH_EscalaAsignaciones a
+
+INNER JOIN dbo.RRHH_EscalasPersonal esc
+    ON esc.EscalaID = a.EscalaID
+   AND esc.Activo = 1
+   AND esc.Estado = N'Publicada'
+
+INNER JOIN dbo.Persona p
+    ON p.PersonaID = a.PersonalID
+
+INNER JOIN dbo.RRHH_EscalaTurnos et
+    ON et.EscalaID = a.EscalaID
+   AND et.EscalaTurnoID = a.EscalaTurnoID
+
+WHERE a.Activo = 1
+  AND a.MaquinaID = @MaquinaID
+
+  AND CAST(@FechaHora AS date) >= CAST(a.FechaInicio AS date)
+  AND CAST(@FechaHora AS date) <= CAST(a.FechaFin AS date)
+
+  AND ISNULL(p.EsColaboradorActivo, 1) = 1
+
+  AND
+  (
+        ISNULL(et.EsFlexible, 0) = 1
+     OR et.HoraInicio IS NULL
+     OR et.HoraFin IS NULL
+
+     OR
+     (
+            ISNULL(et.CruzaDiaSiguiente, 0) = 0
+        AND CAST(@FechaHora AS time) >= et.HoraInicio
+        AND CAST(@FechaHora AS time) < et.HoraFin
+     )
+
+     OR
+     (
+            ISNULL(et.CruzaDiaSiguiente, 0) = 1
+        AND
+        (
+               CAST(@FechaHora AS time) >= et.HoraInicio
+            OR CAST(@FechaHora AS time) < et.HoraFin
+        )
+     )
+  )
+
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.RRHH_NovedadesPersonal n
+      WHERE n.EscalaID = a.EscalaID
+        AND n.PersonalID = a.PersonalID
+        AND n.Activo = 1
+        AND n.TipoNovedad IN (N'Baja', N'Incapacidad', N'Vacaciones')
+        AND CAST(@FechaHora AS date) >= CAST(n.FechaInicio AS date)
+        AND CAST(@FechaHora AS date) <= CAST(ISNULL(n.FechaFin, n.FechaInicio) AS date)
+  )
+
+ORDER BY
+    et.Orden,
+    a.AsignacionID DESC;";
+
+            await using var cmd = tx == null
+                ? new SqlCommand(sql, cn)
+                : new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
+            cmd.Parameters.Add("@FechaHora", SqlDbType.DateTime).Value = fechaHora;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                operadores.Add(new OperadorEscalaProgramaVm
+                {
+                    EscalaAsignacionID = Convert.ToInt32(rd["EscalaAsignacionID"]),
+                    PersonaID = Convert.ToInt32(rd["PersonaID"]),
+
+                    NombreCompleto =
+                        rd["NombreCompleto"] == DBNull.Value
+                            ? string.Empty
+                            : rd["NombreCompleto"].ToString() ?? string.Empty,
+
+                    EscalaTurnoID = Convert.ToInt32(rd["EscalaTurnoID"]),
+
+                    TurnoNombre =
+                        rd["TurnoNombre"] == DBNull.Value
+                            ? "Turno sin nombre"
+                            : rd["TurnoNombre"].ToString() ?? "Turno sin nombre",
+
+                    TurnoColor =
+                        rd["TurnoColor"] == DBNull.Value
+                            ? null
+                            : rd["TurnoColor"].ToString(),
+
+                    MaquinaID = Convert.ToInt32(rd["MaquinaID"])
+                });
+            }
+
+            return operadores;
+        }
         private static decimal CalcularHorasOperativasCalendario(
             DateTime inicio,
             DateTime fin)
@@ -4212,6 +4428,19 @@ WHERE ReleaseDetalleID = @ReleaseDetalleID;";
             }
 
             return Math.Round(total, 4);
+        }
+
+        private sealed class OperadorEscalaProgramaVm
+        {
+            public int EscalaAsignacionID { get; set; }
+            public int PersonaID { get; set; }
+            public string NombreCompleto { get; set; } = string.Empty;
+
+            public int EscalaTurnoID { get; set; }
+            public string TurnoNombre { get; set; } = string.Empty;
+            public string? TurnoColor { get; set; }
+
+            public int MaquinaID { get; set; }
         }
 
         public sealed class CalendarioMaquinasMoverRequest

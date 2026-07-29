@@ -904,36 +904,54 @@
                             </div>
                         </div>
 
+                        <input type="hidden" asp-for="OperadorPrincipalID" id="OperadorPrincipalID" />
+                        <input type="hidden" asp-for="OperadorAuxiliarID" id="OperadorAuxiliarID" />
+
                         <div class="step-line">
                             <div class="step-number">4</div>
                             <div class="w-100">
                                 <label class="field-label">
-                                    Operador principal
+                                    Operador por turno RRHH
                                 </label>
-                                <select asp-for="OperadorPrincipalID"
-                                        asp-items="Model.Operadores"
-                                        class="form-select">
-                                    <option value="">-- Selecciona operador principal --</option>
-                                </select>
-                                <span asp-validation-for="OperadorPrincipalID" class="text-danger small"></span>
+
+                                <div id="operadorTurnoBox"
+                                     class="p-3 rounded-4 border"
+                                     style="background:#f8fbff;">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="fs-4 text-primary">
+                                            <i class="fa-solid fa-user-clock"></i>
+                                        </div>
+
+                                        <div class="w-100">
+                                            <div class="fw-bold text-primary" id="operadorTurnoTitulo">
+                                                Se asignará automáticamente desde la escala de RRHH
+                                            </div>
+
+                                            <div class="small text-muted mt-1" id="operadorTurnoDetalle">
+                                                Selecciona máquina, fecha y hora de cambio para consultar el operador del turno.
+                                            </div>
+
+                                            <div class="mt-2 d-flex gap-2 flex-wrap">
+                                                <span class="badge-muted" id="operadorPrincipalBadge">
+                                                    Principal: pendiente
+                                                </span>
+
+                                                <span class="badge-muted" id="operadorAuxiliarBadge">
+                                                    Auxiliar: sin validar
+                                                </span>
+
+                                                <span class="badge-muted" id="turnoBadge">
+                                                    Turno: pendiente
+                                                </span>
+                                            </div>
+
+                                            <span asp-validation-for="OperadorPrincipalID" class="text-danger small"></span>
+                                            <span asp-validation-for="OperadorAuxiliarID" class="text-danger small"></span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-
-                        <div class="step-line">
-                            <div class="step-number">5</div>
-                            <div class="w-100">
-                                <label class="field-label">
-                                    Operador auxiliar
-                                </label>
-                                <select asp-for="OperadorAuxiliarID"
-                                        asp-items="Model.Operadores"
-                                        class="form-select">
-                                    <option value="">-- Sin auxiliar --</option>
-                                </select>
-                                <span asp-validation-for="OperadorAuxiliarID" class="text-danger small"></span>
-                            </div>
-                        </div>
-
                         <div class="step-line">
                             <div class="step-number">6</div>
                             <div class="w-100">
@@ -1059,6 +1077,162 @@
     const formPrograma = document.getElementById('formPrograma');
     const btnGuardar = document.getElementById('btnGuardar');
     const condicionInput = document.getElementById('CondicionProduccion');
+
+            const maquinaInput = document.getElementById('MaquinaID');
+        const operadorPrincipalInput = document.getElementById('OperadorPrincipalID');
+        const operadorAuxiliarInput = document.getElementById('OperadorAuxiliarID');
+
+        const operadorTurnoBox = document.getElementById('operadorTurnoBox');
+        const operadorTurnoTitulo = document.getElementById('operadorTurnoTitulo');
+        const operadorTurnoDetalle = document.getElementById('operadorTurnoDetalle');
+        const operadorPrincipalBadge = document.getElementById('operadorPrincipalBadge');
+        const operadorAuxiliarBadge = document.getElementById('operadorAuxiliarBadge');
+        const turnoBadge = document.getElementById('turnoBadge');
+
+        function obtenerFechaHoraCambioOperador() {
+            const fechaBase = inicioInput?.value || '';
+            const horaCambio = cambioInput?.value || '';
+
+            if (!fechaBase || !horaCambio) {
+                return '';
+            }
+
+            const fecha = fechaBase.substring(0, 10);
+
+            if (!fecha || fecha.length !== 10) {
+                return '';
+            }
+
+            return `${fecha}T${horaCambio}:00`;
+        }
+
+        function limpiarOperadorTurno(mensaje) {
+            if (operadorPrincipalInput) operadorPrincipalInput.value = '';
+            if (operadorAuxiliarInput) operadorAuxiliarInput.value = '';
+
+            if (operadorTurnoBox) {
+                operadorTurnoBox.style.background = '#fff7ed';
+                operadorTurnoBox.style.borderColor = '#fed7aa';
+            }
+
+            if (operadorTurnoTitulo) {
+                operadorTurnoTitulo.textContent = 'Operador pendiente de asignar';
+                operadorTurnoTitulo.className = 'fw-bold text-warning';
+            }
+
+            if (operadorTurnoDetalle) {
+                operadorTurnoDetalle.textContent = mensaje || 'No se pudo consultar operador para este horario.';
+            }
+
+            if (operadorPrincipalBadge) {
+                operadorPrincipalBadge.textContent = 'Principal: pendiente';
+                operadorPrincipalBadge.className = 'badge-warn';
+            }
+
+            if (operadorAuxiliarBadge) {
+                operadorAuxiliarBadge.textContent = 'Auxiliar: pendiente';
+                operadorAuxiliarBadge.className = 'badge-warn';
+            }
+
+            if (turnoBadge) {
+                turnoBadge.textContent = 'Turno: pendiente';
+                turnoBadge.className = 'badge-warn';
+            }
+        }
+
+        async function cargarOperadorTurno() {
+            const maquinaId = Number(maquinaInput?.value || 0);
+            const fechaHora = obtenerFechaHoraCambioOperador();
+
+            if (!maquinaId || !fechaHora) {
+                limpiarOperadorTurno('Selecciona máquina, fecha y hora de cambio para consultar la escala.');
+                return;
+            }
+
+            try {
+                if (operadorTurnoTitulo) {
+                    operadorTurnoTitulo.textContent = 'Consultando escala de RRHH...';
+                    operadorTurnoTitulo.className = 'fw-bold text-primary';
+                }
+
+                if (operadorTurnoDetalle) {
+                    operadorTurnoDetalle.textContent = 'Buscando operador asignado a esta máquina y turno.';
+                }
+
+                const url =
+                    `/PlaneacionPrograma/OperadoresPorMaquinaFecha?maquinaId=${encodeURIComponent(maquinaId)}&fechaHora=${encodeURIComponent(fechaHora)}`;
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.ok) {
+                    limpiarOperadorTurno(result.mensaje);
+                    return;
+                }
+
+                if (operadorPrincipalInput) {
+                    operadorPrincipalInput.value = result.operadorPrincipalID || '';
+                }
+
+                if (operadorAuxiliarInput) {
+                    operadorAuxiliarInput.value = result.operadorAuxiliarID || '';
+                }
+
+                if (operadorTurnoBox) {
+                    operadorTurnoBox.style.background = '#ecfdf3';
+                    operadorTurnoBox.style.borderColor = '#abefc6';
+                }
+
+                if (operadorTurnoTitulo) {
+                    operadorTurnoTitulo.textContent = 'Operador asignado desde RRHH';
+                    operadorTurnoTitulo.className = 'fw-bold text-success';
+                }
+
+                if (operadorTurnoDetalle) {
+                    operadorTurnoDetalle.textContent = result.mensaje || 'Operador encontrado en escala.';
+                }
+
+                if (operadorPrincipalBadge) {
+                    operadorPrincipalBadge.textContent =
+                        `Principal: ${result.operadorPrincipalNombre || '-'}`;
+                    operadorPrincipalBadge.className = 'badge-ok';
+                }
+
+                if (operadorAuxiliarBadge) {
+                    operadorAuxiliarBadge.textContent =
+                        result.operadorAuxiliarNombre
+                            ? `Auxiliar: ${result.operadorAuxiliarNombre}`
+                            : 'Auxiliar: sin auxiliar';
+                    operadorAuxiliarBadge.className = result.operadorAuxiliarNombre
+                        ? 'badge-ok'
+                        : 'badge-muted';
+                }
+
+                if (turnoBadge) {
+                    turnoBadge.textContent = `Turno: ${result.turnoNombre || '-'}`;
+                    turnoBadge.className = 'badge-ok';
+                }
+            }
+            catch (error) {
+                limpiarOperadorTurno('Error al consultar la escala de RRHH: ' + error.message);
+            }
+        }
+
+        maquinaInput?.addEventListener('change', cargarOperadorTurno);
+        inicioInput?.addEventListener('change', cargarOperadorTurno);
+        cambioInput?.addEventListener('change', cargarOperadorTurno);
+
+        setTimeout(cargarOperadorTurno, 300);
 
     function toDecimal(value) {
         const n = Number(value || 0);
@@ -1327,6 +1501,6 @@
         }
     });
 </script>
-
+ 
 </body>
 </html>

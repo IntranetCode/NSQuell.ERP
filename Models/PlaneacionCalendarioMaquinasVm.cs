@@ -210,6 +210,30 @@ public sealed class PlaneacionCalendarioBloqueVm
 
     public string? MaquinaSustitutaNombre { get; set; }
 
+    public int? EjecucionProduccionID { get; set; }
+    public int? EstatusProduccionID { get; set; }
+    public string? EstatusProduccionNombre { get; set; }
+
+    public int? OperadorProgramadoID { get; set; }
+    public string? OperadorProgramadoNombre { get; set; }
+    public string? TurnoProgramadoNombre { get; set; }
+    public string? TurnoProgramadoColor { get; set; }
+    public int? EscalaAsignacionID { get; set; }
+
+    public bool TieneOperadorProgramado =>
+        OperadorProgramadoID.HasValue &&
+        !string.IsNullOrWhiteSpace(OperadorProgramadoNombre);
+
+    public string TextoOperadorProgramado =>
+        TieneOperadorProgramado
+            ? OperadorProgramadoNombre!
+            : "Sin operador asignado en escala";
+
+    public string TextoTurnoProgramado =>
+        string.IsNullOrWhiteSpace(TurnoProgramadoNombre)
+            ? "Sin turno"
+            : TurnoProgramadoNombre!;
+
     public bool YaProducido =>
         CantidadProgramada > 0 &&
         CantidadProducida >= CantidadProgramada;
