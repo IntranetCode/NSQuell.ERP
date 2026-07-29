@@ -1,0 +1,1739 @@
+﻿@using System
+@using System.Linq
+@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.NovedadesVM
+
+@{
+    ViewData["Title"] = $"Novedades {Model.Escala.Folio}";
+    Layout = "_Layout";
+
+    var fechaMinima = Model.Escala.FechaInicio.ToString("yyyy-MM-dd");
+    var fechaMaxima = Model.Escala.FechaFin.ToString("yyyy-MM-dd");
+
+    var totalIngresos = Model.Novedades.Count(x =>
+        x.TipoNovedad == EscalaVM.TiposNovedad.Ingreso);
+    var totalBajas = Model.Novedades.Count(x =>
+        x.TipoNovedad == EscalaVM.TiposNovedad.Baja);
+    var totalIncapacidades = Model.Novedades.Count(x =>
+        x.TipoNovedad == EscalaVM.TiposNovedad.Incapacidad);
+    var totalVacaciones = Model.Novedades.Count(x =>
+        x.TipoNovedad == EscalaVM.TiposNovedad.Vacaciones);
+    var totalOtras = Model.Novedades.Count(x =>
+        x.TipoNovedad == EscalaVM.TiposNovedad.Otra);
+
+    var estadoClase = "en-status-draft";
+    if (Model.Escala.Estado == EscalaVM.Estados.Publicada)
+    {
+        estadoClase = "en-status-published";
+    }
+    else if (Model.Escala.Estado == EscalaVM.Estados.Cancelada)
+    {
+        estadoClase = "en-status-cancelled";
+    }
+}
+
+<style>
+    .escala-novedades {
+        --en-primary: #17324d;
+        --en-primary-dark: #0f263a;
+        --en-primary-soft: #eaf0f5;
+        --en-accent: #e87524;
+        --en-accent-dark: #c95d13;
+        --en-success: #238657;
+        --en-success-soft: #edf8f2;
+        --en-danger: #c93d3d;
+        --en-danger-soft: #fff0f0;
+        --en-warning: #b46d00;
+        --en-warning-soft: #fff6e7;
+        --en-info: #2d6f9f;
+        --en-info-soft: #edf6fc;
+        --en-purple: #7451a6;
+        --en-purple-soft: #f4effb;
+        --en-text: #243447;
+        --en-muted: #6b7a8c;
+        --en-border: #dfe6ed;
+        --en-surface: #ffffff;
+        --en-bg: #f5f7fa;
+        color: var(--en-text);
+        padding: 1.35rem 0 2.5rem;
+    }
+
+        .escala-novedades *,
+        .escala-novedades *::before,
+        .escala-novedades *::after {
+            box-sizing: border-box;
+        }
+
+        .escala-novedades .en-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .escala-novedades .en-eyebrow {
+            color: var(--en-accent);
+            font-size: .7rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin-bottom: .22rem;
+            text-transform: uppercase;
+        }
+
+        .escala-novedades .en-title {
+            color: var(--en-primary);
+            font-size: clamp(1.45rem, 2.5vw, 2rem);
+            font-weight: 780;
+            letter-spacing: -.025em;
+            margin: 0;
+        }
+
+        .escala-novedades .en-subtitle {
+            color: var(--en-muted);
+            font-size: .88rem;
+            margin: .35rem 0 0;
+        }
+
+        .escala-novedades .en-header-actions,
+        .escala-novedades .en-modal-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            justify-content: flex-end;
+        }
+
+        .escala-novedades .en-btn {
+            align-items: center;
+            border: 1px solid transparent;
+            border-radius: .58rem;
+            cursor: pointer;
+            display: inline-flex;
+            font-size: .8rem;
+            font-weight: 750;
+            gap: .38rem;
+            justify-content: center;
+            min-height: 39px;
+            padding: .5rem .78rem;
+            text-decoration: none;
+            transition: .16s ease;
+        }
+
+            .escala-novedades .en-btn:hover {
+                transform: translateY(-1px);
+            }
+
+        .escala-novedades .en-btn-primary {
+            background: var(--en-accent);
+            border-color: var(--en-accent);
+            color: #fff;
+        }
+
+            .escala-novedades .en-btn-primary:hover {
+                background: var(--en-accent-dark);
+                border-color: var(--en-accent-dark);
+                color: #fff;
+            }
+
+        .escala-novedades .en-btn-dark {
+            background: var(--en-primary);
+            border-color: var(--en-primary);
+            color: #fff;
+        }
+
+            .escala-novedades .en-btn-dark:hover {
+                background: var(--en-primary-dark);
+                color: #fff;
+            }
+
+        .escala-novedades .en-btn-light {
+            background: var(--en-surface);
+            border-color: var(--en-border);
+            color: var(--en-primary);
+        }
+
+            .escala-novedades .en-btn-light:hover {
+                background: var(--en-primary-soft);
+                color: var(--en-primary);
+            }
+
+        .escala-novedades .en-btn-danger {
+            background: var(--en-danger-soft);
+            border-color: #efcaca;
+            color: #9d2f2f;
+        }
+
+            .escala-novedades .en-btn-danger:hover {
+                background: #fde3e3;
+                color: #812323;
+            }
+
+        .escala-novedades .en-btn-icon {
+            min-height: 34px;
+            padding: .36rem .58rem;
+        }
+
+        .escala-novedades .en-alert {
+            border: 0;
+            border-left: 4px solid;
+            border-radius: .65rem;
+            box-shadow: 0 5px 18px rgba(23, 50, 77, .06);
+            margin-bottom: 1rem;
+            padding: .78rem 1rem;
+        }
+
+        .escala-novedades .en-alert-success {
+            background: var(--en-success-soft);
+            border-left-color: var(--en-success);
+            color: #17613e;
+        }
+
+        .escala-novedades .en-alert-error {
+            background: var(--en-danger-soft);
+            border-left-color: var(--en-danger);
+            color: #8b2929;
+        }
+
+        .escala-novedades .en-readonly {
+            align-items: flex-start;
+            background: var(--en-warning-soft);
+            border: 1px solid #efd49f;
+            border-radius: .72rem;
+            color: #7c4a00;
+            display: flex;
+            gap: .65rem;
+            margin-bottom: 1rem;
+            padding: .78rem 1rem;
+        }
+
+        .escala-novedades .en-readonly-icon {
+            align-items: center;
+            background: #f5dca8;
+            border-radius: 50%;
+            display: inline-flex;
+            flex: 0 0 28px;
+            font-size: .82rem;
+            font-weight: 900;
+            height: 28px;
+            justify-content: center;
+        }
+
+        .escala-novedades .en-readonly strong {
+            display: block;
+            font-size: .82rem;
+            margin-bottom: .12rem;
+        }
+
+        .escala-novedades .en-readonly p {
+            font-size: .78rem;
+            margin: 0;
+        }
+
+        .escala-novedades .en-summary {
+            background: var(--en-primary);
+            border-radius: .9rem;
+            box-shadow: 0 12px 28px rgba(23, 50, 77, .16);
+            color: #fff;
+            display: grid;
+            gap: 0;
+            grid-template-columns: minmax(190px, 1.35fr) repeat(4, minmax(130px, .75fr));
+            margin-bottom: 1rem;
+            overflow: hidden;
+            position: relative;
+        }
+
+            .escala-novedades .en-summary::after {
+                background: var(--en-accent);
+                content: "";
+                height: 92px;
+                opacity: .95;
+                position: absolute;
+                right: -48px;
+                top: -50px;
+                transform: rotate(36deg);
+                width: 115px;
+            }
+
+        .escala-novedades .en-summary-item {
+            border-left: 1px solid rgba(255, 255, 255, .13);
+            min-width: 0;
+            padding: 1rem 1.05rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .escala-novedades .en-summary-main {
+            border-left: 0;
+        }
+
+        .escala-novedades .en-summary-label {
+            color: #bcd0e3;
+            display: block;
+            font-size: .66rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            margin-bottom: .3rem;
+            text-transform: uppercase;
+        }
+
+        .escala-novedades .en-summary-value {
+            color: #fff;
+            display: block;
+            font-size: .88rem;
+            font-weight: 720;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+
+        .escala-novedades .en-summary-folio {
+            font-size: 1.2rem;
+            letter-spacing: -.01em;
+        }
+
+        .escala-novedades .en-status {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .7rem;
+            font-weight: 800;
+            padding: .28rem .58rem;
+        }
+
+        .escala-novedades .en-status-draft {
+            background: #fff1cc;
+            color: #774c00;
+        }
+
+        .escala-novedades .en-status-published {
+            background: #d8f3e5;
+            color: #17613e;
+        }
+
+        .escala-novedades .en-status-cancelled {
+            background: #f8dada;
+            color: #8b2929;
+        }
+
+        .escala-novedades .en-kpis {
+            display: grid;
+            gap: .75rem;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            margin-bottom: 1rem;
+        }
+
+        .escala-novedades .en-kpi {
+            background: var(--en-surface);
+            border: 1px solid var(--en-border);
+            border-radius: .78rem;
+            box-shadow: 0 6px 18px rgba(23, 50, 77, .05);
+            min-width: 0;
+            overflow: hidden;
+            padding: .82rem .9rem .82rem 1rem;
+            position: relative;
+        }
+
+            .escala-novedades .en-kpi::before {
+                background: var(--kpi-color);
+                bottom: 0;
+                content: "";
+                left: 0;
+                position: absolute;
+                top: 0;
+                width: 4px;
+            }
+
+        .escala-novedades .en-kpi-ingreso {
+            --kpi-color: var(--en-success);
+        }
+
+        .escala-novedades .en-kpi-baja {
+            --kpi-color: var(--en-danger);
+        }
+
+        .escala-novedades .en-kpi-incapacidad {
+            --kpi-color: var(--en-warning);
+        }
+
+        .escala-novedades .en-kpi-vacaciones {
+            --kpi-color: var(--en-info);
+        }
+
+        .escala-novedades .en-kpi-otra {
+            --kpi-color: var(--en-purple);
+        }
+
+        .escala-novedades .en-kpi-label {
+            color: var(--en-muted);
+            display: block;
+            font-size: .68rem;
+            font-weight: 750;
+            margin-bottom: .18rem;
+            text-transform: uppercase;
+        }
+
+        .escala-novedades .en-kpi-value {
+            color: var(--en-primary);
+            display: block;
+            font-size: 1.4rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .escala-novedades .en-panel {
+            background: var(--en-surface);
+            border: 1px solid var(--en-border);
+            border-radius: .85rem;
+            box-shadow: 0 8px 22px rgba(23, 50, 77, .06);
+            overflow: hidden;
+        }
+
+        .escala-novedades .en-panel-head {
+            align-items: center;
+            border-bottom: 1px solid var(--en-border);
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: .9rem 1rem;
+        }
+
+        .escala-novedades .en-panel-title {
+            color: var(--en-primary);
+            font-size: .98rem;
+            font-weight: 780;
+            margin: 0;
+        }
+
+        .escala-novedades .en-panel-subtitle {
+            color: var(--en-muted);
+            font-size: .75rem;
+            margin: .18rem 0 0;
+        }
+
+        .escala-novedades .en-tools {
+            display: grid;
+            gap: .55rem;
+            grid-template-columns: minmax(210px, 1fr) 170px;
+            min-width: min(100%, 470px);
+        }
+
+        .escala-novedades .en-control,
+        .escala-novedades .en-select,
+        .escala-novedades .en-textarea {
+            background: var(--en-surface);
+            border: 1px solid #cfd9e2;
+            border-radius: .55rem;
+            color: var(--en-text);
+            font-size: .8rem;
+            min-height: 40px;
+            outline: none;
+            padding: .55rem .7rem;
+            transition: border-color .15s ease, box-shadow .15s ease;
+            width: 100%;
+        }
+
+            .escala-novedades .en-control:focus,
+            .escala-novedades .en-select:focus,
+            .escala-novedades .en-textarea:focus {
+                border-color: var(--en-accent);
+                box-shadow: 0 0 0 3px rgba(232, 117, 36, .12);
+            }
+
+        .escala-novedades .en-textarea {
+            min-height: 86px;
+            resize: vertical;
+        }
+
+        .escala-novedades .en-table-wrap {
+            overflow-x: auto;
+        }
+
+        .escala-novedades .en-table {
+            border-collapse: collapse;
+            font-size: .78rem;
+            min-width: 850px;
+            width: 100%;
+        }
+
+            .escala-novedades .en-table th {
+                background: #f1f5f8;
+                border-bottom: 1px solid var(--en-border);
+                color: var(--en-primary);
+                font-size: .67rem;
+                font-weight: 800;
+                letter-spacing: .045em;
+                padding: .7rem .75rem;
+                text-align: left;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+
+            .escala-novedades .en-table td {
+                border-bottom: 1px solid #e9eef3;
+                padding: .78rem .75rem;
+                vertical-align: middle;
+            }
+
+            .escala-novedades .en-table tbody tr:last-child td {
+                border-bottom: 0;
+            }
+
+            .escala-novedades .en-table tbody tr:hover {
+                background: #fafcfd;
+            }
+
+        .escala-novedades .en-person {
+            align-items: center;
+            display: flex;
+            gap: .62rem;
+            min-width: 210px;
+        }
+
+        .escala-novedades .en-avatar {
+            align-items: center;
+            background: var(--en-primary-soft);
+            border-radius: 50%;
+            color: var(--en-primary);
+            display: inline-flex;
+            flex: 0 0 34px;
+            font-size: .72rem;
+            font-weight: 850;
+            height: 34px;
+            justify-content: center;
+            text-transform: uppercase;
+        }
+
+        .escala-novedades .en-person-name {
+            color: var(--en-primary);
+            display: block;
+            font-weight: 760;
+            line-height: 1.25;
+        }
+
+        .escala-novedades .en-person-number {
+            color: var(--en-muted);
+            display: block;
+            font-size: .68rem;
+            margin-top: .12rem;
+        }
+
+        .escala-novedades .en-badge {
+            border: 1px solid transparent;
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .68rem;
+            font-weight: 800;
+            padding: .28rem .55rem;
+            white-space: nowrap;
+        }
+
+        .escala-novedades .en-badge-ingreso {
+            background: var(--en-success-soft);
+            border-color: #c6e7d5;
+            color: #17613e;
+        }
+
+        .escala-novedades .en-badge-baja {
+            background: var(--en-danger-soft);
+            border-color: #efcaca;
+            color: #8b2929;
+        }
+
+        .escala-novedades .en-badge-incapacidad {
+            background: var(--en-warning-soft);
+            border-color: #efd49f;
+            color: #7c4a00;
+        }
+
+        .escala-novedades .en-badge-vacaciones {
+            background: var(--en-info-soft);
+            border-color: #c8dfef;
+            color: #255d85;
+        }
+
+        .escala-novedades .en-badge-otra {
+            background: var(--en-purple-soft);
+            border-color: #ddd0ef;
+            color: #60428c;
+        }
+
+        .escala-novedades .en-date {
+            color: var(--en-text);
+            white-space: nowrap;
+        }
+
+        .escala-novedades .en-date-muted,
+        .escala-novedades .en-cell-muted {
+            color: var(--en-muted);
+        }
+
+        .escala-novedades .en-reason {
+            max-width: 260px;
+        }
+
+        .escala-novedades .en-reason-main {
+            color: var(--en-text);
+            display: block;
+            font-weight: 650;
+            line-height: 1.35;
+        }
+
+        .escala-novedades .en-reason-note {
+            color: var(--en-muted);
+            display: block;
+            font-size: .68rem;
+            line-height: 1.35;
+            margin-top: .16rem;
+        }
+
+        .escala-novedades .en-actions {
+            align-items: center;
+            display: flex;
+            gap: .35rem;
+            justify-content: flex-end;
+            white-space: nowrap;
+        }
+
+        .escala-novedades .en-empty {
+            padding: 3.3rem 1.2rem;
+            text-align: center;
+        }
+
+        .escala-novedades .en-empty-icon {
+            align-items: center;
+            background: var(--en-primary-soft);
+            border-radius: 50%;
+            color: var(--en-primary);
+            display: inline-flex;
+            font-size: 1.2rem;
+            font-weight: 850;
+            height: 52px;
+            justify-content: center;
+            margin-bottom: .75rem;
+            width: 52px;
+        }
+
+        .escala-novedades .en-empty-title {
+            color: var(--en-primary);
+            font-size: .98rem;
+            font-weight: 780;
+            margin: 0 0 .25rem;
+        }
+
+        .escala-novedades .en-empty-text {
+            color: var(--en-muted);
+            font-size: .78rem;
+            margin: 0 auto;
+            max-width: 430px;
+        }
+
+        .escala-novedades .en-no-results {
+            color: var(--en-muted);
+            display: none;
+            font-size: .8rem;
+            padding: 2.2rem 1rem;
+            text-align: center;
+        }
+
+        .escala-novedades .en-modal {
+            align-items: center;
+            background: rgba(10, 24, 38, .58);
+            bottom: 0;
+            display: none;
+            justify-content: center;
+            left: 0;
+            overflow-y: auto;
+            padding: 1rem;
+            position: fixed;
+            right: 0;
+            top: 0;
+            z-index: 1080;
+        }
+
+            .escala-novedades .en-modal.is-open {
+                display: flex;
+            }
+
+        .escala-novedades .en-modal-dialog {
+            background: var(--en-surface);
+            border: 1px solid var(--en-border);
+            border-radius: .9rem;
+            box-shadow: 0 24px 65px rgba(5, 17, 29, .3);
+            margin: auto;
+            max-width: 780px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .escala-novedades .en-modal-small {
+            max-width: 470px;
+        }
+
+        .escala-novedades .en-modal-head {
+            align-items: flex-start;
+            border-bottom: 1px solid var(--en-border);
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: 1rem 1.15rem;
+        }
+
+        .escala-novedades .en-modal-title {
+            color: var(--en-primary);
+            font-size: 1.05rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .escala-novedades .en-modal-subtitle {
+            color: var(--en-muted);
+            font-size: .74rem;
+            margin: .22rem 0 0;
+        }
+
+        .escala-novedades .en-modal-close {
+            align-items: center;
+            background: var(--en-primary-soft);
+            border: 0;
+            border-radius: 50%;
+            color: var(--en-primary);
+            cursor: pointer;
+            display: inline-flex;
+            flex: 0 0 32px;
+            font-size: 1.05rem;
+            height: 32px;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .escala-novedades .en-modal-body {
+            padding: 1rem 1.15rem;
+        }
+
+        .escala-novedades .en-modal-footer {
+            align-items: center;
+            background: #f8fafb;
+            border-top: 1px solid var(--en-border);
+            display: flex;
+            gap: .5rem;
+            justify-content: flex-end;
+            padding: .78rem 1.15rem;
+        }
+
+        .escala-novedades .en-form-grid {
+            display: grid;
+            gap: .8rem;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+        }
+
+        .escala-novedades .en-col-4 {
+            grid-column: span 4;
+        }
+
+        .escala-novedades .en-col-6 {
+            grid-column: span 6;
+        }
+
+        .escala-novedades .en-col-8 {
+            grid-column: span 8;
+        }
+
+        .escala-novedades .en-col-12 {
+            grid-column: span 12;
+        }
+
+        .escala-novedades .en-field label {
+            color: var(--en-primary);
+            display: block;
+            font-size: .72rem;
+            font-weight: 780;
+            margin-bottom: .3rem;
+        }
+
+        .escala-novedades .en-required {
+            color: var(--en-danger);
+        }
+
+        .escala-novedades .en-field-help {
+            color: var(--en-muted);
+            display: block;
+            font-size: .68rem;
+            line-height: 1.35;
+            margin-top: .26rem;
+        }
+
+        .escala-novedades .en-type-help {
+            background: var(--en-primary-soft);
+            border-radius: .5rem;
+            color: var(--en-primary);
+            font-size: .72rem;
+            line-height: 1.4;
+            margin-top: .75rem;
+            padding: .62rem .72rem;
+        }
+
+        .escala-novedades .en-delete-text {
+            color: var(--en-text);
+            font-size: .82rem;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .escala-novedades .en-delete-name {
+            color: var(--en-primary);
+            font-weight: 800;
+        }
+
+    body.en-modal-open {
+        overflow: hidden;
+    }
+
+    @@media (max-width: 1060px) {
+        .escala-novedades .en-summary {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .escala-novedades .en-summary-main {
+            grid-column: span 2;
+        }
+
+        .escala-novedades .en-summary-item:nth-child(4),
+        .escala-novedades .en-summary-item:nth-child(5) {
+            border-top: 1px solid rgba(255, 255, 255, .13);
+        }
+    }
+
+    @@media (max-width: 850px) {
+        .escala-novedades .en-header,
+        .escala-novedades .en-panel-head {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .escala-novedades .en-header-actions {
+            justify-content: flex-start;
+        }
+
+        .escala-novedades .en-kpis {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .escala-novedades .en-tools {
+            grid-template-columns: 1fr;
+            min-width: 100%;
+        }
+    }
+
+    @@media (max-width: 620px) {
+        .escala-novedades {
+            padding-top: .8rem;
+        }
+
+            .escala-novedades .en-header-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                width: 100%;
+            }
+
+            .escala-novedades .en-btn {
+                width: 100%;
+            }
+
+            .escala-novedades .en-summary {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .escala-novedades .en-summary-main {
+                grid-column: span 2;
+            }
+
+            .escala-novedades .en-summary-item {
+                border-top: 1px solid rgba(255, 255, 255, .13);
+            }
+
+            .escala-novedades .en-kpis {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .escala-novedades .en-kpi:last-child {
+                grid-column: span 2;
+            }
+
+            .escala-novedades .en-form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .escala-novedades .en-col-4,
+            .escala-novedades .en-col-6,
+            .escala-novedades .en-col-8,
+            .escala-novedades .en-col-12 {
+                grid-column: span 1;
+            }
+
+            .escala-novedades .en-modal-footer {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+            }
+    }
+
+    html[data-bs-theme="dark"] .escala-novedades,
+    body.dark-mode .escala-novedades {
+        --en-text: #dce5ed;
+        --en-muted: #9fb0c0;
+        --en-border: #34495d;
+        --en-surface: #172534;
+        --en-bg: #101a24;
+        --en-primary-soft: #23384b;
+    }
+
+        html[data-bs-theme="dark"] .escala-novedades .en-table th,
+        html[data-bs-theme="dark"] .escala-novedades .en-modal-footer,
+        body.dark-mode .escala-novedades .en-table th,
+        body.dark-mode .escala-novedades .en-modal-footer {
+            background: #1e3041;
+        }
+
+        html[data-bs-theme="dark"] .escala-novedades .en-table tbody tr:hover,
+        body.dark-mode .escala-novedades .en-table tbody tr:hover {
+            background: #1c2d3d;
+        }
+
+        html[data-bs-theme="dark"] .escala-novedades .en-title,
+        html[data-bs-theme="dark"] .escala-novedades .en-panel-title,
+        html[data-bs-theme="dark"] .escala-novedades .en-kpi-value,
+        html[data-bs-theme="dark"] .escala-novedades .en-person-name,
+        html[data-bs-theme="dark"] .escala-novedades .en-modal-title,
+        html[data-bs-theme="dark"] .escala-novedades .en-field label,
+        body.dark-mode .escala-novedades .en-title,
+        body.dark-mode .escala-novedades .en-panel-title,
+        body.dark-mode .escala-novedades .en-kpi-value,
+        body.dark-mode .escala-novedades .en-person-name,
+        body.dark-mode .escala-novedades .en-modal-title,
+        body.dark-mode .escala-novedades .en-field label {
+            color: #eef4f8;
+        }
+</style>
+
+<div class="escala-novedades" id="novedadesPage">
+    <header class="en-header">
+        <div>
+            <div class="en-eyebrow">Escala de personal</div>
+            <h1 class="en-title">Novedades de la semana</h1>
+            <p class="en-subtitle">
+                Registra ingresos, bajas, incapacidades, vacaciones y otras incidencias del personal.
+            </p>
+        </div>
+
+        <div class="en-header-actions">
+            <a asp-action="Editor"
+               asp-route-id="@Model.Escala.EscalaID"
+               class="en-btn en-btn-light">
+                Volver al editor
+            </a>
+            <a asp-action="Detalle"
+               asp-route-id="@Model.Escala.EscalaID"
+               class="en-btn en-btn-light">
+                Ver detalle
+            </a>
+            @if (Model.PuedeEditar)
+            {
+                <button type="button"
+                        class="en-btn en-btn-primary"
+                        data-new-novedad>
+                    Registrar novedad
+                </button>
+            }
+        </div>
+    </header>
+
+    @if (TempData["Exito"] != null)
+    {
+        <div class="en-alert en-alert-success" role="alert">
+            @TempData["Exito"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="en-alert en-alert-error" role="alert">
+            @TempData["Error"]
+        </div>
+    }
+
+    @if (!Model.PuedeEditar)
+    {
+        <div class="en-readonly">
+            <span class="en-readonly-icon">i</span>
+            <div>
+                <strong>Escala en modo de consulta</strong>
+                <p>
+                    Solo las escalas en estado Borrador permiten registrar, modificar o eliminar novedades.
+                </p>
+            </div>
+        </div>
+    }
+
+    <section class="en-summary" aria-label="Resumen de la escala">
+        <div class="en-summary-item en-summary-main">
+            <span class="en-summary-label">Folio de escala</span>
+            <span class="en-summary-value en-summary-folio">@Model.Escala.Folio</span>
+        </div>
+        <div class="en-summary-item">
+            <span class="en-summary-label">Estado</span>
+            <span class="en-status @estadoClase">@Model.Escala.Estado</span>
+        </div>
+        <div class="en-summary-item">
+            <span class="en-summary-label">Semana</span>
+            <span class="en-summary-value">@Model.Escala.NumeroSemana / @Model.Escala.Anio</span>
+        </div>
+        <div class="en-summary-item">
+            <span class="en-summary-label">Periodo</span>
+            <span class="en-summary-value">
+                @Model.Escala.FechaInicio.ToString("dd/MM/yyyy") -
+                @Model.Escala.FechaFin.ToString("dd/MM/yyyy")
+            </span>
+        </div>
+        <div class="en-summary-item">
+            <span class="en-summary-label">Total de novedades</span>
+            <span class="en-summary-value">@Model.Novedades.Count registro(s)</span>
+        </div>
+    </section>
+
+    <section class="en-kpis" aria-label="Novedades por tipo">
+        <article class="en-kpi en-kpi-ingreso">
+            <span class="en-kpi-label">Ingresos</span>
+            <span class="en-kpi-value">@totalIngresos</span>
+        </article>
+        <article class="en-kpi en-kpi-baja">
+            <span class="en-kpi-label">Bajas</span>
+            <span class="en-kpi-value">@totalBajas</span>
+        </article>
+        <article class="en-kpi en-kpi-incapacidad">
+            <span class="en-kpi-label">Incapacidades</span>
+            <span class="en-kpi-value">@totalIncapacidades</span>
+        </article>
+        <article class="en-kpi en-kpi-vacaciones">
+            <span class="en-kpi-label">Vacaciones</span>
+            <span class="en-kpi-value">@totalVacaciones</span>
+        </article>
+        <article class="en-kpi en-kpi-otra">
+            <span class="en-kpi-label">Otras</span>
+            <span class="en-kpi-value">@totalOtras</span>
+        </article>
+    </section>
+
+    <section class="en-panel">
+        <div class="en-panel-head">
+            <div>
+                <h2 class="en-panel-title">Registros de la escala</h2>
+                <p class="en-panel-subtitle">
+                    Consulta y administra las incidencias registradas durante el periodo.
+                </p>
+            </div>
+            <div class="en-tools">
+                <input type="search"
+                       id="novedadSearch"
+                       class="en-control"
+                       placeholder="Buscar por persona, número o motivo..."
+                       autocomplete="off" />
+                <select id="novedadTypeFilter" class="en-select">
+                    <option value="">Todos los tipos</option>
+                    <option value="@EscalaVM.TiposNovedad.Ingreso">Ingreso</option>
+                    <option value="@EscalaVM.TiposNovedad.Baja">Baja</option>
+                    <option value="@EscalaVM.TiposNovedad.Incapacidad">Incapacidad</option>
+                    <option value="@EscalaVM.TiposNovedad.Vacaciones">Vacaciones</option>
+                    <option value="@EscalaVM.TiposNovedad.Otra">Otra</option>
+                </select>
+            </div>
+        </div>
+
+        @if (Model.Novedades.Any())
+        {
+            <div class="en-table-wrap">
+                <table class="en-table">
+                    <thead>
+                        <tr>
+                            <th>Persona</th>
+                            <th>Tipo</th>
+                            <th>Fecha inicial</th>
+                            <th>Fecha final</th>
+                            <th>Motivo / observaciones</th>
+                            @if (Model.PuedeEditar)
+                            {
+                                <th style="text-align:right;">Acciones</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody id="novedadesBody">
+                        @foreach (var novedad in Model.Novedades)
+                        {
+                            var badgeClass = "en-badge-otra";
+                            if (novedad.TipoNovedad == EscalaVM.TiposNovedad.Ingreso)
+                            {
+                                badgeClass = "en-badge-ingreso";
+                            }
+                            else if (novedad.TipoNovedad == EscalaVM.TiposNovedad.Baja)
+                            {
+                                badgeClass = "en-badge-baja";
+                            }
+                            else if (novedad.TipoNovedad == EscalaVM.TiposNovedad.Incapacidad)
+                            {
+                                badgeClass = "en-badge-incapacidad";
+                            }
+                            else if (novedad.TipoNovedad == EscalaVM.TiposNovedad.Vacaciones)
+                            {
+                                badgeClass = "en-badge-vacaciones";
+                            }
+
+                            var partesNombre = (novedad.NombrePersona ?? string.Empty)
+                                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                            var iniciales = partesNombre.Length == 0
+                                ? "?"
+                                : string.Concat(partesNombre.Take(2).Select(x => x[0]));
+                            var textoBusqueda = string.Join(
+                                " ",
+                                novedad.NombrePersona,
+                                novedad.NumeroEmpleado,
+                                novedad.TipoNovedad,
+                                novedad.Motivo,
+                                novedad.Observaciones).ToLowerInvariant();
+
+                            <tr data-novedad-row
+                                data-type="@novedad.TipoNovedad"
+                                data-search="@textoBusqueda">
+                                <td>
+                                    <div class="en-person">
+                                        <span class="en-avatar">@iniciales</span>
+                                        <span>
+                                            <span class="en-person-name">@novedad.NombrePersona</span>
+                                            <span class="en-person-number">
+                                                ID @novedad.NumeroEmpleado
+                                            </span>
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="en-badge @badgeClass">
+                                        @novedad.TipoNovedad
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="en-date">
+                                        @novedad.FechaInicio.ToString("dd/MM/yyyy")
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (novedad.TipoNovedad == EscalaVM.TiposNovedad.Baja)
+                                    {
+                                        <span class="en-cell-muted">No aplica</span>
+                                    }
+                                    else if (novedad.FechaFin.HasValue)
+                                    {
+                                        <span class="en-date">
+                                            @novedad.FechaFin.Value.ToString("dd/MM/yyyy")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="en-cell-muted">Sin fecha final</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="en-reason">
+                                        <span class="en-reason-main">
+                                            @(string.IsNullOrWhiteSpace(novedad.Motivo)
+                                                ? "Sin motivo especificado"
+                                                : novedad.Motivo)
+                                        </span>
+                                        @if (!string.IsNullOrWhiteSpace(novedad.Observaciones))
+                                        {
+                                            <span class="en-reason-note">
+                                                @novedad.Observaciones
+                                            </span>
+                                        }
+                                    </div>
+                                </td>
+                                @if (Model.PuedeEditar)
+                                {
+                                    <td>
+                                        <div class="en-actions">
+                                            <button type="button"
+                                                    class="en-btn en-btn-light en-btn-icon"
+                                                    data-edit-novedad
+                                                    data-id="@novedad.NovedadID"
+                                                    data-person="@novedad.PersonalID"
+                                                    data-type="@novedad.TipoNovedad"
+                                                    data-start="@novedad.FechaInicio.ToString("yyyy-MM-dd")"
+                                                    data-end="@(novedad.FechaFin?.ToString("yyyy-MM-dd") ?? string.Empty)"
+                                                    data-reason="@novedad.Motivo"
+                                                    data-notes="@novedad.Observaciones">
+                                                Editar
+                                            </button>
+                                            <button type="button"
+                                                    class="en-btn en-btn-danger en-btn-icon"
+                                                    data-delete-novedad
+                                                    data-id="@novedad.NovedadID"
+                                                    data-name="@novedad.NombrePersona"
+                                                    data-type="@novedad.TipoNovedad">
+                                                Eliminar
+                                            </button>
+                                        </div>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="en-no-results" id="novedadesNoResults">
+                No hay novedades que coincidan con la búsqueda o el filtro seleccionado.
+            </div>
+        }
+        else
+        {
+            <div class="en-empty">
+                <span class="en-empty-icon">0</span>
+                <h3 class="en-empty-title">Aún no hay novedades registradas</h3>
+                <p class="en-empty-text">
+                    Esta escala no tiene ingresos, bajas, incapacidades, vacaciones
+                    ni otras incidencias durante el periodo.
+                </p>
+                @if (Model.PuedeEditar)
+                {
+                    <button type="button"
+                            class="en-btn en-btn-primary"
+                            style="margin-top:.9rem;"
+                            data-new-novedad>
+                        Registrar la primera novedad
+                    </button>
+                }
+            </div>
+        }
+    </section>
+
+    @if (Model.PuedeEditar)
+    {
+        <div class="en-modal"
+             id="novedadModal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="novedadModalTitle"
+             aria-hidden="true">
+            <div class="en-modal-dialog">
+                <form asp-action="GuardarNovedad"
+                      method="post"
+                      id="novedadForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden"
+                           name="EscalaID"
+                           value="@Model.Escala.EscalaID" />
+                    <input type="hidden"
+                           name="NovedadID"
+                           id="novedadId" />
+
+                    <div class="en-modal-head">
+                        <div>
+                            <h2 class="en-modal-title" id="novedadModalTitle">
+                                Registrar novedad
+                            </h2>
+                            <p class="en-modal-subtitle">
+                                Las fechas deben encontrarse dentro del periodo
+                                @Model.Escala.FechaInicio.ToString("dd/MM/yyyy") -
+                                @Model.Escala.FechaFin.ToString("dd/MM/yyyy").
+                            </p>
+                        </div>
+                        <button type="button"
+                                class="en-modal-close"
+                                data-close-modal
+                                aria-label="Cerrar">
+                            ×
+                        </button>
+                    </div>
+
+                    <div class="en-modal-body">
+                        <div class="en-form-grid">
+                            <div class="en-field en-col-12">
+                                <label for="personaSearch">
+                                    Buscar persona
+                                </label>
+                                <input type="search"
+                                       id="personaSearch"
+                                       class="en-control"
+                                       placeholder="Escribe el nombre, número de empleado o puesto..."
+                                       autocomplete="off" />
+                                <span class="en-field-help">
+                                    La búsqueda reduce las opciones disponibles en el selector.
+                                </span>
+                            </div>
+
+                            <div class="en-field en-col-8">
+                                <label for="personalId">
+                                    Persona <span class="en-required">*</span>
+                                </label>
+                                <select name="PersonalID"
+                                        id="personalId"
+                                        class="en-select"
+                                        required>
+                                    <option value="">Selecciona una persona</option>
+                                    @foreach (var persona in Model.Personas)
+                                    {
+                                        <option value="@persona.PersonalID"
+                                                data-search="@($"{persona.NumeroEmpleado} {persona.NombreCompleto} {persona.Puesto} {persona.NombreDepartamento}".ToLowerInvariant())">
+                                            @persona.Texto
+                                            @if (!string.IsNullOrWhiteSpace(persona.Puesto))
+                                            {
+                                                <text> · @persona.Puesto</text>
+                                            }
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="en-field en-col-4">
+                                <label for="tipoNovedad">
+                                    Tipo <span class="en-required">*</span>
+                                </label>
+                                <select name="TipoNovedad"
+                                        id="tipoNovedad"
+                                        class="en-select"
+                                        required>
+                                    <option value="">Selecciona un tipo</option>
+                                    <option value="@EscalaVM.TiposNovedad.Ingreso">Ingreso</option>
+                                    <option value="@EscalaVM.TiposNovedad.Baja">Baja</option>
+                                    <option value="@EscalaVM.TiposNovedad.Incapacidad">Incapacidad</option>
+                                    <option value="@EscalaVM.TiposNovedad.Vacaciones">Vacaciones</option>
+                                    <option value="@EscalaVM.TiposNovedad.Otra">Otra</option>
+                                </select>
+                            </div>
+
+                            <div class="en-field en-col-6">
+                                <label for="fechaInicio">
+                                    Fecha inicial <span class="en-required">*</span>
+                                </label>
+                                <input type="date"
+                                       name="FechaInicio"
+                                       id="fechaInicio"
+                                       class="en-control"
+                                       min="@fechaMinima"
+                                       max="@fechaMaxima"
+                                       required />
+                            </div>
+
+                            <div class="en-field en-col-6" id="fechaFinField">
+                                <label for="fechaFin">Fecha final</label>
+                                <input type="date"
+                                       name="FechaFin"
+                                       id="fechaFin"
+                                       class="en-control"
+                                       min="@fechaMinima"
+                                       max="@fechaMaxima" />
+                                <span class="en-field-help">
+                                    Déjala vacía cuando la novedad corresponda a un solo día.
+                                </span>
+                            </div>
+
+                            <div class="en-field en-col-6">
+                                <label for="motivo">Motivo</label>
+                                <input type="text"
+                                       name="Motivo"
+                                       id="motivo"
+                                       class="en-control"
+                                       maxlength="300"
+                                       placeholder="Motivo breve de la novedad" />
+                            </div>
+
+                            <div class="en-field en-col-6">
+                                <label for="observaciones">Observaciones</label>
+                                <textarea name="Observaciones"
+                                          id="observaciones"
+                                          class="en-textarea"
+                                          maxlength="500"
+                                          placeholder="Información adicional para RR. HH. o Planeación"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="en-type-help" id="typeHelp">
+                            Selecciona el tipo de novedad para ver la indicación correspondiente.
+                        </div>
+                    </div>
+
+                    <div class="en-modal-footer">
+                        <button type="button"
+                                class="en-btn en-btn-light"
+                                data-close-modal>
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                class="en-btn en-btn-primary"
+                                id="saveNovedadButton">
+                            Guardar novedad
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="en-modal"
+             id="deleteModal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="deleteModalTitle"
+             aria-hidden="true">
+            <div class="en-modal-dialog en-modal-small">
+                <form asp-action="EliminarNovedad"
+                      method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden"
+                           name="escalaID"
+                           value="@Model.Escala.EscalaID" />
+                    <input type="hidden"
+                           name="novedadID"
+                           id="deleteNovedadId" />
+
+                    <div class="en-modal-head">
+                        <div>
+                            <h2 class="en-modal-title" id="deleteModalTitle">
+                                Eliminar novedad
+                            </h2>
+                            <p class="en-modal-subtitle">
+                                Confirma la eliminación del registro seleccionado.
+                            </p>
+                        </div>
+                        <button type="button"
+                                class="en-modal-close"
+                                data-close-modal
+                                aria-label="Cerrar">
+                            ×
+                        </button>
+                    </div>
+
+                    <div class="en-modal-body">
+                        <p class="en-delete-text">
+                            Se eliminará la novedad
+                            <strong id="deleteNovedadType"></strong>
+                            de
+                            <span class="en-delete-name" id="deleteNovedadName"></span>.
+                            Esta acción retirará el registro de la escala.
+                        </p>
+                    </div>
+
+                    <div class="en-modal-footer">
+                        <button type="button"
+                                class="en-btn en-btn-light"
+                                data-close-modal>
+                            Conservar
+                        </button>
+                        <button type="submit"
+                                class="en-btn en-btn-danger">
+                            Sí, eliminar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            'use strict';
+
+            const page = document.getElementById('novedadesPage');
+            if (!page) {
+                return;
+            }
+
+            const searchInput = document.getElementById('novedadSearch');
+            const typeFilter = document.getElementById('novedadTypeFilter');
+            const rows = Array.from(page.querySelectorAll('[data-novedad-row]'));
+            const noResults = document.getElementById('novedadesNoResults');
+
+            function normalize(value) {
+                return (value || '')
+                    .toString()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .trim();
+            }
+
+            function filterRows() {
+                const term = normalize(searchInput ? searchInput.value : '');
+                const selectedType = typeFilter ? typeFilter.value : '';
+                let visible = 0;
+
+                rows.forEach(function (row) {
+                    const searchText = normalize(row.dataset.search);
+                    const rowType = row.dataset.type || '';
+                    const matchesText = !term || searchText.includes(term);
+                    const matchesType = !selectedType || rowType === selectedType;
+                    const shouldShow = matchesText && matchesType;
+
+                    row.hidden = !shouldShow;
+                    if (shouldShow) {
+                        visible += 1;
+                    }
+                });
+
+                if (noResults) {
+                    noResults.style.display = rows.length > 0 && visible === 0
+                        ? 'block'
+                        : 'none';
+                }
+            }
+
+            if (searchInput) {
+                searchInput.addEventListener('input', filterRows);
+            }
+
+            if (typeFilter) {
+                typeFilter.addEventListener('change', filterRows);
+            }
+
+            const novedadModal = document.getElementById('novedadModal');
+            const deleteModal = document.getElementById('deleteModal');
+            const form = document.getElementById('novedadForm');
+            const modalTitle = document.getElementById('novedadModalTitle');
+            const saveButton = document.getElementById('saveNovedadButton');
+            const novedadId = document.getElementById('novedadId');
+            const personaSelect = document.getElementById('personalId');
+            const personaSearch = document.getElementById('personaSearch');
+            const typeSelect = document.getElementById('tipoNovedad');
+            const startInput = document.getElementById('fechaInicio');
+            const endInput = document.getElementById('fechaFin');
+            const endField = document.getElementById('fechaFinField');
+            const reasonInput = document.getElementById('motivo');
+            const notesInput = document.getElementById('observaciones');
+            const typeHelp = document.getElementById('typeHelp');
+            const minDate = '@fechaMinima';
+
+            function openModal(modal) {
+                if (!modal) {
+                    return;
+                }
+
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('en-modal-open');
+            }
+
+            function closeModal(modal) {
+                if (!modal) {
+                    return;
+                }
+
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+
+                if (!page.querySelector('.en-modal.is-open')) {
+                    document.body.classList.remove('en-modal-open');
+                }
+            }
+
+            function updateTypeRules() {
+                if (!typeSelect || !endInput || !endField || !typeHelp) {
+                    return;
+                }
+
+                const selectedType = typeSelect.value;
+                const isBaja = selectedType === '@EscalaVM.TiposNovedad.Baja';
+
+                endInput.disabled = isBaja;
+                endField.style.opacity = isBaja ? '.55' : '1';
+                if (isBaja) {
+                    endInput.value = '';
+                }
+
+                const helpByType = {
+                    '@EscalaVM.TiposNovedad.Ingreso':
+                        'Ingreso: registra la fecha desde la que la persona se incorpora a la escala.',
+                    '@EscalaVM.TiposNovedad.Baja':
+                        'Baja: solo requiere fecha inicial; la fecha final no aplica.',
+                    '@EscalaVM.TiposNovedad.Incapacidad':
+                        'Incapacidad: captura el intervalo cubierto por el documento correspondiente.',
+                    '@EscalaVM.TiposNovedad.Vacaciones':
+                        'Vacaciones: indica el primer y último día dentro del periodo de esta escala.',
+                    '@EscalaVM.TiposNovedad.Otra':
+                        'Otra: describe claramente el motivo y agrega observaciones cuando sea necesario.'
+                };
+
+                typeHelp.textContent = helpByType[selectedType]
+                    || 'Selecciona el tipo de novedad para ver la indicación correspondiente.';
+            }
+
+            function restorePersonOptions() {
+                if (!personaSelect) {
+                    return;
+                }
+
+                Array.from(personaSelect.options).forEach(function (option, index) {
+                    option.hidden = false;
+                    if (index > 0) {
+                        option.disabled = false;
+                    }
+                });
+            }
+
+            function filterPersonOptions() {
+                if (!personaSelect || !personaSearch) {
+                    return;
+                }
+
+                const term = normalize(personaSearch.value);
+                const currentValue = personaSelect.value;
+
+                Array.from(personaSelect.options).forEach(function (option, index) {
+                    if (index === 0) {
+                        option.hidden = false;
+                        return;
+                    }
+
+                    const matches = !term
+                        || normalize(option.dataset.search || option.textContent).includes(term);
+                    const isSelected = option.value === currentValue;
+
+                    option.hidden = !matches && !isSelected;
+                    option.disabled = !matches && !isSelected;
+                });
+            }
+
+            function resetForm() {
+                if (!form) {
+                    return;
+                }
+
+                form.reset();
+                if (novedadId) {
+                    novedadId.value = '';
+                }
+                if (startInput) {
+                    startInput.value = minDate;
+                }
+                if (personaSearch) {
+                    personaSearch.value = '';
+                }
+
+                restorePersonOptions();
+                updateTypeRules();
+            }
+
+            function openNewNovedad() {
+                resetForm();
+                if (modalTitle) {
+                    modalTitle.textContent = 'Registrar novedad';
+                }
+                if (saveButton) {
+                    saveButton.textContent = 'Guardar novedad';
+                }
+                openModal(novedadModal);
+                window.setTimeout(function () {
+                    if (personaSearch) {
+                        personaSearch.focus();
+                    }
+                }, 40);
+            }
+
+            page.querySelectorAll('[data-new-novedad]').forEach(function (button) {
+                button.addEventListener('click', openNewNovedad);
+            });
+
+            page.querySelectorAll('[data-edit-novedad]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    resetForm();
+
+                    if (novedadId) {
+                        novedadId.value = button.dataset.id || '';
+                    }
+                    if (personaSelect) {
+                        personaSelect.value = button.dataset.person || '';
+                    }
+                    if (typeSelect) {
+                        typeSelect.value = button.dataset.type || '';
+                    }
+                    if (startInput) {
+                        startInput.value = button.dataset.start || minDate;
+                    }
+                    if (endInput) {
+                        endInput.value = button.dataset.end || '';
+                    }
+                    if (reasonInput) {
+                        reasonInput.value = button.dataset.reason || '';
+                    }
+                    if (notesInput) {
+                        notesInput.value = button.dataset.notes || '';
+                    }
+                    if (modalTitle) {
+                        modalTitle.textContent = 'Editar novedad';
+                    }
+                    if (saveButton) {
+                        saveButton.textContent = 'Guardar cambios';
+                    }
+
+                    updateTypeRules();
+                    openModal(novedadModal);
+                });
+            });
+
+            page.querySelectorAll('[data-delete-novedad]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const idInput = document.getElementById('deleteNovedadId');
+                    const typeText = document.getElementById('deleteNovedadType');
+                    const nameText = document.getElementById('deleteNovedadName');
+
+                    if (idInput) {
+                        idInput.value = button.dataset.id || '';
+                    }
+                    if (typeText) {
+                        typeText.textContent = button.dataset.type || '';
+                    }
+                    if (nameText) {
+                        nameText.textContent = button.dataset.name || '';
+                    }
+
+                    openModal(deleteModal);
+                });
+            });
+
+            if (personaSearch) {
+                personaSearch.addEventListener('input', filterPersonOptions);
+            }
+
+            if (typeSelect) {
+                typeSelect.addEventListener('change', updateTypeRules);
+            }
+
+            if (startInput && endInput) {
+                startInput.addEventListener('change', function () {
+                    endInput.min = startInput.value || minDate;
+                    if (endInput.value && endInput.value < endInput.min) {
+                        endInput.value = startInput.value;
+                    }
+                });
+            }
+
+            page.querySelectorAll('[data-close-modal]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    closeModal(button.closest('.en-modal'));
+                });
+            });
+
+            page.querySelectorAll('.en-modal').forEach(function (modal) {
+                modal.addEventListener('click', function (event) {
+                    if (event.target === modal) {
+                        closeModal(modal);
+                    }
+                });
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key !== 'Escape') {
+                    return;
+                }
+
+                page.querySelectorAll('.en-modal.is-open').forEach(closeModal);
+            });
+
+            updateTypeRules();
+        })();
+    </script>
+}

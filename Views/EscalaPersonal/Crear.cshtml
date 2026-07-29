@@ -1,0 +1,1481 @@
+﻿@using System.Linq
+@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.CrearVM
+
+@{
+    ViewData["Title"] = "Nueva Escala de Personal";
+    Layout = "_Layout";
+}
+
+<style>
+    .escala-create {
+        --ep-primary: #17324d;
+        --ep-primary-soft: #eaf0f5;
+        --ep-accent: #e87524;
+        --ep-accent-dark: #c95d13;
+        --ep-text: #243447;
+        --ep-muted: #6b7a8c;
+        --ep-border: #dfe6ed;
+        --ep-surface: #ffffff;
+        color: var(--ep-text);
+        padding: 1.5rem 0 2.5rem;
+    }
+
+        .escala-create .ec-header {
+            align-items: center;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+        }
+
+        .escala-create .ec-eyebrow {
+            color: var(--ep-accent);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin-bottom: .25rem;
+            text-transform: uppercase;
+        }
+
+        .escala-create .ec-title {
+            color: var(--ep-primary);
+            font-size: clamp(1.45rem, 2.3vw, 1.95rem);
+            font-weight: 750;
+            letter-spacing: -.025em;
+            margin: 0;
+        }
+
+        .escala-create .ec-subtitle {
+            color: var(--ep-muted);
+            font-size: .9rem;
+            margin: .35rem 0 0;
+        }
+
+        .escala-create .ec-back {
+            align-items: center;
+            background: #fff;
+            border: 1px solid var(--ep-border);
+            border-radius: .6rem;
+            color: var(--ep-primary);
+            display: inline-flex;
+            font-size: .84rem;
+            font-weight: 700;
+            gap: .4rem;
+            min-height: 40px;
+            padding: .52rem .85rem;
+            text-decoration: none;
+        }
+
+            .escala-create .ec-back:hover {
+                background: var(--ep-primary-soft);
+                color: var(--ep-primary);
+            }
+
+        .escala-create .ec-layout {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) 300px;
+        }
+
+        .escala-create .ec-card {
+            background: var(--ep-surface);
+            border: 1px solid var(--ep-border);
+            border-radius: .9rem;
+            overflow: hidden;
+        }
+
+            .escala-create .ec-card + .ec-card {
+                margin-top: 1rem;
+            }
+
+        .escala-create .ec-card-head {
+            border-bottom: 1px solid var(--ep-border);
+            padding: .95rem 1.1rem;
+        }
+
+        .escala-create .ec-step {
+            color: var(--ep-accent);
+            font-size: .68rem;
+            font-weight: 800;
+            letter-spacing: .09em;
+            margin-bottom: .18rem;
+            text-transform: uppercase;
+        }
+
+        .escala-create .ec-card-title {
+            color: var(--ep-primary);
+            font-size: .98rem;
+            font-weight: 750;
+            margin: 0;
+        }
+
+        .escala-create .ec-card-body {
+            padding: 1.1rem;
+        }
+
+        .escala-create .ec-grid {
+            display: grid;
+            gap: .95rem;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+        }
+
+        .escala-create .ec-col-3 {
+            grid-column: span 3;
+        }
+
+        .escala-create .ec-col-4 {
+            grid-column: span 4;
+        }
+
+        .escala-create .ec-col-6 {
+            grid-column: span 6;
+        }
+
+        .escala-create .ec-col-12 {
+            grid-column: span 12;
+        }
+
+        .escala-create .ec-label {
+            color: #405268;
+            display: block;
+            font-size: .76rem;
+            font-weight: 750;
+            margin-bottom: .38rem;
+        }
+
+        .escala-create .ec-required::after {
+            color: var(--ep-accent);
+            content: " *";
+        }
+
+        .escala-create .ec-control {
+            background: #fff;
+            border: 1px solid var(--ep-border);
+            border-radius: .55rem;
+            color: var(--ep-text);
+            font-size: .86rem;
+            min-height: 42px;
+            outline: none;
+            padding: .55rem .7rem;
+            width: 100%;
+        }
+
+        .escala-create textarea.ec-control {
+            min-height: 90px;
+            resize: vertical;
+        }
+
+        .escala-create .ec-control:focus {
+            border-color: #7b9ab7;
+            box-shadow: 0 0 0 3px rgba(23, 50, 77, .08);
+        }
+
+        .escala-create .ec-control[readonly] {
+            background: #f5f7f9;
+            color: #516277;
+        }
+
+        .escala-create .ec-help {
+            color: var(--ep-muted);
+            font-size: .7rem;
+            margin: .3rem 0 0;
+        }
+
+        .escala-create .field-validation-error,
+        .escala-create .text-danger {
+            color: #b83232 !important;
+            display: block;
+            font-size: .72rem;
+            margin-top: .28rem;
+        }
+
+        .escala-create .validation-summary-valid {
+            display: none;
+        }
+
+        .escala-create .validation-summary-errors {
+            background: #fff0f0;
+            border: 1px solid #f3caca;
+            border-left: 4px solid #c93d3d;
+            border-radius: .6rem;
+            color: #8b2929;
+            font-size: .8rem;
+            margin-bottom: 1rem;
+            padding: .75rem 1rem;
+        }
+
+            .escala-create .validation-summary-errors ul {
+                margin: 0;
+                padding-left: 1.1rem;
+            }
+
+        .escala-create .ec-schedule-toolbar {
+            align-items: center;
+            display: flex;
+            gap: .65rem;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .escala-create .ec-new-schedule {
+            background: #f4f7fa;
+            border: 1px solid #cfdbe6;
+            border-left: 4px solid var(--ep-accent);
+            border-radius: .72rem;
+            margin-bottom: 1rem;
+            padding: .9rem;
+        }
+
+        .escala-create .ec-new-schedule-title {
+            color: var(--ep-primary);
+            font-size: .82rem;
+            font-weight: 800;
+            margin: 0 0 .2rem;
+        }
+
+        .escala-create .ec-new-schedule-help {
+            color: var(--ep-muted);
+            font-size: .72rem;
+            margin: 0 0 .75rem;
+        }
+
+        .escala-create .ec-new-schedule-grid {
+            align-items: end;
+            display: grid;
+            gap: .7rem;
+            grid-template-columns: minmax(180px, 1.5fr) minmax(120px, .8fr) minmax(120px, .8fr) minmax(130px, .9fr) 76px auto;
+        }
+
+        .escala-create .ec-new-schedule-field label {
+            color: #405268;
+            display: block;
+            font-size: .68rem;
+            font-weight: 750;
+            margin-bottom: .3rem;
+        }
+
+        .escala-create .ec-new-schedule-button {
+            align-items: center;
+            background: var(--ep-accent);
+            border: 1px solid var(--ep-accent);
+            border-radius: .55rem;
+            color: #fff;
+            display: inline-flex;
+            font-size: .75rem;
+            font-weight: 800;
+            gap: .35rem;
+            justify-content: center;
+            min-height: 42px;
+            padding: .5rem .8rem;
+            white-space: nowrap;
+        }
+
+            .escala-create .ec-new-schedule-button:hover {
+                background: var(--ep-accent-dark);
+                border-color: var(--ep-accent-dark);
+            }
+
+        .escala-create .ec-new-schedule-error {
+            color: #b83232;
+            font-size: .72rem;
+            margin: .6rem 0 0;
+        }
+
+        .escala-create .ec-selection-count {
+            color: var(--ep-muted);
+            font-size: .75rem;
+            margin: 0;
+        }
+
+        .escala-create .ec-add-schedule {
+            align-items: center;
+            background: var(--ep-primary);
+            border: 1px solid var(--ep-primary);
+            border-radius: .55rem;
+            color: #fff;
+            display: inline-flex;
+            font-size: .75rem;
+            font-weight: 800;
+            gap: .35rem;
+            min-height: 36px;
+            padding: .45rem .7rem;
+        }
+
+            .escala-create .ec-add-schedule:hover {
+                background: #0f263a;
+            }
+
+        .escala-create .ec-schedule-list {
+            display: grid;
+            gap: .8rem;
+        }
+
+        .escala-create .ec-schedule-card {
+            background: #f9fbfc;
+            border: 1px solid var(--ep-border);
+            border-radius: .72rem;
+            padding: .9rem;
+        }
+
+        .escala-create .ec-schedule-head {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: .75rem;
+        }
+
+        .escala-create .ec-schedule-title {
+            color: var(--ep-primary);
+            font-size: .78rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .escala-create .ec-remove-schedule {
+            background: transparent;
+            border: 0;
+            color: #a43232;
+            font-size: .72rem;
+            font-weight: 750;
+            padding: .2rem;
+        }
+
+        .escala-create .ec-schedule-grid {
+            display: grid;
+            gap: .75rem;
+            grid-template-columns: minmax(190px, 2fr) minmax(115px, 1fr) minmax(115px, 1fr) minmax(130px, 1fr) 76px;
+        }
+
+        .escala-create .ec-schedule-field label {
+            color: #405268;
+            display: block;
+            font-size: .68rem;
+            font-weight: 750;
+            margin-bottom: .3rem;
+        }
+
+        .escala-create .ec-schedule-color {
+            cursor: pointer;
+            min-width: 60px;
+            padding: .25rem;
+        }
+
+        .escala-create .ec-schedule-options {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem 1.25rem;
+            margin-top: .75rem;
+        }
+
+        .escala-create .ec-check-label {
+            align-items: center;
+            color: #405268;
+            display: inline-flex;
+            font-size: .72rem;
+            font-weight: 700;
+            gap: .4rem;
+            margin: 0;
+        }
+
+            .escala-create .ec-check-label input {
+                accent-color: var(--ep-accent);
+                height: 16px;
+                width: 16px;
+            }
+
+        .escala-create .ec-next-day {
+            color: var(--ep-muted);
+            font-size: .7rem;
+            margin-left: auto;
+        }
+
+        .escala-create .ec-empty-schedules {
+            background: #f7f9fb;
+            border: 1px dashed #b9c7d4;
+            border-radius: .65rem;
+            color: var(--ep-muted);
+            font-size: .78rem;
+            padding: 1.1rem;
+            text-align: center;
+        }
+
+        .escala-create .ec-summary {
+            position: sticky;
+            top: 1rem;
+        }
+
+        .escala-create .ec-summary-top {
+            background: var(--ep-primary);
+            color: #fff;
+            padding: 1.1rem;
+        }
+
+        .escala-create .ec-summary-label {
+            color: #bcd0e3;
+            font-size: .68rem;
+            font-weight: 800;
+            letter-spacing: .09em;
+            margin-bottom: .25rem;
+            text-transform: uppercase;
+        }
+
+        .escala-create .ec-summary-folio {
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .escala-create .ec-summary-body {
+            padding: 1rem 1.1rem 1.1rem;
+        }
+
+        .escala-create .ec-summary-row {
+            border-bottom: 1px solid #edf1f4;
+            display: flex;
+            gap: .75rem;
+            justify-content: space-between;
+            padding: .7rem 0;
+        }
+
+            .escala-create .ec-summary-row:first-child {
+                padding-top: 0;
+            }
+
+            .escala-create .ec-summary-row:last-of-type {
+                border-bottom: 0;
+            }
+
+        .escala-create .ec-summary-key {
+            color: var(--ep-muted);
+            font-size: .73rem;
+        }
+
+        .escala-create .ec-summary-value {
+            color: var(--ep-primary);
+            font-size: .75rem;
+            font-weight: 800;
+            text-align: right;
+        }
+
+        .escala-create .ec-submit {
+            align-items: center;
+            background: var(--ep-accent);
+            border: 1px solid var(--ep-accent);
+            border-radius: .62rem;
+            color: #fff;
+            display: flex;
+            font-size: .87rem;
+            font-weight: 800;
+            gap: .4rem;
+            justify-content: center;
+            margin-top: .75rem;
+            min-height: 44px;
+            padding: .58rem .9rem;
+            transition: .16s ease;
+            width: 100%;
+        }
+
+            .escala-create .ec-submit:hover {
+                background: var(--ep-accent-dark);
+                border-color: var(--ep-accent-dark);
+            }
+
+            .escala-create .ec-submit:disabled {
+                cursor: not-allowed;
+                opacity: .62;
+            }
+
+        .escala-create .ec-note {
+            background: #f7f9fb;
+            border-radius: .55rem;
+            color: var(--ep-muted);
+            font-size: .7rem;
+            line-height: 1.45;
+            margin-top: .75rem;
+            padding: .65rem .7rem;
+        }
+
+    @@media (max-width: 991px) {
+        .escala-create .ec-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .escala-create .ec-summary {
+            position: static;
+        }
+    }
+
+    @@media (max-width: 767px) {
+        .escala-create {
+            padding-top: 1rem;
+        }
+
+            .escala-create .ec-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .escala-create .ec-back {
+                justify-content: center;
+            }
+
+            .escala-create .ec-col-3,
+            .escala-create .ec-col-4,
+            .escala-create .ec-col-6 {
+                grid-column: span 12;
+            }
+
+            .escala-create .ec-schedule-toolbar {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .escala-create .ec-add-schedule {
+                justify-content: center;
+            }
+
+            .escala-create .ec-schedule-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .escala-create .ec-new-schedule-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .escala-create .ec-new-schedule-field:first-child,
+            .escala-create .ec-new-schedule-field:nth-child(4),
+            .escala-create .ec-new-schedule-button {
+                grid-column: span 2;
+            }
+
+            .escala-create .ec-schedule-field:first-child,
+            .escala-create .ec-schedule-field:nth-child(4) {
+                grid-column: span 2;
+            }
+
+            .escala-create .ec-next-day {
+                margin-left: 0;
+            }
+    }
+
+    @@media (max-width: 480px) {
+        .escala-create .ec-new-schedule-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .escala-create .ec-new-schedule-field:first-child,
+        .escala-create .ec-new-schedule-field:nth-child(4),
+        .escala-create .ec-new-schedule-button {
+            grid-column: span 1;
+        }
+
+        .escala-create .ec-schedule-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .escala-create .ec-schedule-field:first-child,
+        .escala-create .ec-schedule-field:nth-child(4) {
+            grid-column: span 1;
+        }
+    }
+</style>
+
+<div class="container-fluid escala-create">
+    <div class="ec-header">
+        <div>
+            <div class="ec-eyebrow">Escala de Personal</div>
+            <h1 class="ec-title">Nueva programación semanal</h1>
+            <p class="ec-subtitle">
+                Configura el documento, la semana y los horarios que se aplicarán.
+            </p>
+        </div>
+        <a asp-action="Index" class="ec-back">
+            <span aria-hidden="true">←</span>
+            Volver
+        </a>
+    </div>
+
+    <form asp-action="Crear"
+          asp-controller="EscalaPersonal"
+          method="post"
+          id="formCrearEscala"
+          novalidate>
+        @Html.AntiForgeryToken()
+        <input asp-for="Escala.Estado" type="hidden" />
+
+        <div asp-validation-summary="ModelOnly"></div>
+
+        <div class="ec-layout">
+            <main>
+                <section class="ec-card">
+                    <div class="ec-card-head">
+                        <div class="ec-step">Paso 1</div>
+                        <h2 class="ec-card-title">Datos del documento</h2>
+                    </div>
+                    <div class="ec-card-body">
+                        <div class="ec-grid">
+                            <div class="ec-col-4">
+                                <label asp-for="Escala.Folio"
+                                       class="ec-label ec-required"></label>
+                                <input asp-for="Escala.Folio"
+                                       class="ec-control"
+                                       readonly />
+                                <span asp-validation-for="Escala.Folio"></span>
+                                <p class="ec-help">Se genera automáticamente con el año y semana.</p>
+                            </div>
+                            <div class="ec-col-4">
+                                <label asp-for="Escala.CodigoDocumento"
+                                       class="ec-label ec-required"></label>
+                                <input asp-for="Escala.CodigoDocumento"
+                                       class="ec-control"
+                                       maxlength="30" />
+                                <span asp-validation-for="Escala.CodigoDocumento"></span>
+                            </div>
+                            <div class="ec-col-4">
+                                <label asp-for="Escala.VersionDocumento"
+                                       class="ec-label ec-required"></label>
+                                <input asp-for="Escala.VersionDocumento"
+                                       class="ec-control"
+                                       maxlength="10" />
+                                <span asp-validation-for="Escala.VersionDocumento"></span>
+                            </div>
+                            <div class="ec-col-4">
+                                <label asp-for="Escala.FechaElaboracion"
+                                       class="ec-label ec-required"></label>
+                                <input asp-for="Escala.FechaElaboracion"
+                                       type="date"
+                                       class="ec-control" />
+                                <span asp-validation-for="Escala.FechaElaboracion"></span>
+                            </div>
+                            <div class="ec-col-4">
+                                <label asp-for="Escala.PeriodoTrabajo"
+                                       class="ec-label ec-required"></label>
+                                <select asp-for="Escala.PeriodoTrabajo" class="ec-control">
+                                    <option value="Semanal">Semanal</option>
+                                </select>
+                                <span asp-validation-for="Escala.PeriodoTrabajo"></span>
+                            </div>
+                            <div class="ec-col-12">
+                                <label asp-for="Escala.Observaciones" class="ec-label"></label>
+                                <textarea asp-for="Escala.Observaciones"
+                                          class="ec-control"
+                                          maxlength="1000"
+                                          placeholder="Indicaciones generales para esta semana (opcional)"></textarea>
+                                <span asp-validation-for="Escala.Observaciones"></span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="ec-card">
+                    <div class="ec-card-head">
+                        <div class="ec-step">Paso 2</div>
+                        <h2 class="ec-card-title">Semana de aplicación</h2>
+                    </div>
+                    <div class="ec-card-body">
+                        <div class="ec-grid">
+                            <div class="ec-col-3">
+                                <label asp-for="Escala.Anio"
+                                       class="ec-label ec-required"></label>
+                                <input asp-for="Escala.Anio"
+                                       type="number"
+                                       min="2000"
+                                       max="2100"
+                                       class="ec-control" />
+                                <span asp-validation-for="Escala.Anio"></span>
+                            </div>
+                            <div class="ec-col-3">
+                                <label asp-for="Escala.NumeroSemana"
+                                       class="ec-label ec-required"></label>
+                                <input asp-for="Escala.NumeroSemana"
+                                       type="number"
+                                       min="1"
+                                       max="53"
+                                       class="ec-control" />
+                                <span asp-validation-for="Escala.NumeroSemana"></span>
+                            </div>
+                            <div class="ec-col-3">
+                                <label asp-for="Escala.FechaInicio"
+                                       class="ec-label ec-required"></label>
+                                <input asp-for="Escala.FechaInicio"
+                                       type="date"
+                                       class="ec-control"
+                                       readonly />
+                                <span asp-validation-for="Escala.FechaInicio"></span>
+                            </div>
+                            <div class="ec-col-3">
+                                <label asp-for="Escala.FechaFin"
+                                       class="ec-label ec-required"></label>
+                                <input asp-for="Escala.FechaFin"
+                                       type="date"
+                                       class="ec-control"
+                                       readonly />
+                                <span asp-validation-for="Escala.FechaFin"></span>
+                            </div>
+                        </div>
+                        <p class="ec-help mt-3 mb-0">
+                            El periodo se calcula de lunes a sábado conforme a la semana ISO seleccionada.
+                        </p>
+                    </div>
+                </section>
+
+                <section class="ec-card">
+                    <div class="ec-card-head">
+                        <div class="ec-step">Paso 3</div>
+                        <h2 class="ec-card-title">Crear horarios de trabajo</h2>
+                    </div>
+                    <div class="ec-card-body">
+                        <div class="ec-new-schedule">
+                            <p class="ec-new-schedule-title">Agregar un nuevo horario</p>
+                            <p class="ec-new-schedule-help">
+                                Captura la entrada y salida. Por ejemplo: 06:00 a 14:00.
+                                El nombre puede generarse automáticamente.
+                            </p>
+
+                            <div class="ec-new-schedule-grid">
+                                <div class="ec-new-schedule-field">
+                                    <label for="nuevoHorarioNombre">Nombre (opcional)</label>
+                                    <input id="nuevoHorarioNombre"
+                                           type="text"
+                                           class="ec-control"
+                                           maxlength="100"
+                                           placeholder="Ej. Primer turno" />
+                                </div>
+                                <div class="ec-new-schedule-field">
+                                    <label for="nuevoHorarioInicio">Hora de entrada</label>
+                                    <input id="nuevoHorarioInicio"
+                                           type="time"
+                                           class="ec-control" />
+                                </div>
+                                <div class="ec-new-schedule-field">
+                                    <label for="nuevoHorarioFin">Hora de salida</label>
+                                    <input id="nuevoHorarioFin"
+                                           type="time"
+                                           class="ec-control" />
+                                </div>
+                                <div class="ec-new-schedule-field">
+                                    <label for="nuevoHorarioTipo">Tipo</label>
+                                    <select id="nuevoHorarioTipo" class="ec-control">
+                                        <option value="Regular">Regular</option>
+                                        <option value="Mixto">Mixto</option>
+                                        <option value="12x12">12x12</option>
+                                        <option value="Especial">Especial</option>
+                                    </select>
+                                </div>
+                                <div class="ec-new-schedule-field">
+                                    <label for="nuevoHorarioColor">Color</label>
+                                    <input id="nuevoHorarioColor"
+                                           type="color"
+                                           value="#e87524"
+                                           class="ec-control ec-schedule-color" />
+                                </div>
+                                <button type="button"
+                                        id="confirmarNuevoHorario"
+                                        class="ec-new-schedule-button">
+                                    <span aria-hidden="true">＋</span>
+                                    Añadir a la escala
+                                </button>
+                            </div>
+
+                            <p id="errorNuevoHorario"
+                               class="ec-new-schedule-error"
+                               hidden></p>
+                        </div>
+
+                        <div class="ec-schedule-toolbar">
+                            <div>
+                                <p id="contadorHorarios"
+                                   class="ec-selection-count"></p>
+                                <p class="ec-help mb-0">
+                                    Puedes modificar los horarios base, eliminarlos o agregar otros.
+                                </p>
+                            </div>
+                            <button type="button"
+                                    id="agregarHorario"
+                                    class="ec-add-schedule">
+                                <span aria-hidden="true">＋</span>
+                                Agregar horario vacío
+                            </button>
+                        </div>
+
+                        <span asp-validation-for="Horarios"
+                              class="text-danger mb-2"></span>
+                        <div id="errorHorarios"
+                             class="validation-summary-errors"
+                             hidden></div>
+
+                        <div id="listaHorarios" class="ec-schedule-list">
+                            @for (var i = 0; i < Model.Horarios.Count; i++)
+                            {
+                                <div class="ec-schedule-card">
+                                    <input type="hidden"
+                                           name="Horarios.Index"
+                                           value="@i" />
+                                    <input asp-for="Horarios[i].TurnoOrigenID"
+                                           type="hidden" />
+                                    <input asp-for="Horarios[i].Orden"
+                                           type="hidden"
+                                           class="js-order" />
+                                    <input asp-for="Horarios[i].CruzaDiaSiguiente"
+                                           type="hidden"
+                                           class="js-next-day-value" />
+
+                                    <div class="ec-schedule-head">
+                                        <p class="ec-schedule-title">
+                                            Horario <span class="js-schedule-number">@(i + 1)</span>
+                                        </p>
+                                        <button type="button"
+                                                class="ec-remove-schedule js-remove-schedule">
+                                            Eliminar
+                                        </button>
+                                    </div>
+
+                                    <div class="ec-schedule-grid">
+                                        <div class="ec-schedule-field">
+                                            <label asp-for="Horarios[i].Nombre"></label>
+                                            <input asp-for="Horarios[i].Nombre"
+                                                   class="ec-control js-schedule-name"
+                                                   maxlength="100"
+                                                   placeholder="Ej. 07:00 - 15:00" />
+                                            <span asp-validation-for="Horarios[i].Nombre"></span>
+                                        </div>
+                                        <div class="ec-schedule-field">
+                                            <label asp-for="Horarios[i].HoraInicio"></label>
+                                            <input asp-for="Horarios[i].HoraInicio"
+                                                   type="time"
+                                                   class="ec-control js-start-time" />
+                                            <span asp-validation-for="Horarios[i].HoraInicio"></span>
+                                        </div>
+                                        <div class="ec-schedule-field">
+                                            <label asp-for="Horarios[i].HoraFin"></label>
+                                            <input asp-for="Horarios[i].HoraFin"
+                                                   type="time"
+                                                   class="ec-control js-end-time" />
+                                            <span asp-validation-for="Horarios[i].HoraFin"></span>
+                                        </div>
+                                        <div class="ec-schedule-field">
+                                            <label asp-for="Horarios[i].TipoTurno"></label>
+                                            <select asp-for="Horarios[i].TipoTurno"
+                                                    class="ec-control js-schedule-type">
+                                                <option value="Regular">Regular</option>
+                                                <option value="Mixto">Mixto</option>
+                                                <option value="12x12">12x12</option>
+                                                <option value="Especial">Especial</option>
+                                            </select>
+                                            <span asp-validation-for="Horarios[i].TipoTurno"></span>
+                                        </div>
+                                        <div class="ec-schedule-field">
+                                            <label asp-for="Horarios[i].Color"></label>
+                                            <input asp-for="Horarios[i].Color"
+                                                   type="color"
+                                                   class="ec-control ec-schedule-color" />
+                                            <span asp-validation-for="Horarios[i].Color"></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="ec-schedule-options">
+                                        <label class="ec-check-label">
+                                            <input asp-for="Horarios[i].EsFlexible"
+                                                   class="js-flexible" />
+                                            Horario flexible, sin hora fija
+                                        </label>
+                                        <span class="ec-next-day js-next-day-text"></span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div id="sinHorarios"
+                             class="ec-empty-schedules"
+                             hidden>
+                            Todavía no hay horarios. Presiona “Agregar horario” para crear uno.
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <aside>
+                <section class="ec-card ec-summary">
+                    <div class="ec-summary-top">
+                        <div class="ec-summary-label">Resumen de la escala</div>
+                        <p id="resumenFolio" class="ec-summary-folio">
+                            @Model.Escala.Folio
+                        </p>
+                    </div>
+                    <div class="ec-summary-body">
+                        <div class="ec-summary-row">
+                            <span class="ec-summary-key">Semana</span>
+                            <span id="resumenSemana" class="ec-summary-value">
+                                @Model.Escala.NumeroSemana / @Model.Escala.Anio
+                            </span>
+                        </div>
+                        <div class="ec-summary-row">
+                            <span class="ec-summary-key">Periodo</span>
+                            <span id="resumenPeriodo" class="ec-summary-value">
+                                @Model.Escala.FechaInicio.ToString("dd/MM/yyyy")
+                                —
+                                @Model.Escala.FechaFin.ToString("dd/MM/yyyy")
+                            </span>
+                        </div>
+                        <div class="ec-summary-row">
+                            <span class="ec-summary-key">Horarios</span>
+                            <span id="resumenHorarios" class="ec-summary-value">
+                                @Model.Horarios.Count creados
+                            </span>
+                        </div>
+                        <div class="ec-summary-row">
+                            <span class="ec-summary-key">Estado inicial</span>
+                            <span class="ec-summary-value">Borrador</span>
+                        </div>
+
+                        <button type="submit"
+                                id="btnCrearEscala"
+                                class="ec-submit"
+                                disabled="@(Model.Horarios.Count == 0 ? "disabled" : null)">
+                            Crear y asignar personal
+                        </button>
+
+                        <div class="ec-note">
+                            Los horarios creados aquí quedarán guardados en esta escala.
+                            Si después cambia el catálogo general, esta semana conservará
+                            las horas registradas.
+                        </div>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const yearInput = document.getElementById('Escala_Anio');
+            const weekInput = document.getElementById('Escala_NumeroSemana');
+            const startInput = document.getElementById('Escala_FechaInicio');
+            const endInput = document.getElementById('Escala_FechaFin');
+            const folioInput = document.getElementById('Escala_Folio');
+            const summaryFolio = document.getElementById('resumenFolio');
+            const summaryWeek = document.getElementById('resumenSemana');
+            const summaryPeriod = document.getElementById('resumenPeriodo');
+            const summarySchedules = document.getElementById('resumenHorarios');
+            const scheduleCounter = document.getElementById('contadorHorarios');
+            const scheduleList = document.getElementById('listaHorarios');
+            const emptySchedules = document.getElementById('sinHorarios');
+            const addScheduleButton = document.getElementById('agregarHorario');
+            const confirmNewScheduleButton =
+                document.getElementById('confirmarNuevoHorario');
+            const newScheduleName = document.getElementById('nuevoHorarioNombre');
+            const newScheduleStart = document.getElementById('nuevoHorarioInicio');
+            const newScheduleEnd = document.getElementById('nuevoHorarioFin');
+            const newScheduleType = document.getElementById('nuevoHorarioTipo');
+            const newScheduleColor = document.getElementById('nuevoHorarioColor');
+            const newScheduleError = document.getElementById('errorNuevoHorario');
+            const form = document.getElementById('formCrearEscala');
+            const submitButton = document.getElementById('btnCrearEscala');
+            const existingIndexes = Array.from(
+                document.querySelectorAll('input[name="Horarios.Index"]')
+            ).map(item => Number.parseInt(item.value, 10))
+                .filter(Number.isInteger);
+            let nextScheduleIndex = existingIndexes.length === 0
+                ? 0
+                : Math.max(...existingIndexes) + 1;
+
+            const pad = value => String(value).padStart(2, '0');
+
+            const toIsoDate = date => {
+                const year = date.getFullYear();
+                const month = pad(date.getMonth() + 1);
+                const day = pad(date.getDate());
+                return `${year}-${month}-${day}`;
+            };
+
+            const toDisplayDate = date => {
+                return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+            };
+
+            const getIsoMonday = (year, week) => {
+                const januaryFourth = new Date(year, 0, 4);
+                const day = januaryFourth.getDay() || 7;
+                const firstMonday = new Date(januaryFourth);
+                firstMonday.setDate(januaryFourth.getDate() - day + 1);
+
+                const result = new Date(firstMonday);
+                result.setDate(firstMonday.getDate() + ((week - 1) * 7));
+                return result;
+            };
+
+            const getIsoWeek = date => {
+                const utcDate = new Date(Date.UTC(
+                    date.getFullYear(),
+                    date.getMonth(),
+                    date.getDate()
+                ));
+                const day = utcDate.getUTCDay() || 7;
+                utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
+                const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+                return Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+            };
+
+            const maxIsoWeek = year => getIsoWeek(new Date(year, 11, 28));
+
+            const updateWeek = () => {
+                const year = Number.parseInt(yearInput?.value || '', 10);
+                let week = Number.parseInt(weekInput?.value || '', 10);
+
+                if (!Number.isInteger(year) || year < 2000 || year > 2100
+                    || !Number.isInteger(week)) {
+                    return;
+                }
+
+                const maximum = maxIsoWeek(year);
+                weekInput.max = String(maximum);
+                if (week > maximum) {
+                    week = maximum;
+                    weekInput.value = String(maximum);
+                }
+                if (week < 1) {
+                    week = 1;
+                    weekInput.value = '1';
+                }
+
+                const start = getIsoMonday(year, week);
+                const end = new Date(start);
+                end.setDate(start.getDate() + 5);
+                const folio = `EP-${year}-S${pad(week)}`;
+
+                startInput.value = toIsoDate(start);
+                endInput.value = toIsoDate(end);
+                folioInput.value = folio;
+                summaryFolio.textContent = folio;
+                summaryWeek.textContent = `${week} / ${year}`;
+                summaryPeriod.textContent =
+                    `${toDisplayDate(start)} — ${toDisplayDate(end)}`;
+            };
+
+            const getScheduleCards = () => Array.from(
+                scheduleList?.querySelectorAll('.ec-schedule-card') || []
+            );
+
+            const createScheduleHtml = index => `
+                <div class="ec-schedule-card">
+                    <input type="hidden" name="Horarios.Index" value="${index}">
+                    <input type="hidden"
+                           name="Horarios[${index}].TurnoOrigenID"
+                           value="">
+                    <input type="hidden"
+                           name="Horarios[${index}].Orden"
+                           value="0"
+                           class="js-order">
+                    <input type="hidden"
+                           name="Horarios[${index}].CruzaDiaSiguiente"
+                           value="false"
+                           class="js-next-day-value">
+
+                    <div class="ec-schedule-head">
+                        <p class="ec-schedule-title">
+                            Horario <span class="js-schedule-number"></span>
+                        </p>
+                        <button type="button"
+                                class="ec-remove-schedule js-remove-schedule">
+                            Eliminar
+                        </button>
+                    </div>
+
+                    <div class="ec-schedule-grid">
+                        <div class="ec-schedule-field">
+                            <label for="Horarios_${index}__Nombre">Nombre</label>
+                            <input id="Horarios_${index}__Nombre"
+                                   name="Horarios[${index}].Nombre"
+                                   class="ec-control js-schedule-name"
+                                   maxlength="100"
+                                   placeholder="Ej. 07:00 - 15:00">
+                        </div>
+                        <div class="ec-schedule-field">
+                            <label for="Horarios_${index}__HoraInicio">Hora de entrada</label>
+                            <input id="Horarios_${index}__HoraInicio"
+                                   name="Horarios[${index}].HoraInicio"
+                                   type="time"
+                                   class="ec-control js-start-time">
+                        </div>
+                        <div class="ec-schedule-field">
+                            <label for="Horarios_${index}__HoraFin">Hora de salida</label>
+                            <input id="Horarios_${index}__HoraFin"
+                                   name="Horarios[${index}].HoraFin"
+                                   type="time"
+                                   class="ec-control js-end-time">
+                        </div>
+                        <div class="ec-schedule-field">
+                            <label for="Horarios_${index}__TipoTurno">Tipo</label>
+                            <select id="Horarios_${index}__TipoTurno"
+                                    name="Horarios[${index}].TipoTurno"
+                                    class="ec-control js-schedule-type">
+                                <option value="Regular">Regular</option>
+                                <option value="Mixto">Mixto</option>
+                                <option value="12x12">12x12</option>
+                                <option value="Especial">Especial</option>
+                            </select>
+                        </div>
+                        <div class="ec-schedule-field">
+                            <label for="Horarios_${index}__Color">Color</label>
+                            <input id="Horarios_${index}__Color"
+                                   name="Horarios[${index}].Color"
+                                   type="color"
+                                   value="#6c757d"
+                                   class="ec-control ec-schedule-color">
+                        </div>
+                    </div>
+
+                    <div class="ec-schedule-options">
+                        <label class="ec-check-label">
+                            <input id="Horarios_${index}__EsFlexible"
+                                   name="Horarios[${index}].EsFlexible"
+                                   type="checkbox"
+                                   value="true"
+                                   class="js-flexible">
+                            <input name="Horarios[${index}].EsFlexible"
+                                   type="hidden"
+                                   value="false">
+                            Horario flexible, sin hora fija
+                        </label>
+                        <span class="ec-next-day js-next-day-text"></span>
+                    </div>
+                </div>`;
+
+            const updateNextDay = card => {
+                const flexible = card.querySelector('.js-flexible')?.checked === true;
+                const start = card.querySelector('.js-start-time');
+                const end = card.querySelector('.js-end-time');
+                const nextDayValue = card.querySelector('.js-next-day-value');
+                const nextDayText = card.querySelector('.js-next-day-text');
+
+                if (start) {
+                    start.disabled = flexible;
+                }
+                if (end) {
+                    end.disabled = flexible;
+                }
+
+                const crossesDay = !flexible
+                    && Boolean(start?.value)
+                    && Boolean(end?.value)
+                    && end.value < start.value;
+
+                if (nextDayValue) {
+                    nextDayValue.value = crossesDay ? 'true' : 'false';
+                }
+                if (nextDayText) {
+                    nextDayText.textContent = crossesDay
+                        ? 'La salida corresponde al día siguiente.'
+                        : '';
+                }
+            };
+
+            const updateSchedules = () => {
+                const cards = getScheduleCards();
+                const total = cards.length;
+                const label = total === 1
+                    ? '1 horario creado'
+                    : `${total} horarios creados`;
+
+                cards.forEach((card, index) => {
+                    const number = card.querySelector('.js-schedule-number');
+                    const order = card.querySelector('.js-order');
+                    if (number) {
+                        number.textContent = String(index + 1);
+                    }
+                    if (order) {
+                        order.value = String(index + 1);
+                    }
+                    updateNextDay(card);
+                });
+
+                if (scheduleCounter) {
+                    scheduleCounter.textContent = label;
+                }
+                if (summarySchedules) {
+                    summarySchedules.textContent = label;
+                }
+                if (emptySchedules) {
+                    emptySchedules.hidden = total > 0;
+                }
+                if (submitButton) {
+                    submitButton.disabled = total === 0;
+                }
+            };
+
+            const bindScheduleCard = card => {
+                card.querySelector('.js-remove-schedule')
+                    ?.addEventListener('click', () => {
+                        card.remove();
+                        updateSchedules();
+                    });
+
+                card.querySelector('.js-flexible')
+                    ?.addEventListener('change', () => updateNextDay(card));
+                card.querySelector('.js-start-time')
+                    ?.addEventListener('input', () => updateNextDay(card));
+                card.querySelector('.js-end-time')
+                    ?.addEventListener('input', () => updateNextDay(card));
+                card.querySelector('.js-schedule-type')
+                    ?.addEventListener('change', event => {
+                        if (event.target.value === 'Mixto') {
+                            const flexible = card.querySelector('.js-flexible');
+                            if (flexible) {
+                                flexible.checked = true;
+                            }
+                        }
+                        updateNextDay(card);
+                    });
+            };
+
+            const appendSchedule = values => {
+                scheduleList.insertAdjacentHTML(
+                    'beforeend',
+                    createScheduleHtml(nextScheduleIndex)
+                );
+                nextScheduleIndex++;
+
+                const newCard = getScheduleCards().at(-1);
+                if (!newCard) {
+                    return null;
+                }
+
+                bindScheduleCard(newCard);
+
+                if (values) {
+                    const name = newCard.querySelector('.js-schedule-name');
+                    const start = newCard.querySelector('.js-start-time');
+                    const end = newCard.querySelector('.js-end-time');
+                    const type = newCard.querySelector('.js-schedule-type');
+                    const color = newCard.querySelector('input[type="color"]');
+
+                    if (name) {
+                        name.value = values.name || '';
+                    }
+                    if (start) {
+                        start.value = values.start || '';
+                    }
+                    if (end) {
+                        end.value = values.end || '';
+                    }
+                    if (type) {
+                        type.value = values.type || 'Regular';
+                    }
+                    if (color) {
+                        color.value = values.color || '#6c757d';
+                    }
+                }
+
+                updateSchedules();
+                return newCard;
+            };
+
+            const clearNewScheduleError = () => {
+                if (!newScheduleError) {
+                    return;
+                }
+
+                newScheduleError.textContent = '';
+                newScheduleError.hidden = true;
+                newScheduleStart?.classList.remove('is-invalid');
+                newScheduleEnd?.classList.remove('is-invalid');
+            };
+
+            const showNewScheduleError = (message, input) => {
+                if (newScheduleError) {
+                    newScheduleError.textContent = message;
+                    newScheduleError.hidden = false;
+                }
+                input?.classList.add('is-invalid');
+                input?.focus();
+            };
+
+            const addScheduleFromQuickForm = () => {
+                clearNewScheduleError();
+
+                const start = newScheduleStart?.value || '';
+                const end = newScheduleEnd?.value || '';
+
+                if (!start) {
+                    showNewScheduleError(
+                        'Indica la hora de entrada del nuevo horario.',
+                        newScheduleStart
+                    );
+                    return;
+                }
+
+                if (!end) {
+                    showNewScheduleError(
+                        'Indica la hora de salida del nuevo horario.',
+                        newScheduleEnd
+                    );
+                    return;
+                }
+
+                if (start === end) {
+                    showNewScheduleError(
+                        'La hora de entrada y salida no pueden ser iguales.',
+                        newScheduleEnd
+                    );
+                    return;
+                }
+
+                const generatedName = `${start} - ${end}`;
+                const newCard = appendSchedule({
+                    name: newScheduleName?.value.trim() || generatedName,
+                    start,
+                    end,
+                    type: newScheduleType?.value || 'Regular',
+                    color: newScheduleColor?.value || '#e87524'
+                });
+
+                if (!newCard) {
+                    return;
+                }
+
+                if (newScheduleName) {
+                    newScheduleName.value = '';
+                }
+                if (newScheduleStart) {
+                    newScheduleStart.value = '';
+                }
+                if (newScheduleEnd) {
+                    newScheduleEnd.value = '';
+                }
+                if (newScheduleType) {
+                    newScheduleType.value = 'Regular';
+                }
+
+                newCard.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            };
+
+            const showScheduleError = message => {
+                const error = document.getElementById('errorHorarios');
+                if (error) {
+                    error.textContent = message;
+                    error.hidden = false;
+                }
+            };
+
+            const clearScheduleError = () => {
+                const error = document.getElementById('errorHorarios');
+                if (error) {
+                    error.textContent = '';
+                    error.hidden = true;
+                }
+                getScheduleCards().forEach(card => {
+                    card.querySelectorAll('.is-invalid')
+                        .forEach(input => input.classList.remove('is-invalid'));
+                });
+            };
+
+            const validateSchedules = () => {
+                clearScheduleError();
+                const cards = getScheduleCards();
+                if (cards.length === 0) {
+                    showScheduleError('Crea por lo menos un horario para la escala.');
+                    return false;
+                }
+
+                const names = new Set();
+                for (const card of cards) {
+                    const name = card.querySelector('.js-schedule-name');
+                    const start = card.querySelector('.js-start-time');
+                    const end = card.querySelector('.js-end-time');
+                    const flexible = card.querySelector('.js-flexible')?.checked === true;
+                    const normalizedName = name?.value.trim().toLocaleLowerCase() || '';
+
+                    if (!normalizedName) {
+                        name?.classList.add('is-invalid');
+                        showScheduleError('Todos los horarios deben tener nombre.');
+                        name?.focus();
+                        return false;
+                    }
+
+                    if (names.has(normalizedName)) {
+                        name.classList.add('is-invalid');
+                        showScheduleError('No puedes repetir el nombre de un horario.');
+                        name.focus();
+                        return false;
+                    }
+                    names.add(normalizedName);
+
+                    if (!flexible && (!start?.value || !end?.value)) {
+                        if (!start?.value) {
+                            start?.classList.add('is-invalid');
+                        }
+                        if (!end?.value) {
+                            end?.classList.add('is-invalid');
+                        }
+                        showScheduleError(
+                            'Indica la entrada y salida de cada horario no flexible.'
+                        );
+                        (start?.value ? end : start)?.focus();
+                        return false;
+                    }
+
+                    if (!flexible && start.value === end.value) {
+                        end.classList.add('is-invalid');
+                        showScheduleError(
+                            'La hora de entrada y salida no pueden ser iguales.'
+                        );
+                        end.focus();
+                        return false;
+                    }
+                }
+
+                return true;
+            };
+
+            yearInput?.addEventListener('change', updateWeek);
+            yearInput?.addEventListener('input', updateWeek);
+            weekInput?.addEventListener('change', updateWeek);
+            weekInput?.addEventListener('input', updateWeek);
+
+            getScheduleCards().forEach(bindScheduleCard);
+
+            addScheduleButton?.addEventListener('click', () => {
+                const newCard = appendSchedule();
+                if (newCard) {
+                    newCard.querySelector('.js-schedule-name')?.focus();
+                }
+            });
+
+            confirmNewScheduleButton?.addEventListener(
+                'click',
+                addScheduleFromQuickForm
+            );
+
+            [newScheduleName, newScheduleStart, newScheduleEnd].forEach(input => {
+                input?.addEventListener('input', clearNewScheduleError);
+            });
+
+            form?.addEventListener('submit', event => {
+                if (!validateSchedules()) {
+                    event.preventDefault();
+                    document.getElementById('errorHorarios')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                    return;
+                }
+
+                getScheduleCards().forEach(updateNextDay);
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'Creando escala...';
+                }
+            });
+
+            updateWeek();
+            updateSchedules();
+        })();
+    </script>
+}

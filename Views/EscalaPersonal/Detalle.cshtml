@@ -1,0 +1,1017 @@
+﻿@using System
+@using System.Linq
+@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.DetalleVM
+
+@{
+    ViewData["Title"] = $"Detalle {Model.Escala.Folio}";
+    Layout = "_Layout";
+
+    var asignaciones = Model.Grupos
+        .SelectMany(grupo => grupo.Celdas)
+        .SelectMany(celda => celda.Asignaciones)
+        .ToList();
+
+    var totalPersonas = asignaciones
+        .Select(x => x.PersonalID)
+        .Distinct()
+        .Count();
+
+    var estado = Model.Escala.Estado ?? string.Empty;
+    var puedeEditar = estado == EscalaVM.Estados.Borrador;
+    var puedeRegresar = estado == EscalaVM.Estados.Publicada;
+    var puedeCancelar = estado != EscalaVM.Estados.Cancelada;
+
+    var estadoClase = "ed-status-borrador";
+    if (estado == EscalaVM.Estados.Publicada)
+    {
+        estadoClase = "ed-status-publicada";
+    }
+    else if (estado == EscalaVM.Estados.Cancelada)
+    {
+        estadoClase = "ed-status-cancelada";
+    }
+}
+
+<style>
+    .escala-detalle {
+        --ed-primary: #17324d;
+        --ed-primary-dark: #0f263a;
+        --ed-primary-soft: #eaf0f5;
+        --ed-accent: #e87524;
+        --ed-accent-dark: #c95d13;
+        --ed-success: #238657;
+        --ed-danger: #c93d3d;
+        --ed-warning: #b46d00;
+        --ed-text: #243447;
+        --ed-muted: #6b7a8c;
+        --ed-border: #dfe6ed;
+        --ed-surface: #ffffff;
+        --ed-bg: #f5f7fa;
+        color: var(--ed-text);
+        padding: 1.35rem 0 2.5rem;
+    }
+
+        .escala-detalle *,
+        .escala-detalle *::before,
+        .escala-detalle *::after {
+            box-sizing: border-box;
+        }
+
+        .escala-detalle .ed-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .escala-detalle .ed-eyebrow {
+            color: var(--ed-accent);
+            font-size: .7rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin-bottom: .22rem;
+            text-transform: uppercase;
+        }
+
+        .escala-detalle .ed-title {
+            color: var(--ed-primary);
+            font-size: clamp(1.45rem, 2.5vw, 2rem);
+            font-weight: 780;
+            letter-spacing: -.025em;
+            margin: 0;
+        }
+
+        .escala-detalle .ed-subtitle {
+            color: var(--ed-muted);
+            font-size: .88rem;
+            margin: .35rem 0 0;
+        }
+
+        .escala-detalle .ed-header-actions,
+        .escala-detalle .ed-form-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            justify-content: flex-end;
+        }
+
+        .escala-detalle .ed-btn {
+            align-items: center;
+            border: 1px solid transparent;
+            border-radius: .58rem;
+            cursor: pointer;
+            display: inline-flex;
+            font-size: .8rem;
+            font-weight: 750;
+            gap: .38rem;
+            justify-content: center;
+            min-height: 39px;
+            padding: .5rem .78rem;
+            text-decoration: none;
+            transition: .16s ease;
+        }
+
+            .escala-detalle .ed-btn:hover {
+                transform: translateY(-1px);
+            }
+
+        .escala-detalle .ed-btn-primary {
+            background: var(--ed-accent);
+            border-color: var(--ed-accent);
+            color: #fff;
+        }
+
+            .escala-detalle .ed-btn-primary:hover {
+                background: var(--ed-accent-dark);
+                border-color: var(--ed-accent-dark);
+                color: #fff;
+            }
+
+        .escala-detalle .ed-btn-dark {
+            background: var(--ed-primary);
+            border-color: var(--ed-primary);
+            color: #fff;
+        }
+
+            .escala-detalle .ed-btn-dark:hover {
+                background: var(--ed-primary-dark);
+                color: #fff;
+            }
+
+        .escala-detalle .ed-btn-light {
+            background: var(--ed-surface);
+            border-color: var(--ed-border);
+            color: var(--ed-primary);
+        }
+
+            .escala-detalle .ed-btn-light:hover {
+                background: var(--ed-primary-soft);
+                color: var(--ed-primary);
+            }
+
+        .escala-detalle .ed-btn-danger {
+            background: #fff4f4;
+            border-color: #efcaca;
+            color: #a82f2f;
+        }
+
+            .escala-detalle .ed-btn-danger:hover {
+                background: #fde8e8;
+                color: #8b2525;
+            }
+
+        .escala-detalle .ed-btn-warning {
+            background: #fff6e7;
+            border-color: #f0d49b;
+            color: #8a5200;
+        }
+
+            .escala-detalle .ed-btn-warning:hover {
+                background: #ffefd1;
+                color: #714100;
+            }
+
+        .escala-detalle .ed-alert {
+            border: 0;
+            border-left: 4px solid;
+            border-radius: .65rem;
+            box-shadow: 0 5px 18px rgba(23, 50, 77, .06);
+            font-size: .82rem;
+            margin-bottom: .9rem;
+            padding: .78rem 1rem;
+        }
+
+        .escala-detalle .ed-alert-success {
+            background: #edf8f2;
+            border-left-color: var(--ed-success);
+            color: #17613e;
+        }
+
+        .escala-detalle .ed-alert-error {
+            background: #fff0f0;
+            border-left-color: var(--ed-danger);
+            color: #8b2929;
+        }
+
+        .escala-detalle .ed-summary {
+            background: var(--ed-primary);
+            border-radius: .86rem;
+            box-shadow: 0 10px 25px rgba(23, 50, 77, .15);
+            color: #fff;
+            display: grid;
+            gap: .85rem;
+            grid-template-columns: minmax(180px, 1.3fr) repeat(5, minmax(95px, .65fr));
+            margin-bottom: 1rem;
+            overflow: hidden;
+            padding: 1rem 1.15rem;
+            position: relative;
+        }
+
+            .escala-detalle .ed-summary::after {
+                background: var(--ed-accent);
+                content: "";
+                height: 90px;
+                opacity: .95;
+                position: absolute;
+                right: -45px;
+                top: -48px;
+                transform: rotate(38deg);
+                width: 100px;
+            }
+
+        .escala-detalle .ed-summary-main,
+        .escala-detalle .ed-summary-item {
+            min-width: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .escala-detalle .ed-summary-label {
+            color: #bcd0e3;
+            display: block;
+            font-size: .64rem;
+            font-weight: 750;
+            letter-spacing: .07em;
+            margin-bottom: .2rem;
+            text-transform: uppercase;
+        }
+
+        .escala-detalle .ed-summary-value {
+            color: #fff;
+            display: block;
+            font-size: .84rem;
+            font-weight: 760;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .escala-detalle .ed-summary-folio {
+            font-size: 1.15rem;
+            font-weight: 820;
+            letter-spacing: .01em;
+        }
+
+        .escala-detalle .ed-status {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .68rem;
+            font-weight: 800;
+            padding: .27rem .55rem;
+        }
+
+        .escala-detalle .ed-status-borrador {
+            background: #fff0d9;
+            color: #8a5200;
+        }
+
+        .escala-detalle .ed-status-publicada {
+            background: #e5f4eb;
+            color: #17613e;
+        }
+
+        .escala-detalle .ed-status-cancelada {
+            background: #fde8e8;
+            color: #8b2525;
+        }
+
+        .escala-detalle .ed-stats {
+            display: grid;
+            gap: .8rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin-bottom: 1rem;
+        }
+
+        .escala-detalle .ed-stat,
+        .escala-detalle .ed-panel {
+            background: var(--ed-surface);
+            border: 1px solid var(--ed-border);
+            border-radius: .78rem;
+            box-shadow: 0 6px 18px rgba(23, 50, 77, .04);
+        }
+
+        .escala-detalle .ed-stat {
+            padding: .92rem 1rem;
+        }
+
+        .escala-detalle .ed-stat-label {
+            color: var(--ed-muted);
+            font-size: .72rem;
+            font-weight: 760;
+            letter-spacing: .05em;
+            margin: 0 0 .2rem;
+            text-transform: uppercase;
+        }
+
+        .escala-detalle .ed-stat-value {
+            color: var(--ed-primary);
+            font-size: 1.45rem;
+            font-weight: 820;
+            line-height: 1.1;
+            margin: 0;
+        }
+
+        .escala-detalle .ed-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) 330px;
+        }
+
+        .escala-detalle .ed-panel {
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .escala-detalle .ed-panel-head {
+            align-items: center;
+            background: #fbfcfd;
+            border-bottom: 1px solid var(--ed-border);
+            display: flex;
+            gap: .75rem;
+            justify-content: space-between;
+            padding: .86rem 1rem;
+        }
+
+        .escala-detalle .ed-panel-title {
+            color: var(--ed-primary);
+            font-size: .93rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .escala-detalle .ed-panel-subtitle {
+            color: var(--ed-muted);
+            font-size: .76rem;
+            margin: .12rem 0 0;
+        }
+
+        .escala-detalle .ed-panel-body {
+            padding: 1rem;
+        }
+
+        .escala-detalle .ed-turnos {
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        }
+
+        .escala-detalle .ed-turno {
+            border: 1px solid var(--ed-border);
+            border-left: 5px solid var(--turno-color, var(--ed-accent));
+            border-radius: .66rem;
+            min-width: 0;
+            padding: .75rem .8rem;
+        }
+
+        .escala-detalle .ed-turno-name {
+            color: var(--ed-primary);
+            display: block;
+            font-size: .86rem;
+            font-weight: 800;
+            margin-bottom: .18rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .escala-detalle .ed-turno-time {
+            color: var(--ed-text);
+            display: block;
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+        .escala-detalle .ed-turno-meta {
+            color: var(--ed-muted);
+            display: block;
+            font-size: .72rem;
+            margin-top: .16rem;
+        }
+
+        .escala-detalle .ed-table-wrap {
+            overflow: auto;
+            width: 100%;
+        }
+
+        .escala-detalle .ed-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: .78rem;
+            min-width: 960px;
+            width: 100%;
+        }
+
+            .escala-detalle .ed-table th,
+            .escala-detalle .ed-table td {
+                border-bottom: 1px solid var(--ed-border);
+                border-right: 1px solid var(--ed-border);
+                padding: .62rem .65rem;
+                vertical-align: top;
+            }
+
+            .escala-detalle .ed-table th {
+                background: var(--ed-primary-soft);
+                color: var(--ed-primary);
+                font-size: .7rem;
+                font-weight: 820;
+                letter-spacing: .04em;
+                position: sticky;
+                text-transform: uppercase;
+                top: 0;
+                z-index: 1;
+            }
+
+                .escala-detalle .ed-table td:first-child,
+                .escala-detalle .ed-table th:first-child {
+                    border-left: 1px solid var(--ed-border);
+                }
+
+            .escala-detalle .ed-table tr:last-child td {
+                border-bottom: 1px solid var(--ed-border);
+            }
+
+        .escala-detalle .ed-row-title {
+            color: var(--ed-primary);
+            font-weight: 820;
+            white-space: nowrap;
+        }
+
+        .escala-detalle .ed-row-muted {
+            color: var(--ed-muted);
+            display: block;
+            font-size: .72rem;
+            margin-top: .1rem;
+        }
+
+        .escala-detalle .ed-cell-empty {
+            color: #a0abb8;
+            font-size: .74rem;
+        }
+
+        .escala-detalle .ed-person {
+            background: #fbfcfd;
+            border: 1px solid #e3e9ef;
+            border-left: 4px solid var(--person-color, var(--ed-accent));
+            border-radius: .58rem;
+            margin-bottom: .45rem;
+            padding: .5rem .55rem;
+        }
+
+            .escala-detalle .ed-person:last-child {
+                margin-bottom: 0;
+            }
+
+        .escala-detalle .ed-person-name {
+            color: var(--ed-primary);
+            display: block;
+            font-size: .78rem;
+            font-weight: 820;
+        }
+
+        .escala-detalle .ed-person-meta {
+            color: var(--ed-muted);
+            display: block;
+            font-size: .68rem;
+            margin-top: .12rem;
+        }
+
+        .escala-detalle .ed-list {
+            display: grid;
+            gap: .6rem;
+        }
+
+        .escala-detalle .ed-list-item {
+            border: 1px solid var(--ed-border);
+            border-radius: .62rem;
+            padding: .72rem .78rem;
+        }
+
+        .escala-detalle .ed-list-title {
+            color: var(--ed-primary);
+            font-size: .82rem;
+            font-weight: 820;
+            margin: 0;
+        }
+
+        .escala-detalle .ed-list-meta {
+            color: var(--ed-muted);
+            font-size: .72rem;
+            margin: .18rem 0 0;
+        }
+
+        .escala-detalle .ed-badge {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .68rem;
+            font-weight: 800;
+            padding: .23rem .5rem;
+        }
+
+        .escala-detalle .ed-badge-info {
+            background: #eef5fb;
+            color: #2d5879;
+        }
+
+        .escala-detalle .ed-badge-danger {
+            background: #fde8e8;
+            color: #8b2525;
+        }
+
+        .escala-detalle .ed-empty {
+            align-items: center;
+            background: #fbfcfd;
+            border: 1px dashed #cbd6e1;
+            border-radius: .72rem;
+            color: var(--ed-muted);
+            display: flex;
+            justify-content: center;
+            min-height: 105px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .escala-detalle .ed-comment {
+            background: #fbfcfd;
+            border: 1px solid var(--ed-border);
+            border-radius: .65rem;
+            color: var(--ed-text);
+            font-size: .82rem;
+            line-height: 1.45;
+            margin-top: .8rem;
+            padding: .78rem .85rem;
+        }
+
+    @@media (max-width: 1100px) {
+        .escala-detalle .ed-summary,
+        .escala-detalle .ed-stats,
+        .escala-detalle .ed-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .escala-detalle .ed-header {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .escala-detalle .ed-header-actions,
+        .escala-detalle .ed-form-actions {
+            justify-content: flex-start;
+        }
+    }
+
+    @@media print {
+        .navbar,
+        .sidebar,
+        .ed-header-actions,
+        .ed-form-actions,
+        .ed-print-hide {
+            display: none !important;
+        }
+
+        .escala-detalle {
+            padding: 0;
+        }
+
+            .escala-detalle .ed-panel,
+            .escala-detalle .ed-stat,
+            .escala-detalle .ed-summary {
+                box-shadow: none;
+            }
+
+            .escala-detalle .ed-grid {
+                display: block;
+            }
+    }
+</style>
+
+<div class="escala-detalle">
+    <div class="ed-header">
+        <div>
+            <div class="ed-eyebrow">Escala de personal</div>
+            <h1 class="ed-title">Detalle de la escala</h1>
+            <p class="ed-subtitle">
+                Consulta general de horarios, asignaciones, novedades e historial.
+            </p>
+        </div>
+
+        <div class="ed-header-actions ed-print-hide">
+            <a asp-action="Index" class="ed-btn ed-btn-light">Volver</a>
+
+            @if (puedeEditar)
+            {
+                <a asp-action="Editor"
+                   asp-route-id="@Model.Escala.EscalaID"
+                   class="ed-btn ed-btn-primary">
+                    Editar escala
+                </a>
+
+                <a asp-action="Novedades"
+                   asp-route-id="@Model.Escala.EscalaID"
+                   class="ed-btn ed-btn-light">
+                    Novedades
+                </a>
+            }
+
+            <button type="button"
+                    class="ed-btn ed-btn-dark"
+                    onclick="window.print()">
+                Imprimir
+            </button>
+        </div>
+    </div>
+
+    @if (TempData["Exito"] != null)
+    {
+        <div class="ed-alert ed-alert-success">@TempData["Exito"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="ed-alert ed-alert-error">@TempData["Error"]</div>
+    }
+
+    <section class="ed-summary">
+        <div class="ed-summary-main">
+            <span class="ed-summary-label">Folio</span>
+            <span class="ed-summary-value ed-summary-folio">@Model.Escala.Folio</span>
+        </div>
+        <div class="ed-summary-item">
+            <span class="ed-summary-label">Estado</span>
+            <span class="ed-status @estadoClase">@Model.Escala.Estado</span>
+        </div>
+        <div class="ed-summary-item">
+            <span class="ed-summary-label">Semana</span>
+            <span class="ed-summary-value">@Model.Escala.NumeroSemana / @Model.Escala.Anio</span>
+        </div>
+        <div class="ed-summary-item">
+            <span class="ed-summary-label">Periodo</span>
+            <span class="ed-summary-value">
+                @Model.Escala.FechaInicio.ToString("dd/MM/yyyy") - @Model.Escala.FechaFin.ToString("dd/MM/yyyy")
+            </span>
+        </div>
+        <div class="ed-summary-item">
+            <span class="ed-summary-label">Documento</span>
+            <span class="ed-summary-value">@Model.Escala.CodigoDocumento</span>
+        </div>
+        <div class="ed-summary-item">
+            <span class="ed-summary-label">Version</span>
+            <span class="ed-summary-value">@Model.Escala.VersionDocumento</span>
+        </div>
+    </section>
+
+    <section class="ed-stats">
+        <article class="ed-stat">
+            <p class="ed-stat-label">Asignaciones</p>
+            <p class="ed-stat-value">@asignaciones.Count</p>
+        </article>
+        <article class="ed-stat">
+            <p class="ed-stat-label">Personas</p>
+            <p class="ed-stat-value">@totalPersonas</p>
+        </article>
+        <article class="ed-stat">
+            <p class="ed-stat-label">Horarios</p>
+            <p class="ed-stat-value">@Model.Turnos.Count</p>
+        </article>
+        <article class="ed-stat">
+            <p class="ed-stat-label">Novedades</p>
+            <p class="ed-stat-value">@Model.Novedades.Count</p>
+        </article>
+    </section>
+
+    <div class="ed-grid">
+        <main>
+            <section class="ed-panel">
+                <div class="ed-panel-head">
+                    <div>
+                        <h2 class="ed-panel-title">Horarios de la escala</h2>
+                        <p class="ed-panel-subtitle">
+                            Horarios creados especificamente para esta semana.
+                        </p>
+                    </div>
+                </div>
+                <div class="ed-panel-body">
+                    @if (Model.Turnos.Any())
+                    {
+                        <div class="ed-turnos">
+                            @foreach (var turno in Model.Turnos.OrderBy(x => x.Orden))
+                            {
+                                <article class="ed-turno" style="--turno-color: @turno.Color;">
+                                    <span class="ed-turno-name">@turno.Nombre</span>
+                                    <span class="ed-turno-time">@turno.HorarioTexto</span>
+                                    <span class="ed-turno-meta">
+                                        @turno.TipoTurno
+                                        @if (turno.CruzaDiaSiguiente)
+                                        {
+                                            <text> · Termina al dia siguiente</text>
+                                        }
+                                        @if (turno.EsFlexible)
+                                        {
+                                            <text> · Flexible</text>
+                                        }
+                                    </span>
+                                </article>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ed-empty">
+                            Esta escala no tiene horarios configurados.
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="ed-panel">
+                <div class="ed-panel-head">
+                    <div>
+                        <h2 class="ed-panel-title">Programacion por area</h2>
+                        <p class="ed-panel-subtitle">
+                            Matriz de personal asignado por departamento, funcion, maquina y horario.
+                        </p>
+                    </div>
+                    @if (puedeEditar)
+                    {
+                        <a asp-action="Editor"
+                           asp-route-id="@Model.Escala.EscalaID"
+                           class="ed-btn ed-btn-primary ed-print-hide">
+                            Editar programacion
+                        </a>
+                    }
+                </div>
+                <div class="ed-panel-body">
+                    @if (Model.Grupos.Any() && Model.Turnos.Any())
+                    {
+                        <div class="ed-table-wrap">
+                            <table class="ed-table">
+                                <thead>
+                                    <tr>
+                                        <th>Departamento</th>
+                                        <th>Funcion / Maquina</th>
+                                        @foreach (var turno in Model.Turnos.OrderBy(x => x.Orden))
+                                        {
+                                            <th>@turno.Nombre</th>
+                                        }
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var grupo in Model.Grupos)
+                                    {
+                                        var totalGrupo = grupo.Celdas.Sum(x => x.TotalPersonas);
+                                        <tr>
+                                            <td>
+                                                <span class="ed-row-title">@grupo.NombreDepartamento</span>
+                                            </td>
+                                            <td>
+                                                <span class="ed-row-title">@grupo.NombreFuncion</span>
+                                                <span class="ed-row-muted">
+                                                    @(string.IsNullOrWhiteSpace(grupo.NombreMaquina)
+                                                        ? "Sin maquina"
+                                                        : grupo.NombreMaquina)
+                                                </span>
+                                            </td>
+                                            @foreach (var celda in grupo.Celdas.OrderBy(c => Model.Turnos.FirstOrDefault(t => t.EscalaTurnoID == c.EscalaTurnoID)?.Orden ?? 0))
+                                            {
+                                                <td>
+                                                    @if (celda.Asignaciones.Any())
+                                                    {
+                                                        foreach (var asignacion in celda.Asignaciones)
+                                                        {
+                                                            <div class="ed-person" style="--person-color: @asignacion.ColorTurno;">
+                                                                <span class="ed-person-name">@asignacion.NombrePersona</span>
+                                                                <span class="ed-person-meta">
+                                                                    @asignacion.NumeroEmpleado ·
+                                                                    @asignacion.FechaInicio.ToString("dd/MM") - @asignacion.FechaFin.ToString("dd/MM")
+                                                                </span>
+                                                                @if (!string.IsNullOrWhiteSpace(asignacion.Observaciones))
+                                                                {
+                                                                    <span class="ed-person-meta">@asignacion.Observaciones</span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="ed-cell-empty">Sin personal</span>
+                                                    }
+                                                </td>
+                                            }
+                                            <td>
+                                                <strong>@totalGrupo</strong>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ed-empty">
+                            Aun no hay programacion capturada para esta escala.
+                        </div>
+                    }
+                </div>
+            </section>
+        </main>
+
+        <aside>
+            <section class="ed-panel">
+                <div class="ed-panel-head">
+                    <div>
+                        <h2 class="ed-panel-title">Datos del documento</h2>
+                        <p class="ed-panel-subtitle">Informacion general de control.</p>
+                    </div>
+                </div>
+                <div class="ed-panel-body">
+                    <div class="ed-list">
+                        <div class="ed-list-item">
+                            <p class="ed-list-title">Elaborado por</p>
+                            <p class="ed-list-meta">
+                                @(string.IsNullOrWhiteSpace(Model.Escala.ElaboradoPorNombre)
+                                    ? "Sin dato"
+                                    : Model.Escala.ElaboradoPorNombre)
+                            </p>
+                        </div>
+                        <div class="ed-list-item">
+                            <p class="ed-list-title">Fecha de elaboracion</p>
+                            <p class="ed-list-meta">@Model.Escala.FechaElaboracion.ToString("dd/MM/yyyy")</p>
+                        </div>
+                        <div class="ed-list-item">
+                            <p class="ed-list-title">Periodo de trabajo</p>
+                            <p class="ed-list-meta">@Model.Escala.PeriodoTrabajo</p>
+                        </div>
+                        @if (Model.Escala.FechaPublicacion.HasValue)
+                        {
+                            <div class="ed-list-item">
+                                <p class="ed-list-title">Publicado por</p>
+                                <p class="ed-list-meta">
+                                    @(string.IsNullOrWhiteSpace(Model.Escala.PublicadoPorNombre)
+                                        ? "Sin dato"
+                                        : Model.Escala.PublicadoPorNombre)
+                                </p>
+                                <p class="ed-list-meta">
+                                    @Model.Escala.FechaPublicacion.Value.ToString("dd/MM/yyyy HH:mm")
+                                </p>
+                            </div>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.Escala.Observaciones))
+                    {
+                        <div class="ed-comment">
+                            <strong>Observaciones:</strong><br />
+                            @Model.Escala.Observaciones
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="ed-panel">
+                <div class="ed-panel-head">
+                    <div>
+                        <h2 class="ed-panel-title">Novedades</h2>
+                        <p class="ed-panel-subtitle">Movimientos registrados en la semana.</p>
+                    </div>
+                    @if (puedeEditar)
+                    {
+                        <a asp-action="Novedades"
+                           asp-route-id="@Model.Escala.EscalaID"
+                           class="ed-btn ed-btn-light ed-print-hide">
+                            Abrir
+                        </a>
+                    }
+                </div>
+                <div class="ed-panel-body">
+                    @if (Model.Novedades.Any())
+                    {
+                        <div class="ed-list">
+                            @foreach (var novedad in Model.Novedades)
+                            {
+                                var fechaFinal = novedad.FechaFin ?? novedad.FechaInicio;
+                                var badgeClass = novedad.TipoNovedad == EscalaVM.TiposNovedad.Baja
+                                    ? "ed-badge-danger"
+                                    : "ed-badge-info";
+
+                                <article class="ed-list-item">
+                                    <span class="ed-badge @badgeClass">@novedad.TipoNovedad</span>
+                                    <p class="ed-list-title" style="margin-top: .45rem;">
+                                        @novedad.NombrePersona
+                                    </p>
+                                    <p class="ed-list-meta">
+                                        @novedad.NumeroEmpleado ·
+                                        @novedad.FechaInicio.ToString("dd/MM")
+                                        @if (fechaFinal.Date != novedad.FechaInicio.Date)
+                                        {
+                                            <text> - @fechaFinal.ToString("dd/MM")</text>
+                                        }
+                                    </p>
+                                    @if (!string.IsNullOrWhiteSpace(novedad.Motivo))
+                                    {
+                                        <p class="ed-list-meta">@novedad.Motivo</p>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ed-empty">No hay novedades registradas.</div>
+                    }
+                </div>
+            </section>
+
+            <section class="ed-panel ed-print-hide">
+                <div class="ed-panel-head">
+                    <div>
+                        <h2 class="ed-panel-title">Control de estado</h2>
+                        <p class="ed-panel-subtitle">Publicacion y seguimiento del borrador.</p>
+                    </div>
+                </div>
+                <div class="ed-panel-body">
+                    <div class="ed-form-actions">
+                        @if (puedeEditar)
+                        {
+                            <form asp-action="Publicar" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="escalaID" value="@Model.Escala.EscalaID" />
+                                <input type="hidden" name="comentario" value="Publicacion desde detalle." />
+                                <button type="submit" class="ed-btn ed-btn-primary">
+                                    Publicar
+                                </button>
+                            </form>
+                        }
+
+                        @if (puedeRegresar)
+                        {
+                            <form asp-action="RegresarABorrador" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="escalaID" value="@Model.Escala.EscalaID" />
+                                <input type="hidden" name="comentario" value="Regreso a borrador desde detalle." />
+                                <button type="submit" class="ed-btn ed-btn-warning">
+                                    Regresar a borrador
+                                </button>
+                            </form>
+                        }
+
+                        @if (puedeCancelar)
+                        {
+                            <form asp-action="Cancelar"
+                                  method="post"
+                                  onsubmit="return confirm('¿Deseas cancelar esta escala?');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="escalaID" value="@Model.Escala.EscalaID" />
+                                <input type="hidden" name="comentario" value="Cancelacion desde detalle." />
+                                <button type="submit" class="ed-btn ed-btn-danger">
+                                    Cancelar
+                                </button>
+                            </form>
+                        }
+                    </div>
+                </div>
+            </section>
+
+            <section class="ed-panel">
+                <div class="ed-panel-head">
+                    <div>
+                        <h2 class="ed-panel-title">Historial</h2>
+                        <p class="ed-panel-subtitle">Ultimos movimientos de la escala.</p>
+                    </div>
+                </div>
+                <div class="ed-panel-body">
+                    @if (Model.Historial.Any())
+                    {
+                        <div class="ed-list">
+                            @foreach (var movimiento in Model.Historial)
+                            {
+                                <article class="ed-list-item">
+                                    <p class="ed-list-title">
+                                        @(string.IsNullOrWhiteSpace(movimiento.EstadoAnterior)
+                                            ? "Creacion"
+                                            : $"{movimiento.EstadoAnterior} -> {movimiento.EstadoNuevo}")
+                                    </p>
+                                    <p class="ed-list-meta">
+                                        @movimiento.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")
+                                        · @movimiento.NombreUsuario
+                                    </p>
+                                    @if (!string.IsNullOrWhiteSpace(movimiento.Comentario))
+                                    {
+                                        <p class="ed-list-meta">@movimiento.Comentario</p>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ed-empty">No hay historial disponible.</div>
+                    }
+                </div>
+            </section>
+        </aside>
+    </div>
+</div>
