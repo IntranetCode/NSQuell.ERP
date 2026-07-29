@@ -1,0 +1,853 @@
+﻿@model ERP.NSQuell.Models.Compras.BandejaComprasViewModel
+
+@{
+    ViewData["Title"] = "Bandeja Compras";
+}
+
+@section Styles {
+    <style>
+        :root {
+            --compras-text: #1f2937;
+            --compras-muted: #6b7280;
+            --compras-border: #e5e7eb;
+            --ns-blue: #0b4f8f;
+            --ns-blue-dark: #073763;
+            --ns-blue-soft: #eaf3fb;
+            --ns-orange: #ff7a00;
+            --ns-orange-dark: #e85d04;
+            --ns-orange-soft: #fff4e8;
+            --success-soft: #ecfdf5;
+            --success-text: #15803d;
+            --danger-soft: #fef2f2;
+            --danger-text: #b91c1c;
+            --warning-soft: #fff7ed;
+            --warning-text: #c2410c;
+            --info-soft: #eff6ff;
+            --info-text: #1d4ed8;
+            --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.07);
+        }
+
+        .bandeja-page {
+            color: var(--compras-text);
+        }
+
+        .alert-compras {
+            border-radius: 16px;
+            padding: 14px 16px;
+            border: 1px solid var(--compras-border);
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+        .alert-success-compras {
+            background: var(--success-soft);
+            color: #166534;
+            border-color: #bbf7d0;
+        }
+
+        .alert-error-compras {
+            background: var(--danger-soft);
+            color: #991b1b;
+            border-color: #fecaca;
+        }
+
+        .page-hero {
+            background: radial-gradient(circle at 90% 20%, rgba(255, 122, 0, 0.13), transparent 30%), linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid var(--compras-border);
+            border-radius: 24px;
+            padding: 28px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+            position: relative;
+        }
+
+            .page-hero::after {
+                content: "COM";
+                position: absolute;
+                right: 28px;
+                top: 4px;
+                font-size: 86px;
+                font-weight: 1000;
+                color: rgba(11, 79, 143, 0.05);
+                letter-spacing: -0.08em;
+            }
+
+        .page-chip {
+            display: inline-flex;
+            border-radius: 999px;
+            border: 1px solid #ffd2a3;
+            background: var(--ns-orange-soft);
+            color: var(--ns-orange-dark);
+            padding: 7px 12px;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+
+        .page-title {
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 1000;
+            margin: 0 0 8px 0;
+            color: var(--compras-text);
+            letter-spacing: -0.04em;
+        }
+
+        .page-subtitle {
+            color: var(--compras-muted);
+            font-size: 14px;
+            line-height: 1.7;
+            font-weight: 600;
+            max-width: 760px;
+            margin: 0;
+        }
+
+        .btn-compras-main,
+        .btn-compras-secondary,
+        .btn-compras-blue {
+            border-radius: 14px;
+            padding: 10px 15px;
+            text-decoration: none;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-compras-main {
+            background: linear-gradient(135deg, var(--ns-orange), var(--ns-orange-dark));
+            color: white;
+            box-shadow: 0 12px 26px rgba(255, 122, 0, 0.22);
+        }
+
+            .btn-compras-main:hover {
+                color: white;
+                transform: translateY(-2px);
+            }
+
+        .btn-compras-blue {
+            background: linear-gradient(135deg, var(--ns-blue), var(--ns-blue-dark));
+            color: white;
+            box-shadow: 0 12px 26px rgba(11, 79, 143, 0.18);
+        }
+
+            .btn-compras-blue:hover {
+                color: white;
+                transform: translateY(-2px);
+            }
+
+        .btn-compras-secondary {
+            background: white;
+            color: var(--ns-blue);
+            border-color: #cfe2f3;
+        }
+
+            .btn-compras-secondary:hover {
+                background: var(--ns-blue-soft);
+                color: var(--ns-blue-dark);
+                transform: translateY(-2px);
+            }
+
+        .summary-card {
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 20px;
+            padding: 18px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .summary-card::after {
+                content: "";
+                position: absolute;
+                right: -38px;
+                bottom: -38px;
+                width: 105px;
+                height: 105px;
+                border-radius: 999px;
+                background: rgba(255, 122, 0, 0.06);
+            }
+
+        .summary-label {
+            color: var(--compras-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            font-weight: 900;
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .summary-number {
+            color: var(--compras-text);
+            font-size: 31px;
+            font-weight: 1000;
+            line-height: 1;
+            position: relative;
+            z-index: 2;
+        }
+
+        .section-card {
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 24px;
+            padding: 18px;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 18px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 1000;
+            margin: 0;
+            color: var(--compras-text);
+        }
+
+        .section-subtitle {
+            font-size: 13px;
+            color: var(--compras-muted);
+            font-weight: 600;
+            margin: 5px 0 0 0;
+        }
+
+        .compras-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 10px;
+        }
+
+            .compras-table th {
+                color: var(--compras-muted);
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.10em;
+                padding: 0 12px 6px;
+                border: none;
+                white-space: nowrap;
+            }
+
+            .compras-table td {
+                background: #f9fafb;
+                border-top: 1px solid var(--compras-border);
+                border-bottom: 1px solid var(--compras-border);
+                color: #374151;
+                padding: 14px 12px;
+                font-size: 13px;
+                font-weight: 650;
+                vertical-align: middle;
+            }
+
+                .compras-table td:first-child {
+                    border-left: 1px solid var(--compras-border);
+                    border-radius: 16px 0 0 16px;
+                }
+
+                .compras-table td:last-child {
+                    border-right: 1px solid var(--compras-border);
+                    border-radius: 0 16px 16px 0;
+                }
+
+        .folio-text {
+            color: var(--ns-blue-dark);
+            font-weight: 1000;
+        }
+
+        .small-muted {
+            color: var(--compras-muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .badge-compras {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 900;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .badge-pendiente {
+            background: var(--warning-soft);
+            color: var(--warning-text);
+            border-color: #fed7aa;
+        }
+
+        .badge-revision {
+            background: var(--info-soft);
+            color: var(--info-text);
+            border-color: #bfdbfe;
+        }
+
+        .badge-aprobada {
+            background: var(--success-soft);
+            color: var(--success-text);
+            border-color: #bbf7d0;
+        }
+
+        .badge-rechazada {
+            background: var(--danger-soft);
+            color: var(--danger-text);
+            border-color: #fecaca;
+        }
+
+        .badge-cancelada {
+            background: #f3f4f6;
+            color: #4b5563;
+            border-color: #e5e7eb;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .btn-table-view,
+        .btn-table-action {
+            border-radius: 999px;
+            padding: 8px 13px;
+            background: white;
+            border: 1px solid #cfe2f3;
+            color: var(--ns-blue);
+            font-size: 12px;
+            text-decoration: none;
+            font-weight: 900;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+            .btn-table-view:hover {
+                background: var(--ns-blue);
+                border-color: var(--ns-blue);
+                color: white;
+            }
+
+        .btn-table-action {
+            border-color: #bbf7d0;
+            color: var(--success-text);
+        }
+
+            .btn-table-action:hover {
+                background: var(--success-soft);
+                color: var(--success-text);
+            }
+
+        .empty-state {
+            background: #f9fafb;
+            border: 1px dashed #d1d5db;
+            border-radius: 20px;
+            padding: 30px 20px;
+            text-align: center;
+            color: var(--compras-muted);
+            font-weight: 700;
+        }
+
+        .empty-title {
+            color: var(--compras-text);
+            font-size: 18px;
+            font-weight: 1000;
+            margin-bottom: 6px;
+        }
+
+        @@media (max-width: 767.98px) {
+            .page-hero,
+            .section-card {
+                padding: 18px;
+                border-radius: 20px;
+            }
+
+            .action-buttons {
+                justify-content: flex-start;
+            }
+
+            .btn-compras-main,
+            .btn-compras-secondary,
+            .btn-compras-blue {
+                width: 100%;
+            }
+        }
+    </style>
+}
+
+<div class="bandeja-page">
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert-compras alert-success-compras">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert-compras alert-error-compras">
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="erp-page-breadcrumb">
+        <a asp-controller="Compras" asp-action="Solicitudes" class="erp-btn-back">← Regresar</a>
+        <span>Inicio</span>
+        <span>›</span>
+        <span>Compras</span>
+        <span>›</span>
+        <strong>Bandeja Compras</strong>
+    </div>
+
+    <section class="page-hero">
+        <div class="row align-items-center g-4">
+            <div class="col-12 col-lg-8">
+                <div class="page-chip">Gestión operativa</div>
+
+                <h1 class="page-title">Bandeja Compras</h1>
+
+                <p class="page-subtitle">
+                    Administra solicitudes aprobadas, cotizaciones, órdenes de compra y seguimiento con proveedor.
+                </p>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="d-flex justify-content-lg-end gap-2 flex-wrap">
+                    <a asp-controller="Compras" asp-action="Solicitudes" class="btn-compras-secondary">
+                        Solicitudes
+                    </a>
+
+                    <a asp-controller="Compras" asp-action="Index" class="btn-compras-main">
+                        Panel compras
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">
+            <div class="summary-card">
+                <div class="summary-label">Para cotizar</div>
+                <div class="summary-number">@Model.TotalAprobadasParaCotizar</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="summary-card">
+                <div class="summary-label">Cotizando</div>
+                <div class="summary-number">@Model.TotalCotizando</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="summary-card">
+                <div class="summary-label">Para O.C.</div>
+                <div class="summary-number">@Model.TotalParaOrdenCompra</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="summary-card">
+                <div class="summary-label">O.C. generadas</div>
+                <div class="summary-number">@Model.TotalOrdenesGeneradas</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-card">
+        <div class="mb-3">
+            <h2 class="section-title">Solicitudes aprobadas para cotizar</h2>
+            <p class="section-subtitle">Solicitudes autorizadas por Dirección y listas para iniciar cotización.</p>
+        </div>
+
+        @if (Model.AprobadasParaCotizar != null && Model.AprobadasParaCotizar.Any())
+        {
+            <div class="table-responsive">
+                <table class="compras-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Área</th>
+                            <th>Prioridad</th>
+                            <th>Materiales</th>
+                            <th>Estatus</th>
+                            <th>Días</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.AprobadasParaCotizar)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="folio-text">@(item.Folio ?? "Sin folio")</span>
+                                    <div class="small-muted">@(item.TipoCompra ?? "-")</div>
+                                </td>
+                                <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(item.Departamento ?? "-")</td>
+                                <td>
+                                    <span class="badge-compras @GetPrioridadClass(item.Prioridad)">
+                                        @(item.Prioridad ?? "-")
+                                    </span>
+                                </td>
+                                <td>@item.TotalMateriales</td>
+                                <td>
+                                    <span class="badge-compras @GetBadgeClass(item.EstatusID)">
+                                        @(item.EstatusNombre ?? "Sin estatus")
+                                    </span>
+                                </td>
+                                <td>@item.DiasEnEstatus</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a asp-controller="Compras"
+                                           asp-action="DetalleSolicitud"
+                                           asp-route-id="@item.SolicitudCompraID"
+                                           class="btn-table-view">
+                                            Ver detalle
+                                        </a>
+
+                                        <form asp-controller="Compras"
+                                              asp-action="IniciarCotizacion"
+                                              asp-route-id="@item.SolicitudCompraID"
+                                              method="post"
+                                              onsubmit="return confirm('¿Iniciar cotización de esta solicitud?');">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn-table-action">
+                                                Iniciar cotización
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-title">No hay solicitudes para cotizar</div>
+                Las solicitudes aparecerán aquí cuando Dirección las apruebe.
+            </div>
+        }
+    </section>
+
+    <section class="section-card">
+        <div class="mb-3">
+            <h2 class="section-title">Solicitudes en cotización</h2>
+            <p class="section-subtitle">Solicitudes donde Compras ya inició el proceso de cotización.</p>
+        </div>
+
+        @if (Model.Cotizando != null && Model.Cotizando.Any())
+        {
+            <div class="table-responsive">
+                <table class="compras-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Área</th>
+                            <th>Prioridad</th>
+                            <th>Materiales</th>
+                            <th>Cotizaciones</th>
+                            <th>Estatus</th>
+                            <th>Días</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Cotizando)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="folio-text">@(item.Folio ?? "Sin folio")</span>
+                                    <div class="small-muted">@(item.TipoCompra ?? "-")</div>
+                                </td>
+                                <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(item.Departamento ?? "-")</td>
+                                <td>
+                                    <span class="badge-compras @GetPrioridadClass(item.Prioridad)">
+                                        @(item.Prioridad ?? "-")
+                                    </span>
+                                </td>
+                                <td>@item.TotalMateriales</td>
+                                <td>@item.TotalCotizaciones</td>
+                                <td>
+                                    <span class="badge-compras @GetBadgeClass(item.EstatusID)">
+                                        @(item.EstatusNombre ?? "Sin estatus")
+                                    </span>
+                                </td>
+                                <td>@item.DiasEnEstatus</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a asp-controller="Compras"
+                                           asp-action="DetalleSolicitud"
+                                           asp-route-id="@item.SolicitudCompraID"
+                                           class="btn-table-view">
+                                            Cotizar / revisar
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-title">No hay solicitudes en cotización</div>
+                Aquí aparecerán las solicitudes que ya fueron tomadas por Compras.
+            </div>
+        }
+    </section>
+
+    <section class="section-card">
+        <div class="mb-3">
+            <h2 class="section-title">Aprobadas para orden de compra</h2>
+            <p class="section-subtitle">Cotizaciones autorizadas por Dirección y listas para generar O.C.</p>
+        </div>
+
+        @if (Model.ParaOrdenCompra != null && Model.ParaOrdenCompra.Any())
+        {
+            <div class="table-responsive">
+                <table class="compras-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Área</th>
+                            <th>Prioridad</th>
+                            <th>Cotizaciones</th>
+                            <th>Estatus</th>
+                            <th>Días</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.ParaOrdenCompra)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="folio-text">@(item.Folio ?? "Sin folio")</span>
+                                    <div class="small-muted">@(item.TipoCompra ?? "-")</div>
+                                </td>
+                                <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(item.Departamento ?? "-")</td>
+                                <td>
+                                    <span class="badge-compras @GetPrioridadClass(item.Prioridad)">
+                                        @(item.Prioridad ?? "-")
+                                    </span>
+                                </td>
+                                <td>@item.TotalCotizaciones</td>
+                                <td>
+                                    <span class="badge-compras @GetBadgeClass(item.EstatusID)">
+                                        @(item.EstatusNombre ?? "Sin estatus")
+                                    </span>
+                                </td>
+                                <td>@item.DiasEnEstatus</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a asp-controller="Compras"
+                                           asp-action="DetalleSolicitud"
+                                           asp-route-id="@item.SolicitudCompraID"
+                                           class="btn-table-view">
+                                            Generar O.C.
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-title">No hay solicitudes listas para O.C.</div>
+                Cuando Dirección autorice una cotización aparecerá en esta sección.
+            </div>
+        }
+    </section>
+
+    <section class="section-card">
+        <div class="mb-3">
+            <h2 class="section-title">Órdenes generadas / proveedor</h2>
+            <p class="section-subtitle">Solicitudes con O.C. generada o enviada al proveedor.</p>
+        </div>
+
+        @if (Model.OrdenesGeneradas != null && Model.OrdenesGeneradas.Any())
+        {
+            <div class="table-responsive">
+                <table class="compras-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Área</th>
+                            <th>Prioridad</th>
+                            <th>Estatus</th>
+                            <th>Días</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.OrdenesGeneradas)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="folio-text">@(item.Folio ?? "Sin folio")</span>
+                                    <div class="small-muted">@(item.TipoCompra ?? "-")</div>
+                                </td>
+                                <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(item.Departamento ?? "-")</td>
+                                <td>
+                                    <span class="badge-compras @GetPrioridadClass(item.Prioridad)">
+                                        @(item.Prioridad ?? "-")
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge-compras @GetBadgeClass(item.EstatusID)">
+                                        @(item.EstatusNombre ?? "Sin estatus")
+                                    </span>
+                                </td>
+                                <td>@item.DiasEnEstatus</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a asp-controller="Compras"
+                                           asp-action="DetalleSolicitud"
+                                           asp-route-id="@item.SolicitudCompraID"
+                                           class="btn-table-view">
+                                            Ver seguimiento
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-title">No hay órdenes generadas</div>
+                Esta sección se llenará cuando Compras genere órdenes de compra.
+            </div>
+        }
+    </section>
+
+    <section class="section-card">
+        <div class="mb-3">
+            <h2 class="section-title">Histórico Compras</h2>
+            <p class="section-subtitle">Solicitudes que ya salieron de la operación principal de Compras.</p>
+        </div>
+
+        @if (Model.Historico != null && Model.Historico.Any())
+        {
+            <div class="table-responsive">
+                <table class="compras-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Área</th>
+                            <th>Prioridad</th>
+                            <th>Estatus</th>
+                            <th>Días</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Historico)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="folio-text">@(item.Folio ?? "Sin folio")</span>
+                                    <div class="small-muted">@(item.TipoCompra ?? "-")</div>
+                                </td>
+                                <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(item.Departamento ?? "-")</td>
+                                <td>
+                                    <span class="badge-compras @GetPrioridadClass(item.Prioridad)">
+                                        @(item.Prioridad ?? "-")
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge-compras @GetBadgeClass(item.EstatusID)">
+                                        @(item.EstatusNombre ?? "Sin estatus")
+                                    </span>
+                                </td>
+                                <td>@item.DiasEnEstatus</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a asp-controller="Compras"
+                                           asp-action="DetalleSolicitud"
+                                           asp-route-id="@item.SolicitudCompraID"
+                                           class="btn-table-view">
+                                            Ver detalle
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-title">No hay histórico para mostrar</div>
+                Aún no existen solicitudes avanzadas en el flujo.
+            </div>
+        }
+    </section>
+</div>
+
+@functions {
+    private string GetBadgeClass(int estatusId)
+    {
+        return estatusId switch
+        {
+            1 => "badge-pendiente",
+            2 => "badge-revision",
+            3 => "badge-revision",
+            4 => "badge-revision",
+            5 => "badge-aprobada",
+            6 => "badge-revision",
+            7 => "badge-revision",
+            8 => "badge-pendiente",
+            9 => "badge-revision",
+            10 => "badge-aprobada",
+            11 => "badge-rechazada",
+            12 => "badge-cancelada",
+            _ => "badge-pendiente"
+        };
+    }
+
+    private string GetPrioridadClass(string? prioridad)
+    {
+        return prioridad switch
+        {
+            "Urgente" => "badge-rechazada",
+            "Alta" => "badge-pendiente",
+            "Normal" => "badge-revision",
+            "Baja" => "badge-cancelada",
+            _ => "badge-cancelada"
+        };
+    }
+}

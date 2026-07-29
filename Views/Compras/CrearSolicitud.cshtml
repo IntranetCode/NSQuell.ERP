@@ -1,0 +1,899 @@
+﻿@model ERP.NSQuell.Models.Compras.CrearSolicitudViewModel
+
+@{
+    ViewData["Title"] = "Nueva solicitud de compra";
+
+    var materialesJson = System.Text.Json.JsonSerializer.Serialize(
+        Model.MaterialesCatalogo.Select(m => new
+        {
+            value = m.Value,
+            text = m.Text
+        })
+    );
+}
+
+@section Styles {
+    <style>
+        :root {
+            --compras-white: #ffffff;
+            --compras-text: #1f2937;
+            --compras-muted: #6b7280;
+            --compras-border: #e5e7eb;
+            --ns-blue: #0b4f8f;
+            --ns-blue-dark: #073763;
+            --ns-blue-soft: #eaf3fb;
+            --ns-orange: #ff7a00;
+            --ns-orange-dark: #e85d04;
+            --ns-orange-soft: #fff4e8;
+            --success-soft: #ecfdf5;
+            --success-text: #15803d;
+            --danger-soft: #fef2f2;
+            --danger-text: #b91c1c;
+            --warning-soft: #fff7ed;
+            --warning-text: #c2410c;
+            --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.07);
+        }
+
+        .crear-solicitud-page {
+            color: var(--compras-text);
+        }
+
+        .page-hero {
+            background: radial-gradient(circle at 90% 20%, rgba(255, 122, 0, 0.13), transparent 30%), linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid var(--compras-border);
+            border-radius: 24px;
+            padding: 28px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+            position: relative;
+        }
+
+            .page-hero::after {
+                content: "SC";
+                position: absolute;
+                right: 28px;
+                top: 4px;
+                font-size: 86px;
+                font-weight: 1000;
+                color: rgba(11, 79, 143, 0.05);
+                letter-spacing: -0.08em;
+            }
+
+        .page-chip {
+            display: inline-flex;
+            border-radius: 999px;
+            border: 1px solid #ffd2a3;
+            background: var(--ns-orange-soft);
+            color: var(--ns-orange-dark);
+            padding: 7px 12px;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+
+        .page-title {
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 1000;
+            margin: 0 0 8px 0;
+            color: var(--compras-text);
+            letter-spacing: -0.04em;
+        }
+
+        .page-subtitle {
+            color: var(--compras-muted);
+            font-size: 14px;
+            line-height: 1.7;
+            font-weight: 600;
+            max-width: 760px;
+            margin: 0;
+        }
+
+        .form-card {
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 24px;
+            padding: 22px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .form-section-title {
+            font-size: 20px;
+            font-weight: 1000;
+            margin: 0;
+            color: var(--compras-text);
+            letter-spacing: -0.03em;
+        }
+
+        .form-section-subtitle {
+            font-size: 13px;
+            color: var(--compras-muted);
+            font-weight: 600;
+            margin: 5px 0 0 0;
+        }
+
+        .form-label {
+            font-size: 12px;
+            font-weight: 900;
+            color: var(--compras-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 14px;
+            border-color: var(--compras-border);
+            padding: 11px 14px;
+            font-weight: 600;
+            color: var(--compras-text);
+        }
+
+            .form-control:focus,
+            .form-select:focus {
+                border-color: var(--ns-blue);
+                box-shadow: 0 0 0 0.18rem rgba(11, 79, 143, 0.12);
+            }
+
+            .form-control[readonly] {
+                background: #f3f6fa;
+                color: #4b5563;
+                cursor: not-allowed;
+            }
+
+        textarea.form-control {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        .text-danger {
+            font-size: 12px;
+            font-weight: 700;
+            margin-top: 5px;
+            display: block;
+        }
+
+        .validation-summary-errors {
+            background: var(--danger-soft);
+            color: var(--danger-text);
+            border: 1px solid #fecaca;
+            border-radius: 16px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+            .validation-summary-errors ul {
+                margin-bottom: 0;
+            }
+
+        .material-card {
+            background: #f9fafb;
+            border: 1px solid var(--compras-border);
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 14px;
+            position: relative;
+        }
+
+        .material-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .material-title {
+            font-size: 15px;
+            font-weight: 1000;
+            color: var(--ns-blue-dark);
+            margin: 0;
+        }
+
+        .material-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            background: var(--ns-blue-soft);
+            color: var(--ns-blue);
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 900;
+            border: 1px solid #cfe2f3;
+        }
+
+        .stock-hint {
+            font-size: 12px;
+            color: var(--compras-muted);
+            font-weight: 700;
+            margin-top: 7px;
+        }
+
+        .stock-warning {
+            display: none;
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: var(--warning-soft);
+            color: var(--warning-text);
+            border: 1px solid #fed7aa;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+            .stock-warning.is-visible {
+                display: block;
+            }
+
+        .form-check-input {
+            border-radius: 6px;
+        }
+
+            .form-check-input:checked {
+                background-color: var(--ns-orange);
+                border-color: var(--ns-orange);
+            }
+
+        .form-check-label {
+            font-weight: 700;
+            color: var(--compras-muted);
+            font-size: 13px;
+        }
+
+        .btn-compras-main,
+        .btn-compras-secondary,
+        .btn-compras-danger,
+        .btn-compras-light {
+            border-radius: 14px;
+            padding: 10px 15px;
+            text-decoration: none;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-compras-main {
+            background: linear-gradient(135deg, var(--ns-orange), var(--ns-orange-dark));
+            color: white;
+            box-shadow: 0 12px 26px rgba(255, 122, 0, 0.22);
+        }
+
+            .btn-compras-main:hover {
+                color: white;
+                transform: translateY(-2px);
+                box-shadow: 0 16px 32px rgba(255, 122, 0, 0.28);
+            }
+
+        .btn-compras-secondary {
+            background: white;
+            color: var(--ns-blue);
+            border-color: #cfe2f3;
+        }
+
+            .btn-compras-secondary:hover {
+                background: var(--ns-blue-soft);
+                color: var(--ns-blue-dark);
+                transform: translateY(-2px);
+            }
+
+        .btn-compras-danger {
+            background: white;
+            color: var(--danger-text);
+            border-color: #fecaca;
+        }
+
+            .btn-compras-danger:hover {
+                background: var(--danger-soft);
+                color: var(--danger-text);
+            }
+
+        .btn-compras-light {
+            background: #f9fafb;
+            color: var(--compras-text);
+            border-color: var(--compras-border);
+        }
+
+            .btn-compras-light:hover {
+                background: white;
+                color: var(--ns-blue);
+                border-color: #cfe2f3;
+            }
+
+        .actions-footer {
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 22px;
+            padding: 18px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+            position: sticky;
+            bottom: 12px;
+            z-index: 50;
+        }
+
+        .help-box {
+            background: var(--ns-blue-soft);
+            color: var(--ns-blue-dark);
+            border: 1px solid #cfe2f3;
+            border-radius: 18px;
+            padding: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.6;
+        }
+
+            .help-box strong {
+                font-weight: 1000;
+            }
+
+        @@media (max-width: 767.98px) {
+            .page-hero,
+            .form-card,
+            .actions-footer {
+                padding: 18px;
+                border-radius: 20px;
+            }
+
+            .actions-footer {
+                position: static;
+            }
+
+            .btn-compras-main,
+            .btn-compras-secondary,
+            .btn-compras-danger,
+            .btn-compras-light {
+                width: 100%;
+            }
+        }
+    </style>
+}
+
+<div class="crear-solicitud-page">
+
+    <div class="erp-page-breadcrumb">
+        <a href="javascript:history.back()" class="erp-btn-back">← Regresar</a>
+        <span>Inicio</span>
+        <span>›</span>
+        <span>Compras</span>
+        <span>›</span>
+        <strong>Nueva solicitud</strong>
+    </div>
+
+    <section class="page-hero">
+        <div class="row align-items-center g-4">
+            <div class="col-12 col-lg-8">
+                <div class="page-chip">Registro de solicitud</div>
+
+                <h1 class="page-title">Nueva solicitud de compra</h1>
+
+                <p class="page-subtitle">
+                    Registra la necesidad de compra con base en los materiales existentes en el catálogo.
+                    El sistema generará automáticamente el folio de la solicitud.
+                </p>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="help-box">
+                    <strong>Flujo actual:</strong><br />
+                    La solicitud se registra como origen <strong>Almacén</strong>. Selecciona el tipo de compra y el área que requiere el material o concepto.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <form asp-controller="Compras" asp-action="CrearSolicitud" method="post" id="formCrearSolicitud">
+        @Html.AntiForgeryToken()
+
+        <input type="hidden" asp-for="OrigenSolicitud" value="Almacen" />
+        <input type="hidden" asp-for="AlmacenID" value="" />
+        <input type="hidden" asp-for="PedidoClienteReferencia" value="" />
+
+        <div asp-validation-summary="ModelOnly"></div>
+
+        <section class="form-card">
+            <div class="mb-4">
+                <h2 class="form-section-title">Datos generales</h2>
+                <p class="form-section-subtitle">
+                    Información principal de la solicitud.
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <label asp-for="TipoCompra" class="form-label">Tipo de compra</label>
+                    <select asp-for="TipoCompra" asp-items="Model.TiposCompra" class="form-select">
+                        <option value="">Seleccione el tipo de compra</option>
+                    </select>
+                    <span asp-validation-for="TipoCompra" class="text-danger"></span>
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label asp-for="DepartamentoID" class="form-label">Área que requiere la compra</label>
+                    <select asp-for="DepartamentoID" asp-items="Model.Departamentos" class="form-select"></select>
+                    <span asp-validation-for="DepartamentoID" class="text-danger"></span>
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label asp-for="Prioridad" class="form-label">Prioridad</label>
+                    <select asp-for="Prioridad" asp-items="Model.Prioridades" class="form-select">
+                        <option value="">Seleccione prioridad</option>
+                    </select>
+                    <span asp-validation-for="Prioridad" class="text-danger"></span>
+                </div>
+
+                <div class="col-12">
+                    <label asp-for="Motivo" class="form-label">Motivo de la solicitud</label>
+                    <textarea asp-for="Motivo" class="form-control" placeholder="Describe por qué se requiere la compra..."></textarea>
+                    <span asp-validation-for="Motivo" class="text-danger"></span>
+                </div>
+
+                <div class="col-12">
+                    <label asp-for="Observaciones" class="form-label">Observaciones generales</label>
+                    <textarea asp-for="Observaciones" class="form-control" placeholder="Comentarios adicionales para Compras..."></textarea>
+                    <span asp-validation-for="Observaciones" class="text-danger"></span>
+                </div>
+            </div>
+        </section>
+
+        <section class="form-card">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+                <div>
+                    <h2 class="form-section-title">Materiales / conceptos solicitados</h2>
+                    <p class="form-section-subtitle">
+                        Selecciona materiales registrados en el catálogo. El stock se carga automáticamente cuando exista movimiento de almacén.
+                    </p>
+                </div>
+
+                <button type="button" class="btn-compras-secondary" id="btnAgregarMaterial">
+                    + Agregar material
+                </button>
+            </div>
+
+            <div id="materialesContainer">
+                @if (Model.Materiales != null && Model.Materiales.Any())
+                {
+                    for (int i = 0; i < Model.Materiales.Count; i++)
+                    {
+                        <div class="material-card" data-material-index="@i">
+                            <div class="material-header">
+                                <div>
+                                    <span class="material-badge">Material #@(i + 1)</span>
+                                    <h3 class="material-title mt-2">Detalle del material / concepto</h3>
+                                </div>
+
+                                <button type="button" class="btn-compras-danger btnEliminarMaterial">
+                                    Eliminar
+                                </button>
+                            </div>
+
+                            <input type="hidden" name="Materiales[@i].SolicitudDetalleID" value="@Model.Materiales[i].SolicitudDetalleID" />
+
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label">Material</label>
+                                    <select name="Materiales[@i].ProductoID" class="form-select material-select">
+                                        @foreach (var material in Model.MaterialesCatalogo)
+                                        {
+                                            if (Model.Materiales[i].ProductoID?.ToString() == material.Value)
+                                            {
+                                                <option value="@material.Value" selected>@material.Text</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@material.Value">@material.Text</option>
+                                            }
+                                        }
+                                    </select>
+                                    <span class="stock-hint">
+                                        Selecciona un material para cargar código, unidad y stock cuando exista información disponible.
+                                    </span>
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <label class="form-label">Código</label>
+                                    <input name="Materiales[@i].CodigoMaterial"
+                                           value="@Model.Materiales[i].CodigoMaterial"
+                                           class="form-control codigo-material"
+                                           readonly />
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <label class="form-label">Unidad</label>
+                                    <input name="Materiales[@i].UnidadMedida"
+                                           value="@Model.Materiales[i].UnidadMedida"
+                                           class="form-control unidad-material"
+                                           readonly />
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <label class="form-label">Stock actual</label>
+                                    <input name="Materiales[@i].StockActual"
+                                           value="@Model.Materiales[i].StockActual"
+                                           class="form-control stock-actual"
+                                           readonly />
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <label class="form-label">Stock mínimo</label>
+                                    <input name="Materiales[@i].StockMinimo"
+                                           value="@Model.Materiales[i].StockMinimo"
+                                           class="form-control stock-minimo"
+                                           readonly />
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <label class="form-label">Cantidad solicitada</label>
+                                    <input name="Materiales[@i].CantidadSolicitada"
+                                           value="@Model.Materiales[i].CantidadSolicitada"
+                                           type="number"
+                                           step="0.0001"
+                                           min="0"
+                                           class="form-control cantidad-solicitada"
+                                           placeholder="0" />
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <label class="form-label">Fecha requerida</label>
+                                    <input name="Materiales[@i].FechaRequerida"
+                                           value="@(Model.Materiales[i].FechaRequerida?.ToString("yyyy-MM-dd"))"
+                                           type="date"
+                                           class="form-control" />
+                                </div>
+
+                                <div class="col-12 col-md-6 col-lg-3 d-flex align-items-end">
+                                    <div class="form-check mb-2">
+                                        <input type="hidden" name="Materiales[@i].AceptaSustituto" value="false" />
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               name="Materiales[@i].AceptaSustituto"
+                                               value="true"
+                                        @(Model.Materiales[i].AceptaSustituto ? "checked" : "") />
+                                        <label class="form-check-label">
+                                            Acepta sustituto
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <div class="stock-warning"></div>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label">Observaciones del material / concepto</label>
+                                    <textarea name="Materiales[@i].Observaciones"
+                                              class="form-control"
+                                              placeholder="Notas específicas del material o concepto...">@Model.Materiales[i].Observaciones</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div id="sinMateriales" class="help-box mt-3 d-none">
+                No hay materiales agregados. Presiona <strong>Agregar material</strong> para capturar el primero.
+            </div>
+        </section>
+
+        <div class="actions-footer">
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-lg-6">
+                    <div class="form-section-subtitle">
+                        Al guardar, la solicitud quedará con estatus <strong>Pendiente</strong>.
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-6">
+                    <div class="d-flex justify-content-lg-end gap-2 flex-wrap">
+                        <a asp-controller="Compras" asp-action="Solicitudes" class="btn-compras-light">
+                            Cancelar
+                        </a>
+
+                        <button type="submit" class="btn-compras-main">
+                            Guardar solicitud
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        const materialesCatalogo = @Html.Raw(materialesJson);
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const container = document.getElementById('materialesContainer');
+            const btnAgregar = document.getElementById('btnAgregarMaterial');
+            const sinMateriales = document.getElementById('sinMateriales');
+
+            function construirOptionsMateriales() {
+                return materialesCatalogo.map(item => {
+                    const value = item.value ?? '';
+                    const text = item.text ?? '';
+                    return `<option value="${escapeHtml(value)}">${escapeHtml(text)}</option>`;
+                }).join('');
+            }
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+            }
+
+            function actualizarIndices() {
+                const cards = container.querySelectorAll('.material-card');
+
+                cards.forEach((card, index) => {
+                    card.dataset.materialIndex = index;
+
+                    const badge = card.querySelector('.material-badge');
+                    if (badge) {
+                        badge.textContent = `Material #${index + 1}`;
+                    }
+
+                    card.querySelectorAll('input, textarea, select').forEach(input => {
+                        if (!input.name) return;
+                        input.name = input.name.replace(/Materiales\[\d+\]/g, `Materiales[${index}]`);
+                    });
+                });
+
+                if (sinMateriales) {
+                    sinMateriales.classList.toggle('d-none', cards.length > 0);
+                }
+            }
+
+            async function cargarDatosMaterial(select) {
+                const materialId = select.value;
+                const card = select.closest('.material-card');
+
+                const codigoInput = card.querySelector('.codigo-material');
+                const unidadInput = card.querySelector('.unidad-material');
+                const stockActualInput = card.querySelector('.stock-actual');
+                const stockMinimoInput = card.querySelector('.stock-minimo');
+                const warningBox = card.querySelector('.stock-warning');
+
+                codigoInput.value = '';
+                unidadInput.value = '';
+                stockActualInput.value = '';
+                stockMinimoInput.value = '';
+
+                warningBox.textContent = '';
+                warningBox.classList.remove('is-visible');
+
+                if (!materialId) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/Compras/ObtenerMaterial?materialId=${encodeURIComponent(materialId)}`);
+                    const data = await response.json();
+
+                    if (!data.ok) {
+                        alert(data.mensaje || 'No se encontró información del material.');
+                        return;
+                    }
+
+                    codigoInput.value = data.codigoMaterial || '';
+                    unidadInput.value = data.unidad || '';
+                    stockActualInput.value = data.stockActual ?? 0;
+                    stockMinimoInput.value = data.stockMinimo ?? 0;
+
+                    validarStockCard(card);
+                } catch (error) {
+                    console.error(error);
+                    alert('Ocurrió un error al consultar el material.');
+                }
+            }
+
+            function validarStockCard(card) {
+                const stockActualInput = card.querySelector('.stock-actual');
+                const stockMinimoInput = card.querySelector('.stock-minimo');
+                const cantidadInput = card.querySelector('.cantidad-solicitada');
+                const warningBox = card.querySelector('.stock-warning');
+
+                const stockActual = parseFloat(stockActualInput.value || '0');
+                const stockMinimo = parseFloat(stockMinimoInput.value || '0');
+                const cantidad = parseFloat(cantidadInput.value || '0');
+
+                warningBox.textContent = '';
+                warningBox.classList.remove('is-visible');
+
+                if (stockMinimo > 0 && stockActual <= stockMinimo) {
+                    warningBox.textContent = 'El material está en o por debajo del stock mínimo. La solicitud se encuentra justificada por nivel de inventario.';
+                    warningBox.classList.add('is-visible');
+                    return;
+                }
+
+                if (cantidad > 0 && cantidad > stockActual) {
+                    warningBox.textContent = 'La cantidad solicitada es mayor al stock disponible actual.';
+                    warningBox.classList.add('is-visible');
+                }
+            }
+
+            function crearMaterialCard(index) {
+                const div = document.createElement('div');
+                div.className = 'material-card';
+                div.dataset.materialIndex = index;
+
+                div.innerHTML = `
+                    <div class="material-header">
+                        <div>
+                            <span class="material-badge">Material #${index + 1}</span>
+                            <h3 class="material-title mt-2">Detalle del material / concepto</h3>
+                        </div>
+
+                        <button type="button" class="btn-compras-danger btnEliminarMaterial">
+                            Eliminar
+                        </button>
+                    </div>
+
+                    <input type="hidden" name="Materiales[${index}].SolicitudDetalleID" value="0" />
+
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Material</label>
+                            <select name="Materiales[${index}].ProductoID"
+                                    class="form-select material-select">
+                                ${construirOptionsMateriales()}
+                            </select>
+                            <span class="stock-hint">
+                                Selecciona un material para cargar código, unidad y stock cuando exista información disponible.
+                            </span>
+                        </div>
+
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label">Código</label>
+                            <input name="Materiales[${index}].CodigoMaterial"
+                                   class="form-control codigo-material"
+                                   readonly />
+                        </div>
+
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label">Unidad</label>
+                            <input name="Materiales[${index}].UnidadMedida"
+                                   class="form-control unidad-material"
+                                   readonly />
+                        </div>
+
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label">Stock actual</label>
+                            <input name="Materiales[${index}].StockActual"
+                                   class="form-control stock-actual"
+                                   readonly />
+                        </div>
+
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label">Stock mínimo</label>
+                            <input name="Materiales[${index}].StockMinimo"
+                                   class="form-control stock-minimo"
+                                   readonly />
+                        </div>
+
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label">Cantidad solicitada</label>
+                            <input name="Materiales[${index}].CantidadSolicitada"
+                                   type="number"
+                                   step="0.0001"
+                                   min="0"
+                                   class="form-control cantidad-solicitada"
+                                   placeholder="0" />
+                        </div>
+
+                        <div class="col-12 col-md-6 col-lg-3">
+                            <label class="form-label">Fecha requerida</label>
+                            <input name="Materiales[${index}].FechaRequerida"
+                                   type="date"
+                                   class="form-control" />
+                        </div>
+
+                        <div class="col-12 col-md-6 col-lg-3 d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                <input type="hidden" name="Materiales[${index}].AceptaSustituto" value="false" />
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="Materiales[${index}].AceptaSustituto"
+                                       value="true" />
+                                <label class="form-check-label">
+                                    Acepta sustituto
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="stock-warning"></div>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Observaciones del material / concepto</label>
+                            <textarea name="Materiales[${index}].Observaciones"
+                                      class="form-control"
+                                      placeholder="Notas específicas del material o concepto..."></textarea>
+                        </div>
+                    </div>
+                `;
+
+                return div;
+            }
+
+            btnAgregar.addEventListener('click', function () {
+                const index = container.querySelectorAll('.material-card').length;
+                const nuevo = crearMaterialCard(index);
+
+                container.appendChild(nuevo);
+                actualizarIndices();
+
+                nuevo.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            });
+
+            container.addEventListener('click', function (event) {
+                const button = event.target.closest('.btnEliminarMaterial');
+
+                if (!button) return;
+
+                const cards = container.querySelectorAll('.material-card');
+
+                if (cards.length <= 1) {
+                    alert('Debe existir al menos un material en la solicitud.');
+                    return;
+                }
+
+                const card = button.closest('.material-card');
+
+                if (card) {
+                    card.remove();
+                    actualizarIndices();
+                }
+            });
+
+            container.addEventListener('change', function (event) {
+                const select = event.target.closest('.material-select');
+
+                if (select) {
+                    cargarDatosMaterial(select);
+                    return;
+                }
+            });
+
+            container.addEventListener('input', function (event) {
+                const cantidadInput = event.target.closest('.cantidad-solicitada');
+
+                if (cantidadInput) {
+                    const card = cantidadInput.closest('.material-card');
+                    validarStockCard(card);
+                }
+            });
+
+            if (container.querySelectorAll('.material-card').length === 0) {
+                container.appendChild(crearMaterialCard(0));
+            }
+
+            actualizarIndices();
+
+            container.querySelectorAll('.material-select').forEach(select => {
+                if (select.value) {
+                    cargarDatosMaterial(select);
+                }
+            });
+        });
+    </script>
+}
