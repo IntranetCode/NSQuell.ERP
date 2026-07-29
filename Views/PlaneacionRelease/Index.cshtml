@@ -1,0 +1,1158 @@
+﻿@model List<ERP.NSQuell.Models.PlaneacionReleaseIndexVm>
+
+@{
+    Layout = null;
+
+    // RELEASE_INDEX_HISTORICO_V1_0_1
+    var todosReleases = Model ?? new List<ERP.NSQuell.Models.PlaneacionReleaseIndexVm>();
+
+    var releases = todosReleases
+        .Where(x =>
+            !x.UltimaFechaRequerida.HasValue ||
+            x.UltimaFechaRequerida.Value.Date >= DateTime.Today)
+        .ToList();
+
+    var totalReleases = releases.Count;
+
+    var gruposClientes = releases
+        .GroupBy(x => new
+        {
+            x.ClienteID,
+            ClienteNombre = string.IsNullOrWhiteSpace(x.ClienteNombre)
+                ? "Sin cliente"
+                : x.ClienteNombre
+        })
+        .OrderBy(x => x.Key.ClienteNombre)
+        .ToList();
+
+    string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
+    string Fecha(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy") : "-";
+    string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+
+    string InicialCliente(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+            return "?";
+
+        return nombre.Trim().Substring(0, 1).ToUpperInvariant();
+    }
+
+    string IdSeguro(string prefijo, int index)
+    {
+        return $"{prefijo}_{index}";
+    }
+
+    string SemanaRelease(DateTime fecha)
+    {
+        return "SEMANA " + System.Globalization.ISOWeek.GetWeekOfYear(fecha);
+    }
+
+    string TextoOrigen(bool importado)
+    {
+        return importado ? "Archivo" : "Manual";
+    }
+
+    string IconoOrigen(bool importado)
+    {
+        return importado ? "fa-file-import" : "fa-keyboard";
+    }
+
+    string DataSearch(ERP.NSQuell.Models.PlaneacionReleaseIndexVm item)
+    {
+        return string.Join(" ",
+            item.FolioRelease ?? string.Empty,
+            item.FolioCliente ?? string.Empty,
+            item.ClienteNombre ?? string.Empty,
+            item.VersionRelease ?? string.Empty,
+            item.ArchivoOrigenNombre ?? string.Empty,
+            item.PlantillaImportacion ?? string.Empty
+        ).ToLowerInvariant();
+    }
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Releases de Cliente | Planeación</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --blue: #004AAD;
+            --blue-dark: #063875;
+            --blue-soft: #EEF6FF;
+            --green: #10804C;
+            --green-soft: #ECFDF3;
+            --orange: #F79009;
+            --orange-soft: #FFF7ED;
+            --red: #B42318;
+            --red-soft: #FEF3F2;
+            --purple: #7F56D9;
+            --purple-soft: #F4EBFF;
+            --gray-bg: #F4F7FB;
+            --border: #D9E2EE;
+            --text: #1F2937;
+            --muted: #667085;
+            --shadow: 0 18px 48px rgba(16, 24, 40, .10);
+            --shadow-soft: 0 10px 28px rgba(16, 24, 40, .06);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top left, rgba(0, 74, 173, .12), transparent 30%), radial-gradient(circle at 88% 14%, rgba(247, 144, 9, .10), transparent 26%), linear-gradient(180deg, #F7FAFF 0%, #EEF3F9 100%);
+            color: var(--text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .page {
+            max-width: 1760px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .hero {
+            border-radius: 32px;
+            background: linear-gradient(135deg, rgba(0,74,173,.98), rgba(6,56,117,.98)), url("data:image/svg+xml,%3Csvg width='900' height='320' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='rgba(255,255,255,.13)' stroke-width='2'%3E%3Cpath d='M0 250 C180 100 260 300 430 130 S700 80 900 190'/%3E%3Cpath d='M0 80 C200 190 260 20 480 100 S650 260 900 120'/%3E%3C/g%3E%3C/svg%3E");
+            background-size: cover;
+            color: white;
+            padding: 32px;
+            box-shadow: 0 24px 62px rgba(0, 74, 173, .28);
+            margin-bottom: 22px;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .hero::after {
+                content: "";
+                position: absolute;
+                right: -110px;
+                top: -140px;
+                width: 340px;
+                height: 340px;
+                border-radius: 999px;
+                background: rgba(255,255,255,.10);
+            }
+
+        .stage-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border: 1px solid rgba(255,255,255,.35);
+            border-radius: 999px;
+            background: rgba(255,255,255,.13);
+            font-size: .75rem;
+            font-weight: 950;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            margin-bottom: 13px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero h1 {
+            font-size: 2rem;
+            font-weight: 950;
+            margin: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero p {
+            max-width: 960px;
+            color: rgba(255,255,255,.88);
+            margin-top: 8px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-actions {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-counter {
+            min-width: 150px;
+            border: 1px solid rgba(255,255,255,.25);
+            background: rgba(255,255,255,.13);
+            border-radius: 24px;
+            padding: 18px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .hero-counter-value {
+            font-size: 2.1rem;
+            font-weight: 950;
+            line-height: 1;
+        }
+
+        .hero-counter-label {
+            color: rgba(255,255,255,.82);
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            margin-top: 6px;
+        }
+
+        .btn-glass {
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.14);
+            color: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 850;
+            text-decoration: none;
+            backdrop-filter: blur(10px);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+            .btn-glass:hover {
+                background: white;
+                color: var(--blue);
+            }
+
+        .btn-main {
+            background: var(--blue);
+            border: 1px solid var(--blue);
+            color: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+            .btn-main:hover {
+                background: var(--blue-dark);
+                border-color: var(--blue-dark);
+                color: white;
+            }
+
+        .btn-light-main {
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--blue-dark);
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+            .btn-light-main:hover {
+                background: var(--blue-soft);
+                color: var(--blue);
+            }
+
+        .alert {
+            border-radius: 20px;
+            font-weight: 700;
+        }
+
+        .panel {
+            background: rgba(255,255,255,.92);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 22px;
+            overflow: hidden;
+            backdrop-filter: blur(14px);
+        }
+
+        .panel-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .panel-body {
+            padding: 22px;
+        }
+
+        .input-modern {
+            border-radius: 15px;
+            border: 1px solid var(--border);
+            padding: 11px 13px;
+            box-shadow: none;
+        }
+
+            .input-modern:focus {
+                border-color: rgba(0,74,173,.45);
+                box-shadow: 0 0 0 .2rem rgba(0,74,173,.12);
+            }
+
+        .pill {
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: .74rem;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .pill-success {
+            background: var(--green-soft);
+            color: var(--green);
+            border-color: #ABEFc6;
+        }
+
+        .pill-info,
+        .pill-primary {
+            background: var(--blue-soft);
+            color: var(--blue);
+            border-color: #B2DDFF;
+        }
+
+        .pill-warning {
+            background: var(--orange-soft);
+            color: #B54708;
+            border-color: #FED7AA;
+        }
+
+        .pill-danger {
+            background: var(--red-soft);
+            color: var(--red);
+            border-color: #FECDCA;
+        }
+
+        .pill-purple {
+            background: var(--purple-soft);
+            color: var(--purple);
+            border-color: #D6BBFB;
+        }
+
+        .pill-muted {
+            background: #F2F4F7;
+            color: #475467;
+            border-color: #D0D5DD;
+        }
+
+        .client-list {
+            display: grid;
+            gap: 18px;
+        }
+
+        .client-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+        }
+
+        .client-head {
+            padding: 22px;
+            background: linear-gradient(135deg, #FFFFFF, #F6FAFF);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .client-head::after {
+                content: "";
+                position: absolute;
+                right: -80px;
+                top: -95px;
+                width: 250px;
+                height: 250px;
+                border-radius: 999px;
+                background: rgba(0,74,173,.08);
+            }
+
+        .client-avatar {
+            width: 58px;
+            height: 58px;
+            border-radius: 21px;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: 950;
+            box-shadow: 0 14px 28px rgba(0,74,173,.22);
+            position: relative;
+            z-index: 2;
+        }
+
+        .client-title {
+            color: var(--blue-dark);
+            font-size: 1.25rem;
+            font-weight: 950;
+            margin: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .client-sub {
+            color: var(--muted);
+            font-size: .86rem;
+            font-weight: 700;
+            margin-top: 5px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .client-body {
+            padding: 18px 22px 22px;
+            background: #FBFDFF;
+        }
+
+        /* RELEASES COMO FILAS COMPACTAS */
+        .release-list {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .release-list-header,
+        .release-row {
+            display: grid;
+            grid-template-columns:
+                minmax(175px, 1.15fr)
+                minmax(135px, .90fr)
+                105px
+                100px
+                minmax(190px, 1.30fr)
+                135px
+                105px
+                96px;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .release-list-header {
+            padding: 11px 14px;
+            background: #F5F7FA;
+            border-bottom: 1px solid var(--border);
+            color: var(--muted);
+            font-size: .68rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .release-row {
+            min-width: 0;
+            padding: 12px 14px;
+            border-bottom: 1px solid #EAECF0;
+            background: white;
+            transition: background-color .15s ease, box-shadow .15s ease;
+        }
+
+        .release-row:last-child {
+            border-bottom: none;
+        }
+
+        .release-row:hover {
+            background: #F8FBFF;
+            box-shadow: inset 3px 0 0 var(--blue);
+        }
+
+        .release-row.hidden-by-filter,
+        .client-card.hidden-by-filter {
+            display: none !important;
+        }
+
+        .release-cell {
+            min-width: 0;
+            color: var(--text);
+            font-size: .82rem;
+        }
+
+        .release-main-title {
+            color: var(--blue-dark);
+            font-size: .88rem;
+            font-weight: 900;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .release-main-subtitle {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: .70rem;
+            font-weight: 650;
+        }
+
+        .release-value {
+            font-weight: 750;
+            overflow-wrap: anywhere;
+        }
+
+        .release-template,
+        .release-file {
+            display: block;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .release-template {
+            color: var(--text);
+            font-weight: 750;
+        }
+
+        .release-file {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: .70rem;
+            font-weight: 650;
+        }
+
+        .release-row-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+
+        .release-action-btn {
+            width: 36px;
+            height: 34px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: white;
+            color: var(--blue-dark);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+        }
+
+        .release-action-btn:hover {
+            border-color: var(--blue);
+            background: var(--blue);
+            color: white;
+        }
+
+        .release-action-btn.primary {
+            border-color: var(--blue);
+            background: var(--blue);
+            color: white;
+        }
+
+        .release-action-btn.primary:hover {
+            border-color: var(--blue-dark);
+            background: var(--blue-dark);
+        }
+
+        @@media (max-width: 1380px) {
+            .release-list {
+                overflow-x: auto;
+            }
+
+            .release-list-header,
+            .release-row {
+                min-width: 1120px;
+            }
+        }
+
+        @@media (max-width: 768px) {
+            .release-list {
+                border: none;
+                border-radius: 0;
+                overflow: visible;
+                background: transparent;
+            }
+
+            .release-list-header {
+                display: none;
+            }
+
+            .release-row {
+                min-width: 0;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px 14px;
+                margin-bottom: 9px;
+                padding: 13px;
+                border: 1px solid var(--border);
+                border-radius: 14px;
+            }
+
+            .release-row:last-child {
+                border-bottom: 1px solid var(--border);
+            }
+
+            .release-cell::before {
+                display: block;
+                margin-bottom: 2px;
+                color: var(--muted);
+                font-size: .62rem;
+                font-weight: 900;
+                text-transform: uppercase;
+            }
+
+            .release-cell-release,
+            .release-cell-plantilla {
+                grid-column: 1 / -1;
+            }
+
+            .release-cell-release::before {
+                content: "Release";
+            }
+
+            .release-cell-folio::before {
+                content: "Folio cliente";
+            }
+
+            .release-cell-recepcion::before {
+                content: "Recepción";
+            }
+
+            .release-cell-semana::before {
+                content: "Semana";
+            }
+
+            .release-cell-plantilla::before {
+                content: "Plantilla / archivo";
+            }
+
+            .release-cell-creado::before {
+                content: "Creado";
+            }
+
+            .release-cell-origen::before {
+                content: "Origen";
+            }
+
+            .release-cell-acciones {
+                display: flex;
+                align-items: flex-end;
+                justify-content: flex-end;
+            }
+
+            .release-row-actions {
+                width: 100%;
+            }
+
+            .release-action-btn {
+                flex: 1;
+            }
+        }
+
+        .empty-state {
+            background: white;
+            border: 1px dashed var(--border);
+            border-radius: 30px;
+            box-shadow: var(--shadow-soft);
+            padding: 54px 20px;
+            text-align: center;
+            color: var(--muted);
+        }
+
+        .results-summary {
+            color: var(--muted);
+            font-size: .84rem;
+            font-weight: 800;
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 18px;
+            z-index: 20;
+            margin-top: 24px;
+            background: rgba(255,255,255,.92);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        @@media (max-width: 768px) {
+            .page {
+                padding: 16px;
+            }
+
+            .hero {
+                padding: 24px;
+                border-radius: 24px;
+            }
+
+                .hero h1 {
+                    font-size: 1.55rem;
+                }
+
+        }
+    
+</style>
+</head>
+
+<body>
+    <div class="page">
+
+        <section class="hero">
+            <div class="d-flex justify-content-between align-items-start gap-4 flex-wrap">
+                <div>
+                    <div class="stage-label">
+                        <i class="fa-solid fa-flag-checkered"></i>
+                        Etapa 1 · Releases de Cliente
+                    </div>
+
+                    <h1>
+                        <i class="fa-solid fa-inbox me-2"></i>
+                        Releases de Cliente
+                    </h1>
+
+                    <p>
+                        Bandeja de releases capturados por cliente.
+                    </p>
+
+                    <div class="d-flex gap-2 flex-wrap mt-3">
+                        <span class="pill pill-primary">
+                            <i class="fa-solid fa-file-lines"></i>
+                            @totalReleases release@(totalReleases == 1 ? "" : "s")
+                        </span>
+                        
+                    </div>
+                </div>
+
+                <div class="hero-actions d-flex gap-3 align-items-start flex-wrap">
+                    <div class="hero-counter">
+                        <div class="hero-counter-value">@totalReleases.ToString("N0")</div>
+                        <div class="hero-counter-label">Releases</div>
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a asp-controller="Menu"
+                           asp-action="Grupo"
+                           asp-route-id="3"
+                           class="btn-glass">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            Volver
+                        </a>
+@*
+                        <a asp-controller="PlaneacionPanorama"
+                           asp-action="Index"
+                           class="btn-glass">
+                            <i class="fa-solid fa-chart-line"></i>
+                            Panorama
+                        </a>
+*@
+                        <a asp-controller="PlaneacionPrograma"
+                           asp-action="Index"
+                           class="btn-glass">
+                            <i class="fa-solid fa-list-check"></i>
+                            Programa de Planeación
+                        </a>
+
+                        <a asp-controller="PlaneacionRelease"
+                           asp-action="Crear"
+                           class="btn-glass">
+                            <i class="fa-solid fa-plus"></i>
+                            Nuevo release
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success fw-semibold">
+                <i class="fa-solid fa-circle-check me-2"></i>
+                @TempData["Success"]
+            </div>
+        }
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger fw-semibold">
+                <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                @TempData["Error"]
+            </div>
+        }
+
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="h5 fw-bold text-primary m-0">
+                        <i class="fa-solid fa-inbox me-2"></i>
+                        Bandeja
+                    </h2>
+                    <div class="text-muted small">
+                        Releases agrupados por cliente. Abre cada cliente para ver sus releases.
+                    </div>
+                </div>
+
+                <div id="resultsSummary" class="results-summary">
+                    @totalReleases registro@(totalReleases == 1 ? "" : "s")
+                </div>
+            </div>
+
+            <div class="panel-body">
+                @if (releases.Any())
+                {
+                    <div class="row g-3 align-items-end mb-4">
+                        <div class="col-lg-8">
+                            <label for="releaseSearch" class="form-label small fw-bold text-muted">Buscar</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0 rounded-start-4">
+                                    <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                                </span>
+                                <input id="releaseSearch"
+                                       type="search"
+                                       class="form-control input-modern border-start-0"
+                                       placeholder="Buscar folio, cliente, archivo, plantilla o semana..." />
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4 d-grid">
+                            <button id="clearFilters" type="button" class="btn btn-light-main justify-content-center">
+                                <i class="fa-solid fa-filter-circle-xmark me-1"></i>
+                                Limpiar búsqueda
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="client-list" id="clientList">
+                        @{
+                            var clienteIndex = 0;
+                        }
+
+                        @foreach (var grupo in gruposClientes)
+                        {
+                            clienteIndex++;
+
+                            var collapseId = IdSeguro("cliente", clienteIndex);
+                            var releasesCliente = grupo
+                            .OrderByDescending(x => x.FechaRecepcion)
+                            .ThenByDescending(x => x.FechaCreacion)
+                            .ToList();
+
+                            var searchCliente = string.Join(" ",
+                            grupo.Key.ClienteNombre ?? string.Empty,
+                            string.Join(" ", releasesCliente.Select(DataSearch))
+                            ).ToLowerInvariant();
+
+                            <article class="client-card"
+                                     data-client-card
+                                     data-search="@searchCliente">
+
+                                <div class="client-head"
+                                     data-bs-toggle="collapse"
+                                     data-bs-target="#@collapseId"
+                                     aria-expanded="false"
+                                     aria-controls="@collapseId">
+
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="client-avatar">
+                                                @InicialCliente(grupo.Key.ClienteNombre)
+                                            </div>
+
+                                            <div>
+                                                <h3 class="client-title">
+                                                    @grupo.Key.ClienteNombre
+                                                </h3>
+                                                <div class="client-sub">
+                                                    @releasesCliente.Count.ToString("N0") release@(releasesCliente.Count == 1 ? "" : "s") en bandeja
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex gap-2 flex-wrap position-relative" style="z-index:2;">
+                                            <span class="pill pill-primary">
+                                                <i class="fa-solid fa-file-lines"></i>
+                                                @releasesCliente.Count.ToString("N0")
+                                            </span>
+
+                                            <a asp-controller="PlaneacionRelease"
+                                               asp-action="Historico"
+                                               asp-route-clienteId="@grupo.Key.ClienteID"
+                                               class="pill pill-warning text-decoration-none"
+                                               onclick="event.stopPropagation();">
+                                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                                Histórico
+                                            </a>
+
+                                            <span class="pill pill-muted">
+                                                <i class="fa-solid fa-chevron-down"></i>
+                                                Abrir
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="@collapseId" class="collapse">
+                                    <div class="client-body">
+                                        <div class="release-list">
+                                            <div class="release-list-header">
+                                                <div>Release</div>
+                                                <div>Folio cliente</div>
+                                                <div>Recepción</div>
+                                                <div>Semana</div>
+                                                <div>Plantilla / archivo</div>
+                                                <div>Creado</div>
+                                                <div>Origen</div>
+                                                <div class="text-end">Acciones</div>
+                                            </div>
+
+                                            @foreach (var item in releasesCliente)
+                                            {
+                                                var versionTexto = SemanaRelease(item.FechaRecepcion);
+                                                var originText = TextoOrigen(item.ImportadoDesdeArchivo);
+                                                var originIcon = IconoOrigen(item.ImportadoDesdeArchivo);
+                                                var searchableText = DataSearch(item) + " " + versionTexto.ToLowerInvariant();
+
+                                                <div class="release-row"
+                                                     data-release-card
+                                                     data-search="@searchableText">
+
+                                                    <div class="release-cell release-cell-release">
+                                                        <div class="release-main-title">
+                                                            @(item.FolioRelease ?? "-")
+                                                        </div>
+                                                        <div class="release-main-subtitle">
+                                                            ID @item.ReleaseID
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-folio">
+                                                        <div class="release-value">
+                                                            @(item.FolioCliente ?? "-")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-recepcion">
+                                                        <div class="release-value">
+                                                            @item.FechaRecepcion.ToString("dd/MM/yyyy")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-semana">
+                                                        <div class="release-value">
+                                                            @versionTexto
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-plantilla">
+                                                        <span class="release-template"
+                                                              title="@Valor(item.PlantillaImportacion)">
+                                                            @Valor(item.PlantillaImportacion)
+                                                        </span>
+
+                                                        @if (!string.IsNullOrWhiteSpace(item.ArchivoOrigenNombre))
+                                                        {
+                                                            <span class="release-file"
+                                                                  title="@item.ArchivoOrigenNombre">
+                                                                <i class="fa-regular fa-file-lines me-1"></i>
+                                                                @item.ArchivoOrigenNombre
+                                                            </span>
+                                                        }
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-creado">
+                                                        <div class="release-value">
+                                                            @item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-origen">
+                                                        <span class="pill @(item.ImportadoDesdeArchivo ? "pill-success" : "pill-muted")">
+                                                            <i class="fa-solid @originIcon"></i>
+                                                            @originText
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="release-cell release-cell-acciones">
+                                                        <div class="release-row-actions">
+                                                            <a asp-controller="PlaneacionRelease"
+                                                               asp-action="Detalle"
+                                                               asp-route-id="@item.ReleaseID"
+                                                               class="release-action-btn primary"
+                                                               title="Ver detalle"
+                                                               aria-label="Ver detalle del release">
+                                                                <i class="fa-solid fa-eye"></i>
+                                                            </a>
+
+                                                            <a asp-controller="PlaneacionRelease"
+                                                               asp-action="Editar"
+                                                               asp-route-id="@item.ReleaseID"
+                                                               class="release-action-btn"
+                                                               title="Editar"
+                                                               aria-label="Editar release">
+                                                                <i class="fa-solid fa-pen-to-square"></i>
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        }
+                    </div>
+
+                    <div id="noFilterResults" class="empty-state d-none mt-3">
+                        <i class="fa-solid fa-magnifying-glass fa-3x mb-3"></i>
+                        <h3 class="fw-bold text-primary">No se encontraron releases</h3>
+                        <p class="mb-0">
+                            Cambia o limpia la búsqueda para volver a mostrar la bandeja.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <i class="fa-regular fa-folder-open fa-3x mb-3"></i>
+                        <h3 class="fw-bold text-primary">No hay releases capturados</h3>
+                        <p class="mb-0">Comienza registrando la demanda recibida del cliente.</p>
+                        <div class="mt-3">
+                            <a asp-controller="PlaneacionRelease"
+                               asp-action="Crear"
+                               class="btn btn-main">
+                                <i class="fa-solid fa-plus me-1"></i>
+                                Crear primer release
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="sticky-actions">
+            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <a asp-controller="Menu"
+                   asp-action="Grupo"
+                   asp-route-id="3"
+                   class="btn btn-light-main">
+                    <i class="fa-solid fa-arrow-left me-1"></i>
+                    Volver
+                </a>
+                @*
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionPanorama"
+                       asp-action="Index"
+                       class="btn btn-light-main">
+                        <i class="fa-solid fa-chart-line me-1"></i>
+                        Panorama
+                    </a>*@
+
+                    <a asp-controller="PlaneacionPrograma"
+                       asp-action="Index"
+                       class="btn btn-light-main">
+                        <i class="fa-solid fa-list-check me-1"></i>
+                        Programa de Planeación
+                    </a>
+
+                    <a asp-controller="PlaneacionRelease"
+                       asp-action="Crear"
+                       class="btn btn-main">
+                        <i class="fa-solid fa-plus me-1"></i>
+                        Nuevo release
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const searchInput = document.getElementById("releaseSearch");
+            const clearButton = document.getElementById("clearFilters");
+            const clientCards = Array.from(document.querySelectorAll("[data-client-card]"));
+            const releaseCards = Array.from(document.querySelectorAll("[data-release-card]"));
+            const noResults = document.getElementById("noFilterResults");
+            const resultsSummary = document.getElementById("resultsSummary");
+
+            if (!searchInput || clientCards.length === 0) return;
+
+            function normalize(value) {
+                return (value || "")
+                    .toString()
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .trim();
+            }
+
+            function applyFilters() {
+                const searchValue = normalize(searchInput.value);
+                let visibleReleaseCount = 0;
+                let visibleClientCount = 0;
+
+                clientCards.forEach(function (client) {
+                    const releases = Array.from(client.querySelectorAll("[data-release-card]"));
+                    let clientHasVisibleRelease = false;
+
+                    releases.forEach(function (release) {
+                        const releaseSearch = normalize(release.dataset.search);
+                        const clientSearch = normalize(client.dataset.search);
+
+                        const isVisible = !searchValue ||
+                            releaseSearch.includes(searchValue) ||
+                            clientSearch.includes(searchValue);
+
+                        release.classList.toggle("hidden-by-filter", !isVisible);
+
+                        if (isVisible) {
+                            clientHasVisibleRelease = true;
+                            visibleReleaseCount++;
+                        }
+                    });
+
+                    client.classList.toggle("hidden-by-filter", !clientHasVisibleRelease);
+
+                    if (clientHasVisibleRelease) {
+                        visibleClientCount++;
+                    }
+                });
+
+                if (noResults) noResults.classList.toggle("d-none", visibleReleaseCount !== 0);
+
+                if (resultsSummary) {
+                    resultsSummary.textContent =
+                        visibleReleaseCount + (visibleReleaseCount === 1 ? " registro" : " registros") +
+                        " · " +
+                        visibleClientCount + (visibleClientCount === 1 ? " cliente" : " clientes");
+                }
+            }
+
+            searchInput.addEventListener("input", applyFilters);
+
+            if (clearButton) {
+                clearButton.addEventListener("click", function () {
+                    searchInput.value = "";
+                    applyFilters();
+                    searchInput.focus();
+                });
+            }
+        });
+    </script>
+
+</body>
+</html>

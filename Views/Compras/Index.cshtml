@@ -1,0 +1,766 @@
+﻿@model ERP.NSQuell.Models.Compras.DashboardViewModel
+
+@{
+    ViewData["Title"] = "Compras";
+}
+
+@section Styles {
+    <style>
+        :root {
+            --compras-white: #ffffff;
+            --compras-bg: #f5f7fb;
+            --compras-text: #1f2937;
+            --compras-muted: #6b7280;
+            --compras-muted-2: #9ca3af;
+            --compras-border: #e5e7eb;
+            --compras-orange: #f97316;
+            --compras-orange-dark: #ea580c;
+            --compras-soft-orange: #fff7ed;
+            --compras-green: #16a34a;
+            --compras-soft-green: #ecfdf5;
+            --compras-blue: #2563eb;
+            --compras-soft-blue: #eff6ff;
+            --compras-red: #dc2626;
+            --compras-soft-red: #fef2f2;
+            --compras-purple: #7c3aed;
+            --compras-soft-purple: #f5f3ff;
+            --compras-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+        }
+
+        .compras-page {
+            color: var(--compras-text);
+        }
+
+        .alert-compras {
+            border-radius: 16px;
+            padding: 14px 16px;
+            border: 1px solid var(--compras-border);
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+        .alert-success-compras {
+            background: var(--compras-soft-green);
+            color: #166534;
+            border-color: #bbf7d0;
+        }
+
+        .alert-error-compras {
+            background: var(--compras-soft-red);
+            color: #991b1b;
+            border-color: #fecaca;
+        }
+
+        .compras-hero {
+            position: relative;
+            overflow: hidden;
+            background: radial-gradient(circle at 88% 12%, rgba(249, 115, 22, 0.12), transparent 30%), linear-gradient(135deg, #ffffff 0%, #fffaf5 100%);
+            border: 1px solid var(--compras-border);
+            border-radius: 26px;
+            padding: 34px;
+            margin-bottom: 18px;
+            box-shadow: var(--compras-shadow);
+        }
+
+            .compras-hero::after {
+                content: "ERP";
+                position: absolute;
+                right: 30px;
+                top: 16px;
+                font-size: 96px;
+                font-weight: 1000;
+                color: rgba(249, 115, 22, 0.06);
+                letter-spacing: -0.08em;
+            }
+
+        .compras-chip {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            border: 1px solid #fed7aa;
+            background: var(--compras-soft-orange);
+            color: var(--compras-orange-dark);
+            padding: 7px 12px;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .compras-title {
+            font-size: 42px;
+            font-weight: 1000;
+            line-height: 1;
+            margin: 0 0 10px 0;
+            letter-spacing: -0.04em;
+            color: var(--compras-text);
+        }
+
+        .compras-subtitle {
+            max-width: 720px;
+            color: var(--compras-muted);
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.7;
+            margin: 0;
+        }
+
+        .compras-hero-stat {
+            position: absolute;
+            right: 22px;
+            bottom: 22px;
+            width: 160px;
+            height: 118px;
+            border-radius: 22px;
+            background: white;
+            border: 1px solid var(--compras-border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            box-shadow: 0 14px 30px rgba(249, 115, 22, 0.12);
+        }
+
+        .compras-hero-stat-number {
+            font-size: 34px;
+            font-weight: 1000;
+            color: var(--compras-orange);
+        }
+
+        .compras-hero-stat-label {
+            font-size: 10px;
+            color: var(--compras-muted);
+            font-weight: 900;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        .compras-actions-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .btn-compras-main,
+        .btn-compras-secondary {
+            border-radius: 16px;
+            padding: 12px 18px;
+            text-decoration: none;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-compras-main {
+            background: linear-gradient(135deg, var(--compras-orange), var(--compras-orange-dark));
+            color: white;
+            border: 1px solid var(--compras-orange);
+            box-shadow: 0 12px 28px rgba(249, 115, 22, 0.24);
+        }
+
+            .btn-compras-main:hover {
+                color: white;
+                transform: translateY(-2px);
+                box-shadow: 0 16px 34px rgba(249, 115, 22, 0.30);
+            }
+
+        .btn-compras-secondary {
+            color: var(--compras-text);
+            background: white;
+            border: 1px solid var(--compras-border);
+        }
+
+            .btn-compras-secondary:hover {
+                color: var(--compras-orange-dark);
+                border-color: #fed7aa;
+                background: var(--compras-soft-orange);
+                transform: translateY(-2px);
+            }
+
+        .compras-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .compras-card {
+            position: relative;
+            overflow: hidden;
+            min-height: 142px;
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 22px;
+            padding: 18px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+            transition: all 0.2s ease;
+        }
+
+            .compras-card:hover {
+                transform: translateY(-3px);
+                box-shadow: var(--compras-shadow);
+            }
+
+            .compras-card::after {
+                content: "";
+                position: absolute;
+                right: -45px;
+                bottom: -45px;
+                width: 120px;
+                height: 120px;
+                border-radius: 999px;
+                background: rgba(249, 115, 22, 0.06);
+            }
+
+        .compras-card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+            font-weight: 1000;
+            position: relative;
+            z-index: 2;
+        }
+
+            .compras-card-icon.orange {
+                color: var(--compras-orange-dark);
+                background: var(--compras-soft-orange);
+            }
+
+            .compras-card-icon.green {
+                color: var(--compras-green);
+                background: var(--compras-soft-green);
+            }
+
+            .compras-card-icon.blue {
+                color: var(--compras-blue);
+                background: var(--compras-soft-blue);
+            }
+
+            .compras-card-icon.red {
+                color: var(--compras-red);
+                background: var(--compras-soft-red);
+            }
+
+            .compras-card-icon.purple {
+                color: var(--compras-purple);
+                background: var(--compras-soft-purple);
+            }
+
+        .compras-card-label {
+            display: inline-flex;
+            border-radius: 999px;
+            padding: 5px 9px;
+            background: #f9fafb;
+            border: 1px solid var(--compras-border);
+            color: var(--compras-muted);
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .compras-card-number {
+            font-size: 34px;
+            font-weight: 1000;
+            color: var(--compras-text);
+            margin-bottom: 4px;
+            letter-spacing: -0.04em;
+            position: relative;
+            z-index: 2;
+        }
+
+        .compras-card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--compras-muted);
+            margin: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .compras-section {
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 24px;
+            padding: 22px;
+            margin-bottom: 18px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+        }
+
+        .compras-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .compras-section-title {
+            font-size: 21px;
+            font-weight: 1000;
+            margin: 0;
+            letter-spacing: -0.03em;
+            color: var(--compras-text);
+        }
+
+        .compras-section-text {
+            color: var(--compras-muted);
+            font-size: 13px;
+            margin: 5px 0 0 0;
+            font-weight: 600;
+        }
+
+        .compras-flow {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .compras-flow-item {
+            border: 1px solid var(--compras-border);
+            border-radius: 18px;
+            padding: 16px;
+            background: #f9fafb;
+            min-height: 130px;
+        }
+
+        .compras-flow-num {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            background: var(--compras-soft-orange);
+            border: 1px solid #fed7aa;
+            color: var(--compras-orange-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 1000;
+            margin-bottom: 10px;
+        }
+
+        .compras-flow-title {
+            font-weight: 1000;
+            margin-bottom: 5px;
+            color: var(--compras-text);
+        }
+
+        .compras-flow-text {
+            color: var(--compras-muted);
+            font-size: 12px;
+            line-height: 1.55;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .compras-table-wrap {
+            overflow-x: auto;
+        }
+
+        .compras-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 10px;
+        }
+
+            .compras-table th {
+                color: var(--compras-muted);
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.10em;
+                padding: 0 12px 6px;
+                border: none;
+            }
+
+            .compras-table td {
+                background: #f9fafb;
+                border-top: 1px solid var(--compras-border);
+                border-bottom: 1px solid var(--compras-border);
+                color: #374151;
+                padding: 14px 12px;
+                font-size: 13px;
+                font-weight: 650;
+                vertical-align: middle;
+            }
+
+                .compras-table td:first-child {
+                    border-left: 1px solid var(--compras-border);
+                    border-radius: 16px 0 0 16px;
+                }
+
+                .compras-table td:last-child {
+                    border-right: 1px solid var(--compras-border);
+                    border-radius: 0 16px 16px 0;
+                }
+
+        .folio-strong {
+            color: var(--compras-text);
+            font-weight: 1000;
+        }
+
+        .badge-compras {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 900;
+            border: 1px solid transparent;
+        }
+
+        .badge-pendiente {
+            background: var(--compras-soft-orange);
+            color: var(--compras-orange-dark);
+            border-color: #fed7aa;
+        }
+
+        .badge-revision {
+            background: var(--compras-soft-blue);
+            color: #1d4ed8;
+            border-color: #bfdbfe;
+        }
+
+        .badge-aprobada {
+            background: var(--compras-soft-green);
+            color: #15803d;
+            border-color: #bbf7d0;
+        }
+
+        .badge-rechazada {
+            background: var(--compras-soft-red);
+            color: #b91c1c;
+            border-color: #fecaca;
+        }
+
+        .badge-cancelada {
+            background: #f3f4f6;
+            color: #4b5563;
+            border-color: #e5e7eb;
+        }
+
+        .btn-table {
+            border-radius: 999px;
+            padding: 8px 13px;
+            background: white;
+            border: 1px solid #fed7aa;
+            color: var(--compras-orange-dark);
+            font-size: 12px;
+            text-decoration: none;
+            font-weight: 900;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+            .btn-table:hover {
+                color: white;
+                background: var(--compras-orange);
+                border-color: var(--compras-orange);
+            }
+
+        .compras-empty {
+            border: 1px dashed #d1d5db;
+            border-radius: 20px;
+            padding: 28px;
+            text-align: center;
+            color: var(--compras-muted);
+            background: #f9fafb;
+            font-weight: 700;
+        }
+
+        @@media (max-width: 1100px) {
+            .compras-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .compras-flow {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .compras-hero-stat {
+                position: relative;
+                right: auto;
+                bottom: auto;
+                margin-top: 20px;
+                width: 100%;
+                height: 96px;
+            }
+        }
+
+        @@media (max-width: 700px) {
+            .compras-grid,
+            .compras-flow {
+                grid-template-columns: 1fr;
+            }
+
+            .compras-section-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .compras-title {
+                font-size: 34px;
+            }
+        }
+    </style>
+}
+
+<div class="compras-page">
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert-compras alert-success-compras">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert-compras alert-error-compras">
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="erp-page-breadcrumb">
+        <a href="javascript:history.back()" class="erp-btn-back">← Regresar</a>
+        <span>Inicio</span>
+        <span>›</span>
+        <strong>Compras</strong>
+    </div>
+
+    <section class="compras-hero">
+        <div class="compras-chip">Panel de operación</div>
+
+        <h1 class="compras-title">Compras</h1>
+
+        <p class="compras-subtitle">
+            Administra solicitudes de compra, revisión de materiales, órdenes, pagos y recepción en almacén.
+            Este módulo ayuda a formalizar las solicitudes que antes se realizaban de manera verbal.
+        </p>
+
+        <div class="compras-hero-stat">
+            <div class="compras-hero-stat-number">
+                @(Model.SolicitudesPendientes + Model.SolicitudesEnRevision + Model.SolicitudesAprobadas)
+            </div>
+            <div class="compras-hero-stat-label">Solicitudes activas</div>
+        </div>
+    </section>
+
+    <div class="compras-actions-row">
+        <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+            + Nueva solicitud
+        </a>
+
+        <a asp-controller="Compras" asp-action="Solicitudes" class="btn-compras-secondary">
+            Ver solicitudes
+        </a>
+    </div>
+
+    <section class="compras-grid">
+        <div class="compras-card">
+            <div class="compras-card-icon orange">SC</div>
+            <div class="compras-card-label">Pendientes</div>
+            <div class="compras-card-number">@Model.SolicitudesPendientes</div>
+            <p class="compras-card-title">Solicitudes nuevas por revisar</p>
+        </div>
+
+        <div class="compras-card">
+            <div class="compras-card-icon blue">RV</div>
+            <div class="compras-card-label">En revisión</div>
+            <div class="compras-card-number">@Model.SolicitudesEnRevision</div>
+            <p class="compras-card-title">Validación de compras</p>
+        </div>
+
+        <div class="compras-card">
+            <div class="compras-card-icon green">OK</div>
+            <div class="compras-card-label">Aprobadas</div>
+            <div class="compras-card-number">@Model.SolicitudesAprobadas</div>
+            <p class="compras-card-title">Listas para orden de compra</p>
+        </div>
+
+        <div class="compras-card">
+            <div class="compras-card-icon red">NO</div>
+            <div class="compras-card-label">Rechazadas</div>
+            <div class="compras-card-number">@Model.SolicitudesRechazadas</div>
+            <p class="compras-card-title">Solicitudes no autorizadas</p>
+        </div>
+
+        <div class="compras-card">
+            <div class="compras-card-icon orange">OC</div>
+            <div class="compras-card-label">Órdenes</div>
+            <div class="compras-card-number">@Model.OrdenesPendientes</div>
+            <p class="compras-card-title">Órdenes pendientes</p>
+        </div>
+
+        <div class="compras-card">
+            <div class="compras-card-icon blue">$</div>
+            <div class="compras-card-label">Pagos</div>
+            <div class="compras-card-number">@Model.OrdenesEnEsperaPago</div>
+            <p class="compras-card-title">En espera de comprobante</p>
+        </div>
+
+        <div class="compras-card">
+            <div class="compras-card-icon green">RC</div>
+            <div class="compras-card-label">Recepción</div>
+            <div class="compras-card-number">@Model.RecepcionesPendientes</div>
+            <p class="compras-card-title">Material pendiente por recibir</p>
+        </div>
+
+        <div class="compras-card">
+            <div class="compras-card-icon purple">PR</div>
+            <div class="compras-card-label">Proveedores</div>
+            <div class="compras-card-number">@Model.ProveedoresActivos</div>
+            <p class="compras-card-title">Proveedores activos</p>
+        </div>
+    </section>
+
+    <section class="compras-section">
+        <div class="compras-section-header">
+            <div>
+                <h2 class="compras-section-title">Flujo general</h2>
+                <p class="compras-section-text">
+                    Ruta principal del proceso de compras dentro del ERP.
+                </p>
+            </div>
+        </div>
+
+        <div class="compras-flow">
+            <div class="compras-flow-item">
+                <div class="compras-flow-num">1</div>
+                <div class="compras-flow-title">Solicitud</div>
+                <p class="compras-flow-text">
+                    Almacén, planeación o departamento autorizado solicita material.
+                </p>
+            </div>
+
+            <div class="compras-flow-item">
+                <div class="compras-flow-num">2</div>
+                <div class="compras-flow-title">Revisión</div>
+                <p class="compras-flow-text">
+                    Compras valida proveedor, cantidades y materiales sustitutos.
+                </p>
+            </div>
+
+            <div class="compras-flow-item">
+                <div class="compras-flow-num">3</div>
+                <div class="compras-flow-title">Aprobación</div>
+                <p class="compras-flow-text">
+                    Dirección aprueba, rechaza o solicita correcciones.
+                </p>
+            </div>
+
+            <div class="compras-flow-item">
+                <div class="compras-flow-num">4</div>
+                <div class="compras-flow-title">Orden</div>
+                <p class="compras-flow-text">
+                    Compras genera la orden formal para el proveedor.
+                </p>
+            </div>
+
+            <div class="compras-flow-item">
+                <div class="compras-flow-num">5</div>
+                <div class="compras-flow-title">Recepción</div>
+                <p class="compras-flow-text">
+                    Almacén confirma cantidades, calidad y remisión.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="compras-section">
+        <div class="compras-section-header">
+            <div>
+                <h2 class="compras-section-title">Últimas solicitudes</h2>
+                <p class="compras-section-text">
+                    Solicitudes recientes registradas en el módulo.
+                </p>
+            </div>
+
+            <a asp-controller="Compras" asp-action="Solicitudes" class="btn-compras-secondary">
+                Ver todas
+            </a>
+        </div>
+
+        @if (Model.UltimasSolicitudes != null && Model.UltimasSolicitudes.Any())
+        {
+            <div class="compras-table-wrap">
+                <table class="compras-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Origen</th>
+                            <th>Prioridad</th>
+                            <th>Tipo</th>
+                            <th>Estatus</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.UltimasSolicitudes)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="folio-strong">@(item.Folio ?? "Sin folio")</span>
+                                </td>
+                                <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(item.OrigenSolicitud ?? "-")</td>
+                                <td>@(item.Prioridad ?? "-")</td>
+                                <td>@(item.TipoCompra ?? "-")</td>
+                                <td>
+                                    <span class="badge-compras @GetBadgeClass(item.Estatus)">
+                                        @(item.Estatus ?? "Sin estatus")
+                                    </span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <a asp-controller="Compras"
+                                       asp-action="DetalleSolicitud"
+                                       asp-route-id="@item.SolicitudCompraID"
+                                       class="btn-table">
+                                        Abrir →
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="compras-empty">
+                Aún no hay solicitudes registradas.
+                <br /><br />
+                <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+                    Crear primera solicitud
+                </a>
+            </div>
+        }
+    </section>
+</div>
+
+@functions {
+    private string GetBadgeClass(string? estatus)
+    {
+        return estatus switch
+        {
+            "Pendiente" => "badge-pendiente",
+            "En revision" => "badge-revision",
+            "Aprobada" => "badge-aprobada",
+            "Rechazada" => "badge-rechazada",
+            "Cancelada" => "badge-cancelada",
+            _ => "badge-pendiente"
+        };
+    }
+}

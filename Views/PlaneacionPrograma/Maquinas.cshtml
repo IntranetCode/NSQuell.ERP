@@ -1,0 +1,1799 @@
+﻿@model ERP.NSQuell.Models.PlaneacionProgramaMaquinasVm
+@using System.Collections.Generic
+
+@{
+    Layout = null;
+
+    string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
+    string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    string FechaCorta(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM") : "-";
+    string Hora(DateTime? f) => f.HasValue ? f.Value.ToString("HH:mm") : "-";
+    string Decimal2(decimal? v) => v.HasValue ? v.Value.ToString("N2") : "-";
+
+    var hoy = DateTime.Today;
+    var inicioSemana = hoy.AddDays(-((int)hoy.DayOfWeek == 0 ? 6 : (int)hoy.DayOfWeek - 1));
+    var finSemana = inicioSemana.AddDays(6);
+    var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+    var finMes = inicioMes.AddMonths(1).AddDays(-1);
+    var inicioAnio = new DateTime(hoy.Year, 1, 1);
+    var finAnio = new DateTime(hoy.Year, 12, 31);
+
+    var maquinasConPrograma = Model.Maquinas.Count(x => x.Programas.Any());
+    var maquinasSinPrograma = Model.Maquinas.Count(x => !x.Programas.Any());
+    var programasConOF = Model.Maquinas.SelectMany(x => x.Programas).Count(x => x.TieneOF);
+    var programasPendientesOF = Model.Maquinas.SelectMany(x => x.Programas).Count(x => x.PuedeGenerarOF);
+    var programasEnProduccion = Model.Maquinas.SelectMany(x => x.Programas).Count(x => x.EstatusID == ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnProduccion);
+    var programasPreparacion = Model.Maquinas.SelectMany(x => x.Programas).Count(x => x.EstatusID == ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnPreparacion);
+
+    string ClaseEstatus(int estatusId)
+    {
+        return estatusId switch
+        {
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Programado => "pill-info",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnPreparacion => "pill-warning",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnProduccion => "pill-success",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Pausado => "pill-danger",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Terminado => "pill-done",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Cerrado => "pill-done",
+            _ => "pill-info"
+        };
+    }
+
+    string TextoEstadoMaquina(ERP.NSQuell.Models.PlaneacionProgramaMaquinaVm maq)
+    {
+        if (!maq.Programas.Any()) return "Libre";
+        if (maq.Actual != null) return "Produciendo";
+        if (maq.Siguiente != null) return "Próxima carga";
+        return "Programada";
+    }
+
+    string ClaseEstadoMaquina(ERP.NSQuell.Models.PlaneacionProgramaMaquinaVm maq)
+    {
+        if (!maq.Programas.Any()) return "machine-free";
+        if (maq.Actual != null) return "machine-active";
+        if (maq.Siguiente != null) return "machine-next";
+        return "machine-planned";
+    }
+
+    string EstadoFiltro(ERP.NSQuell.Models.PlaneacionProgramaMaquinaVm maq)
+    {
+        if (!maq.Programas.Any()) return "libre";
+        if (maq.Actual != null) return "produciendo";
+        if (maq.Siguiente != null) return "siguiente";
+        return "programada";
+    }
+
+    string IconoEstado(ERP.NSQuell.Models.PlaneacionProgramaMaquinaVm maq)
+    {
+        if (!maq.Programas.Any()) return "fa-circle";
+        if (maq.Actual != null) return "fa-play";
+        if (maq.Siguiente != null) return "fa-forward-step";
+        return "fa-calendar-check";
+    }
+
+    decimal Clamp(decimal value)
+    {
+        if (value < 0) return 0;
+        if (value > 100) return 100;
+        return value;
+    }
+
+    string Percent(decimal value)
+    {
+        return value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    }
+
+    DateTime RangoInicio()
+    {
+        return Model.FechaDesde.Date;
+    }
+
+    DateTime RangoFin()
+    {
+        return Model.FechaHasta.Date.AddDays(1);
+    }
+
+    DateTime FinReal(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        return p.FechaFinProgramada
+            ?? p.FechaInicioProgramada?.AddHours((double)(p.HorasProgramadas ?? 1))
+            ?? RangoInicio().AddHours(1);
+    }
+
+    DateTime InicioVisible(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        var inicio = p.FechaInicioProgramada ?? RangoInicio();
+        return inicio < RangoInicio() ? RangoInicio() : inicio;
+    }
+
+    DateTime FinVisible(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        var fin = FinReal(p);
+        return fin > RangoFin() ? RangoFin() : fin;
+    }
+
+    decimal TimelineLeft(DateTime? fecha)
+    {
+        var rangoInicio = RangoInicio();
+        var rangoFin = RangoFin();
+        var totalMinutos = (decimal)(rangoFin - rangoInicio).TotalMinutes;
+
+        if (!fecha.HasValue || totalMinutos <= 0)
+            return 0;
+
+        var fechaVisible = fecha.Value < rangoInicio ? rangoInicio : fecha.Value;
+        if (fechaVisible > rangoFin)
+            fechaVisible = rangoFin;
+
+        var minutos = (decimal)(fechaVisible - rangoInicio).TotalMinutes;
+        return Clamp((minutos / totalMinutos) * 100m);
+    }
+
+    decimal TimelineWidth(DateTime? inicio, DateTime? fin)
+    {
+        if (!inicio.HasValue)
+            return 0;
+
+        var rangoInicio = RangoInicio();
+        var rangoFin = RangoFin();
+        var totalMinutos = (decimal)(rangoFin - rangoInicio).TotalMinutes;
+
+        if (totalMinutos <= 0)
+            return 0;
+
+        var inicioVisible = inicio.Value < rangoInicio ? rangoInicio : inicio.Value;
+        var finReal = fin ?? inicio.Value.AddHours(1);
+        var finVisible = finReal > rangoFin ? rangoFin : finReal;
+
+        if (finVisible <= inicioVisible)
+            return 0;
+
+        var minutos = (decimal)(finVisible - inicioVisible).TotalMinutes;
+        var porcentaje = (minutos / totalMinutos) * 100m;
+
+        if (porcentaje < 1.6m)
+            porcentaje = 1.6m;
+
+        if (porcentaje > 100)
+            porcentaje = 100;
+
+        return porcentaje;
+    }
+
+    string TimelineStyle(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        var left = TimelineLeft(p.FechaInicioProgramada);
+        var width = TimelineWidth(p.FechaInicioProgramada, p.FechaFinProgramada);
+
+        if (left + width > 100)
+            width = 100 - left;
+
+        if (width < 1.6m)
+            width = 1.6m;
+
+        return $"left:{Percent(left)};width:{Percent(width)};";
+    }
+
+    List<DateTime> DiasRango()
+    {
+        var lista = new List<DateTime>();
+        var inicio = Model.FechaDesde.Date;
+        var fin = Model.FechaHasta.Date;
+
+        if (fin < inicio)
+            fin = inicio;
+
+        for (var fecha = inicio; fecha <= fin; fecha = fecha.AddDays(1))
+            lista.Add(fecha);
+
+        return lista;
+    }
+
+    bool ProgramaCruzaDia(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p, DateTime dia)
+    {
+        if (!p.FechaInicioProgramada.HasValue)
+            return false;
+
+        var inicio = p.FechaInicioProgramada.Value;
+        var fin = FinReal(p);
+        var diaInicio = dia.Date;
+        var diaFin = diaInicio.AddDays(1);
+
+        return inicio < diaFin && fin > diaInicio;
+    }
+
+    string RangoVisibleTexto(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        return InicioVisible(p).ToString("dd/MM HH:mm") + " - " + FinVisible(p).ToString("dd/MM HH:mm");
+    }
+
+    string TimelineNowStyle()
+    {
+        var ahora = DateTime.Now;
+        var rangoInicio = RangoInicio();
+        var rangoFin = RangoFin();
+
+        if (ahora < rangoInicio || ahora > rangoFin)
+            return "display:none;";
+
+        return $"left:{Percent(TimelineLeft(ahora))};";
+    }
+
+    string TimelineClass(ERP.NSQuell.Models.PlaneacionProgramaIndexVm p)
+    {
+        return p.EstatusID switch
+        {
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnProduccion => "timeline-success",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnPreparacion => "timeline-warning",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Pausado => "timeline-danger",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Terminado => "timeline-done",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Cerrado => "timeline-done",
+            _ => "timeline-primary"
+        };
+    }
+
+    string ModalId(ERP.NSQuell.Models.PlaneacionProgramaMaquinaVm maq)
+    {
+        var codigo = (maq.MaquinaCodigo ?? "SIN").Replace(" ", "_").Replace("/", "_").Replace(".", "_").Replace("-", "_");
+        return $"modalMaquina_{maq.MaquinaID}_{codigo}";
+    }
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Tablero de Máquinas | Planeación</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --blue: #004AAD;
+            --blue-dark: #063875;
+            --blue-soft: #EEF6FF;
+            --green: #10804C;
+            --green-soft: #ECFDF3;
+            --orange: #F79009;
+            --orange-soft: #FFF7ED;
+            --red: #B42318;
+            --red-soft: #FEF3F2;
+            --purple: #7F56D9;
+            --purple-soft: #F4EBFF;
+            --gray-bg: #F4F7FB;
+            --border: #D9E2EE;
+            --text: #1F2937;
+            --muted: #667085;
+            --shadow: 0 18px 48px rgba(16, 24, 40, .10);
+            --shadow-soft: 0 10px 28px rgba(16, 24, 40, .06);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top left, rgba(0, 74, 173, .13), transparent 28%), radial-gradient(circle at 85% 18%, rgba(16, 128, 76, .08), transparent 28%), linear-gradient(180deg, #F7FAFF 0%, #EEF3F9 100%);
+            color: var(--text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .page {
+            max-width: 1880px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .hero {
+            border-radius: 32px;
+            background: linear-gradient(135deg, rgba(0,74,173,.98), rgba(6,56,117,.98));
+            color: white;
+            padding: 32px;
+            box-shadow: 0 24px 62px rgba(0, 74, 173, .28);
+            margin-bottom: 22px;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .hero::after {
+                content: "";
+                position: absolute;
+                right: -110px;
+                top: -140px;
+                width: 340px;
+                height: 340px;
+                border-radius: 999px;
+                background: rgba(255,255,255,.10);
+            }
+
+        .stage-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border: 1px solid rgba(255,255,255,.35);
+            border-radius: 999px;
+            background: rgba(255,255,255,.13);
+            font-size: .75rem;
+            font-weight: 950;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            margin-bottom: 13px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero h1 {
+            font-size: 2rem;
+            font-weight: 950;
+            margin: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero p {
+            max-width: 920px;
+            color: rgba(255,255,255,.88);
+            margin-top: 8px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-actions {
+            position: relative;
+            z-index: 2;
+        }
+
+        .btn-glass {
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.14);
+            color: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 850;
+            text-decoration: none;
+            backdrop-filter: blur(10px);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+            .btn-glass:hover {
+                background: white;
+                color: var(--blue);
+            }
+
+        .btn-main {
+            background: var(--blue);
+            border: 1px solid var(--blue);
+            color: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+        }
+
+            .btn-main:hover {
+                background: var(--blue-dark);
+                border-color: var(--blue-dark);
+                color: white;
+            }
+
+        .btn-light-main {
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--blue-dark);
+            border-radius: 15px;
+            padding: 10px 15px;
+            font-weight: 900;
+            text-decoration: none;
+        }
+
+            .btn-light-main:hover {
+                background: var(--blue-soft);
+                color: var(--blue);
+            }
+
+        .panel {
+            background: rgba(255,255,255,.90);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 22px;
+            overflow: hidden;
+            backdrop-filter: blur(14px);
+        }
+
+        .panel-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .panel-body {
+            padding: 22px;
+        }
+
+        .quick-range, .chip-row {
+            display: flex;
+            gap: 9px;
+            flex-wrap: wrap;
+        }
+
+        .chip {
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--blue-dark);
+            border-radius: 999px;
+            padding: 9px 14px;
+            font-weight: 900;
+            font-size: .84rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+            .chip:hover, .chip.active {
+                background: var(--blue);
+                border-color: var(--blue);
+                color: white;
+            }
+
+        .input-modern {
+            border-radius: 15px;
+            border: 1px solid var(--border);
+            padding: 11px 13px;
+            box-shadow: none;
+        }
+
+        .kpi {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: var(--shadow-soft);
+            padding: 18px;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .kpi::before {
+                content: "";
+                width: 8px;
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                background: var(--blue);
+            }
+
+        .kpi-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 16px;
+            background: var(--blue-soft);
+            color: var(--blue);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .kpi-label {
+            color: var(--muted);
+            text-transform: uppercase;
+            font-size: .72rem;
+            letter-spacing: .05em;
+            font-weight: 950;
+        }
+
+        .kpi-value {
+            color: var(--blue-dark);
+            font-size: 1.55rem;
+            font-weight: 950;
+            line-height: 1.1;
+        }
+
+        .kpi-sub {
+            color: var(--muted);
+            font-size: .8rem;
+            font-weight: 650;
+            margin-top: 4px;
+        }
+
+        .machine-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(370px, 1fr));
+            gap: 20px;
+        }
+
+        .machine-card {
+            min-height: 345px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            box-shadow: var(--shadow-soft);
+            padding: 22px;
+            position: relative;
+            overflow: hidden;
+            transition: transform .18s ease, box-shadow .18s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+            .machine-card:hover {
+                transform: translateY(-4px);
+                box-shadow: var(--shadow);
+            }
+
+            .machine-card::after {
+                content: "";
+                position: absolute;
+                right: -85px;
+                top: -95px;
+                width: 250px;
+                height: 250px;
+                border-radius: 999px;
+                opacity: .11;
+                background: var(--blue);
+            }
+
+            .machine-card.machine-active {
+                background: linear-gradient(135deg, #F0FFF6, #FFFFFF);
+                border-color: #B7E4C7;
+            }
+
+            .machine-card.machine-next, .machine-card.machine-planned {
+                background: linear-gradient(135deg, #F2F8FF, #FFFFFF);
+            }
+
+            .machine-card.machine-free {
+                background: linear-gradient(135deg, #F8FAFC, #FFFFFF);
+            }
+
+        .machine-badge-icon {
+            width: 62px;
+            height: 62px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: 950;
+            box-shadow: 0 14px 28px rgba(0,74,173,.22);
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .machine-active .machine-badge-icon {
+            background: linear-gradient(135deg, #12B76A, #067647);
+            box-shadow: 0 14px 28px rgba(16,128,76,.20);
+        }
+
+        .machine-free .machine-badge-icon {
+            background: linear-gradient(135deg, #98A2B3, #475467);
+            box-shadow: 0 14px 28px rgba(71,84,103,.16);
+        }
+
+        .machine-title {
+            color: var(--blue-dark);
+            font-size: 1.25rem;
+            font-weight: 950;
+            margin: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .machine-sub {
+            color: var(--muted);
+            font-size: .86rem;
+            font-weight: 700;
+            margin-top: 5px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .pill {
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: .74rem;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .pill-success {
+            background: var(--green-soft);
+            color: var(--green);
+            border-color: #ABEFC6;
+        }
+
+        .pill-info, .pill-primary {
+            background: var(--blue-soft);
+            color: var(--blue);
+            border-color: #B2DDFF;
+        }
+
+        .pill-warning {
+            background: var(--orange-soft);
+            color: #B54708;
+            border-color: #FED7AA;
+        }
+
+        .pill-danger {
+            background: var(--red-soft);
+            color: var(--red);
+            border-color: #FECDCA;
+        }
+
+        .pill-done, .pill-muted {
+            background: #F2F4F7;
+            color: #475467;
+            border-color: #D0D5DD;
+        }
+
+        .pill-purple {
+            background: var(--purple-soft);
+            color: var(--purple);
+            border-color: #D6BBFB;
+        }
+
+        .machine-kpis {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 11px;
+            margin-top: 18px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .mini-box {
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,.86);
+            border-radius: 18px;
+            padding: 12px;
+        }
+
+        .mini-label {
+            color: var(--muted);
+            font-size: .68rem;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            font-weight: 950;
+        }
+
+        .mini-value {
+            color: var(--text);
+            font-size: .98rem;
+            font-weight: 950;
+        }
+
+        .current-program {
+            margin-top: 18px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 14px;
+            background: rgba(255,255,255,.90);
+            position: relative;
+            z-index: 2;
+        }
+
+        .current-title {
+            font-size: .97rem;
+            color: var(--text);
+            font-weight: 950;
+            line-height: 1.18;
+        }
+
+        .current-desc {
+            color: var(--muted);
+            font-size: .79rem;
+            font-weight: 650;
+            margin-top: 5px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .machine-actions {
+            margin-top: 18px;
+            display: grid;
+            gap: 9px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .empty-machine {
+            margin-top: 18px;
+            border: 1px dashed var(--border);
+            background: rgba(255,255,255,.75);
+            border-radius: 20px;
+            padding: 24px 12px;
+            text-align: center;
+            color: var(--muted);
+            position: relative;
+            z-index: 2;
+        }
+
+        .hidden-by-filter {
+            display: none !important;
+        }
+
+        .modal-fullscreen .modal-content {
+            border: none;
+            background: var(--gray-bg);
+        }
+
+        .modal-header-pro {
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            color: white;
+            padding: 28px 32px;
+            border: none;
+        }
+
+        .modal-title-pro {
+            margin: 0;
+            font-weight: 950;
+            font-size: 1.55rem;
+        }
+
+        .modal-sub-pro {
+            color: rgba(255,255,255,.84);
+            font-size: .92rem;
+            margin-top: 6px;
+        }
+
+        .modal-body-pro {
+            padding: 24px 32px 32px;
+        }
+
+        .modal-kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .modal-kpi {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 16px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .machine-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 390px;
+            gap: 22px;
+            align-items: start;
+        }
+
+        .stage-panel {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .stage-head {
+            padding: 24px;
+            background: linear-gradient(135deg, #FFFFFF, #F6FAFF);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stage-title {
+            color: var(--blue-dark);
+            font-size: 1.35rem;
+            font-weight: 950;
+            margin: 0;
+        }
+
+        .stage-desc {
+            color: var(--muted);
+            font-size: .9rem;
+            font-weight: 650;
+            margin-top: 6px;
+        }
+
+        .stage-body {
+            padding: 24px;
+        }
+
+        .timeline-panel {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 18px;
+            background: #FFFFFF;
+            margin-bottom: 18px;
+        }
+
+        .timeline-title {
+            color: var(--blue-dark);
+            font-weight: 950;
+            margin-bottom: 12px;
+        }
+
+        .timeline-scale {
+            display: grid;
+            gap: 0;
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 18px 18px 0 0;
+            overflow: hidden;
+            background: #F8FBFF;
+        }
+
+        .timeline-scale-day {
+            min-width: 120px;
+            padding: 10px 8px;
+            border-right: 1px solid #E6EDF7;
+            text-align: center;
+        }
+
+            .timeline-scale-day:last-child {
+                border-right: none;
+            }
+
+        .timeline-day-name {
+            color: var(--blue-dark);
+            font-size: .78rem;
+            font-weight: 950;
+            text-transform: capitalize;
+        }
+
+        .timeline-day-date {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 800;
+            margin-top: 2px;
+        }
+
+        .timeline-track {
+            position: relative;
+            height: 246px;
+            border-radius: 0 0 18px 18px;
+            background: white;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .timeline-day-grid {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            pointer-events: none;
+        }
+
+        .timeline-day-column {
+            border-right: 1px solid #EDF2F7;
+            background: linear-gradient(180deg, rgba(248,251,255,.90), rgba(255,255,255,.65));
+        }
+
+            .timeline-day-column:nth-child(even) {
+                background: linear-gradient(180deg, rgba(242,246,252,.90), rgba(255,255,255,.65));
+            }
+
+            .timeline-day-column:last-child {
+                border-right: none;
+            }
+
+        .timeline-hour-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            border-top: 1px dashed #D7E1EE;
+            pointer-events: none;
+        }
+
+        .timeline-item {
+            position: absolute;
+            min-width: 138px;
+            max-width: 240px;
+            height: 38px;
+            border-radius: 12px;
+            color: white;
+            font-size: .72rem;
+            font-weight: 950;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 6px 10px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            box-shadow: 0 10px 20px rgba(16,24,40,.18);
+            z-index: 3;
+        }
+
+            .timeline-item .timeline-ref {
+                display: block;
+                width: 100%;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+                line-height: 1.05;
+            }
+
+            .timeline-item small {
+                display: block;
+                width: 100%;
+                font-size: .64rem;
+                font-weight: 800;
+                opacity: .95;
+                margin-left: 0;
+                margin-top: 2px;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+            }
+
+        .timeline-now-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #B42318;
+            z-index: 5;
+            box-shadow: 0 0 0 3px rgba(180,35,24,.10);
+        }
+
+        .timeline-now-label {
+            position: absolute;
+            top: 6px;
+            transform: translateX(-50%);
+            background: #B42318;
+            color: white;
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: .68rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .timeline-help {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+        .timeline-day-detail {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .timeline-day-card {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: #FBFDFF;
+            padding: 12px;
+        }
+
+        .timeline-day-title {
+            color: var(--blue-dark);
+            font-size: .84rem;
+            font-weight: 950;
+            text-transform: capitalize;
+            margin-bottom: 8px;
+        }
+
+        .timeline-day-empty {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 750;
+        }
+
+        .timeline-day-program {
+            border: 1px solid #E4EBF5;
+            background: white;
+            border-radius: 12px;
+            padding: 8px;
+            margin-bottom: 7px;
+        }
+
+            .timeline-day-program:last-child {
+                margin-bottom: 0;
+            }
+
+        .timeline-day-program-title {
+            color: var(--text);
+            font-size: .78rem;
+            font-weight: 950;
+        }
+
+        .timeline-day-program-sub {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 750;
+            margin-top: 2px;
+        }
+
+        .timeline-primary {
+            background: linear-gradient(90deg, var(--blue), #2E90FA);
+        }
+
+        .timeline-success {
+            background: linear-gradient(90deg, #12B76A, #067647);
+        }
+
+        .timeline-warning {
+            background: linear-gradient(90deg, #FDB022, #DC6803);
+        }
+
+        .timeline-danger {
+            background: linear-gradient(90deg, #F04438, #B42318);
+        }
+
+        .timeline-done {
+            background: linear-gradient(90deg, #98A2B3, #475467);
+        }
+
+        .timeline-legend {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 850;
+            margin-top: 8px;
+        }
+
+        .production-map-panel {
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            background: linear-gradient(135deg, #FFFFFF, #F8FBFF);
+            padding: 16px;
+            margin-top: 18px;
+        }
+
+        .production-map-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .production-map-title {
+            color: var(--blue-dark);
+            font-size: .98rem;
+            font-weight: 950;
+            margin: 0;
+        }
+
+        .production-map-sub {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 700;
+            margin-top: 3px;
+        }
+
+        .production-map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+        }
+
+        .production-map-card {
+            border: 1px solid #E4EBF5;
+            border-radius: 16px;
+            background: white;
+            padding: 12px;
+            box-shadow: 0 6px 14px rgba(16,24,40,.045);
+        }
+
+        .production-map-card.is-current {
+            border-color: #ABEFC6;
+            background: linear-gradient(135deg, #ECFDF3, #FFFFFF);
+        }
+
+        .production-map-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .production-map-part {
+            color: var(--text);
+            font-size: .86rem;
+            font-weight: 950;
+            line-height: 1.15;
+        }
+
+        .production-map-desc {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 700;
+            margin-top: 2px;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .production-map-values {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 7px;
+            margin-top: 10px;
+        }
+
+        .production-map-value {
+            border: 1px solid #EDF2F7;
+            border-radius: 12px;
+            background: #FBFDFF;
+            padding: 8px;
+        }
+
+        .production-map-label {
+            color: var(--muted);
+            font-size: .62rem;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            font-weight: 950;
+        }
+
+        .production-map-number {
+            color: var(--blue-dark);
+            font-size: .9rem;
+            font-weight: 950;
+            margin-top: 2px;
+        }
+
+        .production-map-actions {
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+
+        .program-list {
+            display: grid;
+            gap: 14px;
+        }
+
+        .program-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: var(--shadow-soft);
+            padding: 16px;
+        }
+
+            .program-card.featured {
+                border-color: #ABEFC6;
+                background: linear-gradient(135deg, #F0FFF6, #FFFFFF);
+            }
+
+        .program-title {
+            color: var(--text);
+            font-weight: 950;
+            font-size: 1rem;
+            line-height: 1.2;
+        }
+
+        .program-desc {
+            color: var(--muted);
+            font-size: .8rem;
+            font-weight: 650;
+            margin-top: 5px;
+        }
+
+        .program-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 11px;
+            margin-top: 14px;
+        }
+
+        .side-panel {
+            display: grid;
+            gap: 14px;
+            position: sticky;
+            top: 20px;
+        }
+
+        .side-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: var(--shadow-soft);
+            padding: 16px;
+        }
+
+        .side-title {
+            color: var(--blue-dark);
+            font-weight: 950;
+            margin-bottom: 12px;
+        }
+
+        .queue-item {
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 12px;
+            background: #FBFDFF;
+            margin-bottom: 10px;
+        }
+
+            .queue-item:last-child {
+                margin-bottom: 0;
+            }
+
+        .modal-value-label {
+            color: var(--muted);
+            font-size: .74rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 18px;
+            z-index: 20;
+            margin-top: 24px;
+            background: rgba(255,255,255,.92);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        @@media (max-width: 1200px) {
+            .machine-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .side-panel {
+                position: static;
+            }
+        }
+
+        @@media (max-width: 768px) {
+            .page {
+                padding: 16px;
+            }
+
+            .hero {
+                padding: 24px;
+                border-radius: 24px;
+            }
+
+                .hero h1 {
+                    font-size: 1.55rem;
+                }
+
+            .machine-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .program-grid, .machine-kpis {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .modal-header-pro {
+                padding: 22px;
+            }
+
+            .modal-body-pro {
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <section class="hero">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <div class="stage-label"><i class="fa-solid fa-industry"></i> Vista operativa · Máquinas</div>
+                    <h1><i class="fa-solid fa-table-columns me-2"></i>Tablero de Máquinas</h1>
+                    <p class="mb-0">Dashboard visual para ver máquinas libres, máquinas produciendo, próximos cambios, arranques, piezas pendientes y generación de OF.</p>
+                    <div class="chip-row mt-3">
+                        <span class="pill pill-primary"><i class="fa-solid fa-calendar-days"></i>@Model.FechaDesde.ToString("dd/MM/yyyy") - @Model.FechaHasta.ToString("dd/MM/yyyy")</span>
+                        <span class="pill pill-success">@maquinasConPrograma máquinas con carga</span>
+                        <span class="pill pill-warning">@programasPendientesOF OF pendientes</span>
+                    </div>
+                </div>
+                <div class="hero-actions d-flex gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-glass"><i class="fa-solid fa-arrow-left"></i> Volver</a>
+                  @*  <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn-glass"><i class="fa-solid fa-chart-line"></i> Panorama</a>*@
+                    <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-glass"><i class="fa-solid fa-list"></i> Programa general</a>
+                </div>
+            </div>
+        </section>
+
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success rounded-4 fw-semibold"><i class="fa-solid fa-circle-check me-2"></i>@TempData["Success"]</div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger rounded-4 fw-semibold"><i class="fa-solid fa-triangle-exclamation me-2"></i>@TempData["Error"]</div>
+        }
+
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="h5 fw-bold text-primary m-0"><i class="fa-solid fa-sliders me-2"></i>Filtros y rango</h2>
+                    <div class="text-muted small">Consulta por día, semana, mes, año o un rango personalizado.</div>
+                </div>
+                <div class="quick-range">
+                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" asp-route-fechaDesde="@hoy.ToString("yyyy-MM-dd")" asp-route-fechaHasta="@hoy.ToString("yyyy-MM-dd")" class="chip"><i class="fa-solid fa-sun"></i>Hoy</a>
+                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" asp-route-fechaDesde="@inicioSemana.ToString("yyyy-MM-dd")" asp-route-fechaHasta="@finSemana.ToString("yyyy-MM-dd")" class="chip"><i class="fa-solid fa-calendar-week"></i>Semana</a>
+                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" asp-route-fechaDesde="@inicioMes.ToString("yyyy-MM-dd")" asp-route-fechaHasta="@finMes.ToString("yyyy-MM-dd")" class="chip"><i class="fa-solid fa-calendar-days"></i>Mes</a>
+                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" asp-route-fechaDesde="@inicioAnio.ToString("yyyy-MM-dd")" asp-route-fechaHasta="@finAnio.ToString("yyyy-MM-dd")" class="chip"><i class="fa-solid fa-calendar"></i>Año</a>
+                </div>
+            </div>
+            <div class="panel-body">
+                <form asp-controller="PlaneacionPrograma" asp-action="Maquinas" method="get">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-xl-2 col-md-4"><label class="fw-bold small text-muted">Desde</label><input name="fechaDesde" type="date" value="@Model.FechaDesde.ToString("yyyy-MM-dd")" class="form-control input-modern" /></div>
+                        <div class="col-xl-2 col-md-4"><label class="fw-bold small text-muted">Hasta</label><input name="fechaHasta" type="date" value="@Model.FechaHasta.ToString("yyyy-MM-dd")" class="form-control input-modern" /></div>
+                        <div class="col-xl-2 col-md-4"><button type="submit" class="btn btn-main w-100"><i class="fa-solid fa-magnifying-glass me-1"></i>Consultar</button></div>
+                        <div class="col-xl-2 col-md-4"><a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn btn-light-main w-100"><i class="fa-solid fa-rotate-left me-1"></i>Limpiar</a></div>
+                        <div class="col-xl-4 col-md-8"><label class="fw-bold small text-muted">Buscar máquina / cliente / parte</label><input id="buscarMaquina" type="text" class="form-control input-modern" placeholder="Buscar por máquina, pieza, cliente, molde..." /></div>
+                    </div>
+                </form>
+                <div class="chip-row mt-3">
+                    <button type="button" class="chip active filtro-estado" data-estado="todos"><i class="fa-solid fa-layer-group"></i>Todas</button>
+                    <button type="button" class="chip filtro-estado" data-estado="produciendo"><i class="fa-solid fa-play"></i>Produciendo</button>
+                    <button type="button" class="chip filtro-estado" data-estado="siguiente"><i class="fa-solid fa-forward-step"></i>Próxima carga</button>
+                    <button type="button" class="chip filtro-estado" data-estado="programada"><i class="fa-solid fa-calendar-check"></i>Programadas</button>
+                    <button type="button" class="chip filtro-estado" data-estado="libre"><i class="fa-regular fa-circle"></i>Libres</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-3 mb-4">
+            <div class="col-xl-2 col-md-4"><div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-list-check"></i></div><div class="kpi-label">Programas</div><div class="kpi-value">@Model.TotalProgramas.ToString("N0")</div><div class="kpi-sub">en el rango</div></div></div>
+            <div class="col-xl-2 col-md-4"><div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-cubes-stacked"></i></div><div class="kpi-label">Programadas</div><div class="kpi-value">@Model.TotalPiezasProgramadas.ToString("N0")</div><div class="kpi-sub">piezas</div></div></div>
+            <div class="col-xl-2 col-md-4"><div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div><div class="kpi-label">Pendientes</div><div class="kpi-value">@Model.TotalPiezasPendientes.ToString("N0")</div><div class="kpi-sub">piezas</div></div></div>
+            <div class="col-xl-2 col-md-4"><div class="kpi"><div class="kpi-icon"><i class="fa-regular fa-clock"></i></div><div class="kpi-label">Horas</div><div class="kpi-value">@Model.TotalHorasProgramadas.ToString("N2")</div><div class="kpi-sub">programadas</div></div></div>
+            <div class="col-xl-2 col-md-4"><div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-gears"></i></div><div class="kpi-label">Con carga</div><div class="kpi-value">@maquinasConPrograma.ToString("N0")</div><div class="kpi-sub">@maquinasSinPrograma libres</div></div></div>
+            <div class="col-xl-2 col-md-4"><div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-file-circle-plus"></i></div><div class="kpi-label">OF pendientes</div><div class="kpi-value">@programasPendientesOF.ToString("N0")</div><div class="kpi-sub">@programasConOF con OF</div></div></div>
+        </section>
+
+        <section class="mb-3">
+            <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
+                <div>
+                    <h2 class="h5 fw-bold text-primary mb-1"><i class="fa-solid fa-diagram-project me-2"></i>Carga por máquina</h2>
+                    <div class="text-muted small">Rango: <strong>@Model.FechaDesde.ToString("dd/MM/yyyy")</strong> al <strong>@Model.FechaHasta.ToString("dd/MM/yyyy")</strong> · En producción: <strong>@programasEnProduccion</strong> · En preparación: <strong>@programasPreparacion</strong></div>
+                </div>
+                <div class="chip-row"><span class="pill pill-success"><i class="fa-solid fa-play"></i> Produciendo</span><span class="pill pill-info"><i class="fa-solid fa-calendar-check"></i> Programada</span><span class="pill pill-muted"><i class="fa-regular fa-circle"></i> Libre</span></div>
+            </div>
+        </section>
+
+        <section class="machine-grid" id="gridMaquinas">
+            @foreach (var maq in Model.Maquinas.OrderByDescending(x => x.Actual != null).ThenByDescending(x => x.Programas.Any()).ThenBy(x => x.MaquinaCodigo))
+            {
+                var estadoClase = ClaseEstadoMaquina(maq);
+                var estadoTexto = TextoEstadoMaquina(maq);
+                var filtroEstado = EstadoFiltro(maq);
+                var programasOrdenados = maq.Programas.OrderBy(x => x.FechaInicioProgramada).ThenBy(x => x.SecuenciaMaquina).ToList();
+                var principal = maq.Actual ?? maq.Siguiente ?? programasOrdenados.FirstOrDefault();
+                var modalId = ModalId(maq);
+                var search = ((maq.MaquinaCodigo ?? "") + " " + (maq.MaquinaNombre ?? "") + " " + string.Join(" ", maq.Programas.Select(p => (p.ClienteNombre ?? "") + " " + (p.NumeroParte ?? "") + " " + (p.ReferenciaSAP ?? "") + " " + (p.DesignacionDescripcionSAP ?? "") + " " + (p.MoldeCodigo ?? "") + " " + (p.Color ?? "")))).ToLower();
+
+                <article class="machine-card @estadoClase" data-machine-card data-estado="@filtroEstado" data-search="@search">
+                    <div>
+                        <div class="d-flex justify-content-between gap-3 align-items-start">
+                            <div>
+                                <div class="machine-badge-icon"><i class="fa-solid @IconoEstado(maq)"></i></div>
+                                <h3 class="machine-title">@Valor(maq.MaquinaCodigo)</h3>
+                                <div class="machine-sub">@Valor(maq.MaquinaNombre)</div>
+                            </div>
+                            <span class="pill @(maq.Programas.Any() ? (maq.Actual != null ? "pill-success" : "pill-info") : "pill-muted")"><i class="fa-solid fa-circle" style="font-size:.45rem;"></i>@estadoTexto</span>
+                        </div>
+
+                        <div class="machine-kpis">
+                            <div class="mini-box"><div class="mini-label">Programas</div><div class="mini-value">@maq.Programas.Count.ToString("N0")</div></div>
+                            <div class="mini-box"><div class="mini-label">Pendientes</div><div class="mini-value">@maq.Programas.Sum(x => x.CantidadPendiente).ToString("N0")</div></div>
+                            <div class="mini-box"><div class="mini-label">Horas</div><div class="mini-value">@maq.Programas.Sum(x => x.HorasProgramadas ?? 0).ToString("N2")</div></div>
+                            <div class="mini-box"><div class="mini-label">OF</div><div class="mini-value">@maq.Programas.Count(x => x.TieneOF).ToString("N0") / @maq.Programas.Count.ToString("N0")</div></div>
+                        </div>
+
+                        @if (principal != null)
+                        {
+                            <div class="current-program">
+                                <div class="d-flex justify-content-between gap-2 flex-wrap mb-2"><span class="pill @ClaseEstatus(principal.EstatusID)"><i class="fa-solid fa-circle" style="font-size:.45rem;"></i>@principal.EstatusNombre</span><span class="pill pill-primary">@Valor(principal.CondicionProduccion)</span></div>
+                                <div class="current-title">@Valor(principal.ReferenciaSAP ?? principal.NumeroParte)</div>
+                                <div class="current-desc">@Valor(principal.DesignacionDescripcionSAP)</div>
+                                <div class="d-flex justify-content-between gap-2 mt-2 text-muted small fw-semibold"><span>@FechaCorta(principal.FechaInicioProgramada) @Hora(principal.FechaInicioProgramada)</span><span>@FechaCorta(principal.FechaFinProgramada) @Hora(principal.FechaFinProgramada)</span></div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-machine"><i class="fa-regular fa-calendar-xmark fa-2x mb-2"></i><div class="fw-bold">Máquina libre</div><div class="small">Sin carga en el rango consultado.</div></div>
+                        }
+                    </div>
+                    <div class="machine-actions"><button type="button" class="btn btn-main" data-bs-toggle="modal" data-bs-target="#@modalId"><i class="fa-solid fa-up-right-and-down-left-from-center me-1"></i>Abrir tablero</button></div>
+                </article>
+
+                <div class="modal fade" id="@modalId" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-fullscreen">
+                        <div class="modal-content">
+                            <div class="modal-header-pro">
+                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap w-100">
+                                    <div>
+                                        <h2 class="modal-title-pro"><i class="fa-solid fa-gears me-2"></i>@Valor(maq.MaquinaCodigo)</h2>
+                                        <div class="modal-sub-pro">@Valor(maq.MaquinaNombre) · @estadoTexto · Rango @Model.FechaDesde.ToString("dd/MM/yyyy") - @Model.FechaHasta.ToString("dd/MM/yyyy")</div>
+                                        <div class="chip-row mt-3"><span class="pill pill-primary">@maq.Programas.Count.ToString("N0") programas</span><span class="pill pill-warning">@maq.Programas.Sum(x => x.CantidadPendiente).ToString("N0") pendientes</span><span class="pill pill-success">@maq.Programas.Count(x => x.TieneOF).ToString("N0") con OF</span><span class="pill pill-muted">@maq.Programas.Count(x => x.PuedeGenerarOF).ToString("N0") OF pendientes</span></div>
+                                    </div>
+                                    <button type="button" class="btn btn-light fw-bold rounded-4" data-bs-dismiss="modal"><i class="fa-solid fa-xmark me-1"></i>Cerrar</button>
+                                </div>
+                            </div>
+                            <div class="modal-body-pro">
+                                @if (maq.Programas.Any())
+                                {
+                                    <div class="machine-layout">
+                                        <main>
+                                            <div class="stage-panel">
+                                                <div class="stage-head">
+                                                    <h3 class="stage-title">Timeline operativo</h3>
+                                                    <div class="stage-desc">Carga de la máquina dentro del rango seleccionado. El mapa compacto queda debajo y el panel operativo se mantiene a la derecha.</div>
+                                                </div>
+                                                <div class="stage-body">
+                                                    <div class="timeline-panel">
+                                                        @{
+                                                            var diasTimeline = DiasRango();
+                                                            var columnasTimeline = Math.Max(1, diasTimeline.Count);
+                                                        }
+
+                                                        <div class="timeline-title">
+                                                            <i class="fa-solid fa-timeline me-2"></i>
+                                                            Línea de tiempo operativa
+                                                        </div>
+
+                                                        <div class="timeline-help">
+                                                            <span class="pill pill-primary"><i class="fa-solid fa-circle"></i> Programado</span>
+                                                            <span class="pill pill-success"><i class="fa-solid fa-play"></i> En producción</span>
+                                                            <span class="pill pill-warning"><i class="fa-solid fa-wrench"></i> Preparación</span>
+                                                            <span class="pill pill-danger"><i class="fa-solid fa-pause"></i> Pausado</span>
+                                                            <span class="pill pill-muted"><i class="fa-solid fa-map"></i> El mapa compacto reemplaza el detalle largo</span>
+                                                        </div>
+
+                                                        <div class="timeline-scale" style="grid-template-columns: repeat(@columnasTimeline, minmax(120px, 1fr));">
+                                                            @foreach (var dia in diasTimeline)
+                                                            {
+                                                                <div class="timeline-scale-day">
+                                                                    <div class="timeline-day-name">@dia.ToString("dddd", new System.Globalization.CultureInfo("es-MX"))</div>
+                                                                    <div class="timeline-day-date">@dia.ToString("dd/MM/yyyy")</div>
+                                                                </div>
+                                                            }
+                                                        </div>
+
+                                                        <div class="timeline-track">
+                                                            <div class="timeline-day-grid" style="grid-template-columns: repeat(@columnasTimeline, minmax(120px, 1fr));">
+                                                                @foreach (var dia in diasTimeline)
+                                                                {
+                                                                    <div class="timeline-day-column"></div>
+                                                                }
+                                                            </div>
+
+                                                            <div class="timeline-hour-line"></div>
+
+                                                            <div class="timeline-now-line" style="@TimelineNowStyle()">
+                                                                <span class="timeline-now-label">Ahora</span>
+                                                            </div>
+
+                                                            @for (var idxTimeline = 0; idxTimeline < programasOrdenados.Count; idxTimeline++)
+                                                            {
+                                                                var p = programasOrdenados[idxTimeline];
+                                                                var carrilTimeline = idxTimeline % 5;
+                                                                var topTimeline = 18 + (carrilTimeline * 42);
+
+                                                                <div class="timeline-item @TimelineClass(p)"
+                                                                     style="@TimelineStyle(p) top:@(topTimeline)px;"
+                                                                     title="@Valor(p.ReferenciaSAP ?? p.NumeroParte) · @FechaHora(p.FechaInicioProgramada) - @FechaHora(p.FechaFinProgramada)">
+                                                                    <span class="timeline-ref">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</span>
+                                                                    <small>@InicioVisible(p).ToString("dd/MM HH:mm") - @FinVisible(p).ToString("dd/MM HH:mm")</small>
+                                                                </div>
+                                                            }
+                                                        </div>
+
+                                                        <div class="timeline-legend">
+                                                            <span>Inicio del rango: @Model.FechaDesde.ToString("dd/MM/yyyy 00:00")</span>
+                                                            <span>Fin del rango: @Model.FechaHasta.ToString("dd/MM/yyyy 23:59")</span>
+                                                        </div>
+
+                                                        <div class="production-map-panel">
+                                                            <div class="production-map-head">
+                                                                <div>
+                                                                    <h4 class="production-map-title">
+                                                                        <i class="fa-solid fa-map-location-dot me-2"></i>
+                                                                        Mapa compacto de producción
+                                                                    </h4>
+                                                                    <div class="production-map-sub">
+                                                                        Resumen por programa: pieza, horario, molde y cálculo de piezas necesarias.
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="chip-row">
+                                                                    <span class="pill pill-primary">@programasOrdenados.Count.ToString("N0") programas</span>
+                                                                    <span class="pill pill-warning">@programasOrdenados.Sum(x => x.CantidadPendiente).ToString("N0") pzas necesarias</span>
+                                                                    <span class="pill pill-success">@programasOrdenados.Count(x => x.TieneOF).ToString("N0") con OF</span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="production-map-grid">
+                                                                @foreach (var p in programasOrdenados)
+                                                                {
+                                                                    var esActual = maq.Actual?.ProgramaProduccionID == p.ProgramaProduccionID;
+                                                                    var piezasNecesarias = p.CantidadPendiente > 0 ? p.CantidadPendiente : p.CantidadProgramada;
+                                                                    var claseActual = esActual ? "is-current" : "";
+
+                                                                    <div class="production-map-card @claseActual">
+                                                                        <div class="production-map-top">
+                                                                            <div>
+                                                                                <div class="production-map-part">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</div>
+                                                                                <div class="production-map-desc">@Valor(p.DesignacionDescripcionSAP)</div>
+                                                                            </div>
+
+                                                                            <span class="pill @ClaseEstatus(p.EstatusID)">
+                                                                                @p.EstatusNombre
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div class="chip-row">
+                                                                            @if (esActual)
+                                                                            {
+                                                                                <span class="pill pill-success"><i class="fa-solid fa-play"></i> Actual</span>
+                                                                            }
+                                                                            <span class="pill pill-primary">@Valor(p.CondicionProduccion)</span>
+                                                                            <span class="pill pill-purple">Molde @Valor(p.MoldeCodigo)</span>
+                                                                        </div>
+
+                                                                        <div class="production-map-values">
+                                                                            <div class="production-map-value">
+                                                                                <div class="production-map-label">Necesarias</div>
+                                                                                <div class="production-map-number">@piezasNecesarias.ToString("N0")</div>
+                                                                            </div>
+                                                                            <div class="production-map-value">
+                                                                                <div class="production-map-label">Programadas</div>
+                                                                                <div class="production-map-number">@p.CantidadProgramada.ToString("N0")</div>
+                                                                            </div>
+                                                                            <div class="production-map-value">
+                                                                                <div class="production-map-label">Pendientes</div>
+                                                                                <div class="production-map-number">@p.CantidadPendiente.ToString("N0")</div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div class="text-muted small fw-semibold mt-2">
+                                                                            @FechaHora(p.FechaInicioProgramada) - @FechaHora(p.FechaFinProgramada)
+                                                                        </div>
+
+                                                                        @if (p.PuedeGenerarOF || p.TieneOF)
+                                                                        {
+                                                                            <div class="production-map-actions">
+                                                                                @if (p.PuedeGenerarOF)
+                                                                                {
+                                                                                    <button type="button"
+                                                                                            class="btn btn-sm btn-main btn-generar-of"
+                                                                                            data-programa-id="@p.ProgramaProduccionID"
+                                                                                            data-referencia="@Valor(p.ReferenciaSAP ?? p.NumeroParte)"
+                                                                                            data-designacion="@Valor(p.DesignacionDescripcionSAP)"
+                                                                                            data-maquina="@Valor(p.MaquinaCodigo)"
+                                                                                            data-molde="@Valor(p.MoldeCodigo)"
+                                                                                            data-cantidad="@p.CantidadProgramada.ToString("N0")">
+                                                                                        <i class="fa-solid fa-file-circle-plus me-1"></i>
+                                                                                        Generar OF
+                                                                                    </button>
+                                                                                }
+                                                                                else if (p.TieneOF)
+                                                                                {
+                                                                                    <a asp-controller="Planeacion"
+                                                                                       asp-action="Detalle"
+                                                                                       asp-route-id="@p.SolicitudProduccionID"
+                                                                                       class="btn btn-sm btn-success rounded-4 fw-bold">
+                                                                                        <i class="fa-solid fa-circle-check me-1"></i>
+                                                                                        Ver OF
+                                                                                    </a>
+                                                                                }
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </main>
+
+                                        <aside class="side-panel">
+                                            <div class="side-card">
+                                                <div class="side-title">
+                                                    <i class="fa-solid fa-play text-success me-2"></i>
+                                                    Programa actual
+                                                </div>
+
+                                                @if (maq.Actual != null)
+                                                {
+                                                    var actual = maq.Actual;
+                                                    var piezasNecesariasActual = actual.CantidadPendiente > 0
+                                                        ? actual.CantidadPendiente
+                                                        : actual.CantidadProgramada;
+
+                                                    <div class="queue-item">
+                                                        <div class="fw-bold">@Valor(actual.ReferenciaSAP ?? actual.NumeroParte)</div>
+                                                        <div class="text-muted small">@Valor(actual.DesignacionDescripcionSAP)</div>
+
+                                                        <div class="chip-row mt-2">
+                                                            <span class="pill pill-success">@actual.EstatusNombre</span>
+                                                            <span class="pill pill-primary">@Valor(actual.MoldeCodigo)</span>
+                                                            <span class="pill pill-warning">@piezasNecesariasActual.ToString("N0") pzas necesarias</span>
+                                                        </div>
+
+                                                        <div class="text-muted small fw-semibold mt-2">
+                                                            @FechaHora(actual.FechaInicioProgramada) - @FechaHora(actual.FechaFinProgramada)
+                                                        </div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="text-muted small">No hay programa marcado como actual.</div>
+                                                }
+                                            </div>
+
+                                            <div class="side-card">
+                                                <div class="side-title">
+                                                    <i class="fa-solid fa-forward-step text-primary me-2"></i>
+                                                    Siguiente producción
+                                                </div>
+
+                                                @if (maq.Siguiente != null)
+                                                {
+                                                    var sig = maq.Siguiente;
+                                                    var piezasNecesariasSiguiente = sig.CantidadPendiente > 0
+                                                        ? sig.CantidadPendiente
+                                                        : sig.CantidadProgramada;
+
+                                                    <div class="queue-item">
+                                                        <div class="fw-bold">@Valor(sig.ReferenciaSAP ?? sig.NumeroParte)</div>
+                                                        <div class="text-muted small">@Valor(sig.DesignacionDescripcionSAP)</div>
+
+                                                        <div class="chip-row mt-2">
+                                                            <span class="pill pill-primary">@FechaHora(sig.FechaInicioProgramada)</span>
+                                                            <span class="pill pill-purple">@Valor(sig.MoldeCodigo)</span>
+                                                            <span class="pill pill-warning">@piezasNecesariasSiguiente.ToString("N0") pzas necesarias</span>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="text-muted small">No hay siguiente producción identificada.</div>
+                                                }
+                                            </div>
+
+                                           
+                                        </aside>
+                                    </div>
+                         
+                                                        }
+                                                        else
+                            {
+                                <div class="empty-machine"><i class="fa-regular fa-calendar-xmark fa-3x mb-3"></i><h3 class="fw-bold text-primary">Máquina libre</h3><p class="mb-0">No hay producciones ni cambios programados en este rango.</p></div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+                        }
+        </section>
+
+        <section class="sticky-actions">
+            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn btn-light-main"><i class="fa-solid fa-arrow-left me-1"></i>Volver a Volver</a>
+                <div class="d-flex gap-2 flex-wrap"><a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn btn-light-main"><i class="fa-solid fa-chart-line me-1"></i>Panorama</a><a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn btn-main"><i class="fa-solid fa-list me-1"></i>Programa general</a></div>
+            </div>
+        </section>
+    </div>
+
+    <form asp-controller="PlaneacionPrograma" asp-action="GenerarOF" method="post" id="formGenerarOF" class="d-none">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="programaProduccionId" id="programaProduccionIdGenerarOF" />
+    </form>
+
+    <div class="modal fade" id="modalGenerarOF" tabindex="-1" aria-labelledby="modalGenerarOFLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <div><h5 class="modal-title fw-bold text-primary" id="modalGenerarOFLabel"><i class="fa-solid fa-file-circle-plus me-2"></i>Generar Orden de Fabricación</h5><div class="text-muted small">Confirma que deseas generar la OF desde este programa de máquina.</div></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning rounded-4 mb-3"><i class="fa-solid fa-triangle-exclamation me-2"></i>Al confirmar se creará una nueva OF y quedará ligada al programa de producción.</div>
+                    <div class="border rounded-4 p-3 bg-light">
+                        <div class="mb-2"><div class="modal-value-label">Referencia SAP</div><div class="fw-bold" id="modalOFReferencia">-</div></div>
+                        <div class="mb-2"><div class="modal-value-label">Designación</div><div id="modalOFDesignacion">-</div></div>
+                        <div class="row g-2"><div class="col-4"><div class="modal-value-label">Máquina</div><div class="fw-semibold" id="modalOFMaquina">-</div></div><div class="col-4"><div class="modal-value-label">Molde</div><div class="fw-semibold" id="modalOFMolde">-</div></div><div class="col-4"><div class="modal-value-label">Cantidad</div><div class="fw-semibold" id="modalOFCantidad">-</div></div></div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-light-main" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-main" id="btnConfirmarGenerarOF"><i class="fa-solid fa-check me-1"></i>Sí, generar OF</button></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const inputBusqueda = document.getElementById('buscarMaquina');
+        const cardsMaquina = Array.from(document.querySelectorAll('[data-machine-card]'));
+        const filtrosEstado = Array.from(document.querySelectorAll('.filtro-estado'));
+        let estadoActivo = 'todos';
+
+        function aplicarFiltros() {
+            const texto = (inputBusqueda?.value || '').trim().toLowerCase();
+            cardsMaquina.forEach(card => {
+                const search = (card.dataset.search || '').toLowerCase();
+                const estado = (card.dataset.estado || '').toLowerCase();
+                const coincideTexto = !texto || search.includes(texto);
+                const coincideEstado = estadoActivo === 'todos' || estado === estadoActivo;
+                if (coincideTexto && coincideEstado) card.classList.remove('hidden-by-filter'); else card.classList.add('hidden-by-filter');
+            });
+        }
+
+        inputBusqueda?.addEventListener('input', aplicarFiltros);
+        filtrosEstado.forEach(btn => {
+            btn.addEventListener('click', function () {
+                filtrosEstado.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                estadoActivo = this.dataset.estado || 'todos';
+                aplicarFiltros();
+            });
+        });
+
+        let programaSeleccionadoOF = null;
+        document.querySelectorAll('.btn-generar-of').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                programaSeleccionadoOF = this.dataset.programaId;
+                document.getElementById('modalOFReferencia').textContent = this.dataset.referencia || '-';
+                document.getElementById('modalOFDesignacion').textContent = this.dataset.designacion || '-';
+                document.getElementById('modalOFMaquina').textContent = this.dataset.maquina || '-';
+                document.getElementById('modalOFMolde').textContent = this.dataset.molde || '-';
+                document.getElementById('modalOFCantidad').textContent = this.dataset.cantidad || '-';
+                const modal = new bootstrap.Modal(document.getElementById('modalGenerarOF'));
+                modal.show();
+            });
+        });
+
+        document.getElementById('btnConfirmarGenerarOF')?.addEventListener('click', function () {
+            if (!programaSeleccionadoOF) return;
+            document.getElementById('programaProduccionIdGenerarOF').value = programaSeleccionadoOF;
+            document.getElementById('formGenerarOF').submit();
+        });
+    </script>
+</body>
+</html>

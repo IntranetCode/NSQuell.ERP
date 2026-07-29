@@ -1,0 +1,1664 @@
+﻿@model ERP.NSQuell.Models.PlaneacionProgramaNecesidadFiltroVm
+@using ERP.NSQuell.Models
+@using System.Linq
+@using System.Collections.Generic
+
+@functions {
+    public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    public static string F(DateTime value) => value == DateTime.MinValue ? "-" : value.ToString("dd/MM/yyyy");
+    public static string F(DateTime? value) => value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "-";
+    public static string N0(int? value) => value.HasValue ? value.Value.ToString("N0") : "0";
+    public static string N0(decimal? value) => value.HasValue ? value.Value.ToString("N0") : "0";
+    public static string D2(decimal? value) => value.HasValue ? value.Value.ToString("N2") : "0.00";
+    public static string D4(decimal? value) => value.HasValue ? value.Value.ToString("N4") : "0.0000";
+
+    public static bool NecesitaProduccion(PlaneacionProgramaNecesidadVm x) => (x.PiezasAProducir ?? 0) > 0;
+    public static bool StockOk(PlaneacionProgramaNecesidadVm x) => (x.PiezasDesdePT ?? 0) > 0 || !NecesitaProduccion(x);
+
+    public static bool MpOk(PlaneacionProgramaNecesidadVm x)
+    {
+        if (!NecesitaProduccion(x)) return true;
+        return (x.MPDisponibleKg ?? 0) >= (x.MPRequeridaKg ?? 0) && (x.MPRequeridaKg ?? 0) > 0;
+    }
+
+    public static bool EmbalajeOk(PlaneacionProgramaNecesidadVm x)
+    {
+        if (!NecesitaProduccion(x)) return true;
+        return (x.EmbalajeDisponible ?? 0) >= (x.EmbalajeRequerido ?? 0) && (x.EmbalajeRequerido ?? 0) > 0;
+    }
+
+    public static bool MoldeOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MoldeID.HasValue;
+    public static bool MaquinaOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MaquinaSugeridaID.HasValue;
+    public static bool MaterialOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MaterialID.HasValue || !string.IsNullOrWhiteSpace(x.MaterialCodigo);
+    public static bool CavidadesOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.Cavidades ?? 0) > 0);
+    public static bool CicloOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || !string.IsNullOrWhiteSpace(x.Ciclo);
+    public static bool ObjetivoOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.ObjetivoHora ?? 0) > 0);
+    public static bool PesoOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.PesoBrutoPieza ?? 0) > 0);
+
+    public static bool DatosTecnicosOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return MaterialOk(x) && MoldeOk(x) && MaquinaOk(x) && CavidadesOk(x) && CicloOk(x) && ObjetivoOk(x) && PesoOk(x);
+    }
+
+    public static bool ListoCambioMolde(PlaneacionProgramaNecesidadVm x)
+    {
+        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && DatosTecnicosOk(x) && MpOk(x) && EmbalajeOk(x);
+    }
+
+    public static bool PendienteAbasto(PlaneacionProgramaNecesidadVm x)
+    {
+        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && DatosTecnicosOk(x) && (!MpOk(x) || !EmbalajeOk(x));
+    }
+
+    public static bool PendienteDatosTecnicos(PlaneacionProgramaNecesidadVm x)
+    {
+        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && !DatosTecnicosOk(x);
+    }
+
+    public static bool CubiertoOProgramado(PlaneacionProgramaNecesidadVm x) => x.ProgramaProduccionID.HasValue || !NecesitaProduccion(x);
+    public static string ClienteNombre(PlaneacionProgramaNecesidadVm x) => string.IsNullOrWhiteSpace(x.ClienteNombre) ? "Sin cliente" : x.ClienteNombre!;
+
+    public static string ParteClave(PlaneacionProgramaNecesidadVm x)
+    {
+        if (!string.IsNullOrWhiteSpace(x.NumeroParte)) return x.NumeroParte!;
+        if (!string.IsNullOrWhiteSpace(x.ReferenciaSAP)) return x.ReferenciaSAP!;
+        return "-";
+    }
+
+    public static string EstadoTexto(PlaneacionProgramaNecesidadVm x)
+    {
+        if (x.ProgramaProduccionID.HasValue) return "Ya programado";
+        if (!NecesitaProduccion(x)) return "Cubierto";
+        if (ListoCambioMolde(x)) return "Listo para Cambio de Molde";
+        if (PendienteAbasto(x)) return "Pendiente de abasto";
+        return "Pendiente de datos técnicos";
+    }
+
+    public static string EstadoClase(PlaneacionProgramaNecesidadVm x)
+    {
+        if (ListoCambioMolde(x)) return "estado-ok";
+        if (PendienteAbasto(x)) return "estado-warn";
+        if (PendienteDatosTecnicos(x)) return "estado-danger";
+        return "estado-muted";
+    }
+
+    public static string CardClase(PlaneacionProgramaNecesidadVm x)
+    {
+        if (ListoCambioMolde(x)) return "card-ok";
+        if (PendienteAbasto(x)) return "card-warn";
+        if (PendienteDatosTecnicos(x)) return "card-danger";
+        return "card-muted";
+    }
+
+    public static string CollapseId(string prefix, int a) => prefix + "_" + a.ToString();
+
+    public static string DataSearch(PlaneacionProgramaNecesidadVm item)
+    {
+        return string.Join(" ",
+            item.FolioRelease ?? string.Empty,
+            item.ClienteNombre ?? string.Empty,
+            item.NumeroParte ?? string.Empty,
+            item.ReferenciaSAP ?? string.Empty,
+            item.DesignacionDescripcionSAP ?? string.Empty,
+            item.MaterialCodigo ?? string.Empty,
+            item.MaterialDescripcion ?? string.Empty,
+            item.MoldeCodigo ?? string.Empty,
+            item.MaquinaSugeridaCodigo ?? string.Empty,
+            item.MaquinaSugeridaNombre ?? string.Empty,
+            item.MensajeCapacidad ?? string.Empty
+        ).ToLowerInvariant();
+    }
+
+    public static DateTime PrioridadFecha(PlaneacionProgramaNecesidadVm item)
+    {
+        return item.FechaRequerida == DateTime.MinValue ? DateTime.MaxValue : item.FechaRequerida;
+    }
+
+    public static int PrioridadEntrada(PlaneacionProgramaNecesidadVm item)
+    {
+        return item.ReleaseDetalleID;
+    }
+
+    public static string PrioridadTexto(PlaneacionProgramaNecesidadVm item)
+    {
+        var fecha = item.FechaRequerida == DateTime.MinValue
+            ? "Sin fecha"
+            : item.FechaRequerida.ToString("dd/MM/yyyy");
+
+        return fecha + " · Entrada " + item.ReleaseDetalleID.ToString();
+    }
+
+    public static string ReleaseKey(PlaneacionProgramaNecesidadVm item)
+    {
+        return string.IsNullOrWhiteSpace(item.FolioRelease)
+            ? "SIN_RELEASE"
+            : item.FolioRelease.Replace(" ", "_").Replace("/", "_").Replace(".", "_").Replace("-", "_");
+    }
+
+    public static string ReleaseTexto(PlaneacionProgramaNecesidadVm item)
+    {
+        return string.IsNullOrWhiteSpace(item.FolioRelease)
+            ? "Sin release"
+            : item.FolioRelease!;
+    }
+
+    public sealed class SeccionUi
+    {
+        public string Titulo { get; set; } = "";
+        public string Sub { get; set; } = "";
+        public string Icono { get; set; } = "";
+        public string Clase { get; set; } = "";
+        public bool Open { get; set; }
+        public List<PlaneacionProgramaNecesidadVm> Items { get; set; } = new();
+    }
+}
+
+@{
+    Layout = null;
+    var necesidades = Model.Necesidades ?? new List<PlaneacionProgramaNecesidadVm>();
+
+    // Prioridad FIFO de planeación:
+    // 1) Primero lo que tiene FechaRequerida más cercana.
+    // 2) Si empatan, gana el ReleaseDetalleID más antiguo.
+    var listos = necesidades.Where(ListoCambioMolde).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
+    var abasto = necesidades.Where(PendienteAbasto).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
+    var datosTecnicos = necesidades.Where(PendienteDatosTecnicos).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
+    var resueltos = necesidades.Where(CubiertoOProgramado).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
+
+    var secciones = new List<SeccionUi>
+    {
+        new SeccionUi { Titulo = "Listos para Programa Cambio de Molde", Sub = "Renglones liberados para definir cambio, arranque, máquina y molde final.", Items = listos, Open = true, Icono = "fa-circle-check", Clase = "sec-ok" },
+        new SeccionUi { Titulo = "Pendientes de abastecimiento", Sub = "Tienen datos técnicos completos, pero falta MP o embalaje.", Items = abasto, Open = false, Icono = "fa-truck-ramp-box", Clase = "sec-warn" },
+        new SeccionUi { Titulo = "Pendientes de datos técnicos", Sub = "Falta molde, material, cavidades, ciclo, máquina, objetivo/hra o peso bruto.", Items = datosTecnicos, Open = false, Icono = "fa-screwdriver-wrench", Clase = "sec-danger" },
+        new SeccionUi { Titulo = "Cubiertas o ya programadas", Sub = "Renglones ya cubiertos con stock o ya enviados a máquinas.", Items = resueltos, Open = false, Icono = "fa-box-check", Clase = "sec-muted" }
+    };
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Programa de Planeación</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --azul: #0b4ea2;
+            --azul2: #063a78;
+            --azul-soft: #eef6ff;
+            --linea: #d9e3f1;
+            --texto: #1f2937;
+            --muted: #667085;
+            --ok: #0f7a4f;
+            --ok-bg: #ebfff4;
+            --warn: #b86b00;
+            --warn-bg: #fff7e6;
+            --danger: #b42318;
+            --danger-bg: #fff1f0;
+            --gray-bg: #f4f5f7;
+            --shadow: 0 16px 36px rgba(15,23,42,.08);
+            --shadow-soft: 0 8px 22px rgba(15,23,42,.05)
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            background: radial-gradient(circle at 0% 0%,rgba(11,78,162,.10),transparent 32%),linear-gradient(180deg,#f8fbff 0%,#edf2f8 100%);
+            font-family: "Segoe UI",Arial,sans-serif;
+            color: var(--texto)
+        }
+
+        .page {
+            max-width: 1760px;
+            margin: 0 auto;
+            padding: 24px
+        }
+
+        .hero {
+            border-radius: 28px;
+            padding: 30px;
+            margin-bottom: 18px;
+            color: #fff;
+            background: linear-gradient(135deg,rgba(11,78,162,.98),rgba(6,58,120,.98));
+            box-shadow: var(--shadow)
+        }
+
+            .hero h1 {
+                margin: 0 0 8px 0;
+                font-size: 2rem;
+                font-weight: 950
+            }
+
+            .hero p {
+                margin: 0;
+                opacity: .92;
+                max-width: 1120px
+            }
+
+        .hero-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 16px
+        }
+
+        .btn-glass {
+            color: #fff;
+            text-decoration: none;
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.13);
+            border-radius: 14px;
+            padding: 9px 14px;
+            font-weight: 850;
+            display: inline-flex;
+            gap: 8px;
+            align-items: center
+        }
+
+            .btn-glass:hover {
+                color: var(--azul);
+                background: #fff
+            }
+
+        .filter-card {
+            background: rgba(255,255,255,.94);
+            border: 1px solid var(--linea);
+            border-radius: 24px;
+            padding: 18px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(14px)
+        }
+
+        .form-label {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .form-control, .form-select {
+            border-radius: 14px;
+            border: 1px solid var(--linea);
+            padding: 10px 12px;
+            min-height: 45px
+        }
+
+        .btn-main {
+            border: none;
+            border-radius: 14px;
+            padding: 10px 14px;
+            min-height: 45px;
+            color: #fff;
+            background: linear-gradient(135deg,var(--azul),var(--azul2));
+            font-weight: 900;
+            text-decoration: none;
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center
+        }
+
+            .btn-main:hover {
+                color: #fff;
+                opacity: .96
+            }
+
+        .quick-btn {
+            border-radius: 999px;
+            padding: 9px 13px;
+            border: 1px solid var(--linea);
+            background: #fff;
+            font-size: .83rem;
+            font-weight: 950;
+            text-decoration: none;
+            color: var(--azul2);
+            display: inline-flex;
+            align-items: center;
+            gap: 7px
+        }
+
+            .quick-btn:hover {
+                border-color: rgba(11,78,162,.35);
+                background: var(--azul-soft);
+                color: var(--azul)
+            }
+
+        .quick-ok {
+            color: var(--ok);
+            border-color: #bcebd3;
+            background: var(--ok-bg)
+        }
+
+        .quick-warn {
+            color: var(--warn);
+            border-color: #f2d59a;
+            background: var(--warn-bg)
+        }
+
+        .quick-danger {
+            color: var(--danger);
+            border-color: #f3b8b3;
+            background: var(--danger-bg)
+        }
+
+        .section {
+            background: #fff;
+            border: 1px solid var(--linea);
+            border-radius: 26px;
+            overflow: hidden;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 18px
+        }
+
+            .section.sec-ok {
+                border-color: #bcebd3
+            }
+
+            .section.sec-warn {
+                border-color: #f2d59a
+            }
+
+            .section.sec-danger {
+                border-color: #f3b8b3
+            }
+
+        .section-head {
+            padding: 18px 20px;
+            border-bottom: 1px solid #edf1f7;
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+            cursor: pointer;
+            background: linear-gradient(180deg,#fff,#f8fbff)
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 1.12rem;
+            font-weight: 950;
+            color: var(--azul2);
+            display: flex;
+            align-items: center;
+            gap: 9px
+        }
+
+        .section-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 14px;
+            background: var(--azul-soft);
+            color: var(--azul);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center
+        }
+
+        .section-sub {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: .9rem
+        }
+
+        .section-body {
+            padding: 16px
+        }
+
+        .count-pill, .summary-pill {
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: .78rem;
+            font-weight: 950;
+            background: #eef4ff;
+            color: var(--azul);
+            border: 1px solid #cfe0ff;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        .summary-pill {
+            background: #fff;
+            color: #344054;
+            border-color: var(--linea)
+        }
+
+        .client-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill,minmax(330px,1fr));
+            gap: 12px;
+        }
+
+        .client-panel {
+            border: 1px solid var(--linea);
+            background: linear-gradient(180deg,#ffffff,#fbfdff);
+            border-radius: 24px;
+            box-shadow: 0 8px 22px rgba(15,23,42,.045);
+            overflow: hidden;
+        }
+
+        .client-panel-head {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            padding: 16px;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+            .client-panel-head:hover {
+                background: #f6faff;
+            }
+
+        .client-name {
+            color: #102a52;
+            font-size: 1rem;
+            font-weight: 950;
+            line-height: 1.2;
+        }
+
+        .client-meta {
+            color: var(--muted);
+            font-size: .82rem;
+            font-weight: 750;
+            margin-top: 4px;
+        }
+
+        .client-priority {
+            color: var(--azul2);
+            background: var(--azul-soft);
+            border: 1px solid #cfe0ff;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: .72rem;
+            font-weight: 950;
+            white-space: nowrap;
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .client-body {
+            border-top: 1px solid #edf1f7;
+            padding: 14px;
+            background: #fbfdff;
+        }
+
+        .release-toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            overflow-x: auto;
+            padding: 0 0 12px 0;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #e6eef9;
+        }
+
+        .release-toolbar-label {
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            padding: 7px 0;
+        }
+
+        .release-btn {
+            flex: 0 0 auto;
+            border: 1px solid #cfe0ff;
+            background: #ffffff;
+            color: var(--azul2);
+            border-radius: 999px;
+            padding: 7px 10px;
+            font-size: .75rem;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+            .release-btn:hover,
+            .release-btn.active {
+                background: var(--azul);
+                border-color: var(--azul);
+                color: #ffffff;
+            }
+
+        .release-count {
+            border-radius: 999px;
+            padding: 2px 7px;
+            font-size: .68rem;
+            font-weight: 950;
+            background: rgba(255,255,255,.75);
+            color: inherit;
+            border: 1px solid rgba(255,255,255,.55);
+        }
+
+        .release-summary {
+            margin-left: auto;
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 850;
+            padding: 7px 0;
+            white-space: nowrap;
+        }
+
+        .hidden-by-release {
+            display: none !important;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill,minmax(205px,1fr));
+            gap: 9px
+        }
+
+        .need-card {
+            background: #fff;
+            border: 1px solid var(--linea);
+            border-radius: 18px;
+            padding: 12px;
+            box-shadow: 0 6px 16px rgba(15,23,42,.040);
+            position: relative;
+            overflow: hidden;
+            transition: .16s ease;
+            min-height: 154px
+        }
+
+            .need-card:hover {
+                transform: translateY(-3px);
+                box-shadow: var(--shadow)
+            }
+
+            .need-card:before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 7px;
+                background: var(--azul)
+            }
+
+        .card-ok:before {
+            background: var(--ok)
+        }
+
+        .card-warn:before {
+            background: var(--warn)
+        }
+
+        .card-danger:before {
+            background: var(--danger)
+        }
+
+        .card-muted:before {
+            background: #98A2B3
+        }
+
+        .need-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 9px;
+            align-items: flex-start;
+            margin-bottom: 10px
+        }
+
+        .need-title {
+            color: #102a52;
+            font-weight: 950;
+            font-size: .95rem;
+            line-height: 1.2
+        }
+
+        .need-sub {
+            color: var(--muted);
+            font-size: .76rem;
+            font-weight: 700;
+            margin-top: 3px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden
+        }
+
+        .estado {
+            border-radius: 999px;
+            padding: 5px 8px;
+            font-size: .68rem;
+            font-weight: 950;
+            white-space: nowrap;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px
+        }
+
+        .estado-ok {
+            background: var(--ok-bg);
+            color: var(--ok);
+            border-color: #bcebd3
+        }
+
+        .estado-warn {
+            background: var(--warn-bg);
+            color: var(--warn);
+            border-color: #f2d59a
+        }
+
+        .estado-danger {
+            background: var(--danger-bg);
+            color: var(--danger);
+            border-color: #f3b8b3
+        }
+
+        .estado-muted {
+            background: var(--gray-bg);
+            color: #5b6472;
+            border-color: #d8dde5
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 7px
+        }
+
+        .data-box {
+            border: 1px solid #edf1f7;
+            background: #fbfdff;
+            border-radius: 12px;
+            padding: 8px;
+            min-width: 0
+        }
+
+        .data-label {
+            color: var(--muted);
+            font-size: .61rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            white-space: nowrap
+        }
+
+        .data-value {
+            margin-top: 2px;
+            color: #111827;
+            font-size: .80rem;
+            font-weight: 950;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap
+        }
+
+        .msg {
+            color: #35517a;
+            font-size: .74rem;
+            font-weight: 650;
+            margin-top: 6px;
+            min-height: 18px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #edf1f7
+        }
+
+        .btn-card-main, .btn-card-light {
+            border-radius: 12px;
+            padding: 7px 9px;
+            font-size: .78rem;
+            font-weight: 950;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        .btn-card-main {
+            border: none;
+            color: #fff;
+            background: linear-gradient(135deg,var(--azul),var(--azul2))
+        }
+
+            .btn-card-main:hover {
+                color: #fff;
+                opacity: .96
+            }
+
+        .btn-card-light {
+            border: 1px solid var(--linea);
+            color: var(--azul2);
+            background: #fff
+        }
+
+            .btn-card-light:hover {
+                background: var(--azul-soft);
+                color: var(--azul)
+            }
+
+        .empty {
+            padding: 34px 18px;
+            text-align: center;
+            color: var(--muted);
+            border: 1px dashed var(--linea);
+            border-radius: 20px;
+            background: #fbfdff;
+            font-weight: 800
+        }
+
+        .chev {
+            transition: transform .18s ease;
+            color: var(--azul)
+        }
+
+        [aria-expanded="true"] .chev {
+            transform: rotate(90deg)
+        }
+
+        .hidden-by-search {
+            display: none !important
+        }
+
+        .compact-priority {
+            font-size: .68rem;
+            color: var(--muted);
+            font-weight: 850;
+            margin-top: 3px
+        }
+
+        .mini-metrics {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 6px;
+            margin-top: 7px
+        }
+
+        .mini-metric {
+            border: 1px solid #edf1f7;
+            background: #fbfdff;
+            border-radius: 12px;
+            padding: 6px;
+            min-width: 0
+        }
+
+        .mini-metric-label {
+            color: var(--muted);
+            font-size: .58rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .mini-metric-value {
+            color: #111827;
+            font-size: .80rem;
+            font-weight: 950;
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap
+        }
+
+        .compact-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px
+        }
+
+        .compact-chip {
+            border: 1px solid var(--linea);
+            background: white;
+            color: #344054;
+            border-radius: 999px;
+            padding: 4px 7px;
+            font-size: .66rem;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 18px;
+            z-index: 20;
+            margin-top: 20px;
+            background: rgba(255,255,255,.92);
+            border: 1px solid var(--linea);
+            backdrop-filter: blur(14px);
+            border-radius: 22px;
+            padding: 12px;
+            box-shadow: var(--shadow)
+        }
+
+        body.client-focus {
+            overflow: hidden;
+        }
+
+            body.client-focus .hero,
+            body.client-focus .filter-card,
+            body.client-focus .sticky-actions,
+            body.client-focus .section:not(.has-focus),
+            body.client-focus .section.has-focus > .section-head {
+                display: none !important;
+            }
+
+            body.client-focus .page {
+                max-width: none;
+                padding: 0;
+            }
+
+            body.client-focus .section.has-focus {
+                border: none;
+                box-shadow: none;
+                margin: 0;
+                border-radius: 0;
+                background: transparent;
+            }
+
+                body.client-focus .section.has-focus > .collapse,
+                body.client-focus .section.has-focus > .collapse > .section-body,
+                body.client-focus .section.has-focus .client-grid {
+                    display: block !important;
+                    padding: 0;
+                }
+
+            body.client-focus .client-panel:not(.is-fullscreen) {
+                display: none !important;
+            }
+
+        .client-panel.is-fullscreen {
+            position: fixed;
+            inset: 10px;
+            z-index: 1020;
+            display: flex !important;
+            flex-direction: column;
+            background: #ffffff;
+            border: 1px solid #cfe0ff;
+            border-radius: 26px;
+            box-shadow: 0 26px 70px rgba(15,23,42,.22);
+            overflow: hidden;
+        }
+
+            .client-panel.is-fullscreen .client-panel-head {
+                flex: 0 0 auto;
+                background: linear-gradient(135deg,#ffffff,#f6faff);
+                border-bottom: 1px solid #e6eef9;
+                padding: 18px 20px;
+            }
+
+            .client-panel.is-fullscreen .client-name {
+                font-size: 1.18rem;
+            }
+
+            .client-panel.is-fullscreen .client-meta {
+                font-size: .88rem;
+            }
+
+            .client-panel.is-fullscreen .client-priority::after {
+                content: " · Clic en el encabezado para cerrar";
+            }
+
+            .client-panel.is-fullscreen .collapse {
+                display: block !important;
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow: hidden;
+            }
+
+            .client-panel.is-fullscreen .client-body {
+                height: 100%;
+                overflow: auto;
+                padding: 16px;
+                background: linear-gradient(180deg,#fbfdff,#f3f7fc);
+            }
+
+            .client-panel.is-fullscreen .cards-grid {
+                grid-template-columns: repeat(auto-fill,minmax(230px,1fr));
+                gap: 10px;
+                align-content: start;
+                padding-bottom: 24px;
+            }
+
+            .client-panel.is-fullscreen .need-card {
+                min-height: 154px;
+            }
+
+        @@media(max-width:1200px) {
+            .cards-grid {
+                grid-template-columns: repeat(auto-fill,minmax(205px,1fr))
+            }
+        }
+
+        @@media(max-width:700px) {
+            .page {
+                padding: 14px
+            }
+
+            .hero {
+                padding: 24px
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr
+            }
+
+            .data-grid {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+        }
+
+
+        /* ============================================================
+           PROGRAMA_NECESIDADES_FILA_V1_0
+           Cada necesidad se muestra como un renglón horizontal.
+           ============================================================ */
+        .cards-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 0 0 12px 0;
+        }
+
+        .cards-header,
+        .need-card {
+            display: grid;
+            grid-template-columns:
+                minmax(300px, 2.2fr)
+                110px
+                115px
+                115px
+                minmax(125px, 1fr)
+                minmax(125px, 1fr)
+                95px
+                205px;
+            gap: 10px;
+            align-items: center;
+            min-width: 1310px;
+        }
+
+        .cards-header {
+            position: sticky;
+            top: 0;
+            z-index: 8;
+            padding: 9px 14px 9px 20px;
+            border: 1px solid #dbe6f4;
+            border-radius: 14px;
+            background: #edf5ff;
+            color: var(--azul2);
+            box-shadow: 0 5px 14px rgba(15,23,42,.04);
+            font-size: .69rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+        }
+
+        .need-card {
+            min-height: 0;
+            padding: 10px 14px 10px 20px;
+            border-radius: 15px;
+            overflow: visible;
+        }
+
+        .need-card:hover {
+            transform: none;
+            border-color: #b9cce7;
+            box-shadow: 0 9px 22px rgba(15,23,42,.09);
+        }
+
+        .need-card::before {
+            width: 6px;
+            border-radius: 15px 0 0 15px;
+        }
+
+        .need-main {
+            min-width: 0;
+            padding-right: 4px;
+        }
+
+        .need-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .need-title-row .need-title {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: .91rem;
+        }
+
+        .need-title-row .estado {
+            flex: 0 0 auto;
+            max-width: 190px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .need-main .need-sub {
+            display: block;
+            margin-top: 3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            -webkit-line-clamp: initial;
+        }
+
+        .need-main .compact-priority {
+            margin-top: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .need-cell {
+            min-width: 0;
+            min-height: 52px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 7px 9px;
+            border: 1px solid #e7edf6;
+            border-radius: 11px;
+            background: #fbfdff;
+        }
+
+        .need-cell-label {
+            color: var(--muted);
+            font-size: .59rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            white-space: nowrap;
+        }
+
+        .need-cell-value {
+            display: block;
+            margin-top: 3px;
+            color: #111827;
+            font-size: .78rem;
+            font-weight: 950;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .need-actions-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 7px;
+            min-width: 0;
+        }
+
+        .need-actions-row .btn-card-main,
+        .need-actions-row .btn-card-light {
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        .row-result {
+            border-radius: 999px;
+            padding: 6px 9px;
+            font-size: .70rem;
+            font-weight: 950;
+            white-space: nowrap;
+            border: 1px solid var(--linea);
+        }
+
+        .row-result-ok {
+            color: var(--ok);
+            background: var(--ok-bg);
+            border-color: #bcebd3;
+        }
+
+        .row-result-review {
+            color: var(--warn);
+            background: var(--warn-bg);
+            border-color: #f2d59a;
+        }
+
+        .client-panel.is-fullscreen .cards-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-content: initial;
+            padding-bottom: 24px;
+        }
+
+        .client-panel.is-fullscreen .need-card {
+            min-height: 0;
+        }
+
+        @@media(max-width:700px) {
+            .cards-header,
+            .need-card {
+                min-width: 1180px;
+                grid-template-columns:
+                    minmax(270px, 2fr)
+                    105px
+                    110px
+                    110px
+                    120px
+                    120px
+                    90px
+                    170px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="hero">
+            <h1><i class="fa-solid fa-list-check me-2"></i>Programa de Planeación</h1>
+            <p>Vista por filas: cada necesidad muestra sus datos principales y permite pasar directamente a Programar molde cuando está lista.</p>
+            <div class="hero-actions">
+                <a asp-controller="Menu"
+                   asp-action="Grupo"
+                   asp-route-id="3"
+                   class="btn-glass">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Volver
+                </a>
+
+                <a asp-controller="PlaneacionRelease"
+                   asp-action="Index"
+                   class="btn-glass">
+                    <i class="fa-solid fa-inbox"></i>
+                    Releases
+                </a>
+
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Maquinas"
+                   class="btn-glass">
+                    <i class="fa-solid fa-gears"></i>
+                    Máquinas / Cambio de Molde
+                </a>
+
+                @* CALENDARIO_MAQUINAS_LECTURA_V1_0 *@
+                <a asp-controller="PlaneacionCalendarioMaquinas"
+                   asp-action="Index"
+                   class="btn-glass">
+                    <i class="fa-solid fa-calendar-days"></i>
+                    Calendario Máquinas
+                </a>
+@*
+                <a asp-controller="PlaneacionPanorama"
+                   asp-action="Index"
+                   class="btn-glass">
+                    <i class="fa-solid fa-chart-line"></i>
+                    Panorama
+                </a>*@
+            </div>
+        </section>
+
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success rounded-4 fw-semibold"><i class="fa-solid fa-circle-check me-2"></i>@TempData["Success"]</div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger rounded-4 fw-semibold"><i class="fa-solid fa-triangle-exclamation me-2"></i>@TempData["Error"]</div>
+        }
+
+        <section class="filter-card">
+            <form asp-controller="PlaneacionPrograma" asp-action="Index" method="get">
+                <div class="row g-3 align-items-end">
+                    <div class="col-xl-3 col-md-6"><label class="form-label">Cliente</label><select asp-for="ClienteID" asp-items="Model.Clientes" class="form-select"><option value="">Todos</option></select></div>
+                    <div class="col-xl-3 col-md-6"><label class="form-label">Parte</label><select asp-for="ParteID" asp-items="Model.Partes" class="form-select"><option value="">Todas</option></select></div>
+                    <div class="col-xl-2 col-md-6"><label class="form-label">Desde</label><input asp-for="FechaDesde" type="date" class="form-control" /></div>
+                    <div class="col-xl-2 col-md-6"><label class="form-label">Hasta</label><input asp-for="FechaHasta" type="date" class="form-control" /></div>
+                    <div class="col-xl-2 col-md-12"><button type="submit" class="btn-main w-100"><i class="fa-solid fa-magnifying-glass"></i>Consultar</button></div>
+
+                    <div class="col-12 d-flex gap-2 flex-wrap">
+                        <a class="quick-btn quick-ok" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloListos="true"><i class="fa-solid fa-circle-check"></i>Listos cambio molde</a>
+                        <a class="quick-btn quick-warn" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloPendienteAbasto="true"><i class="fa-solid fa-truck-ramp-box"></i>Pendiente abasto</a>
+                        <a class="quick-btn quick-danger" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloPendienteDatosTecnicos="true"><i class="fa-solid fa-screwdriver-wrench"></i>Pendiente datos técnicos</a>
+                        <a class="quick-btn" asp-controller="PlaneacionPrograma" asp-action="Index"><i class="fa-solid fa-rotate-left"></i>Limpiar</a>
+                        <button type="button" class="quick-btn" id="btnCerrarTodo"><i class="fa-solid fa-down-left-and-up-right-to-center"></i>Cerrar todo</button>
+                    </div>
+
+                    <div class="col-12"><label class="form-label">Buscar en pantalla</label><input id="txtBuscarPantalla" type="search" class="form-control" placeholder="Buscar cliente, parte, release, molde, máquina, material..." /></div>
+                </div>
+            </form>
+        </section>
+
+        @{
+            var sectionIndex = 0;
+        }
+
+        @foreach (var sec in secciones)
+        {
+            sectionIndex++;
+            var sectionCollapseId = CollapseId("sec", sectionIndex);
+            var items = sec.Items;
+            var sectionOpen = sec.Open;
+
+            <section class="section @sec.Clase" data-section data-search="@string.Join(" ", items.Select(DataSearch))">
+                <div class="section-head" data-bs-toggle="collapse" data-bs-target="#@sectionCollapseId" aria-expanded="@(sectionOpen ? "true" : "false")" aria-controls="@sectionCollapseId">
+                    <div>
+                        <h2 class="section-title"><span class="section-icon"><i class="fa-solid @sec.Icono"></i></span><span>@sec.Titulo</span><i class="fa-solid fa-chevron-right chev"></i></h2>
+                        <div class="section-sub">@sec.Sub</div>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="count-pill">@items.Count.ToString("N0") registro(s)</span>
+                        <span class="summary-pill">@items.Sum(x => x.CantidadRequerida).ToString("N0") requerido</span>
+                        <span class="summary-pill">@items.Sum(x => x.ProduccionProgramadaPendiente ?? 0).ToString("N0") programado</span>
+                        <span class="summary-pill">@items.Sum(x => x.HorasNecesarias ?? 0).ToString("N2") hrs</span>
+                    </div>
+                </div>
+
+                <div id="@sectionCollapseId" class="collapse @(sectionOpen ? "show" : "")" data-collapse-level="section">
+                    <div class="section-body">
+                        @if (!items.Any())
+                        {
+                            <div class="empty"><i class="fa-regular fa-folder-open fa-2x mb-2"></i><div>No hay registros en esta sección.</div></div>
+                        }
+                        else
+                        {
+                            var clientesOrdenados = items
+                            .GroupBy(ClienteNombre)
+                            .Select(g => new
+                            {
+                                Cliente = g.Key,
+                                Items = g.OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList(),
+                                FechaPrioridad = g.Min(PrioridadFecha),
+                                EntradaPrioridad = g.Min(PrioridadEntrada)
+                            })
+                            .OrderBy(g => g.FechaPrioridad)
+                            .ThenBy(g => g.EntradaPrioridad)
+                            .ThenBy(g => g.Cliente)
+                            .ToList();
+
+                            <div class="client-grid">
+                                @{
+                                    var clientIndex = 0;
+                                }
+
+                                @foreach (var clienteGrupo in clientesOrdenados)
+                                {
+                                    clientIndex++;
+                                    var clienteCollapseId = "cliente_" + sectionIndex.ToString() + "_" + clientIndex.ToString();
+                                    var clienteItems = clienteGrupo.Items;
+                                    var primerItemCliente = clienteItems.First();
+                                    var partesCliente = clienteItems.Select(ParteClave).Distinct().Count();
+
+                                    var releasesCliente = clienteItems
+                                    .GroupBy(ReleaseKey)
+                                    .Select(g => new
+                                    {
+                                        Key = g.Key,
+                                        Texto = ReleaseTexto(g.First()),
+                                        Items = g.OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList(),
+                                        FechaPrioridad = g.Min(PrioridadFecha),
+                                        EntradaPrioridad = g.Min(PrioridadEntrada),
+                                        TotalRequerido = g.Sum(x => x.CantidadRequerida),
+                                        TotalPT = g.Sum(x => x.PiezasDesdePT ?? 0),
+                                        TotalProgramado = g.Sum(x => x.ProduccionProgramadaPendiente ?? 0)
+                                    })
+                                    .OrderBy(g => g.FechaPrioridad)
+                                    .ThenBy(g => g.EntradaPrioridad)
+                                    .ToList();
+
+                                    var releaseInicial = releasesCliente.First().Key;
+
+                                    <article class="client-panel" data-client data-search="@clienteGrupo.Cliente @string.Join(" ", clienteItems.Select(DataSearch))">
+                                        <button type="button"
+                                                class="client-panel-head"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#@clienteCollapseId"
+                                                aria-expanded="false"
+                                                aria-controls="@clienteCollapseId">
+                                            <div>
+                                                <div class="client-name">
+                                                    <i class="fa-solid fa-chevron-right chev me-2"></i>
+                                                    @clienteGrupo.Cliente
+                                                </div>
+                                                <div class="client-meta">
+                                                    @clienteItems.Count.ToString("N0") registro(s) ·
+                                                    @partesCliente.ToString("N0") parte(s) ·
+                                                    @clienteItems.Sum(x => x.CantidadRequerida).ToString("N0") requerido ·
+                                                    @clienteItems.Sum(x => x.ProduccionProgramadaPendiente ?? 0).ToString("N0") programado
+                                                </div>
+                                            </div>
+
+                                            <span class="client-priority">
+                                                <i class="fa-solid fa-arrow-up-short-wide"></i>
+                                                @PrioridadTexto(primerItemCliente)
+                                            </span>
+                                        </button>
+
+                                        <div id="@clienteCollapseId" class="collapse" data-collapse-level="client">
+                                            <div class="client-body">
+                                                <div class="release-toolbar" data-release-toolbar>
+                                                    <span class="release-toolbar-label">Release</span>
+
+                                                    @foreach (var rel in releasesCliente)
+                                                    {
+                                                        <button type="button"
+                                                                class="release-btn @(rel.Key == releaseInicial ? "active" : "")"
+                                                                data-release-btn
+                                                                data-release-key="@rel.Key">
+                                                            <i class="fa-solid fa-layer-group"></i>
+                                                            @rel.Texto
+                                                            <span class="release-count">@rel.Items.Count</span>
+                                                        </button>
+                                                    }
+
+                                                    <span class="release-summary" data-release-summary>
+                                                        @releasesCliente.First().TotalRequerido.ToString("N0") requerido ·
+                                                        @releasesCliente.First().TotalPT.ToString("N0") PT apartado ·
+                                                        @releasesCliente.First().TotalProgramado.ToString("N0") programado
+                                                    </span>
+                                                </div>
+
+                                                <div class="cards-grid">
+                                                    <div class="cards-header" aria-hidden="true">
+                                                        <div>Parte / estado</div>
+                                                        <div>Fecha</div>
+                                                        <div>Requerido</div>
+                                                        <div>PT apartado</div>
+                                                        <div>Máquina</div>
+                                                        <div>Molde</div>
+                                                        <div>Horas</div>
+                                                        <div>Acciones</div>
+                                                    </div>
+
+                                                    @foreach (var item in clienteItems)
+                                                    {
+                                                        <article class="need-card @CardClase(item) @(ReleaseKey(item) == releaseInicial ? "" : "hidden-by-release")" data-row data-release-key="@ReleaseKey(item)" data-requerido="@item.CantidadRequerida" data-pt="@(item.PiezasDesdePT ?? 0)" data-programado="@(item.ProduccionProgramadaPendiente ?? 0)" data-search="@DataSearch(item)">
+                                                            <div class="need-main">
+                                                                <div class="need-title-row">
+                                                                    <div class="need-title">@ParteClave(item)</div>
+                                                                    <span class="estado @EstadoClase(item)">
+                                                                        <i class="fa-solid fa-circle"></i>
+                                                                        @EstadoTexto(item)
+                                                                    </span>
+                                                                </div>
+
+                                                                <div class="need-sub" title="@Txt(item.DesignacionDescripcionSAP)">
+                                                                    @Txt(item.DesignacionDescripcionSAP)
+                                                                </div>
+
+                                                                <div class="compact-priority">
+                                                                    <i class="fa-solid fa-arrow-up-short-wide me-1"></i>
+                                                                    @PrioridadTexto(item)
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="need-cell">
+                                                                <span class="need-cell-label">Fecha</span>
+                                                                <span class="need-cell-value">@F(item.FechaRequerida)</span>
+                                                            </div>
+
+                                                            <div class="need-cell">
+                                                                <span class="need-cell-label">Requerido</span>
+                                                                <span class="need-cell-value">@item.CantidadRequerida.ToString("N0")</span>
+                                                            </div>
+
+                                                            <div class="need-cell">
+                                                                <span class="need-cell-label">PT apartado</span>
+                                                                <span class="need-cell-value">@N0(item.PiezasDesdePT)</span>
+                                                            </div>
+
+                                                            <div class="need-cell">
+                                                                <span class="need-cell-label">Máquina</span>
+                                                                <span class="need-cell-value" title="@Txt(item.MaquinaSugeridaNombre)">
+                                                                    <i class="fa-solid fa-industry me-1"></i>
+                                                                    @Txt(item.MaquinaSugeridaCodigo)
+                                                                </span>
+                                                            </div>
+
+                                                            <div class="need-cell">
+                                                                <span class="need-cell-label">Molde</span>
+                                                                <span class="need-cell-value">
+                                                                    <i class="fa-solid fa-shapes me-1"></i>
+                                                                    @Txt(item.MoldeCodigo)
+                                                                </span>
+                                                            </div>
+
+                                                            <div class="need-cell">
+                                                                <span class="need-cell-label">Horas</span>
+                                                                <span class="need-cell-value">
+                                                                    <i class="fa-solid fa-clock me-1"></i>
+                                                                    @D2(item.HorasNecesarias)
+                                                                </span>
+                                                            </div>
+
+                                                            <div class="need-actions-row">
+                                                                @if (item.ProgramaProduccionID.HasValue)
+                                                                {
+                                                                    <a class="btn-card-main"
+                                                                       asp-controller="PlaneacionPrograma"
+                                                                       asp-action="Maquinas">
+                                                                        <i class="fa-solid fa-table-columns"></i>
+                                                                        Ver máquinas
+                                                                    </a>
+                                                                }
+                                                                else if (ListoCambioMolde(item))
+                                                                {
+                                                                    <a class="btn-card-main"
+                                                                       href="@Url.Action("CrearDesdeNecesidad", "PlaneacionPrograma", new { releaseDetalleId = item.ReleaseDetalleID })">
+                                                                        <i class="fa-solid fa-gears"></i>
+                                                                        Programar molde
+                                                                    </a>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <button type="button"
+                                                                            class="btn-card-light"
+                                                                            disabled
+                                                                            title="Esta necesidad todavía tiene validaciones pendientes.">
+                                                                        <i class="fa-solid fa-gears"></i>
+                                                                        Programar molde
+                                                                    </button>
+                                                                    <span class="row-result row-result-review">Revisar</span>
+                                                                }
+                                                            </div>
+                                                        </article>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+
+        <section class="sticky-actions">
+            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light rounded-4 fw-bold"><i class="fa-solid fa-arrow-left me-1"></i>Releases</a>
+                <div class="d-flex gap-2 flex-wrap">
+                  @*  <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn btn-light rounded-4 fw-bold"><i class="fa-solid fa-chart-line me-1"></i>Panorama</a>*@
+                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-main"><i class="fa-solid fa-gears me-1"></i>Máquinas / Cambios</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const buscar = document.getElementById("txtBuscarPantalla");
+            const btnCerrarTodo = document.getElementById("btnCerrarTodo");
+            const sections = Array.from(document.querySelectorAll("[data-section]"));
+            const clients = Array.from(document.querySelectorAll("[data-client]"));
+            const rows = Array.from(document.querySelectorAll("[data-row]"));
+
+            function limpiarPantallaCompletaCliente() {
+                document.body.classList.remove("client-focus");
+                sections.forEach(section => section.classList.remove("has-focus"));
+                clients.forEach(client => client.classList.remove("is-fullscreen"));
+            }
+
+            function activarPantallaCompletaCliente(collapseEl) {
+                const client = collapseEl.closest("[data-client]");
+                const section = collapseEl.closest("[data-section]");
+
+                if (!client || !section) return;
+
+                limpiarPantallaCompletaCliente();
+
+                document.body.classList.add("client-focus");
+                section.classList.add("has-focus");
+                client.classList.add("is-fullscreen");
+
+                const activeRelease = client.querySelector("[data-release-btn].active") || client.querySelector("[data-release-btn]");
+                if (activeRelease) {
+                    filtrarReleaseCliente(client, activeRelease.dataset.releaseKey);
+                }
+            }
+
+            function normalize(value) {
+                return (value || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+            }
+
+            function setCollapse(el, show) {
+                if (!el) return;
+                const instance = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+                show ? instance.show() : instance.hide();
+            }
+
+            function actualizarResumenRelease(client, releaseKey) {
+                const btn = client.querySelector(`[data-release-btn][data-release-key="${releaseKey}"]`);
+                const summary = client.querySelector("[data-release-summary]");
+
+                if (!btn || !summary) return;
+
+                const cards = Array.from(client.querySelectorAll(`[data-row][data-release-key="${releaseKey}"]`));
+                let requerido = 0;
+                let pt = 0;
+                let programado = 0;
+
+                cards.forEach(card => {
+                    requerido += parseInt(card.dataset.requerido || "0", 10);
+                    pt += parseInt(card.dataset.pt || "0", 10);
+                    programado += parseInt(card.dataset.programado || "0", 10);
+                });
+
+                summary.textContent =
+                    requerido.toLocaleString("es-MX") + " requerido · " +
+                    pt.toLocaleString("es-MX") + " PT apartado · " +
+                    programado.toLocaleString("es-MX") + " programado";
+            }
+
+            function filtrarReleaseCliente(client, releaseKey) {
+                if (!client || !releaseKey) return;
+
+                client.querySelectorAll("[data-release-btn]").forEach(btn => {
+                    btn.classList.toggle("active", btn.dataset.releaseKey === releaseKey);
+                });
+
+                client.querySelectorAll("[data-row]").forEach(row => {
+                    row.classList.toggle("hidden-by-release", row.dataset.releaseKey !== releaseKey);
+                });
+
+                actualizarResumenRelease(client, releaseKey);
+            }
+
+
+            function aplicarBusqueda() {
+                const q = normalize(buscar?.value || "");
+                rows.forEach(row => {
+                    const visible = !q || normalize(row.dataset.search).includes(q);
+                    row.classList.toggle("hidden-by-search", !visible);
+                });
+
+                clients.forEach(client => {
+                    const visibleRows = Array.from(client.querySelectorAll("[data-row]")).some(row => !row.classList.contains("hidden-by-search"));
+                    const visibleClient = !q || normalize(client.dataset.search).includes(q) || visibleRows;
+                    client.classList.toggle("hidden-by-search", !visibleClient);
+
+                    if (q && visibleClient) {
+                        setCollapse(client.querySelector("[data-collapse-level='client']"), true);
+                    }
+                });
+
+                sections.forEach(section => {
+                    const visibleClients = Array.from(section.querySelectorAll("[data-client]")).some(client => !client.classList.contains("hidden-by-search"));
+                    section.classList.toggle("hidden-by-search", q && !visibleClients);
+                    if (q && visibleClients) setCollapse(section.querySelector("[data-collapse-level='section']"), true);
+                });
+            }
+
+            document.querySelectorAll("[data-release-btn]").forEach(btn => {
+                btn.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const client = btn.closest("[data-client]");
+                    filtrarReleaseCliente(client, btn.dataset.releaseKey);
+                });
+            });
+
+            document.querySelectorAll("[data-collapse-level='client']").forEach(el => {
+                el.addEventListener("shown.bs.collapse", function () {
+                    activarPantallaCompletaCliente(el);
+                });
+
+                el.addEventListener("hidden.bs.collapse", function () {
+                    const client = el.closest("[data-client]");
+                    if (client && client.classList.contains("is-fullscreen")) {
+                        limpiarPantallaCompletaCliente();
+                    }
+                });
+            });
+
+            document.addEventListener("keydown", function (event) {
+                if (event.key !== "Escape" || !document.body.classList.contains("client-focus")) {
+                    return;
+                }
+
+                const openClient = document.querySelector(".client-panel.is-fullscreen [data-collapse-level='client']");
+                if (openClient) {
+                    setCollapse(openClient, false);
+                } else {
+                    limpiarPantallaCompletaCliente();
+                }
+            });
+
+            buscar?.addEventListener("input", aplicarBusqueda);
+            btnCerrarTodo?.addEventListener("click", function () {
+                limpiarPantallaCompletaCliente();
+                document.querySelectorAll("[data-collapse-level='section']").forEach(el => setCollapse(el, false));
+            });
+        });
+    </script>
+</body>
+</html>

@@ -62,7 +62,9 @@ public sealed class AlmacenOFController : AlmacenBaseController
             ("dbo.SolicitudesProduccion", "U"),
             ("dbo.SolicitudesProduccionDetalle", "U"),
             ("dbo.AlmacenMP_Movimientos", "U"),
-            ("dbo.AlmacenEmbalajes_Movimientos", "U")
+            ("dbo.AlmacenEmbalajes_Movimientos", "U"),
+            ("dbo.AlmacenPT_Movimientos", "U"),
+            ("dbo.ERP_Partes", "U")
         };
 
         foreach (var objeto in objetosRequeridos)
@@ -591,6 +593,154 @@ SELECT
     ) AS Entregado
 FROM Embalajes x
 ORDER BY x.SolicitudProduccionID, x.Orden;
+
+WITH Partes AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        p.ParteID AS CatalogoID,
+        p.NumeroParte AS Codigo,
+        MAX
+        (
+            COALESCE
+            (
+                NULLIF(LTRIM(RTRIM(p.Designacion)), ''),
+                NULLIF(LTRIM(RTRIM(p.Descripcion)), ''),
+                NULLIF
+                (
+                    LTRIM
+                    (
+                        RTRIM
+                        (
+                            d.DesignacionDescripcionSAP
+                        )
+                    ),
+                    ''
+                ),
+                ''
+            )
+        ) AS Descripcion,
+        N'PZS' AS Unidad,
+        SUM
+        (
+            CONVERT
+            (
+                DECIMAL(18,4),
+                ISNULL(d.CantidadPiezas, 0)
+            )
+        ) AS Requerido,
+        MIN(d.Renglon) AS Orden
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle d
+        ON d.SolicitudProduccionID =
+           s.SolicitudProduccionID
+       AND d.Activo = 1
+       AND ISNULL(d.CantidadPiezas, 0) > 0
+    INNER JOIN dbo.ERP_Partes p
+        ON p.ParteID = d.ParteID
+       AND p.Activo = 1
+    WHERE s.SolicitudProduccionID IN ({inSql})
+      AND s.Activo = 1
+    GROUP BY
+        s.SolicitudProduccionID,
+        p.ParteID,
+        p.NumeroParte
+)
+SELECT
+    x.SolicitudProduccionID,
+    x.CatalogoID,
+    x.Codigo,
+    x.Descripcion,
+    x.Unidad,
+    x.Requerido,
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            (
+                SELECT SUM
+                (
+                    CASE
+                        WHEN movimiento.TipoMovimiento =
+                             N'Entrada'
+                            THEN movimiento.Cantidad
+                        ELSE 0
+                    END
+                )
+                FROM dbo.AlmacenPT_Movimientos movimiento
+                INNER JOIN dbo.SolicitudesProduccion so
+                    ON so.SolicitudProduccionID =
+                       x.SolicitudProduccionID
+                WHERE movimiento.Activo = 1
+                  AND movimiento.ParteID =
+                      x.CatalogoID
+                  AND
+                  (
+                      (
+                          NULLIF
+                          (
+                              LTRIM
+                              (
+                                  RTRIM
+                                  (
+                                      so.FolioSolicitud
+                                  )
+                              ),
+                              ''
+                          ) IS NOT NULL
+                          AND LTRIM
+                              (
+                                  RTRIM
+                                  (
+                                      movimiento.NumeroOF
+                                  )
+                              ) =
+                              LTRIM
+                              (
+                                  RTRIM
+                                  (
+                                      so.FolioSolicitud
+                                  )
+                              )
+                      )
+                      OR
+                      (
+                          NULLIF
+                          (
+                              LTRIM
+                              (
+                                  RTRIM
+                                  (
+                                      so.NumeroOFRecibida
+                                  )
+                              ),
+                              ''
+                          ) IS NOT NULL
+                          AND LTRIM
+                              (
+                                  RTRIM
+                                  (
+                                      movimiento.NumeroOF
+                                  )
+                              ) =
+                              LTRIM
+                              (
+                                  RTRIM
+                                  (
+                                      so.NumeroOFRecibida
+                                  )
+                              )
+                      )
+                  )
+            ),
+            0
+        )
+    ) AS Entregado
+FROM Partes x
+ORDER BY
+    x.SolicitudProduccionID,
+    x.Orden;
 ;";
 
         await using var command = new SqlCommand(sql, connection);
@@ -602,6 +752,9 @@ ORDER BY x.SolicitudProduccionID, x.Orden;
 
         if (await reader.NextResultAsync(cancellationToken))
             await LeerEntregablesAsync(reader, ordenes, tipo: "EMBALAJE", cancellationToken);
+
+        if (await reader.NextResultAsync(cancellationToken))
+            await LeerEntregablesAsync(reader, ordenes, tipo: "PT", cancellationToken);
     }
 
     private static async Task LeerEntregablesAsync(
@@ -627,9 +780,14 @@ ORDER BY x.SolicitudProduccionID, x.Orden;
                 Entregado = DecimalValor(reader, "Entregado")
             };
 
-            if (tipo == "MP") orden.MaterialesEntrega.Add(item);
-            else orden.EmbalajesEntrega.Add(item);
+            if (tipo == "MP")
+                orden.MaterialesEntrega.Add(item);
+            else if (tipo == "EMBALAJE")
+                orden.EmbalajesEntrega.Add(item);
+            else if (tipo == "PT")
+                orden.PartesEntrega.Add(item);
         }
     }
 }
+
 

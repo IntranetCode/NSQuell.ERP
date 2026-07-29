@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
 
@@ -130,3 +130,4 @@ SELECT CASE WHEN EXISTS
     protected static bool EsSalidaPT(string tipo) =>
         tipo is "Salida" or "Embarque" or "Scrap" or "AjusteNegativo";
 }
+

@@ -1,4 +1,5 @@
 ﻿using ERP.NSQuell.Models.ViewModels.Almacen;
+using ERP.NSQuell.Servicios.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
@@ -15,12 +16,19 @@ public sealed class AlmacenMPController : AlmacenBaseController
     };
 
     public AlmacenMPController(IConfiguration configuration) : base(configuration) { }
-
     [HttpGet]
-    public async Task<IActionResult> Index(string? q, string? estado, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(
+        string? q,
+        string? estado,
+        string? tipoMP,
+        CancellationToken cancellationToken)
     {
         var sesion = ValidarSesion();
-        if (sesion != null) return sesion;
+        if (sesion != null)
+            return sesion;
+
+        var tipoMpFiltro = NormalizarTipoMPFiltro(tipoMP);
+        ViewData["TipoMPFiltro"] = tipoMpFiltro ?? string.Empty;
 
         var vm = new AlmacenMPIndexVm
         {
@@ -28,118 +36,543 @@ public sealed class AlmacenMPController : AlmacenBaseController
             Estado = estado?.Trim().ToUpperInvariant()
         };
 
-        await using var connection = await AbrirConexionAsync(cancellationToken);
-        if (!await ExisteObjetoAsync(connection, "dbo.vw_AlmacenMPInventario", "V", cancellationToken)
-            || !await ExisteColumnaAsync(connection, "dbo.vw_AlmacenMPInventario", "StockConfigurado", cancellationToken)
-            || !await ExisteColumnaAsync(connection, "dbo.vw_AlmacenMPInventario", "CostoUnitario", cancellationToken)
-            || !await ExisteColumnaAsync(connection, "dbo.AlmacenMP_Movimientos", "ReferenciaOperacion", cancellationToken))
+        await using var connection =
+            await AbrirConexionAsync(cancellationToken);
+
+        if (!await ExisteObjetoAsync(
+                connection,
+                "dbo.vw_AlmacenMPInventario",
+                "V",
+                cancellationToken)
+            || !await ExisteColumnaAsync(
+                connection,
+                "dbo.vw_AlmacenMPInventario",
+                "StockConfigurado",
+                cancellationToken)
+            || !await ExisteColumnaAsync(
+                connection,
+                "dbo.AlmacenMP_Movimientos",
+                "ReferenciaOperacion",
+                cancellationToken)
+            || !await ExisteColumnaAsync(
+                connection,
+                "dbo.AlmacenMP_Movimientos",
+                "TipoMP",
+                cancellationToken))
         {
             vm.Configurado = false;
-            vm.MensajeConfiguracion = "Falta ejecutar Scripts/SQL/Almacen/04_Actualizar_Stock_e_Integracion_Almacen.sql.";
+            vm.MensajeConfiguracion =
+                "Falta ejecutar la instalacion completa del almacen MP y la migracion MOLIDO/VIRGEN.";
+
             return View(vm);
         }
 
         const string sql = @"
-SELECT TOP (500)
-    MaterialID, Codigo, Nombre, Unidad,
-    Entradas, Salidas, Saldo, StockMinimo, StockAviso,
-    StockConfigurado,
-    CASE WHEN CostoUnitario IS NULL THEN 0 ELSE 1 END AS TieneCosto,
-    CostoUnitario, MonedaCosto, UnidadCosto, FuenteCosto, FechaCosto,
+WITH Tipos AS
+(
+    SELECT N'VIRGEN' AS TipoMP, 0 AS OrdenTipo
+    UNION ALL
+    SELECT N'MOLIDO' AS TipoMP, 1 AS OrdenTipo
+),
+Movimientos AS
+(
+    SELECT
+        movimiento.MaterialID,
+        CASE
+            WHEN UPPER(LTRIM(RTRIM(ISNULL(movimiento.TipoMP, N'')))) = N'MOLIDO'
+                THEN N'MOLIDO'
+            ELSE N'VIRGEN'
+        END AS TipoMP,
+        SUM
+        (
+            CASE
+                WHEN movimiento.TipoMovimiento IN
+                     (N'Entrada', N'Retorno', N'Ajuste', N'AjustePositivo')
+                    THEN movimiento.Cantidad
+                ELSE 0
+            END
+        ) AS Entradas,
+        SUM
+        (
+            CASE
+                WHEN movimiento.TipoMovimiento IN
+                     (N'Salida', N'Consumo', N'Scrap', N'AjusteNegativo')
+                    THEN movimiento.Cantidad
+                ELSE 0
+            END
+        ) AS Salidas,
+        MAX(movimiento.FechaMovimiento) AS UltimoMovimiento
+    FROM dbo.AlmacenMP_Movimientos movimiento
+    WHERE movimiento.Activo = 1
+    GROUP BY
+        movimiento.MaterialID,
+        CASE
+            WHEN UPPER(LTRIM(RTRIM(ISNULL(movimiento.TipoMP, N'')))) = N'MOLIDO'
+                THEN N'MOLIDO'
+            ELSE N'VIRGEN'
+        END
+),
+Inventario AS
+(
+    SELECT
+        material.MaterialID,
+        material.Codigo,
+        material.Nombre,
+        N'KG' AS Unidad,
+        tipo.TipoMP,
+        tipo.OrdenTipo,
+        ISNULL(movimiento.Entradas, 0) AS Entradas,
+        ISNULL(movimiento.Salidas, 0) AS Salidas,
+        ISNULL(movimiento.Entradas, 0) - ISNULL(movimiento.Salidas, 0) AS Saldo,
+        CONVERT(DECIMAL(18,4), 0) AS Solicitado,
+        material.StockMinimo,
+        material.StockAviso,
+        CASE
+            WHEN movimiento.MaterialID IS NULL THEN CONVERT(BIT, 0)
+            ELSE material.StockConfigurado
+        END AS StockConfigurado,
+        CASE
+            WHEN movimiento.MaterialID IS NULL THEN N'SIN_CONFIGURAR'
+            WHEN material.StockConfigurado = 0 THEN N'SIN_CONFIGURAR'
+            WHEN ISNULL(movimiento.Entradas, 0) - ISNULL(movimiento.Salidas, 0) <= material.StockMinimo THEN N'ROJO'
+            WHEN ISNULL(movimiento.Entradas, 0) - ISNULL(movimiento.Salidas, 0) <= material.StockAviso THEN N'AMARILLO'
+            ELSE N'VERDE'
+        END AS Semaforo,
+        movimiento.UltimoMovimiento
+    FROM dbo.ERP_Materiales material
+    CROSS JOIN Tipos tipo
+    LEFT JOIN Movimientos movimiento
+        ON movimiento.MaterialID = material.MaterialID
+       AND movimiento.TipoMP = tipo.TipoMP
+    WHERE material.Activo = 1
+)
+SELECT TOP (1000)
+    MaterialID, Codigo, Nombre, Unidad, TipoMP,
+    Entradas, Salidas, Saldo, Solicitado,
+    StockMinimo, StockAviso, StockConfigurado,
     Semaforo, UltimoMovimiento
-FROM dbo.vw_AlmacenMPInventario
-WHERE (@Q IS NULL OR Codigo LIKE '%' + @Q + '%' OR Nombre LIKE '%' + @Q + '%')
-  AND (@Estado IS NULL OR Semaforo = @Estado)
-ORDER BY CASE Semaforo WHEN 'SIN_CONFIGURAR' THEN 0 WHEN 'ROJO' THEN 1 WHEN 'AMARILLO' THEN 2 ELSE 3 END,
-         Nombre;";
+FROM Inventario
+WHERE
+    (
+        @Q IS NULL
+        OR Codigo LIKE N'%' + @Q + N'%'
+        OR Nombre LIKE N'%' + @Q + N'%'
+    )
+    AND (@Estado IS NULL OR Semaforo = @Estado)
+    AND (@TipoMP IS NULL OR TipoMP = @TipoMP)
+ORDER BY
+    OrdenTipo,
+    CASE Semaforo
+        WHEN N'ROJO' THEN 0
+        WHEN N'AMARILLO' THEN 1
+        WHEN N'VERDE' THEN 2
+        ELSE 3
+    END,
+    Nombre,
+    Codigo;";
 
-        await using (var command = new SqlCommand(sql, connection))
+        await using (var command =
+            new SqlCommand(sql, connection))
         {
-            command.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(vm.Busqueda) ? DBNull.Value : vm.Busqueda;
-            command.Parameters.Add("@Estado", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(vm.Estado) ? DBNull.Value : vm.Estado;
+            command.Parameters.Add(
+                "@Q",
+                SqlDbType.NVarChar,
+                250).Value =
+                string.IsNullOrWhiteSpace(vm.Busqueda)
+                    ? DBNull.Value
+                    : vm.Busqueda;
 
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            command.Parameters.Add(
+                "@Estado",
+                SqlDbType.NVarChar,
+                20).Value =
+                string.IsNullOrWhiteSpace(vm.Estado)
+                    ? DBNull.Value
+                    : vm.Estado;
+
+            command.Parameters.Add(
+                "@TipoMP",
+                SqlDbType.NVarChar,
+                20).Value =
+                string.IsNullOrWhiteSpace(tipoMpFiltro)
+                    ? DBNull.Value
+                    : tipoMpFiltro;
+
+            await using var reader =
+                await command.ExecuteReaderAsync(cancellationToken);
+
             while (await reader.ReadAsync(cancellationToken))
             {
-                vm.Existencias.Add(new AlmacenMPExistenciaVm
-                {
-                    MaterialID = Entero(reader, "MaterialID"),
-                    Codigo = Texto(reader, "Codigo"),
-                    Nombre = Texto(reader, "Nombre"),
-                    Unidad = Texto(reader, "Unidad"),
-                    Entradas = DecimalValor(reader, "Entradas"),
-                    Salidas = DecimalValor(reader, "Salidas"),
-                    Saldo = DecimalValor(reader, "Saldo"),
-                    StockMinimo = DecimalValor(reader, "StockMinimo"),
-                    StockAviso = DecimalValor(reader, "StockAviso"),
-                    Semaforo = Texto(reader, "Semaforo"),
-                    StockConfigurado = Convert.ToBoolean(reader["StockConfigurado"]),
-                    TieneCosto = Convert.ToBoolean(reader["TieneCosto"]),
-                    CostoUnitario = DecimalValor(reader, "CostoUnitario"),
-                    MonedaCosto = Texto(reader, "MonedaCosto"),
-                    UnidadCosto = Texto(reader, "UnidadCosto"),
-                    FuenteCosto = Texto(reader, "FuenteCosto"),
-                    FechaCosto = Fecha(reader, "FechaCosto"),
-                    UltimoMovimiento = Fecha(reader, "UltimoMovimiento")
-                });
+                vm.Existencias.Add(
+                    new AlmacenMPExistenciaVm
+                    {
+                        MaterialID = Entero(reader, "MaterialID"),
+                        Codigo = Texto(reader, "Codigo"),
+                        Nombre = Texto(reader, "Nombre"),
+                        Unidad = "KG",
+                        TipoMP = Texto(reader, "TipoMP"),
+                        Entradas = DecimalValor(reader, "Entradas"),
+                        Salidas = DecimalValor(reader, "Salidas"),
+                        Saldo = DecimalValor(reader, "Saldo"),
+                        Solicitado = DecimalValor(reader, "Solicitado"),
+                        StockMinimo = DecimalValor(reader, "StockMinimo"),
+                        StockAviso = DecimalValor(reader, "StockAviso"),
+                        Semaforo = Texto(reader, "Semaforo"),
+                        StockConfigurado = Convert.ToBoolean(reader["StockConfigurado"]),
+                        UltimoMovimiento = Fecha(reader, "UltimoMovimiento")
+                    });
             }
         }
 
         const string movimientosSql = @"
-SELECT TOP (60)
-    mm.MovimientoID, mm.FechaMovimiento, mm.MaterialID,
-    m.Codigo, m.Nombre AS Material, mm.TipoMovimiento,
-    mm.Cantidad, mm.Unidad, mm.Lote,
-    CONCAT(u.Almacen, ' / ', u.Rack,
-        CASE WHEN u.Nivel IS NULL THEN '' ELSE ' / ' + u.Nivel END,
-        CASE WHEN u.Posicion IS NULL THEN '' ELSE ' / ' + u.Posicion END) AS Ubicacion,
-    ISNULL(mm.NumeroOF, '') AS NumeroOF,
-    COALESCE(mm.EntregadoPorNombre, p.Nombre + ' ' + ISNULL(p.ApellidoPaterno, ''), mm.CreadoPor, '') AS Responsable,
-    ISNULL(mm.Seguimiento, '') AS Observaciones,
-    ISNULL(mm.ReferenciaOperacion, '') AS ReferenciaOperacion
-FROM dbo.AlmacenMP_Movimientos mm
-INNER JOIN dbo.ERP_Materiales m ON m.MaterialID = mm.MaterialID
-LEFT JOIN dbo.ERP_Ubicaciones u ON u.UbicacionID = mm.UbicacionID
-LEFT JOIN dbo.Usuarios us ON us.UsuarioID = mm.ResponsableUsuarioID
-LEFT JOIN dbo.Persona p ON p.PersonaID = us.PersonaID
-WHERE mm.Activo = 1
-ORDER BY mm.FechaMovimiento DESC, mm.MovimientoID DESC;";
+SELECT TOP (5)
+    movimiento.MovimientoID,
+    movimiento.FechaMovimiento,
+    movimiento.MaterialID,
+    material.Codigo,
+    material.Nombre AS Material,
+    movimiento.TipoMovimiento,
+    movimiento.Cantidad,
+    movimiento.Unidad,
+    movimiento.Lote,
+    CONCAT
+    (
+        ubicacion.Almacen,
+        N' / ',
+        ubicacion.Rack,
+        CASE
+            WHEN ubicacion.Nivel IS NULL
+                THEN N''
+            ELSE N' / ' + ubicacion.Nivel
+        END,
+        CASE
+            WHEN ubicacion.Posicion IS NULL
+                THEN N''
+            ELSE N' / ' + ubicacion.Posicion
+        END
+    ) AS Ubicacion,
+    ISNULL(movimiento.NumeroOF, N'') AS NumeroOF,
+    COALESCE
+    (
+        movimiento.EntregadoPorNombre,
+        persona.Nombre + N' '
+            + ISNULL(persona.ApellidoPaterno, N''),
+        movimiento.CreadoPor,
+        N''
+    ) AS Responsable,
+    ISNULL(movimiento.Seguimiento, N'') AS Observaciones,
+    ISNULL
+    (
+        movimiento.ReferenciaOperacion,
+        N''
+    ) AS ReferenciaOperacion
+FROM dbo.AlmacenMP_Movimientos movimiento
+INNER JOIN dbo.ERP_Materiales material
+    ON material.MaterialID =
+       movimiento.MaterialID
+LEFT JOIN dbo.ERP_Ubicaciones ubicacion
+    ON ubicacion.UbicacionID =
+       movimiento.UbicacionID
+LEFT JOIN dbo.Usuarios usuario
+    ON usuario.UsuarioID =
+       movimiento.ResponsableUsuarioID
+LEFT JOIN dbo.Persona persona
+    ON persona.PersonaID =
+       usuario.PersonaID
+WHERE movimiento.Activo = 1
+ORDER BY
+    movimiento.FechaMovimiento DESC,
+    movimiento.MovimientoID DESC;";
 
-        await using (var command = new SqlCommand(movimientosSql, connection))
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        await using (var command =
+            new SqlCommand(movimientosSql, connection))
+        await using (var reader =
+            await command.ExecuteReaderAsync(cancellationToken))
         {
             while (await reader.ReadAsync(cancellationToken))
             {
-                vm.Movimientos.Add(new AlmacenMPMovimientoListaVm
-                {
-                    MovimientoID = EnteroLargo(reader, "MovimientoID"),
-                    FechaMovimiento = Fecha(reader, "FechaMovimiento") ?? DateTime.MinValue,
-                    MaterialID = Entero(reader, "MaterialID"),
-                    Codigo = Texto(reader, "Codigo"),
-                    Material = Texto(reader, "Material"),
-                    TipoMovimiento = Texto(reader, "TipoMovimiento"),
-                    Cantidad = DecimalValor(reader, "Cantidad"),
-                    Unidad = Texto(reader, "Unidad"),
-                    Lote = Texto(reader, "Lote"),
-                    Ubicacion = Texto(reader, "Ubicacion"),
-                    NumeroOF = Texto(reader, "NumeroOF"),
-                    Responsable = Texto(reader, "Responsable"),
-                    Observaciones = Texto(reader, "Observaciones"),
-                    ReferenciaOperacion = Texto(reader, "ReferenciaOperacion")
-                });
+                vm.Movimientos.Add(
+                    new AlmacenMPMovimientoListaVm
+                    {
+                        MovimientoID =
+                            EnteroLargo(reader, "MovimientoID"),
+                        FechaMovimiento =
+                            Fecha(reader, "FechaMovimiento")
+                            ?? DateTime.MinValue,
+                        MaterialID =
+                            Entero(reader, "MaterialID"),
+                        Codigo =
+                            Texto(reader, "Codigo"),
+                        Material =
+                            Texto(reader, "Material"),
+                        TipoMovimiento =
+                            Texto(reader, "TipoMovimiento"),
+                        Cantidad =
+                            DecimalValor(reader, "Cantidad"),
+                        Unidad =
+                            Texto(reader, "Unidad"),
+                        Lote =
+                            Texto(reader, "Lote"),
+                        Ubicacion =
+                            Texto(reader, "Ubicacion"),
+                        NumeroOF =
+                            Texto(reader, "NumeroOF"),
+                        Responsable =
+                            Texto(reader, "Responsable"),
+                        Observaciones =
+                            Texto(reader, "Observaciones"),
+                        ReferenciaOperacion =
+                            Texto(reader, "ReferenciaOperacion")
+                    });
             }
         }
 
-        vm.TotalMateriales = vm.Existencias.Count;
-        vm.Criticos = vm.Existencias.Count(x => x.Semaforo == "ROJO");
-        vm.Advertencias = vm.Existencias.Count(x => x.Semaforo == "AMARILLO");
-        vm.Disponibles = vm.Existencias.Count(x => x.Semaforo == "VERDE");
-        vm.PendientesConfiguracion = vm.Existencias.Count(x => !x.StockConfigurado);
-        vm.SaldoTotal = vm.Existencias.Sum(x => x.Saldo);
+        // Misma estructura operativa utilizada en Inventario PT.
+        const string resumenSql = @"
+WITH Requerido AS
+(
+    SELECT
+        s.SolicitudProduccionID,
+        s.FolioSolicitud,
+        s.NumeroOFRecibida,
+        material.MaterialID,
+        SUM
+        (
+            CONVERT
+            (
+                DECIMAL(18,4),
+                ISNULL(detalle.CantidadMpKg, 0)
+            )
+        ) AS CantidadRequerida
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle detalle
+        ON detalle.SolicitudProduccionID =
+           s.SolicitudProduccionID
+       AND detalle.Activo = 1
+    INNER JOIN dbo.ERP_Materiales material
+        ON material.Activo = 1
+       AND
+       (
+           detalle.MaterialID = material.MaterialID
+           OR
+           (
+               detalle.MaterialID IS NULL
+               AND UPPER
+                   (
+                       LTRIM
+                       (
+                           RTRIM
+                           (
+                               ISNULL(detalle.MaterialCodigo, N'')
+                           )
+                       )
+                   ) =
+                   UPPER(LTRIM(RTRIM(material.Codigo)))
+           )
+       )
+    WHERE s.Activo = 1
+      AND ISNULL(detalle.CantidadMpKg, 0) > 0
+    GROUP BY
+        s.SolicitudProduccionID,
+        s.FolioSolicitud,
+        s.NumeroOFRecibida,
+        material.MaterialID
+),
+Pendiente AS
+(
+    SELECT
+        requerido.SolicitudProduccionID,
+        requerido.MaterialID,
+        CASE
+            WHEN requerido.CantidadRequerida
+                 - ISNULL(entregado.CantidadEntregada, 0) > 0
+                THEN requerido.CantidadRequerida
+                     - ISNULL(entregado.CantidadEntregada, 0)
+            ELSE 0
+        END AS CantidadPendiente
+    FROM Requerido requerido
+    OUTER APPLY
+    (
+        SELECT
+            SUM
+            (
+                CASE
+                    WHEN movimiento.TipoMovimiento IN
+                         (
+                             N'Salida',
+                             N'Consumo'
+                         )
+                        THEN movimiento.Cantidad
+                    WHEN movimiento.TipoMovimiento = N'Retorno'
+                        THEN -movimiento.Cantidad
+                    ELSE 0
+                END
+            ) AS CantidadEntregada
+        FROM dbo.AlmacenMP_Movimientos movimiento
+        WHERE movimiento.Activo = 1
+          AND movimiento.MaterialID =
+              requerido.MaterialID
+          AND
+          (
+              (
+                  NULLIF
+                  (
+                      LTRIM(RTRIM(requerido.FolioSolicitud)),
+                      N''
+                  ) IS NOT NULL
+                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                      LTRIM(RTRIM(requerido.FolioSolicitud))
+              )
+              OR
+              (
+                  NULLIF
+                  (
+                      LTRIM(RTRIM(requerido.NumeroOFRecibida)),
+                      N''
+                  ) IS NOT NULL
+                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                      LTRIM(RTRIM(requerido.NumeroOFRecibida))
+              )
+          )
+    ) entregado
+)
+SELECT
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            SUM(CantidadPendiente),
+            0
+        )
+    ) AS SolicitadoPendiente,
+    CONVERT
+    (
+        INT,
+        COUNT(DISTINCT SolicitudProduccionID)
+    ) AS OFPendientes
+FROM Pendiente
+WHERE CantidadPendiente > 0.0005;
+
+SELECT
+    CONVERT
+    (
+        INT,
+        COUNT
+        (
+            CASE
+                WHEN TipoMovimiento = N'Entrada'
+                    THEN 1
+                ELSE NULL
+            END
+        )
+    ) AS RecepcionesHoy,
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            SUM
+            (
+                CASE
+                    WHEN TipoMovimiento = N'Entrada'
+                        THEN Cantidad
+                    ELSE 0
+                END
+            ),
+            0
+        )
+    ) AS CantidadRecibidaHoy,
+    CONVERT
+    (
+        DECIMAL(18,4),
+        ISNULL
+        (
+            SUM
+            (
+                CASE
+                    WHEN TipoMovimiento IN
+                         (
+                             N'Salida',
+                             N'Consumo',
+                             N'Scrap',
+                             N'AjusteNegativo'
+                         )
+                        THEN Cantidad
+                    ELSE 0
+                END
+            ),
+            0
+        )
+    ) AS SalidasHoy
+FROM dbo.AlmacenMP_Movimientos
+WHERE Activo = 1
+  AND FechaMovimiento >= CONVERT(DATE, GETDATE())
+  AND FechaMovimiento <
+      DATEADD
+      (
+          DAY,
+          1,
+          CONVERT(DATE, GETDATE())
+      );";
+
+        await using (var command =
+            new SqlCommand(resumenSql, connection))
+        await using (var reader =
+            await command.ExecuteReaderAsync(cancellationToken))
+        {
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                vm.SolicitadoPendiente =
+                    DecimalValor(
+                        reader,
+                        "SolicitadoPendiente");
+
+                vm.OFPendientes =
+                    Entero(reader, "OFPendientes");
+            }
+
+            if (await reader.NextResultAsync(cancellationToken)
+                && await reader.ReadAsync(cancellationToken))
+            {
+                vm.RecepcionesHoy =
+                    Entero(reader, "RecepcionesHoy");
+
+                vm.CantidadRecibidaHoy =
+                    DecimalValor(
+                        reader,
+                        "CantidadRecibidaHoy");
+
+                vm.SalidasHoy =
+                    DecimalValor(reader, "SalidasHoy");
+            }
+        }
+
+        vm.TotalMateriales =
+            vm.Existencias.Count;
+
+        vm.Criticos =
+            vm.Existencias.Count(
+                item => item.Semaforo == "ROJO");
+
+        vm.Advertencias =
+            vm.Existencias.Count(
+                item => item.Semaforo == "AMARILLO");
+
+        vm.Disponibles =
+            vm.Existencias.Count(
+                item => item.Semaforo == "VERDE");
+
+        vm.PendientesConfiguracion =
+            vm.Existencias.Count(
+                item => !item.StockConfigurado);
+
+        vm.SaldoTotal =
+            vm.Existencias.Sum(item => item.Saldo);
+
         return View(vm);
     }
-
-    [HttpGet]
+[HttpGet]
     public async Task<IActionResult> Historial(
         string? material,
         string? q,
@@ -701,14 +1134,15 @@ WHERE MaterialID=@Id AND Activo=1;";
         Mensaje("success", $"Se actualizaron los niveles de stock de {model.Items.Count} materiales MP.");
         return RedirectToAction(nameof(NivelesStock), new { q = model.Busqueda, soloSinConfigurar = model.SoloSinConfigurar });
     }
-
     [HttpGet]
     public async Task<IActionResult> Movimiento(
         int? materialId,
         string? tipo,
+        string? tipoMP,
         string? numeroOF,
         decimal? cantidad,
         string? unidad,
+        int? solicitudProduccionId,
         bool entregaOF = false,
         CancellationToken cancellationToken = default)
     {
@@ -720,17 +1154,64 @@ WHERE MaterialID=@Id AND Activo=1;";
             MaterialID = materialId.GetValueOrDefault(),
             TipoMovimiento = entregaOF
                 ? "Salida"
-                : TiposPermitidos.Contains(tipo ?? string.Empty) ? tipo! : "Entrada",
-            NumeroOF = numeroOF?.Trim(),
-            Cantidad = cantidad.GetValueOrDefault(),
-            Unidad = unidad?.Trim().ToUpperInvariant() ?? string.Empty,
+                : TiposPermitidos.Contains(tipo ?? string.Empty)
+                    ? tipo!
+                    : "Entrada",
+            TipoMP = NormalizarTipoMP(tipoMP),
+            NumeroOF = entregaOF ? null : numeroOF?.Trim(),
+            Cantidad = entregaOF ? 0m : cantidad.GetValueOrDefault(),
+            Unidad = "KG",
             EsEntregaOF = entregaOF,
+            SolicitudProduccionID = solicitudProduccionId,
             FechaMovimiento = DateTime.Now,
             Lote = "S/L",
-            Observaciones = entregaOF && !string.IsNullOrWhiteSpace(numeroOF)
-                ? $"Entrega de materia prima para {numeroOF.Trim()}."
-                : null
+            OperacionToken = AlmacenOFEntregaService.CrearToken()
         };
+
+        if (entregaOF)
+        {
+            if (!solicitudProduccionId.HasValue
+                || solicitudProduccionId.Value <= 0
+                || vm.MaterialID <= 0)
+            {
+                Mensaje("warning", "No se recibio una OF y un material validos.");
+                return RedirectToAction("Index", "AlmacenOF");
+            }
+
+            await using var connection =
+                await AbrirConexionAsync(cancellationToken);
+
+            var contexto = await AlmacenOFEntregaService.CargarMateriaPrimaAsync(
+                connection,
+                null,
+                solicitudProduccionId.Value,
+                vm.MaterialID,
+                cancellationToken);
+
+            if (contexto == null)
+            {
+                Mensaje("warning", "El material no pertenece a la OF seleccionada.");
+                return RedirectToAction("Index", "AlmacenOF");
+            }
+
+            if (string.IsNullOrWhiteSpace(contexto.NumeroOF))
+            {
+                Mensaje("warning", "Planeacion todavia no asigna un numero de OF valido.");
+                return RedirectToAction("Index", "AlmacenOF");
+            }
+
+            if (contexto.Pendiente <= 0.0005m)
+            {
+                Mensaje("warning", "La materia prima seleccionada ya fue entregada completamente.");
+                return RedirectToAction("Index", "AlmacenOF");
+            }
+
+            vm.NumeroOF = contexto.NumeroOF;
+            vm.Unidad = "KG";
+            vm.CantidadPendienteOF = contexto.Pendiente;
+            vm.Cantidad = contexto.Pendiente;
+            vm.Observaciones = $"Entrega de materia prima para {contexto.NumeroOF}.";
+        }
 
         await CargarMovimientoAsync(vm, cancellationToken);
         return View(vm);
@@ -738,35 +1219,76 @@ WHERE MaterialID=@Id AND Activo=1;";
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Movimiento(AlmacenMPMovimientoFormVm model, CancellationToken cancellationToken)
+    public async Task<IActionResult> Movimiento(
+        AlmacenMPMovimientoFormVm model,
+        CancellationToken cancellationToken)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
-        model.Lote = string.IsNullOrWhiteSpace(model.Lote) ? "S/L" : model.Lote.Trim();
-        model.Unidad = model.Unidad?.Trim().ToUpperInvariant() ?? string.Empty;
+
+        model.TipoMP = NormalizarTipoMP(model.TipoMP);
+        model.Lote = "S/L";
+        model.Unidad = "KG";
         model.NumeroOF = model.NumeroOF?.Trim();
         model.Observaciones = model.Observaciones?.Trim();
+        model.OperacionToken = model.OperacionToken?.Trim() ?? string.Empty;
         model.FechaMovimiento = DateTime.Now;
+        model.EsEntregaOF = model.EsEntregaOF || model.SolicitudProduccionID.HasValue;
+
+        ModelState.Remove(nameof(model.Unidad));
+        ModelState.Remove(nameof(model.Lote));
+        ModelState.Remove(nameof(model.TipoMP));
+
+        if (!AlmacenOFEntregaService.TokenValido(model.OperacionToken))
+        {
+            ModelState.AddModelError(
+                nameof(model.OperacionToken),
+                "La operacion expiro. Regresa al formulario e intentalo nuevamente.");
+        }
+
+        if (model.TipoMP is not ("VIRGEN" or "MOLIDO"))
+        {
+            ModelState.AddModelError(nameof(model.TipoMP), "Selecciona VIRGEN o MOLIDO.");
+        }
 
         if (model.EsEntregaOF)
         {
             model.TipoMovimiento = "Salida";
             model.Lote = "S/L";
             model.UbicacionID = null;
+            model.Unidad = "KG";
+
             ModelState.Remove(nameof(model.TipoMovimiento));
             ModelState.Remove(nameof(model.Lote));
             ModelState.Remove(nameof(model.UbicacionID));
+            ModelState.Remove(nameof(model.NumeroOF));
+            ModelState.Remove(nameof(model.CantidadPendienteOF));
+
+            if (!model.SolicitudProduccionID.HasValue
+                || model.SolicitudProduccionID.Value <= 0)
+            {
+                ModelState.AddModelError(
+                    nameof(model.SolicitudProduccionID),
+                    "La orden de fabricacion es obligatoria.");
+            }
 
             if (model.MaterialID <= 0)
-                ModelState.AddModelError(nameof(model.MaterialID), "El material es obligatorio.");
-            if (string.IsNullOrWhiteSpace(model.NumeroOF))
-                ModelState.AddModelError(nameof(model.NumeroOF), "La orden de fabricación es obligatoria.");
+            {
+                ModelState.AddModelError(
+                    nameof(model.MaterialID),
+                    "El material es obligatorio.");
+            }
+
             if (string.IsNullOrWhiteSpace(model.Observaciones))
-                ModelState.AddModelError(nameof(model.Observaciones), "Las observaciones son obligatorias.");
+            {
+                ModelState.AddModelError(
+                    nameof(model.Observaciones),
+                    "Las observaciones son obligatorias.");
+            }
         }
 
-        // REVISION_ALMACEN_V8_AJUSTES_MP
-        if ((model.TipoMovimiento == "AjustePositivo" || model.TipoMovimiento == "AjusteNegativo")
+        if ((model.TipoMovimiento == "AjustePositivo"
+             || model.TipoMovimiento == "AjusteNegativo")
             && string.IsNullOrWhiteSpace(model.Observaciones))
         {
             ModelState.AddModelError(
@@ -775,60 +1297,171 @@ WHERE MaterialID=@Id AND Activo=1;";
         }
 
         if (!TiposPermitidos.Contains(model.TipoMovimiento))
-            ModelState.AddModelError(nameof(model.TipoMovimiento), "Tipo de movimiento inválido.");
+        {
+            ModelState.AddModelError(
+                nameof(model.TipoMovimiento),
+                "Tipo de movimiento invalido.");
+        }
+
         if (!ModelState.IsValid)
         {
             await CargarMovimientoAsync(model, cancellationToken);
             return View(model);
         }
 
-        await using var connection = await AbrirConexionAsync(cancellationToken);
-        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        await using var connection =
+            await AbrirConexionAsync(cancellationToken);
+
+        await using var transaction =
+            (SqlTransaction)await connection.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
+
+        var referencia =
+            AlmacenOFEntregaService.CrearReferencia(
+                "WEB-MP",
+                model.OperacionToken);
+
         try
         {
-            const string materialSql = @"
-SELECT Codigo, Nombre, UnidadDefault, RequiereLote
-FROM dbo.ERP_Materiales WITH (UPDLOCK, HOLDLOCK)
-WHERE MaterialID=@Id AND Activo=1;";
-            string codigo;
-            bool requiereLote;
-            await using (var materialCommand = new SqlCommand(materialSql, connection, transaction))
+            if (await AlmacenOFEntregaService.ExisteReferenciaMPAsync(
+                    connection,
+                    transaction,
+                    referencia,
+                    cancellationToken))
             {
-                materialCommand.Parameters.Add("@Id", SqlDbType.Int).Value = model.MaterialID;
-                await using var reader = await materialCommand.ExecuteReaderAsync(cancellationToken);
-                if (!await reader.ReadAsync(cancellationToken))
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", "Este movimiento ya habia sido registrado. No se creo un duplicado.");
+                return model.EsEntregaOF
+                    ? RedirectToAction("Index", "AlmacenOF")
+                    : RedirectToAction(nameof(Index));
+            }
+
+            string codigo;
+
+            if (model.EsEntregaOF)
+            {
+                var contexto = await AlmacenOFEntregaService.CargarMateriaPrimaAsync(
+                    connection,
+                    transaction,
+                    model.SolicitudProduccionID!.Value,
+                    model.MaterialID,
+                    cancellationToken);
+
+                if (contexto == null)
                 {
-                    ModelState.AddModelError(nameof(model.MaterialID), "El material no existe o está inactivo.");
+                    ModelState.AddModelError(
+                        nameof(model.MaterialID),
+                        "El material no pertenece a la OF seleccionada.");
                     await transaction.RollbackAsync(cancellationToken);
                     await CargarMovimientoAsync(model, cancellationToken);
                     return View(model);
                 }
-                codigo = Texto(reader, "Codigo");
-                requiereLote = Convert.ToBoolean(reader["RequiereLote"]);
-                // La unidad siempre se toma del catálogo; no se confía en el valor enviado por el navegador.
-                model.Unidad = Texto(reader, "UnidadDefault").Trim().ToUpperInvariant();
-            }
 
-            if (!model.EsEntregaOF && requiereLote && model.Lote == "S/L")
+                model.NumeroOF = contexto.NumeroOF;
+                model.Unidad = "KG";
+                model.CantidadPendienteOF = contexto.Pendiente;
+                codigo = contexto.Codigo;
+
+                if (string.IsNullOrWhiteSpace(contexto.NumeroOF))
+                {
+                    ModelState.AddModelError(
+                        nameof(model.SolicitudProduccionID),
+                        "Planeacion todavia no asigna un numero de OF valido.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken);
+                    return View(model);
+                }
+
+                if (contexto.Pendiente <= 0.0005m)
+                {
+                    ModelState.AddModelError(
+                        nameof(model.Cantidad),
+                        "La entrega de este material ya esta completa.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken);
+                    return View(model);
+                }
+
+                if (model.Cantidad - contexto.Pendiente > 0.0005m)
+                {
+                    ModelState.AddModelError(
+                        nameof(model.Cantidad),
+                        $"La cantidad excede lo pendiente. Maximo permitido: {contexto.Pendiente:0.###} KG.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken);
+                    return View(model);
+                }
+            }
+            else
             {
-                ModelState.AddModelError(nameof(model.Lote), "Este material requiere lote.");
-                await transaction.RollbackAsync(cancellationToken);
-                await CargarMovimientoAsync(model, cancellationToken);
-                return View(model);
+                const string materialSql = @"
+SELECT Codigo, Nombre
+FROM dbo.ERP_Materiales WITH (UPDLOCK, HOLDLOCK)
+WHERE MaterialID = @Id
+  AND Activo = 1;";
+
+                await using var materialCommand =
+                    new SqlCommand(materialSql, connection, transaction);
+                materialCommand.Parameters.Add("@Id", SqlDbType.Int).Value = model.MaterialID;
+
+                await using var reader =
+                    await materialCommand.ExecuteReaderAsync(cancellationToken);
+
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    ModelState.AddModelError(
+                        nameof(model.MaterialID),
+                        "El material no existe o esta inactivo.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken);
+                    return View(model);
+                }
+
+                codigo = Texto(reader, "Codigo");
             }
 
             if (EsSalidaMP(model.TipoMovimiento))
             {
                 const string saldoSql = @"
-SELECT ISNULL(Saldo,0)
-FROM dbo.vw_AlmacenMPInventario
-WHERE MaterialID=@MaterialID;";
-                await using var saldoCommand = new SqlCommand(saldoSql, connection, transaction);
+SELECT ISNULL
+(
+    SUM
+    (
+        CASE
+            WHEN TipoMovimiento IN
+                 (N'Entrada', N'Retorno', N'Ajuste', N'AjustePositivo')
+                THEN Cantidad
+            WHEN TipoMovimiento IN
+                 (N'Salida', N'Consumo', N'Scrap', N'AjusteNegativo')
+                THEN -Cantidad
+            ELSE 0
+        END
+    ),
+    0
+)
+FROM dbo.AlmacenMP_Movimientos
+WHERE Activo = 1
+  AND MaterialID = @MaterialID
+  AND CASE
+          WHEN UPPER(LTRIM(RTRIM(ISNULL(TipoMP, N'')))) = N'MOLIDO'
+              THEN N'MOLIDO'
+          ELSE N'VIRGEN'
+      END = @TipoMP;";
+
+                await using var saldoCommand =
+                    new SqlCommand(saldoSql, connection, transaction);
                 saldoCommand.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
-                var saldo = Convert.ToDecimal(await saldoCommand.ExecuteScalarAsync(cancellationToken) ?? 0m);
+                saldoCommand.Parameters.Add("@TipoMP", SqlDbType.NVarChar, 20).Value = model.TipoMP;
+
+                var saldo = Convert.ToDecimal(
+                    await saldoCommand.ExecuteScalarAsync(cancellationToken) ?? 0m);
+
                 if (saldo < model.Cantidad)
                 {
-                    ModelState.AddModelError(nameof(model.Cantidad), $"Stock insuficiente para {codigo}. Disponible: {saldo:0.###} {model.Unidad}.");
+                    ModelState.AddModelError(
+                        nameof(model.Cantidad),
+                        $"Stock insuficiente para {codigo} ({model.TipoMP}). Disponible: {saldo:0.###} KG.");
                     await transaction.RollbackAsync(cancellationToken);
                     await CargarMovimientoAsync(model, cancellationToken);
                     return View(model);
@@ -837,31 +1470,67 @@ WHERE MaterialID=@MaterialID;";
 
             const string insertSql = @"
 INSERT dbo.AlmacenMP_Movimientos
-(FechaMovimiento, MaterialID, TipoMovimiento, Lote, Cantidad, Unidad,
- UbicacionID, NumeroOF, ResponsableUsuarioID, EntregadoPorNombre,
- Seguimiento, FechaCreacion, CreadoPor, Activo,
- RequiereValidacionProduccion, ValidadoProduccion, ReferenciaOperacion)
+(
+    FechaMovimiento, MaterialID, TipoMovimiento, TipoMP,
+    Lote, Cantidad, Unidad, UbicacionID, NumeroOF,
+    ResponsableUsuarioID, EntregadoPorNombre, Seguimiento,
+    FechaCreacion, CreadoPor, Activo,
+    RequiereValidacionProduccion, ValidadoProduccion,
+    ReferenciaOperacion
+)
 VALUES
-(SYSDATETIME(), @MaterialID, @Tipo, @Lote, @Cantidad, @Unidad,
- @UbicacionID, @NumeroOF, @UsuarioID, @Responsable,
- @Observaciones, SYSUTCDATETIME(), @Responsable, 1, 0, 1, @Referencia);";
-            await using var insert = new SqlCommand(insertSql, connection, transaction);
+(
+    SYSDATETIME(), @MaterialID, @Tipo, @TipoMP,
+    N'S/L', @Cantidad, N'KG', @UbicacionID, @NumeroOF,
+    @UsuarioID, @Responsable, @Observaciones,
+    SYSUTCDATETIME(), @Responsable, 1,
+    0, 1, @Referencia
+);";
+
+            await using var insert =
+                new SqlCommand(insertSql, connection, transaction);
+
             insert.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
             insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value = model.TipoMovimiento;
-            insert.Parameters.Add("@Lote", SqlDbType.NVarChar, 120).Value = model.Lote;
+            insert.Parameters.Add("@TipoMP", SqlDbType.NVarChar, 20).Value = model.TipoMP;
+
             var cantidadParametro = insert.Parameters.Add("@Cantidad", SqlDbType.Decimal);
             cantidadParametro.Precision = 18;
             cantidadParametro.Scale = 3;
             cantidadParametro.Value = model.Cantidad;
-            insert.Parameters.Add("@Unidad", SqlDbType.NVarChar, 20).Value = model.Unidad;
-            insert.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = model.UbicacionID.HasValue ? model.UbicacionID.Value : DBNull.Value;
-            insert.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(model.NumeroOF) ? DBNull.Value : model.NumeroOF;
-            insert.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
+
+            insert.Parameters.Add("@UbicacionID", SqlDbType.Int).Value =
+                model.UbicacionID.HasValue
+                    ? model.UbicacionID.Value
+                    : DBNull.Value;
+
+            insert.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value =
+                string.IsNullOrWhiteSpace(model.NumeroOF)
+                    ? DBNull.Value
+                    : model.NumeroOF;
+
+            insert.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                UsuarioID.HasValue
+                    ? UsuarioID.Value
+                    : DBNull.Value;
+
             insert.Parameters.Add("@Responsable", SqlDbType.NVarChar, 180).Value = UsuarioNombre;
-            insert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value = string.IsNullOrWhiteSpace(model.Observaciones) ? DBNull.Value : model.Observaciones.Trim();
-            insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = $"MAN-MP-{Guid.NewGuid():N}";
+            insert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value =
+                string.IsNullOrWhiteSpace(model.Observaciones)
+                    ? DBNull.Value
+                    : model.Observaciones;
+            insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = referencia;
+
             await insert.ExecuteNonQueryAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            Mensaje("warning", "La operacion ya fue procesada. No se creo un movimiento duplicado.");
+            return model.EsEntregaOF
+                ? RedirectToAction("Index", "AlmacenOF")
+                : RedirectToAction(nameof(Index));
         }
         catch
         {
@@ -869,42 +1538,133 @@ VALUES
             throw;
         }
 
-        Mensaje("success", model.EsEntregaOF
-            ? "Entrega de materia prima registrada para la OF."
-            : "Movimiento de Almacén MP registrado correctamente.");
+        Mensaje(
+            "success",
+            model.EsEntregaOF
+                ? $"Entrega de materia prima {model.TipoMP} registrada para la OF."
+                : $"Movimiento de Almacen MP {model.TipoMP} registrado correctamente.");
 
         return model.EsEntregaOF
             ? RedirectToAction("Index", "AlmacenOF")
             : RedirectToAction(nameof(Index));
     }
 
-    private async Task CargarMovimientoAsync(AlmacenMPMovimientoFormVm vm, CancellationToken cancellationToken)
+    private async Task CargarMovimientoAsync(
+        AlmacenMPMovimientoFormVm vm,
+        CancellationToken cancellationToken)
     {
-        await using var connection = await AbrirConexionAsync(cancellationToken);
+        await using var connection =
+            await AbrirConexionAsync(cancellationToken);
+
         const string materialesSql = @"
-SELECT MaterialID, Codigo, Nombre, UnidadDefault
-FROM dbo.ERP_Materiales WHERE Activo=1
+SELECT MaterialID, Codigo, Nombre
+FROM dbo.ERP_Materiales
+WHERE Activo = 1
+  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%BOLSA%'
+  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%CAJA%'
+  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%MIXTO%'
+  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%BAG%'
+  AND UPPER(CONCAT(Codigo, N' ', Nombre)) NOT LIKE N'%BOX%'
 ORDER BY Codigo;";
-        await using (var command = new SqlCommand(materialesSql, connection))
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+
+        await using (var command =
+            new SqlCommand(materialesSql, connection))
+        await using (var reader =
+            await command.ExecuteReaderAsync(cancellationToken))
         {
             while (await reader.ReadAsync(cancellationToken))
             {
-                vm.Materiales.Add(new AlmacenSelectVm
-                {
-                    Id = Entero(reader, "MaterialID"),
-                    Texto = $"{Texto(reader, "Codigo")} · {Texto(reader, "Nombre")}",
-                    Extra = Texto(reader, "UnidadDefault")
-                });
+                vm.Materiales.Add(
+                    new AlmacenSelectVm
+                    {
+                        Id = Entero(reader, "MaterialID"),
+                        Texto = $"{Texto(reader, "Codigo")} · {Texto(reader, "Nombre")}",
+                        Extra = "KG"
+                    });
             }
         }
+
+        var ordenes = new List<string>();
+        if (await ExisteObjetoAsync(
+                connection,
+                "dbo.SolicitudesProduccion",
+                "U",
+                cancellationToken))
+        {
+            const string ordenesSql = @"
+SELECT TOP (300) NumeroOF
+FROM
+(
+    SELECT DISTINCT
+        COALESCE
+        (
+            NULLIF(LTRIM(RTRIM(NumeroOFRecibida)), N''),
+            NULLIF(LTRIM(RTRIM(FolioSolicitud)), N'')
+        ) AS NumeroOF
+    FROM dbo.SolicitudesProduccion
+    WHERE Activo = 1
+) origen
+WHERE NumeroOF IS NOT NULL
+ORDER BY NumeroOF DESC;";
+
+            await using var ordenesCommand =
+                new SqlCommand(ordenesSql, connection);
+            await using var ordenesReader =
+                await ordenesCommand.ExecuteReaderAsync(cancellationToken);
+
+            while (await ordenesReader.ReadAsync(cancellationToken))
+            {
+                ordenes.Add(Texto(ordenesReader, "NumeroOF"));
+            }
+        }
+
+        ViewData["OrdenesFabricacionMP"] = ordenes;
+
         if (!vm.EsEntregaOF)
-            vm.Ubicaciones = await CargarUbicacionesAsync(connection, "MP", cancellationToken);
-        vm.TiposMovimiento = TiposPermitidos.Select((x, i) => new AlmacenSelectVm { Id = i + 1, Texto = x, Extra = x }).ToList();
-        if (vm.MaterialID > 0 && (vm.EsEntregaOF || string.IsNullOrWhiteSpace(vm.Unidad)))
-            vm.Unidad = vm.Materiales.FirstOrDefault(x => x.Id == vm.MaterialID)?.Extra ?? "KG";
+        {
+            vm.Ubicaciones =
+                await CargarUbicacionesAsync(
+                    connection,
+                    "MP",
+                    cancellationToken);
+        }
+
+        vm.TiposMovimiento =
+            TiposPermitidos
+                .Select((x, i) =>
+                    new AlmacenSelectVm
+                    {
+                        Id = i + 1,
+                        Texto = x,
+                        Extra = x
+                    })
+                .ToList();
+
+        vm.Unidad = "KG";
+        vm.Lote = "S/L";
+        vm.TipoMP = NormalizarTipoMP(vm.TipoMP);
     }
 
+    private static string NormalizarTipoMP(string? tipoMP)
+    {
+        return string.Equals(
+            tipoMP?.Trim(),
+            "MOLIDO",
+            StringComparison.OrdinalIgnoreCase)
+                ? "MOLIDO"
+                : "VIRGEN";
+    }
+
+    private static string? NormalizarTipoMPFiltro(string? tipoMP)
+    {
+        if (string.IsNullOrWhiteSpace(tipoMP))
+            return null;
+
+        var valor = tipoMP.Trim().ToUpperInvariant();
+        return valor is "MOLIDO" or "VIRGEN"
+            ? valor
+            : null;
+    }
     private static async Task<List<AlmacenSelectVm>> CargarUbicacionesAsync(SqlConnection connection, string almacen, CancellationToken cancellationToken)
     {
         var rows = new List<AlmacenSelectVm>();
@@ -927,5 +1687,6 @@ ORDER BY Almacen, Rack, Nivel, Posicion;";
         return rows;
     }
 }
+
 
 

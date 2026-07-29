@@ -25,7 +25,10 @@ namespace ERP.NSQuell.Controllers
         {
             var lista = new List<PlaneacionOFIndexVm>();
 
-            const string sql = @"
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            const string sqlOF = @"
 SELECT
     s.SolicitudProduccionID,
     s.FolioSolicitud,
@@ -36,8 +39,33 @@ SELECT
     s.FechaFinPlaneada,
     ISNULL(c.Nombre, s.ClienteNombre) AS Cliente,
     s.Prioridad,
+    ISNULL(NULLIF(s.TipoOF, ''), 'RELEASE') AS TipoOF,
+    s.MotivoTipoOF,
     s.EstatusID,
     s.ResponsablePlaneacionNombre,
+
+    CASE
+        WHEN ISNULL(maquinaResumen.TotalMaquinas, 0) = 1
+            THEN maquinaResumen.MaquinaID
+        ELSE NULL
+    END AS MaquinaID,
+
+    CASE
+        WHEN ISNULL(maquinaResumen.TotalMaquinas, 0) = 0
+            THEN 'SIN MAQUINA'
+        WHEN maquinaResumen.TotalMaquinas = 1
+            THEN ISNULL(m.Codigo, 'MAQUINA SIN CODIGO')
+        ELSE 'VARIAS MAQUINAS'
+    END AS MaquinaCodigo,
+
+    CASE
+        WHEN ISNULL(maquinaResumen.TotalMaquinas, 0) = 0
+            THEN 'Sin asignacion de maquina'
+        WHEN maquinaResumen.TotalMaquinas = 1
+            THEN ISNULL(m.Nombre, ISNULL(m.Codigo, 'Maquina'))
+        ELSE 'La OF tiene asignaciones en mas de una maquina'
+    END AS MaquinaNombre,
+
     COUNT(DISTINCT d.SolicitudProduccionDetalleID) AS TotalRenglones,
     ISNULL(SUM(d.CantidadPiezas), 0) AS TotalPiezas
 FROM dbo.SolicitudesProduccion s
@@ -46,6 +74,21 @@ LEFT JOIN dbo.ERP_Clientes c
 LEFT JOIN dbo.SolicitudesProduccionDetalle d
     ON d.SolicitudProduccionID = s.SolicitudProduccionID
    AND d.Activo = 1
+OUTER APPLY
+(
+    SELECT
+        COUNT(DISTINCT a.MaquinaID) AS TotalMaquinas,
+        MIN(a.MaquinaID) AS MaquinaID
+    FROM dbo.SolicitudesProduccionDetalle detalleMaquina
+    INNER JOIN dbo.SolicitudesProduccionAsignacionMaquina a
+        ON a.SolicitudProduccionDetalleID = detalleMaquina.SolicitudProduccionDetalleID
+       AND a.Activo = 1
+    WHERE detalleMaquina.SolicitudProduccionID = s.SolicitudProduccionID
+      AND detalleMaquina.Activo = 1
+      AND a.MaquinaID IS NOT NULL
+) maquinaResumen
+LEFT JOIN dbo.ERP_Maquinas m
+    ON m.MaquinaID = maquinaResumen.MaquinaID
 WHERE s.Activo = 1
 GROUP BY
     s.SolicitudProduccionID,
@@ -57,42 +100,166 @@ GROUP BY
     s.FechaFinPlaneada,
     ISNULL(c.Nombre, s.ClienteNombre),
     s.Prioridad,
+    s.TipoOF,
+s.MotivoTipoOF,
     s.EstatusID,
     s.ResponsablePlaneacionNombre,
-    s.FechaCreacion
+    s.FechaCreacion,
+    maquinaResumen.TotalMaquinas,
+    maquinaResumen.MaquinaID,
+    m.Codigo,
+    m.Nombre
 ORDER BY s.FechaCreacion DESC;";
 
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
-
-            await using var cmd = new SqlCommand(sql, cn);
-            await using var rd = await cmd.ExecuteReaderAsync();
-
-            while (await rd.ReadAsync())
+            await using (var cmd = new SqlCommand(sqlOF, cn))
+            await using (var rd = await cmd.ExecuteReaderAsync())
             {
-                var estatusId = Convert.ToInt32(rd["EstatusID"]);
-
-                lista.Add(new PlaneacionOFIndexVm
+                while (await rd.ReadAsync())
                 {
-                    SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
-                    FolioSolicitud = rd["FolioSolicitud"] as string,
-                    NumeroOFRecibida = rd["NumeroOFRecibida"] as string,
-                    FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
-                    FechaRequerida = rd["FechaRequerida"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaRequerida"]),
-                    FechaInicioPlaneada = rd["FechaInicioPlaneada"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioPlaneada"]),
-                    FechaFinPlaneada = rd["FechaFinPlaneada"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinPlaneada"]),
-                    Cliente = rd["Cliente"] as string,
-                    Prioridad = rd["Prioridad"] as string ?? "Normal",
-                    EstatusID = estatusId,
-                    EstatusNombre = PlaneacionOFEstatus.Nombre(estatusId),
-                    ResponsablePlaneacionNombre = rd["ResponsablePlaneacionNombre"] as string,
-                    TotalRenglones = Convert.ToInt32(rd["TotalRenglones"]),
-                    TotalPiezas = Convert.ToInt32(rd["TotalPiezas"])
-                });
+                    var estatusId = Convert.ToInt32(rd["EstatusID"]);
+
+                    lista.Add(new PlaneacionOFIndexVm
+                    {
+                        SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
+                        FolioSolicitud = rd["FolioSolicitud"] as string,
+                        NumeroOFRecibida = rd["NumeroOFRecibida"] as string,
+                        FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
+                        FechaRequerida = rd["FechaRequerida"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaRequerida"]),
+                        FechaInicioPlaneada = rd["FechaInicioPlaneada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaInicioPlaneada"]),
+                        FechaFinPlaneada = rd["FechaFinPlaneada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaFinPlaneada"]),
+                        Cliente = rd["Cliente"] as string,
+                        Prioridad = rd["Prioridad"] as string ?? "Normal",
+                        TipoOF = NormalizarTipoOF(rd["TipoOF"] as string),
+                        MotivoTipoOF = rd["MotivoTipoOF"] as string,
+                        EstatusID = estatusId,
+                        EstatusNombre = PlaneacionOFEstatus.Nombre(estatusId),
+                        ResponsablePlaneacionNombre = rd["ResponsablePlaneacionNombre"] as string,
+                        MaquinaID = rd["MaquinaID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["MaquinaID"]),
+                        MaquinaCodigo = rd["MaquinaCodigo"] as string,
+                        MaquinaNombre = rd["MaquinaNombre"] as string,
+                        TotalRenglones = Convert.ToInt32(rd["TotalRenglones"]),
+                        TotalPiezas = Convert.ToInt32(rd["TotalPiezas"])
+                    });
+                }
             }
+
+            const string sqlProgramadosSinOF = @"
+SELECT
+    pp.ProgramaProduccionID,
+    pp.ClienteID,
+    ISNULL(c.Nombre, pp.ClienteNombre) AS ClienteNombre,
+    pp.ReferenciaSAP,
+    pp.NumeroParte,
+    pp.DesignacionDescripcionSAP,
+    pp.CantidadProgramada,
+    pp.FechaInicioProgramada,
+    pp.FechaFinProgramada,
+    pp.FechaCreacion,
+    pp.MaquinaID,
+    pp.MaquinaCodigo,
+    pp.MaquinaNombre,
+    pp.MoldeCodigo,
+    pp.CondicionProduccion,
+    ISNULL(NULLIF(pp.TipoOF, ''), 'RELEASE') AS TipoOF,
+    pp.MotivoTipoOF,
+    pp.EstatusID
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.ERP_Clientes c
+    ON c.ClienteID = pp.ClienteID
+WHERE pp.Activo = 1
+  AND pp.SolicitudProduccionID IS NULL
+  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
+ORDER BY
+    pp.FechaInicioProgramada,
+    pp.MaquinaCodigo,
+    pp.SecuenciaMaquina,
+    pp.ProgramaProduccionID;";
+
+            await using (var cmd = new SqlCommand(sqlProgramadosSinOF, cn))
+            await using (var rd = await cmd.ExecuteReaderAsync())
+            {
+                while (await rd.ReadAsync())
+                {
+                    var programaProduccionId = Convert.ToInt32(rd["ProgramaProduccionID"]);
+                    var maquinaCodigo = rd["MaquinaCodigo"] as string;
+                    var maquinaNombre = rd["MaquinaNombre"] as string;
+                    var moldeCodigo = rd["MoldeCodigo"] as string;
+                    var condicion = rd["CondicionProduccion"] as string;
+                    var tipoOF = NormalizarTipoOF(rd["TipoOF"] as string);
+
+                    var folioPendiente = $"PROG-{programaProduccionId:0000}";
+
+                    lista.Add(new PlaneacionOFIndexVm
+                    {
+                        // ID negativo para identificar en la vista que todavia no existe OF.
+                        SolicitudProduccionID = programaProduccionId * -1,
+
+                        FolioSolicitud = folioPendiente,
+                        NumeroOFRecibida = "Pendiente generar OF",
+
+                        FechaSolicitud = rd["FechaCreacion"] == DBNull.Value
+                            ? DateTime.Today
+                            : Convert.ToDateTime(rd["FechaCreacion"]),
+
+                        FechaRequerida = rd["FechaFinProgramada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaFinProgramada"]).Date,
+
+                        FechaInicioPlaneada = rd["FechaInicioProgramada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaInicioProgramada"]),
+
+                        FechaFinPlaneada = rd["FechaFinProgramada"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaFinProgramada"]),
+
+                        Cliente = rd["ClienteNombre"] as string,
+
+                        Prioridad = "Programado",
+                        TipoOF = tipoOF,
+                        MotivoTipoOF = rd["MotivoTipoOF"] as string,
+                        EstatusID = 0,
+                        EstatusNombre = "Pendiente generar OF",
+                        ResponsablePlaneacionNombre =
+                            $"Tipo OF: {tipoOF} · Molde: {moldeCodigo ?? "-"} · {condicion ?? "-"}",
+
+                        MaquinaID = rd["MaquinaID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["MaquinaID"]),
+                        MaquinaCodigo = string.IsNullOrWhiteSpace(maquinaCodigo)
+                            ? "SIN MAQUINA"
+                            : maquinaCodigo,
+                        MaquinaNombre = string.IsNullOrWhiteSpace(maquinaNombre)
+                            ? "Sin asignacion de maquina"
+                            : maquinaNombre,
+
+                        TotalRenglones = 1,
+                        TotalPiezas = rd["CantidadProgramada"] == DBNull.Value
+                            ? 0
+                            : Convert.ToInt32(rd["CantidadProgramada"])
+                    });
+                }
+            }
+
+            lista = lista
+                .OrderBy(x => x.MaquinaCodigo == "SIN MAQUINA" ? 1 : 0)
+                .ThenBy(x => x.MaquinaCodigo)
+                .ThenBy(x => x.SolicitudProduccionID > 0 ? 1 : 0)
+                .ThenBy(x => x.FechaInicioPlaneada ?? x.FechaSolicitud)
+                .ThenByDescending(x => x.FechaSolicitud)
+                .ToList();
 
             return View(lista);
         }
+
 
         // crearr get
         [HttpGet]
@@ -104,7 +271,9 @@ ORDER BY s.FechaCreacion DESC;";
                 NumeroOFRecibida = await ObtenerNumeroOFSugeridoAsync(),
                 FechaSolicitud = DateTime.Today,
                 OrigenSolicitud = "Dirección",
-                Prioridad = "Normal"
+                Prioridad = "Normal",
+                TipoOF = "RELEASE",
+                MotivoTipoOF = null
             };
 
             vm.Detalles.Add(new PlaneacionOFDetalleCrearVm
@@ -136,6 +305,11 @@ ORDER BY s.FechaCreacion DESC;";
             {
                 ModelState.AddModelError("", "No se pudo identificar el usuario de sesión.");
             }
+
+            vm.TipoOF = NormalizarTipoOF(vm.TipoOF);
+            vm.MotivoTipoOF = vm.MotivoTipoOF?.Trim();
+
+            ValidarTipoOF(vm.TipoOF, vm.MotivoTipoOF, nameof(vm.MotivoTipoOF));
 
             vm.Detalles = vm.Detalles
                 .Where(d =>
@@ -252,7 +426,7 @@ ORDER BY s.FechaCreacion DESC;";
                     null,
                     PlaneacionOFEstatus.Capturada,
                     "Creación de OF desde Planeación",
-                    "OF capturada por Planeación con datos recibidos de Dirección.",
+                    $"OF capturada por Planeación. Tipo OF: {vm.TipoOF}.",
                     usuarioId,
                     cn,
                     (SqlTransaction)tx
@@ -283,24 +457,26 @@ ORDER BY s.FechaCreacion DESC;";
             await cn.OpenAsync();
 
             const string sql = @"
-SELECT
-    s.SolicitudProduccionID,
-    s.FolioSolicitud,
-    s.NumeroOFRecibida,
-    s.FechaSolicitud,
-    s.FechaRequerida,
-    s.FechaInicioPlaneada,
-    s.FechaFinPlaneada,
-    ISNULL(c.Nombre, s.ClienteNombre) AS Cliente,
-    s.Prioridad,
-    s.EstatusID,
-    s.NotasGenerales,
-    s.ResponsablePlaneacionNombre
-FROM dbo.SolicitudesProduccion s
-LEFT JOIN dbo.ERP_Clientes c
-    ON c.ClienteID = s.ClienteID
-WHERE s.SolicitudProduccionID = @SolicitudProduccionID
-  AND s.Activo = 1;";
+                SELECT
+                    s.SolicitudProduccionID,
+                    s.FolioSolicitud,
+                    s.NumeroOFRecibida,
+                    s.FechaSolicitud,
+                    s.FechaRequerida,
+                    s.FechaInicioPlaneada,
+                    s.FechaFinPlaneada,
+                    ISNULL(c.Nombre, s.ClienteNombre) AS Cliente,
+                    s.Prioridad,
+                    ISNULL(NULLIF(s.TipoOF, ''), 'RELEASE') AS TipoOF,
+                    s.MotivoTipoOF,
+                    s.EstatusID,
+                    s.NotasGenerales,
+                    s.ResponsablePlaneacionNombre
+                FROM dbo.SolicitudesProduccion s
+                LEFT JOIN dbo.ERP_Clientes c
+                    ON c.ClienteID = s.ClienteID
+                WHERE s.SolicitudProduccionID = @SolicitudProduccionID
+                AND s.Activo = 1;";
 
             await using (var cmd = new SqlCommand(sql, cn))
             {
@@ -323,6 +499,8 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
                         FechaFinPlaneada = rd["FechaFinPlaneada"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinPlaneada"]),
                         Cliente = rd["Cliente"] as string,
                         Prioridad = rd["Prioridad"] as string ?? "Normal",
+                        TipoOF = NormalizarTipoOF(rd["TipoOF"] as string),
+                        MotivoTipoOF = rd["MotivoTipoOF"] as string,
                         EstatusID = estatusId,
                         EstatusNombre = PlaneacionOFEstatus.Nombre(estatusId),
                         NotasGenerales = rd["NotasGenerales"] as string,
@@ -344,6 +522,18 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
             }
 
             vm.Historial = await ObtenerHistorialAsync(id, cn);
+
+            var permisoEdicion = await ObtenerPermisoEdicionOFAsync(
+    vm.SolicitudProduccionID,
+    vm.FolioSolicitud,
+    vm.NumeroOFRecibida,
+    vm.EstatusID,
+    cn
+);
+
+            vm.PuedeEditar = permisoEdicion.PuedeEditar;
+            vm.MotivoNoEditable = permisoEdicion.Motivo;
+
 
             return View(vm);
         }
@@ -434,34 +624,35 @@ SELECT
     p.ReferenciaSAP,
     p.Descripcion,
     p.Designacion,
-    p.Color,
-    p.Cavidades,
-    p.ObjetivoHora,
-    p.PiezasPorCaja,
-    p.MoldePrincipalID,
+
+    t.Color,
+    t.Cavidades,
+    t.ObjetivoHora,
+    t.PiezasPorCaja,
+    t.MoldePrincipalID,
     mol.CodigoMolde AS MoldeCodigo,
-    p.MaquinaPrincipalID,
-    p.MaquinaSustitutaID,
+    t.MaquinaPrincipalID,
+    t.MaquinaSustitutaID,
 
-    COALESCE(p.MaterialID, t.MaterialID) AS MaterialID,
-    COALESCE(NULLIF(p.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
-    COALESCE(NULLIF(p.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
+    t.MaterialID,
+    t.MaterialCodigo,
+    t.MaterialDescripcion,
 
-    COALESCE(t.Ciclo, NULL) AS Ciclo,
-    COALESCE(t.TipoSecado, p.TipoSecado) AS TipoSecado,
-    COALESCE(t.HorasSecado, p.HorasSecado) AS HorasSecado,
-    COALESCE(t.PesoBrutoPieza, p.PesoBrutoPieza) AS PesoBrutoPieza,
-    COALESCE(NULLIF(t.EmbalajeCodigo, ''), p.EmbalajeCodigo) AS EmbalajeCodigo,
-    COALESCE(NULLIF(t.EmbalajeDescripcion, ''), p.EmbalajeDescripcion) AS EmbalajeDescripcion,
-    COALESCE(t.PiezasPorEmbalaje, p.PiezasPorEmbalaje) AS PiezasPorEmbalaje
+    t.Ciclo,
+    t.TipoSecado,
+    t.HorasSecado,
+    t.PesoBrutoPieza,
+    t.EmbalajeCodigo,
+    t.EmbalajeDescripcion,
+    t.PiezasPorEmbalaje
 FROM dbo.ERP_Partes p
 LEFT JOIN dbo.ERP_Clientes c
     ON c.ClienteID = p.ClienteID
-LEFT JOIN dbo.ERP_Moldes mol
-    ON mol.MoldeID = p.MoldePrincipalID
 LEFT JOIN dbo.ERP_ParteDatosTecnicos t
     ON t.ParteID = p.ParteID
    AND t.Activo = 1
+LEFT JOIN dbo.ERP_Moldes mol
+    ON mol.MoldeID = t.MoldePrincipalID
 WHERE p.ParteID = @ParteID
   AND p.Activo = 1;";
 
@@ -473,7 +664,6 @@ WHERE p.ParteID = @ParteID
             if (!await rd.ReadAsync())
             {
                 return Json(new { ok = false, mensaje = "No se encontró la parte." });
-
             }
 
             var numeroParte = rd["NumeroParte"] as string ?? "";
@@ -516,9 +706,6 @@ WHERE p.ParteID = @ParteID
                 embalajeCodigo = rd["EmbalajeCodigo"] == DBNull.Value ? null : rd["EmbalajeCodigo"],
                 embalajeDescripcion = rd["EmbalajeDescripcion"] == DBNull.Value ? null : rd["EmbalajeDescripcion"],
                 piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? null : rd["PiezasPorEmbalaje"]
-
-              
-
             });
         }
 
@@ -584,21 +771,20 @@ WHERE p.ParteID = @ParteID
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync(cancellationToken);
-
             const string sqlParte = @"
 SELECT
     p.ParteID,
     p.NumeroParte,
     COALESCE(NULLIF(p.Designacion, ''), p.Descripcion) AS Descripcion,
 
-    COALESCE(p.MaterialID, t.MaterialID) AS MaterialID,
-    COALESCE(NULLIF(p.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
-    COALESCE(NULLIF(p.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
-    COALESCE(t.PesoBrutoPieza, p.PesoBrutoPieza) AS PesoBrutoPieza,
+    t.MaterialID,
+    t.MaterialCodigo,
+    t.MaterialDescripcion,
+    t.PesoBrutoPieza,
 
-    COALESCE(NULLIF(t.EmbalajeCodigo, ''), p.EmbalajeCodigo) AS EmbalajeCodigo,
-    COALESCE(NULLIF(t.EmbalajeDescripcion, ''), p.EmbalajeDescripcion) AS EmbalajeDescripcion,
-    COALESCE(t.PiezasPorEmbalaje, p.PiezasPorEmbalaje) AS PiezasPorEmbalaje
+    t.EmbalajeCodigo,
+    t.EmbalajeDescripcion,
+    t.PiezasPorEmbalaje
 FROM dbo.ERP_Partes p
 LEFT JOIN dbo.ERP_ParteDatosTecnicos t
     ON t.ParteID = p.ParteID
@@ -1188,6 +1374,8 @@ INSERT INTO dbo.SolicitudesProduccion
     ClienteNombre,
     OrigenSolicitud,
     Prioridad,
+    TipoOF,
+    MotivoTipoOF,
     EstatusID,
     NotasGenerales,
     ResponsablePlaneacionUsuarioID,
@@ -1209,6 +1397,8 @@ VALUES
     @ClienteNombre,
     @OrigenSolicitud,
     @Prioridad,
+    @TipoOF,
+    @MotivoTipoOF,
     @EstatusID,
     @NotasGenerales,
     @ResponsablePlaneacionUsuarioID,
@@ -1229,7 +1419,9 @@ VALUES
             cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = (object?)vm.ClienteID ?? DBNull.Value;
             cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value = (object?)clienteNombre ?? DBNull.Value;
             cmd.Parameters.Add("@OrigenSolicitud", SqlDbType.NVarChar, 50).Value = (object?)vm.OrigenSolicitud ?? "Dirección";
-            cmd.Parameters.Add("@Prioridad", SqlDbType.NVarChar, 30).Value = string.IsNullOrWhiteSpace(vm.Prioridad) ? "Normal" : vm.Prioridad;
+            cmd.Parameters.Add("@Prioridad", SqlDbType.NVarChar, 30).Value = string.IsNullOrWhiteSpace(vm.Prioridad) ? "Normal" : vm.Prioridad.Trim();
+            cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value = NormalizarTipoOF(vm.TipoOF);
+            cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(vm.MotivoTipoOF) ? DBNull.Value : vm.MotivoTipoOF.Trim();
             cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = PlaneacionOFEstatus.Capturada;
             cmd.Parameters.Add("@NotasGenerales", SqlDbType.NVarChar).Value = (object?)vm.NotasGenerales ?? DBNull.Value;
             cmd.Parameters.Add("@ResponsablePlaneacionUsuarioID", SqlDbType.Int).Value = usuarioId;
@@ -1598,9 +1790,9 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID
         }
 
         private async Task CompletarDetalleDesdeParteAsync(
-            PlaneacionOFDetalleCrearVm d,
-            SqlConnection cn,
-            SqlTransaction tx)
+     PlaneacionOFDetalleCrearVm d,
+     SqlConnection cn,
+     SqlTransaction tx)
         {
             if (!d.ParteID.HasValue)
                 return;
@@ -1611,29 +1803,31 @@ SELECT
     p.ReferenciaSAP,
     p.Descripcion,
     p.Designacion,
-    p.Color,
-    p.Cavidades,
-    p.ObjetivoHora,
-    p.PiezasPorCaja,
-    p.MoldePrincipalID,
 
-    COALESCE(p.MaterialID, t.MaterialID) AS MaterialID,
-    COALESCE(NULLIF(p.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
-    COALESCE(NULLIF(p.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
+    t.Color,
+    t.Cavidades,
+    t.ObjetivoHora,
+    t.PiezasPorCaja,
+    t.MoldePrincipalID,
+
+    t.MaterialID,
+    t.MaterialCodigo,
+    t.MaterialDescripcion,
 
     t.Ciclo,
-    COALESCE(t.TipoSecado, p.TipoSecado) AS TipoSecado,
-    COALESCE(t.HorasSecado, p.HorasSecado) AS HorasSecado,
-    COALESCE(t.PesoBrutoPieza, p.PesoBrutoPieza) AS PesoBrutoPieza,
+    t.TipoSecado,
+    t.HorasSecado,
+    t.PesoBrutoPieza,
 
-    COALESCE(NULLIF(t.EmbalajeCodigo, ''), p.EmbalajeCodigo) AS EmbalajeCodigo,
-    COALESCE(NULLIF(t.EmbalajeDescripcion, ''), p.EmbalajeDescripcion) AS EmbalajeDescripcion,
-    COALESCE(t.PiezasPorEmbalaje, p.PiezasPorEmbalaje) AS PiezasPorEmbalaje
+    t.EmbalajeCodigo,
+    t.EmbalajeDescripcion,
+    t.PiezasPorEmbalaje
 FROM dbo.ERP_Partes p
 LEFT JOIN dbo.ERP_ParteDatosTecnicos t
     ON t.ParteID = p.ParteID
    AND t.Activo = 1
-WHERE p.ParteID = @ParteID;";
+WHERE p.ParteID = @ParteID
+  AND p.Activo = 1;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = d.ParteID.Value;
@@ -1933,8 +2127,457 @@ ORDER BY NumeroParte;";
             });
         }
 
+        //METODO GET PARA EDITAR
+
+        [HttpGet]
+        public async Task<IActionResult> Editar(int id)
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            var vm = await ObtenerOFParaEditarAsync(id, cn);
+
+            if (vm == null)
+            {
+                return NotFound();
+            }
+
+            var permisoEdicion = await ObtenerPermisoEdicionOFAsync(
+                id,
+                vm.FolioSolicitud,
+                vm.NumeroOFRecibida,
+                vm.EstatusID,
+                cn
+            );
+
+            if (!permisoEdicion.PuedeEditar)
+            {
+                TempData["Error"] = permisoEdicion.Motivo;
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            vm.SolicitudProduccionID = id;
+            vm.EsEdicion = true;
+
+            await CargarCatalogosAsync(vm);
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Editar(PlaneacionOFCrearVm vm)
+        {
+            var usuarioId = ObtenerUsuarioID();
+            var usuarioNombre = ObtenerUsuarioNombre();
+
+            if (!vm.SolicitudProduccionID.HasValue || vm.SolicitudProduccionID.Value <= 0)
+            {
+                return BadRequest("La OF no es válida.");
+            }
+
+            if (usuarioId <= 0)
+            {
+                ModelState.AddModelError("", "No se pudo identificar el usuario de sesión.");
+            }
+
+            vm.EsEdicion = true;
+
+            vm.TipoOF = NormalizarTipoOF(vm.TipoOF);
+            vm.MotivoTipoOF = vm.MotivoTipoOF?.Trim();
+
+            ValidarTipoOF(vm.TipoOF, vm.MotivoTipoOF, nameof(vm.MotivoTipoOF));
+
+            vm.Detalles = vm.Detalles
+                .Where(d =>
+                    d.CantidadPiezas > 0 &&
+                    (
+                        d.ParteID.HasValue ||
+                        !string.IsNullOrWhiteSpace(d.ReferenciaSAP) ||
+                        !string.IsNullOrWhiteSpace(d.DesignacionDescripcionSAP)
+                    ))
+                .ToList();
+
+            if (!vm.Detalles.Any())
+            {
+                ModelState.AddModelError("", "Debes capturar al menos un renglón de producción.");
+            }
+
+            if (!vm.ClienteID.HasValue && string.IsNullOrWhiteSpace(vm.ClienteNombre))
+            {
+                ModelState.AddModelError("", "Selecciona o captura el cliente.");
+            }
+
+            foreach (var detalle in vm.Detalles)
+            {
+                detalle.AsignacionesMaquina = detalle.AsignacionesMaquina
+                    .Where(a => a.MaquinaID > 0 && a.CantidadAsignada > 0)
+                    .ToList();
+
+                var totalAsignado = detalle.AsignacionesMaquina.Sum(a => a.CantidadAsignada);
+
+                if (totalAsignado > 0 && totalAsignado != detalle.CantidadPiezas)
+                {
+                    ModelState.AddModelError(
+                        "",
+                        $"En el renglón {detalle.Renglon}, la cantidad asignada a máquinas ({totalAsignado}) debe coincidir con la cantidad de piezas ({detalle.CantidadPiezas})."
+                    );
+                }
+            }
+
+            if (!ModelState.IsValid)
+            {
+                await CargarCatalogosAsync(vm);
+                return View(vm);
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            await using var tx = await cn.BeginTransactionAsync();
+
+            try
+            {
+                var datosActuales = await ObtenerDatosBasicosOFAsync(
+                    vm.SolicitudProduccionID.Value,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                if (datosActuales == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+
+                var permisoEdicion = await ObtenerPermisoEdicionOFAsync(
+                    vm.SolicitudProduccionID.Value,
+                    datosActuales.FolioSolicitud,
+                    datosActuales.NumeroOFRecibida,
+                    datosActuales.EstatusID,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                if (!permisoEdicion.PuedeEditar)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] = permisoEdicion.Motivo;
+                    return RedirectToAction(nameof(Detalle), new { id = vm.SolicitudProduccionID.Value });
+                }
+
+                var clienteNombre = vm.ClienteNombre;
+
+                if (vm.ClienteID.HasValue)
+                {
+                    clienteNombre = await ObtenerClienteNombreAsync(vm.ClienteID.Value, cn, (SqlTransaction)tx);
+                }
+
+                await ActualizarEncabezadoOFAsync(
+                    vm,
+                    clienteNombre,
+                    usuarioId,
+                    usuarioNombre,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                await DesactivarDetalleAnteriorOFAsync(
+                    vm.SolicitudProduccionID.Value,
+                    usuarioId,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                var renglon = 1;
+
+                foreach (var d in vm.Detalles)
+                {
+                    await CompletarDetalleDesdeParteAsync(d, cn, (SqlTransaction)tx);
+                    CalcularDatosTecnicos(d);
+
+                    await CalcularCostosDetalleAsync(d, cn, (SqlTransaction)tx);
+
+                    var detalleId = await InsertarDetalleAsync(
+                        vm.SolicitudProduccionID.Value,
+                        renglon,
+                        d,
+                        cn,
+                        (SqlTransaction)tx
+                    );
+
+                    foreach (var a in d.AsignacionesMaquina)
+                    {
+                        await InsertarAsignacionMaquinaAsync(
+                            detalleId,
+                            a,
+                            d.MoldeID,
+                            usuarioId,
+                            cn,
+                            (SqlTransaction)tx
+                        );
+                    }
+
+                    renglon++;
+                }
+
+                await ActualizarTotalesCostosOFAsync(
+                    vm.SolicitudProduccionID.Value,
+                    vm.Detalles,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                await InsertarHistorialAsync(
+                    vm.SolicitudProduccionID.Value,
+                    datosActuales.EstatusID,
+                    datosActuales.EstatusID,
+                    "Edición de OF",
+                    $"OF editada desde Planeación antes de movimientos de almacén. Tipo OF: {vm.TipoOF}.",
+                    usuarioId,
+                    cn,
+                    (SqlTransaction)tx
+                );
+
+                await tx.CommitAsync();
+
+                TempData["Success"] = "OF actualizada correctamente.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.SolicitudProduccionID.Value });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+
+                ModelState.AddModelError("", "Ocurrió un error al actualizar la OF: " + ex.Message);
+                await CargarCatalogosAsync(vm);
+                return View(vm);
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CancelarOF(int id, string motivoCancelacion)
+        {
+            if (id <= 0)
+            {
+                TempData["Error"] = "No se recibió la OF a cancelar.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            motivoCancelacion = motivoCancelacion?.Trim() ?? "";
+
+            if (string.IsNullOrWhiteSpace(motivoCancelacion) || motivoCancelacion.Length < 5)
+            {
+                TempData["Error"] = "Captura un motivo de cancelación válido.";
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            if (motivoCancelacion.Length > 500)
+            {
+                TempData["Error"] = "El motivo de cancelación no puede exceder 500 caracteres.";
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            var usuarioId = ObtenerUsuarioID();
+
+            if (usuarioId <= 0)
+            {
+                TempData["Error"] = "No se pudo identificar el usuario de la sesión.";
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
+            try
+            {
+                int estatusActual;
+                int? programaProduccionId;
+                int? releaseDetalleId;
+                string? origenOF;
+
+                const string sqlObtener = @"
+SELECT TOP 1
+    SolicitudProduccionID,
+    EstatusID,
+    ProgramaProduccionID,
+    ReleaseDetalleID,
+    OrigenOF
+FROM dbo.SolicitudesProduccion
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+                await using (var cmd = new SqlCommand(sqlObtener, cn, tx))
+                {
+                    cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = id;
+
+                    await using var rd = await cmd.ExecuteReaderAsync();
+
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "No se encontró la OF.";
+                        return RedirectToAction(nameof(Index));
+                    }
+
+                    estatusActual = rd["EstatusID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["EstatusID"]);
+
+                    programaProduccionId = rd["ProgramaProduccionID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(rd["ProgramaProduccionID"]);
+
+                    releaseDetalleId = rd["ReleaseDetalleID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(rd["ReleaseDetalleID"]);
+
+                    origenOF = rd["OrigenOF"] == DBNull.Value
+                        ? null
+                        : rd["OrigenOF"].ToString();
+                }
+
+                if (estatusActual == PlaneacionOFEstatus.Cancelada || estatusActual == 99)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La OF ya se encuentra cancelada.";
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                /*
+                 * Regla base:
+                 * La cancelación solo cancela la OF.
+                 * Si la OF viene de Programa/Release, también se libera la liga para poder regenerarla después.
+                 */
+
+                const string sqlCancelarOF = @"
+UPDATE dbo.SolicitudesProduccion
+SET
+    EstatusID = @EstatusCancelada,
+    MotivoCancelacion = @MotivoCancelacion,
+    FechaCancelacion = GETDATE(),
+    UsuarioCancelacionID = @UsuarioCancelacionID
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+                await using (var cmd = new SqlCommand(sqlCancelarOF, cn, tx))
+                {
+                    cmd.Parameters.Add("@EstatusCancelada", SqlDbType.Int).Value = PlaneacionOFEstatus.Cancelada;
+                    cmd.Parameters.Add("@MotivoCancelacion", SqlDbType.NVarChar, 500).Value = motivoCancelacion;
+                    cmd.Parameters.Add("@UsuarioCancelacionID", SqlDbType.Int).Value = usuarioId;
+                    cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = id;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                if (programaProduccionId.HasValue)
+                {
+                    const string sqlLiberarPrograma = @"
+UPDATE dbo.Planeacion_ProgramaProduccion
+SET
+    SolicitudProduccionID = NULL,
+    SolicitudProduccionDetalleID = NULL,
+    FechaGeneracionOF = NULL,
+    UsuarioGeneroOFID = NULL,
+    UsuarioModificacionID = @UsuarioID,
+    FechaModificacion = GETDATE()
+WHERE ProgramaProduccionID = @ProgramaProduccionID;";
+
+                    await using var cmd = new SqlCommand(sqlLiberarPrograma, cn, tx);
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId.Value;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                if (releaseDetalleId.HasValue)
+                {
+                    const string sqlLiberarReleaseDetalle = @"
+UPDATE dbo.Planeacion_ReleaseDetalle
+SET
+    SolicitudProduccionID = NULL,
+    FechaModificacion = GETDATE()
+WHERE ReleaseDetalleID = @ReleaseDetalleID;";
+
+                    await using var cmd = new SqlCommand(sqlLiberarReleaseDetalle, cn, tx);
+                    cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId.Value;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+
+                TempData["Success"] = "OF cancelada correctamente.";
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+
+                TempData["Error"] = "No fue posible cancelar la OF: " + ex.Message;
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+        }
+
+
 
         // helpesr generales
+
+        private static string NormalizarTipoOF(string? tipoOF)
+        {
+            if (string.IsNullOrWhiteSpace(tipoOF))
+                return "RELEASE";
+
+            var valor = tipoOF.Trim().ToUpperInvariant();
+
+            valor = valor
+                .Replace("Á", "A")
+                .Replace("É", "E")
+                .Replace("Í", "I")
+                .Replace("Ó", "O")
+                .Replace("Ú", "U");
+
+            return valor switch
+            {
+                "RELEASE" => "RELEASE",
+                "ENSAMBLE" => "ENSAMBLE",
+                "PRUEBA" => "PRUEBA",
+                "MP EXTRA" => "MP EXTRA",
+                "MPEXTRA" => "MP EXTRA",
+                "MP_EXTRA" => "MP EXTRA",
+                _ => "RELEASE"
+            };
+        }
+
+        private static bool TipoOFRequiereMotivo(string? tipoOF)
+        {
+            var valor = NormalizarTipoOF(tipoOF);
+
+            return valor == "PRUEBA" ||
+                   valor == "MP EXTRA";
+        }
+
+        private void ValidarTipoOF(string? tipoOF, string? motivoTipoOF, string campoMotivo)
+        {
+            var valor = NormalizarTipoOF(tipoOF);
+
+            if (valor != "RELEASE" &&
+                valor != "ENSAMBLE" &&
+                valor != "PRUEBA" &&
+                valor != "MP EXTRA")
+            {
+                ModelState.AddModelError(nameof(PlaneacionOFCrearVm.TipoOF), "Selecciona un tipo de OF válido.");
+            }
+
+            if (TipoOFRequiereMotivo(valor) &&
+                string.IsNullOrWhiteSpace(motivoTipoOF))
+            {
+                ModelState.AddModelError(campoMotivo, "Captura el motivo para este tipo de OF.");
+            }
+        }
+
+
         private async Task<string> GenerarFolioOFAsync(SqlConnection cn, SqlTransaction tx)
         {
             var yy = DateTime.Now.ToString("yy");
@@ -1998,6 +2641,559 @@ WHERE Activo = 1
             p.Precision = precision;
             p.Scale = scale;
             p.Value = (object?)value ?? DBNull.Value;
+        }
+
+        private async Task<(bool PuedeEditar, string? Motivo)> ObtenerPermisoEdicionOFAsync(
+     int solicitudProduccionId,
+     string? folioSolicitud,
+     string? numeroOFRecibida,
+     int estatusId,
+     SqlConnection cn,
+     SqlTransaction? tx = null)
+        {
+            if (solicitudProduccionId <= 0)
+            {
+                return (false, "La OF no es válida.");
+            }
+
+            if (estatusId == PlaneacionOFEstatus.Cancelada || estatusId == 99)
+            {
+                return (false, "La OF está cancelada.");
+            }
+
+            if (estatusId >= PlaneacionOFEstatus.EnProduccion)
+            {
+                return (false, "La OF ya está en producción o en una etapa posterior.");
+            }
+
+            /*
+             * Regla nueva:
+             * Solo se puede editar desde OF cuando fue creada manualmente.
+             * Si viene de Release / Programa, se debe editar desde Release y recalcular.
+             */
+            const string sqlOrigen = @"
+SELECT TOP 1
+    ReleaseID,
+    ReleaseDetalleID,
+    ProgramaProduccionID,
+    OrigenOF
+FROM dbo.SolicitudesProduccion
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+            int? releaseId = null;
+            int? releaseDetalleId = null;
+            int? programaProduccionId = null;
+            string? origenOF = null;
+
+            await using (var cmd = tx == null
+                ? new SqlCommand(sqlOrigen, cn)
+                : new SqlCommand(sqlOrigen, cn, tx))
+            {
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (!await rd.ReadAsync())
+                {
+                    return (false, "No se encontró la OF.");
+                }
+
+                releaseId = rd["ReleaseID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["ReleaseID"]);
+
+                releaseDetalleId = rd["ReleaseDetalleID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["ReleaseDetalleID"]);
+
+                programaProduccionId = rd["ProgramaProduccionID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["ProgramaProduccionID"]);
+
+                origenOF = rd["OrigenOF"] == DBNull.Value
+                    ? null
+                    : rd["OrigenOF"].ToString();
+            }
+
+            var origen = (origenOF ?? "").Trim().ToUpperInvariant();
+
+            var vieneDeReleaseOPrograma =
+                releaseId.HasValue ||
+                releaseDetalleId.HasValue ||
+                programaProduccionId.HasValue ||
+                origen == "RELEASE" ||
+                origen == "PROGRAMA";
+
+            if (vieneDeReleaseOPrograma)
+            {
+                return (
+                    false,
+                    "Esta OF nació desde un Release/Programa. Para modificarla, edita el Release y recalcula la planeación."
+                );
+            }
+
+            /*
+             * Regla existente:
+             * Si ya tiene movimientos de almacén, no se puede editar.
+             */
+            var folio = folioSolicitud?.Trim();
+            var numero = numeroOFRecibida?.Trim();
+
+            const string sqlMovimientos = @"
+DECLARE @TotalMovimientos BIGINT = 0;
+
+IF OBJECT_ID('dbo.AlmacenMP_Movimientos', 'U') IS NOT NULL
+BEGIN
+    SELECT @TotalMovimientos = @TotalMovimientos + COUNT_BIG(1)
+    FROM dbo.AlmacenMP_Movimientos
+    WHERE Activo = 1
+      AND NULLIF(LTRIM(RTRIM(NumeroOF)), '') IS NOT NULL
+      AND
+      (
+            (@FolioSolicitud IS NOT NULL AND LTRIM(RTRIM(NumeroOF)) = @FolioSolicitud)
+         OR (@NumeroOFRecibida IS NOT NULL AND LTRIM(RTRIM(NumeroOF)) = @NumeroOFRecibida)
+      );
+END;
+
+IF OBJECT_ID('dbo.AlmacenEmbalajes_Movimientos', 'U') IS NOT NULL
+BEGIN
+    SELECT @TotalMovimientos = @TotalMovimientos + COUNT_BIG(1)
+    FROM dbo.AlmacenEmbalajes_Movimientos
+    WHERE Activo = 1
+      AND NULLIF(LTRIM(RTRIM(NumeroOF)), '') IS NOT NULL
+      AND
+      (
+            (@FolioSolicitud IS NOT NULL AND LTRIM(RTRIM(NumeroOF)) = @FolioSolicitud)
+         OR (@NumeroOFRecibida IS NOT NULL AND LTRIM(RTRIM(NumeroOF)) = @NumeroOFRecibida)
+      );
+END;
+
+IF OBJECT_ID('dbo.AlmacenPT_Movimientos', 'U') IS NOT NULL
+BEGIN
+    SELECT @TotalMovimientos = @TotalMovimientos + COUNT_BIG(1)
+    FROM dbo.AlmacenPT_Movimientos
+    WHERE Activo = 1
+      AND NULLIF(LTRIM(RTRIM(NumeroOF)), '') IS NOT NULL
+      AND
+      (
+            (@FolioSolicitud IS NOT NULL AND LTRIM(RTRIM(NumeroOF)) = @FolioSolicitud)
+         OR (@NumeroOFRecibida IS NOT NULL AND LTRIM(RTRIM(NumeroOF)) = @NumeroOFRecibida)
+      );
+END;
+
+SELECT @TotalMovimientos;";
+
+            await using (var cmd = tx == null
+                ? new SqlCommand(sqlMovimientos, cn)
+                : new SqlCommand(sqlMovimientos, cn, tx))
+            {
+                cmd.Parameters.Add("@FolioSolicitud", SqlDbType.NVarChar, 80).Value =
+                    string.IsNullOrWhiteSpace(folio)
+                        ? (object)DBNull.Value
+                        : folio;
+
+                cmd.Parameters.Add("@NumeroOFRecibida", SqlDbType.NVarChar, 80).Value =
+                    string.IsNullOrWhiteSpace(numero)
+                        ? (object)DBNull.Value
+                        : numero;
+
+                var total = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+
+                if (total > 0)
+                {
+                    return (false, "La OF ya tiene movimientos de almacén relacionados. No se puede editar.");
+                }
+            }
+
+            return (true, null);
+        }
+
+
+
+        private async Task<PlaneacionOFCrearVm?> ObtenerOFParaEditarAsync(
+    int solicitudProduccionId,
+    SqlConnection cn)
+        {
+            PlaneacionOFCrearVm? vm = null;
+
+            const string sqlEncabezado = @"
+SELECT
+    SolicitudProduccionID,
+    FolioSolicitud,
+    NumeroOFRecibida,
+    FechaSolicitud,
+    FechaRequerida,
+    FechaInicioPlaneada,
+    FechaFinPlaneada,
+    ClienteID,
+    ClienteNombre,
+    OrigenSolicitud,
+    Prioridad,
+    TipoOF,
+    MotivoTipoOF,
+    EstatusID,
+    NotasGenerales
+FROM dbo.SolicitudesProduccion
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlEncabezado, cn))
+            {
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (!await rd.ReadAsync())
+                    return null;
+
+                vm = new PlaneacionOFCrearVm
+                {
+                    SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
+                    FolioSolicitud = rd["FolioSolicitud"] as string,
+                    NumeroOFRecibida = rd["NumeroOFRecibida"] as string,
+                    FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
+                    FechaRequerida = rd["FechaRequerida"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaRequerida"]),
+                    FechaInicioPlaneada = rd["FechaInicioPlaneada"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioPlaneada"]),
+                    FechaFinPlaneada = rd["FechaFinPlaneada"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinPlaneada"]),
+                    ClienteID = rd["ClienteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ClienteID"]),
+                    ClienteNombre = rd["ClienteNombre"] as string,
+                    OrigenSolicitud = rd["OrigenSolicitud"] as string ?? "Dirección",
+                    Prioridad = rd["Prioridad"] as string ?? "Normal",
+                    TipoOF = NormalizarTipoOF(rd["TipoOF"] as string),
+                    MotivoTipoOF = rd["MotivoTipoOF"] as string,
+                    EstatusID = Convert.ToInt32(rd["EstatusID"]),
+                    NotasGenerales = rd["NotasGenerales"] as string,
+                    EsEdicion = true
+                };
+            }
+
+            const string sqlDetalles = @"
+SELECT
+    SolicitudProduccionDetalleID,
+    Renglon,
+    ParteID,
+    MoldeID,
+    DesignacionDescripcionSAP,
+    ReferenciaSAP,
+    CantidadPiezas,
+    HorasPlaneadas,
+    NumeroMoldeTexto,
+    Color,
+    Cavidades,
+    ObjetivoHora,
+    PiezasPorCaja,
+    Ciclo,
+    TipoSecado,
+    HorasSecado,
+    PesoBrutoPieza,
+    MaterialID,
+    MaterialCodigo,
+    MaterialDescripcion,
+    OrigenSurtido,
+    PTDisponibleAlCrear,
+    MPDisponibleKgAlCrear,
+    AlmacenValidado,
+    MensajeAlmacen,
+    EmbalajeCodigo,
+    EmbalajeDescripcion,
+    PiezasPorEmbalaje,
+    CantidadEmbalajes,
+    CantidadMpKg,
+    Cambio,
+    Arranque,
+    Notas
+FROM dbo.SolicitudesProduccionDetalle
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1
+ORDER BY Renglon;";
+
+            await using (var cmd = new SqlCommand(sqlDetalles, cn))
+            {
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
+                {
+                    vm.Detalles.Add(new PlaneacionOFDetalleCrearVm
+                    {
+                        Renglon = Convert.ToInt32(rd["Renglon"]),
+                        ParteID = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]),
+                        MoldeID = rd["MoldeID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeID"]),
+                        DesignacionDescripcionSAP = rd["DesignacionDescripcionSAP"] as string,
+                        ReferenciaSAP = rd["ReferenciaSAP"] as string,
+                        CantidadPiezas = rd["CantidadPiezas"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadPiezas"]),
+                        HorasPlaneadas = rd["HorasPlaneadas"] == DBNull.Value ? null : Convert.ToDecimal(rd["HorasPlaneadas"]),
+                        NumeroMoldeTexto = rd["NumeroMoldeTexto"] as string,
+                        Color = rd["Color"] as string,
+                        Cavidades = rd["Cavidades"] == DBNull.Value ? null : Convert.ToInt32(rd["Cavidades"]),
+                        ObjetivoHora = rd["ObjetivoHora"] == DBNull.Value ? null : Convert.ToInt32(rd["ObjetivoHora"]),
+                        PiezasPorCaja = rd["PiezasPorCaja"] == DBNull.Value ? null : Convert.ToInt32(rd["PiezasPorCaja"]),
+                        Ciclo = rd["Ciclo"] as string,
+                        TipoSecado = rd["TipoSecado"] as string,
+                        HorasSecado = rd["HorasSecado"] == DBNull.Value ? null : Convert.ToDecimal(rd["HorasSecado"]),
+                        PesoBrutoPieza = rd["PesoBrutoPieza"] == DBNull.Value ? null : Convert.ToDecimal(rd["PesoBrutoPieza"]),
+                        MaterialID = rd["MaterialID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaterialID"]),
+                        MaterialCodigo = rd["MaterialCodigo"] as string,
+                        MaterialDescripcion = rd["MaterialDescripcion"] as string,
+                        OrigenSurtido = rd["OrigenSurtido"] as string,
+                        PTDisponibleAlCrear = rd["PTDisponibleAlCrear"] == DBNull.Value ? null : Convert.ToInt32(rd["PTDisponibleAlCrear"]),
+                        MPDisponibleKgAlCrear = rd["MPDisponibleKgAlCrear"] == DBNull.Value ? null : Convert.ToDecimal(rd["MPDisponibleKgAlCrear"]),
+                        AlmacenValidado = rd["AlmacenValidado"] != DBNull.Value && Convert.ToBoolean(rd["AlmacenValidado"]),
+                        MensajeAlmacen = rd["MensajeAlmacen"] as string,
+                        EmbalajeCodigo = rd["EmbalajeCodigo"] as string,
+                        EmbalajeDescripcion = rd["EmbalajeDescripcion"] as string,
+                        PiezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? null : Convert.ToDecimal(rd["PiezasPorEmbalaje"]),
+                        CantidadEmbalajes = rd["CantidadEmbalajes"] == DBNull.Value ? null : Convert.ToDecimal(rd["CantidadEmbalajes"]),
+                        CantidadMpKg = rd["CantidadMpKg"] == DBNull.Value ? null : Convert.ToDecimal(rd["CantidadMpKg"]),
+                        Cambio = rd["Cambio"] == DBNull.Value ? null : (TimeSpan)rd["Cambio"],
+                        Arranque = rd["Arranque"] == DBNull.Value ? null : (TimeSpan)rd["Arranque"],
+                        Notas = rd["Notas"] as string,
+                        AsignacionesMaquina = new List<PlaneacionOFAsignacionMaquinaCrearVm>()
+                    });
+                }
+            }
+
+            const string sqlAsignaciones = @"
+SELECT
+    a.SolicitudProduccionDetalleID,
+    d.Renglon,
+    a.MaquinaID,
+    a.MoldeID,
+    a.CantidadAsignada,
+    a.HorasEstimadas,
+    a.Secuencia,
+    a.CondicionProduccion,
+    a.FechaProgramadaTentativa,
+    a.HoraInicioTentativa,
+    a.HoraFinTentativa,
+    a.Observaciones
+FROM dbo.SolicitudesProduccionAsignacionMaquina a
+INNER JOIN dbo.SolicitudesProduccionDetalle d
+    ON d.SolicitudProduccionDetalleID = a.SolicitudProduccionDetalleID
+WHERE d.SolicitudProduccionID = @SolicitudProduccionID
+  AND d.Activo = 1
+  AND a.Activo = 1
+ORDER BY d.Renglon, a.Secuencia;";
+
+            await using (var cmd = new SqlCommand(sqlAsignaciones, cn))
+            {
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
+                {
+                    var renglon = Convert.ToInt32(rd["Renglon"]);
+                    var detalle = vm.Detalles.FirstOrDefault(x => x.Renglon == renglon);
+
+                    if (detalle == null)
+                        continue;
+
+                    detalle.AsignacionesMaquina.Add(new PlaneacionOFAsignacionMaquinaCrearVm
+                    {
+                        MaquinaID = rd["MaquinaID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["MaquinaID"]),
+                        MoldeID = rd["MoldeID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeID"]),
+                        CantidadAsignada = rd["CantidadAsignada"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadAsignada"]),
+                        HorasEstimadas = rd["HorasEstimadas"] == DBNull.Value ? null : Convert.ToDecimal(rd["HorasEstimadas"]),
+                        Secuencia = rd["Secuencia"] == DBNull.Value ? 1 : Convert.ToInt32(rd["Secuencia"]),
+                        CondicionProduccion = rd["CondicionProduccion"] as string,
+                        FechaProgramadaTentativa = rd["FechaProgramadaTentativa"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaProgramadaTentativa"]),
+                        HoraInicioTentativa = rd["HoraInicioTentativa"] == DBNull.Value ? null : (TimeSpan)rd["HoraInicioTentativa"],
+                        HoraFinTentativa = rd["HoraFinTentativa"] == DBNull.Value ? null : (TimeSpan)rd["HoraFinTentativa"],
+                        Observaciones = rd["Observaciones"] as string
+                    });
+                }
+            }
+
+            foreach (var detalle in vm.Detalles)
+            {
+                if (detalle.AsignacionesMaquina == null || !detalle.AsignacionesMaquina.Any())
+                {
+                    detalle.AsignacionesMaquina = new List<PlaneacionOFAsignacionMaquinaCrearVm>
+            {
+                new PlaneacionOFAsignacionMaquinaCrearVm
+                {
+                    Secuencia = 1
+                }
+            };
+                }
+            }
+
+            if (!vm.Detalles.Any())
+            {
+                vm.Detalles.Add(new PlaneacionOFDetalleCrearVm
+                {
+                    Renglon = 1,
+                    AsignacionesMaquina = new List<PlaneacionOFAsignacionMaquinaCrearVm>
+            {
+                new PlaneacionOFAsignacionMaquinaCrearVm
+                {
+                    Secuencia = 1
+                }
+            }
+                });
+            }
+
+            return vm;
+        }
+
+        private sealed class DatosBasicosOF
+        {
+            public string? FolioSolicitud { get; set; }
+            public string? NumeroOFRecibida { get; set; }
+            public int EstatusID { get; set; }
+        }
+
+        private async Task<DatosBasicosOF?> ObtenerDatosBasicosOFAsync(
+            int solicitudProduccionId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT
+    FolioSolicitud,
+    NumeroOFRecibida,
+    EstatusID
+FROM dbo.SolicitudesProduccion
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return null;
+
+            return new DatosBasicosOF
+            {
+                FolioSolicitud = rd["FolioSolicitud"] as string,
+                NumeroOFRecibida = rd["NumeroOFRecibida"] as string,
+                EstatusID = Convert.ToInt32(rd["EstatusID"])
+            };
+        }
+
+
+        private async Task ActualizarEncabezadoOFAsync(
+    PlaneacionOFCrearVm vm,
+    string? clienteNombre,
+    int usuarioId,
+    string usuarioNombre,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            const string sql = @"
+UPDATE dbo.SolicitudesProduccion
+SET
+    NumeroOFRecibida = @NumeroOFRecibida,
+    FechaSolicitud = @FechaSolicitud,
+    FechaRequerida = @FechaRequerida,
+    FechaInicioPlaneada = @FechaInicioPlaneada,
+    FechaFinPlaneada = @FechaFinPlaneada,
+    ClienteID = @ClienteID,
+    ClienteNombre = @ClienteNombre,
+    OrigenSolicitud = @OrigenSolicitud,
+    Prioridad = @Prioridad,
+    TipoOF = @TipoOF,
+    MotivoTipoOF = @MotivoTipoOF,
+    NotasGenerales = @NotasGenerales,
+    ResponsablePlaneacionUsuarioID = @ResponsablePlaneacionUsuarioID,
+    ResponsablePlaneacionNombre = @ResponsablePlaneacionNombre,
+    UsuarioModificacionID = @UsuarioModificacionID,
+    FechaModificacion = GETDATE()
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@NumeroOFRecibida", SqlDbType.NVarChar, 80).Value =
+                (object?)vm.NumeroOFRecibida ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FechaSolicitud", SqlDbType.Date).Value = vm.FechaSolicitud.Date;
+
+            cmd.Parameters.Add("@FechaRequerida", SqlDbType.Date).Value =
+                (object?)vm.FechaRequerida?.Date ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FechaInicioPlaneada", SqlDbType.DateTime).Value =
+                (object?)vm.FechaInicioPlaneada ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FechaFinPlaneada", SqlDbType.DateTime).Value =
+                (object?)vm.FechaFinPlaneada ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
+                (object?)vm.ClienteID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value =
+                (object?)clienteNombre ?? DBNull.Value;
+
+            cmd.Parameters.Add("@OrigenSolicitud", SqlDbType.NVarChar, 50).Value =
+                string.IsNullOrWhiteSpace(vm.OrigenSolicitud) ? "Dirección" : vm.OrigenSolicitud;
+
+            cmd.Parameters.Add("@Prioridad", SqlDbType.NVarChar, 30).Value =
+                string.IsNullOrWhiteSpace(vm.Prioridad) ? "Normal" : vm.Prioridad.Trim();
+
+            cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value =
+                NormalizarTipoOF(vm.TipoOF);
+
+            cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value =
+                string.IsNullOrWhiteSpace(vm.MotivoTipoOF) ? DBNull.Value : vm.MotivoTipoOF.Trim();
+
+            cmd.Parameters.Add("@NotasGenerales", SqlDbType.NVarChar).Value =
+                (object?)vm.NotasGenerales ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ResponsablePlaneacionUsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@ResponsablePlaneacionNombre", SqlDbType.NVarChar, 200).Value = usuarioNombre;
+            cmd.Parameters.Add("@UsuarioModificacionID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = vm.SolicitudProduccionID!.Value;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private async Task DesactivarDetalleAnteriorOFAsync(
+    int solicitudProduccionId,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            const string sqlAsignaciones = @"
+                UPDATE a
+                SET
+                    a.Activo = 0,
+                    a.UsuarioModificacionID = @UsuarioModificacionID,
+                    a.FechaModificacion = GETDATE()
+                FROM dbo.SolicitudesProduccionAsignacionMaquina a
+                INNER JOIN dbo.SolicitudesProduccionDetalle d
+                    ON d.SolicitudProduccionDetalleID = a.SolicitudProduccionDetalleID
+                WHERE d.SolicitudProduccionID = @SolicitudProduccionID
+                AND a.Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlAsignaciones, cn, tx))
+            {
+                cmd.Parameters.Add("@UsuarioModificacionID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlDetalles = @"
+                UPDATE dbo.SolicitudesProduccionDetalle
+                SET
+                    Activo = 0,
+                    UsuarioModificacionID = @UsuarioModificacionID,
+                    FechaModificacion = GETDATE()
+                WHERE SolicitudProduccionID = @SolicitudProduccionID
+                AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlDetalles, cn, tx))
+            {
+                cmd.Parameters.Add("@UsuarioModificacionID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
         }
     }
 }

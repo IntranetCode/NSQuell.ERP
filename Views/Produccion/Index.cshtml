@@ -1,0 +1,541 @@
+﻿@model ERP.NSQuell.Models.ProduccionBandejaVm
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Producción - Bandeja</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #f4f7fb;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .page-shell {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 22px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+            color: white;
+            border-radius: 22px;
+            padding: 24px;
+            box-shadow: 0 18px 38px rgba(15, 47, 99, .20);
+        }
+
+        .hero-title {
+            font-size: 1.8rem;
+            font-weight: 900;
+            margin: 0;
+        }
+
+        .hero-subtitle {
+            opacity: .86;
+            margin-top: 4px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 18px;
+            padding: 16px;
+            border: 1px solid #e5eaf3;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .06);
+            height: 100%;
+        }
+
+        .metric-label {
+            color: #667085;
+            font-size: .82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: #102a56;
+            line-height: 1;
+            margin-top: 8px;
+        }
+
+        .filter-card {
+            background: white;
+            border-radius: 18px;
+            border: 1px solid #e5eaf3;
+            padding: 16px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+        }
+
+        .table-card {
+            background: white;
+            border-radius: 20px;
+            border: 1px solid #e5eaf3;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, .06);
+            overflow: hidden;
+        }
+
+        .table thead th {
+            background: #f8fafc;
+            color: #344054;
+            font-size: .78rem;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            border-bottom: 1px solid #e5eaf3;
+            white-space: nowrap;
+        }
+
+        .table tbody td {
+            vertical-align: middle;
+            font-size: .88rem;
+        }
+
+        .part-title {
+            font-weight: 900;
+            color: #102a56;
+        }
+
+        .muted-small {
+            color: #667085;
+            font-size: .78rem;
+        }
+
+        .progress {
+            height: 8px;
+            background: #e9eef7;
+            border-radius: 999px;
+        }
+
+        .progress-bar {
+            border-radius: 999px;
+        }
+
+        .empty-state {
+            padding: 48px 20px;
+            text-align: center;
+            color: #667085;
+        }
+
+        .btn-soft {
+            border: 1px solid #d9e3f2;
+            background: #f8fbff;
+            color: #194c9b;
+            font-weight: 800;
+        }
+
+            .btn-soft:hover {
+                background: #eef5ff;
+                color: #103b7c;
+            }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+
+        <div class="hero mb-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <h1 class="hero-title">
+                        <i class="bi bi-gear-wide-connected me-2"></i>
+                        Producción
+                    </h1>
+                    <div class="hero-subtitle">
+                        Bandeja de ejecuciones reales de producción.
+                    </div>
+                </div>
+
+                <div class="text-end">
+                    <div class="small opacity-75">Fecha</div>
+                    <div class="fw-bold">@DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+            </div>
+        </div>
+
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle me-1"></i>
+                @TempData["Success"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        @if (TempData["Info"] != null)
+        {
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle me-1"></i>
+                @TempData["Info"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-lg">
+                <div class="metric-card">
+                    <div class="metric-label">Total</div>
+                    <div class="metric-value">@(Model.Total + Model.TotalDisponibles)</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg">
+                <div class="metric-card">
+                    <div class="metric-label">Pendientes</div>
+                    <div class="metric-value">@Model.TotalDisponibles</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg">
+                <div class="metric-card">
+                    <div class="metric-label">Preparación</div>
+                    <div class="metric-value">@Model.EnPreparacion</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg">
+                <div class="metric-card">
+                    <div class="metric-label">En producción</div>
+                    <div class="metric-value">@Model.EnProduccion</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg">
+                <div class="metric-card">
+                    <div class="metric-label">Pausados</div>
+                    <div class="metric-value">@Model.Pausados</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg">
+                <div class="metric-card">
+                    <div class="metric-label">Terminados</div>
+                    <div class="metric-value">@Model.Terminados</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-card mb-4">
+            <form method="get" action="@Url.Action("Index", "Produccion")" class="row g-3 align-items-end">
+                <div class="col-12 col-lg-3">
+                    <label class="form-label fw-bold">Buscar</label>
+                    <input type="text"
+                           name="busqueda"
+                           value="@Model.Busqueda"
+                           class="form-control"
+                           placeholder="Máquina, parte, molde, programa..." />
+                </div>
+
+                <div class="col-12 col-lg-2">
+                    <label class="form-label fw-bold">Máquina</label>
+                    <select name="maquinaId" class="form-select">
+                        @foreach (var item in Model.Maquinas)
+                        {
+                            <option value="@item.Value" selected="@(item.Value == Model.MaquinaID?.ToString())">
+                                @item.Text
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-12 col-lg-2">
+                    <label class="form-label fw-bold">Estatus</label>
+                    <select name="estatusId" class="form-select">
+                        @foreach (var item in Model.Estatus)
+                        {
+                            <option value="@item.Value" selected="@(item.Value == Model.EstatusID?.ToString())">
+                                @item.Text
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-6 col-lg-2">
+                    <label class="form-label fw-bold">Desde</label>
+                    <input type="date"
+                           name="fechaDesde"
+                           value="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
+                           class="form-control" />
+                </div>
+
+                <div class="col-6 col-lg-2">
+                    <label class="form-label fw-bold">Hasta</label>
+                    <input type="date"
+                           name="fechaHasta"
+                           value="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))"
+                           class="form-control" />
+                </div>
+
+                <div class="col-12 col-lg-1 d-grid">
+                    <button type="submit" class="btn btn-primary fw-bold">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-card mb-4">
+            <div class="p-3 border-bottom bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h5 class="mb-0 fw-black text-primary">
+                            <i class="bi bi-play-circle me-1"></i>
+                            Programas listos para iniciar producción
+                        </h5>
+                        <div class="text-muted small">
+                            Vienen de Planeación / Calendario. Al iniciar, se crea la ejecución real de producción.
+                        </div>
+                    </div>
+
+                    <span class="badge bg-primary fs-6">
+                        @Model.TotalDisponibles disponible(s)
+                    </span>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Programa / OF</th>
+                            <th>Máquina</th>
+                            <th>Parte</th>
+                            <th>Molde</th>
+                            <th class="text-center">Cantidad</th>
+                            <th>Inicio programado</th>
+                            <th>Fin programado</th>
+                            <th class="text-end">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.ProgramasDisponibles.Any())
+                        {
+                            <tr>
+                                <td colspan="8">
+                                    <div class="empty-state">
+                                        <i class="bi bi-calendar-check fs-1 d-block mb-2"></i>
+                                        No hay programas pendientes para iniciar producción.
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var item in Model.ProgramasDisponibles)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold text-primary">
+                                            Programa @item.ProgramaProduccionID
+                                        </div>
+                                        <div class="muted-small">
+                                            @item.TituloPrograma
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div class="fw-bold">@item.MaquinaCodigo</div>
+                                        <div class="muted-small">@item.MaquinaNombre</div>
+                                    </td>
+
+                                    <td>
+                                        <div class="part-title">@item.TextoParte</div>
+                                        <div class="muted-small">@item.DescripcionParte</div>
+                                    </td>
+
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
+                                        </span>
+                                    </td>
+
+                                    <td class="text-center fw-bold">
+                                        @(item.CantidadProgramada?.ToString("N0") ?? "-")
+                                    </td>
+
+                                    <td>
+                                        @(item.FechaInicioProgramada?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                    </td>
+
+                                    <td>
+                                        @(item.FechaFinProgramada?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                    </td>
+
+                                    <td class="text-end">
+                                        @if (item.PuedeIniciar)
+                                        {
+                                            <form method="post"
+                                                  action="@Url.Action("Iniciar", "Produccion")"
+                                                  class="d-inline">
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden"
+                                                       name="programaProduccionId"
+                                                       value="@item.ProgramaProduccionID" />
+
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-success fw-bold">
+                                                    <i class="bi bi-play-fill me-1"></i>
+                                                    Iniciar preparación
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning text-dark">
+                                                Falta máquina o cantidad
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Programa</th>
+                            <th>Máquina</th>
+                            <th>Parte</th>
+                            <th>Molde</th>
+                            <th>Operador</th>
+                            <th class="text-center">Planeado</th>
+                            <th class="text-center">OK</th>
+                            <th class="text-center">Scrap</th>
+                            <th style="min-width:180px;">Avance</th>
+                            <th>Estatus</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.Ejecuciones.Any())
+                        {
+                            <tr>
+                                <td colspan="11">
+                                    <div class="empty-state">
+                                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                        No hay ejecuciones de producción con los filtros actuales.
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var item in Model.Ejecuciones)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold text-primary">
+                                            Programa @item.ProgramaProduccionID
+                                        </div>
+                                        @if (item.SolicitudProduccionID.HasValue)
+                                        {
+                                            <div class="muted-small">
+                                                OF ID @item.SolicitudProduccionID
+                                            </div>
+                                        }
+                                        @if (item.ReleaseID.HasValue)
+                                        {
+                                            <div class="muted-small">
+                                                Release @item.ReleaseID
+                                            </div>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        <div class="fw-bold">@item.MaquinaCodigo</div>
+                                        <div class="muted-small">@item.MaquinaNombre</div>
+                                    </td>
+
+                                    <td>
+                                        <div class="part-title">@item.TituloPrograma</div>
+                                        <div class="muted-small">@item.DescripcionParte</div>
+                                    </td>
+
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        @if (string.IsNullOrWhiteSpace(item.OperadorNombre))
+                                        {
+                                            <span class="text-muted">Sin operador</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@item.OperadorNombre</span>
+                                        }
+                                    </td>
+
+                                    <td class="text-center fw-bold">
+                                        @(item.CantidadPlaneada?.ToString("N0") ?? "-")
+                                    </td>
+
+                                    <td class="text-center fw-bold text-success">
+                                        @item.CantidadOKTotal.ToString("N0")
+                                    </td>
+
+                                    <td class="text-center fw-bold text-danger">
+                                        @item.CantidadScrapTotal.ToString("N0")
+                                    </td>
+
+                                    <td>
+                                        <div class="d-flex justify-content-between small mb-1">
+                                            <span>@item.PorcentajeAvance%</span>
+                                            <span>@item.CantidadPendiente.ToString("N0") pend.</span>
+                                        </div>
+                                        <div class="progress">
+                                            <div class="progress-bar"
+                                                 role="progressbar"
+                                                 style="width:@Math.Min(100, item.PorcentajeAvance)%">
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="badge @item.EstatusClase">
+                                            @item.EstatusNombre
+                                        </span>
+                                    </td>
+
+                                    <td class="text-end">
+                                        <a href="@Url.Action("Detalle", "Produccion", new { id = item.EjecucionProduccionID })"
+                                           class="btn btn-sm btn-soft">
+                                            <i class="bi bi-eye me-1"></i>
+                                            Detalle
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

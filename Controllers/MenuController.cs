@@ -211,8 +211,51 @@ ORDER BY m.Orden, m.Nombre;";
                 Nombre = "OF",
                 Url = "/AlmacenOF/Index",
                 Icono = "fa-solid fa-clipboard-list",
-                Descripcion = "Órdenes de fabricación: consulta rápida de MP, embalajes y PT entregado al almacén.",
+                Descripcion = "Órdenes de fabricación: entrega controlada de MP, embalajes y producto terminado.",
                 Orden = menus.Count == 0 ? 4 : menus.Max(m => m.Orden) + 1
+            });
+        }
+
+        menus = menus
+            .OrderBy(m => m.Orden)
+            .ThenBy(m => m.Nombre)
+            .ToList();
+    }
+
+    // MENU_CALENDARIO_MAQUINAS_LECTURA_V1_0
+    // /Menu/Grupo/3 corresponde a Planeacion.
+    // Este acceso es solo una tarjeta de navegacion y no modifica OF.
+    if (id == 3)
+    {
+        var tieneCalendarioMaquinas = menus.Any(m =>
+            (m.Nombre?.Contains(
+                "CALENDARIO MAQUINAS",
+                StringComparison.OrdinalIgnoreCase) ?? false)
+            || (m.Nombre?.Contains(
+                "CALENDARIO MÁQUINAS",
+                StringComparison.OrdinalIgnoreCase) ?? false)
+            || (m.Url?.StartsWith(
+                "/PlaneacionCalendarioMaquinas",
+                StringComparison.OrdinalIgnoreCase) ?? false));
+
+        if (!tieneCalendarioMaquinas)
+        {
+            menus.Add(new MenuModel
+            {
+                MenuID = menus.Count == 0
+                    ? 1
+                    : menus.Max(m => m.MenuID) + 1,
+
+                Nombre = "Calendario Máquinas",
+                Url = "/PlaneacionCalendarioMaquinas/Index",
+                Icono = "fa-solid fa-calendar-days",
+
+                Descripcion =
+                    "Consulta semanal de máquinas, OF y producción en modo solo lectura.",
+
+                Orden = menus.Count == 0
+                    ? 1
+                    : menus.Max(m => m.Orden) + 1
             });
         }
 
@@ -246,4 +289,6 @@ WHERE MenuGrupoID = @Id;";
         
     }
 }
+
+
 

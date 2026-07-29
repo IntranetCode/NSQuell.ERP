@@ -1,0 +1,123 @@
+﻿@model ERP.NSQuell.Models.PlaneacionReleaseVinculacionVm
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vincular partes | Releases</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+    <style>
+        :root { --blue:#004AAD; --blue-dark:#063875; --bg:#f3f6fa; --border:#d9e2ee; }
+        body { background:var(--bg); font-family:"Segoe UI",Arial,sans-serif; color:#263238; }
+        .shell { max-width:1250px; margin:0 auto; padding:28px; }
+        .hero { border-radius:24px; padding:26px 30px; color:#fff; background:linear-gradient(135deg,var(--blue),var(--blue-dark)); box-shadow:0 18px 45px rgba(0,74,173,.22); }
+        .card-modern { border:1px solid var(--border); border-radius:20px; box-shadow:0 10px 25px rgba(30,55,90,.07); }
+        .btn-main { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:800; border-radius:12px; }
+        .btn-main:hover { background:var(--blue-dark); border-color:var(--blue-dark); color:#fff; }
+        .original { border-left:4px solid #f79009; background:#fff8eb; border-radius:12px; padding:12px 14px; }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <section class="hero mb-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="small fw-bold text-uppercase opacity-75 mb-2">Planeacion / Releases</div>
+                <h1 class="h3 fw-bold mb-2"><i class="fa-solid fa-link me-2"></i>Vincular partes pendientes</h1>
+                <p class="mb-0 opacity-75">El Release y el PDF original ya estan conservados. Selecciona una parte ACTIVA del mismo cliente para completar el calculo.</p>
+            </div>
+            <a asp-action="Detalle" asp-route-id="@Model.ReleaseID" class="btn btn-light fw-bold rounded-3">
+                <i class="fa-solid fa-arrow-left me-1"></i> Volver al Release
+            </a>
+        </div>
+    </section>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger rounded-4 fw-semibold">@TempData["Error"]</div>
+    }
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success rounded-4 fw-semibold">@TempData["Success"]</div>
+    }
+
+    <section class="card card-modern mb-4">
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <div class="col-md-3"><div class="small text-muted fw-bold">Release</div><div class="fw-bold">@Model.FolioRelease</div></div>
+                <div class="col-md-5"><div class="small text-muted fw-bold">Cliente</div><div class="fw-bold">@Model.ClienteNombre</div></div>
+                <div class="col-md-4"><div class="small text-muted fw-bold">Archivo</div><div class="fw-bold">@Model.ArchivoOrigenNombre</div></div>
+            </div>
+        </div>
+    </section>
+
+    <form asp-action="VincularPartes" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="ReleaseID" value="@Model.ReleaseID" />
+
+        <section class="card card-modern">
+            <div class="card-header bg-white p-4 border-0">
+                <h2 class="h5 fw-bold text-primary mb-1">Renglones detectados</h2>
+                <div class="text-muted small">La referencia original del PDF se conserva hasta que confirmes una equivalencia del catalogo.</div>
+            </div>
+            <div class="card-body p-4">
+                @for (var i = 0; i < Model.Renglones.Count; i++)
+                {
+                    var renglon = Model.Renglones[i];
+                    <div class="border rounded-4 p-3 mb-3 bg-white">
+                        <input type="hidden" name="Renglones[@i].ReleaseRenglonID" value="@renglon.ReleaseRenglonID" />
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-5">
+                                <div class="original">
+                                    <div class="small text-muted fw-bold">Renglon @renglon.Renglon Â· Referencia del documento</div>
+                                    <div class="fw-bold">@(renglon.ReferenciaOriginal ?? renglon.NumeroParteOriginal ?? "-")</div>
+                                    <div class="small">@(renglon.DescripcionOriginal ?? "")</div>
+                                    @if (renglon.ParteID.HasValue && !renglon.ParteActiva)
+                                    {
+                                        <div class="small text-danger fw-bold mt-1">Existe una coincidencia, pero esta INACTIVA.</div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="col-lg-7">
+                                <label class="form-label fw-bold">Parte activa que corresponde</label>
+                                <select name="Renglones[@i].ParteID" class="form-select">
+                                    <option value="">-- Pendiente de seleccionar --</option>
+                                    @foreach (var parte in Model.PartesActivas)
+                                    {
+                                        if (renglon.ParteActiva && renglon.ParteID?.ToString() == parte.Value)
+                                        {
+                                            <option value="@parte.Value" selected>@parte.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@parte.Value">@parte.Text</option>
+                                        }
+                                    }
+                                </select>
+                                <div class="form-text">Solo aparecen partes activas del cliente. Si no existe la correcta, primero debe activarse o registrarse en el catalogo.</div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <div class="d-flex justify-content-between gap-2 flex-wrap mt-4">
+            <a asp-action="DescargarDocumentoImportado" asp-route-id="@Model.ReleaseID" class="btn btn-outline-secondary fw-bold rounded-3">
+                <i class="fa-solid fa-download me-1"></i> Descargar PDF original
+            </a>
+            <button type="submit" class="btn btn-main">
+                <i class="fa-solid fa-floppy-disk me-1"></i> Guardar vinculacion y recalcular
+            </button>
+        </div>
+    </form>
+</div>
+</body>
+</html>

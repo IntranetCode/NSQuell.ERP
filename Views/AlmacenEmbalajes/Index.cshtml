@@ -1,18 +1,69 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPIndexVm
-@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Inventario de embalajes"; }
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPIndexVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Inventario de embalajes";
+
+    string Categoria(string? codigo, string? nombre)
+    {
+        var texto = $"{codigo} {nombre}".ToUpperInvariant();
+        var tieneCaja = texto.Contains("CAJA") || texto.Contains("BOX") || texto.Contains("CARTON");
+        var tieneBolsa = texto.Contains("BOLSA") || texto.Contains("BAG") || texto.Contains("SACO");
+
+        if (texto.Contains("MIXTO") || (tieneCaja && tieneBolsa)) return "MIXTO";
+        if (tieneBolsa) return "BOLSA";
+        return "CAJA";
+    }
+
+    string Icono(string categoria) =>
+        categoria == "BOLSA" ? "fa-bag-shopping" :
+        categoria == "MIXTO" ? "fa-boxes-packing" :
+        "fa-box";
+
+    string Inicial(string categoria) =>
+        categoria == "BOLSA" ? "B" : categoria == "MIXTO" ? "M" : "C";
+
+    string GrupoId(int indice) => $"emb_tipo_{indice}";
+    string EstadoTexto(string? estado) =>
+        estado == "ROJO" ? "Cr&iacute;tico" :
+        estado == "AMARILLO" ? "Aviso" :
+        estado == "VERDE" ? "Disponible" :
+        "Sin configurar";
+
+    var categoriaFiltro = Context.Request.Query["categoria"].ToString().Trim().ToUpperInvariant();
+    if (categoriaFiltro is not ("CAJA" or "BOLSA" or "MIXTO")) categoriaFiltro = string.Empty;
+
+    var grupos = Model.Existencias
+        .GroupBy(x => Categoria(x.Codigo, x.Nombre))
+        .Where(g => string.IsNullOrWhiteSpace(categoriaFiltro) || g.Key == categoriaFiltro)
+        .OrderBy(g => g.Key == "CAJA" ? 0 : g.Key == "BOLSA" ? 1 : 2)
+        .ToList();
+}
 
 <section class="alm-hero">
     <div>
         <small>EMBALAJES</small>
         <h1>Inventario de embalajes</h1>
-        <p>Almacén independiente de cajas, bolsas, separadores, etiquetas y demás materiales de empaque.</p>
+        <p>
+            Cat&aacute;logo dividido en CAJA, BOLSA y MIXTO.
+            Los grupos permanecen cerrados al entrar para mantener la vista compacta.
+        </p>
     </div>
+
     <div class="alm-actions">
-        <a class="alm-btn" asp-action="Movimiento" asp-route-tipo="Entrada">Registrar entrada</a>
+        <a class="alm-btn" asp-action="Movimiento" asp-route-tipo="Entrada">
+            <i class="fa-solid fa-arrow-down"></i>
+            Registrar entrada
+        </a>
         <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="Salida">Registrar salida</a>
-        <a class="alm-btn secondary" asp-action="Embalajes">Catálogo</a>
-        <a class="alm-btn secondary" asp-action="NivelesStock">Niveles</a>
-        <a class="alm-btn secondary" asp-action="Historial">Historial</a>
+        <a class="alm-btn secondary" asp-action="Embalajes">Cat&aacute;logo</a>
+        <a class="alm-btn secondary" asp-action="NivelesStock">
+            <i class="fa-solid fa-sliders"></i>
+            Niveles de stock
+        </a>
+        <a class="alm-btn secondary" asp-action="Historial">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            Historial
+        </a>
     </div>
 </section>
 
@@ -22,104 +73,187 @@
 }
 
 <section class="alm-grid alm-grid-6">
-    <div class="alm-kpi"><small>Embalajes</small><strong>@Model.TotalMateriales</strong></div>
-    <div class="alm-kpi"><small>Crítico</small><strong>@Model.Criticos</strong></div>
-    <div class="alm-kpi"><small>Aviso</small><strong>@Model.Advertencias</strong></div>
-    <div class="alm-kpi"><small>Disponible</small><strong>@Model.Disponibles</strong></div>
-    <div class="alm-kpi"><small>Sin configurar</small><strong>@Model.PendientesConfiguracion</strong></div>
-    <div class="alm-kpi"><small>Saldo total mixto</small><strong>@Model.SaldoTotal.ToString("0.###")</strong></div>
+    <div class="alm-kpi alm-kpi-demand"><small>SOLICITADO PENDIENTE</small><strong>@Model.SolicitadoPendiente.ToString("0.###")</strong><span>Embalaje de OF todav&iacute;a no entregado.</span></div>
+    <div class="alm-kpi"><small>OF PENDIENTES EMBALAJE</small><strong>@Model.OFPendientes</strong><span>&Oacute;rdenes con embalaje pendiente de surtir.</span></div>
+    <div class="alm-kpi"><small>RECEPCIONES DE HOY</small><strong>@Model.RecepcionesHoy</strong><span>Entradas registradas durante el d&iacute;a.</span></div>
+    <div class="alm-kpi"><small>PIEZAS RECIBIDAS HOY</small><strong>@Model.CantidadRecibidaHoy.ToString("0.###")</strong><span>Total ingresado al almac&eacute;n de embalajes.</span></div>
+    <div class="alm-kpi alm-kpi-out"><small>SALIDAS DE HOY</small><strong>@Model.SalidasHoy.ToString("0.###")</strong><span>Salidas, consumos, scrap y ajustes negativos.</span></div>
+    <div class="alm-kpi alm-kpi-critical"><small>EMBALAJES CR&Iacute;TICOS</small><strong>@Model.Criticos</strong><span>Embalajes actualmente en sem&aacute;foro rojo.</span></div>
 </section>
 
-<section class="alm-card">
+<section class="alm-card pt-client-catalog emb-category-catalog">
     <header>
-        <span>Existencias de embalajes</span>
-        <span>@Model.Existencias.Count(x => x.TieneCosto) con costo · Máximo 500 registros</span>
+        <span><i class="fa-solid fa-boxes-packing"></i> Cat&aacute;logo de embalajes</span>
+        <span>@Model.Existencias.Count embalaje(s)</span>
     </header>
-    <form method="get" class="alm-filter">
+
+    <form method="get" class="alm-filter pt-client-filter">
         <div class="alm-field">
-            <label for="q">Embalaje</label>
-            <input id="q" class="alm-input" type="search" name="q" value="@Model.Busqueda" list="emb-opciones" placeholder="Escribe o selecciona" autocomplete="off" />
-            <datalist id="emb-opciones">
-                @foreach (var item in Model.Existencias)
-                {
-                    <option value="@item.Codigo">@item.Codigo · @item.Nombre</option>
-                }
-            </datalist>
+            <label for="q">C&oacute;digo o embalaje</label>
+            <input id="q" class="alm-input" type="search" name="q" value="@Model.Busqueda" placeholder="Escribe un c&oacute;digo o nombre" autocomplete="off" />
         </div>
-        <select class="alm-select" name="estado">
-            <option value="">Todos los niveles</option>
-            <option value="ROJO">Crítico</option>
-            <option value="AMARILLO">Aviso</option>
-            <option value="VERDE">Disponible</option>
-            <option value="SIN_CONFIGURAR">Sin configurar</option>
-        </select>
-        <button class="alm-btn">Filtrar</button>
+        <div class="alm-field">
+            <label for="estado">Nivel de stock</label>
+            <select id="estado" class="alm-select" name="estado">
+                <option value="" selected="@(string.IsNullOrWhiteSpace(Model.Estado))">Todos los niveles</option>
+                <option value="ROJO" selected="@(Model.Estado == "ROJO")">Cr&iacute;tico</option>
+                <option value="AMARILLO" selected="@(Model.Estado == "AMARILLO")">Aviso</option>
+                <option value="VERDE" selected="@(Model.Estado == "VERDE")">Disponible</option>
+                <option value="SIN_CONFIGURAR" selected="@(Model.Estado == "SIN_CONFIGURAR")">Sin configurar</option>
+            </select>
+        </div>
+        <div class="alm-field">
+            <label for="categoria">Categor&iacute;a</label>
+            <select id="categoria" class="alm-select" name="categoria">
+                <option value="" selected="@(string.IsNullOrWhiteSpace(categoriaFiltro))">Todas las categor&iacute;as</option>
+                <option value="CAJA" selected="@(categoriaFiltro == "CAJA")">CAJA</option>
+                <option value="BOLSA" selected="@(categoriaFiltro == "BOLSA")">BOLSA</option>
+                <option value="MIXTO" selected="@(categoriaFiltro == "MIXTO")">MIXTO</option>
+            </select>
+        </div>
+        <button class="alm-btn" type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
+        <a class="alm-btn secondary" asp-action="Index"><i class="fa-solid fa-filter-circle-xmark"></i> Limpiar</a>
     </form>
-    <div class="alm-table-wrap">
-        <table class="alm-table">
-            <thead>
-                <tr>
-                    <th>Código</th>
-                    <th>Embalaje</th>
-                    <th>Entradas</th>
-                    <th>Salidas</th>
-                    <th>Stock disponible</th>
-                    <th>Costo unitario</th>
-                    <th>Último movimiento</th>
-                    <th>Acción</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var x in Model.Existencias)
-                {
-                    <tr>
-                        <td><a class="alm-trace-link" asp-action="Historial" asp-route-embalaje="@x.Codigo"><strong>@x.Codigo</strong></a></td>
-                        <td><a class="alm-trace-link" asp-action="Historial" asp-route-embalaje="@x.Codigo">@x.Nombre</a></td>
-                        <td class="alm-number">@x.Entradas.ToString("0.###")</td>
-                        <td class="alm-number">@x.Salidas.ToString("0.###")</td>
-                        <td class="alm-stock-cell @x.Semaforo">
-                            <strong>@x.Saldo.ToString("0.###") @x.Unidad</strong>
-                            <small>@(x.Semaforo == "SIN_CONFIGURAR" ? "Sin configurar" : x.Semaforo == "ROJO" ? "Crítico" : x.Semaforo == "AMARILLO" ? "Aviso" : "Disponible")</small>
-                        </td>
-                        <td class="alm-number">
-                            @if (x.TieneCosto)
+
+    @if (grupos.Any())
+    {
+        <div class="pt-client-list">
+            @{ var indice = 0; }
+            @foreach (var grupo in grupos)
+            {
+                indice++;
+                var collapseId = GrupoId(indice);
+                var items = grupo.OrderBy(x => x.Nombre).ThenBy(x => x.Codigo).ToList();
+                var existencia = items.Sum(x => x.Saldo);
+                var solicitados = items.Count(x => x.Solicitado > 0.0005m);
+                var criticos = items.Count(x => x.Semaforo == "ROJO");
+
+                <article class="pt-client-card">
+                    <button type="button"
+                            class="pt-client-head"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#@collapseId"
+                            aria-expanded="false"
+                            aria-controls="@collapseId">
+                        <span class="pt-client-head-main">
+                            <span class="pt-client-avatar emb-category-avatar @grupo.Key.ToLowerInvariant()">
+                                @Inicial(grupo.Key)
+                            </span>
+                            <span class="pt-client-copy">
+                                <strong>@grupo.Key</strong>
+                                <small>@items.Count embalaje(s)</small>
+                            </span>
+                        </span>
+
+                        <span class="pt-client-metrics">
+                            <span class="pt-client-pill"><small>Art&iacute;culos</small><strong>@items.Count</strong></span>
+                            <span class="pt-client-pill is-available"><small>Existencia</small><strong>@existencia.ToString("0.###")</strong></span>
+                            <span class="pt-client-pill @(solicitados > 0 ? "is-demand" : string.Empty)"><small>Solicitados</small><strong>@solicitados</strong></span>
+                            @if (criticos > 0)
                             {
-                                <strong>@x.CostoUnitario.ToString("N4") @x.MonedaCosto</strong>
-                                <small class="alm-subtext">por @x.UnidadCosto · @x.FuenteCosto</small>
+                                <span class="pt-client-pill is-critical"><small>Cr&iacute;ticos</small><strong>@criticos</strong></span>
                             }
-                            else
-                            {
-                                <span class="alm-subtext">Sin costo asignado</span>
-                            }
-                        </td>
-                        <td>@(x.UltimoMovimiento?.ToString("dd/MM/yyyy HH:mm") ?? "Sin movimientos")</td>
-                        <td><a class="alm-btn secondary small" asp-action="Movimiento" asp-route-embalajeId="@x.MaterialID">Mov.</a></td>
-                    </tr>
-                }
-                @if (!Model.Existencias.Any())
-                {
-                    <tr><td colspan="8" class="alm-empty">No hay embalajes para mostrar.</td></tr>
-                }
-            </tbody>
-        </table>
-    </div>
+                            <span class="pt-client-chevron"><i class="fa-solid fa-chevron-down"></i></span>
+                        </span>
+                    </button>
+
+                    <div id="@collapseId" class="collapse">
+                        <div class="pt-client-body">
+                            <div class="alm-table-wrap pt-client-table-wrap">
+                                <table class="alm-table alm-table-fit pt-client-table emb-category-table">
+                                    <colgroup>
+                                        <col class="ptc-col-part" />
+                                        <col class="ptc-col-description" />
+                                        <col class="ptc-col-stock" />
+                                        <col class="ptc-col-requested" />
+                                        <col class="ptc-col-last" />
+                                        <col class="ptc-col-actions" />
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>C&oacute;digo</th>
+                                            <th>Embalaje</th>
+                                            <th>Existencia</th>
+                                            <th>Solicitado</th>
+                                            <th>&Uacute;ltimo movimiento</th>
+                                            <th aria-label="Acciones"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var x in items)
+                                        {
+                                            <tr>
+                                                <td data-label="C&oacute;digo">
+                                                    <a class="pt-part-link" asp-action="Historial" asp-route-embalaje="@x.Codigo">
+                                                        <strong>@x.Codigo</strong>
+                                                        <small>@grupo.Key</small>
+                                                    </a>
+                                                </td>
+                                                <td data-label="Embalaje">
+                                                    <a class="pt-truncate-link" asp-action="Historial" asp-route-embalaje="@x.Codigo" title="@x.Nombre">@x.Nombre</a>
+                                                </td>
+                                                <td class="pt-stock" data-label="Existencia">
+                                                    <span class="pt-stock-badge @x.Semaforo"><strong>@x.Saldo.ToString("0.###") @x.Unidad</strong></span>
+                                                    <small class="mp-stock-state">@Html.Raw(EstadoTexto(x.Semaforo))</small>
+                                                </td>
+                                                <td class="pt-requested" data-label="Solicitado">
+                                                    @if (x.Solicitado > 0.0005m)
+                                                    {
+                                                        <strong>-@x.Solicitado.ToString("0.###") @x.Unidad</strong>
+                                                        <small>Pendiente</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="pt-empty-value">0 @x.Unidad</span>
+                                                    }
+                                                </td>
+                                                <td class="pt-last-movement" data-label="&Uacute;ltimo movimiento">
+                                                    @if (x.UltimoMovimiento.HasValue)
+                                                    {
+                                                        <strong>@x.UltimoMovimiento.Value.ToString("dd/MM/yyyy")</strong>
+                                                        <small>@x.UltimoMovimiento.Value.ToString("HH:mm")</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="pt-empty-value">Sin movimientos</span>
+                                                    }
+                                                </td>
+                                                <td data-label="Acciones">
+                                                    <div class="pt-actions">
+                                                        <a class="pt-action" asp-action="Movimiento" asp-route-embalajeId="@x.MaterialID" title="Registrar movimiento"><i class="fa-solid fa-arrow-right-arrow-left"></i></a>
+                                                        <a class="pt-action" asp-action="NivelesStock" asp-route-q="@x.Codigo" title="Configurar niveles"><i class="fa-solid fa-sliders"></i></a>
+                                                        <a class="pt-action" asp-action="Historial" asp-route-embalaje="@x.Codigo" title="Ver historial"><i class="fa-solid fa-clock-rotate-left"></i></a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="alm-empty">No se encontraron embalajes con los filtros seleccionados.</div>
+    }
 </section>
 
-<section class="alm-card">
-    <header><span>Movimientos recientes</span><a class="alm-header-link" asp-action="Historial">Ver historial completo</a></header>
-    <div class="alm-table-wrap">
-        <table class="alm-table">
-            <thead><tr><th>Fecha</th><th>Embalaje</th><th>Tipo</th><th>Cantidad</th><th>Lote</th><th>Ubicación</th><th>OF</th><th>Responsable</th></tr></thead>
-            <tbody>
-                @foreach (var x in Model.Movimientos)
-                {
-                    <tr><td>@x.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td><td><a class="alm-trace-link" asp-action="Historial" asp-route-embalaje="@x.Codigo">@x.Codigo · @x.Material</a></td><td>@x.TipoMovimiento</td><td>@x.Cantidad.ToString("0.###") @x.Unidad</td><td>@x.Lote</td><td>@x.Ubicacion</td><td>@x.NumeroOF</td><td>@x.Responsable</td></tr>
-                }
-                @if (!Model.Movimientos.Any())
-                {
-                    <tr><td colspan="8" class="alm-empty">No hay movimientos registrados.</td></tr>
-                }
-            </tbody>
-        </table>
+<section class="alm-card inv2-recent-card">
+    <header><span>5 movimientos recientes de embalajes</span><a class="alm-header-link" asp-action="Historial">Ver historial completo <i class="fa-solid fa-arrow-right"></i></a></header>
+    <div class="inv2-recent-list">
+        @foreach (var x in Model.Movimientos.Take(5))
+        {
+            <article class="inv2-recent-item">
+                <div><small>FECHA</small><strong>@x.FechaMovimiento.ToString("dd/MM/yyyy")</strong><span>@x.FechaMovimiento.ToString("HH:mm")</span></div>
+                <div class="inv2-recent-main"><small>EMBALAJE</small><a asp-action="Historial" asp-route-embalaje="@x.Codigo">@x.Codigo &middot; @x.Material</a></div>
+                <div><small>MOVIMIENTO</small><strong>@x.TipoMovimiento</strong><span>@x.Cantidad.ToString("0.###") @x.Unidad</span></div>
+                <div><small>UBICACI&Oacute;N / OF</small><strong>@(string.IsNullOrWhiteSpace(x.Ubicacion) ? "Sin ubicaci&oacute;n" : x.Ubicacion)</strong><span>@(string.IsNullOrWhiteSpace(x.NumeroOF) ? "Sin OF" : x.NumeroOF)</span></div>
+                <div><small>RESPONSABLE</small><strong>@(string.IsNullOrWhiteSpace(x.Responsable) ? "Sin responsable" : x.Responsable)</strong></div>
+            </article>
+        }
     </div>
 </section>

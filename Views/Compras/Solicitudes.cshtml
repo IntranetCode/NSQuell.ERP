@@ -1,0 +1,789 @@
+﻿@model List<ERP.NSQuell.Models.Compras.SolicitudListadoViewModel>
+
+@{
+    ViewData["Title"] = "Solicitudes de compra";
+
+    var totalSolicitudes = Model?.Count ?? 0;
+    var pendientesAprobacion = Model?.Count(x => x.EstatusID == 1) ?? 0;
+    var enProceso = Model?.Count(x => x.EstatusID >= 2 && x.EstatusID <= 9) ?? 0;
+    var cerradas = Model?.Count(x => x.EstatusID == 10) ?? 0;
+    var rechazadasCanceladas = Model?.Count(x => x.EstatusID == 11 || x.EstatusID == 12) ?? 0;
+}
+
+@section Styles {
+    <style>
+        :root {
+            --compras-white: #ffffff;
+            --compras-text: #1f2937;
+            --compras-muted: #6b7280;
+            --compras-border: #e5e7eb;
+            --ns-blue: #0b4f8f;
+            --ns-blue-dark: #073763;
+            --ns-blue-soft: #eaf3fb;
+            --ns-orange: #ff7a00;
+            --ns-orange-dark: #e85d04;
+            --ns-orange-soft: #fff4e8;
+            --success-soft: #ecfdf5;
+            --success-text: #15803d;
+            --danger-soft: #fef2f2;
+            --danger-text: #b91c1c;
+            --warning-soft: #fff7ed;
+            --warning-text: #c2410c;
+            --info-soft: #eff6ff;
+            --info-text: #1d4ed8;
+            --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.07);
+        }
+
+        .solicitudes-page {
+            color: var(--compras-text);
+        }
+
+        .alert-compras {
+            border-radius: 16px;
+            padding: 14px 16px;
+            border: 1px solid var(--compras-border);
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+        .alert-success-compras {
+            background: var(--success-soft);
+            color: #166534;
+            border-color: #bbf7d0;
+        }
+
+        .alert-error-compras {
+            background: var(--danger-soft);
+            color: #991b1b;
+            border-color: #fecaca;
+        }
+
+        .page-hero {
+            background: radial-gradient(circle at 90% 20%, rgba(255, 122, 0, 0.13), transparent 30%), linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid var(--compras-border);
+            border-radius: 24px;
+            padding: 28px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+            position: relative;
+        }
+
+            .page-hero::after {
+                content: "SOL";
+                position: absolute;
+                right: 28px;
+                top: 4px;
+                font-size: 86px;
+                font-weight: 1000;
+                color: rgba(11, 79, 143, 0.05);
+                letter-spacing: -0.08em;
+            }
+
+        .page-chip {
+            display: inline-flex;
+            border-radius: 999px;
+            border: 1px solid #ffd2a3;
+            background: var(--ns-orange-soft);
+            color: var(--ns-orange-dark);
+            padding: 7px 12px;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+
+        .page-title {
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 1000;
+            margin: 0 0 8px 0;
+            color: var(--compras-text);
+            letter-spacing: -0.04em;
+        }
+
+        .page-subtitle {
+            color: var(--compras-muted);
+            font-size: 14px;
+            line-height: 1.7;
+            font-weight: 600;
+            max-width: 760px;
+            margin: 0;
+        }
+
+        .btn-compras-main,
+        .btn-compras-secondary,
+        .btn-compras-danger,
+        .btn-compras-blue {
+            border-radius: 14px;
+            padding: 10px 15px;
+            text-decoration: none;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-compras-main {
+            background: linear-gradient(135deg, var(--ns-orange), var(--ns-orange-dark));
+            color: white;
+            box-shadow: 0 12px 26px rgba(255, 122, 0, 0.22);
+        }
+
+            .btn-compras-main:hover {
+                color: white;
+                transform: translateY(-2px);
+                box-shadow: 0 16px 32px rgba(255, 122, 0, 0.28);
+            }
+
+        .btn-compras-blue {
+            background: linear-gradient(135deg, var(--ns-blue), var(--ns-blue-dark));
+            color: white;
+            box-shadow: 0 12px 26px rgba(11, 79, 143, 0.18);
+        }
+
+            .btn-compras-blue:hover {
+                color: white;
+                transform: translateY(-2px);
+            }
+
+        .btn-compras-secondary {
+            background: white;
+            color: var(--ns-blue);
+            border-color: #cfe2f3;
+        }
+
+            .btn-compras-secondary:hover {
+                background: var(--ns-blue-soft);
+                color: var(--ns-blue-dark);
+                transform: translateY(-2px);
+            }
+
+        .btn-compras-danger {
+            background: white;
+            color: var(--danger-text);
+            border-color: #fecaca;
+        }
+
+            .btn-compras-danger:hover {
+                background: var(--danger-soft);
+                color: var(--danger-text);
+            }
+
+        .summary-card {
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 20px;
+            padding: 18px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .summary-card::after {
+                content: "";
+                position: absolute;
+                right: -38px;
+                bottom: -38px;
+                width: 105px;
+                height: 105px;
+                border-radius: 999px;
+                background: rgba(255, 122, 0, 0.06);
+            }
+
+        .summary-label {
+            color: var(--compras-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            font-weight: 900;
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .summary-number {
+            color: var(--compras-text);
+            font-size: 31px;
+            font-weight: 1000;
+            line-height: 1;
+            position: relative;
+            z-index: 2;
+        }
+
+        .filters-card {
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 22px;
+            padding: 18px;
+            margin: 18px 0;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 900;
+            color: var(--compras-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 14px;
+            border-color: var(--compras-border);
+            padding: 11px 14px;
+            font-weight: 600;
+            color: var(--compras-text);
+        }
+
+            .form-control:focus,
+            .form-select:focus {
+                border-color: var(--ns-blue);
+                box-shadow: 0 0 0 0.18rem rgba(11, 79, 143, 0.12);
+            }
+
+        .table-card {
+            background: white;
+            border: 1px solid var(--compras-border);
+            border-radius: 24px;
+            padding: 18px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .table-title {
+            font-size: 20px;
+            font-weight: 1000;
+            margin: 0;
+            color: var(--compras-text);
+        }
+
+        .table-subtitle {
+            font-size: 13px;
+            color: var(--compras-muted);
+            font-weight: 600;
+            margin: 5px 0 0 0;
+        }
+
+        .compras-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 10px;
+        }
+
+            .compras-table th {
+                color: var(--compras-muted);
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.10em;
+                padding: 0 12px 6px;
+                border: none;
+                white-space: nowrap;
+            }
+
+            .compras-table td {
+                background: #f9fafb;
+                border-top: 1px solid var(--compras-border);
+                border-bottom: 1px solid var(--compras-border);
+                color: #374151;
+                padding: 14px 12px;
+                font-size: 13px;
+                font-weight: 650;
+                vertical-align: middle;
+            }
+
+                .compras-table td:first-child {
+                    border-left: 1px solid var(--compras-border);
+                    border-radius: 16px 0 0 16px;
+                }
+
+                .compras-table td:last-child {
+                    border-right: 1px solid var(--compras-border);
+                    border-radius: 0 16px 16px 0;
+                }
+
+        .folio-text {
+            color: var(--ns-blue-dark);
+            font-weight: 1000;
+        }
+
+        .small-muted {
+            color: var(--compras-muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .badge-compras {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 900;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .badge-pendiente {
+            background: var(--warning-soft);
+            color: var(--warning-text);
+            border-color: #fed7aa;
+        }
+
+        .badge-revision {
+            background: var(--info-soft);
+            color: var(--info-text);
+            border-color: #bfdbfe;
+        }
+
+        .badge-aprobada {
+            background: var(--success-soft);
+            color: var(--success-text);
+            border-color: #bbf7d0;
+        }
+
+        .badge-rechazada {
+            background: var(--danger-soft);
+            color: var(--danger-text);
+            border-color: #fecaca;
+        }
+
+        .badge-cancelada {
+            background: #f3f4f6;
+            color: #4b5563;
+            border-color: #e5e7eb;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .btn-table-view {
+            border-radius: 999px;
+            padding: 8px 13px;
+            background: white;
+            border: 1px solid #cfe2f3;
+            color: var(--ns-blue);
+            font-size: 12px;
+            text-decoration: none;
+            font-weight: 900;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+            .btn-table-view:hover {
+                background: var(--ns-blue);
+                border-color: var(--ns-blue);
+                color: white;
+            }
+
+        .btn-table-cancel {
+            border-radius: 999px;
+            padding: 8px 13px;
+            background: white;
+            border: 1px solid #fecaca;
+            color: var(--danger-text);
+            font-size: 12px;
+            text-decoration: none;
+            font-weight: 900;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+            .btn-table-cancel:hover {
+                background: var(--danger-soft);
+                color: var(--danger-text);
+            }
+
+        .empty-state {
+            background: #f9fafb;
+            border: 1px dashed #d1d5db;
+            border-radius: 20px;
+            padding: 36px 20px;
+            text-align: center;
+            color: var(--compras-muted);
+            font-weight: 700;
+        }
+
+        .empty-title {
+            color: var(--compras-text);
+            font-size: 20px;
+            font-weight: 1000;
+            margin-bottom: 6px;
+        }
+
+        @@media (max-width: 767.98px) {
+            .page-hero,
+            .table-card,
+            .filters-card {
+                padding: 18px;
+                border-radius: 20px;
+            }
+
+            .action-buttons {
+                justify-content: flex-start;
+            }
+
+            .btn-compras-main,
+            .btn-compras-secondary,
+            .btn-compras-blue {
+                width: 100%;
+            }
+        }
+    </style>
+}
+
+<div class="solicitudes-page">
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert-compras alert-success-compras">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert-compras alert-error-compras">
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="erp-page-breadcrumb">
+        <a href="javascript:history.back()" class="erp-btn-back">← Regresar</a>
+        <span>Inicio</span>
+        <span>›</span>
+        <span>Compras</span>
+        <span>›</span>
+        <strong>Solicitudes</strong>
+    </div>
+
+    <section class="page-hero">
+        <div class="row align-items-center g-4">
+            <div class="col-12 col-lg-8">
+                <div class="page-chip">Control de solicitudes</div>
+
+                <h1 class="page-title">Solicitudes de compra</h1>
+
+                <p class="page-subtitle">
+                    Consulta las solicitudes registradas, revisa su estatus y da seguimiento al flujo de compras.
+                    El proceso se divide por responsables: Dirección, Compras y Almacén.
+                </p>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="d-flex gap-2 justify-content-lg-end flex-wrap">
+                    <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+                        + Nueva solicitud
+                    </a>
+
+                    <a asp-controller="Compras" asp-action="Index" class="btn-compras-secondary">
+                        Panel compras
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">
+            <div class="summary-card">
+                <div class="summary-label">Total</div>
+                <div class="summary-number">@totalSolicitudes</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="summary-card">
+                <div class="summary-label">Pendientes aprobación</div>
+                <div class="summary-number">@pendientesAprobacion</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="summary-card">
+                <div class="summary-label">En proceso</div>
+                <div class="summary-number">@enProceso</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="summary-card">
+                <div class="summary-label">Cerradas</div>
+                <div class="summary-number">@cerradas</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <a asp-controller="Compras" asp-action="BandejaDireccion" class="btn-compras-blue w-100">
+                Bandeja Dirección
+            </a>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <a asp-controller="Compras" asp-action="BandejaCompras" class="btn-compras-secondary w-100">
+                Bandeja Compras
+            </a>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <a asp-controller="Compras" asp-action="BandejaAlmacen" class="btn-compras-secondary w-100">
+                Bandeja Almacén
+            </a>
+        </div>
+    </section>
+
+    <section class="filters-card">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-lg-5">
+                <label class="filter-label" for="buscarSolicitud">Buscar solicitud</label>
+                <input type="text"
+                       id="buscarSolicitud"
+                       class="form-control"
+                       placeholder="Buscar por folio, departamento, prioridad, tipo, responsable o estatus..." />
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-4">
+                <label class="filter-label" for="filtroEstatus">Estatus</label>
+                <select id="filtroEstatus" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="1">Pendiente de aprobación</option>
+                    <option value="2">Aprobada para cotizar</option>
+                    <option value="3">Cotizando</option>
+                    <option value="4">Cotización enviada a dirección</option>
+                    <option value="5">Aprobada para orden de compra</option>
+                    <option value="6">Orden de compra generada</option>
+                    <option value="7">Enviada al proveedor</option>
+                    <option value="8">Pendiente de recepción</option>
+                    <option value="9">Recibida en almacén</option>
+                    <option value="10">Cerrada</option>
+                    <option value="11">Rechazada</option>
+                    <option value="12">Cancelada</option>
+                </select>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+                <button type="button" id="limpiarFiltros" class="btn-compras-secondary w-100">
+                    Limpiar filtros
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section class="table-card">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div>
+                <h2 class="table-title">Listado de solicitudes</h2>
+                <p class="table-subtitle">
+                    Solicitudes activas registradas en el módulo de compras.
+                    Rechazadas/canceladas: @rechazadasCanceladas
+                </p>
+            </div>
+        </div>
+
+        @if (Model != null && Model.Any())
+        {
+            <div class="table-responsive">
+                <table class="compras-table" id="tablaSolicitudes">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Fecha</th>
+                            <th>Área</th>
+                            <th>Prioridad</th>
+                            <th>Responsable</th>
+                            <th>Estatus</th>
+                            <th>Días</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model)
+                        {
+                            var estatusTexto = item.EstatusNombre ?? item.Estatus ?? "Sin estatus";
+
+                            <tr class="solicitud-row"
+                                data-estatus-id="@item.EstatusID"
+                                data-search="@($"{item.Folio} {item.Departamento} {item.OrigenSolicitud} {item.Prioridad} {item.TipoCompra} {estatusTexto} {item.ResponsableActual}".ToLower())">
+                                <td>
+                                    <span class="folio-text">@(item.Folio ?? "Sin folio")</span>
+                                    <div class="small-muted">@(item.TipoCompra ?? "-")</div>
+                                </td>
+
+                                <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
+
+                                <td>
+                                    @(item.Departamento ?? "-")
+                                    <div class="small-muted">Origen: @(item.OrigenSolicitud ?? "Almacén")</div>
+                                </td>
+
+                                <td>
+                                    <span class="badge-compras @GetPrioridadClass(item.Prioridad)">
+                                        @(item.Prioridad ?? "-")
+                                    </span>
+                                </td>
+
+                                <td>@(item.ResponsableActual ?? "-")</td>
+
+                                <td>
+                                    <span class="badge-compras @GetBadgeClass(item.EstatusID)">
+                                        @estatusTexto
+                                    </span>
+                                </td>
+
+                                <td>@item.DiasEnEstatus</td>
+
+                                <td>
+                                    <div class="action-buttons">
+                                        <a asp-controller="Compras"
+                                           asp-action="DetalleSolicitud"
+                                           asp-route-id="@item.SolicitudCompraID"
+                                           class="btn-table-view">
+                                            Ver detalle
+                                        </a>
+
+                                        @if (PuedeCancelar(item.EstatusID))
+                                        {
+                                            <form asp-controller="Compras"
+                                                  asp-action="CancelarSolicitud"
+                                                  asp-route-id="@item.SolicitudCompraID"
+                                                  method="post"
+                                                  onsubmit="return confirm('¿Seguro que deseas cancelar esta solicitud?');">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn-table-cancel">
+                                                    Cancelar
+                                                </button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="sinResultados" class="empty-state mt-3 d-none">
+                <div class="empty-title">No se encontraron solicitudes</div>
+                Ajusta los filtros o limpia la búsqueda para ver nuevamente los registros.
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-title">Aún no hay solicitudes registradas</div>
+                Crea la primera solicitud de compra para comenzar el flujo.
+                <br /><br />
+                <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+                    Crear primera solicitud
+                </a>
+            </div>
+        }
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const buscarInput = document.getElementById('buscarSolicitud');
+            const filtroEstatus = document.getElementById('filtroEstatus');
+            const limpiarBtn = document.getElementById('limpiarFiltros');
+            const rows = document.querySelectorAll('.solicitud-row');
+            const sinResultados = document.getElementById('sinResultados');
+
+            function aplicarFiltros() {
+                const texto = (buscarInput.value || '').toLowerCase().trim();
+                const estatusId = filtroEstatus.value;
+                let visibles = 0;
+
+                rows.forEach(row => {
+                    const rowSearch = row.dataset.search || '';
+                    const rowEstatusId = row.dataset.estatusId || '';
+
+                    const coincideTexto = !texto || rowSearch.includes(texto);
+                    const coincideEstatus = !estatusId || rowEstatusId === estatusId;
+
+                    const visible = coincideTexto && coincideEstatus;
+
+                    row.classList.toggle('d-none', !visible);
+
+                    if (visible) {
+                        visibles++;
+                    }
+                });
+
+                if (sinResultados) {
+                    sinResultados.classList.toggle('d-none', visibles > 0);
+                }
+            }
+
+            if (buscarInput) {
+                buscarInput.addEventListener('input', aplicarFiltros);
+            }
+
+            if (filtroEstatus) {
+                filtroEstatus.addEventListener('change', aplicarFiltros);
+            }
+
+            if (limpiarBtn) {
+                limpiarBtn.addEventListener('click', function () {
+                    buscarInput.value = '';
+                    filtroEstatus.value = '';
+                    aplicarFiltros();
+                });
+            }
+        });
+    </script>
+}
+
+@functions {
+    private string GetBadgeClass(int estatusId)
+    {
+        return estatusId switch
+        {
+            1 => "badge-pendiente",
+            2 => "badge-revision",
+            3 => "badge-revision",
+            4 => "badge-revision",
+            5 => "badge-aprobada",
+            6 => "badge-revision",
+            7 => "badge-revision",
+            8 => "badge-pendiente",
+            9 => "badge-revision",
+            10 => "badge-aprobada",
+            11 => "badge-rechazada",
+            12 => "badge-cancelada",
+            _ => "badge-pendiente"
+        };
+    }
+
+    private string GetPrioridadClass(string? prioridad)
+    {
+        return prioridad switch
+        {
+            "Urgente" => "badge-rechazada",
+            "Alta" => "badge-pendiente",
+            "Normal" => "badge-revision",
+            "Baja" => "badge-cancelada",
+            _ => "badge-cancelada"
+        };
+    }
+
+    private bool PuedeCancelar(int estatusId)
+    {
+        return estatusId != 10 &&
+               estatusId != 11 &&
+               estatusId != 12;
+    }
+}

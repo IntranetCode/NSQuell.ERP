@@ -144,7 +144,7 @@ namespace ERP.NSQuell.Controllers
             {
                 ModelState.AddModelError(
                     nameof(model.NumeroParte),
-                    "Ya existe una parte con este nÃºmero para el cliente seleccionado.");
+                    "Ya existe una parte con este número para el cliente seleccionado.");
             }
 
             if (!ModelState.IsValid)
@@ -272,7 +272,7 @@ namespace ERP.NSQuell.Controllers
             {
                 ModelState.AddModelError(
                     nameof(model.NumeroParte),
-                    "Ya existe otra parte con este nÃºmero para el cliente seleccionado.");
+                    "Ya existe otra parte con este número para el cliente seleccionado.");
             }
 
             if (!ModelState.IsValid)
@@ -344,7 +344,7 @@ namespace ERP.NSQuell.Controllers
                 return Json(new
                 {
                     success = false,
-                    message = "No se encontrÃ³ la parte seleccionada."
+                    message = "No se encontró la parte seleccionada."
                 });
             }
 
@@ -390,7 +390,7 @@ namespace ERP.NSQuell.Controllers
                 return Json(new
                 {
                     success = false,
-                    message = "La informaciÃ³n enviada no es vÃ¡lida."
+                    message = "La información enviada no es válida."
                 });
             }
 
@@ -403,7 +403,7 @@ namespace ERP.NSQuell.Controllers
                 return Json(new
                 {
                     success = false,
-                    message = "No se encontrÃ³ la parte seleccionada."
+                    message = "No se encontró la parte seleccionada."
                 });
             }
 
@@ -446,7 +446,7 @@ namespace ERP.NSQuell.Controllers
             return Json(new
             {
                 success = true,
-                message = "Los datos tÃ©cnicos fueron guardados correctamente."
+                message = "Los datos técnicos fueron guardados correctamente."
             });
         }
 

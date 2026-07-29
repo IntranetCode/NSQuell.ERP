@@ -1,0 +1,693 @@
+﻿@model ERP.NSQuell.Models.PlaneacionProgramaMaquinasVm
+
+@{
+    Layout = null;
+
+    var inicioSemana = ViewBag.SemanaInicio is DateTime inicio
+        ? inicio
+        : Model.FechaDesde;
+
+    var finSemana = ViewBag.SemanaFin is DateTime fin
+        ? fin
+        : Model.FechaHasta;
+
+    var semanaAnterior = inicioSemana.AddDays(-7);
+    var semanaSiguiente = inicioSemana.AddDays(7);
+
+    string Valor(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    string ClasePrograma(int estatusId)
+    {
+        return estatusId switch
+        {
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnPreparacion => "programa-preparacion",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnProduccion => "programa-produccion",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Pausado => "programa-pausado",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Terminado => "programa-terminado",
+            ERP.NSQuell.Models.PlaneacionProgramaEstatus.Cerrado => "programa-terminado",
+            _ => "programa-programado"
+        };
+    }
+
+    bool PuedeEditar(int estatusId)
+    {
+        return estatusId != ERP.NSQuell.Models.PlaneacionProgramaEstatus.EnProduccion &&
+               estatusId != ERP.NSQuell.Models.PlaneacionProgramaEstatus.Terminado &&
+               estatusId != ERP.NSQuell.Models.PlaneacionProgramaEstatus.Cerrado &&
+               estatusId != 99;
+    }
+
+    var grupos = Model.Maquinas
+        .Select((maquina, index) => new
+        {
+            id = maquina.MaquinaID ?? 0,
+            content = $"<div class='grupo-maquina'><strong>{System.Net.WebUtility.HtmlEncode(Valor(maquina.MaquinaCodigo))}</strong><span>{System.Net.WebUtility.HtmlEncode(Valor(maquina.MaquinaNombre))}</span></div>",
+            order = maquina.MaquinaID.HasValue ? index + 1 : 0,
+            className = maquina.MaquinaID.HasValue ? "grupo-activo" : "grupo-sin-asignar"
+        })
+        .ToList();
+
+    var programas = Model.Maquinas
+        .SelectMany(maquina => maquina.Programas.Select(programa => new
+        {
+            id = programa.ProgramaProduccionID,
+            group = maquina.MaquinaID ?? 0,
+            start = programa.FechaInicioProgramada?.ToString("yyyy-MM-ddTHH:mm:ss"),
+            end = (programa.FechaFinProgramada ?? programa.FechaInicioProgramada?.AddHours(1))?.ToString("yyyy-MM-ddTHH:mm:ss"),
+            content = $"{Valor(programa.ReferenciaSAP ?? programa.NumeroParte)} · {Valor(programa.ClienteNombre)}",
+            title = $"{Valor(programa.ReferenciaSAP ?? programa.NumeroParte)} | {Valor(programa.DesignacionDescripcionSAP)} | Cliente: {Valor(programa.ClienteNombre)} | Molde: {Valor(programa.MoldeCodigo)} | Pendientes: {programa.CantidadPendiente:N0} | {programa.FechaInicioProgramada:dd/MM/yyyy HH:mm} - {programa.FechaFinProgramada:dd/MM/yyyy HH:mm}",
+            className = ClasePrograma(programa.EstatusID),
+            editable = PuedeEditar(programa.EstatusID),
+            estatus = programa.EstatusNombre,
+            referencia = Valor(programa.ReferenciaSAP ?? programa.NumeroParte),
+            cliente = Valor(programa.ClienteNombre),
+            molde = Valor(programa.MoldeCodigo),
+            pendientes = programa.CantidadPendiente,
+            horasProgramadas = programa.HorasProgramadas ?? 0
+        }))
+        .Where(x => !string.IsNullOrWhiteSpace(x.start) && !string.IsNullOrWhiteSpace(x.end))
+        .ToList();
+
+    var gruposJson = System.Text.Json.JsonSerializer.Serialize(grupos);
+    var programasJson = System.Text.Json.JsonSerializer.Serialize(programas);
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Programador semanal de máquinas</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+    <link href="https://unpkg.com/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --blue: #004aad;
+            --blue-dark: #063875;
+            --border: #d7e1ee;
+            --bg: #eef3f9;
+            --text: #1f2937;
+            --muted: #667085;
+            --green: #10804c;
+            --orange: #f79009;
+            --red: #b42318;
+            --purple: #7f56d9;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(0,74,173,.13), transparent 28%),
+                linear-gradient(180deg, #f8fbff, var(--bg));
+        }
+
+        .page {
+            max-width: 1920px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .hero {
+            padding: 26px 28px;
+            border-radius: 28px;
+            color: white;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            box-shadow: 0 22px 58px rgba(0,74,173,.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 999px;
+            right: -110px;
+            top: -150px;
+            background: rgba(255,255,255,.11);
+        }
+
+        .hero-content { position: relative; z-index: 2; }
+        .hero h1 { margin: 0; font-size: 1.75rem; font-weight: 950; }
+        .hero p { margin: 8px 0 0; color: rgba(255,255,255,.86); }
+
+        .btn-glass {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.14);
+            color: white;
+            text-decoration: none;
+            font-weight: 850;
+        }
+
+        .btn-glass:hover { background: white; color: var(--blue); }
+
+        .toolbar {
+            margin-top: 18px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: rgba(255,255,255,.94);
+            box-shadow: 0 12px 32px rgba(16,24,40,.08);
+        }
+
+        .toolbar .btn {
+            border-radius: 12px;
+            font-weight: 800;
+        }
+
+        .calendar-card {
+            margin-top: 18px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 16px 42px rgba(16,24,40,.09);
+            overflow: hidden;
+        }
+
+        .calendar-head {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .calendar-head h2 { margin: 0; color: var(--blue-dark); font-weight: 950; }
+        .calendar-body { padding: 0; }
+        #machineTimeline { height: 690px; }
+
+        .legend {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: .8rem;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 4px; }
+
+        .status-box {
+            margin-top: 14px;
+            min-height: 48px;
+            padding: 12px 15px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+        .status-box.success { background: #ecfdf3; border-color: #abefc6; color: #067647; }
+        .status-box.error { background: #fef3f2; border-color: #fecdca; color: #b42318; }
+        .status-box.working { background: #eef6ff; border-color: #b2ddff; color: #175cd3; }
+
+        .grupo-maquina { min-width: 165px; display: grid; gap: 2px; }
+        .grupo-maquina strong { color: var(--blue-dark); font-size: .9rem; }
+        .grupo-maquina span { color: var(--muted); font-size: .72rem; }
+
+        .vis-timeline { border: none; font-family: inherit; }
+        .vis-panel.vis-left { border-right: 1px solid var(--border); }
+        .vis-labelset .vis-label { border-bottom: 1px solid #edf1f6; background: #fbfdff; }
+        .vis-labelset .vis-label .vis-inner { padding: 11px 14px; }
+        .vis-foreground .vis-group { border-bottom: 1px solid #edf1f6; }
+        .vis-time-axis .vis-text { color: #475467; font-size: .72rem; font-weight: 800; }
+        .vis-time-axis .vis-grid.vis-minor { border-color: #edf1f6; }
+        .vis-time-axis .vis-grid.vis-major { border-color: #cbd5e1; }
+        .vis-current-time { background-color: #f04438; width: 2px; }
+
+        .vis-item {
+            border: 0;
+            border-radius: 10px;
+            color: white;
+            font-size: .72rem;
+            font-weight: 850;
+            box-shadow: 0 7px 16px rgba(16,24,40,.15);
+        }
+
+        if (!maquinaCompatible) {
+            await tx.RollbackAsync();
+            return Json(new {
+                ok = false,
+                requiereConfirmacion = true,
+                mensaje = $"No puedes mover este programa a la máquina {maquinaNuevaCodigo}, porque no está configurada como máquina principal ni sustituta para esta parte."
+            });
+        }
+
+        .vis-item .vis-item-content { padding: 6px 9px; }
+        .vis-item.programa-programado { background: linear-gradient(90deg, #175cd3, #2e90fa); }
+        .vis-item.programa-preparacion { background: linear-gradient(90deg, #dc6803, #f79009); }
+        .vis-item.programa-produccion { background: linear-gradient(90deg, #067647, #12b76a); }
+        .vis-item.programa-pausado { background: linear-gradient(90deg, #b42318, #f04438); }
+        .vis-item.programa-terminado { background: linear-gradient(90deg, #667085, #98a2b3); }
+        .vis-item.vis-selected { outline: 3px solid rgba(127,86,217,.35); }
+
+        .vis-item.turno-1 { background: rgba(23,92,211,.055); border: 0; box-shadow: none; }
+        .vis-item.turno-2 { background: rgba(247,144,9,.055); border: 0; box-shadow: none; }
+        .vis-item.turno-3 { background: rgba(127,86,217,.055); border: 0; box-shadow: none; }
+
+        .vis-item.programa-programado,
+        .vis-item.programa-preparacion,
+        .vis-item.programa-pausado {
+            cursor: grab !important;
+            pointer-events: auto !important;
+        }
+
+            .vis-item.programa-programado:active,
+            .vis-item.programa-preparacion:active,
+            .vis-item.programa-pausado:active {
+                cursor: grabbing !important;
+            }
+
+        .vis-item.vis-readonly {
+            cursor: not-allowed !important;
+            opacity: .75;
+        }
+
+        .grupo-sin-asignar { background: #fff7ed !important; }
+
+        .closure-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border-radius: 999px;
+            padding: 7px 11px;
+            background: #f2f4f7;
+            color: #475467;
+            font-size: .78rem;
+            font-weight: 850;
+        }
+
+        @@media (max-width: 900px) {
+            .page { padding: 14px; }
+            .hero { padding: 22px; border-radius: 22px; }
+            #machineTimeline { height: 620px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="hero">
+            <div class="hero-content d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h1><i class="fa-solid fa-calendar-week me-2"></i>Programador semanal de máquinas</h1>
+                    <p>
+                        Calendario libre por hora. Arrastra un programa para cambiar horario o máquina y usa sus extremos para ajustar la duración.
+                    </p>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-glass">
+                        <i class="fa-solid fa-arrow-left"></i>Tablero de máquinas
+                    </a>
+                    <a asp-controller="PlaneacionPrograma" asp-action="Index" class="btn-glass">
+                        <i class="fa-solid fa-list"></i>Programa general
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="toolbar">
+            <div class="row g-3 align-items-end">
+                <div class="col-xl-4">
+                    <div class="fw-bold text-primary">Semana operativa</div>
+                    <div class="text-muted small">
+                        @inicioSemana.ToString("dd/MM/yyyy HH:mm") — @finSemana.ToString("dd/MM/yyyy HH:mm")
+                    </div>
+                </div>
+
+                <div class="col-xl-5">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a asp-action="CalendarioMaquinas"
+                           asp-route-semana="@semanaAnterior.ToString("yyyy-MM-dd")"
+                           class="btn btn-outline-primary">
+                            <i class="fa-solid fa-chevron-left"></i> Semana anterior
+                        </a>
+
+                        <a asp-action="CalendarioMaquinas"
+                           asp-route-semana="@DateTime.Today.ToString("yyyy-MM-dd")"
+                           class="btn btn-primary">
+                            Hoy
+                        </a>
+
+                        <a asp-action="CalendarioMaquinas"
+                           asp-route-semana="@semanaSiguiente.ToString("yyyy-MM-dd")"
+                           class="btn btn-outline-primary">
+                            Semana siguiente <i class="fa-solid fa-chevron-right"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="col-xl-3">
+                    <label for="snapMinutes" class="form-label small fw-bold text-muted mb-1">Ajuste libre</label>
+                    <select id="snapMinutes" class="form-select">
+                        <option value="15">Cada 15 minutos</option>
+                        <option value="30" selected>Cada 30 minutos</option>
+                        <option value="60">Cada hora</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap align-items-center mt-3">
+                <button id="zoomIn" type="button" class="btn btn-light border"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                <button id="zoomOut" type="button" class="btn btn-light border"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                <button id="fitWeek" type="button" class="btn btn-light border"><i class="fa-solid fa-arrows-left-right"></i> Ver semana</button>
+                <span class="closure-note"><i class="fa-solid fa-lock"></i>Cierre oculto: sábado 15:00 a lunes 07:00</span>
+            </div>
+        </section>
+
+        <div id="calendarStatus" class="status-box">
+            Selecciona y arrastra un bloque. Los turnos solo son una referencia visual; no obligan a colocar el programa por turno completo.
+        </div>
+
+        <section class="calendar-card">
+            <div class="calendar-head">
+                <div>
+                    <h2 class="h5"><i class="fa-solid fa-industry me-2"></i>Máquinas por hora</h2>
+                    <div class="text-muted small">Lunes 07:00 a sábado 15:00. El cierre semanal no suma horas productivas.</div>
+                </div>
+
+                <div class="legend">
+                    <span class="legend-item"><span class="legend-dot" style="background:#175cd3"></span>Programado</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f79009"></span>Preparación</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#12b76a"></span>Producción</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f04438"></span>Pausado</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#98a2b3"></span>Terminado</span>
+                </div>
+            </div>
+
+            <div class="calendar-body">
+                <div id="machineTimeline"></div>
+            </div>
+        </section>
+
+        <div id="antiForgeryToken" class="d-none">
+            @Html.AntiForgeryToken()
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vis-data@7.1.9/peer/umd/vis-data.min.js"></script>
+    <script src="https://unpkg.com/vis-timeline@7.7.3/peer/umd/vis-timeline-graph2d.min.js"></script>
+
+    <script>
+        (() => {
+            const rawGroups = @Html.Raw(gruposJson);
+            const rawPrograms = @Html.Raw(programasJson);
+            const weekStart = parseLocalDate('@inicioSemana.ToString("yyyy-MM-ddTHH:mm:ss")');
+            const weekEnd = parseLocalDate('@finSemana.ToString("yyyy-MM-ddTHH:mm:ss")');
+            const saturdayClose = addDays(startOfDay(weekStart), 5);
+            saturdayClose.setHours(15, 0, 0, 0);
+
+            const statusBox = document.getElementById('calendarStatus');
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            let snapMinutes = 30;
+
+            function parseLocalDate(value) {
+                if (!value) return null;
+                const parts = value.split(/[-T:]/).map(Number);
+                return new Date(parts[0], parts[1] - 1, parts[2], parts[3] || 0, parts[4] || 0, parts[5] || 0);
+            }
+
+            function startOfDay(value) {
+                return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+            }
+
+            function addDays(value, days) {
+                const result = new Date(value);
+                result.setDate(result.getDate() + days);
+                return result;
+            }
+
+            function localIso(value) {
+                const pad = number => String(number).padStart(2, '0');
+                return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:00`;
+            }
+
+            function sameInstant(left, right) {
+                return Math.abs(new Date(left).getTime() - new Date(right).getTime()) < 1000;
+            }
+
+            function setStatus(message, type) {
+                statusBox.className = `status-box ${type || ''}`.trim();
+                statusBox.textContent = message;
+            }
+
+            function operationalInterval(date) {
+                const day = date.getDay();
+                const base = startOfDay(date);
+
+                if (day === 0) return null;
+
+                if (day === 1) {
+                    const open = new Date(base);
+                    open.setHours(7, 0, 0, 0);
+                    return { open, close: addDays(base, 1) };
+                }
+
+                if (day >= 2 && day <= 5) {
+                    return { open: base, close: addDays(base, 1) };
+                }
+
+                if (day === 6) {
+                    const close = new Date(base);
+                    close.setHours(15, 0, 0, 0);
+                    return { open: base, close };
+                }
+
+                return null;
+            }
+
+            function workingHours(start, end) {
+                let total = 0;
+                let day = startOfDay(start);
+                const last = startOfDay(end);
+
+                while (day <= last) {
+                    const interval = operationalInterval(day);
+                    if (interval) {
+                        const from = new Date(Math.max(start.getTime(), interval.open.getTime()));
+                        const to = new Date(Math.min(end.getTime(), interval.close.getTime()));
+                        if (to > from) total += (to - from) / 3600000;
+                    }
+                    day = addDays(day, 1);
+                }
+
+                return Math.round(total * 10000) / 10000;
+            }
+
+            function buildShiftBackgrounds() {
+                const backgrounds = [];
+                let id = 1;
+
+                for (let offset = 0; offset < 5; offset++) {
+                    const day = addDays(startOfDay(weekStart), offset);
+                    const shift1Start = new Date(day); shift1Start.setHours(7, 0, 0, 0);
+                    const shift1End = new Date(day); shift1End.setHours(15, 0, 0, 0);
+                    const shift2End = new Date(day); shift2End.setHours(23, 0, 0, 0);
+                    const shift3End = addDays(day, 1); shift3End.setHours(7, 0, 0, 0);
+
+                    backgrounds.push({ id: `bg_${id++}`, start: shift1Start, end: shift1End, type: 'background', className: 'turno-1', editable: false });
+                    backgrounds.push({ id: `bg_${id++}`, start: shift1End, end: shift2End, type: 'background', className: 'turno-2', editable: false });
+                    backgrounds.push({ id: `bg_${id++}`, start: shift2End, end: shift3End, type: 'background', className: 'turno-3', editable: false });
+                }
+
+                const saturday = addDays(startOfDay(weekStart), 5);
+                const saturdayStart = new Date(saturday); saturdayStart.setHours(7, 0, 0, 0);
+                const saturdayEnd = new Date(saturday); saturdayEnd.setHours(15, 0, 0, 0);
+                backgrounds.push({ id: `bg_${id++}`, start: saturdayStart, end: saturdayEnd, type: 'background', className: 'turno-1', editable: false });
+
+                return backgrounds;
+            }
+
+            const groups = new vis.DataSet(rawGroups);
+                   const programItems = rawPrograms.map(item => {
+            const puedeMover = item.editable === true || item.editable === "true";
+
+            return {
+                ...item,
+                start: parseLocalDate(item.start),
+                end: parseLocalDate(item.end),
+                editable: puedeMover
+                    ? {
+                        updateTime: true,
+                        updateGroup: true,
+                        remove: false
+                    }
+                    : false
+            };
+        });
+
+            const items = new vis.DataSet([
+                ...buildShiftBackgrounds(),
+                ...programItems
+            ]);
+
+            const container = document.getElementById('machineTimeline');
+
+            const options = {
+                start: weekStart,
+                end: weekEnd,
+                min: weekStart,
+                max: weekEnd,
+                orientation: { axis: 'top', item: 'top' },
+                stack: false,
+                showCurrentTime: true,
+                groupOrder: 'order',
+                groupHeightMode: 'fixed',
+                margin: { item: 8, axis: 8 },
+                zoomMin: 4 * 60 * 60 * 1000,
+                zoomMax: 8 * 24 * 60 * 60 * 1000,
+                timeAxis: { scale: 'hour', step: 1 },
+                hiddenDates: [
+                    { start: saturdayClose, end: weekEnd }
+                ],
+                        editable: {
+            add: false,
+            remove: false,
+            updateTime: true,
+            updateGroup: true,
+            overrideItems: false
+        },
+        itemsAlwaysDraggable: {
+            item: true,
+            range: true
+        },
+        selectable: true,
+        multiselect: false,
+                snap: date => {
+                    const ms = snapMinutes * 60 * 1000;
+                    return new Date(Math.round(date.getTime() / ms) * ms);
+                },
+                format: {
+                    minorLabels: { hour: 'HH:mm' },
+                    majorLabels: { hour: 'ddd DD/MM' }
+                },
+                onMove: async (movedItem, callback) => {
+                    const original = items.get(movedItem.id);
+                    if (!original || String(movedItem.id).startsWith('bg_')) {
+                        callback(null);
+                        return;
+                    }
+
+                    const startChanged = !sameInstant(movedItem.start, original.start);
+                    const endChanged = !sameInstant(movedItem.end, original.end);
+                    const resized = startChanged !== endChanged;
+
+                    const durationHours = resized
+                        ? workingHours(new Date(movedItem.start), new Date(movedItem.end))
+                        : workingHours(new Date(original.start), new Date(original.end));
+
+                    if (durationHours <= 0) {
+                        setStatus('La duración seleccionada no contiene horas operativas.', 'error');
+                        callback(null);
+                        return;
+                    }
+
+                    const machineId = Number(movedItem.group);
+                    if (!Number.isFinite(machineId) || machineId <= 0) {
+                        setStatus('Selecciona una máquina activa para colocar el programa.', 'error');
+                        callback(null);
+                        return;
+                    }
+
+                    setStatus('Validando horario, máquina, molde y cruces...', 'working');
+
+                    const payload = {
+                        programaProduccionID: Number(movedItem.id),
+                        maquinaID: machineId,
+                        inicio: localIso(new Date(movedItem.start)),
+                        duracionBloqueHoras: durationHours,
+                        redimensionado: resized,
+                        forzarMaquina: false
+                    };
+
+                    try {
+                        let result = await saveMove(payload);
+
+                               if (result.requiereConfirmacion) {
+            setStatus(result.mensaje || 'No puedes mover este programa a esa máquina porque no es principal ni sustituta.', 'error');
+            callback(null);
+            return;
+        }
+
+                        if (!result.ok) {
+                            setStatus(result.mensaje || 'No fue posible guardar el movimiento.', 'error');
+                            callback(null);
+                            return;
+                        }
+
+                        movedItem.start = parseLocalDate(result.inicio);
+                        movedItem.end = parseLocalDate(result.fin);
+                        movedItem.group = Number(result.maquinaID);
+                        movedItem.horasProgramadas = result.horasProgramadas;
+
+                        setStatus(result.mensaje, 'success');
+                        callback(movedItem);
+                    }
+                    catch (error) {
+                        setStatus('Error al comunicarse con el servidor: ' + error.message, 'error');
+                        callback(null);
+                    }
+                }
+            };
+
+            const timeline = new vis.Timeline(container, items, groups, options);
+
+            async function saveMove(payload) {
+                const response = await fetch('@Url.Action("ReprogramarCalendario", "PlaneacionPrograma")', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                return await response.json();
+            }
+
+            document.getElementById('snapMinutes').addEventListener('change', event => {
+                snapMinutes = Number(event.target.value) || 30;
+                setStatus(`Ajuste libre cambiado a bloques de ${snapMinutes} minuto(s).`, 'success');
+            });
+
+            document.getElementById('zoomIn').addEventListener('click', () => timeline.zoomIn(.35));
+            document.getElementById('zoomOut').addEventListener('click', () => timeline.zoomOut(.35));
+            document.getElementById('fitWeek').addEventListener('click', () => timeline.setWindow(weekStart, weekEnd, { animation: true }));
+
+            timeline.on('select', properties => {
+                if (!properties.items.length) return;
+                const selected = items.get(properties.items[0]);
+                if (!selected || String(selected.id).startsWith('bg_')) return;
+
+                setStatus(
+                    `${selected.referencia} · ${selected.cliente} · Molde ${selected.molde} · ${selected.pendientes.toLocaleString('es-MX')} piezas pendientes · ${selected.estatus}`,
+                    ''
+                );
+            });
+        })();
+    </script>
+</body>
+</html>

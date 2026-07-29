@@ -41,19 +41,33 @@
     };
 }
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-nsq-theme="dark">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@titulo - NS Quell</title>
+
+    <!-- ALMACEN_TEMA_NSQ_V1_0: evita destello de tema incorrecto -->
+    <script>
+        (function () {
+            var theme = 'dark';
+            try {
+                theme = localStorage.getItem('nsq-theme') === 'light' ? 'light' : 'dark';
+            } catch (_) { }
+            document.documentElement.setAttribute('data-nsq-theme', theme);
+        })();
+    </script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-    <link rel="stylesheet" href="~/css/pages/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
 </head>
 <body>
     <header class="alm-shell-header">
         <div class="alm-shell-navbar">
-            <a href="/Menu/Index" class="alm-shell-brand" aria-label="Ir al menú principal">
+            <a href="/Menu/Grupo/1" class="alm-shell-brand" aria-label="Ir al menú principal">
                 @if (!string.IsNullOrWhiteSpace(logoEmpresa) && logoEmpresa != "default-logo.png")
                 {
                     <img src="~/imagenes/@logoEmpresa"
@@ -74,6 +88,18 @@
             </a>
 
             <div class="alm-shell-right">
+                <!-- ALMACEN_TEMA_NSQ_V1_0: selector sincronizado con el ERP -->
+                <button type="button"
+                        class="alm-theme-toggle"
+                        id="almThemeToggle"
+                        aria-label="Cambiar tema"
+                        title="Cambiar tema">
+                    <span class="alm-theme-toggle__icon" aria-hidden="true">
+                        <i class="fa-solid fa-sun" id="almThemeToggleIcon"></i>
+                    </span>
+                    <span class="alm-theme-toggle__text" id="almThemeToggleText">Claro</span>
+                </button>
+
                 <nav class="alm-shell-shortcuts" aria-label="Accesos rápidos de Almacén">
                     <a href="/Menu/Grupo/1"
                        class="alm-shell-shortcut @(seccionActual == "Almacenes" ? "active" : string.Empty)"
@@ -168,6 +194,58 @@
     </main>
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- ALMACEN_TEMA_NSQ_V1_0: persistencia claro/oscuro -->
+    <script>
+        (() => {
+            const storageKey = 'nsq-theme';
+            const root = document.documentElement;
+            const button = document.getElementById('almThemeToggle');
+            const icon = document.getElementById('almThemeToggleIcon');
+            const text = document.getElementById('almThemeToggleText');
+
+            const normalize = value => value === 'light' ? 'light' : 'dark';
+
+            const apply = value => {
+                const theme = normalize(value);
+                root.setAttribute('data-nsq-theme', theme);
+                document.body.classList.remove('nsq-theme-light', 'nsq-theme-dark');
+                document.body.classList.add(theme === 'light' ? 'nsq-theme-light' : 'nsq-theme-dark');
+
+                try {
+                    localStorage.setItem(storageKey, theme);
+                } catch (_) { }
+
+                if (icon) {
+                    icon.className = theme === 'light' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+                }
+
+                if (text) {
+                    text.textContent = theme === 'light' ? 'Oscuro' : 'Claro';
+                }
+
+                if (button) {
+                    const label = theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro';
+                    button.setAttribute('aria-label', label);
+                    button.setAttribute('title', label);
+                }
+            };
+
+            let savedTheme = 'dark';
+            try {
+                savedTheme = localStorage.getItem(storageKey) || 'dark';
+            } catch (_) { }
+
+            apply(savedTheme);
+
+            if (button && button.dataset.themeReady !== '1') {
+                button.dataset.themeReady = '1';
+                button.addEventListener('click', () => {
+                    const current = root.getAttribute('data-nsq-theme') || 'dark';
+                    apply(current === 'light' ? 'dark' : 'light');
+                });
+            }
+        })();
+    </script>
     <script>
         (() => {
             const button = document.getElementById('almacenBackButton');
@@ -186,26 +264,6 @@
         })();
     </script>
     @await RenderSectionAsync("Scripts", required: false)
-    <script>
-        // MARCA_ALMACEN_RUNTIME
-        document.addEventListener("DOMContentLoaded", function () {
-            const root = document.querySelector("header") || document.querySelector("nav");
-            if (!root) return;
-
-            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-            const nodes = [];
-
-            while (walker.nextNode()) {
-                nodes.push(walker.currentNode);
-            }
-
-            nodes.forEach(function (node) {
-                node.nodeValue = node.nodeValue
-                    .replace(/NS\s+GROUP/gi, "NS QUELL")
-                    .replace(/ERP\s+SUITE/gi, "ALMACÉN");
-            });
-        });
-    </script>
 <!-- ALMACEN_REVISION_V8_START -->
 <script>
 (() => {
@@ -334,6 +392,9 @@
 <!-- ALMACEN_REVISION_V8_END -->
 </body>
 </html>
+
+
+
 
 
 

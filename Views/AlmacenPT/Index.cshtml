@@ -1,7 +1,38 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTIndexVm
 @{
-    Layout = "~/Views/Shared/_Layout.cshtml";
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = "Inventario PT";
+
+    // ALMACEN_PT_AGRUPACION_CLIENTES_V1_0
+    // ALMACEN_PT_CLIENTE_CANONICO_V1_5
+    string NombreClienteCatalogo(string? nombre)
+    {
+        var valor = string.IsNullOrWhiteSpace(nombre)
+            ? "Sin cliente"
+            : nombre.Trim();
+
+        if (valor.Equals("A&P", System.StringComparison.OrdinalIgnoreCase))
+            return "A&P SOLUTIONS";
+
+        return valor;
+    }
+
+    var gruposClientes = Model.Existencias
+        .GroupBy(
+            x => NombreClienteCatalogo(x.Cliente),
+            System.StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x.Key)
+        .ToList();
+
+    string InicialCliente(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre) || nombre == "Sin cliente")
+            return "?";
+
+        return nombre.Trim().Substring(0, 1).ToUpperInvariant();
+    }
+
+    string IdCliente(int index) => $"pt_cliente_{index}";
 }
 
 <section class="alm-hero">
@@ -9,8 +40,8 @@
         <small>PRODUCTO TERMINADO</small>
         <h1>Inventario PT</h1>
         <p>
-            Inventario por número de parte. La existencia representa las piezas físicamente registradas;
-            las piezas retenidas permanecen bloqueadas por calidad.
+            Inventario de producto terminado organizado por cliente. Cada grupo concentra
+            sus números de parte, existencia física, solicitado pendiente y trazabilidad.
         </p>
     </div>
 
@@ -38,159 +69,320 @@
     <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
 }
 
+<!-- ALMACEN_PT_KPIS_OPERATIVOS_V1_0 -->
 <section class="alm-grid alm-grid-6">
-    <div class="alm-kpi"><small>Números de parte</small><strong>@Model.TotalPartes</strong></div>
-    <div class="alm-kpi"><small>Existencia total</small><strong>@Model.PiezasFisicas</strong></div>
-    <div class="alm-kpi"><small>Retenido por calidad</small><strong>@Model.PiezasRetenidas</strong></div>
-    <div class="alm-kpi"><small>Stock disponible</small><strong>@Model.PiezasDisponibles</strong></div>
-    <div class="alm-kpi"><small>Crítico / aviso</small><strong>@Model.Criticos / @Model.Advertencias</strong></div>
-    <div class="alm-kpi"><small>Sin configurar</small><strong>@Model.PendientesConfiguracion</strong></div>
+    <div class="alm-kpi alm-kpi-demand">
+        <small>Solicitado pendiente</small>
+        <strong>
+            @(Model.PiezasSolicitadasPendientes > 0
+                ? $"-{Model.PiezasSolicitadasPendientes:N0}"
+                : "0")
+        </strong>
+        <span class="alm-kpi-note">Piezas de OF programadas todavía no recibidas.</span>
+    </div>
+
+    <div class="alm-kpi">
+        <small>OF pendientes PT</small>
+        <strong>@Model.OFPendientesRecepcion.ToString("N0")</strong>
+        <span class="alm-kpi-note">Órdenes con producto pendiente de ingresar.</span>
+    </div>
+
+    <div class="alm-kpi">
+        <small>Cajas recibidas hoy</small>
+        <strong>@Model.CajasRecibidasHoy.ToString("N0")</strong>
+        <span class="alm-kpi-note">Cajas escaneadas con movimiento de entrada.</span>
+    </div>
+
+    <div class="alm-kpi">
+        <small>Piezas recibidas hoy</small>
+        <strong>@Model.PiezasRecibidasHoy.ToString("N0")</strong>
+        <span class="alm-kpi-note">Total ingresado desde Producción.</span>
+    </div>
+
+    <div class="alm-kpi alm-kpi-out">
+        <small>Salidas de hoy</small>
+        <strong>
+            @(Model.PiezasSalidasHoy > 0
+                ? $"-{Model.PiezasSalidasHoy:N0}"
+                : "0")
+        </strong>
+        <span class="alm-kpi-note">Salidas y embarques registrados hoy.</span>
+    </div>
+
+    <div class="alm-kpi alm-kpi-critical">
+        <small>Partes críticas</small>
+        <strong>@Model.Criticos.ToString("N0")</strong>
+        <span class="alm-kpi-note">Partes en semáforo rojo.</span>
+    </div>
 </section>
 
-<section class="alm-card">
+<section class="alm-card pt-client-catalog">
     <header>
-        <span>Existencias PT</span>
-        <span>Catálogo base: ERP_Partes</span>
+        <span>
+            <i class="fa-solid fa-users-rectangle"></i>
+            Catálogo PT por cliente
+        </span>
+        <span id="ptClientSummary">
+            @Model.Existencias.Count.ToString("N0") parte@(Model.Existencias.Count == 1 ? "" : "s")
+            · @gruposClientes.Count.ToString("N0") cliente@(gruposClientes.Count == 1 ? "" : "s")
+        </span>
     </header>
 
-    <form method="get" class="alm-filter">
+    <form method="get" class="alm-filter pt-client-filter">
         <div class="alm-field">
-            <label for="q">Número de parte</label>
+            <label for="q">Número de parte, descripción o cliente</label>
             <input id="q"
                    class="alm-input"
                    type="search"
                    name="q"
                    value="@Model.Busqueda"
                    list="inventario-pt-opciones"
-                   placeholder="Escribe o selecciona una parte"
+                   placeholder="Escribe una parte, descripción o cliente"
                    autocomplete="off" />
 
             <datalist id="inventario-pt-opciones">
                 @foreach (var item in Model.Existencias)
                 {
-                    <option value="@item.NumeroParte">@item.NumeroParte · @item.Descripcion</option>
+                    <option value="@item.NumeroParte">
+                        @item.NumeroParte · @item.Descripcion · @item.Cliente
+                    </option>
                 }
             </datalist>
         </div>
 
-        <select class="alm-select" name="estado">
-            <option value="">Todos los niveles de stock</option>
-            <option value="ROJO">Crítico</option>
-            <option value="AMARILLO">Aviso</option>
-            <option value="VERDE">Disponible</option>
-            <option value="SIN_CONFIGURAR">Sin configurar</option>
-        </select>
+        <div class="alm-field">
+            <label for="estado">Nivel de stock</label>
+            <select id="estado" class="alm-select" name="estado">
+                <option value="" selected="@(string.IsNullOrWhiteSpace(Model.Estado))">Todos los niveles</option>
+                <option value="ROJO" selected="@(Model.Estado == "ROJO")">Crítico</option>
+                <option value="AMARILLO" selected="@(Model.Estado == "AMARILLO")">Aviso</option>
+                <option value="VERDE" selected="@(Model.Estado == "VERDE")">Disponible</option>
+                <option value="SIN_CONFIGURAR" selected="@(Model.Estado == "SIN_CONFIGURAR")">Sin configurar</option>
+            </select>
+        </div>
 
-        <button class="alm-btn">Filtrar</button>
+        <div class="alm-field">
+            <label for="ptClientFilter">Cliente visible</label>
+            <select id="ptClientFilter" class="alm-select">
+                <option value="">Todos los clientes</option>
+                @foreach (var grupo in gruposClientes)
+                {
+                    <option value="@grupo.Key">@grupo.Key (@grupo.Count())</option>
+                }
+            </select>
+        </div>
+
+        <button class="alm-btn" type="submit">
+            <i class="fa-solid fa-filter"></i>
+            Filtrar
+        </button>
+
+        <a class="alm-btn secondary" asp-action="Index">
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            Limpiar
+        </a>
     </form>
 
-    <div class="alm-table-wrap alm-table-wrap-fit">
-        <table class="alm-table alm-table-fit alm-table-pt-final-v2">
-            <colgroup>
-                <col class="pt2-col-part" />
-                <col class="pt2-col-description" />
-                <col class="pt2-col-client" />
-                <col class="pt2-col-stock" />
-                <col class="pt2-col-retained" />
-                <col class="pt2-col-price" />
-                <col class="pt2-col-actions" />
-            </colgroup>
+    @if (gruposClientes.Any())
+    {
+        <div class="pt-client-list" id="ptClientList">
+            @{
+                var clienteIndex = 0;
+            }
 
-            <thead>
-                <tr>
-                    <th>Número de parte</th>
-                    <th>Descripción</th>
-                    <th>Cliente</th>
-                    <th>Existencia</th>
-                    <th>Retenido</th>
-                    <th>Precio venta</th>
-                    <th aria-label="Acciones"></th>
-                </tr>
-            </thead>
+            @foreach (var grupo in gruposClientes)
+            {
+                clienteIndex++;
 
-            <tbody>
-                @foreach (var x in Model.Existencias)
-                {
-                    <tr>
-                        <td>
-                            <a class="pt-part-link"
-                               asp-action="Historial"
-                               asp-route-parte="@x.NumeroParte"
-                               title="Ver trazabilidad de @x.NumeroParte">
-                                <strong>@x.NumeroParte</strong>
-                                <small>@x.Cajas caja(s)</small>
-                            </a>
-                        </td>
+                var collapseId = IdCliente(clienteIndex);
+                var partesCliente = grupo
+                    .OrderBy(x => x.NumeroParte)
+                    .ThenBy(x => x.Descripcion)
+                    .ToList();
 
-                        <td>
-                            <a class="pt-truncate-link"
-                               asp-action="Historial"
-                               asp-route-parte="@x.NumeroParte"
-                               title="@x.Descripcion">
-                                @x.Descripcion
-                            </a>
-                        </td>
+                var existenciaCliente = partesCliente.Sum(x => (long)x.SaldoFisico);
+                var disponibleCliente = partesCliente.Sum(x => (long)x.Disponible);
+                var solicitadoCliente = partesCliente.Sum(x => x.Solicitado);
+                var criticasCliente = partesCliente.Count(x => x.Semaforo == "ROJO");
 
-                        <td>
-                            <span class="pt-truncate" title="@x.Cliente">@x.Cliente</span>
-                        </td>
-
-                        <td class="pt-stock"
-                            title="Existencia física: @x.SaldoFisico · Disponible real: @x.Disponible">
-                            <span class="pt-stock-badge @x.Semaforo"
-                                  title="Existencia física: @x.SaldoFisico · Disponible real: @x.Disponible">
-                                <strong>@x.SaldoFisico</strong>
+                <article class="pt-client-card"
+                         data-pt-client-card
+                         data-client="@grupo.Key"
+                         data-part-count="@partesCliente.Count">
+                    <button type="button"
+                            class="pt-client-head"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#@collapseId"
+                            aria-expanded="false"
+                            aria-controls="@collapseId">
+                        <span class="pt-client-head-main">
+                            <span class="pt-client-avatar" aria-hidden="true">
+                                @InicialCliente(grupo.Key)
                             </span>
-                        </td>
 
-                        <td class="pt-number">@x.Retenido</td>
+                            <span class="pt-client-copy">
+                                <strong>@grupo.Key</strong>
+                                <small>
+                                    @partesCliente.Count.ToString("N0") número@(partesCliente.Count == 1 ? "" : "s") de parte
+                                </small>
+                            </span>
+                        </span>
 
-                        <td class="pt-price"
-                            title="@(x.TienePrecioVenta
-                                ? $"Unidad: {x.UnidadPrecioVenta} · Fuente: {x.FuentePrecioVenta}"
-                                : "Sin precio asignado")">
-                            @if (x.TienePrecioVenta)
+                        <span class="pt-client-metrics">
+                            <span class="pt-client-pill">
+                                <small>Partes</small>
+                                <strong>@partesCliente.Count.ToString("N0")</strong>
+                            </span>
+                            <span class="pt-client-pill">
+                                <small>Existencia</small>
+                                <strong>@existenciaCliente.ToString("N0")</strong>
+                            </span>
+                            <span class="pt-client-pill is-available">
+                                <small>Disponible</small>
+                                <strong>@disponibleCliente.ToString("N0")</strong>
+                            </span>
+                            <span class="pt-client-pill @(solicitadoCliente > 0 ? "is-demand" : string.Empty)">
+                                <small>Solicitado</small>
+                                <strong>@solicitadoCliente.ToString("N0")</strong>
+                            </span>
+                            @if (criticasCliente > 0)
                             {
-                                <strong>@x.PrecioVentaUnitario.ToString("N2")</strong>
-                                <small>@x.MonedaPrecioVenta</small>
+                                <span class="pt-client-pill is-critical">
+                                    <small>Críticas</small>
+                                    <strong>@criticasCliente.ToString("N0")</strong>
+                                </span>
                             }
-                            else
-                            {
-                                <span class="pt-empty-value">—</span>
-                            }
-                        </td>
+                            <span class="pt-client-chevron" aria-hidden="true">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </span>
+                        </span>
+                    </button>
 
-                        <td>
-                            <div class="pt-actions">
-                                <a class="pt-action"
-                                   asp-action="Movimiento"
-                                   asp-route-parteId="@x.ParteID"
-                                   title="Registrar movimiento"
-                                   aria-label="Registrar movimiento">
-                                    <i class="fa-solid fa-arrow-right-arrow-left"></i>
-                                </a>
+                    <div id="@collapseId" class="collapse">
+                        <div class="pt-client-body">
+                            <div class="alm-table-wrap pt-client-table-wrap">
+                                <table class="alm-table alm-table-fit pt-client-table">
+                                    <colgroup>
+                                        <col class="ptc-col-part" />
+                                        <col class="ptc-col-description" />
+                                        <col class="ptc-col-stock" />
+                                        <col class="ptc-col-requested" />
+                                        <col class="ptc-col-last" />
+                                        <col class="ptc-col-actions" />
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>Número de parte</th>
+                                            <th>Descripción</th>
+                                            <th>Existencia</th>
+                                            <th>Solicitado</th>
+                                            <th>Último movimiento</th>
+                                            <th aria-label="Acciones"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var x in partesCliente)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <a class="pt-part-link"
+                                                       asp-action="Historial"
+                                                       asp-route-parte="@x.NumeroParte"
+                                                       title="Ver trazabilidad de @x.NumeroParte">
+                                                        <strong>@x.NumeroParte</strong>
+                                                        <small>@x.Cajas caja(s)</small>
+                                                    </a>
+                                                </td>
 
-                                <a class="pt-action"
-                                   asp-action="Configurar"
-                                   asp-route-id="@x.ParteID"
-                                   title="Configurar niveles de stock"
-                                   aria-label="Configurar niveles de stock">
-                                    <i class="fa-solid fa-sliders"></i>
-                                </a>
+                                                <td>
+                                                    <a class="pt-truncate-link"
+                                                       asp-action="Historial"
+                                                       asp-route-parte="@x.NumeroParte"
+                                                       title="@x.Descripcion">
+                                                        @x.Descripcion
+                                                    </a>
+                                                </td>
+
+                                                <td class="pt-stock"
+                                                    title="Existencia física: @x.SaldoFisico PZA · Disponible real: @x.Disponible PZA">
+                                                    <span class="pt-stock-badge @x.Semaforo"
+                                                          title="Existencia física: @x.SaldoFisico PZA · Disponible real: @x.Disponible PZA">
+                                                        <strong>@x.SaldoFisico.ToString("N0") PZA</strong>
+                                                    </span>
+                                                </td>
+
+                                                <td class="pt-requested">
+                                                    @if (x.Solicitado > 0)
+                                                    {
+                                                        <strong>-@x.Solicitado.ToString("N0") PZA</strong>
+                                                        <small>Pendiente</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="pt-empty-value">0 PZA</span>
+                                                    }
+                                                </td>
+
+                                                <td class="pt-last-movement">
+                                                    @if (x.UltimoMovimiento.HasValue)
+                                                    {
+                                                        <strong>@x.UltimoMovimiento.Value.ToString("dd/MM/yyyy")</strong>
+                                                        <small>@x.UltimoMovimiento.Value.ToString("HH:mm")</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="pt-empty-value">Sin movimientos</span>
+                                                    }
+                                                </td>
+
+                                                <td>
+                                                    <div class="pt-actions">
+                                                        <a class="pt-action"
+                                                           asp-action="Movimiento"
+                                                           asp-route-parteId="@x.ParteID"
+                                                           title="Registrar movimiento"
+                                                           aria-label="Registrar movimiento">
+                                                            <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                                                        </a>
+
+                                                        <a class="pt-action"
+                                                           asp-action="Configurar"
+                                                           asp-route-id="@x.ParteID"
+                                                           title="Configurar niveles de stock"
+                                                           aria-label="Configurar niveles de stock">
+                                                            <i class="fa-solid fa-sliders"></i>
+                                                        </a>
+                                                        <!-- ALMACEN_PT_HISTORIAL_ACCION_V1_1 -->
+                                                        <a class="pt-action pt-action-history"
+                                                           asp-action="Historial"
+                                                           asp-route-parte="@x.NumeroParte"
+                                                           title="Ver historial de movimientos"
+                                                           aria-label="Ver historial de movimientos">
+                                                            <i class="fa-solid fa-clock-rotate-left"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
                             </div>
-                        </td>
-                    </tr>
-                }
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
 
-                @if (!Model.Existencias.Any())
-                {
-                    <tr>
-                        <td colspan="7" class="alm-empty">No hay existencias PT registradas.</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+        <div class="alm-empty pt-client-no-results" id="ptClientNoResults" hidden>
+            No hay partes para el cliente seleccionado.
+        </div>
+    }
+    else
+    {
+        <div class="alm-empty">
+            No hay existencias PT registradas para los filtros seleccionados.
+        </div>
+    }
 </section>
 
 <section class="alm-card">
@@ -211,7 +403,6 @@
                     <th>Etiqueta</th>
                     <th>Tipo</th>
                     <th>Cantidad</th>
-                    <th>Calidad</th>
                     <th>Ubicación</th>
                     <th>OF</th>
                 </tr>
@@ -232,7 +423,6 @@
                         <td>@x.Etiqueta</td>
                         <td>@x.TipoMovimiento</td>
                         <td>@x.Cantidad</td>
-                        <td>@x.EstadoCalidad</td>
                         <td>@x.Ubicacion</td>
                         <td>@x.NumeroOF</td>
                     </tr>
@@ -249,4 +439,59 @@
     </div>
 </section>
 
+@section Scripts {
+    <script>
+        (() => {
+            const select = document.getElementById('ptClientFilter');
+            const cards = Array.from(document.querySelectorAll('[data-pt-client-card]'));
+            const summary = document.getElementById('ptClientSummary');
+            const noResults = document.getElementById('ptClientNoResults');
 
+            if (!select || cards.length === 0) return;
+
+            const normalize = value => (value || '')
+                .toString()
+                .toLocaleLowerCase('es-MX')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+
+            const applyClientFilter = () => {
+                const selected = normalize(select.value);
+                let visibleClients = 0;
+                let visibleParts = 0;
+
+                cards.forEach(card => {
+                    const client = normalize(card.dataset.client);
+                    const visible = !selected || client === selected;
+                    card.hidden = !visible;
+
+                    if (visible) {
+                        visibleClients++;
+                        visibleParts += Number(card.dataset.partCount || 0);
+
+                        if (selected && window.bootstrap) {
+                            const collapseElement = card.querySelector('.collapse');
+                            if (collapseElement) {
+                                bootstrap.Collapse.getOrCreateInstance(collapseElement, { toggle: false }).show();
+                            }
+                        }
+                    }
+                });
+
+                if (summary) {
+                    summary.textContent =
+                        `${visibleParts.toLocaleString('es-MX')} ${visibleParts === 1 ? 'parte' : 'partes'} · ` +
+                        `${visibleClients.toLocaleString('es-MX')} ${visibleClients === 1 ? 'cliente' : 'clientes'}`;
+                }
+
+                if (noResults) {
+                    noResults.hidden = visibleClients !== 0;
+                }
+            };
+
+            select.addEventListener('change', applyClientFilter);
+            applyClientFilter();
+        })();
+    </script>
+}
