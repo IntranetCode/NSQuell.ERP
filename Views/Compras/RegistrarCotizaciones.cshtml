@@ -2,6 +2,13 @@
 
 @{
     ViewData["Title"] = "Registrar cotizaciones";
+
+    var returnTo = ViewBag.ReturnTo as string ?? Context.Request.Query["returnTo"].ToString();
+
+    if (string.IsNullOrWhiteSpace(returnTo) && Context.Request.HasFormContentType)
+    {
+        returnTo = Context.Request.Form["returnTo"].ToString();
+    }
 }
 
 @section Styles {
@@ -299,6 +306,7 @@
         <a asp-controller="Compras"
            asp-action="DetalleSolicitud"
            asp-route-id="@Model.SolicitudCompraID"
+           asp-route-returnTo="@returnTo"
            class="erp-btn-back">
             ← Regresar
         </a>
@@ -329,6 +337,7 @@
                     <a asp-controller="Compras"
                        asp-action="DetalleSolicitud"
                        asp-route-id="@Model.SolicitudCompraID"
+                       asp-route-returnTo="@returnTo"
                        class="btn-compras-secondary">
                         Ver detalle
                     </a>
@@ -352,6 +361,7 @@
                   method="post"
                   enctype="multipart/form-data">
                 @Html.AntiForgeryToken()
+                <input type="hidden" name="returnTo" value="@returnTo" />
 
                 <input type="hidden" name="SolicitudCompraID" value="@Model.SolicitudCompraID" />
 

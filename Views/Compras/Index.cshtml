@@ -6,6 +6,7 @@
     var puedeVerBandejaCompras = (bool)(ViewBag.PuedeVerBandejaCompras ?? false);
     var puedeVerBandejaDireccion = (bool)(ViewBag.PuedeVerBandejaDireccion ?? false);
     var puedeVerBandejaAlmacen = (bool)(ViewBag.PuedeVerBandejaAlmacen ?? false);
+    var puedeVerSeguimientoDireccion = (bool)(ViewBag.PuedeVerSeguimientoDireccion ?? puedeVerBandejaDireccion);
     var puedeVerAlgunaBandeja = puedeVerBandejaCompras || puedeVerBandejaDireccion || puedeVerBandejaAlmacen;
 }
 
@@ -594,7 +595,7 @@
     }
 
     <div class="erp-page-breadcrumb">
-        <a href="javascript:history.back()" class="erp-btn-back">← Regresar</a>
+        <a href="/" class="erp-btn-back">← Inicio</a>
         <span>Inicio</span>
         <span>›</span>
         <strong>Compras</strong>
@@ -619,7 +620,11 @@
     </section>
 
     <div class="compras-actions-row">
-        <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+        <a href="/" class="btn-compras-secondary">
+            ← Inicio
+        </a>
+
+        <a asp-controller="Compras" asp-action="CrearSolicitud" asp-route-returnTo="Index" class="btn-compras-main">
             + Nueva solicitud
         </a>
 
@@ -641,6 +646,13 @@
             </a>
         }
 
+        @if (puedeVerSeguimientoDireccion)
+        {
+            <a asp-controller="Compras" asp-action="SeguimientoDireccion" class="btn-compras-secondary">
+                Seguimiento Dirección
+            </a>
+        }
+
         @if (puedeVerBandejaAlmacen)
         {
             <a asp-controller="Compras" asp-action="BandejaAlmacen" class="btn-compras-secondary">
@@ -655,64 +667,6 @@
             </a>
         }
     </div>
-
-    <section class="compras-grid">
-        <div class="compras-card">
-            <div class="compras-card-icon orange">SC</div>
-            <div class="compras-card-label">Pendientes</div>
-            <div class="compras-card-number">@Model.SolicitudesPendientes</div>
-            <p class="compras-card-title">Solicitudes nuevas por revisar</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon blue">RV</div>
-            <div class="compras-card-label">En revisión</div>
-            <div class="compras-card-number">@Model.SolicitudesEnRevision</div>
-            <p class="compras-card-title">Validación de compras</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon green">OK</div>
-            <div class="compras-card-label">Aprobadas</div>
-            <div class="compras-card-number">@Model.SolicitudesAprobadas</div>
-            <p class="compras-card-title">Listas para orden de compra</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon red">NO</div>
-            <div class="compras-card-label">Rechazadas</div>
-            <div class="compras-card-number">@Model.SolicitudesRechazadas</div>
-            <p class="compras-card-title">Solicitudes no autorizadas</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon orange">OC</div>
-            <div class="compras-card-label">Órdenes</div>
-            <div class="compras-card-number">@Model.OrdenesPendientes</div>
-            <p class="compras-card-title">Órdenes pendientes</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon blue">$</div>
-            <div class="compras-card-label">Pagos</div>
-            <div class="compras-card-number">@Model.OrdenesEnEsperaPago</div>
-            <p class="compras-card-title">En espera de comprobante</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon green">RC</div>
-            <div class="compras-card-label">Recepción</div>
-            <div class="compras-card-number">@Model.RecepcionesPendientes</div>
-            <p class="compras-card-title">Material pendiente por recibir</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon purple">PR</div>
-            <div class="compras-card-label">Proveedores</div>
-            <div class="compras-card-number">@Model.ProveedoresActivos</div>
-            <p class="compras-card-title">Proveedores activos</p>
-        </div>
-    </section>
 
     <section class="compras-section">
         <div class="compras-section-header">
@@ -835,6 +789,7 @@
                                     <a asp-controller="Compras"
                                        asp-action="DetalleSolicitud"
                                        asp-route-id="@item.SolicitudCompraID"
+                                       asp-route-returnTo="Index"
                                        class="btn-table">
                                         Abrir →
                                     </a>
@@ -850,7 +805,7 @@
             <div class="compras-empty">
                 Aún no hay solicitudes registradas.
                 <br /><br />
-                <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+                <a asp-controller="Compras" asp-action="CrearSolicitud" asp-route-returnTo="Index" class="btn-compras-main">
                     Crear primera solicitud
                 </a>
             </div>

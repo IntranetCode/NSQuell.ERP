@@ -3,6 +3,21 @@
 @{
     ViewData["Title"] = "Nueva solicitud de compra";
 
+    var returnTo = Context.Request.Query["returnTo"].ToString();
+
+    if (string.IsNullOrWhiteSpace(returnTo) && Context.Request.HasFormContentType)
+    {
+        returnTo = Context.Request.Form["returnTo"].ToString();
+    }
+
+    var regresarCrearAction = string.Equals(returnTo, "Solicitudes", StringComparison.OrdinalIgnoreCase)
+        ? "Solicitudes"
+        : "Index";
+
+    var regresarCrearTexto = regresarCrearAction == "Solicitudes"
+        ? "← Solicitudes"
+        : "← Panel compras";
+
     var materialesJson = System.Text.Json.JsonSerializer.Serialize(
         Model.MaterialesCatalogo.Select(m => new
         {
@@ -361,7 +376,7 @@
 <div class="crear-solicitud-page">
 
     <div class="erp-page-breadcrumb">
-        <a href="javascript:history.back()" class="erp-btn-back">← Regresar</a>
+        <a asp-controller="Compras" asp-action="@regresarCrearAction" class="erp-btn-back">@regresarCrearTexto</a>
         <span>Inicio</span>
         <span>›</span>
         <span>Compras</span>
@@ -393,6 +408,7 @@
 
     <form asp-controller="Compras" asp-action="CrearSolicitud" method="post" id="formCrearSolicitud">
         @Html.AntiForgeryToken()
+        <input type="hidden" name="returnTo" value="@returnTo" />
 
         <input type="hidden" asp-for="OrigenSolicitud" value="Almacen" />
         <input type="hidden" asp-for="AlmacenID" value="" />
@@ -606,7 +622,7 @@
 
                 <div class="col-12 col-lg-6">
                     <div class="d-flex justify-content-lg-end gap-2 flex-wrap">
-                        <a asp-controller="Compras" asp-action="Solicitudes" class="btn-compras-light">
+                        <a asp-controller="Compras" asp-action="@regresarCrearAction" class="btn-compras-light">
                             Cancelar
                         </a>
 

@@ -1,0 +1,1305 @@
+﻿@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.CatalogoTurnosVM
+
+@{
+    ViewData["Title"] = "Catálogo de turnos";
+    Layout = "_Layout";
+
+    var totalTurnos = Model.Turnos.Count;
+    var turnosActivos = Model.Turnos.Count(x => x.Activo);
+    var turnosFlexibles = Model.Turnos.Count(x => x.EsFlexible);
+    var mostrarModalPorErrores = !ViewData.ModelState.IsValid;
+
+    string HoraInput(TimeSpan? hora)
+    {
+        return hora.HasValue
+            ? hora.Value.ToString(@"hh\:mm")
+            : string.Empty;
+    }
+}
+
+<style>
+    .turnos-page {
+        --ct-primary: #17324d;
+        --ct-primary-soft: #edf3f8;
+        --ct-accent: #e87524;
+        --ct-accent-dark: #c95d13;
+        --ct-text: #243447;
+        --ct-muted: #6c7b8c;
+        --ct-border: #dce4eb;
+        --ct-surface: #ffffff;
+        --ct-background: #f5f7fa;
+        --ct-success: #238657;
+        --ct-danger: #bd3b3b;
+        color: var(--ct-text);
+        padding: 1.5rem 0 2.5rem;
+    }
+
+        .turnos-page *,
+        .turnos-page *::before,
+        .turnos-page *::after {
+            box-sizing: border-box;
+        }
+
+        .turnos-page .ct-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+        }
+
+        .turnos-page .ct-eyebrow {
+            color: var(--ct-accent);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin-bottom: .25rem;
+            text-transform: uppercase;
+        }
+
+        .turnos-page .ct-title {
+            color: var(--ct-primary);
+            font-size: clamp(1.55rem, 2.5vw, 2.1rem);
+            font-weight: 780;
+            letter-spacing: -.025em;
+            margin: 0;
+        }
+
+        .turnos-page .ct-subtitle {
+            color: var(--ct-muted);
+            font-size: .93rem;
+            margin: .35rem 0 0;
+            max-width: 720px;
+        }
+
+        .turnos-page .ct-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .55rem;
+            justify-content: flex-end;
+        }
+
+        .turnos-page .ct-btn {
+            align-items: center;
+            border: 1px solid transparent;
+            border-radius: .65rem;
+            cursor: pointer;
+            display: inline-flex;
+            font: inherit;
+            font-size: .86rem;
+            font-weight: 750;
+            gap: .45rem;
+            justify-content: center;
+            min-height: 42px;
+            padding: .58rem .9rem;
+            text-decoration: none;
+            transition: .18s ease;
+        }
+
+            .turnos-page .ct-btn:hover {
+                transform: translateY(-1px);
+            }
+
+        .turnos-page .ct-btn-primary {
+            background: var(--ct-accent);
+            border-color: var(--ct-accent);
+            color: #fff;
+        }
+
+            .turnos-page .ct-btn-primary:hover {
+                background: var(--ct-accent-dark);
+                border-color: var(--ct-accent-dark);
+                color: #fff;
+            }
+
+        .turnos-page .ct-btn-secondary {
+            background: var(--ct-surface);
+            border-color: var(--ct-border);
+            color: var(--ct-primary);
+        }
+
+            .turnos-page .ct-btn-secondary:hover {
+                background: var(--ct-primary-soft);
+                color: var(--ct-primary);
+            }
+
+        .turnos-page .ct-btn-ghost {
+            background: transparent;
+            border-color: var(--ct-border);
+            color: var(--ct-muted);
+        }
+
+        .turnos-page .ct-btn-small {
+            min-height: 34px;
+            padding: .4rem .65rem;
+        }
+
+        .turnos-page .ct-mark {
+            align-items: center;
+            border: 1px solid currentColor;
+            border-radius: .35rem;
+            display: inline-flex;
+            font-size: .64rem;
+            font-weight: 850;
+            height: 22px;
+            justify-content: center;
+            letter-spacing: .04em;
+            width: 24px;
+        }
+
+        .turnos-page .ct-alert {
+            border: 0;
+            border-left: 4px solid;
+            border-radius: .65rem;
+            box-shadow: 0 5px 18px rgba(23, 50, 77, .07);
+            margin-bottom: 1rem;
+            padding: .8rem 1rem;
+        }
+
+        .turnos-page .ct-alert-success {
+            background: #edf8f2;
+            border-left-color: var(--ct-success);
+            color: #17613e;
+        }
+
+        .turnos-page .ct-alert-error {
+            background: #fff0f0;
+            border-left-color: var(--ct-danger);
+            color: #8b2929;
+        }
+
+        .turnos-page .ct-stats {
+            display: grid;
+            gap: .8rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-bottom: 1rem;
+        }
+
+        .turnos-page .ct-stat {
+            align-items: center;
+            background: var(--ct-surface);
+            border: 1px solid var(--ct-border);
+            border-radius: .8rem;
+            display: flex;
+            gap: .8rem;
+            min-height: 88px;
+            padding: .9rem 1rem;
+        }
+
+        .turnos-page .ct-stat-mark {
+            align-items: center;
+            background: var(--ct-primary-soft);
+            border-radius: .65rem;
+            color: var(--ct-primary);
+            display: flex;
+            flex: 0 0 auto;
+            font-size: .75rem;
+            font-weight: 850;
+            height: 46px;
+            justify-content: center;
+            letter-spacing: .05em;
+            width: 46px;
+        }
+
+        .turnos-page .ct-stat:nth-child(2) .ct-stat-mark {
+            background: #edf8f2;
+            color: var(--ct-success);
+        }
+
+        .turnos-page .ct-stat:nth-child(3) .ct-stat-mark {
+            background: #fff3e9;
+            color: var(--ct-accent-dark);
+        }
+
+        .turnos-page .ct-stat-value {
+            color: var(--ct-primary);
+            display: block;
+            font-size: 1.35rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .turnos-page .ct-stat-label {
+            color: var(--ct-muted);
+            display: block;
+            font-size: .78rem;
+            margin-top: .3rem;
+        }
+
+        .turnos-page .ct-panel {
+            background: var(--ct-surface);
+            border: 1px solid var(--ct-border);
+            border-radius: .9rem;
+            box-shadow: 0 8px 24px rgba(23, 50, 77, .055);
+            overflow: hidden;
+        }
+
+        .turnos-page .ct-toolbar {
+            align-items: center;
+            border-bottom: 1px solid var(--ct-border);
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: minmax(220px, 1fr) 190px 190px;
+            padding: .9rem;
+        }
+
+        .turnos-page .ct-control {
+            background: var(--ct-surface);
+            border: 1px solid var(--ct-border);
+            border-radius: .6rem;
+            color: var(--ct-text);
+            font: inherit;
+            font-size: .87rem;
+            min-height: 42px;
+            outline: none;
+            padding: .58rem .72rem;
+            width: 100%;
+        }
+
+            .turnos-page .ct-control:focus {
+                border-color: var(--ct-accent);
+                box-shadow: 0 0 0 3px rgba(232, 117, 36, .13);
+            }
+
+        .turnos-page .ct-table-wrap {
+            overflow-x: auto;
+        }
+
+        .turnos-page .ct-table {
+            border-collapse: collapse;
+            min-width: 920px;
+            width: 100%;
+        }
+
+            .turnos-page .ct-table th,
+            .turnos-page .ct-table td {
+                border-bottom: 1px solid var(--ct-border);
+                padding: .85rem .9rem;
+                text-align: left;
+                vertical-align: middle;
+            }
+
+            .turnos-page .ct-table th {
+                background: #f8fafc;
+                color: var(--ct-muted);
+                font-size: .7rem;
+                font-weight: 800;
+                letter-spacing: .065em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+
+            .turnos-page .ct-table tbody tr {
+                transition: background .16s ease;
+            }
+
+                .turnos-page .ct-table tbody tr:hover {
+                    background: #fbfcfd;
+                }
+
+                .turnos-page .ct-table tbody tr:last-child td {
+                    border-bottom: 0;
+                }
+
+        .turnos-page .ct-name-wrap {
+            align-items: center;
+            display: flex;
+            gap: .7rem;
+            min-width: 210px;
+        }
+
+        .turnos-page .ct-color {
+            border: 3px solid #fff;
+            border-radius: .5rem;
+            box-shadow: 0 0 0 1px var(--ct-border);
+            flex: 0 0 auto;
+            height: 35px;
+            width: 35px;
+        }
+
+        .turnos-page .ct-name {
+            color: var(--ct-primary);
+            display: block;
+            font-size: .9rem;
+            font-weight: 780;
+        }
+
+        .turnos-page .ct-id {
+            color: var(--ct-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .15rem;
+        }
+
+        .turnos-page .ct-badge {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .7rem;
+            font-weight: 780;
+            padding: .3rem .55rem;
+            white-space: nowrap;
+        }
+
+        .turnos-page .ct-badge-type {
+            background: var(--ct-primary-soft);
+            color: var(--ct-primary);
+        }
+
+        .turnos-page .ct-badge-active {
+            background: #e9f7ef;
+            color: #17613e;
+        }
+
+        .turnos-page .ct-badge-inactive {
+            background: #f0f2f4;
+            color: #65717f;
+        }
+
+        .turnos-page .ct-time {
+            color: var(--ct-text);
+            font-size: .84rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .turnos-page .ct-feature-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .35rem;
+            min-width: 185px;
+        }
+
+        .turnos-page .ct-feature {
+            background: #f4f6f8;
+            border: 1px solid var(--ct-border);
+            border-radius: .4rem;
+            color: var(--ct-muted);
+            font-size: .68rem;
+            font-weight: 700;
+            padding: .25rem .4rem;
+        }
+
+        .turnos-page .ct-row-actions {
+            align-items: center;
+            display: flex;
+            gap: .4rem;
+            justify-content: flex-end;
+            white-space: nowrap;
+        }
+
+        .turnos-page .ct-state-form {
+            display: inline-flex;
+            margin: 0;
+        }
+
+        .turnos-page .ct-link-btn {
+            background: transparent;
+            border: 0;
+            color: var(--ct-primary);
+            cursor: pointer;
+            font: inherit;
+            font-size: .76rem;
+            font-weight: 780;
+            padding: .35rem;
+        }
+
+            .turnos-page .ct-link-btn:hover {
+                color: var(--ct-accent-dark);
+            }
+
+        .turnos-page .ct-link-danger {
+            color: var(--ct-danger);
+        }
+
+        .turnos-page .ct-empty {
+            padding: 3.5rem 1rem;
+            text-align: center;
+        }
+
+        .turnos-page .ct-empty-mark {
+            align-items: center;
+            background: var(--ct-primary-soft);
+            border-radius: 50%;
+            color: var(--ct-primary);
+            display: flex;
+            font-size: .8rem;
+            font-weight: 850;
+            height: 54px;
+            justify-content: center;
+            margin: 0 auto .85rem;
+            width: 54px;
+        }
+
+        .turnos-page .ct-empty-title {
+            color: var(--ct-primary);
+            font-size: 1rem;
+            font-weight: 780;
+            margin: 0;
+        }
+
+        .turnos-page .ct-empty-text {
+            color: var(--ct-muted);
+            font-size: .84rem;
+            margin: .35rem 0 0;
+        }
+
+        .turnos-page .ct-modal[hidden] {
+            display: none;
+        }
+
+        .turnos-page .ct-modal {
+            align-items: center;
+            background: rgba(10, 24, 38, .62);
+            display: flex;
+            inset: 0;
+            justify-content: center;
+            padding: 1rem;
+            position: fixed;
+            z-index: 1080;
+        }
+
+        .turnos-page .ct-modal-dialog {
+            background: var(--ct-surface);
+            border: 1px solid var(--ct-border);
+            border-radius: .9rem;
+            box-shadow: 0 24px 60px rgba(6, 19, 31, .3);
+            max-height: calc(100vh - 2rem);
+            max-width: 720px;
+            overflow: auto;
+            width: 100%;
+        }
+
+        .turnos-page .ct-modal-header {
+            align-items: flex-start;
+            border-bottom: 1px solid var(--ct-border);
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: 1rem 1.1rem;
+        }
+
+        .turnos-page .ct-modal-title {
+            color: var(--ct-primary);
+            font-size: 1.08rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .turnos-page .ct-modal-subtitle {
+            color: var(--ct-muted);
+            font-size: .8rem;
+            margin: .25rem 0 0;
+        }
+
+        .turnos-page .ct-modal-close {
+            align-items: center;
+            background: transparent;
+            border: 1px solid var(--ct-border);
+            border-radius: .5rem;
+            color: var(--ct-muted);
+            cursor: pointer;
+            display: flex;
+            flex: 0 0 auto;
+            font-size: 1.1rem;
+            height: 34px;
+            justify-content: center;
+            width: 34px;
+        }
+
+        .turnos-page .ct-modal-body {
+            padding: 1rem 1.1rem;
+        }
+
+        .turnos-page .ct-modal-footer {
+            align-items: center;
+            background: #f8fafc;
+            border-top: 1px solid var(--ct-border);
+            display: flex;
+            gap: .55rem;
+            justify-content: flex-end;
+            padding: .85rem 1.1rem;
+        }
+
+        .turnos-page .ct-form-grid {
+            display: grid;
+            gap: .9rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .turnos-page .ct-field-full {
+            grid-column: 1 / -1;
+        }
+
+        .turnos-page .ct-label {
+            color: var(--ct-primary);
+            display: block;
+            font-size: .76rem;
+            font-weight: 780;
+            margin-bottom: .35rem;
+        }
+
+        .turnos-page .ct-required::after {
+            color: var(--ct-danger);
+            content: " *";
+        }
+
+        .turnos-page .ct-help {
+            color: var(--ct-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .3rem;
+        }
+
+        .turnos-page .ct-validation {
+            color: var(--ct-danger);
+            display: block;
+            font-size: .72rem;
+            margin-top: .3rem;
+        }
+
+        .turnos-page .validation-summary-valid,
+        .turnos-page .field-validation-valid {
+            display: none;
+        }
+
+        .turnos-page .ct-validation-summary {
+            background: #fff0f0;
+            border-left: 4px solid var(--ct-danger);
+            border-radius: .55rem;
+            color: #8b2929;
+            font-size: .78rem;
+            margin-bottom: .9rem;
+            padding: .7rem .85rem;
+        }
+
+            .turnos-page .ct-validation-summary ul {
+                margin: .3rem 0 0;
+                padding-left: 1.1rem;
+            }
+
+        .turnos-page .ct-checks {
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .turnos-page .ct-check-card {
+            align-items: flex-start;
+            background: #f8fafc;
+            border: 1px solid var(--ct-border);
+            border-radius: .65rem;
+            cursor: pointer;
+            display: flex;
+            gap: .65rem;
+            padding: .75rem;
+        }
+
+            .turnos-page .ct-check-card input {
+                accent-color: var(--ct-accent);
+                height: 17px;
+                margin-top: .1rem;
+                width: 17px;
+            }
+
+        .turnos-page .ct-check-title {
+            color: var(--ct-primary);
+            display: block;
+            font-size: .8rem;
+            font-weight: 780;
+        }
+
+        .turnos-page .ct-check-text {
+            color: var(--ct-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .15rem;
+        }
+
+        .turnos-page .ct-color-row {
+            align-items: center;
+            display: grid;
+            gap: .55rem;
+            grid-template-columns: 52px minmax(0, 1fr);
+        }
+
+        .turnos-page .ct-color-input {
+            cursor: pointer;
+            height: 42px;
+            padding: .25rem;
+        }
+
+    body.ct-modal-open {
+        overflow: hidden;
+    }
+
+    html[data-bs-theme="dark"] .turnos-page,
+    body.dark-mode .turnos-page {
+        --ct-primary: #e3edf6;
+        --ct-primary-soft: #263b4f;
+        --ct-text: #d9e3ec;
+        --ct-muted: #9fb0bf;
+        --ct-border: #3a4d5f;
+        --ct-surface: #1e2d3a;
+        --ct-background: #17232e;
+    }
+
+        html[data-bs-theme="dark"] .turnos-page .ct-table th,
+        html[data-bs-theme="dark"] .turnos-page .ct-modal-footer,
+        html[data-bs-theme="dark"] .turnos-page .ct-check-card,
+        body.dark-mode .turnos-page .ct-table th,
+        body.dark-mode .turnos-page .ct-modal-footer,
+        body.dark-mode .turnos-page .ct-check-card {
+            background: #253746;
+        }
+
+        html[data-bs-theme="dark"] .turnos-page .ct-table tbody tr:hover,
+        body.dark-mode .turnos-page .ct-table tbody tr:hover {
+            background: #233442;
+        }
+
+        html[data-bs-theme="dark"] .turnos-page .ct-feature,
+        body.dark-mode .turnos-page .ct-feature {
+            background: #293b49;
+        }
+
+    @@media (max-width: 900px) {
+        .turnos-page .ct-toolbar {
+            grid-template-columns: 1fr 1fr;
+        }
+
+            .turnos-page .ct-toolbar .ct-search {
+                grid-column: 1 / -1;
+            }
+    }
+
+    @@media (max-width: 680px) {
+        .turnos-page {
+            padding-top: 1rem;
+        }
+
+            .turnos-page .ct-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .turnos-page .ct-actions {
+                justify-content: stretch;
+            }
+
+                .turnos-page .ct-actions .ct-btn {
+                    flex: 1 1 0;
+                }
+
+            .turnos-page .ct-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .turnos-page .ct-stat {
+                min-height: 74px;
+            }
+
+            .turnos-page .ct-toolbar,
+            .turnos-page .ct-form-grid,
+            .turnos-page .ct-checks {
+                grid-template-columns: 1fr;
+            }
+
+                .turnos-page .ct-toolbar .ct-search {
+                    grid-column: auto;
+                }
+
+            .turnos-page .ct-modal {
+                align-items: flex-end;
+                padding: 0;
+            }
+
+            .turnos-page .ct-modal-dialog {
+                border-bottom-left-radius: 0;
+                border-bottom-right-radius: 0;
+                max-height: 94vh;
+            }
+    }
+</style>
+
+<div class="turnos-page">
+    <header class="ct-header">
+        <div>
+            <div class="ct-eyebrow">Escala de personal · Configuración</div>
+            <h1 class="ct-title">Catálogo de turnos</h1>
+            <p class="ct-subtitle">
+                Administra los horarios disponibles para construir las escalas semanales.
+            </p>
+        </div>
+
+        <div class="ct-actions">
+            <a asp-action="Index" class="ct-btn ct-btn-secondary">
+                <span class="ct-mark">←</span>
+                Volver
+            </a>
+            <button type="button"
+                    class="ct-btn ct-btn-primary"
+                    data-new-turn>
+                <span class="ct-mark">+</span>
+                Nuevo turno
+            </button>
+        </div>
+    </header>
+
+    @if (TempData["Exito"] != null)
+    {
+        <div class="ct-alert ct-alert-success" role="status">
+            @TempData["Exito"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="ct-alert ct-alert-error" role="alert">
+            @TempData["Error"]
+        </div>
+    }
+
+    <section class="ct-stats" aria-label="Resumen de turnos">
+        <article class="ct-stat">
+            <span class="ct-stat-mark">TU</span>
+            <span>
+                <strong class="ct-stat-value">@totalTurnos</strong>
+                <span class="ct-stat-label">Turnos registrados</span>
+            </span>
+        </article>
+        <article class="ct-stat">
+            <span class="ct-stat-mark">AC</span>
+            <span>
+                <strong class="ct-stat-value">@turnosActivos</strong>
+                <span class="ct-stat-label">Disponibles para nuevas escalas</span>
+            </span>
+        </article>
+        <article class="ct-stat">
+            <span class="ct-stat-mark">FL</span>
+            <span>
+                <strong class="ct-stat-value">@turnosFlexibles</strong>
+                <span class="ct-stat-label">Horarios flexibles</span>
+            </span>
+        </article>
+    </section>
+
+    <section class="ct-panel">
+        <div class="ct-toolbar">
+            <input type="search"
+                   id="turnSearch"
+                   class="ct-control ct-search"
+                   placeholder="Buscar por nombre, tipo u horario..."
+                   autocomplete="off" />
+
+            <select id="turnTypeFilter" class="ct-control" aria-label="Filtrar por tipo">
+                <option value="">Todos los tipos</option>
+                @foreach (var tipo in Model.TiposTurno)
+                {
+                    <option value="@tipo.Value">@tipo.Text</option>
+                }
+            </select>
+
+            <select id="turnStatusFilter" class="ct-control" aria-label="Filtrar por estado">
+                <option value="">Todos los estados</option>
+                <option value="activo">Activos</option>
+                <option value="inactivo">Inactivos</option>
+            </select>
+        </div>
+
+        @if (Model.Turnos.Any())
+        {
+            <div class="ct-table-wrap">
+                <table class="ct-table">
+                    <thead>
+                        <tr>
+                            <th>Turno</th>
+                            <th>Tipo</th>
+                            <th>Horario</th>
+                            <th>Características</th>
+                            <th>Orden</th>
+                            <th>Estado</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="turnRows">
+                        @foreach (var turno in Model.Turnos
+                            .OrderByDescending(x => x.Activo)
+                            .ThenBy(x => x.Orden)
+                            .ThenBy(x => x.Nombre))
+                        {
+                            var estado = turno.Activo ? "activo" : "inactivo";
+                            var textoBusqueda =
+                                $"{turno.Nombre} {turno.TipoTurno} {turno.HorarioTexto}";
+
+                            <tr data-turn-row
+                                data-search="@textoBusqueda"
+                                data-type="@turno.TipoTurno"
+                                data-status="@estado">
+                                <td>
+                                    <div class="ct-name-wrap">
+                                        <span class="ct-color"
+                                              style="background-color:@turno.Color"></span>
+                                        <span>
+                                            <span class="ct-name">@turno.Nombre</span>
+                                            <span class="ct-id">ID @turno.TurnoID</span>
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="ct-badge ct-badge-type">
+                                        @(turno.TipoTurno == EscalaVM.TiposTurno.DocePorDoce
+                                            ? "12 x 12"
+                                            : turno.TipoTurno)
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="ct-time">@turno.HorarioTexto</span>
+                                </td>
+                                <td>
+                                    <div class="ct-feature-list">
+                                        @if (turno.EsFlexible)
+                                        {
+                                            <span class="ct-feature">Flexible</span>
+                                        }
+                                        @if (turno.CruzaDiaSiguiente)
+                                        {
+                                            <span class="ct-feature">Termina al día siguiente</span>
+                                        }
+                                        @if (!turno.EsFlexible && !turno.CruzaDiaSiguiente)
+                                        {
+                                            <span class="ct-feature">Horario fijo</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>@turno.Orden</td>
+                                <td>
+                                    <span class="ct-badge @(turno.Activo ? "ct-badge-active" : "ct-badge-inactive")">
+                                        @(turno.Activo ? "Activo" : "Inactivo")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="ct-row-actions">
+                                        <button type="button"
+                                                class="ct-link-btn"
+                                                data-edit-turn
+                                                data-id="@turno.TurnoID"
+                                                data-name="@turno.Nombre"
+                                                data-start="@HoraInput(turno.HoraInicio)"
+                                                data-end="@HoraInput(turno.HoraFin)"
+                                                data-next-day="@turno.CruzaDiaSiguiente.ToString().ToLowerInvariant()"
+                                                data-flexible="@turno.EsFlexible.ToString().ToLowerInvariant()"
+                                                data-type="@turno.TipoTurno"
+                                                data-color="@turno.Color"
+                                                data-order="@turno.Orden">
+                                            Editar
+                                        </button>
+
+                                        <form asp-action="CambiarEstadoTurno"
+                                              method="post"
+                                              class="ct-state-form"
+                                              data-state-form
+                                              data-name="@turno.Nombre"
+                                              data-active="@turno.Activo.ToString().ToLowerInvariant()">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden"
+                                                   name="turnoID"
+                                                   value="@turno.TurnoID" />
+                                            <button type="submit"
+                                                    class="ct-link-btn @(turno.Activo ? "ct-link-danger" : string.Empty)">
+                                                @(turno.Activo ? "Desactivar" : "Activar")
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ct-empty" id="turnFilterEmpty" hidden>
+                <div class="ct-empty-mark">?</div>
+                <h2 class="ct-empty-title">No hay coincidencias</h2>
+                <p class="ct-empty-text">
+                    Ajusta la búsqueda o cambia los filtros seleccionados.
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="ct-empty">
+                <div class="ct-empty-mark">TU</div>
+                <h2 class="ct-empty-title">Todavía no hay turnos registrados</h2>
+                <p class="ct-empty-text">
+                    Crea el primer horario para comenzar a organizar las escalas.
+                </p>
+                <button type="button"
+                        class="ct-btn ct-btn-primary mt-3"
+                        data-new-turn>
+                    Nuevo turno
+                </button>
+            </div>
+        }
+    </section>
+
+    <div class="ct-modal"
+         id="turnModal"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="turnModalTitle"
+         hidden>
+        <div class="ct-modal-dialog">
+            <form asp-action="GuardarTurno"
+                  method="post"
+                  id="turnForm">
+                @Html.AntiForgeryToken()
+                <input asp-for="Formulario.TurnoID" type="hidden" id="turnId" />
+
+                <header class="ct-modal-header">
+                    <div>
+                        <h2 class="ct-modal-title" id="turnModalTitle">
+                            Nuevo turno
+                        </h2>
+                        <p class="ct-modal-subtitle">
+                            Define el horario que podrá utilizarse en nuevas escalas.
+                        </p>
+                    </div>
+                    <button type="button"
+                            class="ct-modal-close"
+                            data-close-turn
+                            aria-label="Cerrar">
+                        ×
+                    </button>
+                </header>
+
+                <div class="ct-modal-body">
+                    <div asp-validation-summary="ModelOnly"
+                         class="ct-validation-summary"></div>
+
+                    <div class="ct-form-grid">
+                        <div class="ct-field-full">
+                            <label asp-for="Formulario.Nombre"
+                                   class="ct-label ct-required"></label>
+                            <input asp-for="Formulario.Nombre"
+                                   id="turnName"
+                                   class="ct-control"
+                                   maxlength="100"
+                                   autocomplete="off"
+                                   placeholder="Ej. Primer turno" />
+                            <span asp-validation-for="Formulario.Nombre"
+                                  class="ct-validation"></span>
+                        </div>
+
+                        <div>
+                            <label asp-for="Formulario.TipoTurno"
+                                   class="ct-label ct-required"></label>
+                            <select asp-for="Formulario.TipoTurno"
+                                    asp-items="Model.TiposTurno"
+                                    id="turnType"
+                                    class="ct-control"></select>
+                            <span asp-validation-for="Formulario.TipoTurno"
+                                  class="ct-validation"></span>
+                        </div>
+
+                        <div>
+                            <label asp-for="Formulario.Orden"
+                                   class="ct-label"></label>
+                            <input asp-for="Formulario.Orden"
+                                   id="turnOrder"
+                                   class="ct-control"
+                                   type="number"
+                                   min="0"
+                                   step="1" />
+                            <span class="ct-help">
+                                Controla la posición del turno en la escala.
+                            </span>
+                            <span asp-validation-for="Formulario.Orden"
+                                  class="ct-validation"></span>
+                        </div>
+
+                        <div>
+                            <label asp-for="Formulario.HoraInicio"
+                                   class="ct-label ct-required"
+                                   id="startTimeLabel"></label>
+                            <input asp-for="Formulario.HoraInicio"
+                                   id="turnStart"
+                                   class="ct-control"
+                                   type="time"
+                                   step="60" />
+                            <span asp-validation-for="Formulario.HoraInicio"
+                                  class="ct-validation"></span>
+                        </div>
+
+                        <div>
+                            <label asp-for="Formulario.HoraFin"
+                                   class="ct-label ct-required"
+                                   id="endTimeLabel"></label>
+                            <input asp-for="Formulario.HoraFin"
+                                   id="turnEnd"
+                                   class="ct-control"
+                                   type="time"
+                                   step="60" />
+                            <span asp-validation-for="Formulario.HoraFin"
+                                  class="ct-validation"></span>
+                        </div>
+
+                        <div class="ct-field-full">
+                            <div class="ct-checks">
+                                <label class="ct-check-card">
+                                    <input asp-for="Formulario.CruzaDiaSiguiente"
+                                           id="turnNextDay"
+                                           type="checkbox" />
+                                    <span>
+                                        <span class="ct-check-title">
+                                            Termina al día siguiente
+                                        </span>
+                                        <span class="ct-check-text">
+                                            Úsalo para turnos nocturnos.
+                                        </span>
+                                    </span>
+                                </label>
+
+                                <label class="ct-check-card">
+                                    <input asp-for="Formulario.EsFlexible"
+                                           id="turnFlexible"
+                                           type="checkbox" />
+                                    <span>
+                                        <span class="ct-check-title">
+                                            Horario flexible
+                                        </span>
+                                        <span class="ct-check-text">
+                                            No requiere hora inicial ni final.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="ct-field-full">
+                            <label asp-for="Formulario.Color"
+                                   class="ct-label ct-required"></label>
+                            <div class="ct-color-row">
+                                <input asp-for="Formulario.Color"
+                                       id="turnColor"
+                                       class="ct-control ct-color-input"
+                                       type="color" />
+                                <input type="text"
+                                       id="turnColorText"
+                                       class="ct-control"
+                                       maxlength="7"
+                                       pattern="^#[0-9A-Fa-f]{6}$"
+                                       placeholder="#6C757D" />
+                            </div>
+                            <span asp-validation-for="Formulario.Color"
+                                  class="ct-validation"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="ct-modal-footer">
+                    <button type="button"
+                            class="ct-btn ct-btn-secondary"
+                            data-close-turn>
+                        Cancelar
+                    </button>
+                    <button type="submit"
+                            class="ct-btn ct-btn-primary">
+                        Guardar turno
+                    </button>
+                </footer>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modal = document.getElementById('turnModal');
+        const form = document.getElementById('turnForm');
+        const modalTitle = document.getElementById('turnModalTitle');
+        const idInput = document.getElementById('turnId');
+        const nameInput = document.getElementById('turnName');
+        const startInput = document.getElementById('turnStart');
+        const endInput = document.getElementById('turnEnd');
+        const nextDayInput = document.getElementById('turnNextDay');
+        const flexibleInput = document.getElementById('turnFlexible');
+        const typeInput = document.getElementById('turnType');
+        const colorInput = document.getElementById('turnColor');
+        const colorText = document.getElementById('turnColorText');
+        const orderInput = document.getElementById('turnOrder');
+        const searchInput = document.getElementById('turnSearch');
+        const typeFilter = document.getElementById('turnTypeFilter');
+        const statusFilter = document.getElementById('turnStatusFilter');
+        const emptyFilter = document.getElementById('turnFilterEmpty');
+        const openWithErrors = @mostrarModalPorErrores.ToString().ToLowerInvariant();
+
+        if (!modal || !form) {
+            return;
+        }
+
+        function normalize(value) {
+            return (value || '')
+                .toLocaleLowerCase('es')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
+        function updateTimeState() {
+            const flexible = flexibleInput.checked;
+            startInput.disabled = flexible;
+            endInput.disabled = flexible;
+            nextDayInput.disabled = flexible;
+            startInput.required = !flexible;
+            endInput.required = !flexible;
+
+            if (flexible) {
+                startInput.value = '';
+                endInput.value = '';
+                nextDayInput.checked = false;
+            }
+        }
+
+        function syncColorFromPicker() {
+            colorText.value = colorInput.value.toUpperCase();
+        }
+
+        function syncColorFromText() {
+            const value = colorText.value.trim();
+            if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+                colorInput.value = value;
+            }
+        }
+
+        function openModal() {
+            modal.hidden = false;
+            document.body.classList.add('ct-modal-open');
+            window.setTimeout(function () {
+                nameInput.focus();
+            }, 40);
+        }
+
+        function closeModal() {
+            modal.hidden = true;
+            document.body.classList.remove('ct-modal-open');
+        }
+
+        function prepareNew() {
+            form.reset();
+            idInput.value = '0';
+            modalTitle.textContent = 'Nuevo turno';
+            typeInput.value = '@EscalaVM.TiposTurno.Regular';
+            colorInput.value = '#6C757D';
+            colorText.value = '#6C757D';
+            orderInput.value = '0';
+            updateTimeState();
+            openModal();
+        }
+
+        function prepareEdit(button) {
+            form.reset();
+            idInput.value = button.dataset.id || '0';
+            nameInput.value = button.dataset.name || '';
+            startInput.value = button.dataset.start || '';
+            endInput.value = button.dataset.end || '';
+            nextDayInput.checked = button.dataset.nextDay === 'true';
+            flexibleInput.checked = button.dataset.flexible === 'true';
+            typeInput.value = button.dataset.type || '@EscalaVM.TiposTurno.Regular';
+            colorInput.value = button.dataset.color || '#6C757D';
+            colorText.value = (button.dataset.color || '#6C757D').toUpperCase();
+            orderInput.value = button.dataset.order || '0';
+            modalTitle.textContent = 'Editar turno';
+            updateTimeState();
+            openModal();
+        }
+
+        function filterRows() {
+            const rows = document.querySelectorAll('[data-turn-row]');
+            const query = normalize(searchInput ? searchInput.value : '');
+            const selectedType = typeFilter ? typeFilter.value : '';
+            const selectedStatus = statusFilter ? statusFilter.value : '';
+            let visible = 0;
+
+            rows.forEach(function (row) {
+                const matchesSearch =
+                    !query || normalize(row.dataset.search).includes(query);
+                const matchesType =
+                    !selectedType || row.dataset.type === selectedType;
+                const matchesStatus =
+                    !selectedStatus || row.dataset.status === selectedStatus;
+                const show = matchesSearch && matchesType && matchesStatus;
+
+                row.hidden = !show;
+                if (show) {
+                    visible += 1;
+                }
+            });
+
+            if (emptyFilter) {
+                emptyFilter.hidden = visible !== 0;
+            }
+        }
+
+        document.querySelectorAll('[data-new-turn]').forEach(function (button) {
+            button.addEventListener('click', prepareNew);
+        });
+
+        document.querySelectorAll('[data-edit-turn]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                prepareEdit(button);
+            });
+        });
+
+        document.querySelectorAll('[data-close-turn]').forEach(function (button) {
+            button.addEventListener('click', closeModal);
+        });
+
+        document.querySelectorAll('[data-state-form]').forEach(function (stateForm) {
+            stateForm.addEventListener('submit', function (event) {
+                const isActive = stateForm.dataset.active === 'true';
+                const action = isActive ? 'desactivar' : 'activar';
+                const name = stateForm.dataset.name || 'este turno';
+
+                if (!window.confirm(
+                    '¿Deseas ' + action + ' el turno "' + name + '"?')) {
+                    event.preventDefault();
+                }
+            });
+        });
+
+        flexibleInput.addEventListener('change', updateTimeState);
+        colorInput.addEventListener('input', syncColorFromPicker);
+        colorText.addEventListener('input', syncColorFromText);
+
+        [searchInput, typeFilter, statusFilter].forEach(function (control) {
+            if (!control) {
+                return;
+            }
+
+            control.addEventListener(
+                control.tagName === 'INPUT' ? 'input' : 'change',
+                filterRows);
+        });
+
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !modal.hidden) {
+                closeModal();
+            }
+        });
+
+        if (openWithErrors) {
+            colorText.value = colorInput.value.toUpperCase();
+            updateTimeState();
+            openModal();
+        }
+    });
+</script>
+
