@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ERP.NSQuell.Models.ViewModels
@@ -31,5 +32,28 @@ namespace ERP.NSQuell.Models.ViewModels
         public DateTime? FechaCreacion { get; set; }
 
         public DateTime? FechaModificacion { get; set; }
+
+        // NUEVO:
+        // Aquí se guardan los IDs de las máquinas seleccionadas como sustitutas.
+        public List<int> MaquinasSustitutasSeleccionadas { get; set; } = new();
+
+        // NUEVO:
+        // Aquí se carga la lista de máquinas disponibles para mostrar en la vista.
+        public List<MaquinaSustitutaOpcionViewModel> MaquinasSustitutasDisponibles { get; set; } = new();
+    }
+
+    public class MaquinaSustitutaOpcionViewModel
+    {
+        public int MaquinaID { get; set; }
+
+        public string Codigo { get; set; } = string.Empty;
+
+        public string Nombre { get; set; } = string.Empty;
+
+        public string? Area { get; set; }
+
+        public string? EstadoOperativo { get; set; }
+
+        public bool Seleccionada { get; set; }
     }
 }

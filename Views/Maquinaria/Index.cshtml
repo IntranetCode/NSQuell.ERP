@@ -59,46 +59,76 @@
 
             const string sql = @"
                 SELECT
-                    MaquinaID,
-                    Codigo,
-                    Nombre,
-                    Area,
-                    EstadoOperativo,
-                    Descripcion,
-                    Activo,
-                    FechaCreacion,
-                    FechaModificacion
-                FROM dbo.ERP_Maquinas
+                    M.MaquinaID,
+                    M.Codigo,
+                    M.Nombre,
+                    M.Area,
+                    M.EstadoOperativo,
+                    M.Descripcion,
+                    M.Activo,
+                    M.FechaCreacion,
+                    M.FechaModificacion,
+                    ISNULL(Sust.TotalMaquinasSustitutas, 0) AS TotalMaquinasSustitutas,
+                    ISNULL(Sust.MaquinasSustitutasTexto, '') AS MaquinasSustitutasTexto
+                FROM dbo.ERP_Maquinas AS M
+                OUTER APPLY
+                (
+                    SELECT
+                        COUNT(1) AS TotalMaquinasSustitutas,
+                        STUFF((
+                            SELECT ', ' + ISNULL(S.Codigo, '') +
+                                   CASE 
+                                       WHEN NULLIF(LTRIM(RTRIM(ISNULL(S.Nombre, ''))), '') IS NOT NULL 
+                                       THEN ' - ' + S.Nombre 
+                                       ELSE '' 
+                                   END
+                            FROM dbo.ERP_MaquinasSustitutas AS MS2
+                            INNER JOIN dbo.ERP_Maquinas AS S
+                                ON S.MaquinaID = MS2.MaquinaSustitutaID
+                            WHERE MS2.MaquinaPrincipalID = M.MaquinaID
+                              AND MS2.Activo = 1
+                              AND S.Activo = 1
+                            ORDER BY ISNULL(MS2.Prioridad, 999), S.Codigo, S.Nombre
+                            FOR XML PATH(''), TYPE
+                        ).value('.', 'nvarchar(max)'), 1, 2, '') AS MaquinasSustitutasTexto
+                    FROM dbo.ERP_MaquinasSustitutas AS MS
+                    INNER JOIN dbo.ERP_Maquinas AS S2
+                        ON S2.MaquinaID = MS.MaquinaSustitutaID
+                    WHERE MS.MaquinaPrincipalID = M.MaquinaID
+                      AND MS.Activo = 1
+                      AND S2.Activo = 1
+                ) AS Sust
                 WHERE
                     (
                         @Busqueda = ''
                         OR (@FiltroCampo = 'Todos' AND (
-                            Codigo LIKE @Like
-                            OR Nombre LIKE @Like
-                            OR Area LIKE @Like
-                            OR EstadoOperativo LIKE @Like
-                            OR ISNULL(Descripcion, '') LIKE @Like
+                            M.Codigo LIKE @Like
+                            OR M.Nombre LIKE @Like
+                            OR M.Area LIKE @Like
+                            OR M.EstadoOperativo LIKE @Like
+                            OR ISNULL(M.Descripcion, '') LIKE @Like
+                            OR ISNULL(Sust.MaquinasSustitutasTexto, '') LIKE @Like
                         ))
-                        OR (@FiltroCampo = 'Codigo' AND Codigo LIKE @Like)
-                        OR (@FiltroCampo = 'Nombre' AND Nombre LIKE @Like)
-                        OR (@FiltroCampo = 'Area' AND Area LIKE @Like)
-                        OR (@FiltroCampo = 'EstadoOperativo' AND EstadoOperativo LIKE @Like)
+                        OR (@FiltroCampo = 'Codigo' AND M.Codigo LIKE @Like)
+                        OR (@FiltroCampo = 'Nombre' AND M.Nombre LIKE @Like)
+                        OR (@FiltroCampo = 'Area' AND M.Area LIKE @Like)
+                        OR (@FiltroCampo = 'EstadoOperativo' AND M.EstadoOperativo LIKE @Like)
                     )
                     AND (
                         @EstadoVista = 'Todos'
-                        OR (@EstadoVista = 'Activas' AND Activo = 1)
-                        OR (@EstadoVista = 'Inactivas' AND Activo = 0)
-                        OR (@EstadoVista = 'Operativas' AND EstadoOperativo = 'Operativa')
+                        OR (@EstadoVista = 'Activas' AND M.Activo = 1)
+                        OR (@EstadoVista = 'Inactivas' AND M.Activo = 0)
+                        OR (@EstadoVista = 'Operativas' AND M.EstadoOperativo = 'Operativa')
                     )
                 ORDER BY
-                    Area,
+                    M.Area,
                     CASE
-                        WHEN PATINDEX('%[^0-9]%', Codigo + 'X') > 1
-                        THEN TRY_CONVERT(INT, LEFT(Codigo, PATINDEX('%[^0-9]%', Codigo + 'X') - 1))
+                        WHEN PATINDEX('%[^0-9]%', M.Codigo + 'X') > 1
+                        THEN TRY_CONVERT(INT, LEFT(M.Codigo, PATINDEX('%[^0-9]%', M.Codigo + 'X') - 1))
                         ELSE NULL
                     END,
-                    Codigo,
-                    Nombre;";
+                    M.Codigo,
+                    M.Nombre;";
 
             await using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Busqueda", busquedaActual);
@@ -120,7 +150,9 @@
                     Descripcion = rd["Descripcion"]?.ToString() ?? "",
                     Activo = rd["Activo"] != DBNull.Value && Convert.ToBoolean(rd["Activo"]),
                     FechaCreacion = rd["FechaCreacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaCreacion"]),
-                    FechaModificacion = rd["FechaModificacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaModificacion"])
+                    FechaModificacion = rd["FechaModificacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaModificacion"]),
+                    TotalMaquinasSustitutas = rd["TotalMaquinasSustitutas"] == DBNull.Value ? 0 : Convert.ToInt32(rd["TotalMaquinasSustitutas"]),
+                    MaquinasSustitutasTexto = rd["MaquinasSustitutasTexto"]?.ToString() ?? ""
                 });
             }
         }
@@ -494,6 +526,34 @@
         margin-top: .15rem;
     }
 
+    .maq-sub-list {
+        display: flex;
+        flex-direction: column;
+        gap: .25rem;
+        max-width: 280px;
+    }
+
+    .maq-sub-count {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        width: fit-content;
+        padding: .3rem .55rem;
+        border-radius: 999px;
+        background: #fff7ed;
+        color: #9a3412;
+        font-size: .76rem;
+        font-weight: 950;
+        border: 1px solid rgba(244,123,32,.18);
+    }
+
+    .maq-sub-text {
+        color: #64748b;
+        font-size: .78rem;
+        font-weight: 750;
+        line-height: 1.35;
+    }
+
     .maq-pill {
         border-radius: 999px;
         padding: .42rem .75rem;
@@ -741,7 +801,7 @@
                         Gestiona el catálogo de máquinas, su área, estado operativo y disponibilidad.
                     </p>
 
-                    <a href="@Url.Action("CrearMaquinaria", "Usuarios")" class="maq-main-action">
+                    <a href="@Url.Action("CrearMaquinaria", "Maquinaria")" class="maq-main-action">
                         <i class="fas fa-plus"></i>
                         Agregar máquina
                     </a>
@@ -783,7 +843,7 @@
 
                         @if (!string.IsNullOrWhiteSpace(busquedaActual) || filtroCampoActual != "Todos" || estadoVistaActual != "Todos")
                         {
-                            <a href="@Url.Action("Maquinaria", "Usuarios")"
+                            <a href="@Url.Action("Maquinaria", "Maquinaria")"
                                class="btn btn-clear"
                                title="Limpiar filtros">
                                 <i class="fas fa-times"></i>
@@ -856,6 +916,7 @@
                             <th>Código</th>
                             <th>Nombre</th>
                             <th>Área</th>
+                            <th>Sustitutas</th>
                             <th>Estado operativo</th>
                             <th>Estado</th>
                             <th class="text-end">Acciones</th>
@@ -897,6 +958,23 @@
                                 </td>
 
                                 <td>
+                                    @if (item.TotalMaquinasSustitutas > 0)
+                                    {
+                                        <div class="maq-sub-list">
+                                            <span class="maq-sub-count">
+                                                <i class="fas fa-random"></i>
+                                                @item.TotalMaquinasSustitutas sustituta@(item.TotalMaquinasSustitutas == 1 ? "" : "s")
+                                            </span>
+                                            <span class="maq-sub-text">@item.MaquinasSustitutasTexto</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="maq-code-sub">Sin sustitutas</span>
+                                    }
+                                </td>
+
+                                <td>
                                     <span class="maq-pill @(esOperativa ? "estado-ok" : "estado-alerta")">
                                         <i class="@(esOperativa ? "fas fa-circle-check" : "fas fa-triangle-exclamation")"></i>
                                         @estado
@@ -912,7 +990,7 @@
 
                                 <td class="text-end">
                                     <a class="maq-action-btn"
-                                       href="@Url.Action("EditarMaquinaria", "Usuarios", new { id = item.MaquinaID })">
+                                       href="@Url.Action("EditarMaquinaria", "Maquinaria", new { id = item.MaquinaID })">
                                         <i class="fas fa-pencil-alt"></i>
                                         Editar
                                     </a>
@@ -961,9 +1039,13 @@
                                 <i class="fas fa-gauge-high"></i>
                                 <span><strong>Estado operativo:</strong> @estado</span>
                             </div>
+                            <div>
+                                <i class="fas fa-random"></i>
+                                <span><strong>Sustitutas:</strong> @(item.TotalMaquinasSustitutas > 0 ? item.MaquinasSustitutasTexto : "Sin sustitutas")</span>
+                            </div>
                             <div class="mt-2">
                                 <a class="maq-action-btn"
-                                   href="@Url.Action("EditarMaquinaria", "Usuarios", new { id = item.MaquinaID })">
+                                   href="@Url.Action("EditarMaquinaria", "Maquinaria", new { id = item.MaquinaID })">
                                     <i class="fas fa-pencil-alt"></i>
                                     Editar
                                 </a>
@@ -1000,5 +1082,7 @@
         public bool Activo { get; set; }
         public DateTime? FechaCreacion { get; set; }
         public DateTime? FechaModificacion { get; set; }
+        public int TotalMaquinasSustitutas { get; set; }
+        public string MaquinasSustitutasTexto { get; set; } = "";
     }
 }
