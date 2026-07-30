@@ -8,27 +8,31 @@ namespace ERP.NSQuell.Models
     public class ApplicationDbContext : DbContext
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-        : base(options)
+            : base(options)
         {
         }
 
         public DbSet<UsuarioPerfilViewModel> PerfilUsuarioResults => Set<UsuarioPerfilViewModel>();
 
-
-
         // --- DbSets para el módulo de Usuarios y Auditoría ---
         public DbSet<Usuario> Usuarios { get; set; }
         public DbSet<Persona> Personas { get; set; }
         public DbSet<Rol> Roles { get; set; }
+
+        // --- DbSets ERP ---
         public DbSet<ERPMaquina> ERPMaquinas { get; set; } = null!;
+        public DbSet<ERPMaquinaSustituta> ERPMaquinasSustitutas { get; set; } = null!;
         public DbSet<ERPParte> ERPPartes { get; set; } = null!;
         public DbSet<ERPCliente> ERPClientes { get; set; } = null!;
         public DbSet<ERPMolde> ERPMoldes { get; set; } = null!;
-        public bool TieneDatosTecnicos { get; set; }
         public DbSet<ERPParteDatoTecnico> ERPParteDatosTecnicos { get; set; } = null!;
         public DbSet<ERPMaterial> ERPMateriales { get; set; } = null!;
 
-      
+        public bool TieneDatosTecnicos { get; set; }
+
+        // --- DbSets Calidad ---
+        public DbSet<CalidadInspeccion> CalidadInspecciones { get; set; } = null!;
+        public DbSet<CalidadInspeccionHistorial> CalidadInspeccionHistorial { get; set; } = null!;
 
         public DbSet<AuditoriaUsuario> AuditoriasUsuarios { get; set; }
         public DbSet<V_InformacionUsuarioCompleta> InformacionUsuariosCompletos { get; set; }
@@ -37,20 +41,15 @@ namespace ERP.NSQuell.Models
         public DbSet<Menu> Menus { get; set; }
         public DbSet<SubMenu> SubMenus { get; set; }
         public DbSet<Permiso> Permisos { get; set; }
-        // ---------------------------------------------
 
-
-        // DbSets para el módulo de Notificaciones
+        // --- DbSets para el módulo de Notificaciones ---
         public DbSet<Notificacion> Notificaciones { get; set; }
         public DbSet<NotificacionLectura> NotificacionLecturas { get; set; }
         public DbSet<NotificacionEmpresas> NotificacionEmpresas { get; set; }
         public DbSet<PermisosPorRol> PermisosPorRol { get; set; }
         public DbSet<SubMenuAcciones> SubMenuAcciones { get; set; }
-        public DbSet<Departamento> Departamentos { get; set; } 
-       
+        public DbSet<Departamento> Departamentos { get; set; }
 
-        
-       
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -65,11 +64,38 @@ namespace ERP.NSQuell.Models
                 entity.ToView("V_InformacionUsuarioCompleta");
             });
 
-           
+            // --- CONFIGURACIÓN MÁQUINAS SUSTITUTAS ---
+            modelBuilder.Entity<ERPMaquinaSustituta>(entity =>
+            {
+                entity.ToTable("ERP_MaquinasSustitutas");
+
+                entity.HasKey(e => e.MaquinaSustitutaRelacionID);
+
+                entity.Property(e => e.Observaciones)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.Activo)
+                    .HasDefaultValue(true);
+
+                entity.Property(e => e.FechaCreacion)
+                    .HasColumnType("datetime2(0)")
+                    .HasDefaultValueSql("SYSDATETIME()");
+
+                entity.HasOne(e => e.MaquinaPrincipal)
+                    .WithMany()
+                    .HasForeignKey(e => e.MaquinaPrincipalID)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.MaquinaSustituta)
+                    .WithMany()
+                    .HasForeignKey(e => e.MaquinaSustitutaID)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
 
             // --- CONFIGURACIONES MÓDULO NOTIFICACIONES ---
             modelBuilder.Entity<NotificacionLectura>()
-                .HasIndex(x => new { x.NotificacionId, x.UsuarioId }).IsUnique();
+                .HasIndex(x => new { x.NotificacionId, x.UsuarioId })
+                .IsUnique();
 
             modelBuilder.Entity<NotificacionLectura>()
                 .HasOne(x => x.Notificacion)

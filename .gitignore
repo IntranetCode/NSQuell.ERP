@@ -1,4 +1,4 @@
-# Carpetas de compilaciï¿½n
+# Carpetas de compilación
 bin/
 obj/
 
@@ -6,13 +6,5 @@ obj/
 .vs/
 *.user
 
-# Archivos de configuraciï¿½n con contraseï¿½as reales (un ejemplo si aplica)
+# Archivos de configuración con contraseñas reales (un ejemplo si aplica)
 appsettings.Development.json
-
-@"
-
-# Respaldos locales generados por instaladores
-*.bak
-*.bak-*
-*.bak.*
-"@ | Add-Content .gitignore
