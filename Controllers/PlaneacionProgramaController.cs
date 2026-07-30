@@ -1751,45 +1751,45 @@ VALUES
                     TempData["Error"] = "Ese renglón de release ya fue programado.";
                     return RedirectToAction(nameof(Index));
                 }
-
                 var operadoresEscala = await ObtenerOperadoresEscalaPorMaquinaFechaAsync(
-    vm.MaquinaID!.Value,
-    vm.FechaInicioProgramada!.Value,
-    cn,
-    (SqlTransaction)tx
-);
+                    vm.MaquinaID!.Value,
+                    vm.FechaInicioProgramada!.Value,
+                    cn,
+                    (SqlTransaction)tx
+                );
 
-                if (!operadoresEscala.Any())
+                if (operadoresEscala.Any())
                 {
-                    await tx.RollbackAsync();
+                    var operadorPrincipal = operadoresEscala[0];
+                    var operadorAuxiliar = operadoresEscala
+                        .Skip(1)
+                        .FirstOrDefault();
 
-                    ModelState.AddModelError(
-                        nameof(vm.MaquinaID),
-                        "No hay operador asignado en la escala de RRHH para esta máquina y horario. " +
-                        "Revisa el módulo de turnos antes de programar."
-                    );
+                    vm.OperadorPrincipalID = operadorPrincipal.PersonaID;
+                    vm.OperadorAuxiliarID = operadorAuxiliar?.PersonaID;
 
-                    await CargarCatalogosAsync(vm);
-                    return View(vm);
+                    var textoOperadorEscala =
+                        $"Operador asignado automáticamente desde RRHH: {operadorPrincipal.NombreCompleto}" +
+                        (operadorAuxiliar != null ? $" | Auxiliar: {operadorAuxiliar.NombreCompleto}" : "") +
+                        $" | Turno: {operadorPrincipal.TurnoNombre}.";
+
+                    vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones)
+                        ? textoOperadorEscala
+                        : vm.Observaciones.Trim() + Environment.NewLine + textoOperadorEscala;
                 }
+                else
+                {
+                    vm.OperadorPrincipalID = null;
+                    vm.OperadorAuxiliarID = null;
 
-                var operadorPrincipal = operadoresEscala[0];
-                var operadorAuxiliar = operadoresEscala
-                    .Skip(1)
-                    .FirstOrDefault();
+                    var textoSinOperador =
+                        "Sin operador asignado desde RRHH para esta máquina y horario. " +
+                        "La producción queda programada pendiente de asignación de operador.";
 
-                vm.OperadorPrincipalID = operadorPrincipal.PersonaID;
-                vm.OperadorAuxiliarID = operadorAuxiliar?.PersonaID;
-
-                var textoOperadorEscala =
-                    $"Operador asignado automáticamente desde RRHH: {operadorPrincipal.NombreCompleto}" +
-                    (operadorAuxiliar != null ? $" | Auxiliar: {operadorAuxiliar.NombreCompleto}" : "") +
-                    $" | Turno: {operadorPrincipal.TurnoNombre}.";
-
-                vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones)
-                    ? textoOperadorEscala
-                    : vm.Observaciones.Trim() + Environment.NewLine + textoOperadorEscala;
-
+                    vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones)
+                        ? textoSinOperador
+                        : vm.Observaciones.Trim() + Environment.NewLine + textoSinOperador;
+                }
                 if (!esInterrupcion)
                 {
                     var cruceDentroTx = await MaquinaTieneCruceAsync(
@@ -4065,6 +4065,7 @@ VALUES
                 return Json(new
                 {
                     ok = false,
+                    permiteProgramar = true,
                     mensaje = "Selecciona máquina y fecha/hora de cambio."
                 });
             }
@@ -4083,8 +4084,17 @@ VALUES
                 return Json(new
                 {
                     ok = false,
+                    permiteProgramar = true,
+                    operadorPrincipalID = (int?)null,
+                    operadorPrincipalNombre = (string?)null,
+                    operadorAuxiliarID = (int?)null,
+                    operadorAuxiliarNombre = (string?)null,
+                    turnoNombre = (string?)null,
+                    turnoColor = (string?)null,
+                    escalaAsignacionID = (int?)null,
                     mensaje =
-                        "No hay operador asignado en RRHH para esta máquina y horario."
+                        "No hay operador asignado en RRHH para esta máquina y horario. " +
+                        "Puedes programar, pero quedará pendiente la asignación del operador."
                 });
             }
 
@@ -4094,6 +4104,7 @@ VALUES
             return Json(new
             {
                 ok = true,
+                permiteProgramar = true,
 
                 operadorPrincipalID = principal.PersonaID,
                 operadorPrincipalNombre = principal.NombreCompleto,

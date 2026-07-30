@@ -142,6 +142,46 @@
             : item.FolioRelease!;
     }
 
+    public static DateTime FechaEntregaClave(PlaneacionProgramaNecesidadVm item)
+    {
+        return item.FechaRequerida == DateTime.MinValue
+            ? DateTime.MaxValue
+            : item.FechaRequerida.Date;
+    }
+
+    public static string FechaEntregaTexto(DateTime fecha)
+    {
+        return fecha == DateTime.MaxValue
+            ? "Sin fecha de entrega"
+            : fecha.ToString("dddd dd 'de' MMMM 'de' yyyy");
+    }
+
+    public static string FechaEntregaEstado(DateTime fecha)
+    {
+        if (fecha == DateTime.MaxValue) return "Sin fecha";
+
+        var dias = (fecha.Date - DateTime.Today).Days;
+
+        if (dias < 0) return $"Vencida hace {Math.Abs(dias)} día(s)";
+        if (dias == 0) return "Entrega hoy";
+        if (dias == 1) return "Entrega mañana";
+
+        return $"Faltan {dias} día(s)";
+    }
+
+    public static string FechaEntregaClase(DateTime fecha)
+    {
+        if (fecha == DateTime.MaxValue) return "date-no-date";
+
+        var dias = (fecha.Date - DateTime.Today).Days;
+
+        if (dias < 0) return "date-overdue";
+        if (dias <= 1) return "date-critical";
+        if (dias <= 3) return "date-warning";
+
+        return "date-normal";
+    }
+
     public sealed class SeccionUi
     {
         public string Titulo { get; set; } = "";
@@ -977,9 +1017,9 @@
 
 
         /* ============================================================
-           PROGRAMA_NECESIDADES_FILA_V1_0
-           Cada necesidad se muestra como un renglón horizontal.
-           ============================================================ */
+                   PROGRAMA_NECESIDADES_FILA_V1_0
+                   Cada necesidad se muestra como un renglón horizontal.
+                   ============================================================ */
         .cards-grid {
             display: flex;
             flex-direction: column;
@@ -991,15 +1031,7 @@
         .cards-header,
         .need-card {
             display: grid;
-            grid-template-columns:
-                minmax(300px, 2.2fr)
-                110px
-                115px
-                115px
-                minmax(125px, 1fr)
-                minmax(125px, 1fr)
-                95px
-                205px;
+            grid-template-columns: minmax(300px, 2.2fr) 110px 115px 115px minmax(125px, 1fr) minmax(125px, 1fr) 95px 205px;
             gap: 10px;
             align-items: center;
             min-width: 1310px;
@@ -1028,16 +1060,16 @@
             overflow: visible;
         }
 
-        .need-card:hover {
-            transform: none;
-            border-color: #b9cce7;
-            box-shadow: 0 9px 22px rgba(15,23,42,.09);
-        }
+            .need-card:hover {
+                transform: none;
+                border-color: #b9cce7;
+                box-shadow: 0 9px 22px rgba(15,23,42,.09);
+            }
 
-        .need-card::before {
-            width: 6px;
-            border-radius: 15px 0 0 15px;
-        }
+            .need-card::before {
+                width: 6px;
+                border-radius: 15px 0 0 15px;
+            }
 
         .need-main {
             min-width: 0;
@@ -1051,20 +1083,20 @@
             min-width: 0;
         }
 
-        .need-title-row .need-title {
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: .91rem;
-        }
+            .need-title-row .need-title {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: .91rem;
+            }
 
-        .need-title-row .estado {
-            flex: 0 0 auto;
-            max-width: 190px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+            .need-title-row .estado {
+                flex: 0 0 auto;
+                max-width: 190px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
 
         .need-main .need-sub {
             display: block;
@@ -1122,11 +1154,11 @@
             min-width: 0;
         }
 
-        .need-actions-row .btn-card-main,
-        .need-actions-row .btn-card-light {
-            justify-content: center;
-            white-space: nowrap;
-        }
+            .need-actions-row .btn-card-main,
+            .need-actions-row .btn-card-light {
+                justify-content: center;
+                white-space: nowrap;
+            }
 
         .row-result {
             border-radius: 999px;
@@ -1165,15 +1197,157 @@
             .cards-header,
             .need-card {
                 min-width: 1180px;
-                grid-template-columns:
-                    minmax(270px, 2fr)
-                    105px
-                    110px
-                    110px
-                    120px
-                    120px
-                    90px
-                    170px;
+                grid-template-columns: minmax(270px, 2fr) 105px 110px 110px 120px 120px 90px 170px;
+            }
+        }
+
+
+
+        /* ============================================================
+                   AGRUPACION_POR_FECHA_ENTREGA_CLIENTE_V1_0
+                   ============================================================ */
+        .date-groups {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .date-panel {
+            overflow: hidden;
+            background: #ffffff;
+            border: 1px solid var(--linea);
+            border-radius: 22px;
+            box-shadow: 0 8px 22px rgba(15,23,42,.05);
+        }
+
+        .date-panel-head {
+            width: 100%;
+            border: 0;
+            padding: 16px 18px;
+            background: linear-gradient(180deg,#ffffff,#f8fbff);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+            .date-panel-head:hover {
+                background: #f3f8ff;
+            }
+
+        .date-panel-main,
+        .date-panel-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .date-panel-main {
+            min-width: 0;
+        }
+
+        .date-icon {
+            width: 42px;
+            height: 42px;
+            flex: 0 0 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            background: var(--azul-soft);
+            color: var(--azul);
+        }
+
+        .date-title {
+            color: #102a52;
+            font-size: 1rem;
+            font-weight: 950;
+            text-transform: capitalize;
+        }
+
+        .date-meta {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: .80rem;
+            font-weight: 750;
+        }
+
+        .date-status {
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: .73rem;
+            font-weight: 950;
+            white-space: nowrap;
+            border: 1px solid transparent;
+        }
+
+        .date-panel-body {
+            padding: 14px;
+            border-top: 1px solid #e6eef9;
+            background: #fbfdff;
+        }
+
+        .date-overdue {
+            border-color: #f3b8b3;
+        }
+
+            .date-overdue .date-icon,
+            .date-overdue .date-status {
+                color: #b42318;
+                background: #fff1f0;
+                border-color: #f3b8b3;
+            }
+
+        .date-critical {
+            border-color: #fdba74;
+        }
+
+            .date-critical .date-icon,
+            .date-critical .date-status {
+                color: #c2410c;
+                background: #fff7ed;
+                border-color: #fdba74;
+            }
+
+        .date-warning {
+            border-color: #f2d59a;
+        }
+
+            .date-warning .date-icon,
+            .date-warning .date-status {
+                color: #b86b00;
+                background: #fff7e6;
+                border-color: #f2d59a;
+            }
+
+        .date-normal .date-status {
+            color: #0b4ea2;
+            background: #eef6ff;
+            border-color: #cfe0ff;
+        }
+
+        .date-no-date .date-icon,
+        .date-no-date .date-status {
+            color: #667085;
+            background: #f4f5f7;
+            border-color: #d8dde5;
+        }
+
+        @@media(max-width:700px) {
+            .date-panel-head {
+                align-items: flex-start;
+            }
+
+            .date-panel-right {
+                align-items: flex-end;
+                flex-direction: column-reverse;
+            }
+
+            .date-status {
+                white-space: normal;
+                text-align: right;
             }
         }
 
@@ -1214,7 +1388,7 @@
                     <i class="fa-solid fa-calendar-days"></i>
                     Calendario Máquinas
                 </a>
-@*
+                @*
                 <a asp-controller="PlaneacionPanorama"
                    asp-action="Index"
                    class="btn-glass">
@@ -1238,8 +1412,8 @@
                 <div class="row g-3 align-items-end">
                     <div class="col-xl-3 col-md-6"><label class="form-label">Cliente</label><select asp-for="ClienteID" asp-items="Model.Clientes" class="form-select"><option value="">Todos</option></select></div>
                     <div class="col-xl-3 col-md-6"><label class="form-label">Parte</label><select asp-for="ParteID" asp-items="Model.Partes" class="form-select"><option value="">Todas</option></select></div>
-                    <div class="col-xl-2 col-md-6"><label class="form-label">Desde</label><input asp-for="FechaDesde" type="date" class="form-control" /></div>
-                    <div class="col-xl-2 col-md-6"><label class="form-label">Hasta</label><input asp-for="FechaHasta" type="date" class="form-control" /></div>
+                    <div class="col-xl-2 col-md-6"><label class="form-label">Entrega cliente desde</label><input asp-for="FechaDesde" type="date" class="form-control" /></div>
+                    <div class="col-xl-2 col-md-6"><label class="form-label">Entrega cliente hasta</label><input asp-for="FechaHasta" type="date" class="form-control" /></div>
                     <div class="col-xl-2 col-md-12"><button type="submit" class="btn-main w-100"><i class="fa-solid fa-magnifying-glass"></i>Consultar</button></div>
 
                     <div class="col-12 d-flex gap-2 flex-wrap">
@@ -1288,204 +1462,288 @@
                         }
                         else
                         {
-                            var clientesOrdenados = items
-                            .GroupBy(ClienteNombre)
+                            var fechasOrdenadas = items
+                            .GroupBy(FechaEntregaClave)
                             .Select(g => new
                             {
-                                Cliente = g.Key,
-                                Items = g.OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList(),
-                                FechaPrioridad = g.Min(PrioridadFecha),
-                                EntradaPrioridad = g.Min(PrioridadEntrada)
+                                FechaEntrega = g.Key,
+                                Items = g
+                            .OrderBy(ClienteNombre)
+                            .ThenBy(PrioridadEntrada)
+                            .ToList(),
+                                Clientes = g.Select(ClienteNombre).Distinct().Count(),
+                                Releases = g.Select(ReleaseTexto).Distinct().Count(),
+                                TotalRequerido = g.Sum(x => x.CantidadRequerida),
+                                TotalProgramado = g.Sum(x => x.ProduccionProgramadaPendiente ?? 0)
                             })
-                            .OrderBy(g => g.FechaPrioridad)
-                            .ThenBy(g => g.EntradaPrioridad)
-                            .ThenBy(g => g.Cliente)
+                            .OrderBy(g => g.FechaEntrega)
                             .ToList();
 
-                            <div class="client-grid">
+                            <div class="date-groups">
                                 @{
-                                    var clientIndex = 0;
+                                    var fechaIndex = 0;
                                 }
 
-                                @foreach (var clienteGrupo in clientesOrdenados)
+                                @foreach (var fechaGrupo in fechasOrdenadas)
                                 {
-                                    clientIndex++;
-                                    var clienteCollapseId = "cliente_" + sectionIndex.ToString() + "_" + clientIndex.ToString();
-                                    var clienteItems = clienteGrupo.Items;
-                                    var primerItemCliente = clienteItems.First();
-                                    var partesCliente = clienteItems.Select(ParteClave).Distinct().Count();
+                                    fechaIndex++;
 
-                                    var releasesCliente = clienteItems
-                                    .GroupBy(ReleaseKey)
+                                    var fechaCollapseId = $"fecha_{sectionIndex}_{fechaIndex}";
+                                    var fechaAbierta = fechaIndex == 1;
+
+                                    var clientesOrdenados = fechaGrupo.Items
+                                    .GroupBy(ClienteNombre)
                                     .Select(g => new
                                     {
-                                        Key = g.Key,
-                                        Texto = ReleaseTexto(g.First()),
-                                        Items = g.OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList(),
-                                        FechaPrioridad = g.Min(PrioridadFecha),
-                                        EntradaPrioridad = g.Min(PrioridadEntrada),
-                                        TotalRequerido = g.Sum(x => x.CantidadRequerida),
-                                        TotalPT = g.Sum(x => x.PiezasDesdePT ?? 0),
-                                        TotalProgramado = g.Sum(x => x.ProduccionProgramadaPendiente ?? 0)
+                                        Cliente = g.Key,
+                                        Items = g.OrderBy(PrioridadEntrada).ToList(),
+                                        EntradaPrioridad = g.Min(PrioridadEntrada)
                                     })
-                                    .OrderBy(g => g.FechaPrioridad)
-                                    .ThenBy(g => g.EntradaPrioridad)
+                                    .OrderBy(g => g.EntradaPrioridad)
+                                    .ThenBy(g => g.Cliente)
                                     .ToList();
 
-                                    var releaseInicial = releasesCliente.First().Key;
-
-                                    <article class="client-panel" data-client data-search="@clienteGrupo.Cliente @string.Join(" ", clienteItems.Select(DataSearch))">
+                                    <article class="date-panel @FechaEntregaClase(fechaGrupo.FechaEntrega)"
+                                             data-date-group
+                                             data-search="@string.Join(" ", fechaGrupo.Items.Select(DataSearch))">
                                         <button type="button"
-                                                class="client-panel-head"
+                                                class="date-panel-head"
                                                 data-bs-toggle="collapse"
-                                                data-bs-target="#@clienteCollapseId"
-                                                aria-expanded="false"
-                                                aria-controls="@clienteCollapseId">
-                                            <div>
-                                                <div class="client-name">
-                                                    <i class="fa-solid fa-chevron-right chev me-2"></i>
-                                                    @clienteGrupo.Cliente
-                                                </div>
-                                                <div class="client-meta">
-                                                    @clienteItems.Count.ToString("N0") registro(s) ·
-                                                    @partesCliente.ToString("N0") parte(s) ·
-                                                    @clienteItems.Sum(x => x.CantidadRequerida).ToString("N0") requerido ·
-                                                    @clienteItems.Sum(x => x.ProduccionProgramadaPendiente ?? 0).ToString("N0") programado
+                                                data-bs-target="#@fechaCollapseId"
+                                                aria-expanded="@(fechaAbierta ? "true" : "false")"
+                                                aria-controls="@fechaCollapseId">
+                                            <div class="date-panel-main">
+                                                <span class="date-icon">
+                                                    <i class="fa-solid fa-calendar-day"></i>
+                                                </span>
+
+                                                <div>
+                                                    <div class="date-title">
+                                                        Entrega: @FechaEntregaTexto(fechaGrupo.FechaEntrega)
+                                                    </div>
+                                                    <div class="date-meta">
+                                                        @fechaGrupo.Items.Count.ToString("N0") registro(s) ·
+                                                        @fechaGrupo.Clientes.ToString("N0") cliente(s) ·
+                                                        @fechaGrupo.Releases.ToString("N0") release(s) ·
+                                                        @fechaGrupo.TotalRequerido.ToString("N0") requerido ·
+                                                        @fechaGrupo.TotalProgramado.ToString("N0") programado
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <span class="client-priority">
-                                                <i class="fa-solid fa-arrow-up-short-wide"></i>
-                                                @PrioridadTexto(primerItemCliente)
-                                            </span>
+                                            <div class="date-panel-right">
+                                                <span class="date-status">
+                                                    @FechaEntregaEstado(fechaGrupo.FechaEntrega)
+                                                </span>
+                                                <i class="fa-solid fa-chevron-right chev"></i>
+                                            </div>
                                         </button>
 
-                                        <div id="@clienteCollapseId" class="collapse" data-collapse-level="client">
-                                            <div class="client-body">
-                                                <div class="release-toolbar" data-release-toolbar>
-                                                    <span class="release-toolbar-label">Release</span>
-
-                                                    @foreach (var rel in releasesCliente)
-                                                    {
-                                                        <button type="button"
-                                                                class="release-btn @(rel.Key == releaseInicial ? "active" : "")"
-                                                                data-release-btn
-                                                                data-release-key="@rel.Key">
-                                                            <i class="fa-solid fa-layer-group"></i>
-                                                            @rel.Texto
-                                                            <span class="release-count">@rel.Items.Count</span>
-                                                        </button>
+                                        <div id="@fechaCollapseId"
+                                             class="collapse @(fechaAbierta ? "show" : "")"
+                                             data-collapse-level="date">
+                                            <div class="date-panel-body">
+                                                <div class="client-grid">
+                                                    @{
+                                                        var clientIndex = 0;
                                                     }
 
-                                                    <span class="release-summary" data-release-summary>
-                                                        @releasesCliente.First().TotalRequerido.ToString("N0") requerido ·
-                                                        @releasesCliente.First().TotalPT.ToString("N0") PT apartado ·
-                                                        @releasesCliente.First().TotalProgramado.ToString("N0") programado
-                                                    </span>
-                                                </div>
-
-                                                <div class="cards-grid">
-                                                    <div class="cards-header" aria-hidden="true">
-                                                        <div>Parte / estado</div>
-                                                        <div>Fecha</div>
-                                                        <div>Requerido</div>
-                                                        <div>PT apartado</div>
-                                                        <div>Máquina</div>
-                                                        <div>Molde</div>
-                                                        <div>Horas</div>
-                                                        <div>Acciones</div>
-                                                    </div>
-
-                                                    @foreach (var item in clienteItems)
+                                                    @foreach (var clienteGrupo in clientesOrdenados)
                                                     {
-                                                        <article class="need-card @CardClase(item) @(ReleaseKey(item) == releaseInicial ? "" : "hidden-by-release")" data-row data-release-key="@ReleaseKey(item)" data-requerido="@item.CantidadRequerida" data-pt="@(item.PiezasDesdePT ?? 0)" data-programado="@(item.ProduccionProgramadaPendiente ?? 0)" data-search="@DataSearch(item)">
-                                                            <div class="need-main">
-                                                                <div class="need-title-row">
-                                                                    <div class="need-title">@ParteClave(item)</div>
-                                                                    <span class="estado @EstadoClase(item)">
-                                                                        <i class="fa-solid fa-circle"></i>
-                                                                        @EstadoTexto(item)
-                                                                    </span>
+                                                        clientIndex++;
+
+                                                        var clienteCollapseId = $"cliente_{sectionIndex}_{fechaIndex}_{clientIndex}";
+                                                        var clienteItems = clienteGrupo.Items;
+                                                        var primerItemCliente = clienteItems.First();
+                                                        var partesCliente = clienteItems.Select(ParteClave).Distinct().Count();
+
+                                                        var releasesCliente = clienteItems
+                                                        .GroupBy(ReleaseKey)
+                                                        .Select(g => new
+                                                        {
+                                                            Key = g.Key,
+                                                            Texto = ReleaseTexto(g.First()),
+                                                            Items = g.OrderBy(PrioridadEntrada).ToList(),
+                                                            EntradaPrioridad = g.Min(PrioridadEntrada),
+                                                            TotalRequerido = g.Sum(x => x.CantidadRequerida),
+                                                            TotalPT = g.Sum(x => x.PiezasDesdePT ?? 0),
+                                                            TotalProgramado = g.Sum(x => x.ProduccionProgramadaPendiente ?? 0)
+                                                        })
+                                                        .OrderBy(g => g.EntradaPrioridad)
+                                                        .ToList();
+
+                                                        var releaseInicial = releasesCliente.First().Key;
+
+                                                        <article class="client-panel"
+                                                                 data-client
+                                                                 data-search="@clienteGrupo.Cliente @string.Join(" ", clienteItems.Select(DataSearch))">
+                                                            <button type="button"
+                                                                    class="client-panel-head"
+                                                                    data-bs-toggle="collapse"
+                                                                    data-bs-target="#@clienteCollapseId"
+                                                                    aria-expanded="false"
+                                                                    aria-controls="@clienteCollapseId">
+                                                                <div>
+                                                                    <div class="client-name">
+                                                                        <i class="fa-solid fa-chevron-right chev me-2"></i>
+                                                                        @clienteGrupo.Cliente
+                                                                    </div>
+                                                                    <div class="client-meta">
+                                                                        @clienteItems.Count.ToString("N0") registro(s) ·
+                                                                        @partesCliente.ToString("N0") parte(s) ·
+                                                                        @clienteItems.Sum(x => x.CantidadRequerida).ToString("N0") requerido ·
+                                                                        @clienteItems.Sum(x => x.ProduccionProgramadaPendiente ?? 0).ToString("N0") programado
+                                                                    </div>
                                                                 </div>
 
-                                                                <div class="need-sub" title="@Txt(item.DesignacionDescripcionSAP)">
-                                                                    @Txt(item.DesignacionDescripcionSAP)
+                                                                <span class="client-priority">
+                                                                    <i class="fa-solid fa-calendar-check"></i>
+                                                                    Entrega @F(primerItemCliente.FechaRequerida)
+                                                                </span>
+                                                            </button>
+
+                                                            <div id="@clienteCollapseId"
+                                                                 class="collapse"
+                                                                 data-collapse-level="client">
+                                                                <div class="client-body">
+                                                                    <div class="release-toolbar" data-release-toolbar>
+                                                                        <span class="release-toolbar-label">Release</span>
+
+                                                                        @foreach (var rel in releasesCliente)
+                                                                        {
+                                                                            <button type="button"
+                                                                                    class="release-btn @(rel.Key == releaseInicial ? "active" : "")"
+                                                                                    data-release-btn
+                                                                                    data-release-key="@rel.Key">
+                                                                                <i class="fa-solid fa-layer-group"></i>
+                                                                                @rel.Texto
+                                                                                <span class="release-count">@rel.Items.Count</span>
+                                                                            </button>
+                                                                        }
+
+                                                                        <span class="release-summary" data-release-summary>
+                                                                            @releasesCliente.First().TotalRequerido.ToString("N0") requerido ·
+                                                                            @releasesCliente.First().TotalPT.ToString("N0") PT apartado ·
+                                                                            @releasesCliente.First().TotalProgramado.ToString("N0") programado
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div class="cards-grid">
+                                                                        <div class="cards-header" aria-hidden="true">
+                                                                            <div>Parte / estado</div>
+                                                                            <div>Entrega cliente</div>
+                                                                            <div>Requerido</div>
+                                                                            <div>PT apartado</div>
+                                                                            <div>Máquina</div>
+                                                                            <div>Molde</div>
+                                                                            <div>Horas</div>
+                                                                            <div>Acciones</div>
+                                                                        </div>
+
+                                                                        @foreach (var item in clienteItems)
+                                                                        {
+                                                                            <article class="need-card @CardClase(item) @(ReleaseKey(item) == releaseInicial ? "" : "hidden-by-release")"
+                                                                                     data-row
+                                                                                     data-release-key="@ReleaseKey(item)"
+                                                                                     data-requerido="@item.CantidadRequerida"
+                                                                                     data-pt="@(item.PiezasDesdePT ?? 0)"
+                                                                                     data-programado="@(item.ProduccionProgramadaPendiente ?? 0)"
+                                                                                     data-search="@DataSearch(item)">
+                                                                                <div class="need-main">
+                                                                                    <div class="need-title-row">
+                                                                                        <div class="need-title">@ParteClave(item)</div>
+                                                                                        <span class="estado @EstadoClase(item)">
+                                                                                            <i class="fa-solid fa-circle"></i>
+                                                                                            @EstadoTexto(item)
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    <div class="need-sub" title="@Txt(item.DesignacionDescripcionSAP)">
+                                                                                        @Txt(item.DesignacionDescripcionSAP)
+                                                                                    </div>
+
+                                                                                    <div class="compact-priority">
+                                                                                        <i class="fa-solid fa-arrow-up-short-wide me-1"></i>
+                                                                                        @PrioridadTexto(item)
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div class="need-cell">
+                                                                                    <span class="need-cell-label">Entrega cliente</span>
+                                                                                    <span class="need-cell-value">
+                                                                                        <i class="fa-solid fa-calendar-day me-1"></i>
+                                                                                        @F(item.FechaRequerida)
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                <div class="need-cell">
+                                                                                    <span class="need-cell-label">Requerido</span>
+                                                                                    <span class="need-cell-value">@item.CantidadRequerida.ToString("N0")</span>
+                                                                                </div>
+
+                                                                                <div class="need-cell">
+                                                                                    <span class="need-cell-label">PT apartado</span>
+                                                                                    <span class="need-cell-value">@N0(item.PiezasDesdePT)</span>
+                                                                                </div>
+
+                                                                                <div class="need-cell">
+                                                                                    <span class="need-cell-label">Máquina</span>
+                                                                                    <span class="need-cell-value" title="@Txt(item.MaquinaSugeridaNombre)">
+                                                                                        <i class="fa-solid fa-industry me-1"></i>
+                                                                                        @Txt(item.MaquinaSugeridaCodigo)
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                <div class="need-cell">
+                                                                                    <span class="need-cell-label">Molde</span>
+                                                                                    <span class="need-cell-value">
+                                                                                        <i class="fa-solid fa-shapes me-1"></i>
+                                                                                        @Txt(item.MoldeCodigo)
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                <div class="need-cell">
+                                                                                    <span class="need-cell-label">Horas</span>
+                                                                                    <span class="need-cell-value">
+                                                                                        <i class="fa-solid fa-clock me-1"></i>
+                                                                                        @D2(item.HorasNecesarias)
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                <div class="need-actions-row">
+                                                                                    @if (item.ProgramaProduccionID.HasValue)
+                                                                                    {
+                                                                                        <a class="btn-card-main"
+                                                                                           asp-controller="PlaneacionPrograma"
+                                                                                           asp-action="Maquinas">
+                                                                                            <i class="fa-solid fa-table-columns"></i>
+                                                                                            Ver máquinas
+                                                                                        </a>
+                                                                                    }
+                                                                                    else if (ListoCambioMolde(item))
+                                                                                    {
+                                                                                        <a class="btn-card-main"
+                                                                                           href="@Url.Action("CrearDesdeNecesidad", "PlaneacionPrograma", new { releaseDetalleId = item.ReleaseDetalleID })">
+                                                                                            <i class="fa-solid fa-gears"></i>
+                                                                                            Programar molde
+                                                                                        </a>
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        <button type="button"
+                                                                                                class="btn-card-light"
+                                                                                                disabled
+                                                                                                title="Esta necesidad todavía tiene validaciones pendientes.">
+                                                                                            <i class="fa-solid fa-gears"></i>
+                                                                                            Programar molde
+                                                                                        </button>
+                                                                                        <span class="row-result row-result-review">Revisar</span>
+                                                                                    }
+                                                                                </div>
+                                                                            </article>
+                                                                        }
+                                                                    </div>
                                                                 </div>
-
-                                                                <div class="compact-priority">
-                                                                    <i class="fa-solid fa-arrow-up-short-wide me-1"></i>
-                                                                    @PrioridadTexto(item)
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="need-cell">
-                                                                <span class="need-cell-label">Fecha</span>
-                                                                <span class="need-cell-value">@F(item.FechaRequerida)</span>
-                                                            </div>
-
-                                                            <div class="need-cell">
-                                                                <span class="need-cell-label">Requerido</span>
-                                                                <span class="need-cell-value">@item.CantidadRequerida.ToString("N0")</span>
-                                                            </div>
-
-                                                            <div class="need-cell">
-                                                                <span class="need-cell-label">PT apartado</span>
-                                                                <span class="need-cell-value">@N0(item.PiezasDesdePT)</span>
-                                                            </div>
-
-                                                            <div class="need-cell">
-                                                                <span class="need-cell-label">Máquina</span>
-                                                                <span class="need-cell-value" title="@Txt(item.MaquinaSugeridaNombre)">
-                                                                    <i class="fa-solid fa-industry me-1"></i>
-                                                                    @Txt(item.MaquinaSugeridaCodigo)
-                                                                </span>
-                                                            </div>
-
-                                                            <div class="need-cell">
-                                                                <span class="need-cell-label">Molde</span>
-                                                                <span class="need-cell-value">
-                                                                    <i class="fa-solid fa-shapes me-1"></i>
-                                                                    @Txt(item.MoldeCodigo)
-                                                                </span>
-                                                            </div>
-
-                                                            <div class="need-cell">
-                                                                <span class="need-cell-label">Horas</span>
-                                                                <span class="need-cell-value">
-                                                                    <i class="fa-solid fa-clock me-1"></i>
-                                                                    @D2(item.HorasNecesarias)
-                                                                </span>
-                                                            </div>
-
-                                                            <div class="need-actions-row">
-                                                                @if (item.ProgramaProduccionID.HasValue)
-                                                                {
-                                                                    <a class="btn-card-main"
-                                                                       asp-controller="PlaneacionPrograma"
-                                                                       asp-action="Maquinas">
-                                                                        <i class="fa-solid fa-table-columns"></i>
-                                                                        Ver máquinas
-                                                                    </a>
-                                                                }
-                                                                else if (ListoCambioMolde(item))
-                                                                {
-                                                                    <a class="btn-card-main"
-                                                                       href="@Url.Action("CrearDesdeNecesidad", "PlaneacionPrograma", new { releaseDetalleId = item.ReleaseDetalleID })">
-                                                                        <i class="fa-solid fa-gears"></i>
-                                                                        Programar molde
-                                                                    </a>
-                                                                }
-                                                                else
-                                                                {
-                                                                    <button type="button"
-                                                                            class="btn-card-light"
-                                                                            disabled
-                                                                            title="Esta necesidad todavía tiene validaciones pendientes.">
-                                                                        <i class="fa-solid fa-gears"></i>
-                                                                        Programar molde
-                                                                    </button>
-                                                                    <span class="row-result row-result-review">Revisar</span>
-                                                                }
                                                             </div>
                                                         </article>
                                                     }
@@ -1505,7 +1763,7 @@
             <div class="d-flex justify-content-between gap-2 flex-wrap">
                 <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-light rounded-4 fw-bold"><i class="fa-solid fa-arrow-left me-1"></i>Releases</a>
                 <div class="d-flex gap-2 flex-wrap">
-                  @*  <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn btn-light rounded-4 fw-bold"><i class="fa-solid fa-chart-line me-1"></i>Panorama</a>*@
+                    @*  <a asp-controller="PlaneacionPanorama" asp-action="Index" class="btn btn-light rounded-4 fw-bold"><i class="fa-solid fa-chart-line me-1"></i>Panorama</a>*@
                     <a asp-controller="PlaneacionPrograma" asp-action="Maquinas" class="btn-main"><i class="fa-solid fa-gears me-1"></i>Máquinas / Cambios</a>
                 </div>
             </div>
@@ -1610,6 +1868,17 @@
                     }
                 });
 
+                document.querySelectorAll("[data-date-group]").forEach(dateGroup => {
+                    const visibleClients = Array.from(dateGroup.querySelectorAll("[data-client]"))
+                        .some(client => !client.classList.contains("hidden-by-search"));
+
+                    dateGroup.classList.toggle("hidden-by-search", q && !visibleClients);
+
+                    if (q && visibleClients) {
+                        setCollapse(dateGroup.querySelector("[data-collapse-level='date']"), true);
+                    }
+                });
+
                 sections.forEach(section => {
                     const visibleClients = Array.from(section.querySelectorAll("[data-client]")).some(client => !client.classList.contains("hidden-by-search"));
                     section.classList.toggle("hidden-by-search", q && !visibleClients);
@@ -1656,7 +1925,9 @@
             buscar?.addEventListener("input", aplicarBusqueda);
             btnCerrarTodo?.addEventListener("click", function () {
                 limpiarPantallaCompletaCliente();
-                document.querySelectorAll("[data-collapse-level='section']").forEach(el => setCollapse(el, false));
+                document.querySelectorAll(
+                    "[data-collapse-level='client'], [data-collapse-level='date'], [data-collapse-level='section']"
+                ).forEach(el => setCollapse(el, false));
             });
         });
     </script>
