@@ -521,7 +521,7 @@
                                                    value="NOK"
                                                    checked="@(pregunta.Resultado == "NOK")"
                                                    disabled="@disabledAttr" />
-                                            <label class="nok" for="r_(@pregunta.ChecklistArranqueDetalleID)_nok">
+                                            <label class="nok" for="r_@(pregunta.ChecklistArranqueDetalleID)_nok">
                                                 NOK
                                             </label>
                                         </div>
@@ -533,7 +533,7 @@
                                                    value="NA"
                                                    checked="@(pregunta.Resultado == "NA")"
                                                    disabled="@disabledAttr" />
-                                            <label class="na" for="r_(@pregunta.ChecklistArranqueDetalleID)_na">
+                                            <label class="na" for="r_@(pregunta.ChecklistArranqueDetalleID)_na">
                                                 N/A
                                             </label>
                                         </div>
@@ -563,6 +563,47 @@
                             preguntaIndex++;
                         }
                     }
+                </div>
+            }
+
+            @if (Model.TieneProcesoCalidad)
+            {
+                <div class="panel mb-4">
+                    <div class="panel-header">
+                        <i class="bi bi-patch-check me-1"></i>
+                        Seguimiento de Calidad
+                    </div>
+
+                    <div class="panel-body">
+                        <div class="d-flex flex-wrap justify-content-between gap-3">
+                            <div>
+                                <div class="data-label">Estado</div>
+                                <div class="data-value">@(Model.CalidadEstado?.Replace("_", " ") ?? "-")</div>
+                            </div>
+
+                            <div>
+                                <div class="data-label">Notificacion</div>
+                                <div class="data-value">
+                                    @(Model.FechaNotificacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="data-label">Liberacion verde</div>
+                                <div class="data-value">
+                                    @(Model.FechaLiberacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(Model.CalidadMotivoDevolucion))
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">
+                                <strong>Correccion solicitada:</strong><br />
+                                @Model.CalidadMotivoDevolucion
+                            </div>
+                        }
+                    </div>
                 </div>
             }
 

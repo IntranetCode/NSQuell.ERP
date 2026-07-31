@@ -443,6 +443,70 @@
                     </div>
                 </div>
 
+                <div class="panel mb-4">
+                    <div class="panel-header">
+                        <i class="bi bi-patch-check me-1"></i>
+                        Liberacion de Calidad
+                    </div>
+
+                    <div class="panel-body">
+                        @if (Model.CalidadResumen == null)
+                        {
+                            <div class="alert alert-secondary mb-0">
+                                El checklist todavia no ha sido enviado a Calidad.
+                            </div>
+                        }
+                        else
+                        {
+                            var calidad = Model.CalidadResumen;
+
+                            <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+                                <div>
+                                    <div class="data-label">Estado de Calidad</div>
+                                    <span class="badge @calidad.ClaseBadge fs-6 mt-1">
+                                        @calidad.EstadoTexto
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <div class="data-label">Notificacion</div>
+                                    <div class="data-value">
+                                        @(calidad.FechaNotificacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="data-label">Etiqueta verde</div>
+                                    <div class="data-value">
+                                        @(calidad.FechaLiberacionProduccion?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(calidad.MotivoDevolucion))
+                            {
+                                <div class="alert alert-danger mb-3">
+                                    <strong>Correccion solicitada por Calidad:</strong><br />
+                                    @calidad.MotivoDevolucion
+                                </div>
+                            }
+
+                            @if (calidad.ConfiguracionInvalidada)
+                            {
+                                <div class="alert alert-danger mb-3">
+                                    La configuracion de la corrida fue invalidada por cambios en Planeacion.
+                                </div>
+                            }
+
+                            <a href="@Url.Action("Detalle", "Calidad", new { id = calidad.InspeccionID })"
+                               class="btn btn-outline-primary w-100 btn-strong">
+                                <i class="bi bi-box-arrow-up-right me-1"></i>
+                                Abrir seguimiento de Calidad
+                            </a>
+                        }
+                    </div>
+                </div>
+
                 @if (e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion && !Model.TieneParoAbierto)
                 {
                     <div class="panel mb-4">
@@ -454,7 +518,7 @@
                         <div class="panel-body">
                             <div class="flow-note mb-3">
                                 Este paso cambia la ejecución de preparación a producción en serie.
-                                Solo se permite si el checklist de arranque ya fue capturado y enviado a Calidad.
+                                Solo se permite después de que Calidad libere las primeras piezas con etiqueta verde.
                             </div>
 
                             <form method="post" action="@Url.Action("IniciarSerie", "Produccion")">
@@ -466,10 +530,18 @@
 
                                 <button type="submit"
                                         class="btn btn-success w-100 btn-strong"
+                                        disabled="@(Model.CalidadResumen?.PuedeIniciarSerie != true)"
                                         onclick="return confirm('¿Confirmas iniciar producción en serie?');">
                                     <i class="bi bi-play-fill me-1"></i>
                                     Iniciar serie
                                 </button>
+
+                                @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
+                                {
+                                    <div class="text-danger fw-bold small mt-2">
+                                        Pendiente de liberacion verde por Calidad.
+                                    </div>
+                                }
                             </form>
                         </div>
                     </div>

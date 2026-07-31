@@ -7,7 +7,7 @@ using System.Data;
 
 namespace ERP.NSQuell.Controllers
 {
-    public sealed class ProduccionController : Controller
+    public sealed partial class ProduccionController : Controller
     {
         private readonly IConfiguration _configuration;
 
@@ -187,7 +187,8 @@ ORDER BY
                 RegistrosHora = await ObtenerRegistrosHoraAsync(id, cn),
                 Paros = await ObtenerParosAsync(id, cn),
                 MotivosParo = await CargarMotivosParoAsync(cn),
-                ChecklistResumen = await ObtenerResumenChecklistArranqueAsync(id, cn)
+                ChecklistResumen = await ObtenerResumenChecklistArranqueAsync(id, cn),
+                CalidadResumen = await ObtenerResumenCalidadAsync(id, cn)
             };
 
             return View(vm);
@@ -246,6 +247,8 @@ ORDER BY
                     nameof(Detalle),
                     new { id = ejecucionProduccionId });
             }
+
+            await CargarEstadoCalidadChecklistAsync(checklist, cn);
 
             return View(checklist);
         }
@@ -372,6 +375,16 @@ ORDER BY
                     usuarioId,
                     cn,
                     tx);
+
+                if (vm.EnviarACalidad)
+                {
+                    await CrearOActualizarSolicitudCalidadAsync(
+                        vm.ChecklistArranqueID,
+                        vm.EjecucionProduccionID,
+                        usuarioId,
+                        cn,
+                        tx);
+                }
 
                 await tx.CommitAsync();
 
@@ -573,7 +586,7 @@ ORDER BY
                     await tx.RollbackAsync();
 
                     TempData["Error"] =
-                        "Para iniciar producción en serie primero debes capturar el checklist de arranque y enviarlo a Calidad.";
+                        "No se puede iniciar la producción en serie hasta que Calidad libere las primeras piezas con etiqueta verde.";
 
                     return RedirectToAction(
                         nameof(Detalle),
@@ -590,6 +603,12 @@ ORDER BY
                 await MarcarProgramaEnProduccionAsync(
                     ejecucion.ProgramaProduccionID,
                     DateTime.Now,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                await MarcarCalidadEnMonitoreoAsync(
+                    ejecucionProduccionId,
                     usuarioId,
                     cn,
                     tx);
@@ -2785,27 +2804,32 @@ WHERE ProgramaProduccionID = @ProgramaProduccionID
             SqlTransaction tx)
         {
             const string sql = @"
-SELECT TOP (1)
-    EstatusID
-FROM dbo.Produccion_ChecklistArranque
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1
-ORDER BY ChecklistArranqueID DESC;";
+SELECT CAST(
+    CASE WHEN EXISTS
+    (
+        SELECT 1
+        FROM dbo.Calidad_Inspecciones ci
+        INNER JOIN dbo.Produccion_ChecklistArranque c
+            ON c.ChecklistArranqueID = ci.ChecklistArranqueID
+           AND c.Activo = 1
+        WHERE ci.EjecucionProduccionID = @EjecucionProduccionID
+          AND c.EjecucionProduccionID = @EjecucionProduccionID
+          AND c.EstatusID = @ChecklistValidado
+          AND ci.Estado = 'PRODUCCION_LIBERADA'
+          AND ISNULL(ci.Liberado, 0) = 1
+          AND ISNULL(ci.ConfiguracionInvalidada, 0) = 0
+          AND ISNULL(ci.RequiereReliberacion, 0) = 0
+    ) THEN 1 ELSE 0 END
+AS BIT);";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
-
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
                 ejecucionProduccionId;
+            cmd.Parameters.Add("@ChecklistValidado", SqlDbType.Int).Value =
+                ProduccionChecklistEstatus.ValidadoPorCalidad;
 
             var result = await cmd.ExecuteScalarAsync();
-
-            if (result == null || result == DBNull.Value)
-                return false;
-
-            var estatusChecklist = Convert.ToInt32(result);
-
-            return estatusChecklist == ProduccionChecklistEstatus.PendienteValidacionCalidad ||
-                   estatusChecklist == ProduccionChecklistEstatus.ValidadoPorCalidad;
+            return result != null && result != DBNull.Value && Convert.ToBoolean(result);
         }
 
         private async Task MarcarProgramaTerminadoAsync(
