@@ -347,6 +347,7 @@ public sealed class ProduccionDetalleVm
 
     public ProduccionCalidadResumenVm? CalidadResumen { get; set; }
 
+    public List<ProduccionRecepcionOFVm> RecepcionesOF { get; set; } = new();
 }
 
 public sealed class ProduccionIniciarRequestVm
@@ -447,6 +448,75 @@ public sealed class ProduccionOperadorTabletVm
             return Math.Max(0, CantidadPlaneada.Value - CantidadOKTotal);
         }
     }
+}
+
+public sealed class ProduccionRecepcionOFVm
+{
+    public int RecepcionOFID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+
+    public string TipoRecepcion { get; set; } = "";
+    public string? Codigo { get; set; }
+    public string? Descripcion { get; set; }
+
+    public string? Lote { get; set; }
+    public string? NumeroUI { get; set; }
+    public string? EtiquetaInicio { get; set; }
+    public string? EtiquetaFin { get; set; }
+
+    public decimal? Cantidad { get; set; }
+    public string? Unidad { get; set; }
+
+    public string? EntregadoPor { get; set; }
+    public string? RecibidoPor { get; set; }
+
+    public DateTime FechaRecepcion { get; set; }
+    public string? Observaciones { get; set; }
+
+    public string TextoTipo
+    {
+        get
+        {
+            if (string.Equals(TipoRecepcion, "MP", StringComparison.OrdinalIgnoreCase))
+                return "Materia prima";
+
+            if (string.Equals(TipoRecepcion, "COMPONENTE", StringComparison.OrdinalIgnoreCase))
+                return "Componente";
+
+            if (string.Equals(TipoRecepcion, "EMBALAJE", StringComparison.OrdinalIgnoreCase))
+                return "Embalaje";
+
+            if (string.Equals(TipoRecepcion, "ETIQUETA", StringComparison.OrdinalIgnoreCase))
+                return "Etiqueta";
+
+            return TipoRecepcion;
+        }
+    }
+}
+
+public sealed class ProduccionRecepcionOFPostVm
+{
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+
+    public string TipoRecepcion { get; set; } = "";
+    public string? Codigo { get; set; }
+    public string? Descripcion { get; set; }
+
+    public string? Lote { get; set; }
+    public string? NumeroUI { get; set; }
+    public string? EtiquetaInicio { get; set; }
+    public string? EtiquetaFin { get; set; }
+
+    public decimal? Cantidad { get; set; }
+    public string? Unidad { get; set; }
+
+    public string? EntregadoPor { get; set; }
+    public string? RecibidoPor { get; set; }
+
+    public DateTime? FechaRecepcion { get; set; }
+    public string? Observaciones { get; set; }
 }
 
 

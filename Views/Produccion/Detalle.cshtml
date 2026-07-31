@@ -11,6 +11,57 @@
     {
         horaFin = new TimeSpan(23, 59, 0);
     }
+
+    var avancePct = e.PorcentajeAvance;
+
+    if (avancePct < 0)
+    {
+        avancePct = 0;
+    }
+
+    if (avancePct > 100)
+    {
+        avancePct = 100;
+    }
+}
+
+@functions {
+    public static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    public static string Fecha(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    public static string FechaInput(DateTime value)
+    {
+        return value.ToString("yyyy-MM-ddTHH:mm");
+    }
+
+    public static string Dec4(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N4") : "-";
+    }
+
+    public static string TipoClase(string? tipo)
+    {
+        if (string.Equals(tipo, "MP", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-primary";
+
+        if (string.Equals(tipo, "COMPONENTE", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-info text-dark";
+
+        if (string.Equals(tipo, "EMBALAJE", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-success";
+
+        if (string.Equals(tipo, "ETIQUETA", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-warning text-dark";
+
+        return "badge bg-secondary";
+    }
 }
 
 <!DOCTYPE html>
@@ -30,7 +81,7 @@
         }
 
         .page-shell {
-            max-width: 1450px;
+            max-width: 1500px;
             margin: 0 auto;
             padding: 22px;
         }
@@ -178,6 +229,63 @@
             font-weight: 900;
             border-radius: 12px;
         }
+
+        .form-label {
+            color: #344054;
+            font-size: .78rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 12px;
+            border: 1px solid #d7e2f1;
+            box-shadow: none;
+        }
+
+            .form-control:focus,
+            .form-select:focus {
+                border-color: #7ca8e8;
+                box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
+            }
+
+        .recepcion-form {
+            border: 1px solid #d7e2f1;
+            border-radius: 16px;
+            background: #fbfdff;
+            padding: 14px;
+        }
+
+        .recepcion-alert {
+            border: 1px solid #fed7aa;
+            background: #fff7ed;
+            color: #9a3412;
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-size: .86rem;
+            font-weight: 700;
+        }
+
+        .soft-box {
+            border: 1px solid #e5eaf3;
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        .modal-content {
+            border-radius: 20px;
+            border: 0;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .25);
+        }
+
+        @@media (max-width: 992px) {
+            .page-shell {
+                padding: 14px;
+            }
+        }
     </style>
 </head>
 
@@ -275,7 +383,7 @@
             <div class="col-6 col-lg">
                 <div class="metric-card">
                     <div class="metric-label">Avance</div>
-                    <div class="metric-value">@e.PorcentajeAvance%</div>
+                    <div class="metric-value">@e.PorcentajeAvance.ToString("0.##")%</div>
                 </div>
             </div>
         </div>
@@ -284,11 +392,11 @@
             <div class="panel-body">
                 <div class="d-flex justify-content-between small mb-1">
                     <span class="fw-bold text-primary">Avance de producción</span>
-                    <span>@e.PorcentajeAvance%</span>
+                    <span>@e.PorcentajeAvance.ToString("0.##")%</span>
                 </div>
                 <div class="progress">
                     <div class="progress-bar"
-                         style="width:@Math.Min(100, e.PorcentajeAvance)%">
+                         style="width:@avancePct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">
                     </div>
                 </div>
             </div>
@@ -446,14 +554,14 @@
                 <div class="panel mb-4">
                     <div class="panel-header">
                         <i class="bi bi-patch-check me-1"></i>
-                        Liberacion de Calidad
+                        Liberación de Calidad
                     </div>
 
                     <div class="panel-body">
                         @if (Model.CalidadResumen == null)
                         {
                             <div class="alert alert-secondary mb-0">
-                                El checklist todavia no ha sido enviado a Calidad.
+                                El checklist todavía no ha sido enviado a Calidad.
                             </div>
                         }
                         else
@@ -469,7 +577,7 @@
                                 </div>
 
                                 <div>
-                                    <div class="data-label">Notificacion</div>
+                                    <div class="data-label">Notificación</div>
                                     <div class="data-value">
                                         @(calidad.FechaNotificacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
                                     </div>
@@ -486,7 +594,7 @@
                             @if (!string.IsNullOrWhiteSpace(calidad.MotivoDevolucion))
                             {
                                 <div class="alert alert-danger mb-3">
-                                    <strong>Correccion solicitada por Calidad:</strong><br />
+                                    <strong>Corrección solicitada por Calidad:</strong><br />
                                     @calidad.MotivoDevolucion
                                 </div>
                             }
@@ -494,7 +602,7 @@
                             @if (calidad.ConfiguracionInvalidada)
                             {
                                 <div class="alert alert-danger mb-3">
-                                    La configuracion de la corrida fue invalidada por cambios en Planeacion.
+                                    La configuración de la corrida fue invalidada por cambios en Planeación.
                                 </div>
                             }
 
@@ -539,7 +647,7 @@
                                 @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
                                 {
                                     <div class="text-danger fw-bold small mt-2">
-                                        Pendiente de liberacion verde por Calidad.
+                                        Pendiente de liberación verde por Calidad.
                                     </div>
                                 }
                             </form>
@@ -737,6 +845,203 @@
 
                 <div class="panel mb-4">
                     <div class="panel-header">
+                        <i class="bi bi-box-seam me-1"></i>
+                        Recepciones parciales contra OF
+                    </div>
+
+                    <div class="panel-body">
+                        <div class="recepcion-alert mb-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Este registro es manual mientras Almacén termina su integración. Puede capturarse por partes:
+                            materia prima, componentes, embalaje o etiquetas. No descuenta inventario.
+                        </div>
+
+                        <form method="post" action="@Url.Action("GuardarRecepcionOF", "Produccion")" class="recepcion-form mb-4" id="formRecepcionOF">
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+                            <input type="hidden" name="ProgramaProduccionID" value="@e.ProgramaProduccionID" />
+
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">Tipo</label>
+                                    <select name="TipoRecepcion" id="TipoRecepcion" class="form-select" required>
+                                        <option value="">-- Selecciona --</option>
+                                        <option value="MP">Materia prima</option>
+                                        <option value="COMPONENTE">Componente</option>
+                                        <option value="EMBALAJE">Embalaje</option>
+                                        <option value="ETIQUETA">Etiqueta</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">Código</label>
+                                    <input type="text" name="Codigo" class="form-control" maxlength="100" placeholder="Código interno / SAP" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label">Descripción</label>
+                                    <input type="text" name="Descripcion" class="form-control" maxlength="300" placeholder="Material, componente, caja, etiqueta..." />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">Lote</label>
+                                    <input type="text" name="Lote" class="form-control" maxlength="100" placeholder="Lote material" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">N.UI / Embalaje</label>
+                                    <input type="text" name="NumeroUI" class="form-control" maxlength="100" placeholder="N.UI Emb" />
+                                </div>
+
+                                <div class="col-md-3 etiqueta-field">
+                                    <label class="form-label">Etiqueta inicio</label>
+                                    <input type="text" name="EtiquetaInicio" class="form-control" maxlength="100" placeholder="Inicio" />
+                                </div>
+
+                                <div class="col-md-3 etiqueta-field">
+                                    <label class="form-label">Etiqueta fin</label>
+                                    <input type="text" name="EtiquetaFin" class="form-control" maxlength="100" placeholder="Fin" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">Cantidad</label>
+                                    <input type="number" name="Cantidad" class="form-control" step="0.0001" min="0" placeholder="0.0000" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">Unidad</label>
+                                    <select name="Unidad" class="form-select">
+                                        <option value="">-- Unidad --</option>
+                                        <option value="KG">KG</option>
+                                        <option value="PZA">PZA</option>
+                                        <option value="CAJA">CAJA</option>
+                                        <option value="ROLLO">ROLLO</option>
+                                        <option value="RANGO">RANGO</option>
+                                        <option value="N/A">N/A</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">Entregó</label>
+                                    <input type="text" name="EntregadoPor" class="form-control" maxlength="200" placeholder="Persona / área" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">Recibió</label>
+                                    <input type="text" name="RecibidoPor" class="form-control" maxlength="200" value="@e.TextoOperador" />
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label">Fecha recepción</label>
+                                    <input type="datetime-local" name="FechaRecepcion" class="form-control" value="@FechaInput(DateTime.Now)" />
+                                </div>
+
+                                <div class="col-md-8">
+                                    <label class="form-label">Observaciones</label>
+                                    <input type="text" name="Observaciones" class="form-control" maxlength="500" placeholder="Parcial, complemento, cambio de lote, entrega manual..." />
+                                </div>
+
+                                <div class="col-12 d-flex justify-content-end">
+                                    <button type="submit" class="btn btn-primary btn-strong">
+                                        <i class="bi bi-save me-1"></i>
+                                        Guardar recepción
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Código / descripción</th>
+                                        <th>Lote / N.UI</th>
+                                        <th>Etiqueta</th>
+                                        <th class="text-end">Cantidad</th>
+                                        <th>Entregó / recibió</th>
+                                        <th>Fecha</th>
+                                        <th>Observaciones</th>
+                                        <th class="text-end">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.RecepcionesOF == null || !Model.RecepcionesOF.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted py-4">
+                                                Sin recepciones registradas contra la OF.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var r in Model.RecepcionesOF)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <span class="@TipoClase(r.TipoRecepcion)">
+                                                        @r.TextoTipo
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    <div class="fw-bold">@Txt(r.Codigo)</div>
+                                                    <div class="text-muted small">@Txt(r.Descripcion)</div>
+                                                </td>
+
+                                                <td>
+                                                    <div><strong>Lote:</strong> @Txt(r.Lote)</div>
+                                                    <div class="text-muted small"><strong>N.UI:</strong> @Txt(r.NumeroUI)</div>
+                                                </td>
+
+                                                <td>
+                                                    <div><strong>Ini:</strong> @Txt(r.EtiquetaInicio)</div>
+                                                    <div class="text-muted small"><strong>Fin:</strong> @Txt(r.EtiquetaFin)</div>
+                                                </td>
+
+                                                <td class="text-end fw-bold">
+                                                    @Dec4(r.Cantidad)
+                                                    <div class="text-muted small">@Txt(r.Unidad)</div>
+                                                </td>
+
+                                                <td>
+                                                    <div><strong>Entregó:</strong> @Txt(r.EntregadoPor)</div>
+                                                    <div class="text-muted small"><strong>Recibió:</strong> @Txt(r.RecibidoPor)</div>
+                                                </td>
+
+                                                <td>
+                                                    @r.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")
+                                                </td>
+
+                                                <td>
+                                                    @Txt(r.Observaciones)
+                                                </td>
+
+                                                <td class="text-end">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-danger btn-strong"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#modalCancelarRecepcion"
+                                                            data-recepcion-id="@r.RecepcionOFID"
+                                                            data-tipo="@r.TextoTipo"
+                                                            data-descripcion="@Txt(r.Descripcion)">
+                                                        <i class="bi bi-x-circle me-1"></i>
+                                                        Cancelar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel mb-4">
+                    <div class="panel-header">
                         <i class="bi bi-clock-history me-1"></i>
                         Capturas por hora
                     </div>
@@ -841,6 +1146,90 @@
 
     </div>
 
+    <div class="modal fade" id="modalCancelarRecepcion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="@Url.Action("CancelarRecepcionOF", "Produccion")">
+                    @Html.AntiForgeryToken()
+
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title fw-bold">
+                            <i class="bi bi-x-circle me-1"></i>
+                            Cancelar recepción
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <input type="hidden" name="recepcionOFId" id="cancelarRecepcionOFId" />
+                        <input type="hidden" name="ejecucionProduccionId" value="@e.EjecucionProduccionID" />
+
+                        <div class="soft-box mb-3">
+                            <div class="data-label">Recepción</div>
+                            <div class="data-value" id="cancelarRecepcionTexto">-</div>
+                        </div>
+
+                        <label class="form-label">Motivo de cancelación</label>
+                        <textarea name="motivoCancelacion"
+                                  class="form-control"
+                                  rows="3"
+                                  maxlength="500"
+                                  required
+                                  placeholder="Explica por qué se cancela esta recepción..."></textarea>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light btn-strong" data-bs-dismiss="modal">
+                            Cerrar
+                        </button>
+                        <button type="submit" class="btn btn-danger btn-strong">
+                            Confirmar cancelación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const tipoRecepcion = document.getElementById('TipoRecepcion');
+        const etiquetaFields = document.querySelectorAll('.etiqueta-field');
+
+        function actualizarCamposEtiqueta() {
+            const tipo = (tipoRecepcion?.value || '').toUpperCase();
+
+            etiquetaFields.forEach(function (el) {
+                el.style.display = tipo === 'ETIQUETA' ? '' : 'none';
+            });
+        }
+
+        tipoRecepcion?.addEventListener('change', actualizarCamposEtiqueta);
+        actualizarCamposEtiqueta();
+
+        const modalCancelarRecepcion = document.getElementById('modalCancelarRecepcion');
+
+        modalCancelarRecepcion?.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+
+            if (!btn) return;
+
+            const recepcionId = btn.getAttribute('data-recepcion-id') || '';
+            const tipo = btn.getAttribute('data-tipo') || '';
+            const descripcion = btn.getAttribute('data-descripcion') || '';
+
+            const inputId = document.getElementById('cancelarRecepcionOFId');
+            const texto = document.getElementById('cancelarRecepcionTexto');
+
+            if (inputId) {
+                inputId.value = recepcionId;
+            }
+
+            if (texto) {
+                texto.textContent = tipo + ' · ' + descripcion;
+            }
+        });
+    </script>
 </body>
 </html>

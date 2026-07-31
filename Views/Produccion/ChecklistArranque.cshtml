@@ -3,295 +3,706 @@
 @{
     Layout = null;
 
-    var preguntaIndex = 0;
-    var puedeEditarProduccion = Model.PuedeEditarProduccion;
+    var puedeEditar =
+        ERP.NSQuell.Models.ProduccionChecklistEstatus.PuedeEditarProduccion(Model.EstatusID);
+
+    var totalPreguntas = 0;
+    var totalRespondidas = 0;
+    var totalOK = 0;
+    var totalNOK = 0;
+    var totalNA = 0;
+    var totalPendientes = 0;
+
+    foreach (var seccion in Model.Secciones
+        .Where(x =>
+            x.OrdenSeccion <= 7 &&
+            !(x.Seccion ?? "").ToUpperInvariant().Contains("CALIDAD") &&
+            !(x.Seccion ?? "").ToUpperInvariant().Contains("PARO")))
+    {
+        foreach (var pregunta in seccion.Preguntas)
+        {
+            totalPreguntas++;
+
+            var resultado = string.IsNullOrWhiteSpace(pregunta.Resultado)
+                ? ""
+                : pregunta.Resultado.Trim().ToUpperInvariant();
+
+            if (resultado == "OK")
+            {
+                totalRespondidas++;
+                totalOK++;
+            }
+            else if (resultado == "NOK")
+            {
+                totalRespondidas++;
+                totalNOK++;
+            }
+            else if (resultado == "NA" || resultado == "N/A")
+            {
+                totalRespondidas++;
+                totalNA++;
+            }
+            else
+            {
+                totalPendientes++;
+            }
+        }
+    }
+
+    var porcentajeAvance = totalPreguntas > 0
+        ? Math.Round((decimal)totalRespondidas * 100m / totalPreguntas, 2)
+        : 0m;
+}
+
+@functions {
+    public static string Txt(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    public static string TxtNull(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    public static string Fecha(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    public static string ResultadoActual(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
+        value = value.Trim().ToUpperInvariant();
+
+        if (value == "N/A")
+            return "NA";
+
+        return value;
+    }
+
+    public static string BadgeResultado(string value)
+    {
+        value = ResultadoActual(value);
+
+        if (value == "OK")
+            return "badge bg-success";
+
+        if (value == "NOK")
+            return "badge bg-danger";
+
+        if (value == "NA")
+            return "badge bg-secondary";
+
+        return "badge bg-warning text-dark";
+    }
+
+    public static string TextoResultado(string value)
+    {
+        value = ResultadoActual(value);
+
+        if (value == "OK")
+            return "OK";
+
+        if (value == "NOK")
+            return "NOK";
+
+        if (value == "NA")
+            return "N/A";
+
+        return "Pendiente";
+    }
+
+    public static string ClaseSeccion(int ordenSeccion)
+    {
+        if (ordenSeccion == 2)
+            return "step-docs";
+
+        if (ordenSeccion == 3)
+            return "step-recepcion";
+
+        if (ordenSeccion == 4)
+            return "step-material";
+
+        if (ordenSeccion == 5)
+            return "step-molde";
+
+        if (ordenSeccion == 6)
+            return "step-hmpi";
+
+        if (ordenSeccion == 7)
+            return "step-disparos";
+
+        return "step-general";
+    }
+
+    public static string IconoSeccion(int ordenSeccion)
+    {
+        if (ordenSeccion == 2)
+            return "bi-file-earmark-text";
+
+        if (ordenSeccion == 3)
+            return "bi-box-seam";
+
+        if (ordenSeccion == 4)
+            return "bi-droplet-half";
+
+        if (ordenSeccion == 5)
+            return "bi-tools";
+
+        if (ordenSeccion == 6)
+            return "bi-cpu";
+
+        if (ordenSeccion == 7)
+            return "bi-bullseye";
+
+        return "bi-check2-square";
+    }
+
+    public static string PasoTexto(int ordenSeccion)
+    {
+        if (ordenSeccion >= 2 && ordenSeccion <= 7)
+            return "Paso " + ordenSeccion.ToString();
+
+        return "Sección";
+    }
 }
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
+    <title>Preparación de arranque | Producción</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Checklist de arranque</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
     <style>
-        body {
-            background: #f4f7fb;
-            font-family: Arial, Helvetica, sans-serif;
+        :root {
+            --azul: #003b82;
+            --azul2: #0056b3;
+            --bg: #f4f7fb;
+            --txt: #102033;
+            --muted: #667085;
+            --border: #d7e2f1;
+            --green: #107c41;
+            --orange: #b54708;
+            --red: #b42318;
+            --purple: #6650a4;
         }
 
-        .page-shell {
-            max-width: 1500px;
+        body {
+            margin: 0;
+            background: radial-gradient(circle at top left, rgba(0,74,173,.10), transparent 28%), linear-gradient(180deg, #f8fbff, #eef3f9);
+            color: var(--txt);
+            font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+            font-size: 14px;
+        }
+
+        .page {
+            max-width: 1600px;
             margin: 0 auto;
             padding: 22px;
         }
 
         .hero {
-            background: linear-gradient(135deg, #0f2f63, #194c9b);
-            color: white;
             border-radius: 24px;
             padding: 24px;
-            box-shadow: 0 18px 38px rgba(15, 47, 99, .20);
+            margin-bottom: 16px;
+            color: #fff;
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+            box-shadow: 0 18px 42px rgba(15, 47, 99, .22);
         }
 
         .hero-title {
-            font-size: 1.75rem;
-            font-weight: 900;
             margin: 0;
+            font-size: 1.7rem;
+            font-weight: 950;
         }
 
-        .hero-subtitle {
-            opacity: .88;
-            margin-top: 5px;
+        .hero-sub {
+            margin-top: 6px;
+            color: rgba(255,255,255,.86);
+            font-weight: 650;
         }
 
-        .metric-card {
-            background: white;
-            border-radius: 18px;
-            padding: 16px;
-            border: 1px solid #e5eaf3;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
-            height: 100%;
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
-        .metric-label {
-            color: #667085;
-            font-size: .78rem;
-            font-weight: 800;
+        .btn-hero {
+            border: 1px solid rgba(255,255,255,.34);
+            border-radius: 12px;
+            background: rgba(255,255,255,.13);
+            color: #fff;
+            font-weight: 900;
+            text-decoration: none;
+            padding: 9px 12px;
+        }
+
+            .btn-hero:hover {
+                background: #fff;
+                color: var(--azul);
+            }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .summary {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: #fff;
+            padding: 13px;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, .045);
+        }
+
+        .summary-k {
+            color: var(--muted);
+            font-size: .72rem;
             text-transform: uppercase;
             letter-spacing: .04em;
+            font-weight: 950;
         }
 
-        .metric-value {
-            font-size: 1.65rem;
-            font-weight: 900;
-            color: #102a56;
-            margin-top: 6px;
-            line-height: 1;
+        .summary-v {
+            margin-top: 4px;
+            color: var(--azul);
+            font-size: 1.35rem;
+            font-weight: 950;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 340px minmax(0, 1fr);
+            gap: 16px;
+            align-items: start;
         }
 
         .panel {
-            background: white;
+            border: 1px solid var(--border);
             border-radius: 20px;
-            border: 1px solid #e5eaf3;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, .06);
+            background: #fff;
+            box-shadow: 0 10px 26px rgba(15, 23, 42, .055);
             overflow: hidden;
+            margin-bottom: 16px;
         }
 
-        .panel-header {
-            padding: 16px 18px;
-            background: #f8fafc;
-            border-bottom: 1px solid #e5eaf3;
-            color: #102a56;
-            font-weight: 900;
+        .panel-head {
+            padding: 15px 17px;
+            border-bottom: 1px solid var(--border);
+            background: #f8fbff;
+            color: var(--azul);
+            font-weight: 950;
         }
 
         .panel-body {
-            padding: 18px;
+            padding: 17px;
         }
 
-        .data-label {
-            color: #667085;
-            font-size: .76rem;
-            font-weight: 800;
+        .data-row {
+            display: grid;
+            grid-template-columns: 120px minmax(0, 1fr);
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid #edf2f7;
+        }
+
+            .data-row:last-child {
+                border-bottom: 0;
+            }
+
+        .data-k {
+            color: var(--muted);
+            font-size: .72rem;
             text-transform: uppercase;
             letter-spacing: .04em;
+            font-weight: 950;
         }
 
-        .data-value {
-            color: #102a56;
-            font-weight: 800;
+        .data-v {
+            color: #182437;
+            font-weight: 850;
+            word-break: break-word;
         }
 
-        .muted-small {
-            color: #667085;
-            font-size: .82rem;
+        .flow-note {
+            border: 1px solid #bfdbfe;
+            border-radius: 16px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 12px 14px;
+            font-weight: 750;
+            margin-bottom: 14px;
         }
 
-        .section-card {
-            background: white;
-            border: 1px solid #e5eaf3;
+        .progress {
+            height: 10px;
+            border-radius: 999px;
+            background: #e9eef7;
+        }
+
+        .progress-bar {
+            border-radius: 999px;
+        }
+
+        .step-card {
+            border: 1px solid var(--border);
             border-radius: 20px;
+            background: #fff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+            margin-bottom: 16px;
             overflow: hidden;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, .055);
-            margin-bottom: 18px;
         }
 
-        .section-header {
-            padding: 15px 18px;
-            background: #f8fafc;
-            border-bottom: 1px solid #e5eaf3;
+        .step-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border);
         }
 
-        .section-title {
+        .step-title-wrap {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .step-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.25rem;
+            flex: 0 0 42px;
+        }
+
+        .step-docs .step-icon {
+            background: #194c9b;
+        }
+
+        .step-recepcion .step-icon {
+            background: #107c41;
+        }
+
+        .step-material .step-icon {
+            background: #0e7490;
+        }
+
+        .step-molde .step-icon {
+            background: #b54708;
+        }
+
+        .step-hmpi .step-icon {
+            background: #6650a4;
+        }
+
+        .step-disparos .step-icon {
+            background: #b42318;
+        }
+
+        .step-calidad .step-icon {
+            background: #05603a;
+        }
+
+        .step-paro .step-icon {
+            background: #7a271a;
+        }
+
+        .step-general .step-icon {
+            background: #475467;
+        }
+
+        .step-label {
+            color: var(--muted);
+            font-size: .74rem;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            font-weight: 950;
+        }
+
+        .step-title {
+            margin-top: 2px;
+            color: #102033;
+            font-size: 1.05rem;
+            font-weight: 950;
+        }
+
+        .step-resp {
+            color: var(--muted);
+            font-size: .82rem;
+            font-weight: 700;
+            margin-top: 3px;
+        }
+
+        .step-count {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            border: 1px solid #d0d5dd;
+            background: #fff;
+            color: #344054;
+            font-size: .74rem;
             font-weight: 900;
-            color: #102a56;
-            margin: 0;
+            white-space: nowrap;
+        }
+
+        .pill-ok {
+            border-color: #abefc6;
+            background: #ecfdf3;
+            color: #067647;
+        }
+
+        .pill-nok {
+            border-color: #fecdca;
+            background: #fef3f2;
+            color: #b42318;
+        }
+
+        .pill-pending {
+            border-color: #fed7aa;
+            background: #fff7ed;
+            color: #b54708;
         }
 
         .question-row {
-            padding: 16px 18px;
-            border-bottom: 1px solid #eef2f7;
+            display: grid;
+            grid-template-columns: 54px minmax(0, 1fr) 300px;
+            gap: 12px;
+            padding: 15px 18px;
+            border-bottom: 1px solid #edf2f7;
         }
 
             .question-row:last-child {
                 border-bottom: 0;
             }
 
+        .question-num {
+            width: 38px;
+            height: 38px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #eff6ff;
+            color: var(--azul);
+            border: 1px solid #bfdbfe;
+            font-weight: 950;
+        }
+
         .question-text {
-            color: #102a56;
-            font-weight: 800;
-            line-height: 1.25;
+            color: #182437;
+            font-weight: 850;
+            line-height: 1.35;
         }
 
         .question-meta {
-            color: #667085;
-            font-size: .78rem;
-            margin-top: 4px;
-        }
-
-        .result-group {
             display: flex;
+            gap: 6px;
             flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        .answer-box {
+            border: 1px solid #e5eaf3;
+            border-radius: 14px;
+            background: #fbfdff;
+            padding: 10px;
+        }
+
+        .answer-options {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .answer-option input {
+            display: none;
+        }
+
+        .answer-option span {
+            display: block;
+            text-align: center;
+            border: 1px solid #d0d5dd;
+            border-radius: 10px;
+            background: #fff;
+            color: #344054;
+            padding: 8px 6px;
+            font-weight: 950;
+            cursor: pointer;
+        }
+
+        .answer-option input:checked + span.ok {
+            border-color: #12b76a;
+            background: #ecfdf3;
+            color: #067647;
+        }
+
+        .answer-option input:checked + span.nok {
+            border-color: #f04438;
+            background: #fef3f2;
+            color: #b42318;
+        }
+
+        .answer-option input:checked + span.na {
+            border-color: #98a2b3;
+            background: #f2f4f7;
+            color: #344054;
+        }
+
+        .answer-option.disabled span {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+        .obs {
+            min-height: 38px;
+            font-size: .86rem;
+        }
+
+        .readonly-answer {
+            display: flex;
+            flex-direction: column;
             gap: 8px;
-            justify-content: flex-end;
-        }
-
-        .result-option {
-            position: relative;
-        }
-
-            .result-option input {
-                position: absolute;
-                opacity: 0;
-                pointer-events: none;
-            }
-
-            .result-option label {
-                min-width: 66px;
-                text-align: center;
-                border-radius: 999px;
-                padding: 8px 12px;
-                border: 1px solid #d0d7e2;
-                background: #fff;
-                color: #344054;
-                font-weight: 900;
-                cursor: pointer;
-                user-select: none;
-                transition: all .15s ease;
-            }
-
-            .result-option input:checked + label.ok {
-                background: #16a34a;
-                border-color: #16a34a;
-                color: white;
-            }
-
-            .result-option input:checked + label.nok {
-                background: #dc2626;
-                border-color: #dc2626;
-                color: white;
-            }
-
-            .result-option input:checked + label.na {
-                background: #64748b;
-                border-color: #64748b;
-                color: white;
-            }
-
-            .result-option input:disabled + label {
-                opacity: .55;
-                cursor: not-allowed;
-            }
-
-        .obs-box {
-            margin-top: 12px;
         }
 
         .sticky-actions {
             position: sticky;
             bottom: 0;
-            z-index: 50;
-            background: rgba(244, 247, 251, .96);
-            backdrop-filter: blur(8px);
-            border-top: 1px solid #dbe3f0;
-            padding: 14px 0;
-            margin-top: 22px;
+            z-index: 30;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: rgba(255,255,255,.94);
+            backdrop-filter: blur(10px);
+            padding: 12px;
+            box-shadow: 0 -8px 26px rgba(15, 23, 42, .08);
         }
 
-        .quality-locked {
-            background: #fff7ed;
-            border: 1px solid #fed7aa;
-            color: #9a3412;
-            border-radius: 14px;
-            padding: 12px 14px;
-            font-size: .9rem;
-            font-weight: 700;
+        .btn-strong {
+            border-radius: 12px;
+            font-weight: 950;
         }
 
-        .readonly-banner {
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            color: #1d4ed8;
-            border-radius: 14px;
-            padding: 12px 14px;
-            font-weight: 700;
+        .form-control {
+            border-radius: 12px;
+            border: 1px solid #d7e2f1;
+            box-shadow: none;
         }
 
-        .btn-big {
-            padding: 12px 18px;
-            font-weight: 900;
-            border-radius: 14px;
-        }
-
-        @@media (max-width: 992px) {
-            .result-group {
-                justify-content: flex-start;
-                margin-top: 12px;
+            .form-control:focus {
+                border-color: #7ca8e8;
+                box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
             }
 
-            .hero-title {
-                font-size: 1.35rem;
+        .modal-content {
+            border: 0;
+            border-radius: 22px;
+            box-shadow: 0 24px 80px rgba(15, 23, 42, .28);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+            color: #fff;
+            border: 0;
+        }
+
+        @@media (max-width: 1200px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .question-row {
+                grid-template-columns: 46px minmax(0, 1fr);
+            }
+
+            .answer-box {
+                grid-column: 1 / -1;
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @@media (max-width: 700px) {
+            .page {
+                padding: 12px;
+            }
+
+            .hero {
+                border-radius: 18px;
+                padding: 18px;
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .question-row {
+                padding: 13px;
+            }
+
+            .step-head {
+                padding: 14px;
             }
         }
     </style>
 </head>
 
 <body>
-    <div class="page-shell">
+    <div class="page">
 
-        <div class="hero mb-4">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <section class="hero">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                 <div>
                     <h1 class="hero-title">
                         <i class="bi bi-clipboard2-check me-2"></i>
-                        Checklist de arranque
+                        Preparación de arranque
                     </h1>
-                    <div class="hero-subtitle">
-                        @Model.TextoFormato · Programa @Model.ProgramaProduccionID · @Model.TextoMaquina
+                    <div class="hero-sub">
+                        Flujo de preparación previo a Calidad: documentos, recepción contra OF, material, molde, HMPI y disparos de prueba.
                     </div>
                 </div>
 
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <span class="badge @Model.EstatusClase fs-6">
-                        @Model.EstatusNombre
-                    </span>
-
+                <div class="hero-actions">
                     <a href="@Url.Action("Detalle", "Produccion", new { id = Model.EjecucionProduccionID })"
-                       class="btn btn-light fw-bold">
+                       class="btn-hero">
                         <i class="bi bi-arrow-left me-1"></i>
-                        Volver
+                        Volver a producción
                     </a>
                 </div>
             </div>
-        </div>
+        </section>
 
         @if (TempData["Success"] != null)
         {
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <div class="alert alert-success alert-dismissible fade show">
                 <i class="bi bi-check-circle me-1"></i>
                 @TempData["Success"]
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -300,441 +711,526 @@
 
         @if (TempData["Error"] != null)
         {
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <div class="alert alert-danger alert-dismissible fade show">
                 <i class="bi bi-exclamation-triangle me-1"></i>
                 @TempData["Error"]
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         }
 
-        @if (!puedeEditarProduccion)
+        @if (TempData["Info"] != null)
         {
-            <div class="readonly-banner mb-4">
+            <div class="alert alert-info alert-dismissible fade show">
                 <i class="bi bi-info-circle me-1"></i>
-                Este checklist ya no está editable para Producción. Puedes consultarlo, pero no modificarlo.
+                @TempData["Info"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         }
 
-        <div class="row g-3 mb-4">
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Preguntas</div>
-                    <div class="metric-value">@Model.TotalPreguntas</div>
-                </div>
+        <div class="summary-grid">
+            <div class="summary">
+                <div class="summary-k">Preguntas</div>
+                <div class="summary-v">@totalPreguntas</div>
             </div>
 
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Respondidas</div>
-                    <div class="metric-value">@Model.TotalRespondidas</div>
-                </div>
+            <div class="summary">
+                <div class="summary-k">Respondidas</div>
+                <div class="summary-v text-success">@totalRespondidas</div>
             </div>
 
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">OK</div>
-                    <div class="metric-value text-success">@Model.TotalOK</div>
-                </div>
+            <div class="summary">
+                <div class="summary-k">Pendientes</div>
+                <div class="summary-v text-warning">@totalPendientes</div>
             </div>
 
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">NOK</div>
-                    <div class="metric-value text-danger">@Model.TotalNOK</div>
-                </div>
+            <div class="summary">
+                <div class="summary-k">OK</div>
+                <div class="summary-v text-success">@totalOK</div>
             </div>
 
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">N/A</div>
-                    <div class="metric-value text-secondary">@Model.TotalNA</div>
-                </div>
+            <div class="summary">
+                <div class="summary-k">NOK</div>
+                <div class="summary-v text-danger">@totalNOK</div>
             </div>
 
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Estatus</div>
-                    <div class="mt-2">
-                        <span class="badge @Model.EstatusClase fs-6">
-                            @Model.EstatusNombre
-                        </span>
-                    </div>
-                </div>
+            <div class="summary">
+                <div class="summary-k">N/A</div>
+                <div class="summary-v text-secondary">@totalNA</div>
             </div>
         </div>
 
-        <div class="panel mb-4">
-            <div class="panel-header">
-                <i class="bi bi-info-circle me-1"></i>
-                Datos del arranque
-            </div>
+        <div class="layout">
 
-            <div class="panel-body">
-                <div class="row g-3">
-                    <div class="col-6 col-lg-3">
-                        <div class="data-label">Programa</div>
-                        <div class="data-value">@Model.ProgramaProduccionID</div>
+            <aside>
+                <div class="panel">
+                    <div class="panel-head">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Datos del arranque
                     </div>
 
-                    <div class="col-6 col-lg-3">
-                        <div class="data-label">Máquina</div>
-                        <div class="data-value">@Model.MaquinaCodigo</div>
-                        <div class="muted-small">@Model.MaquinaNombre</div>
-                    </div>
-
-                    <div class="col-6 col-lg-3">
-                        <div class="data-label">Molde</div>
-                        <div class="data-value">@(Model.MoldeCodigo ?? "Sin molde")</div>
-                    </div>
-
-                    <div class="col-6 col-lg-3">
-                        <div class="data-label">Parte</div>
-                        <div class="data-value">@Model.TextoParte</div>
-                        <div class="muted-small">@Model.DescripcionParte</div>
-                    </div>
-
-                    <div class="col-6 col-lg-3">
-                        <div class="data-label">Fecha checklist</div>
-                        <div class="data-value">@Model.FechaChecklist.ToString("dd/MM/yyyy HH:mm")</div>
-                    </div>
-
-                    <div class="col-6 col-lg-3">
-                        <div class="data-label">Captura producción</div>
-                        <div class="data-value">
-                            @(Model.FechaCapturaProduccion?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                    <div class="panel-body">
+                        <div class="data-row">
+                            <div class="data-k">Checklist</div>
+                            <div class="data-v">@Model.ChecklistArranqueID</div>
                         </div>
-                    </div>
 
-                    <div class="col-6 col-lg-3">
-                        <div class="data-label">Validación calidad</div>
-                        <div class="data-value">
-                            @(Model.FechaValidacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")
+                        <div class="data-row">
+                            <div class="data-k">Programa</div>
+                            <div class="data-v">@Model.ProgramaProduccionID</div>
                         </div>
-                    </div>
 
-                    <div class="col-6 col-lg-3">
-                        <div class="data-label">Formato</div>
-                        <div class="data-value">@Model.TextoFormato</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+                        <div class="data-row">
+                            <div class="data-k">Ejecución</div>
+                            <div class="data-v">@Model.EjecucionProduccionID</div>
+                        </div>
 
-        <form method="post" action="@Url.Action("GuardarChecklistArranque", "Produccion")" id="formChecklistArranque">
-            @Html.AntiForgeryToken()
+                        <div class="data-row">
+                            <div class="data-k">Formato</div>
+                            <div class="data-v">@TxtNull(Model.CodigoFormato) @TxtNull(Model.VersionFormato)</div>
+                        </div>
 
-            <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
-            <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                        <div class="data-row">
+                            <div class="data-k">Fecha</div>
+                            <div class="data-v">@Model.FechaChecklist.ToString("dd/MM/yyyy HH:mm")</div>
+                        </div>
 
-            @foreach (var seccion in Model.Secciones.OrderBy(x => x.OrdenSeccion))
-            {
-                var esCalidad = seccion.EsSeccionCalidad;
-                var editableSeccion = puedeEditarProduccion && !esCalidad;
-
-                <div class="section-card">
-                    <div class="section-header">
-                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                            <div>
-                                <h5 class="section-title">
-                                    @seccion.Seccion
-                                </h5>
-                                <div class="muted-small">
-                                    Responsable: @(seccion.ResponsableSugerido ?? "No definido")
-                                </div>
+                        <div class="data-row">
+                            <div class="data-k">Máquina</div>
+                            <div class="data-v">
+                                @TxtNull(Model.MaquinaCodigo)
+                                <div class="text-muted small">@TxtNull(Model.MaquinaNombre)</div>
                             </div>
+                        </div>
 
-                            <div class="d-flex flex-wrap gap-2">
-                                <span class="badge bg-light text-dark border">
-                                    @seccion.TotalRespondidas / @seccion.TotalPreguntas respondidas
+                        <div class="data-row">
+                            <div class="data-k">Molde</div>
+                            <div class="data-v">@TxtNull(Model.MoldeCodigo)</div>
+                        </div>
+
+                        <div class="data-row">
+                            <div class="data-k">Parte</div>
+                            <div class="data-v">
+                                @TxtNull(Model.ReferenciaSAP ?? Model.NumeroParte)
+                                <div class="text-muted small">@TxtNull(Model.DescripcionParte)</div>
+                            </div>
+                        </div>
+
+                        <div class="data-row">
+                            <div class="data-k">Estatus</div>
+                            <div class="data-v">
+                                <span class="badge @Model.EstatusClase">
+                                    @Model.EstatusNombre
                                 </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                                @if (seccion.TotalNOK > 0)
-                                {
-                                    <span class="badge bg-danger">
-                                        @seccion.TotalNOK NOK
-                                    </span>
-                                }
+                <div class="panel">
+                    <div class="panel-head">
+                        <i class="bi bi-graph-up-arrow me-1"></i>
+                        Avance
+                    </div>
 
-                                @if (esCalidad)
-                                {
-                                    <span class="badge bg-warning text-dark">
-                                        Calidad
-                                    </span>
-                                }
+                    <div class="panel-body">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="fw-bold text-primary">@porcentajeAvance.ToString("0.##")%</span>
+                            <span class="text-muted">@totalRespondidas / @totalPreguntas</span>
+                        </div>
+
+                        <div class="progress mb-3">
+                            <div class="progress-bar"
+                                 style="width:@porcentajeAvance.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">
                             </div>
                         </div>
 
-                        @if (esCalidad)
-                        {
-                            <div class="quality-locked mt-3">
-                                <i class="bi bi-lock-fill me-1"></i>
-                                Esta sección queda preparada para Calidad. Producción no debe capturarla.
-                            </div>
-                        }
+                        <div class="flow-note mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Por ahora Producción captura todos los pasos operativos. Más adelante se puede filtrar por puesto:
+                            supervisor o técnico.
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <main>
+                <form method="post"
+                      action="@Url.Action("GuardarChecklistArranque", "Produccion")"
+                      id="formChecklistArranque">
+
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
+                    <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+
+                    <div class="flow-note">
+                        <i class="bi bi-diagram-3 me-1"></i>
+                        Captura los pasos operativos de Producción antes de enviar a Calidad. Puedes guardar borrador o enviar a Calidad cuando esté completo.
+                        Las respuestas NOK requieren observación.
                     </div>
 
-                    @foreach (var pregunta in seccion.Preguntas.OrderBy(x => x.OrdenPregunta))
+                    @{
+                        var index = 0;
+                    }
+
+                    @foreach (var seccion in Model.Secciones
+                                        .Where(x =>
+                                        x.OrdenSeccion <= 7 &&
+                                        !(x.Seccion ?? "").ToUpperInvariant().Contains("CALIDAD") &&
+                                        !(x.Seccion ?? "").ToUpperInvariant().Contains("PARO"))
+                                        .OrderBy(x => x.OrdenSeccion))
                     {
-                        var disabledAttr = editableSeccion ? null : "disabled";
-                        var requiereObs = pregunta.RequiereObservacionSiNOK;
+                        var preguntas = seccion.Preguntas
+                        .OrderBy(x => x.OrdenPregunta)
+                        .ThenBy(x => x.PreguntaID)
+                        .ToList();
 
-                        <div class="question-row">
-                            <div class="row g-3 align-items-start">
-                                <div class="col-12 col-lg-7">
-                                    <div class="question-text">
-                                        @pregunta.OrdenPregunta. @pregunta.TextoPregunta
+                        var respondidasSeccion = 0;
+                        var nokSeccion = 0;
+                        var pendientesSeccion = 0;
+
+                        foreach (var p in preguntas)
+                        {
+                            var r = ResultadoActual(p.Resultado);
+
+                            if (r == "OK" || r == "NOK" || r == "NA")
+                            {
+                                respondidasSeccion++;
+                            }
+                            else
+                            {
+                                pendientesSeccion++;
+                            }
+
+                            if (r == "NOK")
+                            {
+                                nokSeccion++;
+                            }
+                        }
+
+                        var claseSeccion = ClaseSeccion(seccion.OrdenSeccion);
+
+                        <section class="step-card @claseSeccion">
+                            <div class="step-head">
+                                <div class="step-title-wrap">
+                                    <div class="step-icon">
+                                        <i class="bi @IconoSeccion(seccion.OrdenSeccion)"></i>
                                     </div>
 
-                                    <div class="question-meta">
-                                        Responsable sugerido: @(pregunta.ResponsableSugerido ?? "-")
-                                        @if (requiereObs)
-                                        {
-                                            <span> · Si es NOK requiere observación</span>
-                                        }
-                                    </div>
+                                    <div>
+                                        <div class="step-label">
+                                            @PasoTexto(seccion.OrdenSeccion)
+                                        </div>
 
-                                    @if (editableSeccion)
+                                        <div class="step-title">
+                                            @seccion.Seccion
+                                        </div>
+
+                                        <div class="step-resp">
+                                            Responsable sugerido: @TxtNull(seccion.ResponsableSugerido)
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="step-count">
+                                    <span class="pill pill-ok">
+                                        <i class="bi bi-check-circle"></i>
+                                        @respondidasSeccion / @preguntas.Count
+                                    </span>
+
+                                    @if (pendientesSeccion > 0)
                                     {
-                                        <input type="hidden" name="Respuestas[@preguntaIndex].ChecklistArranqueDetalleID" value="@pregunta.ChecklistArranqueDetalleID" />
-                                        <input type="hidden" name="Respuestas[@preguntaIndex].PreguntaID" value="@pregunta.PreguntaID" />
+                                        <span class="pill pill-pending">
+                                            <i class="bi bi-clock"></i>
+                                            @pendientesSeccion pendiente(s)
+                                        </span>
+                                    }
+
+                                    @if (nokSeccion > 0)
+                                    {
+                                        <span class="pill pill-nok">
+                                            <i class="bi bi-x-circle"></i>
+                                            @nokSeccion NOK
+                                        </span>
                                     }
                                 </div>
+                            </div>
 
-                                <div class="col-12 col-lg-5">
-                                    <div class="result-group">
-                                        <div class="result-option">
-                                            <input type="radio"
-                                                   id="r_(@pregunta.ChecklistArranqueDetalleID)_ok"
-                                                   name="Respuestas[@preguntaIndex].Resultado"
-                                                   value="OK"
-                                                   checked="@(pregunta.Resultado == "OK")"
-                                                   disabled="@disabledAttr" />
-                                            <label class="ok" for="r_@pregunta.(ChecklistArranqueDetalleID)_ok">
-                                                OK
-                                            </label>
-                                        </div>
+                            @foreach (var pregunta in preguntas)
+                            {
+                                var resultado = ResultadoActual(pregunta.Resultado);
+                                var respuestaPrefix = "Respuestas[" + index + "]";
 
-                                        <div class="result-option">
-                                            <input type="radio"
-                                                   id="r_@pregunta.(ChecklistArranqueDetalleID)_nok"
-                                                   name="Respuestas[@preguntaIndex].Resultado"
-                                                   value="NOK"
-                                                   checked="@(pregunta.Resultado == "NOK")"
-                                                   disabled="@disabledAttr" />
-                                            <label class="nok" for="r_@(pregunta.ChecklistArranqueDetalleID)_nok">
-                                                NOK
-                                            </label>
-                                        </div>
-
-                                        <div class="result-option">
-                                            <input type="radio"
-                                                   id="r_@(pregunta.ChecklistArranqueDetalleID)_na"
-                                                   name="Respuestas[@preguntaIndex].Resultado"
-                                                   value="NA"
-                                                   checked="@(pregunta.Resultado == "NA")"
-                                                   disabled="@disabledAttr" />
-                                            <label class="na" for="r_@(pregunta.ChecklistArranqueDetalleID)_na">
-                                                N/A
-                                            </label>
+                                <div class="question-row">
+                                    <div>
+                                        <div class="question-num">
+                                            @pregunta.OrdenPregunta
                                         </div>
                                     </div>
 
-                                    <div class="obs-box">
-                                        <textarea name="Respuestas[@preguntaIndex].Observaciones"
-                                          class="form-control"
-                                          rows="2"
-                                          maxlength="500"
-                                          placeholder="Observaciones..."
-                                          disabled="@disabledAttr">@pregunta.Observaciones</textarea>
+                                    <div>
+                                        <div class="question-text">
+                                            @pregunta.TextoPregunta
+                                        </div>
 
-                                        @if (pregunta.TieneErrorCaptura)
+                                        <div class="question-meta">
+                                            <span class="pill">
+                                                <i class="bi bi-person-badge"></i>
+                                                @TxtNull(pregunta.ResponsableSugerido)
+                                            </span>
+
+                                            @if (pregunta.RequiereObservacionSiNOK)
+                                            {
+                                                <span class="pill pill-nok">
+                                                    <i class="bi bi-chat-left-text"></i>
+                                                    Obs. requerida si NOK
+                                                </span>
+                                            }
+
+                                            <span class="@BadgeResultado(pregunta.Resultado)">
+                                                @TextoResultado(pregunta.Resultado)
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="answer-box">
+                                        <input type="hidden"
+                                               name="@(respuestaPrefix + ".ChecklistArranqueDetalleID")"
+                                               value="@pregunta.ChecklistArranqueDetalleID" />
+
+                                        @if (puedeEditar)
                                         {
-                                            <div class="text-danger small fw-bold mt-1">
-                                                Esta pregunta está NOK y requiere observación.
+                                            <div class="answer-options">
+                                                <label class="answer-option">
+                                                    <input type="radio"
+                                                           name="@(respuestaPrefix + ".Resultado")"
+                                                           value="OK"
+                                                           @(resultado == "OK" ? "checked" : "") />
+                                                    <span class="ok">OK</span>
+                                                </label>
+
+                                                <label class="answer-option">
+                                                    <input type="radio"
+                                                           name="@(respuestaPrefix + ".Resultado")"
+                                                           value="NOK"
+                                                           @(resultado == "NOK" ? "checked" : "") />
+                                                    <span class="nok">NOK</span>
+                                                </label>
+
+                                                <label class="answer-option">
+                                                    <input type="radio"
+                                                           name="@(respuestaPrefix + ".Resultado")"
+                                                           value="NA"
+                                                           @(resultado == "NA" ? "checked" : "") />
+                                                    <span class="na">N/A</span>
+                                                </label>
+                                            </div>
+
+                                            <textarea name="@(respuestaPrefix + ".Observaciones")"
+                                          class="form-control obs"
+                                          maxlength="500"
+                                          rows="2"
+                                          placeholder="Observaciones, corrección o evidencia...">@pregunta.Observaciones</textarea>
+                                        }
+                                        else
+                                        {
+                                            <div class="readonly-answer">
+                                                <span class="@BadgeResultado(pregunta.Resultado)">
+                                                    @TextoResultado(pregunta.Resultado)
+                                                </span>
+
+                                                <div class="soft-box">
+                                                    @TxtNull(pregunta.Observaciones)
+                                                </div>
                                             </div>
                                         }
                                     </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        if (editableSeccion)
-                        {
-                            preguntaIndex++;
-                        }
+                                index++;
+                            }
+                        </section>
                     }
-                </div>
-            }
 
-            @if (Model.TieneProcesoCalidad)
-            {
-                <div class="panel mb-4">
-                    <div class="panel-header">
-                        <i class="bi bi-patch-check me-1"></i>
-                        Seguimiento de Calidad
-                    </div>
-
-                    <div class="panel-body">
-                        <div class="d-flex flex-wrap justify-content-between gap-3">
-                            <div>
-                                <div class="data-label">Estado</div>
-                                <div class="data-value">@(Model.CalidadEstado?.Replace("_", " ") ?? "-")</div>
-                            </div>
-
-                            <div>
-                                <div class="data-label">Notificacion</div>
-                                <div class="data-value">
-                                    @(Model.FechaNotificacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                </div>
-                            </div>
-
-                            <div>
-                                <div class="data-label">Liberacion verde</div>
-                                <div class="data-value">
-                                    @(Model.FechaLiberacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                </div>
-                            </div>
+                    <div class="panel">
+                        <div class="panel-head">
+                            <i class="bi bi-chat-left-text me-1"></i>
+                            Observaciones generales de Producción
                         </div>
 
-                        @if (!string.IsNullOrWhiteSpace(Model.CalidadMotivoDevolucion))
-                        {
-                            <div class="alert alert-danger mt-3 mb-0">
-                                <strong>Correccion solicitada:</strong><br />
-                                @Model.CalidadMotivoDevolucion
-                            </div>
-                        }
+                        <div class="panel-body">
+                            <textarea name="ObservacionesGenerales"
+                                      class="form-control"
+                                      rows="4"
+                                      maxlength="1000"
+                                      @(puedeEditar ? "" : "readonly")
+                                      placeholder="Observaciones generales de preparación, ajuste, cambios, hallazgos o pendientes...">@Model.ObservacionesGenerales</textarea>
+                        </div>
                     </div>
-                </div>
-            }
 
-            <div class="panel mb-4">
-                <div class="panel-header">
-                    <i class="bi bi-chat-left-text me-1"></i>
-                    Observaciones generales de Producción
-                </div>
-
-                <div class="panel-body">
-                    <textarea name="ObservacionesGenerales"
-                              class="form-control"
-                              rows="3"
-                              maxlength="1000"
-                              placeholder="Observaciones generales del arranque..."
-                              disabled="@(puedeEditarProduccion ? null : "disabled")">@Model.ObservacionesGenerales</textarea>
-
-                    @if (!string.IsNullOrWhiteSpace(Model.ObservacionesCalidad))
+                    @if (puedeEditar)
                     {
-                        <div class="mt-3">
-                            <div class="data-label">Observaciones de Calidad</div>
-                            <div class="alert alert-warning mb-0">
-                                @Model.ObservacionesCalidad
+                        <div class="sticky-actions">
+                            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                                <a href="@Url.Action("Detalle", "Produccion", new { id = Model.EjecucionProduccionID })"
+                                   class="btn btn-light btn-strong">
+                                    <i class="bi bi-arrow-left me-1"></i>
+                                    Volver
+                                </a>
+
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button type="submit"
+                                            name="EnviarACalidad"
+                                            value="false"
+                                            class="btn btn-primary btn-strong">
+                                        <i class="bi bi-save me-1"></i>
+                                        Guardar borrador
+                                    </button>
+
+                                    <button type="button"
+                                            class="btn btn-success btn-strong"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalEnviarCalidad">
+                                        <i class="bi bi-send-check me-1"></i>
+                                        Enviar a Calidad
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal fade" id="modalEnviarCalidad" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title fw-bold">
+                                            <i class="bi bi-send-check me-1"></i>
+                                            Enviar preparación a Calidad
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+
+                                    <div class="modal-body">
+                                        <div class="alert alert-info rounded-4 fw-bold">
+                                            El sistema validará que los pasos operativos de Producción estén respondidos y que las respuestas NOK tengan observación.
+                                        </div>
+
+                                        <div class="soft-box">
+                                            <div class="data-row">
+                                                <div class="data-k">Preguntas</div>
+                                                <div class="data-v">@totalPreguntas</div>
+                                            </div>
+
+                                            <div class="data-row">
+                                                <div class="data-k">Respondidas</div>
+                                                <div class="data-v">@totalRespondidas</div>
+                                            </div>
+
+                                            <div class="data-row">
+                                                <div class="data-k">Pendientes</div>
+                                                <div class="data-v">@totalPendientes</div>
+                                            </div>
+
+                                            <div class="data-row">
+                                                <div class="data-k">NOK</div>
+                                                <div class="data-v">@totalNOK</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="modal-footer border-0">
+                                        <button type="button"
+                                                class="btn btn-light btn-strong"
+                                                data-bs-dismiss="modal">
+                                            Cancelar
+                                        </button>
+
+                                        <button type="submit"
+                                                name="EnviarACalidad"
+                                                value="true"
+                                                class="btn btn-success btn-strong">
+                                            <i class="bi bi-send-check me-1"></i>
+                                            Sí, enviar a Calidad
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     }
-                </div>
-            </div>
+                    else
+                    {
+                        <div class="sticky-actions">
+                            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                                <a href="@Url.Action("Detalle", "Produccion", new { id = Model.EjecucionProduccionID })"
+                                   class="btn btn-light btn-strong">
+                                    <i class="bi bi-arrow-left me-1"></i>
+                                    Volver
+                                </a>
 
-            @if (puedeEditarProduccion)
-            {
-                <div class="sticky-actions">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                        <div class="muted-small">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Guarda como borrador o envía el checklist a validación de Calidad.
-                            Si hay respuestas NOK, deben tener observación.
+                                <span class="pill">
+                                    <i class="bi bi-lock"></i>
+                                    Este checklist ya no puede editarse por Producción
+                                </span>
+                            </div>
                         </div>
-
-                        <div class="d-flex flex-wrap gap-2">
-                            <a href="@Url.Action("Detalle", "Produccion", new { id = Model.EjecucionProduccionID })"
-                               class="btn btn-outline-secondary btn-big">
-                                Cancelar
-                            </a>
-
-                            <button type="submit"
-                                    name="GuardarBorrador"
-                                    value="true"
-                                    class="btn btn-primary btn-big">
-                                <i class="bi bi-save me-1"></i>
-                                Guardar borrador
-                            </button>
-
-                            <button type="submit"
-                                    name="EnviarACalidad"
-                                    value="true"
-                                    class="btn btn-success btn-big"
-                                    onclick="return confirmarEnvioCalidad();">
-                                <i class="bi bi-send-check me-1"></i>
-                                Enviar a Calidad
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            }
-        </form>
-
+                    }
+                </form>
+            </main>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        function confirmarEnvioCalidad() {
-            return confirm('¿Confirmas enviar el checklist a validación de Calidad? Después de enviarlo ya no podrá editarse desde Producción.');
+        const formChecklist = document.getElementById('formChecklistArranque');
+
+        function validarNokConObservacion() {
+            const rows = document.querySelectorAll('.question-row');
+            let faltantes = [];
+
+            rows.forEach(function (row) {
+                const nok = row.querySelector('input[type="radio"][value="NOK"]');
+                const obs = row.querySelector('textarea');
+
+                if (!nok || !obs) return;
+
+                if (nok.checked && !obs.value.trim()) {
+                    const txt = row.querySelector('.question-text');
+                    faltantes.push(txt ? txt.textContent.trim() : 'Pregunta NOK sin observación');
+                    obs.classList.add('is-invalid');
+                }
+                else {
+                    obs.classList.remove('is-invalid');
+                }
+            });
+
+            if (faltantes.length > 0) {
+                alert('Las respuestas NOK requieren observación antes de guardar/enviar.');
+                return false;
+            }
+
+            return true;
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            const form = document.getElementById('formChecklistArranque');
-
-            if (!form) {
+        formChecklist?.addEventListener('submit', function (event) {
+            if (!validarNokConObservacion()) {
+                event.preventDefault();
                 return;
             }
 
-            form.addEventListener('submit', function (event) {
-                const submitter = event.submitter;
+            const submitter = event.submitter;
 
-                if (!submitter || submitter.name !== 'EnviarACalidad') {
-                    return;
+            if (submitter) {
+                submitter.disabled = true;
+
+                if (submitter.value === 'true') {
+                    submitter.innerHTML =
+                        '<span class="spinner-border spinner-border-sm me-1"></span> Enviando...';
                 }
-
-                const rows = document.querySelectorAll('.question-row');
-                let faltantes = 0;
-                let nokSinObservacion = 0;
-
-                rows.forEach(function (row) {
-                    const radios = row.querySelectorAll('input[type="radio"]:not(:disabled)');
-                    if (!radios || radios.length === 0) {
-                        return;
-                    }
-
-                    const checked = row.querySelector('input[type="radio"]:checked:not(:disabled)');
-
-                    if (!checked) {
-                        faltantes++;
-                        row.style.background = '#fff7ed';
-                        return;
-                    }
-
-                    const textarea = row.querySelector('textarea:not(:disabled)');
-
-                    if (checked.value === 'NOK' && textarea && textarea.value.trim() === '') {
-                        nokSinObservacion++;
-                        row.style.background = '#fef2f2';
-                        return;
-                    }
-
-                    row.style.background = '';
-                });
-
-                if (faltantes > 0) {
-                    event.preventDefault();
-                    alert('Hay preguntas de Producción sin responder. Responde todo antes de enviar a Calidad.');
-                    return;
+                else {
+                    submitter.innerHTML =
+                        '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
                 }
-
-                if (nokSinObservacion > 0) {
-                    event.preventDefault();
-                    alert('Hay respuestas NOK sin observación. Agrega observación antes de enviar a Calidad.');
-                    return;
-                }
-            });
+            }
         });
     </script>
 </body>

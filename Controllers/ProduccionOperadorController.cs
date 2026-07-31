@@ -1,6 +1,7 @@
 ﻿using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using System.Data;
 
@@ -597,12 +598,15 @@ SELECT
 FROM dbo.Produccion_Ejecucion e
 LEFT JOIN dbo.SolicitudesProduccion s
     ON s.SolicitudProduccionID = e.SolicitudProduccionID
+LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.ProgramaProduccionID = e.ProgramaProduccionID
+   AND pp.Activo = 1
 WHERE e.Activo = 1
   AND e.EstatusID IN (@EnProduccion, @Pausado)
 ORDER BY
     e.MaquinaCodigo,
-    e.FechaInicioReal DESC,
-    e.EjecucionProduccionID DESC;";
+    ISNULL(pp.FechaInicioProgramada, e.FechaInicioReal),
+    e.EjecucionProduccionID;";
 
             await using var cmd = new SqlCommand(sql, cn);
 
