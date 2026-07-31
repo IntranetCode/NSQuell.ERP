@@ -1,6 +1,75 @@
 ﻿@model ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm
 @using System.Globalization
 
+@functions {
+    public static string Pct(double value)
+    {
+        return value.ToString("0.####", CultureInfo.InvariantCulture);
+    }
+
+    public static string ClaseVista(string vistaActual, string vista)
+    {
+        return string.Equals(vistaActual, vista, StringComparison.OrdinalIgnoreCase)
+            ? "btn btn-primary fw-bold"
+            : "btn btn-outline-primary fw-bold";
+    }
+
+    public static string BadgeProduccion(int? estatusProduccionId)
+    {
+        if (estatusProduccionId.HasValue)
+        {
+            switch (estatusProduccionId.Value)
+            {
+                case 2: return "badge bg-info text-dark";
+                case 3: return "badge bg-warning text-dark";
+                case 4: return "badge bg-danger";
+                case 5: return "badge bg-success";
+                case 9: return "badge bg-dark";
+                case 99: return "badge bg-secondary";
+            }
+        }
+
+        return "badge bg-light text-dark border";
+    }
+
+    public static string TextoProduccion(int? estatusProduccionId, string estatusProduccionNombre)
+    {
+        if (!string.IsNullOrWhiteSpace(estatusProduccionNombre))
+            return estatusProduccionNombre;
+
+        if (estatusProduccionId.HasValue)
+        {
+            switch (estatusProduccionId.Value)
+            {
+                case 2: return "En preparación";
+                case 3: return "En producción";
+                case 4: return "Pausado";
+                case 5: return "Terminado";
+                case 9: return "Cerrado";
+                case 99: return "Cancelado";
+            }
+        }
+
+        return "Sin ejecución";
+    }
+
+    public static string TextoPeriodoAnterior(ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm model)
+    {
+        if (model.EsVistaDia) return "Día anterior";
+        if (model.EsVistaMes) return "Mes anterior";
+        if (model.EsVistaRango) return "Rango anterior";
+        return "Semana anterior";
+    }
+
+    public static string TextoPeriodoSiguiente(ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm model)
+    {
+        if (model.EsVistaDia) return "Día siguiente";
+        if (model.EsVistaMes) return "Mes siguiente";
+        if (model.EsVistaRango) return "Rango siguiente";
+        return "Semana siguiente";
+    }
+}
+
 @{
     Layout = null;
 
@@ -14,17 +83,8 @@
         finPeriodo = inicioPeriodo.AddDays(7);
     }
 
-    var totalMinutos = (finPeriodo - inicioPeriodo).TotalMinutes;
+    var totalMinutos = Math.Max(1, (finPeriodo - inicioPeriodo).TotalMinutes);
     var totalDias = Math.Max(1, Model.TotalDiasPeriodo);
-
-    var anchoDias = totalDias <= 1
-        ? 1250
-        : Math.Max(1250, totalDias * 150);
-
-    var timelineMinWidth = anchoDias + 280;
-
-    string Pct(double value) =>
-        value.ToString("0.####", CultureInfo.InvariantCulture);
 
     var ahoraVisible =
         Model.Ahora >= inicioPeriodo &&
@@ -37,38 +97,20 @@
     var periodoAnterior = Model.PeriodoAnterior;
     var periodoSiguiente = Model.PeriodoSiguiente;
 
-    var rangoFinVisible = Model.RangoFin?.ToString("yyyy-MM-dd")
-        ?? Model.FinPeriodo.AddDays(-1).ToString("yyyy-MM-dd");
+    var rangoFinVisible = Model.RangoFin.HasValue
+        ? Model.RangoFin.Value.ToString("yyyy-MM-dd")
+        : Model.FinPeriodo.AddDays(-1).ToString("yyyy-MM-dd");
 
-    var rangoInicioVisible = Model.RangoInicio?.ToString("yyyy-MM-dd")
-        ?? Model.InicioPeriodo.ToString("yyyy-MM-dd");
+    var rangoInicioVisible = Model.RangoInicio.HasValue
+        ? Model.RangoInicio.Value.ToString("yyyy-MM-dd")
+        : Model.InicioPeriodo.ToString("yyyy-MM-dd");
 
-    string ClaseVista(string vista) =>
-        Model.VistaNormalizada == vista
-            ? "btn btn-primary fw-bold"
-            : "btn btn-outline-primary fw-bold";
-
-    string TextoPeriodoAnterior()
-    {
-        if (Model.EsVistaDia) return "Día anterior";
-        if (Model.EsVistaMes) return "Mes anterior";
-        if (Model.EsVistaRango) return "Rango anterior";
-        return "Semana anterior";
-    }
-
-    string TextoPeriodoSiguiente()
-    {
-        if (Model.EsVistaDia) return "Día siguiente";
-        if (Model.EsVistaMes) return "Mes siguiente";
-        if (Model.EsVistaRango) return "Rango siguiente";
-        return "Semana siguiente";
-    }
-
-    string UrlPeriodo(DateTime fecha)
+    Func<DateTime, string> UrlPeriodo = fecha =>
     {
         if (Model.EsVistaRango)
         {
             var finRango = fecha.AddDays(totalDias - 1).ToString("yyyy-MM-dd");
+
             return Url.Action("Index", "PlaneacionCalendarioMaquinas", new
             {
                 vista = "rango",
@@ -82,7 +124,7 @@
             vista = Model.VistaNormalizada,
             fecha = fecha.ToString("yyyy-MM-dd")
         }) ?? "#";
-    }
+    };
 }
 
 <!DOCTYPE html>
@@ -103,7 +145,7 @@
             --border: #d7e1ee;
             --text: #1f2937;
             --muted: #667085;
-            --machine-width: 280px;
+            --machine-width: 300px;
             --dias-periodo: @totalDias;
             --horas-periodo: @(Math.Max(1, totalDias * 24));
         }
@@ -275,7 +317,7 @@
 
         .days {
             display: grid;
-            grid-template-columns: repeat( @totalDias,1fr);
+            grid-template-columns: repeat( @totalDias, 1fr);
             border-bottom: 1px solid var(--border);
         }
 
@@ -353,7 +395,7 @@
 
         .track {
             position: relative;
-            min-height: 48px;
+            min-height: 56px;
             background-color: #fff;
             background-image: linear-gradient(to right,rgba(148,163,184,.18) 1px,transparent 1px), linear-gradient(to right,rgba(71,84,103,.28) 1px,transparent 1px);
             background-size: calc(100% / var(--horas-periodo)) 100%, calc(100% / var(--dias-periodo)) 100%;
@@ -364,6 +406,38 @@
                 outline-offset: -6px;
                 background-color: #f8fbff;
             }
+
+
+            .track.compatible-target {
+                outline: 3px solid rgba(18,183,106,.55);
+                outline-offset: -6px;
+                background-color: #ecfdf3;
+            }
+
+                .track.compatible-target.drag-over {
+                    outline: 4px solid rgba(18,183,106,.75);
+                    background-color: #d1fadf;
+                }
+
+            .track.incompatible-target {
+                opacity: .45;
+                background-color: #f8fafc;
+                cursor: not-allowed;
+            }
+
+        .machine-row.compatible-row .machine-info {
+            background: #ecfdf3;
+            border-right-color: #abefc6;
+        }
+
+        .machine-row.incompatible-row .machine-info {
+            background: #f8fafc;
+            color: #98a2b3;
+        }
+
+        body.drag-compatible-mode .track:not(.compatible-target) {
+            opacity: .50;
+        }
 
         .now-line {
             position: absolute;
@@ -377,10 +451,10 @@
 
         .block {
             position: absolute;
-            height: 32px;
-            padding: 4px 8px;
+            height: 42px;
+            padding: 5px 8px;
             border: 0;
-            border-radius: 9px;
+            border-radius: 10px;
             color: #fff;
             text-align: left;
             overflow: hidden;
@@ -396,7 +470,7 @@
 
             .block.no-drag {
                 cursor: not-allowed;
-                opacity: .78;
+                opacity: .80;
             }
 
             .block strong,
@@ -408,12 +482,20 @@
             }
 
             .block strong {
-                font-size: .68rem;
+                font-size: .66rem;
+                line-height: 1.05;
             }
 
             .block span {
-                font-size: .60rem;
-                opacity: .92;
+                font-size: .58rem;
+                opacity: .94;
+                line-height: 1.05;
+            }
+
+            .block .operator-line {
+                margin-top: 2px;
+                font-size: .56rem;
+                opacity: .98;
             }
 
         .bloque-timeline {
@@ -423,6 +505,7 @@
         .bloque-produciendo {
             background: #fdb022;
             color: #111827;
+            border: 1px solid rgba(181, 71, 8, .35);
         }
 
         .bloque-producido {
@@ -476,6 +559,44 @@
                 display: block;
             }
 
+        .detail-card {
+            border: 1px solid #e5eaf3;
+            border-radius: 14px;
+            padding: 12px;
+            height: 100%;
+            background: #fff;
+        }
+
+            .detail-card small {
+                color: var(--muted);
+                font-weight: 800;
+                text-transform: uppercase;
+                font-size: .70rem;
+            }
+
+            .detail-card strong {
+                color: var(--blue-dark);
+            }
+
+        .operator-card {
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            border-radius: 14px;
+            padding: 12px;
+            height: 100%;
+        }
+
+            .operator-card small {
+                color: #1d4ed8;
+                font-weight: 900;
+                text-transform: uppercase;
+                font-size: .70rem;
+            }
+
+            .operator-card strong {
+                color: #102a56;
+            }
+
         @@media(max-width:800px) {
             .page {
                 padding: 13px;
@@ -486,8 +607,22 @@
             }
 
             :root {
-                --machine-width: 210px;
+                --machine-width: 230px;
             }
+
+            .block {
+                height: 38px;
+                padding: 4px 7px;
+            }
+
+                .block strong {
+                    font-size: .60rem;
+                }
+
+                .block span,
+                .block .operator-line {
+                    font-size: .54rem;
+                }
         }
     </style>
 </head>
@@ -542,7 +677,7 @@
                     <a href="@UrlPeriodo(periodoAnterior)"
                        class="btn btn-outline-primary fw-bold">
                         <i class="fa-solid fa-chevron-left"></i>
-                        @TextoPeriodoAnterior()
+                        @TextoPeriodoAnterior(Model)
                     </a>
 
                     <a asp-action="Index"
@@ -554,20 +689,20 @@
 
                     <a href="@UrlPeriodo(periodoSiguiente)"
                        class="btn btn-outline-primary fw-bold">
-                        @TextoPeriodoSiguiente()
+                        @TextoPeriodoSiguiente(Model)
                         <i class="fa-solid fa-chevron-right"></i>
                     </a>
                 </div>
 
                 <div style="min-width:280px">
                     <label class="form-label fw-bold mb-1">
-                        Buscar máquina, OF, cliente o parte
+                        Buscar máquina, OF, cliente, parte, operador o turno
                     </label>
 
                     <input id="calendarSearch"
                            class="form-control"
                            type="search"
-                           placeholder="Ej. 500-T, OF 24, GOLDE, 100234..." />
+                           placeholder="Ej. 500-T, OF 24, GOLDE, operador, turno..." />
                 </div>
             </div>
 
@@ -575,29 +710,44 @@
                 <a asp-action="Index"
                    asp-route-vista="dia"
                    asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista("dia")">
+                   class="@ClaseVista(Model.VistaNormalizada, "dia")">
                     Día
                 </a>
 
                 <a asp-action="Index"
                    asp-route-vista="semana"
                    asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista("semana")">
+                   class="@ClaseVista(Model.VistaNormalizada, "semana")">
                     Semana
                 </a>
 
                 <a asp-action="Index"
                    asp-route-vista="mes"
                    asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista("mes")">
+                   class="@ClaseVista(Model.VistaNormalizada, "mes")">
                     Mes
                 </a>
 
                 <button type="button"
                         id="btnMostrarRango"
-                        class="@ClaseVista("rango")">
+                        class="@ClaseVista(Model.VistaNormalizada, "rango")">
                     Rango
                 </button>
+            </div>
+
+            <div class="mt-3 p-3 rounded-4 border bg-light">
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           role="switch"
+                           id="trabajarDomingoCalendario" />
+                    <label class="form-check-label fw-bold" for="trabajarDomingoCalendario">
+                        Considerar domingo como día operativo para movimientos
+                    </label>
+                    <div class="small text-muted mt-1">
+                        Déjalo apagado para que el sistema corte sábado a las 22:30 y continúe lunes 07:00. Actívalo solo cuando autoricen trabajar domingo.
+                    </div>
+                </div>
             </div>
 
             <form id="formRangoCalendario"
@@ -641,7 +791,10 @@
             </form>
         </section>
 
-        @if (TempData["CalendarioError"] is string errorCalendario && !string.IsNullOrWhiteSpace(errorCalendario))
+        @{
+            var errorCalendario = TempData["CalendarioError"] as string;
+        }
+        @if (!string.IsNullOrWhiteSpace(errorCalendario))
         {
             <div class="calendar-status error">
                 @errorCalendario
@@ -649,7 +802,7 @@
         }
 
         <div id="calendarStatus" class="calendar-status">
-            Arrastra un bloque azul hacia otra máquina. El sistema calculará line time, cola, molde y cambio antes de pedir confirmación.
+            Arrastra un bloque azul hacia otra máquina. Solo se resaltarán en verde las máquinas compatibles; el sistema insertará en cola y compactará las OF posteriores sin dejar huecos.
         </div>
 
         <div id="antiForgeryToken" class="d-none">
@@ -664,7 +817,7 @@
                     </strong>
 
                     <div class="small text-muted">
-                        Vista: @Model.TextoVista. Azul = timeline y se puede mover. Amarillo = produciendo/en línea y no se mueve. Verde = ya producido. Gris = cerrado o cancelado.
+                        Vista: @Model.TextoVista. Azul = timeline y se puede mover. Amarillo = produciendo/en línea. Verde = ya producido. Gris = cerrado/cancelado. Operador y turno vienen de Escala/RRHH.
                     </div>
                 </div>
 
@@ -696,13 +849,13 @@
 
                     @foreach (var maquina in Model.Maquinas)
                     {
-                        var rowHeight = Math.Max(48, 8 + maquina.Carriles * 36);
+                        var rowHeight = Math.Max(56, 8 + maquina.Carriles * 48);
 
                         var search = string.Join(" ",
                         maquina.Codigo,
                         maquina.Nombre,
                         string.Join(" ", maquina.Bloques.Select(x =>
-                        $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo} {x.MaquinaSugeridaTexto} {x.EstadoSemaforoTexto}")))
+                        $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo} {x.MaquinaSugeridaTexto} {x.EstadoSemaforoTexto} {x.OperadorProgramadoNombre} {x.TurnoProgramadoNombre} {x.EstatusProduccionNombre}")))
                         .ToLowerInvariant();
 
                         <div class="machine-row calendar-machine-row"
@@ -746,13 +899,21 @@
                                     .35,
                                     (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
 
-                                    var top = 8 + bloque.Carril * 36;
+                                    var top = 8 + bloque.Carril * 48;
 
                                     var puedeMover = bloque.PuedeMoverCalendario;
 
                                     var tituloBloqueo = puedeMover
                                     ? "Arrastra para mandar a cola de otra máquina compatible."
                                     : bloque.MotivoBloqueoMovimiento;
+
+                                    var textoOperador = string.IsNullOrWhiteSpace(bloque.OperadorProgramadoNombre)
+                                    ? "Sin operador"
+                                    : bloque.OperadorProgramadoNombre;
+
+                                    var textoTurno = string.IsNullOrWhiteSpace(bloque.TurnoProgramadoNombre)
+                                    ? "Sin turno"
+                                    : bloque.TurnoProgramadoNombre;
 
                                     <button type="button"
                                             class="block @bloque.ClaseSemaforoCalendario @(puedeMover ? "" : "no-drag")"
@@ -766,9 +927,13 @@
                                             data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
                                             data-bs-toggle="modal"
                                             data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
-                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @tituloBloqueo">
+                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador: @textoOperador · Turno: @textoTurno · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @tituloBloqueo">
                                         <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
                                         <span>@(bloque.ClienteNombre ?? "Sin cliente") · @bloque.EstadoSemaforoTexto</span>
+                                        <span class="operator-line">
+                                            <i class="fa-solid fa-user-gear"></i>
+                                            @textoOperador · @textoTurno
+                                        </span>
                                     </button>
                                 }
                             </div>
@@ -781,6 +946,18 @@
 
     @foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
     {
+        var textoOperadorModal = string.IsNullOrWhiteSpace(bloque.OperadorProgramadoNombre)
+        ? "Sin operador asignado en escala"
+        : bloque.OperadorProgramadoNombre;
+
+        var textoTurnoModal = string.IsNullOrWhiteSpace(bloque.TurnoProgramadoNombre)
+        ? "Sin turno asignado"
+        : bloque.TurnoProgramadoNombre;
+
+        var textoEstatusProduccion = TextoProduccion(
+        bloque.EstatusProduccionID,
+        bloque.EstatusProduccionNombre);
+
         <div class="modal fade"
              id="ofModal_@bloque.ProgramaProduccionID"
              tabindex="-1"
@@ -790,7 +967,7 @@
                     <div class="modal-header border-0">
                         <div>
                             <div class="small text-muted fw-bold text-uppercase">
-                                Detalle de producción
+                                Detalle de producción / planeación
                             </div>
 
                             <h2 class="modal-title h5 fw-bold text-primary">
@@ -805,39 +982,81 @@
 
                     <div class="modal-body">
                         <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="operator-card">
+                                    <small>Operador programado por RRHH</small>
+                                    <strong class="d-block">@textoOperadorModal</strong>
+                                    <span class="small text-muted">
+                                        Se consulta desde Escala Personal según máquina, fecha y hora programada.
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-3">
+                                <div class="operator-card">
+                                    <small>Turno</small>
+                                    <strong class="d-block">@textoTurnoModal</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-3">
+                                <div class="operator-card">
+                                    <small>Asignación escala</small>
+                                    <strong class="d-block">
+                                        @(bloque.EscalaAsignacionID.HasValue? bloque.EscalaAsignacionID.Value.ToString() : "-")
+                                    </strong>
+                                </div>
+                            </div>
+
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Máquina actual</small>
+                                <div class="detail-card">
+                                    <small>Máquina actual</small>
                                     <strong class="d-block">@bloque.MaquinaCodigo</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Máquina principal</small>
+                                <div class="detail-card">
+                                    <small>Máquina principal</small>
                                     <strong class="d-block">@(bloque.MaquinaPrincipalCodigo ?? "Sin máquina principal")</strong>
                                     <span class="small">@bloque.MaquinaPrincipalNombre</span>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Máquina sustituta</small>
+                                <div class="detail-card">
+                                    <small>Máquina sustituta</small>
                                     <strong class="d-block">@(bloque.MaquinaSustitutaCodigo ?? "Sin máquina sustituta")</strong>
                                     <span class="small">@bloque.MaquinaSustitutaNombre</span>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Estatus</small>
+                                <div class="detail-card">
+                                    <small>Estatus planeación</small>
                                     <strong class="d-block">@bloque.EstatusTexto</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Semáforo</small>
+                                <div class="detail-card">
+                                    <small>Estatus producción</small>
+                                    <span class="@BadgeProduccion(bloque.EstatusProduccionID)">
+                                        @textoEstatusProduccion
+                                    </span>
+
+                                    @if (bloque.EjecucionProduccionID.HasValue)
+                                    {
+                                        <strong class="d-block mt-2">
+                                            Ejecución @bloque.EjecucionProduccionID
+                                        </strong>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="detail-card">
+                                    <small>Semáforo</small>
                                     <strong class="d-block">@bloque.EstadoSemaforoTexto</strong>
 
                                     @if (!bloque.PuedeMoverCalendario)
@@ -850,79 +1069,95 @@
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Molde</small>
+                                <div class="detail-card">
+                                    <small>Molde</small>
                                     <strong class="d-block">@(bloque.MoldeCodigo ?? "-")</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Horas a producir</small>
+                                <div class="detail-card">
+                                    <small>Horas a producir</small>
                                     <strong class="d-block">@bloque.HorasProgramadas.ToString("N2")</strong>
                                 </div>
                             </div>
 
+                            <div class="col-md-4">
+                                <div class="detail-card">
+                                    <small>Máquina sugerida</small>
+                                    <strong class="d-block">@bloque.MaquinaSugeridaTexto</strong>
+                                </div>
+                            </div>
+
                             <div class="col-md-6">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Cliente</small>
+                                <div class="detail-card">
+                                    <small>Cliente</small>
                                     <strong class="d-block">@(bloque.ClienteNombre ?? "-")</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-6">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Parte</small>
+                                <div class="detail-card">
+                                    <small>Parte</small>
                                     <strong class="d-block">@bloque.ParteTexto</strong>
                                     <span class="small">@bloque.Descripcion</span>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Cambio de molde</small>
-                                    <strong class="d-block">@(bloque.Cambio?.ToString(@"hh\:mm") ?? "-")</strong>
+                                <div class="detail-card">
+                                    <small>Cambio de molde</small>
+                                    <strong class="d-block">@(bloque.Cambio.HasValue? bloque.Cambio.Value.ToString(@"hh\:mm") : "-")</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Arranque</small>
-                                    <strong class="d-block">@(bloque.Arranque?.ToString(@"hh\:mm") ?? "-")</strong>
+                                <div class="detail-card">
+                                    <small>Arranque</small>
+                                    <strong class="d-block">@(bloque.Arranque.HasValue? bloque.Arranque.Value.ToString(@"hh\:mm") : "-")</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="detail-card">
+                                    <small>Duración visible</small>
+                                    <strong class="d-block">
+                                        @((bloque.Fin - bloque.Inicio).TotalHours.ToString("N2")) h
+                                    </strong>
                                 </div>
                             </div>
 
                             <div class="col-md-6">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Inicio</small>
+                                <div class="detail-card">
+                                    <small>Inicio</small>
                                     <strong class="d-block">@bloque.Inicio.ToString("dd/MM/yyyy HH:mm")</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-6">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Fin</small>
+                                <div class="detail-card">
+                                    <small>Fin</small>
                                     <strong class="d-block">@bloque.Fin.ToString("dd/MM/yyyy HH:mm")</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Programadas</small>
+                                <div class="detail-card">
+                                    <small>Programadas</small>
                                     <strong class="d-block">@bloque.CantidadProgramada.ToString("N0")</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Producidas</small>
+                                <div class="detail-card">
+                                    <small>Producidas</small>
                                     <strong class="d-block">@bloque.CantidadProducida.ToString("N0")</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
-                                <div class="border rounded-3 p-3">
-                                    <small class="text-muted">Pendientes</small>
+                                <div class="detail-card">
+                                    <small>Pendientes</small>
                                     <strong class="d-block">@bloque.CantidadPendiente.ToString("N0")</strong>
                                 </div>
                             </div>
@@ -1071,6 +1306,7 @@
         const search = document.getElementById('calendarSearch');
         const statusBox = document.getElementById('calendarStatus');
         const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+        const trabajarDomingoCalendario = document.getElementById('trabajarDomingoCalendario');
 
         const inicioPeriodo = new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
         const finPeriodo = new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
@@ -1078,7 +1314,11 @@
 
         let draggedBlock = null;
         let dragStarted = false;
+        let suppressClickUntil = 0;
         let payloadPendienteConfirmacion = null;
+
+        let maquinasCompatiblesActuales = new Set();
+        let cargandoCompatibles = false;
 
         function setStatus(message, type) {
             if (!statusBox) return;
@@ -1118,11 +1358,113 @@
             const minutos = porcentaje * totalMinutosPeriodo;
 
             const fecha = new Date(inicioPeriodo.getTime() + minutos * 60000);
-            return snapToMinutes(fecha, 30);
+            // Se ajusta a 15 minutos para respetar cola sin crear huecos grandes.
+            return snapToMinutes(fecha, 15);
         }
 
         function puedeArrastrar(block) {
             return block.dataset.puedeMover === 'true';
+        }
+
+
+        function limpiarMaquinasCompatibles() {
+            maquinasCompatiblesActuales = new Set();
+            document.body.classList.remove('drag-compatible-mode');
+
+            document.querySelectorAll('.track.compatible-target, .track.incompatible-target, .track.drag-over').forEach(track => {
+                track.classList.remove('compatible-target', 'incompatible-target', 'drag-over');
+            });
+
+            document.querySelectorAll('.calendar-machine-row.compatible-row, .calendar-machine-row.incompatible-row').forEach(row => {
+                row.classList.remove('compatible-row', 'incompatible-row');
+            });
+        }
+
+        function aplicarMaquinasCompatibles(maquinas) {
+            limpiarMaquinasCompatibles();
+
+            maquinasCompatiblesActuales = new Set(
+                (maquinas || [])
+                    .map(x => Number(x.maquinaID || x.maquinaId || x.MaquinaID || 0))
+                    .filter(x => Number.isFinite(x) && x > 0)
+            );
+
+            if (!maquinasCompatiblesActuales.size) {
+                setStatus('No se encontraron máquinas compatibles para este programa.', 'error');
+                return;
+            }
+
+            document.body.classList.add('drag-compatible-mode');
+
+            document.querySelectorAll('.track').forEach(track => {
+                const maquinaId = Number(track.dataset.maquinaId || 0);
+                const row = track.closest('.calendar-machine-row');
+
+                if (maquinasCompatiblesActuales.has(maquinaId)) {
+                    track.classList.add('compatible-target');
+                    row?.classList.add('compatible-row');
+                } else {
+                    track.classList.add('incompatible-target');
+                    row?.classList.add('incompatible-row');
+                }
+            });
+        }
+
+        async function cargarMaquinasCompatibles(programaId) {
+            if (!programaId || cargandoCompatibles) return;
+
+            try {
+                cargandoCompatibles = true;
+
+                       const urlMaquinasCompatibles =
+            '@Url.Action("MaquinasCompatibles", "PlaneacionCalendarioMaquinas")' +
+            '?programaProduccionId=' +
+            encodeURIComponent(programaId);
+
+        const response = await fetch(urlMaquinasCompatibles, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.ok) {
+                    limpiarMaquinasCompatibles();
+                    setStatus(result.mensaje || 'No se pudieron consultar máquinas compatibles.', 'error');
+                    return;
+                }
+
+                aplicarMaquinasCompatibles(result.maquinas || []);
+
+                if ((result.maquinas || []).length > 0) {
+                    setStatus('Máquinas compatibles resaltadas en verde. Suelta el bloque solo sobre una máquina habilitada.', 'working');
+                }
+            }
+            catch (error) {
+                limpiarMaquinasCompatibles();
+                setStatus('Error al consultar máquinas compatibles: ' + error.message, 'error');
+            }
+            finally {
+                cargandoCompatibles = false;
+            }
+        }
+
+               function destinoCompatible(track) {
+            const maquinaId = Number(track.dataset.maquinaId || 0);
+
+            if (!draggedBlock) {
+                return false;
+            }
+
+            if (!maquinasCompatiblesActuales.size) {
+                return false;
+            }
+
+            return maquinasCompatiblesActuales.has(maquinaId);
         }
 
         function abrirModalConfirmacionMovimiento(result, payload) {
@@ -1172,7 +1514,7 @@
 
                 setStatus('Aplicando movimiento confirmado...', 'working');
 
-                const response = await fetch('/PlaneacionCalendarioMaquinas/ReprogramarCalendario', {
+        const response = await fetch('@Url.Action("ReprogramarCalendario", "PlaneacionCalendarioMaquinas")', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1285,7 +1627,8 @@
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', block.dataset.programaId);
 
-                setStatus('Arrastrando programa. Suéltalo sobre otra máquina compatible.', 'working');
+                setStatus('Consultando máquinas compatibles...', 'working');
+                cargarMaquinasCompatibles(Number(block.dataset.programaId || 0));
 
                 setTimeout(() => {
                     dragStarted = false;
@@ -1293,15 +1636,17 @@
             });
 
             block.addEventListener('dragend', () => {
-                document.querySelectorAll('.track.drag-over').forEach(track => {
-                    track.classList.remove('drag-over');
-                });
+                suppressClickUntil = Date.now() + 650;
+
+                limpiarMaquinasCompatibles();
             });
 
             block.addEventListener('click', event => {
-                if (dragStarted) {
+                if (dragStarted || Date.now() < suppressClickUntil) {
                     event.preventDefault();
                     event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    return false;
                 }
             });
         });
@@ -1309,6 +1654,11 @@
         document.querySelectorAll('.track').forEach(track => {
             track.addEventListener('dragover', event => {
                 if (!draggedBlock) return;
+
+                if (!destinoCompatible(track)) {
+                    event.dataTransfer.dropEffect = 'none';
+                    return;
+                }
 
                 event.preventDefault();
                 event.dataTransfer.dropEffect = 'move';
@@ -1341,6 +1691,14 @@
                     return;
                 }
 
+                if (!destinoCompatible(track)) {
+                    const mensaje = 'Esta máquina no está configurada como principal ni sustituta para esta parte.';
+                    setStatus(mensaje, 'error');
+                    mostrarModalCalendario('Movimiento no permitido', mensaje);
+                    draggedBlock = null;
+                    return;
+                }
+
                 const payload = {
                     programaProduccionID: programaId,
                     maquinaID: maquinaId,
@@ -1348,13 +1706,14 @@
                     duracionBloqueHoras: 0,
                     redimensionado: false,
                     forzarMaquina: false,
-                    confirmarMovimiento: false
+                    confirmarMovimiento: false,
+                    trabajarDomingo: !!trabajarDomingoCalendario?.checked
                 };
 
                 try {
-                    setStatus('Validando máquina, line time, cola, molde y cambio...', 'working');
+                    setStatus('Validando máquina, line time, cola, molde, operador/turno y cambio...', 'working');
 
-                    const response = await fetch('/PlaneacionCalendarioMaquinas/ReprogramarCalendario', {
+        const response = await fetch('@Url.Action("ReprogramarCalendario", "PlaneacionCalendarioMaquinas")', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1401,6 +1760,7 @@
                     mostrarModalCalendario('Error al guardar', mensaje);
                 }
                 finally {
+                    limpiarMaquinasCompatibles();
                     draggedBlock = null;
                 }
             });

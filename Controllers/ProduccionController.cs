@@ -36,12 +36,7 @@ namespace ERP.NSQuell.Controllers
 
 
         [HttpGet]
-        public async Task<IActionResult> Index(
-            string? busqueda = null,
-            int? maquinaId = null,
-            int? estatusId = null,
-            DateTime? fechaDesde = null,
-            DateTime? fechaHasta = null)
+        public async Task<IActionResult> Index(  string? busqueda = null,  int? maquinaId = null,   int? estatusId = null, DateTime? fechaDesde = null,  DateTime? fechaHasta = null)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
@@ -60,6 +55,7 @@ namespace ERP.NSQuell.Controllers
 
             vm.Maquinas = await CargarMaquinasAsync(cn);
             vm.Estatus = CargarEstatusProduccion();
+            ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
 
             vm.ProgramasDisponibles = await ObtenerProgramasDisponiblesAsync(
     busqueda,
@@ -411,14 +407,13 @@ ORDER BY
         }
 
 
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Iniciar(
-            int programaProduccionId,
-            int? operadorId = null,
-            string? operadorNombre = null,
-            string? observaciones = null)
+    int programaProduccionId,
+    int? operadorId = null,
+    string? operadorNombre = null,
+    string? observaciones = null)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
@@ -476,26 +471,77 @@ ORDER BY
                     return RedirectToAction(nameof(Index));
                 }
 
+                int? operadorFinalId = operadorId;
+                string? operadorFinalNombre = operadorNombre;
+
+                if (operadorFinalId.HasValue)
+                {
+                    var operadorDb = await ObtenerPersonaNombreAsync(
+                        operadorFinalId.Value,
+                        cn,
+                        tx);
+
+                    if (!string.IsNullOrWhiteSpace(operadorDb))
+                        operadorFinalNombre = operadorDb;
+                }
+
+                if (!operadorFinalId.HasValue &&
+                    string.IsNullOrWhiteSpace(operadorFinalNombre))
+                {
+                    var operadorSugerido = await ObtenerOperadorSugeridoProduccionAsync(
+                        programa.MaquinaID.Value,
+                        DateTime.Now,
+                        cn,
+                        tx);
+
+                    if (operadorSugerido != null)
+                    {
+                        operadorFinalId = operadorSugerido.OperadorID;
+                        operadorFinalNombre = operadorSugerido.OperadorNombre;
+                    }
+                }
+
+                var observacionesFinales = observaciones;
+
+                if (!string.IsNullOrWhiteSpace(operadorFinalNombre))
+                {
+                    var textoOperador =
+                        "Operador al iniciar preparación: " + operadorFinalNombre.Trim() + ".";
+
+                    observacionesFinales = string.IsNullOrWhiteSpace(observacionesFinales)
+                        ? textoOperador
+                        : observacionesFinales.Trim() + Environment.NewLine + textoOperador;
+                }
+                else
+                {
+                    var textoSinOperador =
+                        "Preparación iniciada sin operador asignado. Producción podrá asignarlo posteriormente.";
+
+                    observacionesFinales = string.IsNullOrWhiteSpace(observacionesFinales)
+                        ? textoSinOperador
+                        : observacionesFinales.Trim() + Environment.NewLine + textoSinOperador;
+                }
+
                 var ejecucionId =
                     await InsertarEjecucionAsync(
                         programa,
-                        operadorId,
-                        operadorNombre,
-                        observaciones,
+                        operadorFinalId,
+                        operadorFinalNombre,
+                        observacionesFinales,
                         usuarioId,
                         cn,
                         tx);
 
                 await MarcarProgramaEnPreparacionAsync(
-    programaProduccionId,
-    usuarioId,
-    cn,
-    tx);
+                    programaProduccionId,
+                    usuarioId,
+                    cn,
+                    tx);
 
                 await tx.CommitAsync();
 
                 TempData["Success"] =
-     "Preparación iniciada correctamente. Continúa con el checklist de arranque.";
+                    "Preparación iniciada correctamente. Continúa con el checklist de arranque.";
 
                 return RedirectToAction(
                     nameof(Detalle),
@@ -511,6 +557,8 @@ ORDER BY
                 return RedirectToAction(nameof(Index));
             }
         }
+
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1080,9 +1128,7 @@ WHERE ParoID = @ParoID
             }
         }
 
-        // ============================================================
-        // TERMINAR PRODUCCIÓN
-        // ============================================================
+        
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1447,11 +1493,11 @@ ORDER BY FechaInicioParo DESC;";
         }
 
         private async Task<List<ProduccionProgramaDisponibleVm>> ObtenerProgramasDisponiblesAsync(
-    string? busqueda,
-    int? maquinaId,
-    DateTime? fechaDesde,
-    DateTime? fechaHasta,
-    SqlConnection cn)
+          string? busqueda,
+          int? maquinaId,
+          DateTime? fechaDesde,
+          DateTime? fechaHasta,
+          SqlConnection cn)
         {
             var lista = new List<ProduccionProgramaDisponibleVm>();
 
@@ -1480,16 +1526,93 @@ SELECT
 
     CONVERT(INT, ISNULL(pp.CantidadProgramada, 0)) AS CantidadProgramada,
 
-    pp.FechaInicioProgramada,
-    pp.FechaFinProgramada,
-    ISNULL(pp.EstatusID, 1) AS EstatusID
+pp.FechaInicioProgramada,
+pp.FechaFinProgramada,
+ISNULL(pp.SecuenciaMaquina, 999999) AS SecuenciaMaquina,
+ISNULL(pp.EstatusID, 1) AS EstatusID,
+
+    escala.OperadorSugeridoID,
+    escala.OperadorSugeridoNombre,
+    escala.TurnoSugeridoNombre,
+    escala.TurnoSugeridoColor,
+    escala.EscalaAsignacionID
+
 FROM dbo.Planeacion_ProgramaProduccion pp
+
 LEFT JOIN dbo.SolicitudesProduccion s
     ON s.SolicitudProduccionID = pp.SolicitudProduccionID
+
 LEFT JOIN dbo.Planeacion_ReleaseDetalle rd
     ON rd.ReleaseDetalleID = pp.ReleaseDetalleID
+
 LEFT JOIN dbo.ERP_Maquinas maq
     ON maq.MaquinaID = pp.MaquinaID
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        a.AsignacionID AS EscalaAsignacionID,
+        a.PersonalID AS OperadorSugeridoID,
+        LTRIM(RTRIM(
+            ISNULL(p.Nombre, '') + ' ' +
+            ISNULL(p.ApellidoPaterno, '') + ' ' +
+            ISNULL(p.ApellidoMaterno, '')
+        )) AS OperadorSugeridoNombre,
+        et.Nombre AS TurnoSugeridoNombre,
+        et.Color AS TurnoSugeridoColor
+    FROM dbo.RRHH_EscalaAsignaciones a
+    INNER JOIN dbo.RRHH_EscalasPersonal esc
+        ON esc.EscalaID = a.EscalaID
+       AND esc.Activo = 1
+       AND esc.Estado = N'Publicada'
+    INNER JOIN dbo.Persona p
+        ON p.PersonaID = a.PersonalID
+    INNER JOIN dbo.RRHH_EscalaTurnos et
+        ON et.EscalaID = a.EscalaID
+       AND et.EscalaTurnoID = a.EscalaTurnoID
+    WHERE pp.MaquinaID IS NOT NULL
+      AND pp.FechaInicioProgramada IS NOT NULL
+      AND a.Activo = 1
+      AND a.MaquinaID = pp.MaquinaID
+      AND CAST(pp.FechaInicioProgramada AS date) >= CAST(a.FechaInicio AS date)
+      AND CAST(pp.FechaInicioProgramada AS date) <= CAST(a.FechaFin AS date)
+      AND
+      (
+            ISNULL(et.EsFlexible, 0) = 1
+         OR et.HoraInicio IS NULL
+         OR et.HoraFin IS NULL
+         OR
+         (
+                ISNULL(et.CruzaDiaSiguiente, 0) = 0
+            AND CAST(pp.FechaInicioProgramada AS time) >= et.HoraInicio
+            AND CAST(pp.FechaInicioProgramada AS time) < et.HoraFin
+         )
+         OR
+         (
+                ISNULL(et.CruzaDiaSiguiente, 0) = 1
+            AND
+            (
+                   CAST(pp.FechaInicioProgramada AS time) >= et.HoraInicio
+                OR CAST(pp.FechaInicioProgramada AS time) < et.HoraFin
+            )
+         )
+      )
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.RRHH_NovedadesPersonal n
+          WHERE n.EscalaID = a.EscalaID
+            AND n.PersonalID = a.PersonalID
+            AND n.Activo = 1
+            AND n.TipoNovedad IN (N'Baja', N'Incapacidad', N'Vacaciones')
+            AND CAST(pp.FechaInicioProgramada AS date) >= CAST(n.FechaInicio AS date)
+            AND CAST(pp.FechaInicioProgramada AS date) <= CAST(ISNULL(n.FechaFin, n.FechaInicio) AS date)
+      )
+    ORDER BY
+        et.Orden,
+        a.AsignacionID DESC
+) escala
+
 WHERE pp.Activo = 1
   AND ISNULL(pp.EstatusID, 1) NOT IN (3, 4, 5, 9, 99)
   AND NOT EXISTS
@@ -1515,10 +1638,12 @@ WHERE pp.Activo = 1
      OR pp.MaquinaCodigo LIKE '%' + @Busqueda + '%'
      OR pp.MaquinaNombre LIKE '%' + @Busqueda + '%'
      OR pp.MoldeCodigo LIKE '%' + @Busqueda + '%'
+     OR escala.OperadorSugeridoNombre LIKE '%' + @Busqueda + '%'
   )
 ORDER BY
+    COALESCE(NULLIF(pp.MaquinaCodigo, ''), maq.Codigo),
     pp.FechaInicioProgramada,
-    pp.MaquinaCodigo,
+    ISNULL(pp.SecuenciaMaquina, 999999),
     pp.ProgramaProduccionID;";
 
             await using var cmd = new SqlCommand(sql, cn);
@@ -1569,16 +1694,18 @@ ORDER BY
                     FechaInicioProgramada = NullableFecha(rd, "FechaInicioProgramada"),
                     FechaFinProgramada = NullableFecha(rd, "FechaFinProgramada"),
 
-                    EstatusID = Entero(rd, "EstatusID")
+                    EstatusID = Entero(rd, "EstatusID"),
+
+                    OperadorSugeridoID = NullableEntero(rd, "OperadorSugeridoID"),
+                    OperadorSugeridoNombre = TextoNullable(rd, "OperadorSugeridoNombre"),
+                    TurnoSugeridoNombre = TextoNullable(rd, "TurnoSugeridoNombre"),
+                    TurnoSugeridoColor = TextoNullable(rd, "TurnoSugeridoColor"),
+                    EscalaAsignacionID = NullableEntero(rd, "EscalaAsignacionID")
                 });
             }
 
             return lista;
         }
-
-        // ============================================================
-        // PROGRAMA DE PLANEACIÓN A EJECUCIÓN
-        // ============================================================
 
         private sealed class ProgramaParaProduccion
         {
@@ -2266,9 +2393,9 @@ ORDER BY EjecucionProduccionID DESC;";
         }
 
         private async Task<ProgramaParaProduccion?> ObtenerProgramaParaIniciarAsync(
-            int programaProduccionId,
-            SqlConnection cn,
-            SqlTransaction tx)
+     int programaProduccionId,
+     SqlConnection cn,
+     SqlTransaction tx)
         {
             const string sql = @"
 SELECT TOP (1)
@@ -2291,16 +2418,21 @@ SELECT TOP (1)
     pp.MoldeCodigo,
 
     CONVERT(INT, ISNULL(pp.CantidadProgramada, 0)) AS CantidadPlaneada
+
 FROM dbo.Planeacion_ProgramaProduccion pp
+
 LEFT JOIN dbo.Planeacion_ReleaseDetalle rd
     ON rd.ReleaseDetalleID = pp.ReleaseDetalleID
+
 LEFT JOIN dbo.ERP_Maquinas maq
     ON maq.MaquinaID = pp.MaquinaID
+
 WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
   AND pp.Activo = 1
-  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99);";
+  AND ISNULL(pp.EstatusID, 1) NOT IN (3, 4, 5, 9, 99);";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
+
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
                 programaProduccionId;
 
@@ -2332,6 +2464,7 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                 CantidadPlaneada = NullableEntero(rd, "CantidadPlaneada")
             };
         }
+
 
         private async Task<int> InsertarEjecucionAsync(
             ProgramaParaProduccion programa,
@@ -3165,6 +3298,246 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
                 DateTime date => date.TimeOfDay,
                 _ => TimeSpan.Parse(value.ToString() ?? "00:00")
             };
+        }
+
+        private sealed class OperadorSugeridoProduccion
+        {
+            public int OperadorID { get; set; }
+            public string OperadorNombre { get; set; } = string.Empty;
+            public string? TurnoNombre { get; set; }
+            public string? TurnoColor { get; set; }
+            public int? EscalaAsignacionID { get; set; }
+        }
+
+        private async Task<OperadorSugeridoProduccion?> ObtenerOperadorSugeridoProduccionAsync(
+            int maquinaId,
+            DateTime fechaHora,
+            SqlConnection cn,
+            SqlTransaction? tx)
+        {
+            const string sql = @"
+SELECT TOP (1)
+    a.AsignacionID AS EscalaAsignacionID,
+    a.PersonalID AS OperadorID,
+    LTRIM(RTRIM(
+        ISNULL(p.Nombre, '') + ' ' +
+        ISNULL(p.ApellidoPaterno, '') + ' ' +
+        ISNULL(p.ApellidoMaterno, '')
+    )) AS OperadorNombre,
+    et.Nombre AS TurnoNombre,
+    et.Color AS TurnoColor
+FROM dbo.RRHH_EscalaAsignaciones a
+INNER JOIN dbo.RRHH_EscalasPersonal esc
+    ON esc.EscalaID = a.EscalaID
+   AND esc.Activo = 1
+   AND esc.Estado = N'Publicada'
+INNER JOIN dbo.Persona p
+    ON p.PersonaID = a.PersonalID
+INNER JOIN dbo.RRHH_EscalaTurnos et
+    ON et.EscalaID = a.EscalaID
+   AND et.EscalaTurnoID = a.EscalaTurnoID
+WHERE a.Activo = 1
+  AND a.MaquinaID = @MaquinaID
+  AND CAST(@FechaHora AS date) >= CAST(a.FechaInicio AS date)
+  AND CAST(@FechaHora AS date) <= CAST(a.FechaFin AS date)
+  AND
+  (
+        ISNULL(et.EsFlexible, 0) = 1
+     OR et.HoraInicio IS NULL
+     OR et.HoraFin IS NULL
+     OR
+     (
+            ISNULL(et.CruzaDiaSiguiente, 0) = 0
+        AND CAST(@FechaHora AS time) >= et.HoraInicio
+        AND CAST(@FechaHora AS time) < et.HoraFin
+     )
+     OR
+     (
+            ISNULL(et.CruzaDiaSiguiente, 0) = 1
+        AND
+        (
+               CAST(@FechaHora AS time) >= et.HoraInicio
+            OR CAST(@FechaHora AS time) < et.HoraFin
+        )
+     )
+  )
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.RRHH_NovedadesPersonal n
+      WHERE n.EscalaID = a.EscalaID
+        AND n.PersonalID = a.PersonalID
+        AND n.Activo = 1
+        AND n.TipoNovedad IN (N'Baja', N'Incapacidad', N'Vacaciones')
+        AND CAST(@FechaHora AS date) >= CAST(n.FechaInicio AS date)
+        AND CAST(@FechaHora AS date) <= CAST(ISNULL(n.FechaFin, n.FechaInicio) AS date)
+  )
+ORDER BY
+    et.Orden,
+    a.AsignacionID DESC;";
+
+            await using var cmd = tx == null
+                ? new SqlCommand(sql, cn)
+                : new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
+            cmd.Parameters.Add("@FechaHora", SqlDbType.DateTime).Value = fechaHora;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return null;
+
+            return new OperadorSugeridoProduccion
+            {
+                OperadorID = Entero(rd, "OperadorID"),
+                OperadorNombre = TextoNullable(rd, "OperadorNombre") ?? string.Empty,
+                TurnoNombre = TextoNullable(rd, "TurnoNombre"),
+                TurnoColor = TextoNullable(rd, "TurnoColor"),
+                EscalaAsignacionID = NullableEntero(rd, "EscalaAsignacionID")
+            };
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> OperadoresPorMaquinaFecha(
+    int maquinaId,
+    DateTime fechaHora)
+        {
+            if (!UsuarioEnSesion())
+            {
+                return Json(new
+                {
+                    ok = false,
+                    mensaje = "La sesión terminó. Vuelve a iniciar sesión."
+                });
+            }
+
+            if (maquinaId <= 0)
+            {
+                return Json(new
+                {
+                    ok = false,
+                    mensaje = "No se recibió la máquina."
+                });
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            var operador = await ObtenerOperadorSugeridoProduccionAsync(
+                maquinaId,
+                fechaHora,
+                cn,
+                null);
+
+            if (operador == null)
+            {
+                return Json(new
+                {
+                    ok = true,
+                    operadorID = (int?)null,
+                    operadorNombre = "",
+                    turnoNombre = "",
+                    turnoColor = "",
+                    mensaje = "No hay operador asignado en la escala RRHH para esta máquina y horario. Puedes seleccionar uno manualmente."
+                });
+            }
+
+            return Json(new
+            {
+                ok = true,
+                operadorID = operador.OperadorID,
+                operadorNombre = operador.OperadorNombre,
+                turnoNombre = operador.TurnoNombre,
+                turnoColor = operador.TurnoColor,
+                escalaAsignacionID = operador.EscalaAsignacionID,
+                mensaje = "Operador sugerido desde escala RRHH."
+            });
+        }
+
+        private async Task<List<SelectListItem>> CargarOperadoresProduccionAsync(
+    SqlConnection cn)
+        {
+            var lista = new List<SelectListItem>
+    {
+        new SelectListItem
+        {
+            Value = "",
+            Text = "-- Sin operador / seleccionar manualmente --"
+        }
+    };
+
+            const string sql = @"
+SELECT
+    PersonaID,
+    LTRIM(RTRIM(
+        ISNULL(Nombre, '') + ' ' +
+        ISNULL(ApellidoPaterno, '') + ' ' +
+        ISNULL(ApellidoMaterno, '')
+    )) AS NombreCompleto,
+    Puesto
+FROM dbo.Persona
+WHERE EsColaboradorActivo = 1
+  AND
+  (
+        UPPER(LTRIM(RTRIM(ISNULL(Puesto, '')))) LIKE '%OPERADOR%'
+     OR UPPER(LTRIM(RTRIM(ISNULL(Puesto, '')))) LIKE '%PRODUCCION%'
+     OR UPPER(LTRIM(RTRIM(ISNULL(Puesto, '')))) LIKE '%PRODUCCIÓN%'
+  )
+ORDER BY
+    Nombre,
+    ApellidoPaterno,
+    ApellidoMaterno;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                var personaId = Entero(rd, "PersonaID");
+                var nombre = TextoNullable(rd, "NombreCompleto") ?? personaId.ToString();
+                var puesto = TextoNullable(rd, "Puesto");
+
+                lista.Add(new SelectListItem
+                {
+                    Value = personaId.ToString(),
+                    Text = string.IsNullOrWhiteSpace(puesto)
+                        ? nombre
+                        : nombre + " - " + puesto
+                });
+            }
+
+            return lista;
+        }
+
+
+
+        private async Task<string?> ObtenerPersonaNombreAsync(
+    int personaId,
+    SqlConnection cn,
+    SqlTransaction? tx)
+        {
+            const string sql = @"
+SELECT TOP (1)
+    LTRIM(RTRIM(
+        ISNULL(Nombre, '') + ' ' +
+        ISNULL(ApellidoPaterno, '') + ' ' +
+        ISNULL(ApellidoMaterno, '')
+    )) AS NombreCompleto
+FROM dbo.Persona
+WHERE PersonaID = @PersonaID;";
+
+            await using var cmd = tx == null
+                ? new SqlCommand(sql, cn)
+                : new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId;
+
+            var result = await cmd.ExecuteScalarAsync();
+
+            return result == null || result == DBNull.Value
+                ? null
+                : result.ToString()?.Trim();
         }
 
         private static bool Booleano(SqlDataReader rd, string columna)

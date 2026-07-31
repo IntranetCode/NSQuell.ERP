@@ -3,6 +3,30 @@
 @{
     ViewData["Title"] = "Detalle de solicitud";
 
+    var returnTo = ViewBag.ReturnTo as string ?? Context.Request.Query["returnTo"].ToString();
+
+    var detalleBackAction = returnTo switch
+    {
+        "Index" => "Index",
+        "Solicitudes" => "Solicitudes",
+        "BandejaDireccion" => "BandejaDireccion",
+        "SeguimientoDireccion" => "SeguimientoDireccion",
+        "BandejaCompras" => "BandejaCompras",
+        "BandejaAlmacen" => "BandejaAlmacen",
+        _ => "Solicitudes"
+    };
+
+    var detalleBackText = detalleBackAction switch
+    {
+        "Index" => "← Panel compras",
+        "Solicitudes" => "← Solicitudes",
+        "BandejaDireccion" => "← Bandeja Dirección",
+        "SeguimientoDireccion" => "← Seguimiento Dirección",
+        "BandejaCompras" => "← Bandeja Compras",
+        "BandejaAlmacen" => "← Bandeja Almacén",
+        _ => "← Solicitudes"
+    };
+
     var estatus = Model.EstatusNombre ?? Model.Estatus ?? "Sin estatus";
     var puedeCancelar = !Model.EstaCerrada && !Model.EstaRechazada && !Model.EstaCancelada;
 }
@@ -426,7 +450,7 @@
     }
 
     <div class="erp-page-breadcrumb">
-        <a asp-controller="Compras" asp-action="Solicitudes" class="erp-btn-back">← Regresar</a>
+        <a asp-controller="Compras" asp-action="@detalleBackAction" class="erp-btn-back">@detalleBackText</a>
         <span>Inicio</span>
         <span>›</span>
         <span>Compras</span>
@@ -553,6 +577,7 @@
                     <div class="col-12 col-lg-6">
                         <form asp-controller="Compras" asp-action="AprobarSolicitud" method="post">
                             @Html.AntiForgeryToken()
+                            <input type="hidden" name="returnTo" value="@returnTo" />
                             <input type="hidden" name="SolicitudCompraID" value="@Model.SolicitudCompraID" />
 
                             <label class="form-label">Comentario de aprobación</label>
@@ -568,6 +593,7 @@
                         <form asp-controller="Compras" asp-action="RechazarSolicitud" method="post"
                               onsubmit="return confirm('¿Seguro que deseas rechazar esta solicitud?');">
                             @Html.AntiForgeryToken()
+                            <input type="hidden" name="returnTo" value="@returnTo" />
                             <input type="hidden" name="SolicitudCompraID" value="@Model.SolicitudCompraID" />
 
                             <label class="form-label">Motivo de rechazo</label>
@@ -591,6 +617,7 @@
 
                 <form asp-controller="Compras" asp-action="IniciarCotizacion" asp-route-id="@Model.SolicitudCompraID" method="post">
                     @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnTo" value="@returnTo" />
                     <button type="submit" class="btn-compras-blue">
                         Iniciar cotización
                     </button>
@@ -608,6 +635,7 @@
                 <a asp-controller="Compras"
                    asp-action="RegistrarCotizaciones"
                    asp-route-id="@Model.SolicitudCompraID"
+                   asp-route-returnTo="@returnTo"
                    class="btn-compras-main">
                     Abrir captura de cotizaciones
                 </a>
@@ -625,6 +653,7 @@
                 {
                     <form asp-controller="Compras" asp-action="SeleccionarCotizacion" method="post">
                         @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnTo" value="@returnTo" />
                         <input type="hidden" name="SolicitudCompraID" value="@Model.SolicitudCompraID" />
 
                         <div class="row g-3">
@@ -659,6 +688,7 @@
                     <form asp-controller="Compras" asp-action="RechazarSolicitud" method="post"
                           onsubmit="return confirm('¿Seguro que deseas rechazar esta solicitud/cotización?');">
                         @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnTo" value="@returnTo" />
                         <input type="hidden" name="SolicitudCompraID" value="@Model.SolicitudCompraID" />
 
                         <label class="form-label">Motivo de rechazo</label>
@@ -687,6 +717,7 @@
 
                 <form asp-controller="Compras" asp-action="RegistrarOrdenCompra" method="post">
                     @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnTo" value="@returnTo" />
                     <input type="hidden" name="SolicitudCompraID" value="@Model.SolicitudCompraID" />
                     <input type="hidden" name="CotizacionID" value="@Model.CotizacionSeleccionadaID" />
 
@@ -732,6 +763,7 @@
                 {
                     <form asp-controller="Compras" asp-action="EnviarOrdenProveedor" method="post">
                         @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnTo" value="@returnTo" />
                         <input type="hidden" name="SolicitudCompraID" value="@Model.SolicitudCompraID" />
                         <input type="hidden" name="OrdenCompraID" value="@Model.OrdenCompra.OrdenCompraID" />
 
@@ -773,6 +805,7 @@
 
                 <form asp-controller="Compras" asp-action="RegistrarRecepcionAlmacen" method="post" enctype="multipart/form-data">
                     @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnTo" value="@returnTo" />
                     <input type="hidden" name="SolicitudCompraID" value="@Model.SolicitudCompraID" />
 
                     @if (Model.OrdenCompra != null)
@@ -829,6 +862,7 @@
                       method="post"
                       onsubmit="return confirm('¿Seguro que deseas cancelar esta solicitud?');">
                     @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnTo" value="@returnTo" />
                     <button type="submit" class="btn-compras-danger">
                         Cancelar solicitud
                     </button>

@@ -895,6 +895,12 @@ public sealed class ProduccionProgramaDisponibleVm
 
     public int EstatusID { get; set; }
 
+    public int? OperadorSugeridoID { get; set; }
+    public string? OperadorSugeridoNombre { get; set; }
+    public string? TurnoSugeridoNombre { get; set; }
+    public string? TurnoSugeridoColor { get; set; }
+    public int? EscalaAsignacionID { get; set; }
+
     public string TituloPrograma
     {
         get

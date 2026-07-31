@@ -1,0 +1,827 @@
+﻿@using System.Globalization
+@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.IndexVM
+
+@{
+    ViewData["Title"] = "Escala de Personal";
+    Layout = "_Layout";
+}
+
+<style>
+    .escala-page {
+        --ep-primary: #17324d;
+        --ep-primary-soft: #eaf0f5;
+        --ep-accent: #e87524;
+        --ep-accent-dark: #c95d13;
+        --ep-text: #243447;
+        --ep-muted: #6b7a8c;
+        --ep-border: #dfe6ed;
+        --ep-surface: #ffffff;
+        --ep-bg: #f5f7fa;
+        color: var(--ep-text);
+        padding: 1.5rem 0 2.5rem;
+    }
+
+        .escala-page .ep-header {
+            align-items: center;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1.35rem;
+        }
+
+        .escala-page .ep-eyebrow {
+            color: var(--ep-accent);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin-bottom: .25rem;
+            text-transform: uppercase;
+        }
+
+        .escala-page .ep-title {
+            color: var(--ep-primary);
+            font-size: clamp(1.55rem, 2.5vw, 2.1rem);
+            font-weight: 750;
+            letter-spacing: -.025em;
+            margin: 0;
+        }
+
+        .escala-page .ep-subtitle {
+            color: var(--ep-muted);
+            font-size: .94rem;
+            margin: .35rem 0 0;
+        }
+
+        .escala-page .ep-btn-primary,
+        .escala-page .ep-btn-secondary {
+            align-items: center;
+            border-radius: .65rem;
+            display: inline-flex;
+            font-size: .88rem;
+            font-weight: 700;
+            gap: .45rem;
+            justify-content: center;
+            min-height: 42px;
+            padding: .58rem .95rem;
+            text-decoration: none;
+            transition: .18s ease;
+        }
+
+        .escala-page .ep-btn-primary {
+            background: var(--ep-accent);
+            border: 1px solid var(--ep-accent);
+            color: #fff;
+        }
+
+            .escala-page .ep-btn-primary:hover {
+                background: var(--ep-accent-dark);
+                border-color: var(--ep-accent-dark);
+                color: #fff;
+                transform: translateY(-1px);
+            }
+
+        .escala-page .ep-btn-secondary {
+            background: var(--ep-surface);
+            border: 1px solid var(--ep-border);
+            color: var(--ep-primary);
+        }
+
+            .escala-page .ep-btn-secondary:hover {
+                background: var(--ep-primary-soft);
+                border-color: #cbd6e1;
+                color: var(--ep-primary);
+            }
+
+        .escala-page .ep-alert {
+            border: 0;
+            border-left: 4px solid;
+            border-radius: .6rem;
+            box-shadow: 0 5px 18px rgba(23, 50, 77, .07);
+            margin-bottom: 1rem;
+            padding: .8rem 1rem;
+        }
+
+        .escala-page .ep-alert-success {
+            background: #edf8f2;
+            border-left-color: #238657;
+            color: #17613e;
+        }
+
+        .escala-page .ep-alert-error {
+            background: #fff0f0;
+            border-left-color: #c93d3d;
+            color: #8b2929;
+        }
+
+        .escala-page .ep-current {
+            background: var(--ep-primary);
+            border-radius: .9rem;
+            box-shadow: 0 12px 28px rgba(23, 50, 77, .18);
+            color: #fff;
+            display: grid;
+            gap: 1.25rem;
+            grid-template-columns: minmax(0, 1fr) auto;
+            margin-bottom: 1.15rem;
+            overflow: hidden;
+            padding: 1.25rem 1.35rem;
+            position: relative;
+        }
+
+            .escala-page .ep-current::after {
+                background: var(--ep-accent);
+                content: "";
+                height: 120px;
+                opacity: .95;
+                position: absolute;
+                right: -48px;
+                top: -48px;
+                transform: rotate(35deg);
+                width: 120px;
+            }
+
+        .escala-page .ep-current-label {
+            color: #bcd0e3;
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .1em;
+            margin-bottom: .25rem;
+            text-transform: uppercase;
+        }
+
+        .escala-page .ep-current-title {
+            font-size: 1.25rem;
+            font-weight: 750;
+            margin: 0 0 .35rem;
+        }
+
+        .escala-page .ep-current-meta {
+            color: #d7e3ed;
+            font-size: .88rem;
+            margin: 0;
+        }
+
+        .escala-page .ep-current-actions {
+            align-items: center;
+            display: flex;
+            gap: .55rem;
+            padding-right: 1.6rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .escala-page .ep-current .ep-btn-light {
+            background: #fff;
+            border: 1px solid #fff;
+            border-radius: .6rem;
+            color: var(--ep-primary);
+            font-size: .84rem;
+            font-weight: 750;
+            padding: .55rem .85rem;
+            text-decoration: none;
+        }
+
+        .escala-page .ep-current .ep-btn-outline-light {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, .55);
+            border-radius: .6rem;
+            color: #fff;
+            font-size: .84rem;
+            font-weight: 700;
+            padding: .55rem .85rem;
+            text-decoration: none;
+        }
+
+        .escala-page .ep-stats {
+            display: grid;
+            gap: .9rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin-bottom: 1.15rem;
+        }
+
+        .escala-page .ep-stat {
+            background: var(--ep-surface);
+            border: 1px solid var(--ep-border);
+            border-radius: .8rem;
+            min-width: 0;
+            padding: 1rem 1.05rem;
+        }
+
+        .escala-page .ep-stat-head {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .escala-page .ep-stat-label {
+            color: var(--ep-muted);
+            font-size: .78rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .escala-page .ep-stat-dot {
+            border-radius: 50%;
+            height: 9px;
+            width: 9px;
+        }
+
+        .escala-page .ep-stat-value {
+            color: var(--ep-primary);
+            font-size: 1.65rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-top: .55rem;
+        }
+
+        .escala-page .ep-tools {
+            display: grid;
+            gap: .9rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-bottom: 1.15rem;
+        }
+
+        .escala-page .ep-tool {
+            align-items: center;
+            background: var(--ep-surface);
+            border: 1px solid var(--ep-border);
+            border-radius: .8rem;
+            color: inherit;
+            display: flex;
+            gap: .85rem;
+            padding: .9rem 1rem;
+            text-decoration: none;
+            transition: .18s ease;
+        }
+
+            .escala-page .ep-tool:hover {
+                border-color: #c1ceda;
+                box-shadow: 0 7px 20px rgba(23, 50, 77, .08);
+                color: inherit;
+                transform: translateY(-1px);
+            }
+
+        .escala-page .ep-tool-mark {
+            align-items: center;
+            background: var(--ep-primary-soft);
+            border-radius: .6rem;
+            color: var(--ep-primary);
+            display: flex;
+            flex: 0 0 40px;
+            font-size: .82rem;
+            font-weight: 800;
+            height: 40px;
+            justify-content: center;
+        }
+
+        .escala-page .ep-tool-title {
+            color: var(--ep-primary);
+            font-size: .9rem;
+            font-weight: 750;
+            margin: 0;
+        }
+
+        .escala-page .ep-tool-text {
+            color: var(--ep-muted);
+            font-size: .76rem;
+            margin: .12rem 0 0;
+        }
+
+        .escala-page .ep-panel {
+            background: var(--ep-surface);
+            border: 1px solid var(--ep-border);
+            border-radius: .9rem;
+            overflow: hidden;
+        }
+
+        .escala-page .ep-panel-head {
+            align-items: center;
+            border-bottom: 1px solid var(--ep-border);
+            display: flex;
+            gap: .8rem;
+            justify-content: space-between;
+            padding: 1rem 1.1rem;
+        }
+
+        .escala-page .ep-panel-title {
+            color: var(--ep-primary);
+            font-size: 1rem;
+            font-weight: 750;
+            margin: 0;
+        }
+
+        .escala-page .ep-filters {
+            display: flex;
+            gap: .55rem;
+        }
+
+        .escala-page .ep-input,
+        .escala-page .ep-select {
+            background: #fff;
+            border: 1px solid var(--ep-border);
+            border-radius: .55rem;
+            color: var(--ep-text);
+            font-size: .82rem;
+            min-height: 38px;
+            outline: none;
+            padding: .45rem .7rem;
+        }
+
+            .escala-page .ep-input:focus,
+            .escala-page .ep-select:focus {
+                border-color: #7b9ab7;
+                box-shadow: 0 0 0 3px rgba(23, 50, 77, .08);
+            }
+
+        .escala-page .ep-table-wrap {
+            overflow-x: auto;
+        }
+
+        .escala-page .ep-table {
+            border-collapse: collapse;
+            margin: 0;
+            min-width: 930px;
+            width: 100%;
+        }
+
+            .escala-page .ep-table th {
+                background: #f7f9fb;
+                border-bottom: 1px solid var(--ep-border);
+                color: #617184;
+                font-size: .7rem;
+                font-weight: 800;
+                letter-spacing: .055em;
+                padding: .75rem .85rem;
+                text-align: left;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+
+            .escala-page .ep-table td {
+                border-bottom: 1px solid #edf1f4;
+                font-size: .82rem;
+                padding: .82rem .85rem;
+                vertical-align: middle;
+            }
+
+            .escala-page .ep-table tbody tr:last-child td {
+                border-bottom: 0;
+            }
+
+            .escala-page .ep-table tbody tr:hover {
+                background: #fafcfd;
+            }
+
+        .escala-page .ep-folio {
+            color: var(--ep-primary);
+            font-weight: 800;
+        }
+
+        .escala-page .ep-muted {
+            color: var(--ep-muted);
+        }
+
+        .escala-page .ep-badge {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .7rem;
+            font-weight: 800;
+            padding: .32rem .58rem;
+        }
+
+        .escala-page .ep-badge-draft {
+            background: #fff4e8;
+            color: #a64b0b;
+        }
+
+        .escala-page .ep-badge-published {
+            background: #e8f6ef;
+            color: #18764b;
+        }
+
+        .escala-page .ep-badge-cancelled {
+            background: #f1f3f5;
+            color: #66717c;
+        }
+
+        .escala-page .ep-actions {
+            display: flex;
+            gap: .35rem;
+            justify-content: flex-end;
+        }
+
+        .escala-page .ep-action {
+            background: #fff;
+            border: 1px solid var(--ep-border);
+            border-radius: .48rem;
+            color: var(--ep-primary);
+            font-size: .74rem;
+            font-weight: 750;
+            padding: .38rem .58rem;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+            .escala-page .ep-action:hover {
+                background: var(--ep-primary-soft);
+                color: var(--ep-primary);
+            }
+
+        .escala-page .ep-empty {
+            padding: 3.2rem 1.25rem;
+            text-align: center;
+        }
+
+        .escala-page .ep-empty-mark {
+            align-items: center;
+            background: var(--ep-primary-soft);
+            border-radius: 50%;
+            color: var(--ep-primary);
+            display: inline-flex;
+            font-weight: 800;
+            height: 54px;
+            justify-content: center;
+            margin-bottom: .85rem;
+            width: 54px;
+        }
+
+        .escala-page .ep-empty-title {
+            color: var(--ep-primary);
+            font-size: 1rem;
+            font-weight: 750;
+            margin-bottom: .25rem;
+        }
+
+        .escala-page .ep-empty-text {
+            color: var(--ep-muted);
+            font-size: .84rem;
+            margin-bottom: 1rem;
+        }
+
+        .escala-page .ep-hidden-row {
+            display: none;
+        }
+
+    @@media (max-width: 991px) {
+        .escala-page .ep-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .escala-page .ep-tools {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 767px) {
+        .escala-page {
+            padding-top: 1rem;
+        }
+
+            .escala-page .ep-header,
+            .escala-page .ep-panel-head {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+                .escala-page .ep-header .ep-btn-primary {
+                    width: 100%;
+                }
+
+            .escala-page .ep-current {
+                grid-template-columns: 1fr;
+            }
+
+            .escala-page .ep-current-actions {
+                flex-wrap: wrap;
+                padding-right: 0;
+            }
+
+            .escala-page .ep-stats {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .escala-page .ep-filters {
+                flex-direction: column;
+            }
+
+            .escala-page .ep-input,
+            .escala-page .ep-select {
+                width: 100%;
+            }
+    }
+</style>
+
+<div class="container-fluid escala-page">
+    <div class="ep-header">
+        <div>
+            <div class="ep-eyebrow">Recursos Humanos</div>
+            <h1 class="ep-title">Escala de Personal</h1>
+            <p class="ep-subtitle">
+                Programa turnos, funciones y novedades del personal por semana.
+            </p>
+        </div>
+
+        @if (Model.PuedeAdministrar)
+        {
+            <a asp-controller="EscalaPersonal"
+               asp-action="Crear"
+               class="ep-btn-primary">
+                <span aria-hidden="true">＋</span>
+                Nueva escala
+            </a>
+        }
+    </div>
+
+    @if (TempData["Exito"] != null)
+    {
+        <div class="ep-alert ep-alert-success" role="alert">
+            @TempData["Exito"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="ep-alert ep-alert-error" role="alert">
+            @TempData["Error"]
+        </div>
+    }
+
+    @if (Model.EscalaSemanaActual != null)
+    {
+        var actual = Model.EscalaSemanaActual;
+        <section class="ep-current" aria-label="Escala de la semana actual">
+            <div>
+                <div class="ep-current-label">Semana en curso</div>
+                <h2 class="ep-current-title">
+                    Semana @actual.NumeroSemana · @actual.Folio
+                </h2>
+                <p class="ep-current-meta">
+                    @actual.FechaInicio.ToString("dd MMM", new CultureInfo("es-MX"))
+                    —
+                    @actual.FechaFin.ToString("dd MMM yyyy", new CultureInfo("es-MX"))
+                    · @actual.TotalPersonas personas · @actual.Estado
+                </p>
+            </div>
+            <div class="ep-current-actions">
+                @if (actual.Estado == EscalaVM.Estados.Borrador)
+                {
+                    <a asp-action="Editor"
+                       asp-route-id="@actual.EscalaID"
+                       class="ep-btn-light">
+                        Continuar edición
+                    </a>
+                }
+                <a asp-action="Detalle"
+                   asp-route-id="@actual.EscalaID"
+                   class="ep-btn-outline-light">
+                    Ver detalle
+                </a>
+            </div>
+        </section>
+    }
+
+    <section class="ep-stats" aria-label="Resumen de escalas">
+        <article class="ep-stat">
+            <div class="ep-stat-head">
+                <p class="ep-stat-label">Total de escalas</p>
+                <span class="ep-stat-dot" style="background:#17324d"></span>
+            </div>
+            <div class="ep-stat-value">@Model.Escalas.Count</div>
+        </article>
+        <article class="ep-stat">
+            <div class="ep-stat-head">
+                <p class="ep-stat-label">Borradores</p>
+                <span class="ep-stat-dot" style="background:#e87524"></span>
+            </div>
+            <div class="ep-stat-value">@Model.TotalBorradores</div>
+        </article>
+        <article class="ep-stat">
+            <div class="ep-stat-head">
+                <p class="ep-stat-label">Publicadas</p>
+                <span class="ep-stat-dot" style="background:#238657"></span>
+            </div>
+            <div class="ep-stat-value">@Model.TotalPublicadas</div>
+        </article>
+        <article class="ep-stat">
+            <div class="ep-stat-head">
+                <p class="ep-stat-label">Canceladas</p>
+                <span class="ep-stat-dot" style="background:#7a8793"></span>
+            </div>
+            <div class="ep-stat-value">@Model.TotalCanceladas</div>
+        </article>
+    </section>
+
+    @if (Model.PuedeAdministrar)
+    {
+        <nav class="ep-tools" aria-label="Configuración del módulo">
+            <a asp-action="Turnos" class="ep-tool">
+                <span class="ep-tool-mark">TU</span>
+                <span>
+                    <span class="ep-tool-title">Configurar turnos</span>
+                    <span class="ep-tool-text d-block">
+                        Edita horarios regulares, mixtos y especiales.
+                    </span>
+                </span>
+            </a>
+            <a asp-action="Funciones" class="ep-tool">
+                <span class="ep-tool-mark">FR</span>
+                <span>
+                    <span class="ep-tool-title">Configurar funciones</span>
+                    <span class="ep-tool-text d-block">
+                        Administra roles y requerimientos por departamento.
+                    </span>
+                </span>
+            </a>
+            <a asp-action="Crear" class="ep-tool">
+                <span class="ep-tool-mark">NS</span>
+                <span>
+                    <span class="ep-tool-title">Preparar nueva semana</span>
+                    <span class="ep-tool-text d-block">
+                        Genera el encabezado y selecciona los turnos aplicables.
+                    </span>
+                </span>
+            </a>
+        </nav>
+    }
+
+    <section class="ep-panel">
+        <div class="ep-panel-head">
+            <h2 class="ep-panel-title">Programaciones registradas</h2>
+            @if (Model.Escalas.Count > 0)
+            {
+                <div class="ep-filters">
+                    <input id="filtroEscalas"
+                           class="ep-input"
+                           type="search"
+                           placeholder="Buscar folio, año o semana"
+                           autocomplete="off" />
+                    <select id="filtroEstado" class="ep-select">
+                        <option value="">Todos los estados</option>
+                        <option value="borrador">Borrador</option>
+                        <option value="publicada">Publicada</option>
+                        <option value="cancelada">Cancelada</option>
+                    </select>
+                </div>
+            }
+        </div>
+
+        @if (Model.Escalas.Count == 0)
+        {
+            <div class="ep-empty">
+                <div class="ep-empty-mark">EP</div>
+                <div class="ep-empty-title">Todavía no hay escalas registradas</div>
+                <div class="ep-empty-text">
+                    Crea la primera programación semanal para comenzar a asignar personal.
+                </div>
+                @if (Model.PuedeAdministrar)
+                {
+                    <a asp-action="Crear" class="ep-btn-primary">Crear primera escala</a>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="ep-table-wrap">
+                <table class="ep-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Semana</th>
+                            <th>Periodo</th>
+                            <th>Estado</th>
+                            <th>Personal</th>
+                            <th>Asignaciones</th>
+                            <th>Novedades</th>
+                            <th>Elaboró</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaEscalas">
+                        @foreach (var escala in Model.Escalas)
+                        {
+                            var estadoClase = escala.Estado == EscalaVM.Estados.Publicada
+                                ? "ep-badge-published"
+                                : escala.Estado == EscalaVM.Estados.Cancelada
+                                    ? "ep-badge-cancelled"
+                                    : "ep-badge-draft";
+                            var textoBusqueda =
+                                $"{escala.Folio} {escala.Anio} {escala.NumeroSemana} {escala.Estado}"
+                                    .ToLowerInvariant();
+
+                            <tr data-search="@textoBusqueda"
+                                data-status="@escala.Estado.ToLowerInvariant()">
+                                <td>
+                                    <span class="ep-folio">@escala.Folio</span>
+                                    <div class="ep-muted">
+                                        @escala.CodigoDocumento · V.@escala.VersionDocumento
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong>@escala.NumeroSemana</strong>
+                                    <span class="ep-muted"> / @escala.Anio</span>
+                                </td>
+                                <td>
+                                    @escala.FechaInicio.ToString("dd/MM/yyyy")
+                                    <div class="ep-muted">
+                                        al @escala.FechaFin.ToString("dd/MM/yyyy")
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="ep-badge @estadoClase">@escala.Estado</span>
+                                </td>
+                                <td>@escala.TotalPersonas</td>
+                                <td>@escala.TotalAsignaciones</td>
+                                <td>@escala.TotalNovedades</td>
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(escala.ElaboradoPorNombre)
+                                        ? "Usuario del sistema"
+                                        : escala.ElaboradoPorNombre)
+                                    <div class="ep-muted">
+                                        @escala.FechaElaboracion.ToString("dd/MM/yyyy")
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="ep-actions">
+                                        @if (escala.Estado == EscalaVM.Estados.Borrador
+                                            && Model.PuedeAdministrar)
+                                        {
+                                            <a asp-action="Editor"
+                                               asp-route-id="@escala.EscalaID"
+                                               class="ep-action">
+                                                Editar
+                                            </a>
+                                            <a asp-action="Novedades"
+                                               asp-route-id="@escala.EscalaID"
+                                               class="ep-action">
+                                                Novedades
+                                            </a>
+                                        }
+                                        <a asp-action="Detalle"
+                                           asp-route-id="@escala.EscalaID"
+                                           class="ep-action">
+                                            Detalle
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div id="sinResultados" class="ep-empty d-none">
+                <div class="ep-empty-title">No se encontraron coincidencias</div>
+                <div class="ep-empty-text mb-0">
+                    Modifica la búsqueda o selecciona otro estado.
+                </div>
+            </div>
+        }
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const searchInput = document.getElementById('filtroEscalas');
+            const statusSelect = document.getElementById('filtroEstado');
+            const rows = Array.from(document.querySelectorAll('#tablaEscalas tr'));
+            const emptyMessage = document.getElementById('sinResultados');
+
+            if (!searchInput || !statusSelect || rows.length === 0) {
+                return;
+            }
+
+            const normalize = value => (value || '')
+                .toString()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+
+            const applyFilters = () => {
+                const term = normalize(searchInput.value);
+                const status = normalize(statusSelect.value);
+                let visible = 0;
+
+                rows.forEach(row => {
+                    const rowText = normalize(row.dataset.search);
+                    const rowStatus = normalize(row.dataset.status);
+                    const matchesText = !term || rowText.includes(term);
+                    const matchesStatus = !status || rowStatus === status;
+                    const show = matchesText && matchesStatus;
+
+                    row.classList.toggle('ep-hidden-row', !show);
+                    if (show) {
+                        visible += 1;
+                    }
+                });
+
+                if (emptyMessage) {
+                    emptyMessage.classList.toggle('d-none', visible > 0);
+                }
+            };
+
+            searchInput.addEventListener('input', applyFilters);
+            statusSelect.addEventListener('change', applyFilters);
+        })();
+    </script>
+}

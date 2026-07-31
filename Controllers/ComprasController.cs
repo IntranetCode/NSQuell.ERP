@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using System.Data;
 using System.IO;
+using System.Globalization;
 using System.Security.Claims;
+using System.Text;
 
 namespace ERP.NSQuell.Controllers
 {
@@ -89,6 +91,10 @@ namespace ERP.NSQuell.Controllers
 
             model.UltimasSolicitudes = await ObtenerSolicitudesAsync(5);
 
+            var departamentosUsuario = await ObtenerDepartamentosUsuarioActualAsync();
+
+            await CargarPermisosBandejasViewBagAsync();
+
             return View(model);
         }
 
@@ -98,8 +104,41 @@ namespace ERP.NSQuell.Controllers
         [HttpGet]
         public async Task<IActionResult> Solicitudes()
         {
+            await CargarPermisosBandejasViewBagAsync();
+
             var model = await ObtenerSolicitudesAsync();
+            model = await FiltrarSolicitudesPorAccesoAsync(model);
+
             return View(model);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> MiBandeja()
+        {
+            if (await TieneAccesoDepartamentoAsync("Compras"))
+            {
+                return RedirectToAction(nameof(BandejaCompras));
+            }
+
+            if (await TieneAccesoDepartamentoAsync("Dirección", "Direccion"))
+            {
+                return RedirectToAction(nameof(BandejaDireccion));
+            }
+
+            if (await TieneAccesoDepartamentoAsync("Almacén", "Almacen"))
+            {
+                return RedirectToAction(nameof(BandejaAlmacen));
+            }
+
+            TempData["Error"] = "Tu usuario no tiene un departamento asignado para las bandejas de compras.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpGet]
+        public IActionResult AccesoDenegadoCompras()
+        {
+            TempData["Error"] = "Tu usuario no tiene acceso a esta sección de Compras.";
+            return RedirectToAction(nameof(Index));
         }
 
         // =========================================================
@@ -108,6 +147,12 @@ namespace ERP.NSQuell.Controllers
         [HttpGet]
         public async Task<IActionResult> BandejaDireccion()
         {
+            if (!await TieneAccesoDepartamentoAsync("Dirección", "Direccion"))
+            {
+                TempData["Error"] = "Tu usuario no tiene acceso a la bandeja de Dirección.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var solicitudes = await ObtenerSolicitudesBandejaAsync();
 
             var model = new Compras.BandejaDireccionViewModel
@@ -131,12 +176,118 @@ namespace ERP.NSQuell.Controllers
             return View(model);
         }
 
+
+        // =========================================================
+        // SEGUIMIENTO DIRECCION
+        // Monitoreo completo del flujo para Dirección
+        // =========================================================
+        [HttpGet]
+        public async Task<IActionResult> SeguimientoDireccion(
+            int? estatusId,
+            string? departamento,
+            string? comprador,
+            bool soloRetrasadas = false)
+        {
+            if (!await TieneAccesoDepartamentoAsync("Dirección", "Direccion"))
+            {
+                TempData["Error"] = "Tu usuario no tiene acceso al seguimiento de Dirección.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var model = new Compras.SeguimientoDireccionViewModel
+            {
+                FiltroEstatusID = estatusId,
+                FiltroDepartamento = departamento,
+                FiltroComprador = comprador,
+                SoloRetrasadas = soloRetrasadas
+            };
+
+            using var connection = new SqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+
+            model.EstatusCatalogo = await ObtenerEstatusComprasSelectAsync(connection);
+            model.DepartamentosCatalogo = await ObtenerDepartamentosFiltroSelectAsync(connection);
+            model.CompradoresCatalogo = await ObtenerCompradoresFiltroSelectAsync(connection);
+
+            model.Solicitudes = await ObtenerSeguimientoDireccionAsync(
+                connection,
+                estatusId,
+                departamento,
+                comprador,
+                soloRetrasadas
+            );
+
+            await CargarDiasPorEtapasSeguimientoAsync(connection, model.Solicitudes);
+
+            model.CargaCompradores = CalcularCargaCompradores(model.Solicitudes);
+
+            return View(model);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> CargaCompradoresSeguimiento(int? anio, int? mes)
+        {
+            if (!await TieneAccesoDepartamentoAsync("Dirección", "Direccion"))
+            {
+                return Unauthorized();
+            }
+
+            using var connection = new SqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+
+            var solicitudes = await ObtenerSeguimientoDireccionAsync(
+                connection,
+                null,
+                null,
+                null,
+                false
+            );
+
+            if (anio.HasValue)
+            {
+                solicitudes = solicitudes
+                    .Where(x => x.FechaSolicitud.Year == anio.Value)
+                    .ToList();
+            }
+
+            if (mes.HasValue)
+            {
+                solicitudes = solicitudes
+                    .Where(x => x.FechaSolicitud.Month == mes.Value)
+                    .ToList();
+            }
+
+            await CargarDiasPorEtapasSeguimientoAsync(connection, solicitudes);
+
+            var carga = CalcularCargaCompradores(solicitudes)
+                .Select(x => new
+                {
+                    comprador = x.Comprador,
+                    totalAsignadas = x.TotalAsignadas,
+                    pendientes = x.Pendientes,
+                    cotizando = x.Cotizando,
+                    ordenes = x.Ordenes,
+                    cerradas = x.Cerradas,
+                    retrasadas = x.Retrasadas,
+                    montoTotal = x.MontoTotal
+                })
+                .ToList();
+
+            return Json(carga);
+        }
+
         // =========================================================
         // BANDEJA COMPRAS
         // =========================================================
         [HttpGet]
         public async Task<IActionResult> BandejaCompras()
         {
+            if (!await TieneAccesoDepartamentoAsync("Compras"))
+            {
+                TempData["Error"] = "Tu usuario no tiene acceso a la bandeja de Compras.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var solicitudes = await ObtenerSolicitudesBandejaAsync();
 
             var model = new Compras.BandejaComprasViewModel
@@ -176,6 +327,12 @@ namespace ERP.NSQuell.Controllers
         [HttpGet]
         public async Task<IActionResult> BandejaAlmacen()
         {
+            if (!await TieneAccesoDepartamentoAsync("Almacén", "Almacen"))
+            {
+                TempData["Error"] = "Tu usuario no tiene acceso a la bandeja de Almacén.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var solicitudes = await ObtenerSolicitudesBandejaAsync();
 
             var model = new Compras.BandejaAlmacenViewModel
@@ -198,8 +355,9 @@ namespace ERP.NSQuell.Controllers
         // CREAR SOLICITUD - GET
         // =========================================================
         [HttpGet]
-        public async Task<IActionResult> CrearSolicitud()
+        public async Task<IActionResult> CrearSolicitud(string? returnTo = null)
         {
+            ViewBag.ReturnTo = returnTo;
             var model = new Compras.CrearSolicitudViewModel
             {
                 OrigenSolicitud = "Almacen",
@@ -222,7 +380,7 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CrearSolicitud(Compras.CrearSolicitudViewModel model)
+        public async Task<IActionResult> CrearSolicitud(Compras.CrearSolicitudViewModel model, string? returnTo = null)
         {
             model.OrigenSolicitud = "Almacen";
             model.AlmacenID = null;
@@ -235,6 +393,7 @@ namespace ERP.NSQuell.Controllers
                     k == "OrigenSolicitud" ||
                     k == "AlmacenID" ||
                     k == "PedidoClienteReferencia" ||
+                    k.EndsWith(".ProductoID") ||
                     k.EndsWith(".DescripcionMaterial") ||
                     k.EndsWith(".UnidadMedida") ||
                     k.EndsWith(".StockActual") ||
@@ -252,6 +411,8 @@ namespace ERP.NSQuell.Controllers
                 .Where(x =>
                     x.ProductoID.HasValue ||
                     x.CantidadSolicitada > 0 ||
+                    !string.IsNullOrWhiteSpace(x.DescripcionMaterial) ||
+                    !string.IsNullOrWhiteSpace(x.UnidadMedida) ||
                     !string.IsNullOrWhiteSpace(x.Observaciones))
                 .ToList();
 
@@ -265,11 +426,32 @@ namespace ERP.NSQuell.Controllers
                 ModelState.AddModelError(nameof(model.TipoCompra), "Seleccione el tipo de compra.");
             }
 
+            var esMateriaPrima = string.Equals(
+                model.TipoCompra,
+                "Materia prima",
+                StringComparison.OrdinalIgnoreCase
+            );
+
             for (int i = 0; i < model.Materiales.Count; i++)
             {
-                if (!model.Materiales[i].ProductoID.HasValue || model.Materiales[i].ProductoID.Value <= 0)
+                if (esMateriaPrima)
                 {
-                    ModelState.AddModelError($"Materiales[{i}].ProductoID", "Seleccione un material o concepto.");
+                    if (!model.Materiales[i].ProductoID.HasValue || model.Materiales[i].ProductoID.Value <= 0)
+                    {
+                        ModelState.AddModelError($"Materiales[{i}].ProductoID", "Seleccione un material.");
+                    }
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(model.Materiales[i].DescripcionMaterial))
+                    {
+                        ModelState.AddModelError($"Materiales[{i}].DescripcionMaterial", "Capture la descripción o concepto solicitado.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(model.Materiales[i].UnidadMedida))
+                    {
+                        ModelState.AddModelError($"Materiales[{i}].UnidadMedida", "Capture la unidad.");
+                    }
                 }
 
                 if (model.Materiales[i].CantidadSolicitada <= 0)
@@ -400,27 +582,32 @@ namespace ERP.NSQuell.Controllers
 
                 foreach (var item in model.Materiales)
                 {
-                    if (!item.ProductoID.HasValue || item.ProductoID.Value <= 0)
-                    {
-                        throw new InvalidOperationException("Uno de los materiales o conceptos no tiene MaterialID.");
-                    }
+                    MaterialCompraDto? material = null;
 
-                    var material = await ObtenerMaterialCompraAsync(connection, item.ProductoID.Value, transaction);
-
-                    if (material == null)
+                    if (esMateriaPrima)
                     {
-                        throw new InvalidOperationException("No se encontró información del material o concepto seleccionado.");
+                        if (!item.ProductoID.HasValue || item.ProductoID.Value <= 0)
+                        {
+                            throw new InvalidOperationException("Uno de los materiales no tiene MaterialID.");
+                        }
+
+                        material = await ObtenerMaterialCompraAsync(connection, item.ProductoID.Value, transaction);
+
+                        if (material == null)
+                        {
+                            throw new InvalidOperationException("No se encontró información del material seleccionado.");
+                        }
                     }
 
                     using var command = new SqlCommand(insertDetalle, connection, transaction);
 
                     command.Parameters.AddWithValue("@SolicitudCompraID", solicitudId);
-                    command.Parameters.AddWithValue("@ProductoID", material.MaterialID);
-                    command.Parameters.AddWithValue("@DescripcionMaterial", ToDbValue(material.Material));
-                    command.Parameters.AddWithValue("@UnidadMedida", ToDbValue(material.Unidad));
+                    command.Parameters.AddWithValue("@ProductoID", ToDbValue(esMateriaPrima ? material?.MaterialID : item.ProductoID));
+                    command.Parameters.AddWithValue("@DescripcionMaterial", ToDbValue(esMateriaPrima ? material?.Material : item.DescripcionMaterial?.Trim()));
+                    command.Parameters.AddWithValue("@UnidadMedida", ToDbValue(esMateriaPrima ? material?.Unidad : item.UnidadMedida?.Trim()));
                     command.Parameters.AddWithValue("@CantidadSolicitada", item.CantidadSolicitada);
-                    command.Parameters.AddWithValue("@StockActual", material.StockActual);
-                    command.Parameters.AddWithValue("@StockMinimo", material.StockMinimo);
+                    command.Parameters.AddWithValue("@StockActual", ToDbValue(esMateriaPrima ? material?.StockActual : null));
+                    command.Parameters.AddWithValue("@StockMinimo", ToDbValue(esMateriaPrima ? material?.StockMinimo : null));
                     command.Parameters.AddWithValue("@FechaRequerida", ToDbValue(item.FechaRequerida));
                     command.Parameters.AddWithValue("@AceptaSustituto", item.AceptaSustituto);
                     command.Parameters.AddWithValue("@Observaciones", ToDbValue(item.Observaciones));
@@ -441,7 +628,7 @@ namespace ERP.NSQuell.Controllers
 
                 TempData["Success"] = $"Solicitud {folio} creada correctamente.";
 
-                return RedirectToAction(nameof(DetalleSolicitud), new { id = solicitudId });
+                return RedirectToAction(nameof(DetalleSolicitud), new { id = solicitudId, returnTo = string.IsNullOrWhiteSpace(returnTo) ? "Index" : returnTo });
             }
             catch (Exception ex)
             {
@@ -464,8 +651,9 @@ namespace ERP.NSQuell.Controllers
         // DETALLE SOLICITUD
         // =========================================================
         [HttpGet]
-        public async Task<IActionResult> DetalleSolicitud(int id)
+        public async Task<IActionResult> DetalleSolicitud(int id, string? returnTo = null)
         {
+            ViewBag.ReturnTo = returnTo;
             using var connection = new SqlConnection(GetConnectionString());
             await connection.OpenAsync();
 
@@ -635,8 +823,13 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AprobarSolicitud(Compras.AprobarSolicitudViewModel model)
+        public async Task<IActionResult> AprobarSolicitud(Compras.AprobarSolicitudViewModel model, string? returnTo = null)
         {
+            if (!await TieneAccesoDepartamentoAsync("Dirección", "Direccion"))
+            {
+                TempData["Error"] = "Solo Dirección puede aprobar o rechazar solicitudes.";
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
+            }
             var usuarioId = ObtenerUsuarioId();
 
             using var connection = new SqlConnection(GetConnectionString());
@@ -652,7 +845,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La solicitud no se encuentra en un estatus que pueda aprobar Dirección.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var nuevoEstatusID = estatusActual == 1 ? 2 : 5;
@@ -734,7 +927,7 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "Ocurrió un error al aprobar la solicitud: " + ex.Message;
             }
 
-            return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+            return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
         }
 
         // =========================================================
@@ -742,12 +935,17 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RechazarSolicitud(Compras.RechazarSolicitudViewModel model)
+        public async Task<IActionResult> RechazarSolicitud(Compras.RechazarSolicitudViewModel model, string? returnTo = null)
         {
+            if (!await TieneAccesoDepartamentoAsync("Dirección", "Direccion"))
+            {
+                TempData["Error"] = "Solo Dirección puede aprobar o rechazar solicitudes.";
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
+            }
             if (!ModelState.IsValid)
             {
                 TempData["Error"] = "Debes capturar el motivo del rechazo.";
-                return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
             }
 
             var usuarioId = ObtenerUsuarioId();
@@ -765,7 +963,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La solicitud no se encuentra en un estatus que pueda rechazar Dirección.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var estatusNombre = await ObtenerNombreEstatusAsync(connection, transaction, 11);
@@ -811,7 +1009,7 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "Ocurrió un error al rechazar la solicitud: " + ex.Message;
             }
 
-            return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+            return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
         }
 
         // =========================================================
@@ -820,8 +1018,13 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> IniciarCotizacion(int id)
+        public async Task<IActionResult> IniciarCotizacion(int id, string? returnTo = null)
         {
+            if (!await TieneAccesoDepartamentoAsync("Compras"))
+            {
+                TempData["Error"] = "Solo Compras puede iniciar cotizaciones.";
+                return RedireccionarFlujoCompras(returnTo, id);
+            }
             using var connection = new SqlConnection(GetConnectionString());
             await connection.OpenAsync();
 
@@ -835,7 +1038,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La solicitud no está aprobada para cotizar.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id });
+                    return RedireccionarFlujoCompras(returnTo, id);
                 }
 
                 await CambiarEstatusSolicitudAsync(
@@ -857,7 +1060,7 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "Ocurrió un error al iniciar cotización: " + ex.Message;
             }
 
-            return RedirectToAction(nameof(DetalleSolicitud), new { id });
+            return RedireccionarFlujoCompras(returnTo, id);
         }
 
         // =========================================================
@@ -894,12 +1097,17 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SeleccionarCotizacion(Compras.SeleccionarCotizacionViewModel model)
+        public async Task<IActionResult> SeleccionarCotizacion(Compras.SeleccionarCotizacionViewModel model, string? returnTo = null)
         {
+            if (!await TieneAccesoDepartamentoAsync("Dirección", "Direccion"))
+            {
+                TempData["Error"] = "Solo Dirección puede autorizar cotizaciones.";
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
+            }
             if (!ModelState.IsValid)
             {
                 TempData["Error"] = "Selecciona una cotización.";
-                return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
             }
 
             var usuarioId = ObtenerUsuarioId();
@@ -917,7 +1125,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La solicitud no se encuentra pendiente de autorización de cotización.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var existeCotizacion = await ExisteCotizacionSolicitudAsync(
@@ -931,7 +1139,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La cotización seleccionada no pertenece a esta solicitud.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var estatusNombre = await ObtenerNombreEstatusAsync(connection, transaction, 5);
@@ -992,7 +1200,7 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "Ocurrió un error al seleccionar la cotización: " + ex.Message;
             }
 
-            return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+            return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
         }
 
         // =========================================================
@@ -1001,8 +1209,13 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RegistrarOrdenCompra(Compras.OrdenCompraViewModel model)
+        public async Task<IActionResult> RegistrarOrdenCompra(Compras.OrdenCompraViewModel model, string? returnTo = null)
         {
+            if (!await TieneAccesoDepartamentoAsync("Compras"))
+            {
+                TempData["Error"] = "Solo Compras puede registrar órdenes de compra.";
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
+            }
             if (model.SolicitudCompraID <= 0)
             {
                 TempData["Error"] = "No se recibió la solicitud de compra.";
@@ -1012,7 +1225,7 @@ namespace ERP.NSQuell.Controllers
             if (string.IsNullOrWhiteSpace(model.NumeroOC))
             {
                 TempData["Error"] = "Captura el número de orden de compra.";
-                return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
             }
 
             var usuarioId = ObtenerUsuarioId();
@@ -1030,7 +1243,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La solicitud no está aprobada para generar orden de compra.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var tieneOrden = await TieneOrdenCompraActivaAsync(connection, transaction, model.SolicitudCompraID);
@@ -1039,7 +1252,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "Esta solicitud ya tiene una orden de compra activa.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var cotizacion = await ObtenerCotizacionSeleccionadaAsync(connection, transaction, model.SolicitudCompraID);
@@ -1048,7 +1261,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "No se encontró una cotización seleccionada para generar la orden.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var folioOc = $"OC-{DateTime.Now:yyyy}-{model.SolicitudCompraID.ToString().PadLeft(5, '0')}";
@@ -1129,15 +1342,21 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "Ocurrió un error al registrar la orden de compra: " + ex.Message;
             }
 
-            return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+            return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
         }
 
         // =========================================================
         // REGISTRAR COTIZACIONES - PANTALLA
         // =========================================================
         [HttpGet]
-        public async Task<IActionResult> RegistrarCotizaciones(int id)
+        public async Task<IActionResult> RegistrarCotizaciones(int id, string? returnTo = null)
         {
+            ViewBag.ReturnTo = returnTo;
+            if (!await TieneAccesoDepartamentoAsync("Compras"))
+            {
+                TempData["Error"] = "Solo Compras puede registrar cotizaciones.";
+                return RedirectToAction(nameof(DetalleSolicitud), new { id, returnTo });
+            }
             if (id <= 0)
             {
                 TempData["Error"] = "No se recibió la solicitud de compra.";
@@ -1187,7 +1406,7 @@ namespace ERP.NSQuell.Controllers
             if (model.EstatusID != 3 && model.EstatusID != 4)
             {
                 TempData["Error"] = "La solicitud no se encuentra en estatus de cotización.";
-                return RedirectToAction(nameof(DetalleSolicitud), new { id });
+                return RedirectToAction(nameof(DetalleSolicitud), new { id, returnTo });
             }
 
             model.Proveedores = await ObtenerProveedoresAsync(connection);
@@ -1205,8 +1424,13 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RegistrarCotizaciones(Compras.RegistrarCotizacionesViewModel model, int? id)
+        public async Task<IActionResult> RegistrarCotizaciones(Compras.RegistrarCotizacionesViewModel model, int? id, string? returnTo = null)
         {
+            if (!await TieneAccesoDepartamentoAsync("Compras"))
+            {
+                TempData["Error"] = "Solo Compras puede registrar cotizaciones.";
+                return RedirectToAction(nameof(Index));
+            }
             if (model.SolicitudCompraID <= 0 && id.HasValue)
             {
                 model.SolicitudCompraID = id.Value;
@@ -1231,7 +1455,7 @@ namespace ERP.NSQuell.Controllers
             if (!cotizacionesValidas.Any())
             {
                 TempData["Error"] = "Agrega al menos una cotización.";
-                return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID });
+                return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID, returnTo });
             }
 
             for (int i = 0; i < cotizacionesValidas.Count; i++)
@@ -1241,19 +1465,19 @@ namespace ERP.NSQuell.Controllers
                 if (!item.ProveedorID.HasValue || item.ProveedorID.Value <= 0)
                 {
                     TempData["Error"] = $"Selecciona el proveedor de la cotización #{i + 1}.";
-                    return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID });
+                    return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID, returnTo });
                 }
 
                 if (!item.Total.HasValue || item.Total.Value <= 0)
                 {
                     TempData["Error"] = $"Captura el total de la cotización #{i + 1}.";
-                    return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID });
+                    return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID, returnTo });
                 }
 
                 if (item.ArchivoCotizacion == null || item.ArchivoCotizacion.Length <= 0)
                 {
                     TempData["Error"] = $"Adjunta el archivo de la cotización #{i + 1}.";
-                    return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID });
+                    return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID, returnTo });
                 }
             }
 
@@ -1277,7 +1501,7 @@ namespace ERP.NSQuell.Controllers
                     TempData["Error"] = "La solicitud no se encuentra en estatus de cotización.";
                     transaction.Rollback();
 
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 int totalGuardadas = 0;
@@ -1295,7 +1519,7 @@ namespace ERP.NSQuell.Controllers
                         TempData["Error"] = "Uno de los proveedores seleccionados no existe o está inactivo.";
                         transaction.Rollback();
 
-                        return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID });
+                        return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID, returnTo });
                     }
 
                     var archivo = await GuardarArchivoAsync(
@@ -1404,7 +1628,7 @@ namespace ERP.NSQuell.Controllers
 
                 TempData["Success"] = $"{totalGuardadas} cotización(es) registrada(s) correctamente.";
 
-                return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
             }
             catch (Exception ex)
             {
@@ -1412,7 +1636,7 @@ namespace ERP.NSQuell.Controllers
 
                 TempData["Error"] = "Ocurrió un error al registrar las cotizaciones: " + ex.Message;
 
-                return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID });
+                return RedirectToAction(nameof(RegistrarCotizaciones), new { id = model.SolicitudCompraID, returnTo });
             }
         }
 
@@ -1424,8 +1648,13 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EnviarOrdenProveedor(Compras.EnviarOrdenProveedorViewModel model)
+        public async Task<IActionResult> EnviarOrdenProveedor(Compras.EnviarOrdenProveedorViewModel model, string? returnTo = null)
         {
+            if (!await TieneAccesoDepartamentoAsync("Compras"))
+            {
+                TempData["Error"] = "Solo Compras puede enviar órdenes al proveedor.";
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
+            }
             if (model.SolicitudCompraID <= 0)
             {
                 TempData["Error"] = "No se recibió la solicitud de compra.";
@@ -1435,7 +1664,7 @@ namespace ERP.NSQuell.Controllers
             if (!model.FechaEntregaEstimada.HasValue)
             {
                 TempData["Error"] = "Captura la fecha estimada de entrega.";
-                return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
             }
 
             var usuarioId = ObtenerUsuarioId();
@@ -1453,7 +1682,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La solicitud no tiene una orden lista para envío al proveedor.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var ordenCompraId = model.OrdenCompraID > 0
@@ -1464,7 +1693,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "No se encontró una orden de compra activa para esta solicitud.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var query = @"
@@ -1519,7 +1748,7 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "Ocurrió un error al enviar la orden al proveedor: " + ex.Message;
             }
 
-            return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+            return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
         }
 
         // =========================================================
@@ -1528,8 +1757,13 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RegistrarRecepcionAlmacen(Compras.RecepcionCompraViewModel model)
+        public async Task<IActionResult> RegistrarRecepcionAlmacen(Compras.RecepcionCompraViewModel model, string? returnTo = null)
         {
+            if (!await TieneAccesoDepartamentoAsync("Almacén", "Almacen"))
+            {
+                TempData["Error"] = "Solo Almacén puede registrar recepciones.";
+                return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
+            }
             if (model.SolicitudCompraID <= 0)
             {
                 TempData["Error"] = "No se recibió la solicitud de compra.";
@@ -1553,7 +1787,7 @@ namespace ERP.NSQuell.Controllers
                 catch (Exception ex)
                 {
                     TempData["Error"] = "No se pudo guardar la evidencia de recepción: " + ex.Message;
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
             }
 
@@ -1570,7 +1804,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La solicitud no está pendiente de recepción en almacén.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+                    return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
                 }
 
                 var ordenCompraId = model.OrdenCompraID.HasValue && model.OrdenCompraID.Value > 0
@@ -1634,7 +1868,7 @@ namespace ERP.NSQuell.Controllers
                     transaction,
                     model.SolicitudCompraID,
                     9,
-                    "Almacén registró la recepción del material.",
+                    "Almacén registró la recepción del material o concepto.",
                     usuarioId
                 );
 
@@ -1657,7 +1891,7 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "Ocurrió un error al registrar la recepción: " + ex.Message;
             }
 
-            return RedirectToAction(nameof(DetalleSolicitud), new { id = model.SolicitudCompraID });
+            return RedireccionarFlujoCompras(returnTo, model.SolicitudCompraID);
         }
 
         // =========================================================
@@ -1689,7 +1923,7 @@ namespace ERP.NSQuell.Controllers
         // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CancelarSolicitud(int id)
+        public async Task<IActionResult> CancelarSolicitud(int id, string? returnTo = null)
         {
             using var connection = new SqlConnection(GetConnectionString());
             await connection.OpenAsync();
@@ -1704,7 +1938,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     TempData["Error"] = "La solicitud ya se encuentra cerrada, rechazada o cancelada.";
                     transaction.Rollback();
-                    return RedirectToAction(nameof(DetalleSolicitud), new { id });
+                    return RedireccionarFlujoCompras(returnTo, id);
                 }
 
                 await CambiarEstatusSolicitudAsync(
@@ -1726,7 +1960,7 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "Ocurrió un error al cancelar la solicitud: " + ex.Message;
             }
 
-            return RedirectToAction(nameof(Solicitudes));
+            return RedireccionarFlujoCompras(string.IsNullOrWhiteSpace(returnTo) ? "Solicitudes" : returnTo, id);
         }
 
         // =========================================================
@@ -2152,6 +2386,468 @@ namespace ERP.NSQuell.Controllers
                     UsuarioNombre = GetString(reader, "UsuarioNombre"),
                     FechaMovimiento = GetDateTime(reader, "FechaMovimiento")
                 });
+            }
+
+            return lista;
+        }
+
+
+        // =========================================================
+        // SEGUIMIENTO DIRECCION - CONSULTAS Y CALCULOS
+        // =========================================================
+        private async Task<List<Compras.SeguimientoDireccionItemViewModel>> ObtenerSeguimientoDireccionAsync(
+            SqlConnection connection,
+            int? estatusId,
+            string? departamento,
+            string? comprador,
+            bool soloRetrasadas)
+        {
+            var lista = new List<Compras.SeguimientoDireccionItemViewModel>();
+
+            var query = @"
+                SELECT
+                    s.SolicitudCompraID,
+                    s.Folio,
+                    s.FechaSolicitud,
+                    s.Departamento,
+                    s.SolicitadoPorUsuarioID,
+                    Solicitante = COALESCE(us.Username, CONCAT('Usuario ID ', s.SolicitadoPorUsuarioID)),
+                    s.Prioridad,
+                    s.TipoCompra,
+                    s.EstatusID,
+                    s.EstatusNombre,
+                    s.ResponsableActual,
+                    s.FechaUltimoMovimiento,
+                    s.DiasEnEstatus,
+                    DiasTotales = DATEDIFF(DAY, s.FechaSolicitud, COALESCE(s.FechaCierre, GETDATE())),
+                    s.CompradorAsignadoUsuarioID,
+                    CompradorAsignado =
+                        CASE
+                            WHEN s.CompradorAsignadoUsuarioID IS NULL THEN 'Sin asignar'
+                            ELSE COALESCE(uc.Username, CONCAT('Usuario ID ', s.CompradorAsignadoUsuarioID))
+                        END,
+                    TotalCotizaciones = ISNULL(cot.TotalCotizaciones, 0),
+                    MontoCotizado = ISNULL(cot.MontoCotizado, 0)
+                FROM dbo.vw_ComprasSolicitudes_Flujo s
+                LEFT JOIN dbo.Usuarios us
+                    ON us.UsuarioID = s.SolicitadoPorUsuarioID
+                LEFT JOIN dbo.Usuarios uc
+                    ON uc.UsuarioID = s.CompradorAsignadoUsuarioID
+                OUTER APPLY
+                (
+                    SELECT
+                        TotalCotizaciones = COUNT(1),
+                        MontoCotizado = COALESCE(
+                            SUM(CASE WHEN c.EsSeleccionada = 1 THEN c.Total END),
+                            SUM(c.Total),
+                            0
+                        )
+                    FROM dbo.ComprasCotizaciones c
+                    WHERE c.SolicitudCompraID = s.SolicitudCompraID
+                      AND c.Activo = 1
+                ) cot
+                WHERE s.Activo = 1
+                ORDER BY s.FechaSolicitud DESC;
+            ";
+
+            using var command = new SqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var item = new Compras.SeguimientoDireccionItemViewModel
+                {
+                    SolicitudCompraID = GetInt(reader, "SolicitudCompraID"),
+                    Folio = GetString(reader, "Folio"),
+                    FechaSolicitud = GetDateTime(reader, "FechaSolicitud"),
+                    Solicitante = GetString(reader, "Solicitante"),
+                    Departamento = GetString(reader, "Departamento"),
+                    CompradorAsignadoUsuarioID = GetNullableInt(reader, "CompradorAsignadoUsuarioID"),
+                    CompradorAsignado = GetString(reader, "CompradorAsignado"),
+                    Prioridad = GetString(reader, "Prioridad"),
+                    TipoCompra = GetString(reader, "TipoCompra"),
+                    EstatusID = GetInt(reader, "EstatusID"),
+                    EstatusNombre = GetString(reader, "EstatusNombre"),
+                    ResponsableActual = GetString(reader, "ResponsableActual"),
+                    FechaUltimoMovimiento = GetNullableDateTime(reader, "FechaUltimoMovimiento"),
+                    DiasEnEstatus = GetInt(reader, "DiasEnEstatus"),
+                    DiasTotales = GetInt(reader, "DiasTotales"),
+                    TotalCotizaciones = GetInt(reader, "TotalCotizaciones"),
+                    MontoCotizado = GetNullableDecimal(reader, "MontoCotizado")
+                };
+
+                item.DiasPermitidos = ObtenerDiasPermitidosSeguimiento(item.EstatusID, item.Prioridad);
+                AplicarSemaforoSeguimiento(item);
+
+                lista.Add(item);
+            }
+
+            if (estatusId.HasValue && estatusId.Value > 0)
+            {
+                lista = lista
+                    .Where(x => x.EstatusID == estatusId.Value)
+                    .ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(departamento))
+            {
+                var filtroDepartamento = NormalizarTexto(departamento);
+
+                lista = lista
+                    .Where(x => NormalizarTexto(x.Departamento).Contains(filtroDepartamento))
+                    .ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(comprador))
+            {
+                var filtroComprador = NormalizarTexto(comprador);
+
+                lista = lista
+                    .Where(x => NormalizarTexto(x.CompradorAsignado).Contains(filtroComprador))
+                    .ToList();
+            }
+
+            if (soloRetrasadas)
+            {
+                lista = lista
+                    .Where(x => x.EsRetrasada)
+                    .ToList();
+            }
+
+            return lista
+                .OrderByDescending(x => x.FechaSolicitud)
+                .ToList();
+        }
+
+        private static int ObtenerDiasPermitidosSeguimiento(int estatusId, string? prioridad)
+        {
+            var diasBase = estatusId switch
+            {
+                1 => 2,  // Dirección aprueba solicitud
+                2 => 1,  // Compras recibe para cotizar
+                3 => 3,  // Compras cotiza
+                4 => 2,  // Dirección autoriza cotización
+                5 => 2,  // Compras prepara O.C.
+                6 => 2,  // O.C. generada pendiente envío
+                7 => 4,  // Proveedor entrega
+                8 => 2,  // Almacén recibe
+                9 => 1,  // Validación/cierre
+                _ => 0
+            };
+
+            if (diasBase <= 0)
+            {
+                return 0;
+            }
+
+            return prioridad switch
+            {
+                "Urgente" => Math.Max(1, diasBase - 1),
+                "Alta" => diasBase,
+                "Baja" => diasBase + 2,
+                _ => diasBase
+            };
+        }
+
+        private static void AplicarSemaforoSeguimiento(Compras.SeguimientoDireccionItemViewModel item)
+        {
+            if (item.EstatusID == 10)
+            {
+                item.SemaforoTexto = "Cerrada";
+                item.SemaforoCss = "badge-semaforo badge-verde";
+                return;
+            }
+
+            if (item.EstatusID == 11)
+            {
+                item.SemaforoTexto = "Rechazada";
+                item.SemaforoCss = "badge-semaforo badge-rojo";
+                return;
+            }
+
+            if (item.EstatusID == 12)
+            {
+                item.SemaforoTexto = "Cancelada";
+                item.SemaforoCss = "badge-semaforo badge-gris";
+                return;
+            }
+
+            if (item.DiasPermitidos > 0 && item.DiasEnEstatus > item.DiasPermitidos)
+            {
+                item.SemaforoTexto = "Retrasada";
+                item.SemaforoCss = "badge-semaforo badge-rojo";
+                return;
+            }
+
+            if (item.DiasPermitidos > 0 && item.DiasEnEstatus >= Math.Max(1, item.DiasPermitidos - 1))
+            {
+                item.SemaforoTexto = "Por vencer";
+                item.SemaforoCss = "badge-semaforo badge-amarillo";
+                return;
+            }
+
+            item.SemaforoTexto = "A tiempo";
+            item.SemaforoCss = "badge-semaforo badge-verde";
+        }
+
+        private async Task CargarDiasPorEtapasSeguimientoAsync(
+            SqlConnection connection,
+            List<Compras.SeguimientoDireccionItemViewModel> solicitudes)
+        {
+            if (solicitudes == null || solicitudes.Count == 0)
+            {
+                return;
+            }
+
+            var ids = solicitudes
+                .Select(x => x.SolicitudCompraID)
+                .Distinct()
+                .ToList();
+
+            var parametros = ids
+                .Select((_, index) => $"@Id{index}")
+                .ToList();
+
+            var query = $@"
+                SELECT
+                    SolicitudCompraID,
+                    EstatusID,
+                    FechaMovimiento
+                FROM dbo.ComprasHistorial
+                WHERE SolicitudCompraID IN ({string.Join(",", parametros)})
+                ORDER BY SolicitudCompraID, FechaMovimiento;
+            ";
+
+            var historial = new List<SeguimientoHistorialDto>();
+
+            using (var command = new SqlCommand(query, connection))
+            {
+                for (int i = 0; i < ids.Count; i++)
+                {
+                    command.Parameters.AddWithValue(parametros[i], ids[i]);
+                }
+
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    historial.Add(new SeguimientoHistorialDto
+                    {
+                        SolicitudCompraID = GetInt(reader, "SolicitudCompraID"),
+                        EstatusID = GetInt(reader, "EstatusID"),
+                        FechaMovimiento = GetDateTime(reader, "FechaMovimiento")
+                    });
+                }
+            }
+
+            var historialPorSolicitud = historial
+                .GroupBy(x => x.SolicitudCompraID)
+                .ToDictionary(x => x.Key, x => x.OrderBy(y => y.FechaMovimiento).ToList());
+
+            foreach (var item in solicitudes)
+            {
+                if (!historialPorSolicitud.TryGetValue(item.SolicitudCompraID, out var movimientos) ||
+                    movimientos.Count == 0)
+                {
+                    SumarDiasEtapa(item, item.EstatusID, item.DiasEnEstatus);
+                    continue;
+                }
+
+                for (int i = 0; i < movimientos.Count; i++)
+                {
+                    var actual = movimientos[i];
+                    var siguiente = i + 1 < movimientos.Count
+                        ? movimientos[i + 1].FechaMovimiento
+                        : item.EsFinal && item.FechaUltimoMovimiento.HasValue
+                            ? item.FechaUltimoMovimiento.Value
+                            : DateTime.Now;
+
+                    var dias = Math.Max(0, (siguiente.Date - actual.FechaMovimiento.Date).Days);
+
+                    SumarDiasEtapa(item, actual.EstatusID, dias);
+                }
+
+                if (item.DiasDireccion == 0 &&
+                    item.DiasCompras == 0 &&
+                    item.DiasOC == 0 &&
+                    item.DiasProveedor == 0 &&
+                    item.DiasAlmacen == 0)
+                {
+                    SumarDiasEtapa(item, item.EstatusID, item.DiasEnEstatus);
+                }
+            }
+        }
+
+        private static void SumarDiasEtapa(
+            Compras.SeguimientoDireccionItemViewModel item,
+            int estatusId,
+            int dias)
+        {
+            switch (estatusId)
+            {
+                case 1:
+                case 4:
+                    item.DiasDireccion += dias;
+                    break;
+
+                case 2:
+                case 3:
+                    item.DiasCompras += dias;
+                    break;
+
+                case 5:
+                case 6:
+                    item.DiasOC += dias;
+                    break;
+
+                case 7:
+                    item.DiasProveedor += dias;
+                    break;
+
+                case 8:
+                case 9:
+                    item.DiasAlmacen += dias;
+                    break;
+            }
+        }
+
+        private static List<Compras.CompradorCargaViewModel> CalcularCargaCompradores(
+            List<Compras.SeguimientoDireccionItemViewModel> solicitudes)
+        {
+            return solicitudes
+                .GroupBy(x => new
+                {
+                    x.CompradorAsignadoUsuarioID,
+                    Comprador = string.IsNullOrWhiteSpace(x.CompradorAsignado)
+                        ? "Sin asignar"
+                        : x.CompradorAsignado
+                })
+                .Select(g => new Compras.CompradorCargaViewModel
+                {
+                    CompradorUsuarioID = g.Key.CompradorAsignadoUsuarioID,
+                    Comprador = g.Key.Comprador ?? "Sin asignar",
+                    TotalAsignadas = g.Count(),
+                    Pendientes = g.Count(x => x.EstatusID == 1 || x.EstatusID == 2 || x.EstatusID == 4),
+                    Cotizando = g.Count(x => x.EstatusID == 3),
+                    Ordenes = g.Count(x => x.EstatusID == 5 || x.EstatusID == 6 || x.EstatusID == 7),
+                    Cerradas = g.Count(x => x.EstatusID == 10),
+                    Retrasadas = g.Count(x => x.EsRetrasada),
+                    MontoTotal = g.Sum(x => x.MontoCotizado ?? 0)
+                })
+                .OrderByDescending(x => x.TotalAsignadas)
+                .ThenBy(x => x.Comprador)
+                .ToList();
+        }
+
+        private async Task<List<SelectListItem>> ObtenerEstatusComprasSelectAsync(SqlConnection connection)
+        {
+            var lista = new List<SelectListItem>
+            {
+                new SelectListItem { Value = "", Text = "Todos los estatus" }
+            };
+
+            var query = @"
+                SELECT
+                    EstatusID,
+                    Nombre
+                FROM dbo.ComprasEstatus
+                WHERE Activo = 1
+                ORDER BY OrdenFlujo, EstatusID;
+            ";
+
+            using var command = new SqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                lista.Add(new SelectListItem
+                {
+                    Value = GetInt(reader, "EstatusID").ToString(),
+                    Text = GetString(reader, "Nombre") ?? ""
+                });
+            }
+
+            return lista;
+        }
+
+        private async Task<List<SelectListItem>> ObtenerDepartamentosFiltroSelectAsync(SqlConnection connection)
+        {
+            var lista = new List<SelectListItem>
+            {
+                new SelectListItem { Value = "", Text = "Todos los departamentos" }
+            };
+
+            var query = @"
+                SELECT
+                    NombreDepartamento
+                FROM dbo.Departamentos
+                WHERE Activo = 1
+                ORDER BY NombreDepartamento;
+            ";
+
+            using var command = new SqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var nombre = GetString(reader, "NombreDepartamento");
+
+                if (!string.IsNullOrWhiteSpace(nombre))
+                {
+                    lista.Add(new SelectListItem
+                    {
+                        Value = nombre,
+                        Text = nombre
+                    });
+                }
+            }
+
+            return lista;
+        }
+
+        private async Task<List<SelectListItem>> ObtenerCompradoresFiltroSelectAsync(SqlConnection connection)
+        {
+            var lista = new List<SelectListItem>
+            {
+                new SelectListItem { Value = "", Text = "Todos los compradores" }
+            };
+
+            var query = @"
+                SELECT DISTINCT
+                    u.UsuarioID,
+                    u.Username
+                FROM dbo.Usuarios u
+                LEFT JOIN dbo.Departamentos d
+                    ON d.DepartamentoID = u.DepartamentoID
+                WHERE u.Activo = 1
+                  AND
+                  (
+                        d.NombreDepartamento LIKE '%Compras%'
+                        OR EXISTS
+                        (
+                            SELECT 1
+                            FROM dbo.ComprasSolicitudes s
+                            WHERE s.CompradorAsignadoUsuarioID = u.UsuarioID
+                        )
+                  )
+                ORDER BY u.Username;
+            ";
+
+            using var command = new SqlCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var username = GetString(reader, "Username");
+
+                if (!string.IsNullOrWhiteSpace(username))
+                {
+                    lista.Add(new SelectListItem
+                    {
+                        Value = username,
+                        Text = username
+                    });
+                }
             }
 
             return lista;
@@ -2638,6 +3334,198 @@ namespace ERP.NSQuell.Controllers
         // UTILIDADES
         // =========================================================
 
+        // =========================================================
+        // CONTROL DE ACCESO POR DEPARTAMENTO
+        // =========================================================
+        private async Task<List<string>> ObtenerDepartamentosUsuarioActualAsync()
+        {
+            var usuarioId = ObtenerUsuarioId();
+            var lista = new List<string>();
+
+            if (!usuarioId.HasValue)
+            {
+                return lista;
+            }
+
+            using var connection = new SqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+
+            var query = @"
+        SELECT
+            d.NombreDepartamento
+        FROM dbo.Usuarios u
+        INNER JOIN dbo.Departamentos d
+            ON d.DepartamentoID = u.DepartamentoID
+        WHERE u.UsuarioID = @UsuarioID
+          AND u.Activo = 1
+          AND d.Activo = 1;
+    ";
+
+            using var command = new SqlCommand(query, connection);
+            command.Parameters.AddWithValue("@UsuarioID", usuarioId.Value);
+
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var nombre = GetString(reader, "NombreDepartamento");
+
+                if (!string.IsNullOrWhiteSpace(nombre))
+                {
+                    lista.Add(nombre);
+                }
+            }
+
+            return lista;
+        }
+
+        private async Task<bool> TieneAccesoDepartamentoAsync(params string[] departamentosPermitidos)
+        {
+            if (EsUsuarioAdministrador())
+            {
+                return true;
+            }
+
+            var departamentosUsuario = await ObtenerDepartamentosUsuarioActualAsync();
+
+            return PuedeAccederPorDepartamento(departamentosUsuario, departamentosPermitidos);
+        }
+
+        private async Task<List<Compras.SolicitudListadoViewModel>> FiltrarSolicitudesPorAccesoAsync(
+            List<Compras.SolicitudListadoViewModel> solicitudes)
+        {
+            if (EsUsuarioAdministrador())
+            {
+                return solicitudes;
+            }
+
+            var departamentosUsuario = await ObtenerDepartamentosUsuarioActualAsync();
+            var usuarioId = ObtenerUsuarioId();
+
+            var puedeCompras = PuedeAccederPorDepartamento(departamentosUsuario, "Compras");
+            var puedeDireccion = PuedeAccederPorDepartamento(departamentosUsuario, "Dirección", "Direccion");
+            var puedeAlmacen = PuedeAccederPorDepartamento(departamentosUsuario, "Almacén", "Almacen");
+
+            return solicitudes
+                .Where(x =>
+                {
+                    var esPropia = usuarioId.HasValue &&
+                                   string.Equals(
+                                       x.Solicitante,
+                                       $"Usuario ID {usuarioId.Value}",
+                                       StringComparison.OrdinalIgnoreCase
+                                   );
+
+                    var responsable = NormalizarTexto(x.ResponsableActual);
+
+                    var correspondeCompras =
+                        puedeCompras &&
+                        (
+                            responsable == NormalizarTexto("Compras") ||
+                            x.EstatusID == 2 ||
+                            x.EstatusID == 3 ||
+                            x.EstatusID == 5 ||
+                            x.EstatusID == 6 ||
+                            x.EstatusID == 7
+                        );
+
+                    var correspondeDireccion =
+                        puedeDireccion &&
+                        (
+                            responsable == NormalizarTexto("Dirección") ||
+                            x.EstatusID == 1 ||
+                            x.EstatusID == 4
+                        );
+
+                    var correspondeAlmacen =
+                        puedeAlmacen &&
+                        (
+                            responsable == NormalizarTexto("Almacén") ||
+                            x.EstatusID == 8 ||
+                            x.EstatusID == 9 ||
+                            x.EstatusID == 10
+                        );
+
+                    return esPropia ||
+                           correspondeCompras ||
+                           correspondeDireccion ||
+                           correspondeAlmacen;
+                })
+                .OrderByDescending(x => x.FechaSolicitud)
+                .ToList();
+        }
+
+        private static bool PuedeAccederPorDepartamento(
+            IEnumerable<string> departamentosUsuario,
+            params string[] departamentosPermitidos)
+        {
+            var permitidosNormalizados = departamentosPermitidos
+                .Select(NormalizarTexto)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToHashSet();
+
+            foreach (var departamento in departamentosUsuario)
+            {
+                var departamentoNormalizado = NormalizarTexto(departamento);
+
+                if (permitidosNormalizados.Contains(departamentoNormalizado))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string NormalizarTexto(string? texto)
+        {
+            if (string.IsNullOrWhiteSpace(texto))
+            {
+                return string.Empty;
+            }
+
+            var normalizado = texto.Trim().ToUpperInvariant().Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder();
+
+            foreach (var c in normalizado)
+            {
+                var categoria = CharUnicodeInfo.GetUnicodeCategory(c);
+
+                if (categoria != UnicodeCategory.NonSpacingMark)
+                {
+                    sb.Append(c);
+                }
+            }
+
+            return sb.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        private bool EsUsuarioAdministrador()
+        {
+            var rolSession =
+                HttpContext.Session.GetString("Rol") ??
+                HttpContext.Session.GetString("NombreRol");
+
+            if (!string.IsNullOrWhiteSpace(rolSession) &&
+                NormalizarTexto(rolSession).Contains("ADMIN"))
+            {
+                return true;
+            }
+
+            var rolClaim =
+                User.FindFirstValue(ClaimTypes.Role) ??
+                User.FindFirstValue("Rol") ??
+                User.FindFirstValue("NombreRol");
+
+            if (!string.IsNullOrWhiteSpace(rolClaim) &&
+                NormalizarTexto(rolClaim).Contains("ADMIN"))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         private async Task<List<SelectListItem>> ObtenerProveedoresAsync(SqlConnection connection)
         {
             var lista = new List<SelectListItem>
@@ -2710,9 +3598,58 @@ namespace ERP.NSQuell.Controllers
             return null;
         }
 
+        private async Task CargarPermisosBandejasViewBagAsync()
+        {
+            var departamentosUsuario = await ObtenerDepartamentosUsuarioActualAsync();
+
+            ViewBag.PuedeVerBandejaCompras =
+                EsUsuarioAdministrador() ||
+                PuedeAccederPorDepartamento(departamentosUsuario, "Compras");
+
+            ViewBag.PuedeVerBandejaDireccion =
+                EsUsuarioAdministrador() ||
+                PuedeAccederPorDepartamento(departamentosUsuario, "Dirección", "Direccion");
+
+            ViewBag.PuedeVerBandejaAlmacen =
+                EsUsuarioAdministrador() ||
+                PuedeAccederPorDepartamento(departamentosUsuario, "Almacén", "Almacen");
+
+            ViewBag.PuedeVerSeguimientoDireccion =
+                EsUsuarioAdministrador() ||
+                PuedeAccederPorDepartamento(departamentosUsuario, "Dirección", "Direccion");
+        }
+
+        private IActionResult RedireccionarFlujoCompras(string? returnTo, int solicitudCompraId)
+        {
+            var destino = NormalizarTexto(returnTo);
+
+            return destino switch
+            {
+                "BANDEJADIRECCION" => RedirectToAction(nameof(BandejaDireccion)),
+                "SEGUIMIENTODIRECCION" => RedirectToAction(nameof(SeguimientoDireccion)),
+                "BANDEJACOMPRAS" => RedirectToAction(nameof(BandejaCompras)),
+                "BANDEJAALMACEN" => RedirectToAction(nameof(BandejaAlmacen)),
+                "SOLICITUDES" => RedirectToAction(nameof(Solicitudes)),
+                "INDEX" => RedirectToAction(nameof(Index)),
+                "PANELCOMPRAS" => RedirectToAction(nameof(Index)),
+                "COMPRAS" => RedirectToAction(nameof(Index)),
+                "DETALLE" => RedirectToAction(nameof(DetalleSolicitud), new { id = solicitudCompraId }),
+                "DETALLESOLICITUD" => RedirectToAction(nameof(DetalleSolicitud), new { id = solicitudCompraId }),
+                _ => RedirectToAction(nameof(DetalleSolicitud), new { id = solicitudCompraId })
+            };
+        }
+
         private static object ToDbValue(object? value)
         {
             return value ?? DBNull.Value;
+        }
+
+
+        private class SeguimientoHistorialDto
+        {
+            public int SolicitudCompraID { get; set; }
+            public int EstatusID { get; set; }
+            public DateTime FechaMovimiento { get; set; }
         }
 
         private class MaterialCompraDto

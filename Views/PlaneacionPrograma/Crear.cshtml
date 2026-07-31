@@ -6,7 +6,7 @@
 }
 
 @functions {
-    public static string Valor(string? value)
+    public static string Valor(string value)
     {
         return string.IsNullOrWhiteSpace(value) ? "-" : value;
     }
@@ -36,7 +36,7 @@
         return value.HasValue ? value.Value.ToString("yyyy-MM-ddTHH:mm") : "";
     }
 
-    public static bool TieneValor(string? value)
+    public static bool TieneValor(string value)
     {
         return !string.IsNullOrWhiteSpace(value);
     }
@@ -529,6 +529,7 @@
                 <div class="fw-bold">Aquí se decide el cambio de molde.</div>
                 <div class="small">
                     Los datos de parte, material, molde, máquina, cavidades, ciclo, objetivo y horas vienen desde Programa de Planeación.
+                    En esta salida, el stock de almacén solo se calcula como referencia; no bloquea ni descuenta automáticamente.
                 </div>
             </div>
         </div>
@@ -539,93 +540,93 @@
             <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-4 fw-semibold"></div>
 
             @if (ViewBag.MostrarModalMaquinaOcupada == true)
-{
-    <div class="modal fade" id="modalMaquinaOcupada" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content" style="border-radius:26px; overflow:hidden; border:0; box-shadow:0 24px 70px rgba(15,23,42,.25);">
-                <div class="modal-header" style="background:linear-gradient(135deg,#4e3a85,#6650a4); color:white; border:0;">
-                    <div>
-                        <h5 class="modal-title" style="font-weight:950;">
-                            <i class="fa-solid fa-industry me-2"></i>
-                            @ViewBag.MaquinaOcupadaTitulo
-                        </h5>
-                        <div class="small opacity-75 mt-1">
-                            No se puede programar T.P. en ese horario porque la máquina debe respetar la cola.
-                        </div>
-                    </div>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
+            {
+                <div class="modal fade" id="modalMaquinaOcupada" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-lg">
+                        <div class="modal-content" style="border-radius:26px; overflow:hidden; border:0; box-shadow:0 24px 70px rgba(15,23,42,.25);">
+                            <div class="modal-header" style="background:linear-gradient(135deg,#4e3a85,#6650a4); color:white; border:0;">
+                                <div>
+                                    <h5 class="modal-title" style="font-weight:950;">
+                                        <i class="fa-solid fa-industry me-2"></i>
+                                        @ViewBag.MaquinaOcupadaTitulo
+                                    </h5>
+                                    <div class="small opacity-75 mt-1">
+                                        No se puede programar T.P. en ese horario porque la máquina debe respetar la cola.
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            </div>
 
-                <div class="modal-body p-4">
-                    <div class="alert alert-warning rounded-4 fw-semibold">
-                        <i class="fa-solid fa-triangle-exclamation me-2"></i>
-                        @ViewBag.MaquinaOcupadaMensaje
-                    </div>
+                            <div class="modal-body p-4">
+                                <div class="alert alert-warning rounded-4 fw-semibold">
+                                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                                    @ViewBag.MaquinaOcupadaMensaje
+                                </div>
 
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <div class="p-3 rounded-4 border bg-light">
-                                <div class="text-muted small fw-bold text-uppercase">Siguiente hora de cambio disponible</div>
-                                <div class="fs-4 fw-bold text-primary mt-1">
-                                    @ViewBag.MaquinaOcupadaCambio
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="p-3 rounded-4 border bg-light">
+                                            <div class="text-muted small fw-bold text-uppercase">Siguiente hora de cambio disponible</div>
+                                            <div class="fs-4 fw-bold text-primary mt-1">
+                                                @ViewBag.MaquinaOcupadaCambio
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="p-3 rounded-4 border bg-light">
+                                            <div class="text-muted small fw-bold text-uppercase">Hora de arranque sugerida</div>
+                                            <div class="fs-4 fw-bold text-success mt-1">
+                                                @ViewBag.MaquinaOcupadaArranque
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="p-3 rounded-4 border" style="background:#fbfdff;">
+                                    <div class="fw-bold mb-3">
+                                        <i class="fa-solid fa-timeline me-2 text-primary"></i>
+                                        Línea de tiempo sugerida
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <div class="px-3 py-2 rounded-pill bg-secondary text-white fw-bold">
+                                            Solicitud actual
+                                        </div>
+
+                                        <div class="flex-grow-1 border-top border-3"></div>
+
+                                        <div class="px-3 py-2 rounded-pill bg-primary text-white fw-bold">
+                                            Cambio @ViewBag.MaquinaOcupadaCambio
+                                        </div>
+
+                                        <div class="flex-grow-1 border-top border-3"></div>
+
+                                        <div class="px-3 py-2 rounded-pill bg-success text-white fw-bold">
+                                            Arranque @ViewBag.MaquinaOcupadaArranque
+                                        </div>
+                                    </div>
+
+                                    <div class="small text-muted mt-3">
+                                        @ViewBag.MaquinaOcupadaMotivo
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-info rounded-4 fw-semibold mt-3 mb-0">
+                                    <i class="fa-solid fa-circle-info me-2"></i>
+                                    @ViewBag.MaquinaOcupadaEsIP
                                 </div>
                             </div>
-                        </div>
 
-                        <div class="col-md-6">
-                            <div class="p-3 rounded-4 border bg-light">
-                                <div class="text-muted small fw-bold text-uppercase">Hora de arranque sugerida</div>
-                                <div class="fs-4 fw-bold text-success mt-1">
-                                    @ViewBag.MaquinaOcupadaArranque
-                                </div>
+                            <div class="modal-footer border-0 p-4 pt-0">
+                                <button type="button" class="btn btn-light rounded-4 fw-bold" data-bs-dismiss="modal">
+                                    Revisar horario
+                                </button>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="p-3 rounded-4 border" style="background:#fbfdff;">
-                        <div class="fw-bold mb-3">
-                            <i class="fa-solid fa-timeline me-2 text-primary"></i>
-                            Línea de tiempo sugerida
-                        </div>
-
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <div class="px-3 py-2 rounded-pill bg-secondary text-white fw-bold">
-                                Solicitud actual
-                            </div>
-
-                            <div class="flex-grow-1 border-top border-3"></div>
-
-                            <div class="px-3 py-2 rounded-pill bg-primary text-white fw-bold">
-                                Cambio @ViewBag.MaquinaOcupadaCambio
-                            </div>
-
-                            <div class="flex-grow-1 border-top border-3"></div>
-
-                            <div class="px-3 py-2 rounded-pill bg-success text-white fw-bold">
-                                Arranque @ViewBag.MaquinaOcupadaArranque
-                            </div>
-                        </div>
-
-                        <div class="small text-muted mt-3">
-                            @ViewBag.MaquinaOcupadaMotivo
-                        </div>
-                    </div>
-
-                    <div class="alert alert-info rounded-4 fw-semibold mt-3 mb-0">
-                        <i class="fa-solid fa-circle-info me-2"></i>
-                        @ViewBag.MaquinaOcupadaEsIP
                     </div>
                 </div>
-
-                <div class="modal-footer border-0 p-4 pt-0">
-                    <button type="button" class="btn btn-light rounded-4 fw-bold" data-bs-dismiss="modal">
-                        Revisar horario
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
+            }
 
             <input type="hidden" asp-for="ReleaseDetalleID" />
             <input type="hidden" asp-for="ReleaseID" />
@@ -733,26 +734,6 @@
                                 </div>
 
                                 <div class="metric">
-                                    <div class="k">PT físico (pzas)</div>
-                                    <div class="v">@Model.PTDisponibleAlCalcular.ToString("N0")</div>
-                                </div>
-
-                                <div class="metric">
-                                    <div class="k">PT apartado otros (pzas)</div>
-                                    <div class="v">@Model.PTApartadoOtros.ToString("N0")</div>
-                                </div>
-
-                                <div class="metric">
-                                    <div class="k">PT neto disponible (pzas)</div>
-                                    <div class="v">@Model.PTDisponibleNeto.ToString("N0")</div>
-                                </div>
-
-                                <div class="metric">
-                                    <div class="k">PT reservado release (pzas)</div>
-                                    <div class="v">@Model.PiezasDesdePT.ToString("N0")</div>
-                                </div>
-
-                                <div class="metric">
                                     <div class="k">A producir (pzas)</div>
                                     <div class="v">@Model.PiezasAProducir.ToString("N0")</div>
                                 </div>
@@ -818,7 +799,7 @@
                                 </div>
 
                                 <div class="tech-item">
-                                    <div class="tech-k">Máquina sustituta</div>
+                                    <div class="tech-k">Máquinas sustitutas configuradas</div>
                                     <div class="tech-v">@Valor(Model.MaquinaSustitutaCodigo)</div>
                                     <div class="text-muted small">@Valor(Model.MaquinaSustitutaNombre)</div>
                                 </div>
@@ -885,7 +866,7 @@
                                 @if (TieneValor(Model.MaquinaSustitutaCodigo))
                                 {
                                     <div class="small text-muted mt-1">
-                                        Alternativa sugerida: <strong>@Model.MaquinaSustitutaCodigo</strong>
+                                        Alternativas configuradas: <strong>@Model.MaquinaSustitutaCodigo</strong>
                                     </div>
                                 }
                             </div>
@@ -904,36 +885,54 @@
                             </div>
                         </div>
 
+                        <input type="hidden" asp-for="OperadorPrincipalID" id="OperadorPrincipalID" />
+                        <input type="hidden" asp-for="OperadorAuxiliarID" id="OperadorAuxiliarID" />
+
                         <div class="step-line">
                             <div class="step-number">4</div>
                             <div class="w-100">
                                 <label class="field-label">
-                                    Operador principal
+                                    Operador por turno RRHH
                                 </label>
-                                <select asp-for="OperadorPrincipalID"
-                                        asp-items="Model.Operadores"
-                                        class="form-select">
-                                    <option value="">-- Selecciona operador principal --</option>
-                                </select>
-                                <span asp-validation-for="OperadorPrincipalID" class="text-danger small"></span>
+
+                                <div id="operadorTurnoBox"
+                                     class="p-3 rounded-4 border"
+                                     style="background:#f8fbff;">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="fs-4 text-primary">
+                                            <i class="fa-solid fa-user-clock"></i>
+                                        </div>
+
+                                        <div class="w-100">
+                                            <div class="fw-bold text-primary" id="operadorTurnoTitulo">
+                                                Se asignará automáticamente desde la escala de RRHH
+                                            </div>
+
+                                            <div class="small text-muted mt-1" id="operadorTurnoDetalle">
+                                                Selecciona máquina, fecha y hora de cambio para consultar el operador del turno.
+                                            </div>
+
+                                            <div class="mt-2 d-flex gap-2 flex-wrap">
+                                                <span class="badge-muted" id="operadorPrincipalBadge">
+                                                    Principal: pendiente
+                                                </span>
+
+                                                <span class="badge-muted" id="operadorAuxiliarBadge">
+                                                    Auxiliar: sin validar
+                                                </span>
+
+                                                <span class="badge-muted" id="turnoBadge">
+                                                    Turno: pendiente
+                                                </span>
+                                            </div>
+
+                                            <span asp-validation-for="OperadorPrincipalID" class="text-danger small"></span>
+                                            <span asp-validation-for="OperadorAuxiliarID" class="text-danger small"></span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-
-                        <div class="step-line">
-                            <div class="step-number">5</div>
-                            <div class="w-100">
-                                <label class="field-label">
-                                    Operador auxiliar
-                                </label>
-                                <select asp-for="OperadorAuxiliarID"
-                                        asp-items="Model.Operadores"
-                                        class="form-select">
-                                    <option value="">-- Sin auxiliar --</option>
-                                </select>
-                                <span asp-validation-for="OperadorAuxiliarID" class="text-danger small"></span>
-                            </div>
-                        </div>
-
                         <div class="step-line">
                             <div class="step-number">6</div>
                             <div class="w-100">
@@ -966,33 +965,33 @@
                             <div class="col-12">
                                 <label class="field-label">Inicio programado</label>
                                 <input asp-for="FechaInicioProgramada"
-       type="datetime-local"
-       value="@DateTimeLocal(Model.FechaInicioProgramada)"
-       class="form-control"
-       id="FechaInicioProgramada"
-       step="3600" />
+                                       type="datetime-local"
+                                       value="@DateTimeLocal(Model.FechaInicioProgramada)"
+                                       class="form-control"
+                                       id="FechaInicioProgramada"
+                                       step="3600" />
                                 <span asp-validation-for="FechaInicioProgramada" class="text-danger small"></span>
                             </div>
 
                             <div class="col-md-6">
                                 <label class="field-label">Hora cambio</label>
                                 <input asp-for="Cambio"
-       type="time"
-       value="@TimeValue(Model.Cambio)"
-       class="form-control"
-       id="Cambio"
-       step="3600" />
+                                       type="time"
+                                       value="@TimeValue(Model.Cambio)"
+                                       class="form-control"
+                                       id="Cambio"
+                                       step="3600" />
                                 <span asp-validation-for="Cambio" class="text-danger small"></span>
                             </div>
 
                             <div class="col-md-6">
                                 <label class="field-label">Hora arranque</label>
                                 <input asp-for="Arranque"
-       type="time"
-       value="@TimeValue(Model.Arranque)"
-       class="form-control"
-       id="Arranque"
-       step="3600" />
+                                       type="time"
+                                       value="@TimeValue(Model.Arranque)"
+                                       class="form-control"
+                                       id="Arranque"
+                                       step="3600" />
                                 <span asp-validation-for="Arranque" class="text-danger small"></span>
                             </div>
 
@@ -1015,6 +1014,22 @@
                                        class="form-control"
                                        id="FechaFinProgramada"
                                        readonly />
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check p-3 rounded-4 border" style="background:#fbfdff;">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           value="true"
+                                           id="TrabajarDomingo"
+                                           name="TrabajarDomingo" />
+                                    <label class="form-check-label fw-bold" for="TrabajarDomingo">
+                                        Considerar domingo como día operativo
+                                    </label>
+                                    <div class="small text-muted mt-1">
+                                        Si no se marca, el cálculo corta el sábado a las 22:30 y continúa el lunes a las 07:00.
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="col-12">
@@ -1047,286 +1062,546 @@
         </form>
     </div>
 
-<script>
-    const objetivoHora = Number('@(Model.ObjetivoHora ?? 0)');
-    const cantidadInput = document.getElementById('CantidadProgramada');
-    const inicioInput = document.getElementById('FechaInicioProgramada');
-    const horasInput = document.getElementById('HorasProgramadas');
-    const finInput = document.getElementById('FechaFinProgramada');
-    const cambioInput = document.getElementById('Cambio');
-    const arranqueInput = document.getElementById('Arranque');
-    const formulaHoras = document.getElementById('formulaHoras');
-    const formPrograma = document.getElementById('formPrograma');
-    const btnGuardar = document.getElementById('btnGuardar');
-    const condicionInput = document.getElementById('CondicionProduccion');
+    <script>
+        const objetivoHora = Number('@(Model.ObjetivoHora ?? 0)');
+        const cantidadInput = document.getElementById('CantidadProgramada');
+        const inicioInput = document.getElementById('FechaInicioProgramada');
+        const horasInput = document.getElementById('HorasProgramadas');
+        const finInput = document.getElementById('FechaFinProgramada');
+        const cambioInput = document.getElementById('Cambio');
+        const arranqueInput = document.getElementById('Arranque');
+        const formulaHoras = document.getElementById('formulaHoras');
+        const formPrograma = document.getElementById('formPrograma');
+        const btnGuardar = document.getElementById('btnGuardar');
+        const condicionInput = document.getElementById('CondicionProduccion');
+        const trabajarDomingoInput = document.getElementById('TrabajarDomingo');
 
-    function toDecimal(value) {
-        const n = Number(value || 0);
-        return isNaN(n) ? 0 : n;
-    }
+                const maquinaInput = document.getElementById('MaquinaID');
+            const operadorPrincipalInput = document.getElementById('OperadorPrincipalID');
+            const operadorAuxiliarInput = document.getElementById('OperadorAuxiliarID');
 
-    function formatearFechaLocal(fecha) {
-        const yyyy = fecha.getFullYear();
-        const mm = String(fecha.getMonth() + 1).padStart(2, '0');
-        const dd = String(fecha.getDate()).padStart(2, '0');
-        const hh = String(fecha.getHours()).padStart(2, '0');
-        const mi = String(fecha.getMinutes()).padStart(2, '0');
+            const operadorTurnoBox = document.getElementById('operadorTurnoBox');
+            const operadorTurnoTitulo = document.getElementById('operadorTurnoTitulo');
+            const operadorTurnoDetalle = document.getElementById('operadorTurnoDetalle');
+            const operadorPrincipalBadge = document.getElementById('operadorPrincipalBadge');
+            const operadorAuxiliarBadge = document.getElementById('operadorAuxiliarBadge');
+            const turnoBadge = document.getElementById('turnoBadge');
 
-        return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-    }
+            function obtenerFechaHoraCambioOperador() {
+                const fechaBase = inicioInput?.value || '';
+                const horaCambio = cambioInput?.value || '';
 
-    function esInterrupcionProduccion() {
-        const valor = (condicionInput?.value || '').toLowerCase();
+                if (!fechaBase || !horaCambio) {
+                    return '';
+                }
 
-        return valor.includes('interrumpir') ||
-               valor.includes('i.p') ||
-               valor.includes('ip');
-    }
+                const fecha = fechaBase.substring(0, 10);
 
-    function redondearSiguienteHora(fecha) {
-        const f = new Date(fecha);
+                if (!fecha || fecha.length !== 10) {
+                    return '';
+                }
 
-        const tieneMinutos =
-            f.getMinutes() !== 0 ||
-            f.getSeconds() !== 0 ||
-            f.getMilliseconds() !== 0;
+                return `${fecha}T${horaCambio}:00`;
+            }
 
-        f.setMinutes(0);
-        f.setSeconds(0);
-        f.setMilliseconds(0);
+            function limpiarOperadorTurno(mensaje) {
+                if (operadorPrincipalInput) operadorPrincipalInput.value = '';
+                if (operadorAuxiliarInput) operadorAuxiliarInput.value = '';
 
-        if (tieneMinutos) {
-            f.setHours(f.getHours() + 1);
+                if (operadorTurnoBox) {
+                    operadorTurnoBox.style.background = '#fff7ed';
+                    operadorTurnoBox.style.borderColor = '#fed7aa';
+                }
+
+                if (operadorTurnoTitulo) {
+                    operadorTurnoTitulo.textContent = 'Operador pendiente de asignar';
+                    operadorTurnoTitulo.className = 'fw-bold text-warning';
+                }
+
+                if (operadorTurnoDetalle) {
+                    operadorTurnoDetalle.textContent = mensaje || 'No se pudo consultar operador para este horario.';
+                }
+
+                if (operadorPrincipalBadge) {
+                    operadorPrincipalBadge.textContent = 'Principal: pendiente';
+                    operadorPrincipalBadge.className = 'badge-warn';
+                }
+
+                if (operadorAuxiliarBadge) {
+                    operadorAuxiliarBadge.textContent = 'Auxiliar: pendiente';
+                    operadorAuxiliarBadge.className = 'badge-warn';
+                }
+
+                if (turnoBadge) {
+                    turnoBadge.textContent = 'Turno: pendiente';
+                    turnoBadge.className = 'badge-warn';
+                }
+            }
+
+            async function cargarOperadorTurno() {
+                const maquinaId = Number(maquinaInput?.value || 0);
+                const fechaHora = obtenerFechaHoraCambioOperador();
+
+                if (!maquinaId || !fechaHora) {
+                    limpiarOperadorTurno('Selecciona máquina, fecha y hora de cambio para consultar la escala.');
+                    return;
+                }
+
+                try {
+                    if (operadorTurnoTitulo) {
+                        operadorTurnoTitulo.textContent = 'Consultando escala de RRHH...';
+                        operadorTurnoTitulo.className = 'fw-bold text-primary';
+                    }
+
+                    if (operadorTurnoDetalle) {
+                        operadorTurnoDetalle.textContent = 'Buscando operador asignado a esta máquina y turno.';
+                    }
+
+                    const url =
+                        `/PlaneacionPrograma/OperadoresPorMaquinaFecha?maquinaId=${encodeURIComponent(maquinaId)}&fechaHora=${encodeURIComponent(fechaHora)}`;
+
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (!result.ok) {
+                        limpiarOperadorTurno(result.mensaje);
+                        return;
+                    }
+
+                    if (operadorPrincipalInput) {
+                        operadorPrincipalInput.value = result.operadorPrincipalID || '';
+                    }
+
+                    if (operadorAuxiliarInput) {
+                        operadorAuxiliarInput.value = result.operadorAuxiliarID || '';
+                    }
+
+                    if (operadorTurnoBox) {
+                        operadorTurnoBox.style.background = '#ecfdf3';
+                        operadorTurnoBox.style.borderColor = '#abefc6';
+                    }
+
+                    if (operadorTurnoTitulo) {
+                        operadorTurnoTitulo.textContent = 'Operador asignado desde RRHH';
+                        operadorTurnoTitulo.className = 'fw-bold text-success';
+                    }
+
+                    if (operadorTurnoDetalle) {
+                        operadorTurnoDetalle.textContent = result.mensaje || 'Operador encontrado en escala.';
+                    }
+
+                    if (operadorPrincipalBadge) {
+                        operadorPrincipalBadge.textContent =
+                            `Principal: ${result.operadorPrincipalNombre || '-'}`;
+                        operadorPrincipalBadge.className = 'badge-ok';
+                    }
+
+                    if (operadorAuxiliarBadge) {
+                        operadorAuxiliarBadge.textContent =
+                            result.operadorAuxiliarNombre
+                                ? `Auxiliar: ${result.operadorAuxiliarNombre}`
+                                : 'Auxiliar: sin auxiliar';
+                        operadorAuxiliarBadge.className = result.operadorAuxiliarNombre
+                            ? 'badge-ok'
+                            : 'badge-muted';
+                    }
+
+                    if (turnoBadge) {
+                        turnoBadge.textContent = `Turno: ${result.turnoNombre || '-'}`;
+                        turnoBadge.className = 'badge-ok';
+                    }
+                }
+                catch (error) {
+                    limpiarOperadorTurno('Error al consultar la escala de RRHH: ' + error.message);
+                }
+            }
+
+            maquinaInput?.addEventListener('change', cargarOperadorTurno);
+            inicioInput?.addEventListener('change', cargarOperadorTurno);
+            cambioInput?.addEventListener('change', cargarOperadorTurno);
+
+            setTimeout(cargarOperadorTurno, 300);
+
+        function toDecimal(value) {
+            const n = Number(value || 0);
+            return isNaN(n) ? 0 : n;
         }
 
-        return f;
-    }
+        function formatearFechaLocal(fecha) {
+            const yyyy = fecha.getFullYear();
+            const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+            const dd = String(fecha.getDate()).padStart(2, '0');
+            const hh = String(fecha.getHours()).padStart(2, '0');
+            const mi = String(fecha.getMinutes()).padStart(2, '0');
 
-    function minimoFechaHoraPermitido() {
-        return formatearFechaLocal(redondearSiguienteHora(new Date()));
-    }
-
-    function horaCompletaTexto(fecha) {
-        return String(fecha.getHours()).padStart(2, '0') + ':00';
-    }
-
-    function normalizarTimeHoraCompleta(input) {
-        if (!input || !input.value || input.value.length < 5) return;
-
-        const partes = input.value.split(':');
-        const hh = Number(partes[0] || 0);
-
-        input.value = String(hh).padStart(2, '0') + ':00';
-    }
-
-    function sumarUnaHoraCompleta(horaValue) {
-        if (!horaValue || horaValue.length < 5) return '';
-
-        const partes = horaValue.split(':');
-        const hh = Number(partes[0] || 0);
-
-        const fecha = new Date();
-        fecha.setHours(hh);
-        fecha.setMinutes(0);
-        fecha.setSeconds(0);
-        fecha.setMilliseconds(0);
-        fecha.setHours(fecha.getHours() + 1);
-
-        return String(fecha.getHours()).padStart(2, '0') + ':00';
-    }
-
-    function construirFechaArranque() {
-        if (!inicioInput || !inicioInput.value) return null;
-
-        const inicio = new Date(inicioInput.value);
-
-        if (!arranqueInput || !arranqueInput.value || arranqueInput.value.length < 5) {
-            return inicio;
+            return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
         }
 
-        const partes = arranqueInput.value.split(':');
-        const hh = Number(partes[0] || 0);
-        const mm = Number(partes[1] || 0);
+        function esInterrupcionProduccion() {
+            const valor = (condicionInput?.value || '').toLowerCase();
 
-        const fechaArranque = new Date(inicio);
-        fechaArranque.setHours(hh);
-        fechaArranque.setMinutes(mm);
-        fechaArranque.setSeconds(0);
-        fechaArranque.setMilliseconds(0);
-
-        if (fechaArranque < inicio) {
-            fechaArranque.setDate(fechaArranque.getDate() + 1);
+            return valor.includes('interrumpir') ||
+                   valor.includes('i.p') ||
+                   valor.includes('ip');
         }
 
-        return fechaArranque;
-    }
+        function redondearSiguienteHora(fecha) {
+            const f = new Date(fecha);
 
-    function recalcularHorasPorCantidad() {
-        if (!cantidadInput || !horasInput || objetivoHora <= 0) return;
+            const tieneMinutos =
+                f.getMinutes() !== 0 ||
+                f.getSeconds() !== 0 ||
+                f.getMilliseconds() !== 0;
 
-        const cantidad = toDecimal(cantidadInput.value);
-        const horas = cantidad > 0 ? Math.ceil(cantidad / objetivoHora) : 0;
+            f.setMinutes(0);
+            f.setSeconds(0);
+            f.setMilliseconds(0);
 
-        if (horas > 0) {
-            horasInput.value = horas.toFixed(0);
+            if (tieneMinutos) {
+                f.setHours(f.getHours() + 1);
+            }
 
-            if (formulaHoras) {
-                formulaHoras.textContent = horas.toFixed(0);
+            return f;
+        }
+
+        function minimoFechaHoraPermitido() {
+            return formatearFechaLocal(redondearSiguienteHora(new Date()));
+        }
+
+        function horaCompletaTexto(fecha) {
+            return String(fecha.getHours()).padStart(2, '0') + ':00';
+        }
+
+        function normalizarTimeHoraCompleta(input) {
+            if (!input || !input.value || input.value.length < 5) return;
+
+            const partes = input.value.split(':');
+            const hh = Number(partes[0] || 0);
+
+            input.value = String(hh).padStart(2, '0') + ':00';
+        }
+
+        function sumarUnaHoraCompleta(horaValue) {
+            if (!horaValue || horaValue.length < 5) return '';
+
+            const partes = horaValue.split(':');
+            const hh = Number(partes[0] || 0);
+
+            const fecha = new Date();
+            fecha.setHours(hh);
+            fecha.setMinutes(0);
+            fecha.setSeconds(0);
+            fecha.setMilliseconds(0);
+            fecha.setHours(fecha.getHours() + 1);
+
+            return String(fecha.getHours()).padStart(2, '0') + ':00';
+        }
+
+        function construirFechaArranque() {
+            if (!inicioInput || !inicioInput.value) return null;
+
+            const inicio = new Date(inicioInput.value);
+
+            if (!arranqueInput || !arranqueInput.value || arranqueInput.value.length < 5) {
+                return inicio;
+            }
+
+            const partes = arranqueInput.value.split(':');
+            const hh = Number(partes[0] || 0);
+            const mm = Number(partes[1] || 0);
+
+            const fechaArranque = new Date(inicio);
+            fechaArranque.setHours(hh);
+            fechaArranque.setMinutes(mm);
+            fechaArranque.setSeconds(0);
+            fechaArranque.setMilliseconds(0);
+
+            if (fechaArranque < inicio) {
+                fechaArranque.setDate(fechaArranque.getDate() + 1);
+            }
+
+            return fechaArranque;
+        }
+
+        function recalcularHorasPorCantidad() {
+            if (!cantidadInput || !horasInput || objetivoHora <= 0) return;
+
+            const cantidad = toDecimal(cantidadInput.value);
+            const horas = cantidad > 0 ? Math.ceil(cantidad / objetivoHora) : 0;
+
+            if (horas > 0) {
+                horasInput.value = horas.toFixed(0);
+
+                if (formulaHoras) {
+                    formulaHoras.textContent = horas.toFixed(0);
+                }
             }
         }
-    }
 
-    function recalcularFin() {
-        if (!horasInput || !finInput) return;
+        function obtenerIntervaloOperativoJs(fecha) {
+            const dia = new Date(fecha);
+            dia.setHours(0, 0, 0, 0);
 
-        const horas = Math.ceil(toDecimal(horasInput.value));
-        const base = construirFechaArranque();
+            const dow = fecha.getDay();
 
-        if (!base || horas <= 0) {
-            finInput.value = '';
-            return;
+            if (dow === 0) {
+                if (!trabajarDomingoInput?.checked) return null;
+
+                return {
+                    apertura: new Date(dia),
+                    cierre: new Date(dia.getTime() + 24 * 60 * 60 * 1000)
+                };
+            }
+
+            if (dow === 1) {
+                const apertura = new Date(dia);
+                apertura.setHours(7, 0, 0, 0);
+
+                return {
+                    apertura: apertura,
+                    cierre: new Date(dia.getTime() + 24 * 60 * 60 * 1000)
+                };
+            }
+
+            if (dow >= 2 && dow <= 5) {
+                return {
+                    apertura: new Date(dia),
+                    cierre: new Date(dia.getTime() + 24 * 60 * 60 * 1000)
+                };
+            }
+
+            if (dow === 6) {
+                const cierre = new Date(dia);
+
+                // CAMBIO RÁPIDO SÁBADO:
+                // Si te confirman otro horario, cambia este 18.
+                // Ejemplo: sábado hasta 15:00 => cierre.setHours(15, 0, 0, 0);
+                //          sábado hasta 20:00 => cierre.setHours(20, 0, 0, 0);
+                cierre.setHours(18, 0, 0, 0);
+
+                return {
+                    apertura: new Date(dia),
+                    cierre: cierre
+                };
+            }
+
+            return null;
         }
 
-        base.setHours(base.getHours() + horas);
-        finInput.value = formatearFechaLocal(base);
-    }
+        function siguienteAperturaOperativaJs(fecha) {
+            let actual = new Date(fecha);
 
-    function normalizarInicioCambioArranque() {
-        if (!inicioInput || !inicioInput.value) return;
+            for (let i = 0; i < 21; i++) {
+                const intervalo = obtenerIntervaloOperativoJs(actual);
 
-        if (esInterrupcionProduccion()) {
-            recalcularFin();
-            return;
+                if (intervalo) {
+                    if (actual < intervalo.apertura) return intervalo.apertura;
+                    if (actual >= intervalo.apertura && actual < intervalo.cierre) return actual;
+                }
+
+                actual = new Date(actual.getFullYear(), actual.getMonth(), actual.getDate() + 1, 0, 0, 0, 0);
+            }
+
+            return fecha;
         }
 
-        const inicioRedondeado = redondearSiguienteHora(new Date(inicioInput.value));
+        function sumarHorasOperativasJs(inicio, horas) {
+            let actual = new Date(inicio);
+            let restante = Number(horas || 0);
 
-        inicioInput.value = formatearFechaLocal(inicioRedondeado);
+            if (restante <= 0) return actual;
 
-        if (cambioInput) {
-            cambioInput.value = horaCompletaTexto(inicioRedondeado);
+            while (restante > 0) {
+                const intervalo = obtenerIntervaloOperativoJs(actual);
+
+                if (!intervalo) {
+                    actual = siguienteAperturaOperativaJs(actual);
+                    continue;
+                }
+
+                if (actual < intervalo.apertura) actual = intervalo.apertura;
+
+                if (actual >= intervalo.cierre) {
+                    actual = siguienteAperturaOperativaJs(new Date(intervalo.cierre.getTime() + 60000));
+                    continue;
+                }
+
+                const disponibles = (intervalo.cierre - actual) / 3600000;
+
+                if (disponibles >= restante) {
+                    return new Date(actual.getTime() + restante * 3600000);
+                }
+
+                restante -= disponibles;
+                actual = siguienteAperturaOperativaJs(new Date(intervalo.cierre.getTime() + 60000));
+            }
+
+            return actual;
         }
 
-        if (arranqueInput) {
-            arranqueInput.value = sumarUnaHoraCompleta(cambioInput.value);
-        }
+        function recalcularFin() {
+            if (!horasInput || !finInput) return;
 
-        recalcularFin();
-    }
+            const horas = Math.ceil(toDecimal(horasInput.value));
+            const base = construirFechaArranque();
 
-    cantidadInput?.addEventListener('input', function () {
-        recalcularHorasPorCantidad();
-        recalcularFin();
-    });
-
-    horasInput?.addEventListener('input', function () {
-        const horas = Math.ceil(toDecimal(horasInput.value));
-
-        if (horas > 0) {
-            horasInput.value = horas.toFixed(0);
-        }
-
-        if (formulaHoras) {
-            formulaHoras.textContent = horas > 0 ? horas.toFixed(0) : '0';
-        }
-
-        recalcularFin();
-    });
-
-    inicioInput?.addEventListener('change', function () {
-        normalizarInicioCambioArranque();
-    });
-
-    cambioInput?.addEventListener('change', function () {
-        if (esInterrupcionProduccion()) {
-            recalcularFin();
-            return;
-        }
-
-        normalizarTimeHoraCompleta(cambioInput);
-
-        if (inicioInput && inicioInput.value && cambioInput.value) {
-            const fechaInicio = new Date(inicioInput.value);
-            const partes = cambioInput.value.split(':');
-
-            fechaInicio.setHours(Number(partes[0] || 0));
-            fechaInicio.setMinutes(0);
-            fechaInicio.setSeconds(0);
-            fechaInicio.setMilliseconds(0);
-
-            inicioInput.value = formatearFechaLocal(fechaInicio);
-        }
-
-        if (arranqueInput) {
-            arranqueInput.value = sumarUnaHoraCompleta(cambioInput.value);
-        }
-
-        recalcularFin();
-    });
-
-    arranqueInput?.addEventListener('change', function () {
-        if (!esInterrupcionProduccion()) {
-            normalizarTimeHoraCompleta(arranqueInput);
-        }
-
-        recalcularFin();
-    });
-
-    condicionInput?.addEventListener('change', function () {
-        normalizarInicioCambioArranque();
-    });
-
-    formPrograma?.addEventListener('submit', function (event) {
-        if (inicioInput) {
-            const minimo = minimoFechaHoraPermitido();
-            inicioInput.min = minimo;
-
-            if (!esInterrupcionProduccion() && inicioInput.value && inicioInput.value < minimo) {
-                event.preventDefault();
-                alert('No puedes seleccionar una hora que ya pasó. Selecciona ' + minimo.replace('T', ' ') + ' o posterior.');
+            if (!base || horas <= 0) {
+                finInput.value = '';
                 return;
             }
+
+            const fin = sumarHorasOperativasJs(base, horas);
+            finInput.value = formatearFechaLocal(fin);
         }
 
-        if (!esInterrupcionProduccion()) {
-            normalizarInicioCambioArranque();
-        }
+        function normalizarInicioCambioArranque() {
+            if (!inicioInput || !inicioInput.value) return;
 
-        recalcularHorasPorCantidad();
-        recalcularFin();
-
-        if (!btnGuardar) return;
-
-        btnGuardar.disabled = true;
-        btnGuardar.querySelector('i').className = 'fa-solid fa-spinner fa-spin';
-        btnGuardar.querySelector('.btn-label').textContent = 'Guardando cambio...';
-    });
-
-    document.addEventListener('DOMContentLoaded', function () {
-        if (inicioInput) {
-            const minimo = minimoFechaHoraPermitido();
-            inicioInput.min = minimo;
-
-            if (!inicioInput.value || (!esInterrupcionProduccion() && inicioInput.value < minimo)) {
-                inicioInput.value = minimo;
+            if (esInterrupcionProduccion()) {
+                recalcularFin();
+                return;
             }
+
+            const inicioRedondeado = redondearSiguienteHora(new Date(inicioInput.value));
+
+            inicioInput.value = formatearFechaLocal(inicioRedondeado);
+
+            if (cambioInput) {
+                cambioInput.value = horaCompletaTexto(inicioRedondeado);
+            }
+
+            if (arranqueInput) {
+                arranqueInput.value = sumarUnaHoraCompleta(cambioInput.value);
+            }
+
+            recalcularFin();
         }
 
-        if (!esInterrupcionProduccion()) {
+        cantidadInput?.addEventListener('input', function () {
+            recalcularHorasPorCantidad();
+            recalcularFin();
+        });
+
+        trabajarDomingoInput?.addEventListener('change', recalcularFin);
+
+        horasInput?.addEventListener('input', function () {
+            const horas = Math.ceil(toDecimal(horasInput.value));
+
+            if (horas > 0) {
+                horasInput.value = horas.toFixed(0);
+            }
+
+            if (formulaHoras) {
+                formulaHoras.textContent = horas > 0 ? horas.toFixed(0) : '0';
+            }
+
+            recalcularFin();
+        });
+
+        inicioInput?.addEventListener('change', function () {
             normalizarInicioCambioArranque();
-        }
+        });
 
-        recalcularHorasPorCantidad();
-        recalcularFin();
+        cambioInput?.addEventListener('change', function () {
+            if (esInterrupcionProduccion()) {
+                recalcularFin();
+                return;
+            }
 
-        const modalMaquinaOcupada = document.getElementById('modalMaquinaOcupada');
+            normalizarTimeHoraCompleta(cambioInput);
 
-        if (modalMaquinaOcupada && window.bootstrap) {
-            const modal = new bootstrap.Modal(modalMaquinaOcupada);
-            modal.show();
-        }
-    });
-</script>
+            if (inicioInput && inicioInput.value && cambioInput.value) {
+                const fechaInicio = new Date(inicioInput.value);
+                const partes = cambioInput.value.split(':');
+
+                fechaInicio.setHours(Number(partes[0] || 0));
+                fechaInicio.setMinutes(0);
+                fechaInicio.setSeconds(0);
+                fechaInicio.setMilliseconds(0);
+
+                inicioInput.value = formatearFechaLocal(fechaInicio);
+            }
+
+            if (arranqueInput) {
+                arranqueInput.value = sumarUnaHoraCompleta(cambioInput.value);
+            }
+
+            recalcularFin();
+        });
+
+        arranqueInput?.addEventListener('change', function () {
+            if (!esInterrupcionProduccion()) {
+                normalizarTimeHoraCompleta(arranqueInput);
+            }
+
+            recalcularFin();
+        });
+
+        condicionInput?.addEventListener('change', function () {
+            normalizarInicioCambioArranque();
+        });
+
+        formPrograma?.addEventListener('submit', function (event) {
+            if (inicioInput) {
+                const minimo = minimoFechaHoraPermitido();
+                inicioInput.min = minimo;
+
+                if (!esInterrupcionProduccion() && inicioInput.value && inicioInput.value < minimo) {
+                    event.preventDefault();
+                    alert('No puedes seleccionar una hora que ya pasó. Selecciona ' + minimo.replace('T', ' ') + ' o posterior.');
+                    return;
+                }
+            }
+
+            if (!esInterrupcionProduccion()) {
+                normalizarInicioCambioArranque();
+            }
+
+            recalcularHorasPorCantidad();
+            recalcularFin();
+
+            if (!btnGuardar) return;
+
+            btnGuardar.disabled = true;
+            btnGuardar.querySelector('i').className = 'fa-solid fa-spinner fa-spin';
+            btnGuardar.querySelector('.btn-label').textContent = 'Guardando cambio...';
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            if (inicioInput) {
+                const minimo = minimoFechaHoraPermitido();
+                inicioInput.min = minimo;
+
+                if (!inicioInput.value || (!esInterrupcionProduccion() && inicioInput.value < minimo)) {
+                    inicioInput.value = minimo;
+                }
+            }
+
+            if (!esInterrupcionProduccion()) {
+                normalizarInicioCambioArranque();
+            }
+
+            recalcularHorasPorCantidad();
+            recalcularFin();
+
+            const modalMaquinaOcupada = document.getElementById('modalMaquinaOcupada');
+
+            if (modalMaquinaOcupada && window.bootstrap) {
+                const modal = new bootstrap.Modal(modalMaquinaOcupada);
+                modal.show();
+            }
+        });
+    </script>
 
 </body>
 </html>

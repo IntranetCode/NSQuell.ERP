@@ -215,6 +215,7 @@
                                         <col class="mpc-col-code" />
                                         <col class="mpc-col-name" />
                                         <col class="mpc-col-stock" />
+                                                                                <col class="ptc-col-requested" />
                                         <col class="mpc-col-last" />
                                         <col class="mpc-col-actions" />
                                     </colgroup>
@@ -223,6 +224,7 @@
                                             <th>C&oacute;digo</th>
                                             <th>Material</th>
                                             <th>Existencia</th>
+                                                                                        <th>Solicitado</th>
                                             <th>&Uacute;ltimo movimiento</th>
                                             <th aria-label="Acciones"></th>
                                         </tr>
@@ -249,9 +251,19 @@
                                                     <span class="pt-stock-badge @x.Semaforo">
                                                         <strong>@x.Saldo.ToString("0.###") KG</strong>
                                                     </span>
-                                                    <small class="mp-stock-state">@Html.Raw(EstadoTexto(x.Semaforo))</small>
-                                                </td>
-                                                <td class="pt-last-movement" data-label="&Uacute;ltimo movimiento">
+                                                    </td>
+                                                                                                <!-- ALMACEN_MP_COLUMNA_SOLICITADO_V1_0 -->
+                                                <td class="pt-requested" data-label="Solicitado">
+                                                    @if (x.Solicitado > 0.0005m)
+                                                    {
+                                                        <strong>-@x.Solicitado.ToString("0.###") KG</strong>
+                                                        <small>Pendiente</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="pt-empty-value">0 KG</span>
+                                                    }
+                                                </td>                                                <td class="pt-last-movement" data-label="&Uacute;ltimo movimiento">
                                                     @if (x.UltimoMovimiento.HasValue)
                                                     {
                                                         <strong>@x.UltimoMovimiento.Value.ToString("dd/MM/yyyy")</strong>
@@ -322,3 +334,24 @@
         }
     </div>
 </section>
+
+<!-- ALMACEN_COMPRA_MP_V3_START -->
+<script>
+(() => {
+  document.querySelectorAll('.pt-actions').forEach(actions => {
+    if (actions.querySelector('[data-alm-buy]')) return;
+    const movement = actions.querySelector('a[href*="materialId="]');
+    if (!movement) return;
+    const source = new URL(movement.href, location.origin);
+    const id = source.searchParams.get('materialId');
+    const tipo = source.searchParams.get('tipoMP') || 'VIRGEN';
+    if (!id) return;
+    const link = document.createElement('a');
+    link.className='pt-action'; link.dataset.almBuy='1'; link.title='Solicitar compra';
+    link.href=`/AlmacenCompras/Confirmar?modulo=MP&catalogoID=${encodeURIComponent(id)}&variante=${encodeURIComponent(tipo)}&returnUrl=${encodeURIComponent(location.pathname+location.search)}`;
+    link.innerHTML='<i class="fa-solid fa-cart-plus"></i>';
+    actions.appendChild(link);
+  });
+})();
+</script>
+<!-- ALMACEN_COMPRA_MP_V3_END -->

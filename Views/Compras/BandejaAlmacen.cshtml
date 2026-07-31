@@ -399,7 +399,7 @@
     }
 
     <div class="erp-page-breadcrumb">
-        <a asp-controller="Compras" asp-action="Solicitudes" class="erp-btn-back">← Regresar</a>
+        <a asp-controller="Compras" asp-action="Index" class="erp-btn-back">← Panel compras</a>
         <span>Inicio</span>
         <span>›</span>
         <span>Compras</span>
@@ -421,12 +421,12 @@
 
             <div class="col-12 col-lg-4">
                 <div class="d-flex justify-content-lg-end gap-2 flex-wrap">
-                    <a asp-controller="Compras" asp-action="Solicitudes" class="btn-compras-secondary">
-                        Solicitudes
+                    <a asp-controller="Compras" asp-action="Index" class="btn-compras-secondary">
+                        Panel compras
                     </a>
 
-                    <a asp-controller="Compras" asp-action="Index" class="btn-compras-main">
-                        Panel compras
+                    <a asp-controller="Compras" asp-action="Solicitudes" class="btn-compras-main">
+                        Solicitudes
                     </a>
                 </div>
             </div>
@@ -513,6 +513,7 @@
                                         <a asp-controller="Compras"
                                            asp-action="DetalleSolicitud"
                                            asp-route-id="@item.SolicitudCompraID"
+                                           asp-route-returnTo="BandejaAlmacen"
                                            class="btn-table-view">
                                             Revisar
                                         </a>
@@ -520,6 +521,7 @@
                                         <a asp-controller="Compras"
                                            asp-action="DetalleSolicitud"
                                            asp-route-id="@item.SolicitudCompraID"
+                                           asp-route-returnTo="BandejaAlmacen"
                                            class="btn-table-action">
                                             Registrar recepción
                                         </a>
@@ -602,6 +604,7 @@
                                         <a asp-controller="Compras"
                                            asp-action="DetalleSolicitud"
                                            asp-route-id="@item.SolicitudCompraID"
+                                           asp-route-returnTo="BandejaAlmacen"
                                            class="btn-table-view">
                                             Ver detalle
                                         </a>
