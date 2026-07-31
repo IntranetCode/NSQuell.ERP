@@ -1,372 +1,269 @@
-﻿using System.Globalization;
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 
-namespace ERP.NSQuell.Models;
-
-public sealed class PlaneacionCalendarioMaquinasVm
+namespace ERP.NSQuell.Models
 {
-    /*
-     * Nuevas propiedades para zoom del calendario:
-     * dia / semana / mes / rango
-     */
-    public string Vista { get; set; } = "semana";
-
-    public DateTime InicioPeriodo { get; set; }
-    public DateTime FinPeriodo { get; set; }
-
-    public DateTime? FechaReferencia { get; set; }
-    public DateTime? RangoInicio { get; set; }
-    public DateTime? RangoFin { get; set; }
-
-    /*
-     * Compatibilidad con la vista/controlador anterior.
-     * No las quitamos todavía para no romper nada.
-     */
-    public DateTime InicioSemana
+    public sealed class PlaneacionCalendarioMaquinasVm
     {
-        get => InicioPeriodo;
-        set => InicioPeriodo = value;
-    }
-
-    public DateTime FinSemana
-    {
-        get => FinPeriodo;
-        set => FinPeriodo = value;
-    }
-
-    public DateTime Ahora { get; set; } = DateTime.Now;
-
-    public List<PlaneacionCalendarioMaquinaVm> Maquinas { get; set; } = new();
-
-    public int TotalMaquinas => Maquinas.Count;
-
-    public int TotalBloques => Maquinas.Sum(x => x.Bloques.Count);
-
-    public int TrabajandoAhora => Maquinas.Count(x =>
-        x.Bloques.Any(b => b.EstaEnLinea));
-
-    public string VistaNormalizada =>
-        string.IsNullOrWhiteSpace(Vista)
-            ? "semana"
-            : Vista.Trim().ToLowerInvariant();
-
-    public bool EsVistaDia => VistaNormalizada == "dia";
-
-    public bool EsVistaSemana => VistaNormalizada == "semana";
-
-    public bool EsVistaMes => VistaNormalizada == "mes";
-
-    public bool EsVistaRango => VistaNormalizada == "rango";
-
-    public int TotalDiasPeriodo
-    {
-        get
+        public PlaneacionCalendarioMaquinasVm()
         {
-            if (FinPeriodo <= InicioPeriodo)
-                return 1;
-
-            return Math.Max(
-                1,
-                (int)Math.Ceiling((FinPeriodo.Date - InicioPeriodo.Date).TotalDays)
-            );
+            Vista = "semana";
+            Ahora = DateTime.Now;
+            Maquinas = new List<PlaneacionCalendarioMaquinaVm>();
         }
-    }
 
-    public DateTime PeriodoAnterior
-    {
-        get
+        public string Vista { get; set; }
+        public DateTime InicioPeriodo { get; set; }
+        public DateTime FinPeriodo { get; set; }
+        public DateTime? FechaReferencia { get; set; }
+        public DateTime? RangoInicio { get; set; }
+        public DateTime? RangoFin { get; set; }
+
+        public DateTime InicioSemana
         {
-            if (EsVistaDia)
-                return InicioPeriodo.AddDays(-1);
-
-            if (EsVistaMes)
-                return InicioPeriodo.AddMonths(-1);
-
-            if (EsVistaRango)
-                return InicioPeriodo.AddDays(-TotalDiasPeriodo);
-
-            return InicioPeriodo.AddDays(-7);
+            get { return InicioPeriodo; }
+            set { InicioPeriodo = value; }
         }
-    }
 
-    public DateTime PeriodoSiguiente
-    {
-        get
+        public DateTime FinSemana
         {
-            if (EsVistaDia)
-                return InicioPeriodo.AddDays(1);
-
-            if (EsVistaMes)
-                return InicioPeriodo.AddMonths(1);
-
-            if (EsVistaRango)
-                return InicioPeriodo.AddDays(TotalDiasPeriodo);
-
-            return InicioPeriodo.AddDays(7);
+            get { return FinPeriodo; }
+            set { FinPeriodo = value; }
         }
-    }
 
-    public string TituloPeriodo
-    {
-        get
+        public DateTime Ahora { get; set; }
+        public List<PlaneacionCalendarioMaquinaVm> Maquinas { get; set; }
+
+        public int TotalMaquinas { get { return Maquinas.Count; } }
+        public int TotalBloques { get { return Maquinas.Sum(x => x.Bloques.Count); } }
+        public int TrabajandoAhora { get { return Maquinas.Count(x => x.Bloques.Any(b => b.EstaEnLinea)); } }
+
+        public string VistaNormalizada
         {
-            var cultura = new CultureInfo("es-MX");
-
-            if (EsVistaDia)
-                return $"Día {InicioPeriodo:dd/MM/yyyy}";
-
-            if (EsVistaMes)
-                return $"Mes {InicioPeriodo.ToString("MMMM yyyy", cultura)}";
-
-            if (EsVistaRango)
-                return $"Rango {InicioPeriodo:dd/MM/yyyy} al {FinPeriodo.AddDays(-1):dd/MM/yyyy}";
-
-            return $"Semana {InicioPeriodo:dd/MM/yyyy} al {FinPeriodo.AddDays(-1):dd/MM/yyyy}";
+            get { return string.IsNullOrWhiteSpace(Vista) ? "semana" : Vista.Trim().ToLowerInvariant(); }
         }
-    }
 
-    public string TextoVista
-    {
-        get
+        public bool EsVistaDia { get { return VistaNormalizada == "dia"; } }
+        public bool EsVistaSemana { get { return VistaNormalizada == "semana"; } }
+        public bool EsVistaMes { get { return VistaNormalizada == "mes"; } }
+        public bool EsVistaRango { get { return VistaNormalizada == "rango"; } }
+
+        public int TotalDiasPeriodo
         {
-            if (EsVistaDia)
-                return "Día";
-
-            if (EsVistaMes)
-                return "Mes";
-
-            if (EsVistaRango)
-                return "Rango";
-
-            return "Semana";
-        }
-    }
-}
-
-public sealed class PlaneacionCalendarioMaquinaVm
-{
-    public int MaquinaID { get; set; }
-
-    public string Codigo { get; set; } = string.Empty;
-
-    public string Nombre { get; set; } = string.Empty;
-
-    public int Carriles { get; set; } = 1;
-
-    public List<PlaneacionCalendarioBloqueVm> Bloques { get; set; } = new();
-}
-
-public sealed class PlaneacionCalendarioBloqueVm
-{
-    public int ProgramaProduccionID { get; set; }
-
-    public int? SolicitudProduccionID { get; set; }
-
-    public int MaquinaID { get; set; }
-
-    public string MaquinaCodigo { get; set; } = string.Empty;
-
-    public string? ClienteNombre { get; set; }
-
-    public string? NumeroParte { get; set; }
-
-    public string? ReferenciaSAP { get; set; }
-
-    public string? Descripcion { get; set; }
-
-    public string? MoldeCodigo { get; set; }
-
-    public int CantidadProgramada { get; set; }
-
-    public int CantidadProducida { get; set; }
-
-    public int CantidadPendiente =>
-        Math.Max(0, CantidadProgramada - CantidadProducida);
-
-    public DateTime Inicio { get; set; }
-
-    public DateTime Fin { get; set; }
-
-    public decimal HorasProgramadas { get; set; }
-
-    public TimeSpan? Cambio { get; set; }
-
-    public TimeSpan? Arranque { get; set; }
-
-    public int EstatusID { get; set; }
-
-    public int Carril { get; set; }
-
-    public bool EstaEnLinea { get; set; }
-
-    public int? MaquinaPrincipalID { get; set; }
-
-    public string? MaquinaPrincipalCodigo { get; set; }
-
-    public string? MaquinaPrincipalNombre { get; set; }
-
-    public int? MaquinaSustitutaID { get; set; }
-
-    public string? MaquinaSustitutaCodigo { get; set; }
-
-    public string? MaquinaSustitutaNombre { get; set; }
-
-    public int? EjecucionProduccionID { get; set; }
-    public int? EstatusProduccionID { get; set; }
-    public string? EstatusProduccionNombre { get; set; }
-
-    public int? OperadorProgramadoID { get; set; }
-    public string? OperadorProgramadoNombre { get; set; }
-    public string? TurnoProgramadoNombre { get; set; }
-    public string? TurnoProgramadoColor { get; set; }
-    public int? EscalaAsignacionID { get; set; }
-
-    public bool TieneOperadorProgramado =>
-        OperadorProgramadoID.HasValue &&
-        !string.IsNullOrWhiteSpace(OperadorProgramadoNombre);
-
-    public string TextoOperadorProgramado =>
-        TieneOperadorProgramado
-            ? OperadorProgramadoNombre!
-            : "Sin operador asignado en escala";
-
-    public string TextoTurnoProgramado =>
-        string.IsNullOrWhiteSpace(TurnoProgramadoNombre)
-            ? "Sin turno"
-            : TurnoProgramadoNombre!;
-
-    public bool YaProducido =>
-        CantidadProgramada > 0 &&
-        CantidadProducida >= CantidadProgramada;
-
-    public bool EstaTerminadoOCerrado =>
-        EstatusID == PlaneacionProgramaEstatus.Terminado ||
-        EstatusID == PlaneacionProgramaEstatus.Cerrado ||
-        EstatusID == 99;
-
-    public bool EstaProduciendo =>
-        EstaEnLinea ||
-        EstatusID == PlaneacionProgramaEstatus.EnProduccion;
-
-    public bool PuedeMoverCalendario =>
-        !EstaProduciendo &&
-        !YaProducido &&
-        !EstaTerminadoOCerrado;
-
-    public string ClaseSemaforoCalendario
-    {
-        get
-        {
-            if (EstatusID == 99 || EstatusID == PlaneacionProgramaEstatus.Cerrado)
-                return "bloque-cerrado";
-
-            if (YaProducido || EstatusID == PlaneacionProgramaEstatus.Terminado)
-                return "bloque-producido";
-
-            if (EstaProduciendo)
-                return "bloque-produciendo";
-
-            return "bloque-timeline";
-        }
-    }
-
-    public string MaquinaSugeridaTexto
-    {
-        get
-        {
-            var principal = string.IsNullOrWhiteSpace(MaquinaPrincipalCodigo)
-                ? "Sin máquina principal"
-                : MaquinaPrincipalCodigo;
-
-            var sustituta = string.IsNullOrWhiteSpace(MaquinaSustitutaCodigo)
-                ? "Sin máquina sustituta"
-                : MaquinaSustitutaCodigo;
-
-            return $"Principal: {principal} | Sustituta: {sustituta}";
-        }
-    }
-
-    public string OFTexto =>
-        SolicitudProduccionID.HasValue
-            ? $"OF {SolicitudProduccionID.Value}"
-            : $"Programa {ProgramaProduccionID}";
-
-    public string ParteTexto =>
-        !string.IsNullOrWhiteSpace(ReferenciaSAP)
-            ? ReferenciaSAP!
-            : !string.IsNullOrWhiteSpace(NumeroParte)
-                ? NumeroParte!
-                : "Sin parte";
-
-    public string EstatusTexto
-    {
-        get
-        {
-            if (YaProducido)
-                return "Ya producido";
-
-            if (EstaEnLinea)
-                return "En línea";
-
-            return EstatusID switch
+            get
             {
-                1 => "Programado",
-                2 => "En preparación",
-                3 => "En producción",
-                4 => "Pausado",
-                5 => "Terminado",
-                9 => "Cerrado",
-                99 => "Cancelado",
-                _ => $"Estatus {EstatusID}"
-            };
+                if (FinPeriodo <= InicioPeriodo) return 1;
+                return Math.Max(1, (int)Math.Ceiling((FinPeriodo.Date - InicioPeriodo.Date).TotalDays));
+            }
         }
-    }
 
-    public string EstadoSemaforoTexto
-    {
-        get
+        public DateTime PeriodoAnterior
         {
-            if (EstatusID == 99 || EstatusID == PlaneacionProgramaEstatus.Cerrado)
-                return "Cerrado / cancelado";
-
-            if (YaProducido || EstatusID == PlaneacionProgramaEstatus.Terminado)
-                return "Ya producido";
-
-            if (EstaProduciendo)
-                return "Produciendo";
-
-            return "Timeline";
+            get
+            {
+                if (EsVistaDia) return InicioPeriodo.AddDays(-1);
+                if (EsVistaMes) return InicioPeriodo.AddMonths(-1);
+                if (EsVistaRango) return InicioPeriodo.AddDays(-TotalDiasPeriodo);
+                return InicioPeriodo.AddDays(-7);
+            }
         }
-    }
 
-    public string MotivoBloqueoMovimiento
-    {
-        get
+        public DateTime PeriodoSiguiente
         {
-            if (EstaProduciendo)
-                return "Este programa está en línea o producción. No puede moverse hasta que esté listo el módulo de Producción.";
+            get
+            {
+                if (EsVistaDia) return InicioPeriodo.AddDays(1);
+                if (EsVistaMes) return InicioPeriodo.AddMonths(1);
+                if (EsVistaRango) return InicioPeriodo.AddDays(TotalDiasPeriodo);
+                return InicioPeriodo.AddDays(7);
+            }
+        }
 
-            if (YaProducido)
-                return "Este programa ya fue producido. No puede moverse desde el calendario.";
+        public string TituloPeriodo
+        {
+            get
+            {
+                var cultura = new CultureInfo("es-MX");
+                if (EsVistaDia) return string.Format("Día {0:dd/MM/yyyy}", InicioPeriodo);
+                if (EsVistaMes) return "Mes " + InicioPeriodo.ToString("MMMM yyyy", cultura);
+                if (EsVistaRango) return string.Format("Rango {0:dd/MM/yyyy} al {1:dd/MM/yyyy}", InicioPeriodo, FinPeriodo.AddDays(-1));
+                return string.Format("Semana {0:dd/MM/yyyy} al {1:dd/MM/yyyy}", InicioPeriodo, FinPeriodo.AddDays(-1));
+            }
+        }
 
-            if (EstaTerminadoOCerrado)
-                return "Este programa está terminado, cerrado o cancelado. No puede moverse.";
-
-            return string.Empty;
+        public string TextoVista
+        {
+            get
+            {
+                if (EsVistaDia) return "Día";
+                if (EsVistaMes) return "Mes";
+                if (EsVistaRango) return "Rango";
+                return "Semana";
+            }
         }
     }
 
-    /*
-     * Se deja ClaseEstado por compatibilidad con vistas anteriores.
-     * La vista nueva debe usar ClaseSemaforoCalendario.
-     */
-    public string ClaseEstado => EstatusID switch
+    public sealed class PlaneacionCalendarioMaquinaVm
     {
-        2 => "bloque-preparacion",
-        3 => "bloque-produccion",
-        4 => "bloque-pausado",
-        5 => "bloque-terminado",
-        9 => "bloque-terminado",
-        99 => "bloque-terminado",
-        _ => "bloque-programado"
-    };
+        public PlaneacionCalendarioMaquinaVm()
+        {
+            Codigo = string.Empty;
+            Nombre = string.Empty;
+            Carriles = 1;
+            Bloques = new List<PlaneacionCalendarioBloqueVm>();
+        }
+
+        public int MaquinaID { get; set; }
+        public string Codigo { get; set; }
+        public string Nombre { get; set; }
+        public int Carriles { get; set; }
+        public List<PlaneacionCalendarioBloqueVm> Bloques { get; set; }
+    }
+
+    public sealed class PlaneacionCalendarioBloqueVm
+    {
+        public PlaneacionCalendarioBloqueVm()
+        {
+            MaquinaCodigo = string.Empty;
+        }
+
+        public int ProgramaProduccionID { get; set; }
+        public int? SolicitudProduccionID { get; set; }
+        public int MaquinaID { get; set; }
+        public string MaquinaCodigo { get; set; }
+        public string ClienteNombre { get; set; }
+        public string NumeroParte { get; set; }
+        public string ReferenciaSAP { get; set; }
+        public string Descripcion { get; set; }
+        public string MoldeCodigo { get; set; }
+        public int CantidadProgramada { get; set; }
+        public int CantidadProducida { get; set; }
+        public int CantidadPendiente { get { return Math.Max(0, CantidadProgramada - CantidadProducida); } }
+        public DateTime Inicio { get; set; }
+        public DateTime Fin { get; set; }
+        public decimal HorasProgramadas { get; set; }
+        public TimeSpan? Cambio { get; set; }
+        public TimeSpan? Arranque { get; set; }
+        public int EstatusID { get; set; }
+        public int Carril { get; set; }
+        public bool EstaEnLinea { get; set; }
+        public int? MaquinaPrincipalID { get; set; }
+        public string MaquinaPrincipalCodigo { get; set; }
+        public string MaquinaPrincipalNombre { get; set; }
+        public int? MaquinaSustitutaID { get; set; }
+        public string MaquinaSustitutaCodigo { get; set; }
+        public string MaquinaSustitutaNombre { get; set; }
+        public int? EjecucionProduccionID { get; set; }
+        public int? EstatusProduccionID { get; set; }
+        public string EstatusProduccionNombre { get; set; }
+        public int? OperadorProgramadoID { get; set; }
+        public string OperadorProgramadoNombre { get; set; }
+        public string TurnoProgramadoNombre { get; set; }
+        public string TurnoProgramadoColor { get; set; }
+        public int? EscalaAsignacionID { get; set; }
+
+        public bool TieneOperadorProgramado { get { return OperadorProgramadoID.HasValue && !string.IsNullOrWhiteSpace(OperadorProgramadoNombre); } }
+        public string TextoOperadorProgramado { get { return TieneOperadorProgramado ? OperadorProgramadoNombre : "Sin operador asignado en escala"; } }
+        public string TextoTurnoProgramado { get { return string.IsNullOrWhiteSpace(TurnoProgramadoNombre) ? "Sin turno" : TurnoProgramadoNombre; } }
+        public bool YaProducido { get { return CantidadProgramada > 0 && CantidadProducida >= CantidadProgramada; } }
+        public bool EstaTerminadoOCerrado { get { return EstatusID == PlaneacionProgramaEstatus.Terminado || EstatusID == PlaneacionProgramaEstatus.Cerrado || EstatusID == 99; } }
+        public bool EstaPreparacionOPausado { get { return EstatusID == 2 || EstatusID == 4 || EstatusProduccionID == 2 || EstatusProduccionID == 4; } }
+        public bool EstaProduciendo { get { return EstaEnLinea || EstatusID == PlaneacionProgramaEstatus.EnProduccion || EstatusProduccionID == 3; } }
+        public bool PuedeMoverCalendario { get { return !EstaPreparacionOPausado && !EstaProduciendo && !YaProducido && !EstaTerminadoOCerrado; } }
+
+        public string ClaseSemaforoCalendario
+        {
+            get
+            {
+                if (EstatusID == 99 || EstatusID == PlaneacionProgramaEstatus.Cerrado) return "bloque-cerrado";
+                if (YaProducido || EstatusID == PlaneacionProgramaEstatus.Terminado) return "bloque-producido";
+                if (EstaProduciendo || EstaPreparacionOPausado) return "bloque-produciendo";
+                return "bloque-timeline";
+            }
+        }
+
+        public string MaquinaSugeridaTexto
+        {
+            get
+            {
+                var principal = string.IsNullOrWhiteSpace(MaquinaPrincipalCodigo) ? "Sin máquina principal" : MaquinaPrincipalCodigo;
+                var sustituta = string.IsNullOrWhiteSpace(MaquinaSustitutaCodigo) ? "Sin máquina sustituta" : MaquinaSustitutaCodigo;
+                return "Principal: " + principal + " | Sustituta: " + sustituta;
+            }
+        }
+
+        public string OFTexto { get { return SolicitudProduccionID.HasValue ? "OF " + SolicitudProduccionID.Value : "Programa " + ProgramaProduccionID; } }
+        public string ParteTexto
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(ReferenciaSAP)) return ReferenciaSAP;
+                if (!string.IsNullOrWhiteSpace(NumeroParte)) return NumeroParte;
+                return "Sin parte";
+            }
+        }
+
+        public string EstatusTexto
+        {
+            get
+            {
+                if (YaProducido) return "Ya producido";
+                if (EstaEnLinea) return "En línea";
+                switch (EstatusID)
+                {
+                    case 1: return "Programado";
+                    case 2: return "En preparación";
+                    case 3: return "En producción";
+                    case 4: return "Pausado";
+                    case 5: return "Terminado";
+                    case 9: return "Cerrado";
+                    case 99: return "Cancelado";
+                    default: return "Estatus " + EstatusID;
+                }
+            }
+        }
+
+        public string EstadoSemaforoTexto
+        {
+            get
+            {
+                if (EstatusID == 99 || EstatusID == PlaneacionProgramaEstatus.Cerrado) return "Cerrado / cancelado";
+                if (YaProducido || EstatusID == PlaneacionProgramaEstatus.Terminado) return "Ya producido";
+                if (EstaPreparacionOPausado) return "En preparación / pausado";
+                if (EstaProduciendo) return "Produciendo";
+                return "Timeline";
+            }
+        }
+
+        public string MotivoBloqueoMovimiento
+        {
+            get
+            {
+                if (EstaPreparacionOPausado) return "Este programa ya está en preparación o pausado. No puede moverse desde Planeación.";
+                if (EstaProduciendo) return "Este programa está en línea o producción. No puede moverse hasta que esté listo el módulo de Producción.";
+                if (YaProducido) return "Este programa ya fue producido. No puede moverse desde el calendario.";
+                if (EstaTerminadoOCerrado) return "Este programa está terminado, cerrado o cancelado. No puede moverse.";
+                return string.Empty;
+            }
+        }
+
+        public string ClaseEstado
+        {
+            get
+            {
+                switch (EstatusID)
+                {
+                    case 2: return "bloque-preparacion";
+                    case 3: return "bloque-produccion";
+                    case 4: return "bloque-pausado";
+                    case 5: return "bloque-terminado";
+                    case 9: return "bloque-terminado";
+                    case 99: return "bloque-terminado";
+                    default: return "bloque-programado";
+                }
+            }
+        }
+    }
 }

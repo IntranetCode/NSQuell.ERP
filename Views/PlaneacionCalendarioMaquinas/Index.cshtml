@@ -1,6 +1,75 @@
 ﻿@model ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm
 @using System.Globalization
 
+@functions {
+    public static string Pct(double value)
+    {
+        return value.ToString("0.####", CultureInfo.InvariantCulture);
+    }
+
+    public static string ClaseVista(string vistaActual, string vista)
+    {
+        return string.Equals(vistaActual, vista, StringComparison.OrdinalIgnoreCase)
+            ? "btn btn-primary fw-bold"
+            : "btn btn-outline-primary fw-bold";
+    }
+
+    public static string BadgeProduccion(int? estatusProduccionId)
+    {
+        if (estatusProduccionId.HasValue)
+        {
+            switch (estatusProduccionId.Value)
+            {
+                case 2: return "badge bg-info text-dark";
+                case 3: return "badge bg-warning text-dark";
+                case 4: return "badge bg-danger";
+                case 5: return "badge bg-success";
+                case 9: return "badge bg-dark";
+                case 99: return "badge bg-secondary";
+            }
+        }
+
+        return "badge bg-light text-dark border";
+    }
+
+    public static string TextoProduccion(int? estatusProduccionId, string estatusProduccionNombre)
+    {
+        if (!string.IsNullOrWhiteSpace(estatusProduccionNombre))
+            return estatusProduccionNombre;
+
+        if (estatusProduccionId.HasValue)
+        {
+            switch (estatusProduccionId.Value)
+            {
+                case 2: return "En preparación";
+                case 3: return "En producción";
+                case 4: return "Pausado";
+                case 5: return "Terminado";
+                case 9: return "Cerrado";
+                case 99: return "Cancelado";
+            }
+        }
+
+        return "Sin ejecución";
+    }
+
+    public static string TextoPeriodoAnterior(ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm model)
+    {
+        if (model.EsVistaDia) return "Día anterior";
+        if (model.EsVistaMes) return "Mes anterior";
+        if (model.EsVistaRango) return "Rango anterior";
+        return "Semana anterior";
+    }
+
+    public static string TextoPeriodoSiguiente(ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm model)
+    {
+        if (model.EsVistaDia) return "Día siguiente";
+        if (model.EsVistaMes) return "Mes siguiente";
+        if (model.EsVistaRango) return "Rango siguiente";
+        return "Semana siguiente";
+    }
+}
+
 @{
     Layout = null;
 
@@ -17,9 +86,6 @@
     var totalMinutos = Math.Max(1, (finPeriodo - inicioPeriodo).TotalMinutes);
     var totalDias = Math.Max(1, Model.TotalDiasPeriodo);
 
-    string Pct(double value) =>
-        value.ToString("0.####", CultureInfo.InvariantCulture);
-
     var ahoraVisible =
         Model.Ahora >= inicioPeriodo &&
         Model.Ahora < finPeriodo;
@@ -31,34 +97,15 @@
     var periodoAnterior = Model.PeriodoAnterior;
     var periodoSiguiente = Model.PeriodoSiguiente;
 
-    var rangoFinVisible = Model.RangoFin?.ToString("yyyy-MM-dd")
-        ?? Model.FinPeriodo.AddDays(-1).ToString("yyyy-MM-dd");
+    var rangoFinVisible = Model.RangoFin.HasValue
+        ? Model.RangoFin.Value.ToString("yyyy-MM-dd")
+        : Model.FinPeriodo.AddDays(-1).ToString("yyyy-MM-dd");
 
-    var rangoInicioVisible = Model.RangoInicio?.ToString("yyyy-MM-dd")
-        ?? Model.InicioPeriodo.ToString("yyyy-MM-dd");
+    var rangoInicioVisible = Model.RangoInicio.HasValue
+        ? Model.RangoInicio.Value.ToString("yyyy-MM-dd")
+        : Model.InicioPeriodo.ToString("yyyy-MM-dd");
 
-    string ClaseVista(string vista) =>
-        Model.VistaNormalizada == vista
-            ? "btn btn-primary fw-bold"
-            : "btn btn-outline-primary fw-bold";
-
-    string TextoPeriodoAnterior()
-    {
-        if (Model.EsVistaDia) return "Día anterior";
-        if (Model.EsVistaMes) return "Mes anterior";
-        if (Model.EsVistaRango) return "Rango anterior";
-        return "Semana anterior";
-    }
-
-    string TextoPeriodoSiguiente()
-    {
-        if (Model.EsVistaDia) return "Día siguiente";
-        if (Model.EsVistaMes) return "Mes siguiente";
-        if (Model.EsVistaRango) return "Rango siguiente";
-        return "Semana siguiente";
-    }
-
-    string UrlPeriodo(DateTime fecha)
+    Func<DateTime, string> UrlPeriodo = fecha =>
     {
         if (Model.EsVistaRango)
         {
@@ -77,38 +124,7 @@
             vista = Model.VistaNormalizada,
             fecha = fecha.ToString("yyyy-MM-dd")
         }) ?? "#";
-    }
-
-    string BadgeProduccion(int? estatusProduccionId)
-    {
-        return estatusProduccionId switch
-        {
-            2 => "badge bg-info text-dark",
-            3 => "badge bg-warning text-dark",
-            4 => "badge bg-danger",
-            5 => "badge bg-success",
-            9 => "badge bg-dark",
-            99 => "badge bg-secondary",
-            _ => "badge bg-light text-dark border"
-        };
-    }
-
-    string TextoProduccion(int? estatusProduccionId, string? estatusProduccionNombre)
-    {
-        if (!string.IsNullOrWhiteSpace(estatusProduccionNombre))
-            return estatusProduccionNombre;
-
-        return estatusProduccionId switch
-        {
-            2 => "En preparación",
-            3 => "En producción",
-            4 => "Pausado",
-            5 => "Terminado",
-            9 => "Cerrado",
-            99 => "Cancelado",
-            _ => "Sin ejecución"
-        };
-    }
+    };
 }
 
 <!DOCTYPE html>
@@ -391,6 +407,38 @@
                 background-color: #f8fbff;
             }
 
+
+            .track.compatible-target {
+                outline: 3px solid rgba(18,183,106,.55);
+                outline-offset: -6px;
+                background-color: #ecfdf3;
+            }
+
+                .track.compatible-target.drag-over {
+                    outline: 4px solid rgba(18,183,106,.75);
+                    background-color: #d1fadf;
+                }
+
+            .track.incompatible-target {
+                opacity: .45;
+                background-color: #f8fafc;
+                cursor: not-allowed;
+            }
+
+        .machine-row.compatible-row .machine-info {
+            background: #ecfdf3;
+            border-right-color: #abefc6;
+        }
+
+        .machine-row.incompatible-row .machine-info {
+            background: #f8fafc;
+            color: #98a2b3;
+        }
+
+        body.drag-compatible-mode .track:not(.compatible-target) {
+            opacity: .50;
+        }
+
         .now-line {
             position: absolute;
             top: 0;
@@ -457,6 +505,7 @@
         .bloque-produciendo {
             background: #fdb022;
             color: #111827;
+            border: 1px solid rgba(181, 71, 8, .35);
         }
 
         .bloque-producido {
@@ -628,7 +677,7 @@
                     <a href="@UrlPeriodo(periodoAnterior)"
                        class="btn btn-outline-primary fw-bold">
                         <i class="fa-solid fa-chevron-left"></i>
-                        @TextoPeriodoAnterior()
+                        @TextoPeriodoAnterior(Model)
                     </a>
 
                     <a asp-action="Index"
@@ -640,7 +689,7 @@
 
                     <a href="@UrlPeriodo(periodoSiguiente)"
                        class="btn btn-outline-primary fw-bold">
-                        @TextoPeriodoSiguiente()
+                        @TextoPeriodoSiguiente(Model)
                         <i class="fa-solid fa-chevron-right"></i>
                     </a>
                 </div>
@@ -661,29 +710,44 @@
                 <a asp-action="Index"
                    asp-route-vista="dia"
                    asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista("dia")">
+                   class="@ClaseVista(Model.VistaNormalizada, "dia")">
                     Día
                 </a>
 
                 <a asp-action="Index"
                    asp-route-vista="semana"
                    asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista("semana")">
+                   class="@ClaseVista(Model.VistaNormalizada, "semana")">
                     Semana
                 </a>
 
                 <a asp-action="Index"
                    asp-route-vista="mes"
                    asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista("mes")">
+                   class="@ClaseVista(Model.VistaNormalizada, "mes")">
                     Mes
                 </a>
 
                 <button type="button"
                         id="btnMostrarRango"
-                        class="@ClaseVista("rango")">
+                        class="@ClaseVista(Model.VistaNormalizada, "rango")">
                     Rango
                 </button>
+            </div>
+
+            <div class="mt-3 p-3 rounded-4 border bg-light">
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           role="switch"
+                           id="trabajarDomingoCalendario" />
+                    <label class="form-check-label fw-bold" for="trabajarDomingoCalendario">
+                        Considerar domingo como día operativo para movimientos
+                    </label>
+                    <div class="small text-muted mt-1">
+                        Déjalo apagado para que el sistema corte sábado a las 22:30 y continúe lunes 07:00. Actívalo solo cuando autoricen trabajar domingo.
+                    </div>
+                </div>
             </div>
 
             <form id="formRangoCalendario"
@@ -727,7 +791,10 @@
             </form>
         </section>
 
-        @if (TempData["CalendarioError"] is string errorCalendario && !string.IsNullOrWhiteSpace(errorCalendario))
+        @{
+            var errorCalendario = TempData["CalendarioError"] as string;
+        }
+        @if (!string.IsNullOrWhiteSpace(errorCalendario))
         {
             <div class="calendar-status error">
                 @errorCalendario
@@ -735,7 +802,7 @@
         }
 
         <div id="calendarStatus" class="calendar-status">
-            Arrastra un bloque azul hacia otra máquina. El sistema calculará line time, cola, molde, operador/turno y cambio antes de pedir confirmación.
+            Arrastra un bloque azul hacia otra máquina. Solo se resaltarán en verde las máquinas compatibles; el sistema insertará en cola y compactará las OF posteriores sin dejar huecos.
         </div>
 
         <div id="antiForgeryToken" class="d-none">
@@ -936,7 +1003,7 @@
                                 <div class="operator-card">
                                     <small>Asignación escala</small>
                                     <strong class="d-block">
-                                        @(bloque.EscalaAsignacionID?.ToString() ?? "-")
+                                        @(bloque.EscalaAsignacionID.HasValue? bloque.EscalaAsignacionID.Value.ToString() : "-")
                                     </strong>
                                 </div>
                             </div>
@@ -1040,14 +1107,14 @@
                             <div class="col-md-4">
                                 <div class="detail-card">
                                     <small>Cambio de molde</small>
-                                    <strong class="d-block">@(bloque.Cambio?.ToString(@"hh\:mm") ?? "-")</strong>
+                                    <strong class="d-block">@(bloque.Cambio.HasValue? bloque.Cambio.Value.ToString(@"hh\:mm") : "-")</strong>
                                 </div>
                             </div>
 
                             <div class="col-md-4">
                                 <div class="detail-card">
                                     <small>Arranque</small>
-                                    <strong class="d-block">@(bloque.Arranque?.ToString(@"hh\:mm") ?? "-")</strong>
+                                    <strong class="d-block">@(bloque.Arranque.HasValue? bloque.Arranque.Value.ToString(@"hh\:mm") : "-")</strong>
                                 </div>
                             </div>
 
@@ -1239,6 +1306,7 @@
         const search = document.getElementById('calendarSearch');
         const statusBox = document.getElementById('calendarStatus');
         const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+        const trabajarDomingoCalendario = document.getElementById('trabajarDomingoCalendario');
 
         const inicioPeriodo = new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
         const finPeriodo = new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
@@ -1248,6 +1316,9 @@
         let dragStarted = false;
         let suppressClickUntil = 0;
         let payloadPendienteConfirmacion = null;
+
+        let maquinasCompatiblesActuales = new Set();
+        let cargandoCompatibles = false;
 
         function setStatus(message, type) {
             if (!statusBox) return;
@@ -1287,11 +1358,113 @@
             const minutos = porcentaje * totalMinutosPeriodo;
 
             const fecha = new Date(inicioPeriodo.getTime() + minutos * 60000);
-            return snapToMinutes(fecha, 30);
+            // Se ajusta a 15 minutos para respetar cola sin crear huecos grandes.
+            return snapToMinutes(fecha, 15);
         }
 
         function puedeArrastrar(block) {
             return block.dataset.puedeMover === 'true';
+        }
+
+
+        function limpiarMaquinasCompatibles() {
+            maquinasCompatiblesActuales = new Set();
+            document.body.classList.remove('drag-compatible-mode');
+
+            document.querySelectorAll('.track.compatible-target, .track.incompatible-target, .track.drag-over').forEach(track => {
+                track.classList.remove('compatible-target', 'incompatible-target', 'drag-over');
+            });
+
+            document.querySelectorAll('.calendar-machine-row.compatible-row, .calendar-machine-row.incompatible-row').forEach(row => {
+                row.classList.remove('compatible-row', 'incompatible-row');
+            });
+        }
+
+        function aplicarMaquinasCompatibles(maquinas) {
+            limpiarMaquinasCompatibles();
+
+            maquinasCompatiblesActuales = new Set(
+                (maquinas || [])
+                    .map(x => Number(x.maquinaID || x.maquinaId || x.MaquinaID || 0))
+                    .filter(x => Number.isFinite(x) && x > 0)
+            );
+
+            if (!maquinasCompatiblesActuales.size) {
+                setStatus('No se encontraron máquinas compatibles para este programa.', 'error');
+                return;
+            }
+
+            document.body.classList.add('drag-compatible-mode');
+
+            document.querySelectorAll('.track').forEach(track => {
+                const maquinaId = Number(track.dataset.maquinaId || 0);
+                const row = track.closest('.calendar-machine-row');
+
+                if (maquinasCompatiblesActuales.has(maquinaId)) {
+                    track.classList.add('compatible-target');
+                    row?.classList.add('compatible-row');
+                } else {
+                    track.classList.add('incompatible-target');
+                    row?.classList.add('incompatible-row');
+                }
+            });
+        }
+
+        async function cargarMaquinasCompatibles(programaId) {
+            if (!programaId || cargandoCompatibles) return;
+
+            try {
+                cargandoCompatibles = true;
+
+                       const urlMaquinasCompatibles =
+            '@Url.Action("MaquinasCompatibles", "PlaneacionCalendarioMaquinas")' +
+            '?programaProduccionId=' +
+            encodeURIComponent(programaId);
+
+        const response = await fetch(urlMaquinasCompatibles, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.ok) {
+                    limpiarMaquinasCompatibles();
+                    setStatus(result.mensaje || 'No se pudieron consultar máquinas compatibles.', 'error');
+                    return;
+                }
+
+                aplicarMaquinasCompatibles(result.maquinas || []);
+
+                if ((result.maquinas || []).length > 0) {
+                    setStatus('Máquinas compatibles resaltadas en verde. Suelta el bloque solo sobre una máquina habilitada.', 'working');
+                }
+            }
+            catch (error) {
+                limpiarMaquinasCompatibles();
+                setStatus('Error al consultar máquinas compatibles: ' + error.message, 'error');
+            }
+            finally {
+                cargandoCompatibles = false;
+            }
+        }
+
+               function destinoCompatible(track) {
+            const maquinaId = Number(track.dataset.maquinaId || 0);
+
+            if (!draggedBlock) {
+                return false;
+            }
+
+            if (!maquinasCompatiblesActuales.size) {
+                return false;
+            }
+
+            return maquinasCompatiblesActuales.has(maquinaId);
         }
 
         function abrirModalConfirmacionMovimiento(result, payload) {
@@ -1341,7 +1514,7 @@
 
                 setStatus('Aplicando movimiento confirmado...', 'working');
 
-                const response = await fetch('/PlaneacionCalendarioMaquinas/ReprogramarCalendario', {
+        const response = await fetch('@Url.Action("ReprogramarCalendario", "PlaneacionCalendarioMaquinas")', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1454,7 +1627,8 @@
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', block.dataset.programaId);
 
-                setStatus('Arrastrando programa. Suéltalo sobre otra máquina compatible.', 'working');
+                setStatus('Consultando máquinas compatibles...', 'working');
+                cargarMaquinasCompatibles(Number(block.dataset.programaId || 0));
 
                 setTimeout(() => {
                     dragStarted = false;
@@ -1464,9 +1638,7 @@
             block.addEventListener('dragend', () => {
                 suppressClickUntil = Date.now() + 650;
 
-                document.querySelectorAll('.track.drag-over').forEach(track => {
-                    track.classList.remove('drag-over');
-                });
+                limpiarMaquinasCompatibles();
             });
 
             block.addEventListener('click', event => {
@@ -1482,6 +1654,11 @@
         document.querySelectorAll('.track').forEach(track => {
             track.addEventListener('dragover', event => {
                 if (!draggedBlock) return;
+
+                if (!destinoCompatible(track)) {
+                    event.dataTransfer.dropEffect = 'none';
+                    return;
+                }
 
                 event.preventDefault();
                 event.dataTransfer.dropEffect = 'move';
@@ -1514,6 +1691,14 @@
                     return;
                 }
 
+                if (!destinoCompatible(track)) {
+                    const mensaje = 'Esta máquina no está configurada como principal ni sustituta para esta parte.';
+                    setStatus(mensaje, 'error');
+                    mostrarModalCalendario('Movimiento no permitido', mensaje);
+                    draggedBlock = null;
+                    return;
+                }
+
                 const payload = {
                     programaProduccionID: programaId,
                     maquinaID: maquinaId,
@@ -1521,13 +1706,14 @@
                     duracionBloqueHoras: 0,
                     redimensionado: false,
                     forzarMaquina: false,
-                    confirmarMovimiento: false
+                    confirmarMovimiento: false,
+                    trabajarDomingo: !!trabajarDomingoCalendario?.checked
                 };
 
                 try {
                     setStatus('Validando máquina, line time, cola, molde, operador/turno y cambio...', 'working');
 
-                    const response = await fetch('/PlaneacionCalendarioMaquinas/ReprogramarCalendario', {
+        const response = await fetch('@Url.Action("ReprogramarCalendario", "PlaneacionCalendarioMaquinas")', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1574,6 +1760,7 @@
                     mostrarModalCalendario('Error al guardar', mensaje);
                 }
                 finally {
+                    limpiarMaquinasCompatibles();
                     draggedBlock = null;
                 }
             });

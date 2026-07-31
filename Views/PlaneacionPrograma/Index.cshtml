@@ -3,6 +3,7 @@
 @using System.Linq
 @using System.Collections.Generic
 
+
 @functions {
     public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
     public static string F(DateTime value) => value == DateTime.MinValue ? "-" : value.ToString("dd/MM/yyyy");
@@ -12,51 +13,125 @@
     public static string D2(decimal? value) => value.HasValue ? value.Value.ToString("N2") : "0.00";
     public static string D4(decimal? value) => value.HasValue ? value.Value.ToString("N4") : "0.0000";
 
-    public static bool NecesitaProduccion(PlaneacionProgramaNecesidadVm x) => (x.PiezasAProducir ?? 0) > 0;
-    public static bool StockOk(PlaneacionProgramaNecesidadVm x) => (x.PiezasDesdePT ?? 0) > 0 || !NecesitaProduccion(x);
+    public static bool NecesitaProduccion(PlaneacionProgramaNecesidadVm x)
+    {
+        return (x.PiezasAProducir ?? 0) > 0;
+    }
+
+    // LANZAMIENTO TEMPORAL SIN ALMACEN:
+    // PT, MP y embalaje se muestran como referencia, pero NO bloquean la programación.
+    public static bool StockOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return true;
+    }
 
     public static bool MpOk(PlaneacionProgramaNecesidadVm x)
     {
-        if (!NecesitaProduccion(x)) return true;
-        return (x.MPDisponibleKg ?? 0) >= (x.MPRequeridaKg ?? 0) && (x.MPRequeridaKg ?? 0) > 0;
+        return true;
     }
 
     public static bool EmbalajeOk(PlaneacionProgramaNecesidadVm x)
     {
-        if (!NecesitaProduccion(x)) return true;
-        return (x.EmbalajeDisponible ?? 0) >= (x.EmbalajeRequerido ?? 0) && (x.EmbalajeRequerido ?? 0) > 0;
+        return true;
     }
 
-    public static bool MoldeOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MoldeID.HasValue;
-    public static bool MaquinaOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MaquinaSugeridaID.HasValue;
-    public static bool MaterialOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || x.MaterialID.HasValue || !string.IsNullOrWhiteSpace(x.MaterialCodigo);
-    public static bool CavidadesOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.Cavidades ?? 0) > 0);
-    public static bool CicloOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || !string.IsNullOrWhiteSpace(x.Ciclo);
-    public static bool ObjetivoOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.ObjetivoHora ?? 0) > 0);
-    public static bool PesoOk(PlaneacionProgramaNecesidadVm x) => !NecesitaProduccion(x) || ((x.PesoBrutoPieza ?? 0) > 0);
+    public static bool MoldeOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || x.MoldeID.HasValue;
+    }
+
+    public static bool MaquinaOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || x.MaquinaSugeridaID.HasValue;
+    }
+
+    // Material sí sigue siendo dato técnico obligatorio.
+    // No importa si hay saldo en almacén, pero sí debe existir el material/resina en datos técnicos.
+    public static bool MaterialOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) ||
+               x.MaterialID.HasValue ||
+               !string.IsNullOrWhiteSpace(x.MaterialCodigo);
+    }
+
+    public static bool CavidadesOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || ((x.Cavidades ?? 0) > 0);
+    }
+
+    public static bool CicloOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || !string.IsNullOrWhiteSpace(x.Ciclo);
+    }
+
+    public static bool ObjetivoOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || ((x.ObjetivoHora ?? 0) > 0);
+    }
+
+    public static bool PesoOk(PlaneacionProgramaNecesidadVm x)
+    {
+        return !NecesitaProduccion(x) || ((x.PesoBrutoPieza ?? 0) > 0);
+    }
+
+    // Embalaje requerido/piezas por embalaje se mantiene como dato técnico.
+    // Lo que NO bloquea es el saldo disponible en almacén.
+    public static bool EmbalajeTecnicoOk(PlaneacionProgramaNecesidadVm x)
+    {
+        /*
+            LANZAMIENTO TEMPORAL SIN ALMACEN:
+            Embalaje no bloquea programación.
+            Se mantiene visible como referencia, pero no impide pasar a Programa Cambio de Molde.
+        */
+        return true;
+    }
 
     public static bool DatosTecnicosOk(PlaneacionProgramaNecesidadVm x)
     {
-        return MaterialOk(x) && MoldeOk(x) && MaquinaOk(x) && CavidadesOk(x) && CicloOk(x) && ObjetivoOk(x) && PesoOk(x);
+        return MaterialOk(x) &&
+               MoldeOk(x) &&
+               MaquinaOk(x) &&
+               CavidadesOk(x) &&
+               CicloOk(x) &&
+               ObjetivoOk(x) &&
+               PesoOk(x) &&
+               EmbalajeTecnicoOk(x);
     }
 
     public static bool ListoCambioMolde(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && DatosTecnicosOk(x) && MpOk(x) && EmbalajeOk(x);
+        // LANZAMIENTO TEMPORAL SIN ALMACEN:
+        // Solo se exige que tenga producción pendiente y datos técnicos completos.
+        // No se bloquea por MP disponible ni por embalaje disponible.
+        return !x.ProgramaProduccionID.HasValue &&
+               NecesitaProduccion(x) &&
+               DatosTecnicosOk(x);
     }
 
     public static bool PendienteAbasto(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && DatosTecnicosOk(x) && (!MpOk(x) || !EmbalajeOk(x));
+        // LANZAMIENTO TEMPORAL SIN ALMACEN:
+        // Por ahora nada debe caer aquí por falta de stock/MP/embalaje.
+        // Se deja el método para reactivarlo cuando almacén esté integrado.
+        return false;
     }
 
     public static bool PendienteDatosTecnicos(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue && NecesitaProduccion(x) && !DatosTecnicosOk(x);
+        return !x.ProgramaProduccionID.HasValue &&
+               NecesitaProduccion(x) &&
+               !DatosTecnicosOk(x);
     }
 
-    public static bool CubiertoOProgramado(PlaneacionProgramaNecesidadVm x) => x.ProgramaProduccionID.HasValue || !NecesitaProduccion(x);
-    public static string ClienteNombre(PlaneacionProgramaNecesidadVm x) => string.IsNullOrWhiteSpace(x.ClienteNombre) ? "Sin cliente" : x.ClienteNombre!;
+    public static bool CubiertoOProgramado(PlaneacionProgramaNecesidadVm x)
+    {
+        return x.ProgramaProduccionID.HasValue || !NecesitaProduccion(x);
+    }
+
+    public static string ClienteNombre(PlaneacionProgramaNecesidadVm x)
+    {
+        return string.IsNullOrWhiteSpace(x.ClienteNombre) ? "Sin cliente" : x.ClienteNombre!;
+    }
 
     public static string ParteClave(PlaneacionProgramaNecesidadVm x)
     {
@@ -70,14 +145,13 @@
         if (x.ProgramaProduccionID.HasValue) return "Ya programado";
         if (!NecesitaProduccion(x)) return "Cubierto";
         if (ListoCambioMolde(x)) return "Listo para Cambio de Molde";
-        if (PendienteAbasto(x)) return "Pendiente de abasto";
-        return "Pendiente de datos técnicos";
+        if (PendienteDatosTecnicos(x)) return "Pendiente de datos técnicos";
+        return "Pendiente de revisión";
     }
 
     public static string EstadoClase(PlaneacionProgramaNecesidadVm x)
     {
         if (ListoCambioMolde(x)) return "estado-ok";
-        if (PendienteAbasto(x)) return "estado-warn";
         if (PendienteDatosTecnicos(x)) return "estado-danger";
         return "estado-muted";
     }
@@ -85,7 +159,6 @@
     public static string CardClase(PlaneacionProgramaNecesidadVm x)
     {
         if (ListoCambioMolde(x)) return "card-ok";
-        if (PendienteAbasto(x)) return "card-warn";
         if (PendienteDatosTecnicos(x)) return "card-danger";
         return "card-muted";
     }
@@ -196,22 +269,68 @@
 @{
     Layout = null;
     var necesidades = Model.Necesidades ?? new List<PlaneacionProgramaNecesidadVm>();
+    var listos = necesidades
+        .Where(ListoCambioMolde)
+        .OrderBy(PrioridadFecha)
+        .ThenBy(PrioridadEntrada)
+        .ToList();
 
-    // Prioridad FIFO de planeación:
-    // 1) Primero lo que tiene FechaRequerida más cercana.
-    // 2) Si empatan, gana el ReleaseDetalleID más antiguo.
-    var listos = necesidades.Where(ListoCambioMolde).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
-    var abasto = necesidades.Where(PendienteAbasto).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
-    var datosTecnicos = necesidades.Where(PendienteDatosTecnicos).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
-    var resueltos = necesidades.Where(CubiertoOProgramado).OrderBy(PrioridadFecha).ThenBy(PrioridadEntrada).ToList();
+    // LANZAMIENTO TEMPORAL SIN ALMACEN:
+    // Por ahora no habrá sección bloqueante de abastecimiento.
+    // MP y embalaje quedan solo como referencia visual.
+    var abasto = new List<PlaneacionProgramaNecesidadVm>();
+
+    var datosTecnicos = necesidades
+        .Where(PendienteDatosTecnicos)
+        .OrderBy(PrioridadFecha)
+        .ThenBy(PrioridadEntrada)
+        .ToList();
+
+    var resueltos = necesidades
+        .Where(CubiertoOProgramado)
+        .OrderBy(PrioridadFecha)
+        .ThenBy(PrioridadEntrada)
+        .ToList();
 
     var secciones = new List<SeccionUi>
+{
+    new SeccionUi
     {
-        new SeccionUi { Titulo = "Listos para Programa Cambio de Molde", Sub = "Renglones liberados para definir cambio, arranque, máquina y molde final.", Items = listos, Open = true, Icono = "fa-circle-check", Clase = "sec-ok" },
-        new SeccionUi { Titulo = "Pendientes de abastecimiento", Sub = "Tienen datos técnicos completos, pero falta MP o embalaje.", Items = abasto, Open = false, Icono = "fa-truck-ramp-box", Clase = "sec-warn" },
-        new SeccionUi { Titulo = "Pendientes de datos técnicos", Sub = "Falta molde, material, cavidades, ciclo, máquina, objetivo/hra o peso bruto.", Items = datosTecnicos, Open = false, Icono = "fa-screwdriver-wrench", Clase = "sec-danger" },
-        new SeccionUi { Titulo = "Cubiertas o ya programadas", Sub = "Renglones ya cubiertos con stock o ya enviados a máquinas.", Items = resueltos, Open = false, Icono = "fa-box-check", Clase = "sec-muted" }
-    };
+        Titulo = "Listos para Programa Cambio de Molde",
+        Sub = "Renglones liberados para definir cambio, arranque, máquina y molde final. Almacén queda solo como referencia temporal.",
+        Items = listos,
+        Open = true,
+        Icono = "fa-circle-check",
+        Clase = "sec-ok"
+    },
+    new SeccionUi
+    {
+        Titulo = "Pendientes de abastecimiento",
+        Sub = "Temporalmente no bloquea. MP y embalaje se muestran solo como referencia hasta integrar Almacén.",
+        Items = abasto,
+        Open = false,
+        Icono = "fa-truck-ramp-box",
+        Clase = "sec-warn"
+    },
+    new SeccionUi
+    {
+        Titulo = "Pendientes de datos técnicos",
+        Sub = "Falta molde, material, cavidades, ciclo, máquina, objetivo/hra, peso bruto o dato técnico de embalaje.",
+        Items = datosTecnicos,
+        Open = false,
+        Icono = "fa-screwdriver-wrench",
+        Clase = "sec-danger"
+    },
+    new SeccionUi
+    {
+        Titulo = "Cubiertas o ya programadas",
+        Sub = "Renglones ya enviados a máquinas o sin piezas pendientes por producir.",
+        Items = resueltos,
+        Open = false,
+        Icono = "fa-box-check",
+        Clase = "sec-muted"
+    }
+};
 }
 
 <!DOCTYPE html>
@@ -1017,9 +1136,9 @@
 
 
         /* ============================================================
-                   PROGRAMA_NECESIDADES_FILA_V1_0
-                   Cada necesidad se muestra como un renglón horizontal.
-                   ============================================================ */
+                           PROGRAMA_NECESIDADES_FILA_V1_0
+                           Cada necesidad se muestra como un renglón horizontal.
+                           ============================================================ */
         .cards-grid {
             display: flex;
             flex-direction: column;
@@ -1204,8 +1323,8 @@
 
 
         /* ============================================================
-                   AGRUPACION_POR_FECHA_ENTREGA_CLIENTE_V1_0
-                   ============================================================ */
+                           AGRUPACION_POR_FECHA_ENTREGA_CLIENTE_V1_0
+                           ============================================================ */
         .date-groups {
             display: flex;
             flex-direction: column;

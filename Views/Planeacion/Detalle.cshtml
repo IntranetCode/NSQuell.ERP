@@ -767,6 +767,152 @@
             }
         }
 
+
+
+        /* OF REAL IMPRESA - GQ-F-PL01-05 */
+        .of-page {
+            background: #fff;
+            color: #000;
+            font-family: Arial, "Segoe UI", sans-serif;
+            font-size: 7.5px;
+            width: 100%;
+            page-break-after: always;
+        }
+
+            .of-page:last-child {
+                page-break-after: auto;
+            }
+
+        .of-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+            .of-table td,
+            .of-table th {
+                border: 1px solid #000;
+                padding: 2px 3px;
+                vertical-align: middle;
+                line-height: 1.05;
+            }
+
+        .of-no-border td,
+        .of-no-border th {
+            border: 0 !important;
+        }
+
+        .of-title {
+            font-size: 16px;
+            font-weight: 900;
+            text-align: center;
+            line-height: 1.05;
+        }
+
+        .of-subtitle {
+            font-size: 10px;
+            font-weight: 900;
+            text-align: center;
+            line-height: 1.05;
+        }
+
+        .of-logo-box {
+            height: 37px;
+            font-weight: 900;
+            font-size: 16px;
+            color: #004AAD;
+            text-align: center;
+        }
+
+        .of-label {
+            font-size: 6.5px;
+            font-weight: 900;
+            text-align: center;
+            background: #f2f2f2;
+        }
+
+        .of-label-white {
+            font-size: 6.5px;
+            font-weight: 900;
+            text-align: center;
+            background: #fff;
+        }
+
+        .of-value {
+            min-height: 12px;
+            font-size: 7.5px;
+            font-weight: 700;
+            text-align: center;
+            background: #fff;
+        }
+
+        .of-value-left {
+            min-height: 12px;
+            font-size: 7.5px;
+            font-weight: 700;
+            text-align: left;
+            background: #fff;
+        }
+
+        .of-section-tab {
+            width: 115px;
+            border: 1px solid #000;
+            border-bottom: 0;
+            background: #d9d9d9;
+            font-size: 7px;
+            font-weight: 900;
+            text-align: center;
+            padding: 3px;
+            margin-top: 7px;
+        }
+
+        .of-yellow {
+            background: #fff200 !important;
+            font-weight: 900;
+        }
+
+        .of-black-box {
+            display: inline-block;
+            width: 22px;
+            height: 18px;
+            background: #000;
+            border: 1px solid #000;
+        }
+
+        .of-check-box {
+            display: inline-block;
+            width: 22px;
+            height: 18px;
+            background: #fff;
+            border: 1px solid #000;
+        }
+
+        .of-empty {
+            height: 16px;
+            background: #fff;
+        }
+
+        .of-empty-small {
+            height: 12px;
+            background: #fff;
+        }
+
+        .of-material-row td {
+            height: 18px;
+        }
+
+        .of-sign-row td {
+            height: 15px;
+        }
+
+        .of-footer-real {
+            margin-top: 22px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 6px;
+            color: #000;
+        }
+
         @@media print {
             @@page {
                 size: letter landscape;
@@ -873,19 +1019,19 @@
                                 Editar OF
                             </a>
                         }
-                        else
-                        {
-                            <div class="alert alert-info rounded-4 fw-semibold mb-0">
-                                <i class="fa-solid fa-circle-info me-2"></i>
-                                Esta OF nació desde un Release/Programa. Para modificarla, edita el Release y recalcula la planeación.
-                            </div>
-                        }
                         else if (!string.IsNullOrWhiteSpace(Model.MotivoNoEditable))
                         {
                             <span class="badge bg-secondary align-self-center">
                                 <i class="fa-solid fa-lock me-1"></i>
                                 @Model.MotivoNoEditable
                             </span>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info rounded-4 fw-semibold mb-0">
+                                <i class="fa-solid fa-circle-info me-2"></i>
+                                Esta OF nació desde un Release/Programa. Para modificarla, edita el Release y recalcula la planeación.
+                            </div>
                         }
 
                         <button type="button"
@@ -1562,179 +1708,286 @@
                             Imprimir OF
                         </button>
 
-                       
+
                     </div>
                 </div>
             </div>
         </div>
 
-       
+
     </div>
 
     <div class="print-area">
-        <div class="print-sheet">
-            <div class="print-top">
-                <div>
-                    <div class="print-brand">ERP QUELL</div>
-                    <div class="print-subtitle">Planeación / Orden de Fabricación</div>
-                </div>
+        @if (Model.Detalles != null && Model.Detalles.Any())
+        {
+            foreach (var d in Model.Detalles)
+            {
+                var asignacion = d.AsignacionesMaquina != null ? d.AsignacionesMaquina.FirstOrDefault() : null;
+                var cantidadEtiquetas = d.CantidadEmbalajes.HasValue
+                ? Convert.ToInt32(Math.Ceiling(d.CantidadEmbalajes.Value))
+                : 0;
+                var etiquetaInicio = cantidadEtiquetas > 0 ? "1" : "";
+                var etiquetaFin = cantidadEtiquetas > 0 ? cantidadEtiquetas.ToString("N0") : "";
+                var requiereSecado =
+                !string.IsNullOrWhiteSpace(d.TipoSecado) &&
+                !string.Equals(d.TipoSecado.Trim(), "N/A", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(d.TipoSecado.Trim(), "NA", StringComparison.OrdinalIgnoreCase);
+                var textoTipoSecado = requiereSecado ? d.TipoSecado : "N/A";
+                var textoHorasSecado = requiereSecado ? Decimal2(d.HorasSecado) : "N/A";
+                var fechaInicio = asignacion != null && asignacion.FechaProgramadaTentativa.HasValue
+                ? Fecha(asignacion.FechaProgramadaTentativa)
+                : Fecha(Model.FechaInicioPlaneada);
+                var fechaFin = Fecha(Model.FechaFinPlaneada);
+                var horaInicio = asignacion != null ? Hora(asignacion.HoraInicioTentativa) : "";
+                var horaFin = asignacion != null ? Hora(asignacion.HoraFinTentativa) : "";
+                var maquina = asignacion != null ? asignacion.Maquina : null;
+                var molde = !string.IsNullOrWhiteSpace(d.Molde) ? d.Molde : (asignacion != null ? asignacion.Molde : null);
+                var ofDireccion = string.IsNullOrWhiteSpace(Model.NumeroOFRecibida) ? Model.FolioSolicitud : Model.NumeroOFRecibida;
+                var anioCorto = DateTime.Now.ToString("yy");
 
-                <div>
-                    <div class="print-title">ORDEN DE FABRICACIÓN</div>
-                    <div class="print-folio">
-                        Folio interno: @Valor(Model.FolioSolicitud)<br />
-                        OF Dirección: @Valor(Model.NumeroOFRecibida)<br />
-                        Tipo OF: @textoTipoOFActual
-                    </div>
-                </div>
-            </div>
+                <div class="of-page">
+                    <table class="of-table">
+                        <tr>
+                            <td rowspan="2" style="width:17%;" class="of-logo-box">ERP QUELL</td>
+                            <td style="width:70%;" class="of-title">Orden de Fabricación</td>
+                            <td style="width:13%;" class="of-label-white">Ver. 07</td>
+                        </tr>
+                        <tr>
+                            <td class="of-subtitle">GQ-F-PL01-05</td>
+                            <td class="of-label-white">Fecha: 15.07.2025</td>
+                        </tr>
+                    </table>
 
-            <div class="print-section-title">Encabezado</div>
-            <div class="print-grid">
-                <div class="print-cell">
-                    <div class="print-label">Cliente</div>
-                    <div class="print-value">@Valor(Model.Cliente)</div>
-                </div>
+                    <table class="of-table of-no-border" style="margin-top:5px;">
+                        <tr>
+                            <td style="width:20%;"></td>
+                            <td style="width:7%;" class="of-label-white">N° Molde</td>
+                            <td style="width:11%;" class="of-label-white">Fecha Inicio</td>
+                            <td style="width:8%;" class="of-label-white">Hora</td>
+                            <td style="width:11%;" class="of-label-white">Fecha Fin</td>
+                            <td style="width:8%;" class="of-label-white">Hora</td>
+                            <td style="width:17%;" class="of-label-white">N. Orden de Fabricacion</td>
+                            <td style="width:6%;" class="of-label-white">Serie</td>
+                            <td style="width:6%;" class="of-label-white">Pruebas</td>
+                            <td style="width:6%;" class="of-label-white">Pre-serie</td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td class="of-value" style="border:1px solid #000 !important;">@Valor(molde)</td>
+                            <td class="of-value" style="border:1px solid #000 !important;">@fechaInicio</td>
+                            <td class="of-value" style="border:1px solid #000 !important;">@horaInicio</td>
+                            <td class="of-value" style="border:1px solid #000 !important;">@fechaFin</td>
+                            <td class="of-value" style="border:1px solid #000 !important;">@horaFin</td>
+                            <td class="of-value of-yellow" style="border:1px solid #000 !important;">@Valor(ofDireccion) &nbsp; / &nbsp; @anioCorto</td>
+                            <td class="of-value"><span class="of-black-box"></span></td>
+                            <td class="of-value"><span class="of-check-box"></span></td>
+                            <td class="of-value"><span class="of-check-box"></span></td>
+                        </tr>
+                    </table>
 
-                <div class="print-cell">
-                    <div class="print-label">Estatus</div>
-                    <div class="print-value">@Valor(Model.EstatusNombre)</div>
-                </div>
+                    <div class="of-section-tab">Datos de producción</div>
+                    <table class="of-table">
+                        <tr>
+                            <th class="of-label" style="width:7%;">Máquina</th>
+                            <th class="of-label" style="width:20%;">Designacion</th>
+                            <th class="of-label" style="width:10%;">COLOR</th>
+                            <th class="of-label" style="width:7%;">Cav.</th>
+                            <th class="of-label" style="width:9%;">Cantidad</th>
+                            <th class="of-label" style="width:8%;">H.Prod</th>
+                            <th class="of-label" style="width:17%;">Cliente</th>
+                            <th class="of-label" colspan="2">N. de Etiquetas</th>
+                        </tr>
+                        <tr>
+                            <td class="of-value">@Valor(maquina)</td>
+                            <td class="of-value">@Valor(d.DesignacionDescripcionSAP)</td>
+                            <td class="of-value">@Valor(d.Color)</td>
+                            <td class="of-value">@Entero(d.Cavidades)</td>
+                            <td class="of-value">@d.CantidadPiezas.ToString("N0")</td>
+                            <td class="of-value">@Decimal2(d.HorasPlaneadas)</td>
+                            <td class="of-value">@Valor(Model.Cliente)</td>
+                            <td class="of-value">Inicio<br />@etiquetaInicio</td>
+                            <td class="of-value">Fin<br />@etiquetaFin</td>
+                        </tr>
+                        <tr>
+                            <th class="of-label">Ref.Interna</th>
+                            <th class="of-label">Ref.SAP</th>
+                            <th class="of-label">Ref. Cliente</th>
+                            <th class="of-label">Ciclo</th>
+                            <th class="of-label">Tipo de Secado</th>
+                            <th class="of-label">Hrs. De Secado</th>
+                            <th class="of-label">Piezas por hora</th>
+                            <th class="of-label" colspan="2">Peso Bruto/Pieza</th>
+                        </tr>
+                        <tr>
+                            <td class="of-value">@Valor(d.ReferenciaSAP)</td>
+                            <td class="of-value">@Valor(d.ReferenciaSAP)</td>
+                            <td class="of-value">@Valor(d.ReferenciaSAP)</td>
+                            <td class="of-value">@Valor(d.Ciclo)</td>
+                            <td class="of-value">@Valor(textoTipoSecado)</td>
+                            <td class="of-value">@textoHorasSecado</td>
+                            <td class="of-value">@Entero(d.ObjetivoHora)</td>
+                            <td class="of-value" colspan="2">@Decimal6(d.PesoBrutoPieza)</td>
+                        </tr>
+                    </table>
 
-                <div class="print-cell">
-                    <div class="print-label">Responsable</div>
-                    <div class="print-value">@Valor(Model.ResponsablePlaneacionNombre)</div>
-                </div>
-
-                <div class="print-cell">
-                    <div class="print-label">Fecha solicitud</div>
-                    <div class="print-value">@Model.FechaSolicitud.ToString("dd/MM/yyyy")</div>
-                </div>
-
-                <div class="print-cell">
-                    <div class="print-label">Fecha requerida</div>
-                    <div class="print-value">@Fecha(Model.FechaRequerida)</div>
-                </div>
-
-                <div class="print-cell">
-                    <div class="print-label">Inicio planeado</div>
-                    <div class="print-value">@FechaHora(Model.FechaInicioPlaneada)</div>
-                </div>
-
-                <div class="print-cell">
-                    <div class="print-label">Fin planeado</div>
-                    <div class="print-value">@FechaHora(Model.FechaFinPlaneada)</div>
-                </div>
-
-                <div class="print-cell">
-                    <div class="print-label">Tipo OF</div>
-                    <div class="print-value">@textoTipoOFActual</div>
-                </div>
-
-                <div class="print-cell">
-                    <div class="print-label">Motivo tipo OF</div>
-                    <div class="print-value">@Valor(Model.MotivoTipoOF)</div>
-                </div>
-
-                <div class="print-cell">
-                    <div class="print-label">Fecha impresión</div>
-                    <div class="print-value">@DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
-                </div>
-            </div>
-
-            <div class="print-metrics">
-                <div class="print-metric">
-                    <div class="print-metric-label">Renglones</div>
-                    <div class="print-metric-value">@totalRenglones</div>
-                </div>
-
-                <div class="print-metric">
-                    <div class="print-metric-label">Total piezas</div>
-                    <div class="print-metric-value">@totalPiezas.ToString("N0")</div>
-                </div>
-
-                <div class="print-metric">
-                    <div class="print-metric-label">Horas planeadas</div>
-                    <div class="print-metric-value">@totalHoras.ToString("N2")</div>
-                </div>
-
-                <div class="print-metric">
-                    <div class="print-metric-label">MP requerida kg</div>
-                    <div class="print-metric-value">@totalMp.ToString("N4")</div>
-                </div>
-            </div>
-
-            <div class="print-section-title">Detalle de producción</div>
-            <table class="print-table">
-                <thead>
-                    <tr>
-                        <th style="width:4%;">Ren.</th>
-                        <th style="width:10%;">Referencia</th>
-                        <th style="width:19%;">Descripción</th>
-                        <th style="width:7%;">Cantidad</th>
-                        <th style="width:7%;">Horas</th>
-                        <th style="width:9%;">Máquina</th>
-                        <th style="width:8%;">Molde</th>
-                        <th style="width:7%;">Color</th>
-                        <th style="width:11%;">Material</th>
-                        <th style="width:7%;">MP kg</th>
-                        <th style="width:8%;">Emb.</th>
-                        <th style="width:7%;">Cant. emb.</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (Model.Detalles != null && Model.Detalles.Any())
-                    {
-                        foreach (var d in Model.Detalles)
+                    <div class="of-section-tab">Seguimiento de Etiquetas</div>
+                    <table class="of-table">
+                        <tr>
+                            <th class="of-label" style="width:4%;">N. Op</th>
+                            <th class="of-label" style="width:7%;">1er. Turno</th>
+                            <th class="of-label" style="width:7%;">Fecha</th>
+                            <th class="of-label" style="width:9%;">Etiqueta Inicio</th>
+                            <th class="of-label" style="width:7%;">Etiqueta Fin</th>
+                            <th class="of-label" style="width:4%;">N. Op</th>
+                            <th class="of-label" style="width:7%;">2o. Turno</th>
+                            <th class="of-label" style="width:7%;">Fecha</th>
+                            <th class="of-label" style="width:9%;">Etiqueta Inicio</th>
+                            <th class="of-label" style="width:7%;">Etiqueta Fin</th>
+                            <th class="of-label" style="width:4%;">N. Op</th>
+                            <th class="of-label" style="width:7%;">3er. Turno</th>
+                            <th class="of-label" style="width:7%;">Fecha</th>
+                            <th class="of-label" style="width:8%;">Etiqueta Inicio</th>
+                            <th class="of-label" style="width:7%;">Etiqueta Fin</th>
+                        </tr>
+                        @for (var i = 0; i < 8; i++)
                         {
-                            var asignacion = d.AsignacionesMaquina?.FirstOrDefault();
-
                             <tr>
-                                <td>@d.Renglon</td>
-                                <td>@Valor(d.ReferenciaSAP)</td>
-                                <td>@Valor(d.DesignacionDescripcionSAP)</td>
-                                <td>@d.CantidadPiezas.ToString("N0")</td>
-                                <td>@Decimal2(d.HorasPlaneadas)</td>
-                                <td>@Valor(asignacion?.Maquina)</td>
-                                <td>@Valor(d.Molde ?? asignacion?.Molde)</td>
-                                <td>@Valor(d.Color)</td>
-                                <td>
-                                    <strong>@Valor(d.MaterialCodigo)</strong><br />
-                                    @Valor(d.MaterialDescripcion)
-                                </td>
-                                <td>@Decimal4(d.CantidadMpKg)</td>
-                                <td>
-                                    <strong>@Valor(d.EmbalajeCodigo)</strong><br />
-                                    @Valor(d.EmbalajeDescripcion)
-                                </td>
-
-                                <td>@Decimal4(d.CantidadEmbalajes)</td>
+                                <td class="of-empty-small"></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
                             </tr>
                         }
-                    }
-                    else
-                    {
+                    </table>
+
+                    <div class="of-section-tab">Designación de Material</div>
+                    <table class="of-table">
                         <tr>
-                            <td colspan="12">No hay renglones registrados.</td>
+                            <th class="of-label" style="width:8%;"></th>
+                            <th class="of-label" style="width:13%;">Cod Interno</th>
+                            <th class="of-label" style="width:22%;">Designacion</th>
+                            <th class="of-label" style="width:10%;">Cant. De Embalajes</th>
+                            <th class="of-label" style="width:10%;">Pzas x Embajale</th>
+                            <th class="of-label" colspan="4">Seguimiento de Material</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                        <tr>
+                            <th class="of-label">Embalaje</th>
+                            <td class="of-value">@Valor(d.EmbalajeCodigo)</td>
+                            <td class="of-value">@Valor(d.EmbalajeDescripcion)</td>
+                            <td class="of-value">@Decimal4(d.CantidadEmbalajes)</td>
+                            <td class="of-value">@Decimal4(d.PiezasPorEmbalaje)</td>
+                            <th class="of-label">Lote</th>
+                            <th class="of-label">N.UI Emb</th>
+                            <th class="of-label">Lote</th>
+                            <th class="of-label">N.UI Emb</th>
+                        </tr>
+                        <tr class="of-material-row">
+                            <th class="of-label">Material / componente</th>
+                            <td class="of-value">@Valor(d.MaterialCodigo)</td>
+                            <td class="of-value">@Valor(d.MaterialDescripcion)</td>
+                            <td class="of-value">@Decimal4(d.CantidadMpKg)</td>
+                            <td class="of-value">KG</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        @for (var i = 0; i < 3; i++)
+                        {
+                            <tr class="of-material-row">
+                                <th class="of-label">Material / componente</th>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        }
+                    </table>
 
-            <div class="print-section-title">Notas generales</div>
-            <div class="print-notes">
-                @Valor(Model.NotasGenerales)
-            </div>
+                    <table class="of-table of-no-border" style="margin-top:8px;">
+                        <tr>
+                            <td style="width:37%; padding:0;">
+                                <table class="of-table">
+                                    <tr>
+                                        <th class="of-label" colspan="4">Entregas de M.P</th>
+                                    </tr>
+                                    <tr>
+                                        <th class="of-label">Entregue por:</th>
+                                        <th class="of-label">Recibido por:</th>
+                                        <th class="of-label">Fecha</th>
+                                        <th class="of-label">Cantidad</th>
+                                    </tr>
+                                    @for (var i = 0; i < 5; i++)
+                                    {
+                                        <tr class="of-sign-row">
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                        </tr>
+                                    }
+                                </table>
+                            </td>
+                            <td style="width:4%;"></td>
+                            <td style="width:59%; padding:0;">
+                                <table class="of-table">
+                                    <tr>
+                                        <th class="of-label" colspan="5">Extension de Material</th>
+                                    </tr>
+                                    <tr>
+                                        <th class="of-label">Nombre de quien autoriza</th>
+                                        <th class="of-label">Firma</th>
+                                        <th class="of-label">Fecha</th>
+                                        <th class="of-label">Cantidad</th>
+                                        <th class="of-label">Turno</th>
+                                    </tr>
+                                    @for (var i = 0; i < 5; i++)
+                                    {
+                                        <tr class="of-sign-row">
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                        </tr>
+                                    }
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
 
-            <div class="print-footer">
-                <div>
-                    Documento generado desde ERP QUELL.
+                    <div class="of-footer-real">
+                        <div>
+                            Versión 04<br />
+                            Fecha de versión 12/04/21
+                        </div>
+                        <div>Pág. 1 de 1</div>
+                    </div>
                 </div>
-                <div>
-                    Impreso: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")
-                </div>
+            }
+        }
+        else
+        {
+            <div class="print-sheet">
+                <div class="print-section-title">Orden de Fabricación</div>
+                <div class="print-notes">No hay renglones registrados.</div>
             </div>
-        </div>
+        }
     </div>
 
     <div class="modal fade" id="modalCancelarOF" tabindex="-1" aria-labelledby="modalCancelarOFLabel" aria-hidden="true">
