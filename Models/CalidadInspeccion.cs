@@ -12,17 +12,17 @@ namespace ERP.NSQuell.Models
         public int InspeccionID { get; set; }
 
         // =========================================================
-        // RELACIONES CON PLANEACIÓN
+        // RELACIONES DEL FLUJO
+        // Planeacion -> Produccion -> Checklist -> Calidad
         // =========================================================
 
         public int? ProgramaProduccionID { get; set; }
+        public int? EjecucionProduccionID { get; set; }
+        public int? ChecklistArranqueID { get; set; }
 
         public int? SolicitudProduccionID { get; set; }
-
         public int? SolicitudProduccionDetalleID { get; set; }
-
         public int? ReleaseID { get; set; }
-
         public int? ReleaseDetalleID { get; set; }
 
         // =========================================================
@@ -35,17 +35,12 @@ namespace ERP.NSQuell.Models
         public string? ClienteNombre { get; set; }
 
         public int? ParteID { get; set; }
-
         public int? MaquinaID { get; set; }
-
         public int? MoldeID { get; set; }
-
         public int? MaterialID { get; set; }
 
         // =========================================================
-        // FOTOGRAFÍA HISTÓRICA
-        // Estos campos conservan la información exacta que Calidad
-        // recibió, aunque Planeación cambie posteriormente.
+        // FOTOGRAFIA HISTORICA
         // =========================================================
 
         [StringLength(150)]
@@ -70,11 +65,10 @@ namespace ERP.NSQuell.Models
         public string? Molde { get; set; }
 
         public DateTime? FechaInicioProgramada { get; set; }
-
         public DateTime? FechaFinProgramada { get; set; }
 
         // =========================================================
-        // OPERADORES ASIGNADOS
+        // PERSONAL ASIGNADO
         // =========================================================
 
         public int? OperadorPrincipalPersonaID { get; set; }
@@ -87,8 +81,13 @@ namespace ERP.NSQuell.Models
         [StringLength(250)]
         public string? OperadorAuxiliarNombre { get; set; }
 
+        public int? TecnicoInyeccionPersonaID { get; set; }
+
+        [StringLength(250)]
+        public string? TecnicoInyeccionNombre { get; set; }
+
         // =========================================================
-        // CANTIDADES
+        // CANTIDADES DE LA OF
         // =========================================================
 
         [Column(TypeName = "decimal(18,3)")]
@@ -101,66 +100,54 @@ namespace ERP.NSQuell.Models
         public decimal CantidadPendiente { get; set; }
 
         // =========================================================
-        // DOCUMENTACIÓN
+        // DOCUMENTACION Y PREARRANQUE
         // =========================================================
 
         public bool ChecklistValidado { get; set; }
-
         public bool HojaInspeccionProducto { get; set; }
-
         public bool HojaValidacionCalidad { get; set; }
 
-        // =========================================================
-        // ENVÍO DESDE PRODUCCIÓN
-        // =========================================================
+        public bool AyudaVisualColocada { get; set; }
+        public bool? AlertaCalidadAplica { get; set; }
+        public bool? AlertaCalidadColocada { get; set; }
+        public bool HIPColocada { get; set; }
+        public bool HCCColocada { get; set; }
+        public bool MatrizPolivalenciaValidada { get; set; }
 
         public DateTime? FechaNotificacionCalidad { get; set; }
-
         public int? UsuarioNotificoID { get; set; }
 
-        // =========================================================
-        // AUTORIZACIÓN DE PREARRANQUE
-        // =========================================================
+        public DateTime? FechaInicioValidacionPrearranque { get; set; }
+        public DateTime? FechaFinValidacionPrearranque { get; set; }
+        public int? MinutosLiberacionInicial { get; set; }
+        public bool? CumplioTiempoObjetivoInicial { get; set; }
 
         public DateTime? FechaAutorizacionPrearranque { get; set; }
-
         public int? UsuarioAutorizacionPrearranqueID { get; set; }
 
         [StringLength(1000)]
         public string? MotivoDevolucion { get; set; }
 
         // =========================================================
-        // VALIDACIÓN DE PRIMERAS PIEZAS
+        // RESUMEN DE LA ULTIMA VALIDACION DE PRIMERAS PIEZAS
+        // El detalle completo se conserva en Calidad_PrimerasPiezasIntentos.
         // =========================================================
 
         public bool CincoDisparosSegregados { get; set; }
 
-        [Range(
-            0,
-            5,
-            ErrorMessage = "La cantidad de disparos conformes debe estar entre 0 y 5."
-        )]
+        [Range(0, 5, ErrorMessage = "La cantidad de disparos conformes debe estar entre 0 y 5.")]
         public int CantidadDisparosConformes { get; set; }
 
-        /*
-         * true  = conforme
-         * false = no conforme
-         * null  = pendiente o no aplica
-         */
         public bool? ValidacionDimensional { get; set; }
-
         public bool? ValidacionApariencia { get; set; }
-
         public bool? ValidacionGauge { get; set; }
-
         public bool? ValidacionConductividad { get; set; }
 
         public DateTime? FechaValidacionPrimerasPiezas { get; set; }
-
         public int? UsuarioValidacionPrimerasPiezasID { get; set; }
 
         // =========================================================
-        // RESULTADO Y LIBERACIÓN
+        // RESULTADO Y LIBERACION
         // =========================================================
 
         [StringLength(30)]
@@ -170,21 +157,8 @@ namespace ERP.NSQuell.Models
         public string? Etiqueta { get; set; }
 
         public bool Liberado { get; set; }
-
-        /*
-         * Esta es la propiedad real almacenada en SQL Server.
-         */
         public bool RequiereGP12 { get; set; }
 
-        /*
-         * Propiedad temporal de compatibilidad.
-         *
-         * El controlador y las vistas antiguas todavía utilizan
-         * RequiereGPI2. Al tener [NotMapped], Entity Framework no
-         * buscará una columna llamada RequiereGPI2.
-         *
-         * Todo valor se redirige hacia RequiereGP12.
-         */
         [NotMapped]
         public bool RequiereGPI2
         {
@@ -193,21 +167,23 @@ namespace ERP.NSQuell.Models
         }
 
         public bool EnContencion { get; set; }
-
         public bool EsScrap { get; set; }
 
         public DateTime? FechaLiberacionProduccion { get; set; }
-
         public int? UsuarioLiberacionProduccionID { get; set; }
 
         // =========================================================
-        // INVALIDACIÓN POR CAMBIOS DE PLANEACIÓN
+        // RELIBERACION DESPUES DE PARO MAYOR A 15 MINUTOS
+        // =========================================================
+
+        public bool RequiereReliberacion { get; set; }
+
+        // =========================================================
+        // INVALIDACION POR CAMBIOS DE PLANEACION
         // =========================================================
 
         public bool ConfiguracionInvalidada { get; set; }
-
         public DateTime? FechaInvalidacion { get; set; }
-
         public int? UsuarioInvalidacionID { get; set; }
 
         [StringLength(1000)]
@@ -222,81 +198,66 @@ namespace ERP.NSQuell.Models
 
         [Required]
         [StringLength(50)]
-        public string Estado { get; set; } =
-            CalidadEstados.PendientePrearranque;
+        public string Estado { get; set; } = CalidadEstados.PendientePrearranque;
 
         public int? UsuarioCreacionID { get; set; }
-
         public DateTime FechaCreacion { get; set; }
-
         public int? UsuarioModificacionID { get; set; }
-
         public DateTime? FechaModificacion { get; set; }
+
+        // =========================================================
+        // NAVEGACIONES DEL MODULO DE CALIDAD
+        // =========================================================
 
         public ICollection<CalidadInspeccionHistorial> Historial { get; set; } =
             new List<CalidadInspeccionHistorial>();
+
+        public ICollection<CalidadPrimeraPiezaIntento> PrimerasPiezasIntentos { get; set; } =
+            new List<CalidadPrimeraPiezaIntento>();
+
+        public ICollection<CalidadMonitoreoProceso> MonitoreosProceso { get; set; } =
+            new List<CalidadMonitoreoProceso>();
+
+        public ICollection<CalidadDisposicionMaterial> DisposicionesMaterial { get; set; } =
+            new List<CalidadDisposicionMaterial>();
+
+        public ICollection<CalidadCajaLiberada> CajasLiberadas { get; set; } =
+            new List<CalidadCajaLiberada>();
+
+        public ICollection<CalidadMuestraResguardo> MuestrasResguardo { get; set; } =
+            new List<CalidadMuestraResguardo>();
+
+        public ICollection<CalidadReliberacion> Reliberaciones { get; set; } =
+            new List<CalidadReliberacion>();
+
+        public ICollection<CalidadGP12> RegistrosGP12 { get; set; } =
+            new List<CalidadGP12>();
     }
 
-    /// <summary>
-    /// Estados propios del flujo de Calidad.
-    /// No sustituyen los estados de Planeación ni Producción.
-    /// </summary>
     public static class CalidadEstados
     {
-        public const string PendientePrearranque =
-            "PENDIENTE_PREARRANQUE";
+        public const string PendientePrearranque = "PENDIENTE_PREARRANQUE";
+        public const string DevueltoPrearranque = "DEVUELTO_PREARRANQUE";
+        public const string ArranqueAutorizado = "ARRANQUE_AUTORIZADO";
+        public const string PendientePrimerasPiezas = "PENDIENTE_PRIMERAS_PIEZAS";
+        public const string AjustesSolicitados = "AJUSTES_SOLICITADOS";
+        public const string ProduccionLiberada = "PRODUCCION_LIBERADA";
+        public const string MonitoreoActivo = "MONITOREO_ACTIVO";
+        public const string PendienteLiberacionCaja = "PENDIENTE_LIBERACION_CAJA";
+        public const string CajaLiberada = "CAJA_LIBERADA";
+        public const string PendienteReliberacion = "PENDIENTE_RELIBERACION";
+        public const string PendienteGP12 = "PENDIENTE_GP12";
+        public const string EnGP12 = "EN_GP12";
+        public const string MaterialLiberado = "MATERIAL_LIBERADO";
+        public const string MaterialNoConforme = "MATERIAL_NO_CONFORME";
+        public const string Cerrada = "CERRADA";
 
-        public const string DevueltoPrearranque =
-            "DEVUELTO_PREARRANQUE";
-
-        public const string ArranqueAutorizado =
-            "ARRANQUE_AUTORIZADO";
-
-        public const string PendientePrimerasPiezas =
-            "PENDIENTE_PRIMERAS_PIEZAS";
-
-        public const string AjustesSolicitados =
-            "AJUSTES_SOLICITADOS";
-
-        public const string ProduccionLiberada =
-            "PRODUCCION_LIBERADA";
-
-        public const string PendienteGP12 =
-            "PENDIENTE_GP12";
-
-        public const string EnGP12 =
-            "EN_GP12";
-
-        public const string MaterialLiberado =
-            "MATERIAL_LIBERADO";
-
-        public const string MaterialNoConforme =
-            "MATERIAL_NO_CONFORME";
-
-        public const string Cerrada =
-            "CERRADA";
-
-        /*
-         * Estados anteriores.
-         * Se conservan temporalmente para leer registros existentes.
-         */
-        public const string LegacyAbierta =
-            "ABIERTA";
-
-        public const string LegacyLiberada =
-            "LIBERADA";
-
-        public const string LegacyGPI2 =
-            "GPI2";
-
-        public const string LegacyContencion =
-            "CONTENCION";
-
-        public const string LegacyScrap =
-            "SCRAP";
-
-        public const string LegacyDetenida =
-            "DETENIDA";
+        public const string LegacyAbierta = "ABIERTA";
+        public const string LegacyLiberada = "LIBERADA";
+        public const string LegacyGPI2 = "GPI2";
+        public const string LegacyContencion = "CONTENCION";
+        public const string LegacyScrap = "SCRAP";
+        public const string LegacyDetenida = "DETENIDA";
 
         public static bool EsProcesoActivo(string? estado)
         {
@@ -305,8 +266,16 @@ namespace ERP.NSQuell.Models
                    estado == ArranqueAutorizado ||
                    estado == PendientePrimerasPiezas ||
                    estado == AjustesSolicitados ||
+                   estado == ProduccionLiberada ||
+                   estado == MonitoreoActivo ||
+                   estado == PendienteLiberacionCaja ||
+                   estado == CajaLiberada ||
+                   estado == PendienteReliberacion ||
                    estado == PendienteGP12 ||
-                   estado == EnGP12;
+                   estado == EnGP12 ||
+                   estado == LegacyAbierta ||
+                   estado == LegacyDetenida ||
+                   estado == LegacyGPI2;
         }
 
         public static bool PuedeAutorizarPrearranque(string? estado)
@@ -322,45 +291,37 @@ namespace ERP.NSQuell.Models
                    estado == AjustesSolicitados;
         }
 
-        public static bool EsEstadoFinal(string? estado)
+        public static bool PuedeMonitorear(string? estado)
         {
             return estado == ProduccionLiberada ||
-                   estado == MaterialLiberado ||
+                   estado == MonitoreoActivo;
+        }
+
+        public static bool EsEstadoFinal(string? estado)
+        {
+            return estado == MaterialLiberado ||
                    estado == MaterialNoConforme ||
                    estado == Cerrada;
         }
     }
 
-    /// <summary>
-    /// Nombres normalizados para el historial de Calidad.
-    /// </summary>
     public static class CalidadMovimientos
     {
-        public const string RecibidoDesdeProduccion =
-            "RECIBIDO_DESDE_PRODUCCION";
-
-        public const string PrearranqueAutorizado =
-            "PREARRANQUE_AUTORIZADO";
-
-        public const string PrearranqueDevuelto =
-            "PREARRANQUE_DEVUELTO";
-
-        public const string PrimerasPiezasRecibidas =
-            "PRIMERAS_PIEZAS_RECIBIDAS";
-
-        public const string AjustesSolicitados =
-            "AJUSTES_SOLICITADOS";
-
-        public const string ProduccionLiberada =
-            "PRODUCCION_LIBERADA";
-
-        public const string EnviadoGP12 =
-            "ENVIADO_GP12";
-
-        public const string ConfiguracionInvalidada =
-            "CONFIGURACION_INVALIDADA";
-
-        public const string Cierre =
-            "CIERRE";
+        public const string RecibidoDesdeProduccion = "RECIBIDO_DESDE_PRODUCCION";
+        public const string ChecklistCalidadCapturado = "CHECKLIST_CALIDAD_CAPTURADO";
+        public const string PrearranqueAutorizado = "PREARRANQUE_AUTORIZADO";
+        public const string PrearranqueDevuelto = "PREARRANQUE_DEVUELTO";
+        public const string PrimerasPiezasRecibidas = "PRIMERAS_PIEZAS_RECIBIDAS";
+        public const string AjustesSolicitados = "AJUSTES_SOLICITADOS";
+        public const string ProduccionLiberada = "PRODUCCION_LIBERADA";
+        public const string MonitoreoRegistrado = "MONITOREO_REGISTRADO";
+        public const string MaterialSospechoso = "MATERIAL_SOSPECHOSO";
+        public const string CajaLiberada = "CAJA_LIBERADA";
+        public const string EnviadoGP12 = "ENVIADO_GP12";
+        public const string ReliberacionSolicitada = "RELIBERACION_SOLICITADA";
+        public const string ReliberacionAutorizada = "RELIBERACION_AUTORIZADA";
+        public const string ReliberacionRechazada = "RELIBERACION_RECHAZADA";
+        public const string ConfiguracionInvalidada = "CONFIGURACION_INVALIDADA";
+        public const string Cierre = "CIERRE";
     }
 }

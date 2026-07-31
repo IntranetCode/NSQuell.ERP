@@ -345,6 +345,8 @@ public sealed class ProduccionDetalleVm
 
     public ProduccionChecklistResumenVm? ChecklistResumen { get; set; }
 
+    public ProduccionCalidadResumenVm? CalidadResumen { get; set; }
+
 }
 
 public sealed class ProduccionIniciarRequestVm
@@ -547,6 +549,18 @@ public sealed class ProduccionChecklistArranqueVm
     public int? UsuarioModificacionID { get; set; }
     public DateTime? FechaModificacion { get; set; }
     public bool Activo { get; set; } = true;
+
+    // Estado del proceso relacionado en Calidad.
+    public int? CalidadInspeccionID { get; set; }
+    public string? CalidadEstado { get; set; }
+    public string? CalidadMotivoDevolucion { get; set; }
+    public DateTime? FechaNotificacionCalidad { get; set; }
+    public DateTime? FechaLiberacionCalidad { get; set; }
+
+    public bool TieneProcesoCalidad => CalidadInspeccionID.HasValue;
+    public bool ProduccionLiberadaPorCalidad =>
+        string.Equals(CalidadEstado, CalidadEstados.ProduccionLiberada, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(CalidadEstado, CalidadEstados.MonitoreoActivo, StringComparison.OrdinalIgnoreCase);
 
     public List<ProduccionChecklistSeccionVm> Secciones { get; set; } = new();
 
@@ -796,6 +810,59 @@ public sealed class ProduccionChecklistResumenVm
 }
 
 
+
+
+public sealed class ProduccionCalidadResumenVm
+{
+    public int InspeccionID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int ChecklistArranqueID { get; set; }
+
+    public string Estado { get; set; } = string.Empty;
+    public string? ResultadoCalidad { get; set; }
+    public string? Etiqueta { get; set; }
+    public string? MotivoDevolucion { get; set; }
+
+    public DateTime? FechaNotificacionCalidad { get; set; }
+    public DateTime? FechaAutorizacionPrearranque { get; set; }
+    public DateTime? FechaLiberacionProduccion { get; set; }
+
+    public bool ConfiguracionInvalidada { get; set; }
+    public bool RequiereReliberacion { get; set; }
+    public bool Liberado { get; set; }
+
+    public bool PuedeIniciarSerie =>
+        Liberado &&
+        !ConfiguracionInvalidada &&
+        !RequiereReliberacion &&
+        (string.Equals(Estado, CalidadEstados.ProduccionLiberada, StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(Estado, CalidadEstados.MonitoreoActivo, StringComparison.OrdinalIgnoreCase));
+
+    public string EstadoTexto => Estado switch
+    {
+        CalidadEstados.PendientePrearranque => "Pendiente de prearranque",
+        CalidadEstados.DevueltoPrearranque => "Devuelto a Produccion",
+        CalidadEstados.ArranqueAutorizado => "Arranque controlado autorizado",
+        CalidadEstados.PendientePrimerasPiezas => "Primeras piezas en revision",
+        CalidadEstados.AjustesSolicitados => "Ajustes solicitados",
+        CalidadEstados.ProduccionLiberada => "Produccion liberada",
+        CalidadEstados.MonitoreoActivo => "Monitoreo horario activo",
+        CalidadEstados.PendienteReliberacion => "Pendiente de reliberacion",
+        _ => string.IsNullOrWhiteSpace(Estado) ? "Sin proceso de Calidad" : Estado.Replace("_", " ")
+    };
+
+    public string ClaseBadge => Estado switch
+    {
+        CalidadEstados.ProduccionLiberada => "bg-success",
+        CalidadEstados.MonitoreoActivo => "bg-success",
+        CalidadEstados.DevueltoPrearranque => "bg-danger",
+        CalidadEstados.AjustesSolicitados => "bg-danger",
+        CalidadEstados.PendienteReliberacion => "bg-danger",
+        CalidadEstados.ArranqueAutorizado => "bg-info text-dark",
+        CalidadEstados.PendientePrimerasPiezas => "bg-info text-dark",
+        _ => "bg-warning text-dark"
+    };
+}
 
 public sealed class ProduccionProgramaDisponibleVm
 {

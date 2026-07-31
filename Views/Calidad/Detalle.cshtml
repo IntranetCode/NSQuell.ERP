@@ -55,6 +55,18 @@
         CalidadEstados.ProduccionLiberada =>
             "Producción liberada",
 
+        CalidadEstados.MonitoreoActivo =>
+            "Monitoreo horario activo",
+
+        CalidadEstados.PendienteLiberacionCaja =>
+            "Pendiente de liberación de caja",
+
+        CalidadEstados.CajaLiberada =>
+            "Caja liberada",
+
+        CalidadEstados.PendienteReliberacion =>
+            "Pendiente de reliberación",
+
         CalidadEstados.PendienteGP12 =>
             "Pendiente de GP12",
 
@@ -113,6 +125,18 @@
         CalidadEstados.ProduccionLiberada =>
             "quality-state-success",
 
+        CalidadEstados.MonitoreoActivo =>
+            "quality-state-success",
+
+        CalidadEstados.PendienteLiberacionCaja =>
+            "quality-state-warning",
+
+        CalidadEstados.CajaLiberada =>
+            "quality-state-success",
+
+        CalidadEstados.PendienteReliberacion =>
+            "quality-state-danger",
+
         CalidadEstados.MaterialLiberado =>
             "quality-state-success",
 
@@ -162,18 +186,15 @@
         Model.ValidacionGauge != false &&
         Model.ValidacionConductividad != false;
 
+    // En el flujo nuevo GP12 se decide por caja, despues del monitoreo y empaque.
+    // Las acciones antiguas solo permanecen visibles para registros heredados.
     var puedeTomarDisposicion =
-        !Model.ConfiguracionInvalidada &&
-        estado != CalidadEstados.Cerrada &&
-        (
-            puedeRegistrarPrimerasPiezas ||
-            puedeLiberarProduccion ||
-            estado == CalidadEstados.ProduccionLiberada ||
-            estado == CalidadEstados.LegacyLiberada
-        );
+        estado == CalidadEstados.LegacyAbierta ||
+        estado == CalidadEstados.LegacyLiberada ||
+        estado == CalidadEstados.LegacyGPI2 ||
+        estado == CalidadEstados.LegacyContencion;
 
     var puedeCerrar =
-        estado == CalidadEstados.ProduccionLiberada ||
         estado == CalidadEstados.MaterialLiberado ||
         estado == CalidadEstados.MaterialNoConforme ||
         estado == CalidadEstados.LegacyLiberada ||
@@ -1215,6 +1236,75 @@
                     </div>
                 </section>
 
+                @if (puedePrearranque && Model.ChecklistArranqueID.HasValue && Model.PreguntasChecklistCalidad.Any())
+                {
+                    <section class="quality-card">
+                        <div class="quality-card-header">
+                            <h2>
+                                <i class="fa-solid fa-list-check"></i>
+                                Sección del auditor de Calidad
+                            </h2>
+                        </div>
+
+                        <div class="quality-card-body">
+                            <form asp-controller="Calidad"
+                                  asp-action="GuardarChecklistCalidad"
+                                  method="post">
+                                @Html.AntiForgeryToken()
+
+                                <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+                                <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
+
+                                @for (var i = 0; i < Model.PreguntasChecklistCalidad.Count; i++)
+                                {
+                                    var pregunta = Model.PreguntasChecklistCalidad[i];
+
+                                    <input type="hidden"
+                                           name="Respuestas[@i].ChecklistArranqueDetalleID"
+                                           value="@pregunta.ChecklistArranqueDetalleID" />
+
+                                    <div class="quality-side-action mb-3">
+                                        <h3>@pregunta.OrdenPregunta. @pregunta.TextoPregunta</h3>
+
+                                        <div class="quality-form-grid">
+                                            <div>
+                                                <label class="quality-form-label">Resultado</label>
+                                                <select name="Respuestas[@i].Resultado"
+                                                        class="quality-form-select"
+                                                        required>
+                                                    <option value="">Selecciona</option>
+                                                    <option value="OK" selected="@(pregunta.Resultado == "OK" ? "selected" : null)">OK</option>
+                                                    <option value="NOK" selected="@(pregunta.Resultado == "NOK" ? "selected" : null)">NOK</option>
+                                                    <option value="NA" selected="@(pregunta.Resultado == "NA" ? "selected" : null)">N/A</option>
+                                                </select>
+                                            </div>
+
+                                            <div>
+                                                <label class="quality-form-label">Observaciones</label>
+                                                <textarea name="Respuestas[@i].Observaciones"
+                                                          class="quality-form-control"
+                                                          maxlength="500"
+                                                          placeholder="Obligatoria cuando el resultado sea NOK">@pregunta.Observaciones</textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <label class="quality-form-label">Observaciones generales de Calidad</label>
+                                <textarea name="ObservacionesCalidad"
+                                          class="quality-form-control"
+                                          maxlength="1000"
+                                          placeholder="Observaciones generales de la revisión..."></textarea>
+
+                                <button type="submit" class="quality-btn quality-btn-primary mt-3">
+                                    <i class="fa-solid fa-floppy-disk"></i>
+                                    Guardar sección de Calidad
+                                </button>
+                            </form>
+                        </div>
+                    </section>
+                }
+
                 @if (puedePrearranque)
                 {
                     <section class="quality-card">
@@ -1236,7 +1326,7 @@
 
                             <div class="quality-form-grid">
                                 <form asp-controller="Calidad"
-                                      asp-action="AutorizarPrearranque"
+                                      asp-action="AutorizarPrearranqueFlujo"
                                       method="post"
                                       class="quality-side-action"
                                       data-confirm="¿Confirmas que la máquina está lista para realizar el arranque controlado?">
@@ -1254,6 +1344,40 @@
                                         para generar las primeras piezas.
                                     </p>
 
+                                    <div class="quality-form-check mb-2">
+                                        <input asp-for="AyudaVisualColocada" class="form-check-input" />
+                                        <label asp-for="AyudaVisualColocada">Ayuda visual colocada</label>
+                                    </div>
+
+                                    <div class="quality-form-check mb-2">
+                                        <input asp-for="HIPColocada" class="form-check-input" />
+                                        <label asp-for="HIPColocada">HIP colocado</label>
+                                    </div>
+
+                                    <div class="quality-form-check mb-2">
+                                        <input asp-for="HCCColocada" class="form-check-input" />
+                                        <label asp-for="HCCColocada">HCC colocada</label>
+                                    </div>
+
+                                    <div class="quality-form-check mb-3">
+                                        <input asp-for="MatrizPolivalenciaValidada" class="form-check-input" />
+                                        <label asp-for="MatrizPolivalenciaValidada">Matriz de polivalencia validada</label>
+                                    </div>
+
+                                    <label class="quality-form-label">¿Aplica alerta de Calidad?</label>
+                                    <select asp-for="AlertaCalidadAplica" class="quality-form-select mb-2">
+                                        <option value="">Selecciona</option>
+                                        <option value="false">No aplica</option>
+                                        <option value="true">Sí aplica</option>
+                                    </select>
+
+                                    <label class="quality-form-label">Alerta colocada</label>
+                                    <select asp-for="AlertaCalidadColocada" class="quality-form-select mb-3">
+                                        <option value="">No aplica / pendiente</option>
+                                        <option value="false">No</option>
+                                        <option value="true">Sí</option>
+                                    </select>
+
                                     <label class="quality-form-label">
                                         Comentario opcional
                                     </label>
@@ -1270,7 +1394,7 @@
                                 </form>
 
                                 <form asp-controller="Calidad"
-                                      asp-action="DevolverPrearranque"
+                                      asp-action="DevolverPrearranqueFlujo"
                                       method="post"
                                       class="quality-side-action"
                                       data-confirm="¿Confirmas que deseas devolver esta revisión a Producción?">
@@ -1459,7 +1583,7 @@
 
                                 <div class="quality-form-actions">
                                     <button type="submit"
-                                            formaction="@Url.Action("SolicitarAjustes", "Calidad")"
+                                            formaction="@Url.Action("SolicitarAjustesFlujo", "Calidad")"
                                             class="quality-btn quality-btn-danger"
                                             data-submit-confirm="¿Confirmas que deseas solicitar ajustes a Producción?">
                                         <i class="fa-solid fa-screwdriver-wrench"></i>
@@ -1467,7 +1591,7 @@
                                     </button>
 
                                     <button type="submit"
-                                            formaction="@Url.Action("RegistrarPrimerasPiezas", "Calidad")"
+                                            formaction="@Url.Action("RegistrarPrimerasPiezasFlujo", "Calidad")"
                                             class="quality-btn quality-btn-primary"
                                             data-submit-confirm="¿Confirmas que deseas guardar esta validación?">
                                         <i class="fa-solid fa-floppy-disk"></i>
@@ -1541,6 +1665,86 @@
                                     @Model.FechaValidacionPrimerasPiezas.Value.ToString("dd/MM/yyyy HH:mm")
                                 </div>
                             }
+                        </div>
+                    </section>
+                }
+
+                @if (Model.IntentosPrimerasPiezas.Any())
+                {
+                    <section class="quality-card">
+                        <div class="quality-card-header">
+                            <h2>
+                                <i class="fa-solid fa-vials"></i>
+                                Intentos de primeras piezas
+                            </h2>
+                        </div>
+
+                        <div class="quality-card-body table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Intento</th>
+                                        <th>Disparos</th>
+                                        <th>Dimensional</th>
+                                        <th>Apariencia</th>
+                                        <th>Gauge</th>
+                                        <th>Conductividad</th>
+                                        <th>Resultado</th>
+                                        <th>Fecha</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var intento in Model.IntentosPrimerasPiezas)
+                                    {
+                                        <tr>
+                                            <td>#@intento.NumeroIntento</td>
+                                            <td>@intento.CantidadDisparosPresentados</td>
+                                            <td>@ResultadoNullable(intento.ValidacionDimensional)</td>
+                                            <td>@ResultadoNullable(intento.ValidacionApariencia)</td>
+                                            <td>@ResultadoNullable(intento.ValidacionGauge)</td>
+                                            <td>@ResultadoNullable(intento.ValidacionConductividad)</td>
+                                            <td><strong>@intento.Resultado</strong></td>
+                                            <td>@intento.FechaInicio.ToString("dd/MM/yyyy HH:mm")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                }
+
+                @if (Model.Monitoreos.Any())
+                {
+                    <section class="quality-card">
+                        <div class="quality-card-header">
+                            <h2>
+                                <i class="fa-solid fa-clock"></i>
+                                Monitoreos programados cada hora
+                            </h2>
+                        </div>
+
+                        <div class="quality-card-body table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Hora</th>
+                                        <th>Programada</th>
+                                        <th>Revisión</th>
+                                        <th>Resultado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var monitor in Model.Monitoreos)
+                                    {
+                                        <tr>
+                                            <td>@monitor.NumeroHora</td>
+                                            <td>@monitor.FechaHoraProgramada.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td>@(monitor.FechaHoraRevision?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</td>
+                                            <td>@monitor.Resultado</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
                         </div>
                     </section>
                 }
@@ -1659,7 +1863,7 @@
                                     </p>
 
                                     <form asp-controller="Calidad"
-                                          asp-action="LiberarProduccion"
+                                          asp-action="LiberarProduccionFlujo"
                                           method="post"
                                           data-confirm="¿Confirmas que las primeras piezas cumplen y deseas liberar la producción?">
 
