@@ -222,6 +222,22 @@ namespace ERP.NSQuell.Models.ViewModels
         public List<CalidadCajaItemViewModel> Cajas { get; set; } = new();
         public List<CalidadReliberacionItemViewModel> Reliberaciones { get; set; } = new();
         public List<CalidadChecklistPreguntaViewModel> PreguntasChecklistCalidad { get; set; } = new();
+        public List<CalidadCatalogoDefectoItemViewModel> CatalogoDefectos { get; set; } = new();
+
+        public int TotalMonitoreos => Monitoreos.Count;
+        public int MonitoreosPendientes => Monitoreos.Count(x => x.EsPendiente);
+        public int MonitoreosVencidos => Monitoreos.Count(x => x.EstaVencido);
+        public int MonitoreosConformes => Monitoreos.Count(x => x.Resultado == CalidadResultadoMonitoreo.Conforme);
+        public int MonitoreosConHallazgo => Monitoreos.Count(x =>
+            x.Resultado == CalidadResultadoMonitoreo.Sospechoso ||
+            x.Resultado == CalidadResultadoMonitoreo.NoConforme);
+        public int MonitoreosReinspeccionados => Monitoreos.Count(x => x.Resultado == CalidadResultadoMonitoreo.Reinspeccion);
+        public int DisposicionesPendientes => Disposiciones.Count(x => x.ResultadoFinal == CalidadResultadoDisposicion.Pendiente);
+        public DateTime? ProximoMonitoreo => Monitoreos
+            .Where(x => x.EsPendiente)
+            .OrderBy(x => x.FechaHoraProgramada)
+            .Select(x => (DateTime?)x.FechaHoraProgramada)
+            .FirstOrDefault();
     }
 
     public class CalidadCorridaOrigenViewModel
@@ -354,7 +370,7 @@ namespace ERP.NSQuell.Models.ViewModels
         [Range(1, int.MaxValue)]
         public int InspeccionID { get; set; }
 
-        [Range(0, int.MaxValue)]
+        [Range(1, int.MaxValue, ErrorMessage = "La muestra revisada debe ser mayor a cero.")]
         public int CantidadRevisadaMuestra { get; set; }
 
         [Required]
@@ -378,6 +394,24 @@ namespace ERP.NSQuell.Models.ViewModels
 
         [StringLength(20)]
         public string? ResponsableRetrabajo { get; set; }
+
+        [StringLength(1000)]
+        public string? Observaciones { get; set; }
+    }
+
+    public class CalidadDisposicionResolverViewModel
+    {
+        [Range(1, int.MaxValue)]
+        public int DisposicionID { get; set; }
+
+        [Range(1, int.MaxValue)]
+        public int InspeccionID { get; set; }
+
+        [Range(0, int.MaxValue)]
+        public int CantidadLiberada { get; set; }
+
+        [Range(0, int.MaxValue)]
+        public int CantidadScrap { get; set; }
 
         [StringLength(1000)]
         public string? Observaciones { get; set; }
@@ -481,9 +515,19 @@ namespace ERP.NSQuell.Models.ViewModels
     public class CalidadMonitoreoItemViewModel
     {
         public int MonitoreoID { get; set; }
+        public int? RegistroHoraID { get; set; }
         public int NumeroHora { get; set; }
         public DateTime FechaHoraProgramada { get; set; }
         public DateTime? FechaHoraRevision { get; set; }
+
+        public DateTime? FechaProduccion { get; set; }
+        public TimeSpan? HoraInicioProduccion { get; set; }
+        public TimeSpan? HoraFinProduccion { get; set; }
+        public int CantidadOKProduccion { get; set; }
+        public int CantidadSospechosaProduccion { get; set; }
+        public int CantidadScrapProduccion { get; set; }
+        public string? ObservacionesProduccion { get; set; }
+
         public int CantidadProducidaPeriodo { get; set; }
         public int CantidadRevisadaMuestra { get; set; }
         public string Resultado { get; set; } = CalidadResultadoMonitoreo.Pendiente;
@@ -496,9 +540,23 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? ResponsableRetrabajo { get; set; }
         public string? Observaciones { get; set; }
 
-        public bool EstaVencido =>
-            Resultado == CalidadResultadoMonitoreo.Pendiente &&
-            FechaHoraProgramada < DateTime.Now;
+        public bool EsPendiente => Resultado == CalidadResultadoMonitoreo.Pendiente;
+        public bool TieneRegistroProduccion => RegistroHoraID.HasValue;
+        public bool PuedeCapturar => EsPendiente && TieneRegistroProduccion;
+        public bool EstaVencido => EsPendiente && FechaHoraProgramada < DateTime.Now;
+
+        public string RangoProduccion =>
+            HoraInicioProduccion.HasValue && HoraFinProduccion.HasValue
+                ? $"{HoraInicioProduccion.Value:hh\\:mm} - {HoraFinProduccion.Value:hh\\:mm}"
+                : "Sin captura vinculada";
+    }
+
+    public class CalidadCatalogoDefectoItemViewModel
+    {
+        public int CatalogoDefectoID { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public string Texto => string.IsNullOrWhiteSpace(Codigo) ? Nombre : $"{Codigo} - {Nombre}";
     }
 
     public class CalidadDisposicionItemViewModel

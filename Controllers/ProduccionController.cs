@@ -782,11 +782,21 @@ ORDER BY
                         new { id = vm.EjecucionProduccionID });
                 }
 
-                await InsertarRegistroHoraAsync(
+                var registroHoraId = await InsertarRegistroHoraAsync(
                     ejecucion,
                     vm,
                     horaInicio,
                     horaFin,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                await VincularRegistroHoraConMonitoreoAsync(
+                    ejecucion,
+                    vm,
+                    horaInicio,
+                    horaFin,
+                    registroHoraId,
                     usuarioId,
                     cn,
                     tx);
@@ -2621,7 +2631,7 @@ VALUES
         // ESCRITURAS
         // ============================================================
 
-        private async Task InsertarRegistroHoraAsync(
+        private async Task<int> InsertarRegistroHoraAsync(
             ProduccionEjecucionVm ejecucion,
             ProduccionRegistroHoraPostVm vm,
             TimeSpan horaInicio,
@@ -2649,6 +2659,7 @@ INSERT INTO dbo.Produccion_RegistroHora
     FechaCreacion,
     Activo
 )
+OUTPUT INSERTED.RegistroHoraID
 VALUES
 (
     @EjecucionProduccionID,
@@ -2709,7 +2720,12 @@ VALUES
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
                 usuarioId;
 
-            await cmd.ExecuteNonQueryAsync();
+            var result = await cmd.ExecuteScalarAsync();
+
+            if (result == null || result == DBNull.Value)
+                throw new InvalidOperationException("No fue posible obtener el identificador del registro por hora.");
+
+            return Convert.ToInt32(result);
         }
 
         private async Task<ProduccionChecklistResumenVm?> ObtenerResumenChecklistArranqueAsync(

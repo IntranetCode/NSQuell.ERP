@@ -23,39 +23,46 @@ namespace ERP.NSQuell.Models
 
         public DateTime InicioSemana
         {
-            get { return InicioPeriodo; }
-            set { InicioPeriodo = value; }
+            get => InicioPeriodo;
+            set => InicioPeriodo = value;
         }
 
         public DateTime FinSemana
         {
-            get { return FinPeriodo; }
-            set { FinPeriodo = value; }
+            get => FinPeriodo;
+            set => FinPeriodo = value;
         }
 
         public DateTime Ahora { get; set; }
         public List<PlaneacionCalendarioMaquinaVm> Maquinas { get; set; }
 
-        public int TotalMaquinas { get { return Maquinas.Count; } }
-        public int TotalBloques { get { return Maquinas.Sum(x => x.Bloques.Count); } }
-        public int TrabajandoAhora { get { return Maquinas.Count(x => x.Bloques.Any(b => b.EstaEnLinea)); } }
+        public int TotalMaquinas => Maquinas.Count;
+        public int TotalBloques => Maquinas.Sum(x => x.Bloques.Count);
 
-        public string VistaNormalizada
-        {
-            get { return string.IsNullOrWhiteSpace(Vista) ? "semana" : Vista.Trim().ToLowerInvariant(); }
-        }
+        public int TrabajandoAhora =>
+            Maquinas.Count(x => x.Bloques.Any(b => b.EstaEnLinea));
 
-        public bool EsVistaDia { get { return VistaNormalizada == "dia"; } }
-        public bool EsVistaSemana { get { return VistaNormalizada == "semana"; } }
-        public bool EsVistaMes { get { return VistaNormalizada == "mes"; } }
-        public bool EsVistaRango { get { return VistaNormalizada == "rango"; } }
+        public string VistaNormalizada =>
+            string.IsNullOrWhiteSpace(Vista)
+                ? "semana"
+                : Vista.Trim().ToLowerInvariant();
+
+        public bool EsVistaDia => VistaNormalizada == "dia";
+        public bool EsVistaSemana => VistaNormalizada == "semana";
+        public bool EsVistaMes => VistaNormalizada == "mes";
+        public bool EsVistaRango => VistaNormalizada == "rango";
 
         public int TotalDiasPeriodo
         {
             get
             {
-                if (FinPeriodo <= InicioPeriodo) return 1;
-                return Math.Max(1, (int)Math.Ceiling((FinPeriodo.Date - InicioPeriodo.Date).TotalDays));
+                if (FinPeriodo <= InicioPeriodo)
+                    return 1;
+
+                return Math.Max(
+                    1,
+                    (int)Math.Ceiling(
+                        (FinPeriodo.Date - InicioPeriodo.Date).TotalDays));
             }
         }
 
@@ -86,10 +93,23 @@ namespace ERP.NSQuell.Models
             get
             {
                 var cultura = new CultureInfo("es-MX");
-                if (EsVistaDia) return string.Format("Día {0:dd/MM/yyyy}", InicioPeriodo);
-                if (EsVistaMes) return "Mes " + InicioPeriodo.ToString("MMMM yyyy", cultura);
-                if (EsVistaRango) return string.Format("Rango {0:dd/MM/yyyy} al {1:dd/MM/yyyy}", InicioPeriodo, FinPeriodo.AddDays(-1));
-                return string.Format("Semana {0:dd/MM/yyyy} al {1:dd/MM/yyyy}", InicioPeriodo, FinPeriodo.AddDays(-1));
+
+                if (EsVistaDia)
+                    return $"Día {InicioPeriodo:dd/MM/yyyy}";
+
+                if (EsVistaMes)
+                    return "Mes " + InicioPeriodo.ToString("MMMM yyyy", cultura);
+
+                if (EsVistaRango)
+                {
+                    return
+                        $"Rango {InicioPeriodo:dd/MM/yyyy} al " +
+                        $"{FinPeriodo.AddDays(-1):dd/MM/yyyy}";
+                }
+
+                return
+                    $"Semana {InicioPeriodo:dd/MM/yyyy} al " +
+                    $"{FinPeriodo.AddDays(-1):dd/MM/yyyy}";
             }
         }
 
@@ -127,59 +147,190 @@ namespace ERP.NSQuell.Models
         public PlaneacionCalendarioBloqueVm()
         {
             MaquinaCodigo = string.Empty;
+            ClienteNombre = string.Empty;
+            NumeroParte = string.Empty;
+            ReferenciaSAP = string.Empty;
+            Descripcion = string.Empty;
+            MoldeCodigo = string.Empty;
+            MaquinaPrincipalCodigo = string.Empty;
+            MaquinaPrincipalNombre = string.Empty;
+            MaquinaSustitutaCodigo = string.Empty;
+            MaquinaSustitutaNombre = string.Empty;
+            EstatusProduccionNombre = string.Empty;
+            OperadorProgramadoNombre = string.Empty;
+            OperadorAuxiliarProgramadoNombre = string.Empty;
+            OperadorRealNombre = string.Empty;
+            TurnoProgramadoNombre = string.Empty;
+            TurnoProgramadoColor = string.Empty;
+            EstadoCalidad = string.Empty;
         }
 
         public int ProgramaProduccionID { get; set; }
         public int? SolicitudProduccionID { get; set; }
+
         public int MaquinaID { get; set; }
         public string MaquinaCodigo { get; set; }
+
         public string ClienteNombre { get; set; }
         public string NumeroParte { get; set; }
         public string ReferenciaSAP { get; set; }
         public string Descripcion { get; set; }
         public string MoldeCodigo { get; set; }
+
         public int CantidadProgramada { get; set; }
         public int CantidadProducida { get; set; }
-        public int CantidadPendiente { get { return Math.Max(0, CantidadProgramada - CantidadProducida); } }
+
+        public int CantidadPendiente =>
+            Math.Max(0, CantidadProgramada - CantidadProducida);
+
         public DateTime Inicio { get; set; }
         public DateTime Fin { get; set; }
         public decimal HorasProgramadas { get; set; }
         public TimeSpan? Cambio { get; set; }
         public TimeSpan? Arranque { get; set; }
+
         public int EstatusID { get; set; }
         public int Carril { get; set; }
+
+        /// <summary>
+        /// Indica que Producción está realmente en estado En producción.
+        /// Ya no se activa solamente por estar dentro del horario teórico.
+        /// </summary>
         public bool EstaEnLinea { get; set; }
+
+        /// <summary>
+        /// Solo sirve como referencia visual del calendario.
+        /// No bloquea por sí sola el movimiento del programa.
+        /// </summary>
+        public bool DentroHorarioProgramado { get; set; }
+
         public int? MaquinaPrincipalID { get; set; }
         public string MaquinaPrincipalCodigo { get; set; }
         public string MaquinaPrincipalNombre { get; set; }
+
         public int? MaquinaSustitutaID { get; set; }
         public string MaquinaSustitutaCodigo { get; set; }
         public string MaquinaSustitutaNombre { get; set; }
+
         public int? EjecucionProduccionID { get; set; }
         public int? EstatusProduccionID { get; set; }
         public string EstatusProduccionNombre { get; set; }
+
         public int? OperadorProgramadoID { get; set; }
         public string OperadorProgramadoNombre { get; set; }
+
+        public int? OperadorAuxiliarProgramadoID { get; set; }
+        public string OperadorAuxiliarProgramadoNombre { get; set; }
+
+        public int? OperadorRealID { get; set; }
+        public string OperadorRealNombre { get; set; }
+
         public string TurnoProgramadoNombre { get; set; }
         public string TurnoProgramadoColor { get; set; }
         public int? EscalaAsignacionID { get; set; }
 
-        public bool TieneOperadorProgramado { get { return OperadorProgramadoID.HasValue && !string.IsNullOrWhiteSpace(OperadorProgramadoNombre); } }
-        public string TextoOperadorProgramado { get { return TieneOperadorProgramado ? OperadorProgramadoNombre : "Sin operador asignado en escala"; } }
-        public string TextoTurnoProgramado { get { return string.IsNullOrWhiteSpace(TurnoProgramadoNombre) ? "Sin turno" : TurnoProgramadoNombre; } }
-        public bool YaProducido { get { return CantidadProgramada > 0 && CantidadProducida >= CantidadProgramada; } }
-        public bool EstaTerminadoOCerrado { get { return EstatusID == PlaneacionProgramaEstatus.Terminado || EstatusID == PlaneacionProgramaEstatus.Cerrado || EstatusID == 99; } }
-        public bool EstaPreparacionOPausado { get { return EstatusID == 2 || EstatusID == 4 || EstatusProduccionID == 2 || EstatusProduccionID == 4; } }
-        public bool EstaProduciendo { get { return EstaEnLinea || EstatusID == PlaneacionProgramaEstatus.EnProduccion || EstatusProduccionID == 3; } }
-        public bool PuedeMoverCalendario { get { return !EstaPreparacionOPausado && !EstaProduciendo && !YaProducido && !EstaTerminadoOCerrado; } }
+        public int? InspeccionCalidadID { get; set; }
+        public string EstadoCalidad { get; set; }
+        public bool ConfiguracionCalidadInvalidada { get; set; }
+        public bool RequiereReliberacion { get; set; }
+
+        public bool TieneOperadorProgramado =>
+            OperadorProgramadoID.HasValue &&
+            !string.IsNullOrWhiteSpace(OperadorProgramadoNombre);
+
+        public bool TieneOperadorReal =>
+            OperadorRealID.HasValue ||
+            !string.IsNullOrWhiteSpace(OperadorRealNombre);
+
+        public bool TieneEjecucionProduccion =>
+            EjecucionProduccionID.HasValue;
+
+        public bool TieneProcesoCalidad =>
+            InspeccionCalidadID.HasValue;
+
+        public string TextoOperadorProgramado =>
+            TieneOperadorProgramado
+                ? OperadorProgramadoNombre
+                : "Sin operador planeado";
+
+        public string TextoOperadorAuxiliarProgramado =>
+            string.IsNullOrWhiteSpace(OperadorAuxiliarProgramadoNombre)
+                ? "Sin auxiliar planeado"
+                : OperadorAuxiliarProgramadoNombre;
+
+        public string TextoOperadorReal =>
+            TieneOperadorReal
+                ? OperadorRealNombre
+                : "Sin operador real registrado";
+
+        public string TextoOperadorVisible =>
+            TieneOperadorReal
+                ? TextoOperadorReal
+                : TextoOperadorProgramado;
+
+        public string TextoTurnoProgramado =>
+            string.IsNullOrWhiteSpace(TurnoProgramadoNombre)
+                ? "Sin turno"
+                : TurnoProgramadoNombre;
+
+        public bool YaProducido =>
+            CantidadProgramada > 0 &&
+            CantidadProducida >= CantidadProgramada;
+
+        public bool EstaPreparacionOPausado =>
+            EstatusID == ProduccionEstatus.EnPreparacion ||
+            EstatusID == ProduccionEstatus.Pausado ||
+            EstatusProduccionID == ProduccionEstatus.EnPreparacion ||
+            EstatusProduccionID == ProduccionEstatus.Pausado;
+
+        public bool EstaProduciendo =>
+            EstaEnLinea ||
+            EstatusID == ProduccionEstatus.EnProduccion ||
+            EstatusProduccionID == ProduccionEstatus.EnProduccion;
+
+        public bool EstaTerminadoOCerrado =>
+            EstatusID == ProduccionEstatus.TerminadoParcial ||
+            EstatusID == ProduccionEstatus.Terminado ||
+            EstatusID == ProduccionEstatus.Cerrado ||
+            EstatusID == ProduccionEstatus.Cancelado ||
+            EstatusProduccionID == ProduccionEstatus.TerminadoParcial ||
+            EstatusProduccionID == ProduccionEstatus.Terminado ||
+            EstatusProduccionID == ProduccionEstatus.Cerrado ||
+            EstatusProduccionID == ProduccionEstatus.Cancelado;
+
+        /// <summary>
+        /// La vista aplica este bloqueo, pero el controlador vuelve a validar
+        /// Producción y Calidad dentro de la transacción.
+        /// </summary>
+        public bool PuedeMoverCalendario =>
+            EstatusID == ProduccionEstatus.Pendiente &&
+            !TieneEjecucionProduccion &&
+            !TieneProcesoCalidad &&
+            !YaProducido;
 
         public string ClaseSemaforoCalendario
         {
             get
             {
-                if (EstatusID == 99 || EstatusID == PlaneacionProgramaEstatus.Cerrado) return "bloque-cerrado";
-                if (YaProducido || EstatusID == PlaneacionProgramaEstatus.Terminado) return "bloque-producido";
-                if (EstaProduciendo || EstaPreparacionOPausado) return "bloque-produciendo";
+                if (EstatusID == ProduccionEstatus.Cancelado ||
+                    EstatusID == ProduccionEstatus.Cerrado)
+                {
+                    return "bloque-cerrado";
+                }
+
+                if (YaProducido ||
+                    EstatusID == ProduccionEstatus.TerminadoParcial ||
+                    EstatusID == ProduccionEstatus.Terminado)
+                {
+                    return "bloque-producido";
+                }
+
+                if (EstaProduciendo || EstaPreparacionOPausado)
+                    return "bloque-produciendo";
+
+                if (TieneProcesoCalidad)
+                    return "bloque-calidad";
+
                 return "bloque-timeline";
             }
         }
@@ -188,19 +339,33 @@ namespace ERP.NSQuell.Models
         {
             get
             {
-                var principal = string.IsNullOrWhiteSpace(MaquinaPrincipalCodigo) ? "Sin máquina principal" : MaquinaPrincipalCodigo;
-                var sustituta = string.IsNullOrWhiteSpace(MaquinaSustitutaCodigo) ? "Sin máquina sustituta" : MaquinaSustitutaCodigo;
-                return "Principal: " + principal + " | Sustituta: " + sustituta;
+                var principal = string.IsNullOrWhiteSpace(MaquinaPrincipalCodigo)
+                    ? "Sin máquina principal"
+                    : MaquinaPrincipalCodigo;
+
+                var sustituta = string.IsNullOrWhiteSpace(MaquinaSustitutaCodigo)
+                    ? "Sin máquina sustituta"
+                    : MaquinaSustitutaCodigo;
+
+                return $"Principal: {principal} | Sustituta: {sustituta}";
             }
         }
 
-        public string OFTexto { get { return SolicitudProduccionID.HasValue ? "OF " + SolicitudProduccionID.Value : "Programa " + ProgramaProduccionID; } }
+        public string OFTexto =>
+            SolicitudProduccionID.HasValue
+                ? $"OF {SolicitudProduccionID.Value}"
+                : $"Programa {ProgramaProduccionID}";
+
         public string ParteTexto
         {
             get
             {
-                if (!string.IsNullOrWhiteSpace(ReferenciaSAP)) return ReferenciaSAP;
-                if (!string.IsNullOrWhiteSpace(NumeroParte)) return NumeroParte;
+                if (!string.IsNullOrWhiteSpace(ReferenciaSAP))
+                    return ReferenciaSAP;
+
+                if (!string.IsNullOrWhiteSpace(NumeroParte))
+                    return NumeroParte;
+
                 return "Sin parte";
             }
         }
@@ -209,30 +374,58 @@ namespace ERP.NSQuell.Models
         {
             get
             {
-                if (YaProducido) return "Ya producido";
-                if (EstaEnLinea) return "En línea";
-                switch (EstatusID)
+                if (YaProducido)
+                    return "Ya producido";
+
+                return EstatusID switch
                 {
-                    case 1: return "Programado";
-                    case 2: return "En preparación";
-                    case 3: return "En producción";
-                    case 4: return "Pausado";
-                    case 5: return "Terminado";
-                    case 9: return "Cerrado";
-                    case 99: return "Cancelado";
-                    default: return "Estatus " + EstatusID;
-                }
+                    ProduccionEstatus.Pendiente => "Programado",
+                    ProduccionEstatus.EnPreparacion => "En preparación",
+                    ProduccionEstatus.EnProduccion => "En producción",
+                    ProduccionEstatus.Pausado => "Pausado",
+                    ProduccionEstatus.TerminadoParcial => "Terminado parcial",
+                    ProduccionEstatus.Terminado => "Terminado",
+                    ProduccionEstatus.Cerrado => "Cerrado",
+                    ProduccionEstatus.Cancelado => "Cancelado",
+                    _ => $"Estatus {EstatusID}"
+                };
             }
         }
+
+        public string EstadoCalidadTexto =>
+            string.IsNullOrWhiteSpace(EstadoCalidad)
+                ? "Sin proceso de Calidad"
+                : EstadoCalidad.Replace("_", " ");
 
         public string EstadoSemaforoTexto
         {
             get
             {
-                if (EstatusID == 99 || EstatusID == PlaneacionProgramaEstatus.Cerrado) return "Cerrado / cancelado";
-                if (YaProducido || EstatusID == PlaneacionProgramaEstatus.Terminado) return "Ya producido";
-                if (EstaPreparacionOPausado) return "En preparación / pausado";
-                if (EstaProduciendo) return "Produciendo";
+                if (EstatusID == ProduccionEstatus.Cancelado ||
+                    EstatusID == ProduccionEstatus.Cerrado)
+                {
+                    return "Cerrado / cancelado";
+                }
+
+                if (YaProducido ||
+                    EstatusID == ProduccionEstatus.TerminadoParcial ||
+                    EstatusID == ProduccionEstatus.Terminado)
+                {
+                    return "Ya producido";
+                }
+
+                if (EstaPreparacionOPausado)
+                    return "En preparación / pausado";
+
+                if (EstaProduciendo)
+                    return "Produciendo";
+
+                if (TieneProcesoCalidad)
+                    return "En proceso de Calidad";
+
+                if (DentroHorarioProgramado)
+                    return "Dentro del horario planeado";
+
                 return "Timeline";
             }
         }
@@ -241,10 +434,30 @@ namespace ERP.NSQuell.Models
         {
             get
             {
-                if (EstaPreparacionOPausado) return "Este programa ya está en preparación o pausado. No puede moverse desde Planeación.";
-                if (EstaProduciendo) return "Este programa está en línea o producción. No puede moverse hasta que esté listo el módulo de Producción.";
-                if (YaProducido) return "Este programa ya fue producido. No puede moverse desde el calendario.";
-                if (EstaTerminadoOCerrado) return "Este programa está terminado, cerrado o cancelado. No puede moverse.";
+                if (TieneEjecucionProduccion)
+                {
+                    return
+                        "Este programa ya tiene una ejecución de Producción. " +
+                        "La máquina y las fechas deben conservarse.";
+                }
+
+                if (TieneProcesoCalidad)
+                {
+                    return
+                        $"Este programa ya tiene un proceso de Calidad " +
+                        $"({EstadoCalidadTexto}). No puede reprogramarse.";
+                }
+
+                if (EstatusID != ProduccionEstatus.Pendiente)
+                {
+                    return
+                        "Solo los programas en estado Programado pueden " +
+                        "moverse desde Planeación.";
+                }
+
+                if (YaProducido)
+                    return "Este programa ya fue producido.";
+
                 return string.Empty;
             }
         }
@@ -253,16 +466,17 @@ namespace ERP.NSQuell.Models
         {
             get
             {
-                switch (EstatusID)
+                return EstatusID switch
                 {
-                    case 2: return "bloque-preparacion";
-                    case 3: return "bloque-produccion";
-                    case 4: return "bloque-pausado";
-                    case 5: return "bloque-terminado";
-                    case 9: return "bloque-terminado";
-                    case 99: return "bloque-terminado";
-                    default: return "bloque-programado";
-                }
+                    ProduccionEstatus.EnPreparacion => "bloque-preparacion",
+                    ProduccionEstatus.EnProduccion => "bloque-produccion",
+                    ProduccionEstatus.Pausado => "bloque-pausado",
+                    ProduccionEstatus.TerminadoParcial => "bloque-terminado",
+                    ProduccionEstatus.Terminado => "bloque-terminado",
+                    ProduccionEstatus.Cerrado => "bloque-terminado",
+                    ProduccionEstatus.Cancelado => "bloque-terminado",
+                    _ => "bloque-programado"
+                };
             }
         }
     }

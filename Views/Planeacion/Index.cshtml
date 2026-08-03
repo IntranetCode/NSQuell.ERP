@@ -141,7 +141,8 @@
 }
 
 @{
-    Layout = null;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Bandeja de OF | ERP QUELL";
 
     var success = TempData["Success"] as string;
     var error = TempData["Error"] as string;

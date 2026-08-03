@@ -831,6 +831,16 @@ public sealed class ProduccionCalidadResumenVm
     public bool RequiereReliberacion { get; set; }
     public bool Liberado { get; set; }
 
+    public int TotalMonitoreos { get; set; }
+    public int MonitoreosPendientes { get; set; }
+    public int MonitoreosVencidos { get; set; }
+    public int MonitoreosConformes { get; set; }
+    public int MonitoreosConHallazgo { get; set; }
+    public int DisposicionesPendientes { get; set; }
+    public DateTime? ProximoMonitoreo { get; set; }
+
+    public bool TieneMonitoreoHorario => TotalMonitoreos > 0;
+
     public bool PuedeIniciarSerie =>
         Liberado &&
         !ConfiguracionInvalidada &&

@@ -41,6 +41,15 @@
             CalidadEstados.ProduccionLiberada =>
                 "Producción liberada",
 
+            CalidadEstados.MonitoreoActivo =>
+                "Monitoreo horario activo",
+
+            CalidadEstados.PendienteLiberacionCaja =>
+                "Pendiente de liberación de caja",
+
+            CalidadEstados.PendienteReliberacion =>
+                "Pendiente de reliberación",
+
             CalidadEstados.PendienteGP12 =>
                 "Pendiente de GP12",
 
@@ -106,6 +115,15 @@
             CalidadEstados.ProduccionLiberada =>
                 "quality-status-success",
 
+            CalidadEstados.MonitoreoActivo =>
+                "quality-status-info",
+
+            CalidadEstados.PendienteLiberacionCaja =>
+                "quality-status-warning",
+
+            CalidadEstados.PendienteReliberacion =>
+                "quality-status-danger",
+
             CalidadEstados.MaterialLiberado =>
                 "quality-status-success",
 
@@ -156,6 +174,15 @@
 
             CalidadEstados.ProduccionLiberada =>
                 "fa-circle-check",
+
+            CalidadEstados.MonitoreoActivo =>
+                "fa-clock",
+
+            CalidadEstados.PendienteLiberacionCaja =>
+                "fa-box",
+
+            CalidadEstados.PendienteReliberacion =>
+                "fa-rotate",
 
             CalidadEstados.PendienteGP12 =>
                 "fa-magnifying-glass-plus",
@@ -985,6 +1012,22 @@
 
             <a asp-controller="Calidad"
                asp-action="Index"
+               asp-route-estadoFiltro="@CalidadEstados.MonitoreoActivo"
+               asp-route-busqueda="@Model.Busqueda"
+               class="quality-summary-card @TarjetaActiva(CalidadEstados.MonitoreoActivo)">
+
+                <div class="quality-summary-icon info">
+                    <i class="fa-solid fa-clock"></i>
+                </div>
+
+                <div class="quality-summary-content">
+                    <span>Monitoreo horario</span>
+                    <strong>@Model.TotalMonitoreoActivo</strong>
+                </div>
+            </a>
+
+            <a asp-controller="Calidad"
+               asp-action="Index"
                asp-route-estadoFiltro="@CalidadEstados.PendienteGP12"
                asp-route-busqueda="@Model.Busqueda"
                class="quality-summary-card @TarjetaActiva(
@@ -1087,6 +1130,21 @@
                     <option value="@CalidadEstados.ProduccionLiberada"
                             selected="@(estadoFiltro == CalidadEstados.ProduccionLiberada ? "selected" : null)">
                         Producción liberada
+                    </option>
+
+                    <option value="@CalidadEstados.MonitoreoActivo"
+                            selected="@(estadoFiltro == CalidadEstados.MonitoreoActivo ? "selected" : null)">
+                        Monitoreo horario activo
+                    </option>
+
+                    <option value="@CalidadEstados.PendienteLiberacionCaja"
+                            selected="@(estadoFiltro == CalidadEstados.PendienteLiberacionCaja ? "selected" : null)">
+                        Pendiente de liberación de caja
+                    </option>
+
+                    <option value="@CalidadEstados.PendienteReliberacion"
+                            selected="@(estadoFiltro == CalidadEstados.PendienteReliberacion ? "selected" : null)">
+                        Pendiente de reliberación
                     </option>
 
                     <option value="@CalidadEstados.PendienteGP12"
