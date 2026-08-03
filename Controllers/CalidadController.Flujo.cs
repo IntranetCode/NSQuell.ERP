@@ -169,6 +169,7 @@ namespace ERP.NSQuell.Controllers
                 .Select(x => new CalidadCajaItemViewModel
                 {
                     CajaLiberadaID = x.CajaLiberadaID,
+                    CajaProduccionID = x.CajaProduccionID,
                     FolioCaja = x.FolioCaja,
                     CantidadPiezas = x.CantidadPiezas,
                     EstandarPackCumple = x.EstandarPackCumple,
@@ -181,6 +182,12 @@ namespace ERP.NSQuell.Controllers
                     Estado = x.Estado
                 })
                 .ToListAsync();
+
+            model.CajasProduccion = await CargarCajasProduccionInspeccionAsync(
+                id,
+                inspeccion.EjecucionProduccionID);
+
+            model.RegistrosGP12 = await CargarRegistrosGP12Async(id);
 
             model.Reliberaciones = await _context.CalidadReliberaciones
                 .AsNoTracking()

@@ -159,6 +159,7 @@ namespace ERP.NSQuell.Models
 
         public int InspeccionID { get; set; }
         public int EjecucionProduccionID { get; set; }
+        public long? CajaProduccionID { get; set; }
 
         [Required]
         [StringLength(100)]
@@ -462,6 +463,7 @@ namespace ERP.NSQuell.Models
         public const string Pendiente = "PENDIENTE";
         public const string Liberada = "LIBERADA";
         public const string EnGP12 = "EN_GP12";
+        public const string Devuelta = "DEVUELTA";
         public const string Entregada = "ENTREGADA";
         public const string Cancelada = "CANCELADA";
     }

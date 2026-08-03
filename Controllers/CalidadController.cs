@@ -101,7 +101,8 @@ namespace ERP.NSQuell.Controllers
                 );
             }
 
-            if (!string.IsNullOrWhiteSpace(estadoFiltro))
+            if (!string.IsNullOrWhiteSpace(estadoFiltro) &&
+                estadoFiltro != CalidadEstados.PendienteLiberacionCaja)
             {
                 query = query.Where(x =>
                     x.Estado == estadoFiltro);
@@ -147,10 +148,9 @@ namespace ERP.NSQuell.Controllers
                         x.Estado ==
                         CalidadEstados.MonitoreoActivo),
 
-                TotalPendienteLiberacionCaja =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.PendienteLiberacionCaja),
+                // Este total se carga desde Produccion_Cajas, no desde
+                // el estado general de Calidad_Inspecciones.
+                TotalPendienteLiberacionCaja = 0,
 
                 TotalPendienteReliberacion =
                     await baseQuery.CountAsync(x =>
@@ -347,6 +347,21 @@ namespace ERP.NSQuell.Controllers
 
             model.TotalMostrados =
                 model.Inspecciones.Count;
+
+            model.CajasPendientes =
+                await CargarCajasPendientesCalidadAsync(busqueda);
+
+            model.TotalCajasPendientes =
+                model.CajasPendientes.Count;
+
+            model.TotalPendienteLiberacionCaja =
+                model.TotalCajasPendientes;
+
+            if (estadoFiltro == CalidadEstados.PendienteLiberacionCaja)
+            {
+                model.TotalMostrados =
+                    model.TotalCajasPendientes;
+            }
 
             return View(model);
         }

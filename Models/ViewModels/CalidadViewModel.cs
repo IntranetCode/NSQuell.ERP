@@ -25,6 +25,9 @@ namespace ERP.NSQuell.Models.ViewModels
         public int TotalMaterialNoConforme { get; set; }
         public int TotalCerradas { get; set; }
 
+        public int TotalCajasPendientes { get; set; }
+        public List<CalidadCajaProduccionItemViewModel> CajasPendientes { get; set; } = new();
+
         // Compatibilidad con el Index anterior.
         public int TotalAbiertas { get; set; }
         public int TotalLiberadas { get; set; }
@@ -220,6 +223,8 @@ namespace ERP.NSQuell.Models.ViewModels
         public List<CalidadMonitoreoItemViewModel> Monitoreos { get; set; } = new();
         public List<CalidadDisposicionItemViewModel> Disposiciones { get; set; } = new();
         public List<CalidadCajaItemViewModel> Cajas { get; set; } = new();
+        public List<CalidadCajaProduccionItemViewModel> CajasProduccion { get; set; } = new();
+        public List<CalidadGP12ItemViewModel> RegistrosGP12 { get; set; } = new();
         public List<CalidadReliberacionItemViewModel> Reliberaciones { get; set; } = new();
         public List<CalidadChecklistPreguntaViewModel> PreguntasChecklistCalidad { get; set; } = new();
         public List<CalidadCatalogoDefectoItemViewModel> CatalogoDefectos { get; set; } = new();
@@ -417,6 +422,36 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? Observaciones { get; set; }
     }
 
+    public class CalidadCajaDecisionViewModel
+    {
+        [Range(1, int.MaxValue)]
+        public int InspeccionID { get; set; }
+
+        [Range(typeof(long), "1", "9223372036854775807")]
+        public long CajaProduccionID { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string Decision { get; set; } = string.Empty;
+
+        public bool EstandarPackCumple { get; set; }
+        public bool EtiquetaProductoCorrecta { get; set; }
+
+        [StringLength(50)]
+        public string? NumeroOperadorEtiqueta { get; set; }
+
+        public bool TecnicoConfirmoInformacion { get; set; }
+
+        [StringLength(100)]
+        public string? Tarima { get; set; }
+
+        [StringLength(500)]
+        public string? MotivoGP12 { get; set; }
+
+        [StringLength(1000)]
+        public string? Observaciones { get; set; }
+    }
+
     public class CalidadCajaGuardarViewModel
     {
         [Range(1, int.MaxValue)]
@@ -464,6 +499,9 @@ namespace ERP.NSQuell.Models.ViewModels
 
     public class CalidadGP12RevisionGuardarViewModel
     {
+        [Range(1, int.MaxValue)]
+        public int InspeccionID { get; set; }
+
         [Range(1, int.MaxValue)]
         public int GP12ID { get; set; }
 
@@ -579,6 +617,7 @@ namespace ERP.NSQuell.Models.ViewModels
     public class CalidadCajaItemViewModel
     {
         public int CajaLiberadaID { get; set; }
+        public long? CajaProduccionID { get; set; }
         public string FolioCaja { get; set; } = string.Empty;
         public int CantidadPiezas { get; set; }
         public bool EstandarPackCumple { get; set; }
@@ -589,6 +628,81 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? Tarima { get; set; }
         public string? Destino { get; set; }
         public string Estado { get; set; } = CalidadEstadoCaja.Pendiente;
+    }
+
+    public class CalidadCajaProduccionItemViewModel
+    {
+        public long CajaProduccionID { get; set; }
+        public int InspeccionID { get; set; }
+        public int EjecucionProduccionID { get; set; }
+        public int ProgramaProduccionID { get; set; }
+        public int NumeroCaja { get; set; }
+        public string FolioCaja { get; set; } = string.Empty;
+        public int CantidadPiezas { get; set; }
+        public string TipoCaja { get; set; } = "OK";
+        public string? LoteMaterial { get; set; }
+        public string? EtiquetaFolio { get; set; }
+        public bool EtiquetaVerde { get; set; }
+        public int EstadoCajaID { get; set; }
+        public string EstadoCajaNombre { get; set; } = string.Empty;
+        public DateTime FechaFormacion { get; set; }
+        public DateTime? FechaSolicitudCalidad { get; set; }
+        public DateTime? FechaLiberacionCalidad { get; set; }
+        public string? ResultadoCalidad { get; set; }
+        public string? MotivoCalidad { get; set; }
+        public string? OrdenTrabajo { get; set; }
+        public string? ClienteNombre { get; set; }
+        public string? NumeroParte { get; set; }
+        public string? Maquina { get; set; }
+        public string? Molde { get; set; }
+
+        public bool EstaPendiente => EstadoCajaID == 2;
+
+        public bool PuedeRevisar => EstadoCajaID == 2;
+    }
+
+    public class CalidadGP12ItemViewModel
+    {
+        public int GP12ID { get; set; }
+        public int InspeccionID { get; set; }
+        public int CajaLiberadaID { get; set; }
+        public long? CajaProduccionID { get; set; }
+        public string FolioCaja { get; set; } = string.Empty;
+        public int CantidadEntrada { get; set; }
+        public string? Motivo { get; set; }
+        public string Estado { get; set; } = CalidadEstadoGP12.EnInspeccion;
+        public DateTime FechaEntrada { get; set; }
+        public DateTime? FechaSalida { get; set; }
+        public int? CantidadSalida { get; set; }
+        public string? Observaciones { get; set; }
+        public List<CalidadGP12RevisionItemViewModel> Revisiones { get; set; } = new();
+
+        public bool PuedeRevisar =>
+            Estado == CalidadEstadoGP12.EnInspeccion ||
+            Estado == CalidadEstadoGP12.NokReinspeccion;
+    }
+
+    public class CalidadGP12RevisionItemViewModel
+    {
+        public int RevisionGP12ID { get; set; }
+        public int NumeroRevision { get; set; }
+        public DateTime FechaRevision { get; set; }
+        public int CantidadRevisada { get; set; }
+        public int CantidadOK { get; set; }
+        public int CantidadNOK { get; set; }
+        public string Resultado { get; set; } = CalidadResultadoGP12.Nok;
+        public string? Observaciones { get; set; }
+        public List<CalidadGP12DefectoItemViewModel> Defectos { get; set; } = new();
+    }
+
+    public class CalidadGP12DefectoItemViewModel
+    {
+        public int DefectoGP12ID { get; set; }
+        public int CatalogoDefectoID { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public int Cantidad { get; set; }
+        public string? Observaciones { get; set; }
     }
 
     public class CalidadReliberacionItemViewModel

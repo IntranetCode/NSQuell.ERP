@@ -1028,6 +1028,22 @@
 
             <a asp-controller="Calidad"
                asp-action="Index"
+               asp-route-estadoFiltro="@CalidadEstados.PendienteLiberacionCaja"
+               asp-route-busqueda="@Model.Busqueda"
+               class="quality-summary-card @TarjetaActiva(CalidadEstados.PendienteLiberacionCaja)">
+
+                <div class="quality-summary-icon warning">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+
+                <div class="quality-summary-content">
+                    <span>Cajas por liberar</span>
+                    <strong>@Model.TotalCajasPendientes</strong>
+                </div>
+            </a>
+
+            <a asp-controller="Calidad"
+               asp-action="Index"
                asp-route-estadoFiltro="@CalidadEstados.PendienteGP12"
                asp-route-busqueda="@Model.Busqueda"
                class="quality-summary-card @TarjetaActiva(
@@ -1205,6 +1221,140 @@
                 </div>
             </form>
         </section>
+
+        @if (Model.CajasPendientes.Any() ||
+             estadoFiltro == CalidadEstados.PendienteLiberacionCaja)
+        {
+            <section class="quality-list-card mb-4" id="cajas-pendientes-calidad">
+                <div class="quality-list-header">
+                    <h2>
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                        Cajas pendientes de liberación
+                    </h2>
+
+                    <span class="quality-result-count">
+                        <i class="fa-solid fa-hourglass-half"></i>
+                        @Model.TotalCajasPendientes caja(s)
+                    </span>
+                </div>
+
+                @if (!Model.CajasPendientes.Any())
+                {
+                    <div class="quality-empty">
+                        <div class="quality-empty-icon">
+                            <i class="fa-solid fa-box-open"></i>
+                        </div>
+
+                        <h3>No hay cajas pendientes</h3>
+
+                        <p>
+                            Producción todavía no ha enviado cajas para revisión
+                            o todas las solicitudes ya fueron resueltas.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    <div class="quality-table-wrap">
+                        <table class="quality-table">
+                            <thead>
+                                <tr>
+                                    <th>Caja</th>
+                                    <th>OF / programa</th>
+                                    <th>Cliente / parte</th>
+                                    <th>Máquina / molde</th>
+                                    <th>Tipo / cantidad</th>
+                                    <th>Lote / etiqueta</th>
+                                    <th>Solicitud</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var caja in Model.CajasPendientes)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(caja.FolioCaja)
+                                            </span>
+                                            <span class="quality-secondary-text">
+                                                Caja #@caja.NumeroCaja · ID @caja.CajaProduccionID
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(caja.OrdenTrabajo)
+                                            </span>
+                                            <span class="quality-secondary-text">
+                                                Programa @caja.ProgramaProduccionID
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(caja.NumeroParte)
+                                            </span>
+                                            <span class="quality-secondary-text">
+                                                @Mostrar(caja.ClienteNombre)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(caja.Maquina)
+                                            </span>
+                                            <span class="quality-secondary-text">
+                                                Molde: @Mostrar(caja.Molde)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @caja.TipoCaja
+                                            </span>
+                                            <span class="quality-secondary-text">
+                                                @caja.CantidadPiezas.ToString("N0") pieza(s)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(caja.LoteMaterial)
+                                            </span>
+                                            <span class="quality-secondary-text">
+                                                @Mostrar(caja.EtiquetaFolio)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @(caja.FechaSolicitudCalidad?.ToString("dd/MM/yyyy") ?? "—")
+                                            </span>
+                                            <span class="quality-secondary-text">
+                                                @(caja.FechaSolicitudCalidad?.ToString("HH:mm") ?? "—")
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <a asp-controller="Calidad"
+                                               asp-action="Detalle"
+                                               asp-route-id="@caja.InspeccionID"
+                                               asp-fragment="cajas-produccion"
+                                               class="quality-btn quality-btn-primary">
+                                                <i class="fa-solid fa-clipboard-check"></i>
+                                                Revisar caja
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
 
         <section class="quality-list-card">
             <div class="quality-list-header">

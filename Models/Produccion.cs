@@ -1117,7 +1117,7 @@ public sealed class ProduccionOperadorCajasVm
 
 public sealed class ProduccionOperadorCajaVm
 {
-    public int CajaProduccionID { get; set; }
+    public long CajaProduccionID { get; set; }
 
     public int EjecucionProduccionID { get; set; }
     public int ProgramaProduccionID { get; set; }

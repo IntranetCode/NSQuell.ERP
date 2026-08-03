@@ -31,6 +31,19 @@
         };
     }
 
+    string ClaseEstadoCaja(int estadoCajaId)
+    {
+        return estadoCajaId switch
+        {
+            2 => "bg-warning text-dark",
+            3 => "bg-success",
+            4 => "bg-warning text-dark",
+            5 => "bg-success",
+            6 => "bg-primary",
+            _ => "bg-secondary"
+        };
+    }
+
     var estado = (Model.Estado ?? string.Empty)
         .Trim()
         .ToUpperInvariant();
@@ -2108,6 +2121,458 @@
                             }
                         </div>
                     </section>
+                }
+
+                @if (Model.CajasProduccion.Any())
+                {
+                    <section class="quality-card" id="cajas-produccion">
+                        <div class="quality-card-header">
+                            <div>
+                                <h2>
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                    Liberación de cajas de Producción
+                                </h2>
+                                <div class="quality-help">
+                                    La decisión de cada caja es independiente del estado general
+                                    de la corrida y no interrumpe el monitoreo horario.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="quality-card-body">
+                            @foreach (var caja in Model.CajasProduccion)
+                            {
+                                <article class="border rounded-4 p-3 mb-3 bg-white">
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                                        <div>
+                                            <h3 class="h5 mb-1 fw-bold">
+                                                <i class="fa-solid fa-box me-1"></i>
+                                                @Mostrar(caja.FolioCaja)
+                                            </h3>
+                                            <div class="quality-help">
+                                                Caja #@caja.NumeroCaja · ID @caja.CajaProduccionID
+                                            </div>
+                                        </div>
+
+                                        <span class="badge @ClaseEstadoCaja(caja.EstadoCajaID)">
+                                            @Mostrar(caja.EstadoCajaNombre)
+                                        </span>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Tipo</div>
+                                            <div class="fw-semibold">@caja.TipoCaja</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Cantidad</div>
+                                            <div class="fw-bold">@caja.CantidadPiezas.ToString("N0")</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Lote</div>
+                                            <div class="fw-semibold">@Mostrar(caja.LoteMaterial)</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Etiqueta / folio</div>
+                                            <div class="fw-semibold">@Mostrar(caja.EtiquetaFolio)</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Solicitud a Calidad</div>
+                                            <div class="fw-semibold">
+                                                @(caja.FechaSolicitudCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (caja.PuedeRevisar)
+                                    {
+                                        <form asp-controller="Calidad"
+                                              asp-action="ResolverCajaProduccion"
+                                              method="post">
+                                            @Html.AntiForgeryToken()
+
+                                            <input type="hidden"
+                                                   name="InspeccionID"
+                                                   value="@Model.InspeccionID" />
+                                            <input type="hidden"
+                                                   name="CajaProduccionID"
+                                                   value="@caja.CajaProduccionID" />
+
+                                            <div class="row g-3">
+                                                <div class="col-lg-4">
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input"
+                                                               type="checkbox"
+                                                               name="EstandarPackCumple"
+                                                               value="true"
+                                                               id="pack-@caja.CajaProduccionID" />
+                                                        <label class="form-check-label fw-semibold"
+                                                               for="pack-@caja.CajaProduccionID">
+                                                            Cumple estándar de empaque
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input"
+                                                               type="checkbox"
+                                                               name="EtiquetaProductoCorrecta"
+                                                               value="true"
+                                                               id="etiqueta-@caja.CajaProduccionID" />
+                                                        <label class="form-check-label fw-semibold"
+                                                               for="etiqueta-@caja.CajaProduccionID">
+                                                            Etiqueta de producto correcta
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="form-check">
+                                                        <input class="form-check-input"
+                                                               type="checkbox"
+                                                               name="TecnicoConfirmoInformacion"
+                                                               value="true"
+                                                               id="tecnico-@caja.CajaProduccionID" />
+                                                        <label class="form-check-label fw-semibold"
+                                                               for="tecnico-@caja.CajaProduccionID">
+                                                            Técnico confirmó la información
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-lg-4">
+                                                    <label class="form-label fw-semibold">
+                                                        Número de operador en etiqueta
+                                                    </label>
+                                                    <input type="text"
+                                                           name="NumeroOperadorEtiqueta"
+                                                           maxlength="50"
+                                                           class="form-control mb-3" />
+
+                                                    <label class="form-label fw-semibold">Tarima</label>
+                                                    <input type="text"
+                                                           name="Tarima"
+                                                           maxlength="100"
+                                                           class="form-control" />
+                                                </div>
+
+                                                <div class="col-lg-4">
+                                                    <label class="form-label fw-semibold">
+                                                        Motivo GP12
+                                                    </label>
+                                                    <textarea name="MotivoGP12"
+                                                              rows="2"
+                                                              maxlength="500"
+                                                              class="form-control mb-3"
+                                                              placeholder="Obligatorio al enviar a GP12..."></textarea>
+
+                                                    <label class="form-label fw-semibold">
+                                                        Observaciones / motivo de devolución
+                                                    </label>
+                                                    <textarea name="Observaciones"
+                                                              rows="2"
+                                                              maxlength="1000"
+                                                              class="form-control"
+                                                              placeholder="Describe hallazgos o correcciones requeridas..."></textarea>
+                                                </div>
+                                            </div>
+
+                                            <div class="d-flex gap-2 flex-wrap mt-3">
+                                                <button type="submit"
+                                                        name="Decision"
+                                                        value="LIBERAR"
+                                                        class="quality-btn quality-btn-success"
+                                                        data-submit-confirm="¿Confirmas la liberación de esta caja con etiqueta verde?">
+                                                    <i class="fa-solid fa-circle-check"></i>
+                                                    Liberar a Almacén
+                                                </button>
+
+                                                <button type="submit"
+                                                        name="Decision"
+                                                        value="GP12"
+                                                        class="quality-btn quality-btn-warning"
+                                                        data-submit-confirm="¿Confirmas el envío de esta caja a GP12?">
+                                                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                                                    Enviar a GP12
+                                                </button>
+
+                                                <button type="submit"
+                                                        name="Decision"
+                                                        value="DEVOLVER"
+                                                        class="quality-btn quality-btn-danger"
+                                                        data-submit-confirm="¿Confirmas la devolución de esta caja a Producción?">
+                                                    <i class="fa-solid fa-rotate-left"></i>
+                                                    Devolver a Producción
+                                                </button>
+                                            </div>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <div class="quality-help">
+                                            Resultado: @Mostrar(caja.ResultadoCalidad)
+                                            @if (!string.IsNullOrWhiteSpace(caja.MotivoCalidad))
+                                            {
+                                                <span> · @caja.MotivoCalidad</span>
+                                            }
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    </section>
+                }
+
+                @if (Model.RegistrosGP12.Any())
+                {
+                    <section class="quality-card" id="gp12-cajas">
+                        <div class="quality-card-header">
+                            <div>
+                                <h2>
+                                    <i class="fa-solid fa-microscope"></i>
+                                    Inspección reforzada GP12
+                                </h2>
+                                <div class="quality-help">
+                                    GP12 requiere revisar la caja completa. Un resultado NOK
+                                    mantiene la caja bloqueada para una nueva inspección; no genera scrap automático.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="quality-card-body">
+                            @foreach (var gp12 in Model.RegistrosGP12)
+                            {
+                                <article class="border rounded-4 p-3 mb-3 bg-white">
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                                        <div>
+                                            <h3 class="h5 mb-1 fw-bold">
+                                                <i class="fa-solid fa-box-open me-1"></i>
+                                                @Mostrar(gp12.FolioCaja)
+                                            </h3>
+                                            <div class="quality-help">
+                                                GP12 #@gp12.GP12ID · Entrada @gp12.FechaEntrada.ToString("dd/MM/yyyy HH:mm")
+                                            </div>
+                                        </div>
+
+                                        <span class="badge @(gp12.Estado == CalidadEstadoGP12.Liberado ? "bg-success" : gp12.Estado == CalidadEstadoGP12.NokReinspeccion ? "bg-danger" : "bg-warning text-dark")">
+                                            @gp12.Estado.Replace("_", " ")
+                                        </span>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Cantidad de entrada</div>
+                                            <div class="fw-bold">@gp12.CantidadEntrada.ToString("N0")</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="quality-data-label">Motivo</div>
+                                            <div class="fw-semibold">@Mostrar(gp12.Motivo)</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Salida</div>
+                                            <div class="fw-semibold">
+                                                @(gp12.FechaSalida?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (gp12.Revisiones.Any())
+                                    {
+                                        <div class="table-responsive mb-3">
+                                            <table class="table table-sm align-middle">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Revisión</th>
+                                                        <th>Fecha</th>
+                                                        <th>Revisadas</th>
+                                                        <th>OK</th>
+                                                        <th>NOK</th>
+                                                        <th>Resultado</th>
+                                                        <th>Defectos</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var revision in gp12.Revisiones)
+                                                    {
+                                                        <tr>
+                                                            <td>#@revision.NumeroRevision</td>
+                                                            <td>@revision.FechaRevision.ToString("dd/MM/yyyy HH:mm")</td>
+                                                            <td>@revision.CantidadRevisada</td>
+                                                            <td class="text-success fw-bold">@revision.CantidadOK</td>
+                                                            <td class="text-danger fw-bold">@revision.CantidadNOK</td>
+                                                            <td>
+                                                                <span class="badge @(revision.Resultado == CalidadResultadoGP12.Ok ? "bg-success" : "bg-danger")">
+                                                                    @revision.Resultado
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                @if (revision.Defectos.Any())
+                                                                {
+                                                                    @string.Join(", ", revision.Defectos.Select(x => $"{x.Codigo}: {x.Cantidad}"))
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span>—</span>
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+
+                                    @if (gp12.PuedeRevisar)
+                                    {
+                                        <form asp-controller="Calidad"
+                                              asp-action="RegistrarRevisionGP12"
+                                              method="post"
+                                              data-gp12-form>
+                                            @Html.AntiForgeryToken()
+
+                                            <input type="hidden"
+                                                   name="InspeccionID"
+                                                   value="@Model.InspeccionID" />
+                                            <input type="hidden"
+                                                   name="GP12ID"
+                                                   value="@gp12.GP12ID" />
+
+                                            <div class="row g-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-semibold">Cantidad revisada</label>
+                                                    <input type="number"
+                                                           name="CantidadRevisada"
+                                                           min="1"
+                                                           max="@gp12.CantidadEntrada"
+                                                           value="@gp12.CantidadEntrada"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-semibold">Cantidad OK</label>
+                                                    <input type="number"
+                                                           name="CantidadOK"
+                                                           min="0"
+                                                           max="@gp12.CantidadEntrada"
+                                                           value="@gp12.CantidadEntrada"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-semibold">Cantidad NOK</label>
+                                                    <input type="number"
+                                                           name="CantidadNOK"
+                                                           min="0"
+                                                           max="@gp12.CantidadEntrada"
+                                                           value="0"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+                                                    <label class="form-label fw-semibold mb-0">
+                                                        Defectos detectados
+                                                    </label>
+                                                    <button type="button"
+                                                            class="quality-btn quality-btn-light"
+                                                            data-add-defecto
+                                                            data-gp12-id="@gp12.GP12ID">
+                                                        <i class="fa-solid fa-plus"></i>
+                                                        Agregar defecto
+                                                    </button>
+                                                </div>
+
+                                                <div data-defectos-container="@gp12.GP12ID"></div>
+
+                                                <template id="defecto-template-@gp12.GP12ID">
+                                                    <div class="row g-2 align-items-end border rounded-3 p-2 mb-2" data-defecto-row>
+                                                        <div class="col-md-5">
+                                                            <label class="form-label fw-semibold">Defecto</label>
+                                                            <select name="Defectos[__index__].CatalogoDefectoID"
+                                                                    class="form-select">
+                                                                <option value="">-- Selecciona defecto --</option>
+                                                                @foreach (var defecto in Model.CatalogoDefectos)
+                                                                {
+                                                                    <option value="@defecto.CatalogoDefectoID">
+                                                                        @defecto.Texto
+                                                                    </option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <label class="form-label fw-semibold">Cantidad</label>
+                                                            <input type="number"
+                                                                   name="Defectos[__index__].Cantidad"
+                                                                   min="1"
+                                                                   value="1"
+                                                                   class="form-control" />
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <label class="form-label fw-semibold">Observaciones</label>
+                                                            <input type="text"
+                                                                   name="Defectos[__index__].Observaciones"
+                                                                   maxlength="500"
+                                                                   class="form-control" />
+                                                        </div>
+                                                        <div class="col-md-1">
+                                                            <button type="button"
+                                                                    class="btn btn-outline-danger w-100"
+                                                                    data-remove-defecto
+                                                                    title="Quitar defecto">
+                                                                <i class="fa-solid fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <label class="form-label fw-semibold">Observaciones de GP12</label>
+                                                <textarea name="Observaciones"
+                                                          rows="3"
+                                                          maxlength="1000"
+                                                          class="form-control"
+                                                          placeholder="Describe la revisión, correcciones o hallazgos..."></textarea>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <button type="submit"
+                                                        class="quality-btn quality-btn-primary"
+                                                        data-submit-confirm="¿Confirmas el resultado de esta revisión GP12?">
+                                                    <i class="fa-solid fa-floppy-disk"></i>
+                                                    Guardar revisión GP12
+                                                </button>
+                                            </div>
+                                        </form>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    </section>
+
+                    <script>
+                        document.querySelectorAll('[data-add-defecto]').forEach(function (button) {
+                            button.addEventListener('click', function () {
+                                const gp12Id = button.dataset.gp12Id;
+                                const container = document.querySelector('[data-defectos-container="' + gp12Id + '"]');
+                                const template = document.getElementById('defecto-template-' + gp12Id);
+
+                                if (!container || !template) return;
+
+                                const index = Number(container.dataset.nextIndex || '0');
+                                container.dataset.nextIndex = (index + 1).toString();
+
+                                const html = template.innerHTML.replaceAll('__index__', index.toString());
+                                container.insertAdjacentHTML('beforeend', html);
+                            });
+                        });
+
+                        document.addEventListener('click', function (event) {
+                            const button = event.target.closest('[data-remove-defecto]');
+                            if (!button) return;
+
+                            button.closest('[data-defecto-row]')?.remove();
+                        });
+                    </script>
                 }
 
                 <script>
