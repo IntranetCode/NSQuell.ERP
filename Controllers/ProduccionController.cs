@@ -3771,6 +3771,8 @@ WHERE ProgramaProduccionID = @ProgramaProduccionID
 
             return codigo + " | " + descripcion;
         }
+
+      
         private async Task MarcarProgramaEnPreparacionAsync(
     int programaProduccionId,
     int usuarioId,
