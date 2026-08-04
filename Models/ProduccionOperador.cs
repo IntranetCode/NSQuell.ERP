@@ -87,6 +87,122 @@ namespace ERP.NSQuell.Models
         }
     }
 
+
+    public sealed class ProduccionAlertaProximoProgramaVm
+    {
+        public int ProgramaProduccionID { get; set; }
+        public int? EjecucionProduccionID { get; set; }
+
+        public string TipoAlerta { get; set; } = "";
+        public string TipoAlertaNombre
+        {
+            get
+            {
+                if (TipoAlerta == "CAMBIO_MOLDE")
+                    return "Cambio de molde próximo";
+
+                if (TipoAlerta == "ARRANQUE")
+                    return "Arranque próximo";
+
+                return "Alerta";
+            }
+        }
+
+        public int? MaquinaID { get; set; }
+        public string? MaquinaCodigo { get; set; }
+        public string? MaquinaNombre { get; set; }
+
+        public int? ParteID { get; set; }
+        public string? NumeroParte { get; set; }
+        public string? ReferenciaSAP { get; set; }
+        public string? DescripcionParte { get; set; }
+
+        public int? MoldeID { get; set; }
+        public string? MoldeCodigo { get; set; }
+
+        public int CantidadProgramada { get; set; }
+
+        public DateTime FechaObjetivo { get; set; }
+        public int MinutosRestantes { get; set; }
+
+        public bool YaDebeAtenderse
+        {
+            get { return MinutosRestantes <= 0; }
+        }
+
+        public bool EsCambioMolde
+        {
+            get { return TipoAlerta == "CAMBIO_MOLDE"; }
+        }
+
+        public int? OperadorPrincipalID { get; set; }
+        public string? OperadorPrincipalNombre { get; set; }
+
+        public int? OperadorAuxiliarID { get; set; }
+        public string? OperadorAuxiliarNombre { get; set; }
+
+        public string TextoMaquina
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(MaquinaCodigo))
+                    return "Sin máquina";
+
+                if (string.IsNullOrWhiteSpace(MaquinaNombre))
+                    return MaquinaCodigo;
+
+                return MaquinaCodigo + " - " + MaquinaNombre;
+            }
+        }
+
+        public string TextoParte
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(ReferenciaSAP))
+                    return ReferenciaSAP;
+
+                if (!string.IsNullOrWhiteSpace(NumeroParte))
+                    return NumeroParte;
+
+                return "Sin parte";
+            }
+        }
+
+        public string TextoOperadorPrincipal
+        {
+            get
+            {
+                return string.IsNullOrWhiteSpace(OperadorPrincipalNombre)
+                    ? "Sin operador principal"
+                    : OperadorPrincipalNombre;
+            }
+        }
+
+        public string TextoOperadorAuxiliar
+        {
+            get
+            {
+                return string.IsNullOrWhiteSpace(OperadorAuxiliarNombre)
+                    ? "Sin operador auxiliar"
+                    : OperadorAuxiliarNombre;
+            }
+        }
+
+        public string ClaseAlerta
+        {
+            get
+            {
+                if (YaDebeAtenderse)
+                    return "alert-danger";
+
+                if (EsCambioMolde)
+                    return "alert-warning";
+
+                return "alert-info";
+            }
+        }
+    }
     public sealed class ProduccionOperadorCajaVm
     {
         public int CajaProduccionID { get; set; }

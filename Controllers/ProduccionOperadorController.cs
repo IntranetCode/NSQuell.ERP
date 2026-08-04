@@ -20,15 +20,9 @@ namespace ERP.NSQuell.Controllers
             _configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("No se encontró la cadena de conexión DefaultConnection.");
 
-        private static class ProgramaProduccionEstatus
-        {
-            public const int EnPreparacion = 2;
-            public const int EnProduccion = 3;
-            public const int Pausado = 4;
-        }
 
 
-        [HttpGet]
+[HttpGet]
         public async Task<IActionResult> Index()
         {
             if (!UsuarioEnSesion())
@@ -46,12 +40,11 @@ namespace ERP.NSQuell.Controllers
 
             var programas = await ObtenerProgramasEnProduccionAsync(cn);
 
+            ViewBag.AlertasProximosProgramas =
+                await ObtenerAlertasProximosProgramasAsync(cn, 15);
+
             return View(programas);
         }
-
-        // ============================================================
-        // KIOSKO OPERADOR - CAPTURA
-        // ============================================================
 
         [HttpGet]
         public async Task<IActionResult> Captura(int id)
@@ -601,12 +594,12 @@ WHERE ParoID = @ParoID
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> FormarCaja(
-    int ejecucionProduccionId,
-    int cantidadPiezas,
-    string tipoCaja,
-    string? loteMaterial,
-    string? etiquetaFolio,
-    string? observaciones)
+     int ejecucionProduccionId,
+     int cantidadPiezas,
+     string tipoCaja,
+     string? loteMaterial,
+     string? etiquetaFolio,
+     string? observaciones)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
@@ -739,7 +732,6 @@ INSERT INTO dbo.Produccion_Cajas
     UsuarioCreacionID,
     FechaCreacion,
 
-    -- Compatibilidad con columnas anteriores
     Etiqueta,
     Cantidad,
     EstatusCalidad,
@@ -762,8 +754,8 @@ VALUES
     @LoteMaterial,
     @EtiquetaFolio,
 
-    1,
-    N'Formada en Producción',
+    @EstadoCajaID,
+    @EstadoCajaNombre,
     0,
 
     GETDATE(),
@@ -823,6 +815,12 @@ VALUES
                             ? DBNull.Value
                             : etiquetaFolio.Trim();
 
+                    cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value =
+                        ProduccionCajaEstatus.FormadaProduccion;
+
+                    cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value =
+                        ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.FormadaProduccion);
+
                     cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
                         string.IsNullOrWhiteSpace(observaciones)
                             ? DBNull.Value
@@ -858,11 +856,10 @@ VALUES
             return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
         }
 
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SolicitarLiberacionCaja(
-    int cajaProduccionId)
+            int cajaProduccionId)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
@@ -893,7 +890,7 @@ VALUES
 
                 ejecucionProduccionId = caja.EjecucionProduccionID;
 
-                if (caja.EstadoCajaID != 1)
+                if (caja.EstadoCajaID != ProduccionCajaEstatus.FormadaProduccion)
                 {
                     await tx.RollbackAsync();
 
@@ -906,8 +903,8 @@ VALUES
                 const string sql = @"
 UPDATE dbo.Produccion_Cajas
 SET
-    EstadoCajaID = 2,
-    EstadoCajaNombre = N'Pendiente de Calidad',
+    EstadoCajaID = @EstadoCajaID,
+    EstadoCajaNombre = @EstadoCajaNombre,
     FechaSolicitudCalidad = GETDATE(),
     UsuarioSolicitudCalidadID = @UsuarioID,
     EstatusCalidad = N'PENDIENTE',
@@ -920,6 +917,12 @@ WHERE CajaProduccionID = @CajaProduccionID
 
                 cmd.Parameters.Add("@CajaProduccionID", SqlDbType.Int).Value =
                     cajaProduccionId;
+
+                cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value =
+                    ProduccionCajaEstatus.PendienteCalidad;
+
+                cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value =
+                    ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.PendienteCalidad);
 
                 cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
                     usuarioId;
@@ -945,7 +948,7 @@ WHERE CajaProduccionID = @CajaProduccionID
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> MoverCajaZonaVerde(
-    int cajaProduccionId)
+     int cajaProduccionId)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
@@ -976,7 +979,7 @@ WHERE CajaProduccionID = @CajaProduccionID
 
                 ejecucionProduccionId = caja.EjecucionProduccionID;
 
-                if (caja.EstadoCajaID != 3 || !caja.EtiquetaVerde)
+                if (caja.EstadoCajaID != ProduccionCajaEstatus.LiberadaCalidad || !caja.EtiquetaVerde)
                 {
                     await tx.RollbackAsync();
 
@@ -989,8 +992,8 @@ WHERE CajaProduccionID = @CajaProduccionID
                 const string sql = @"
 UPDATE dbo.Produccion_Cajas
 SET
-    EstadoCajaID = 5,
-    EstadoCajaNombre = N'Zona verde',
+    EstadoCajaID = @EstadoCajaID,
+    EstadoCajaNombre = @EstadoCajaNombre,
     FechaZonaVerde = GETDATE(),
     UsuarioZonaVerdeID = @UsuarioID,
     UsuarioModificacionID = @UsuarioID,
@@ -1002,6 +1005,12 @@ WHERE CajaProduccionID = @CajaProduccionID
 
                 cmd.Parameters.Add("@CajaProduccionID", SqlDbType.Int).Value =
                     cajaProduccionId;
+
+                cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value =
+                    ProduccionCajaEstatus.ZonaVerde;
+
+                cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value =
+                    ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.ZonaVerde);
 
                 cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
                     usuarioId;
@@ -1027,8 +1036,8 @@ WHERE CajaProduccionID = @CajaProduccionID
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EscanearSalidaCaja(
-    int cajaProduccionId,
-    string? etiquetaEscaneada)
+     int cajaProduccionId,
+     string? etiquetaEscaneada)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
@@ -1059,7 +1068,7 @@ WHERE CajaProduccionID = @CajaProduccionID
 
                 ejecucionProduccionId = caja.EjecucionProduccionID;
 
-                if (caja.EstadoCajaID != 5)
+                if (caja.EstadoCajaID != ProduccionCajaEstatus.ZonaVerde)
                 {
                     await tx.RollbackAsync();
 
@@ -1084,8 +1093,8 @@ WHERE CajaProduccionID = @CajaProduccionID
                 const string sql = @"
 UPDATE dbo.Produccion_Cajas
 SET
-    EstadoCajaID = 6,
-    EstadoCajaNombre = N'Salida de Producción escaneada',
+    EstadoCajaID = @EstadoCajaID,
+    EstadoCajaNombre = @EstadoCajaNombre,
     FechaSalidaProduccion = GETDATE(),
     UsuarioSalidaProduccionID = @UsuarioID,
     UsuarioModificacionID = @UsuarioID,
@@ -1098,6 +1107,12 @@ WHERE CajaProduccionID = @CajaProduccionID
                 cmd.Parameters.Add("@CajaProduccionID", SqlDbType.Int).Value =
                     cajaProduccionId;
 
+                cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value =
+                    ProduccionCajaEstatus.SalidaProduccion;
+
+                cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value =
+                    ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.SalidaProduccion);
+
                 cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
                     usuarioId;
 
@@ -1106,7 +1121,7 @@ WHERE CajaProduccionID = @CajaProduccionID
                 await tx.CommitAsync();
 
                 TempData["Success"] =
-                    "Salida de Producción escaneada correctamente.";
+                    "Salida de Producción escaneada correctamente. Pendiente recepción de Almacén PT.";
             }
             catch (Exception ex)
             {
@@ -2537,6 +2552,283 @@ WHERE u.UsuarioID = @UsuarioID
             return puesto.Equals("OPERADOR", StringComparison.OrdinalIgnoreCase) ||
                    puesto.Contains("OPERADOR", StringComparison.OrdinalIgnoreCase);
         }
+
+
+        private async Task<List<ProduccionAlertaProximoProgramaVm>> ObtenerAlertasProximosProgramasAsync(
+      SqlConnection cn,
+      int minutosAntes)
+        {
+            var lista = new List<ProduccionAlertaProximoProgramaVm>();
+
+            const string sql = @"
+DECLARE @Ahora DATETIME = GETDATE();
+DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
+
+;WITH ProgramasBase AS
+(
+    SELECT
+        pp.ProgramaProduccionID,
+        pe.EjecucionProduccionID,
+
+        pp.MaquinaID,
+        COALESCE(NULLIF(pp.MaquinaCodigo, ''), maq.Codigo) AS MaquinaCodigo,
+        COALESCE(NULLIF(pp.MaquinaNombre, ''), maq.Nombre) AS MaquinaNombre,
+
+        pp.ParteID,
+        pp.NumeroParte,
+        pp.ReferenciaSAP,
+        pp.DesignacionDescripcionSAP AS DescripcionParte,
+
+        pp.MoldeID,
+        pp.MoldeCodigo,
+
+        CONVERT(INT, ISNULL(pp.CantidadProgramada, 0)) AS CantidadProgramada,
+
+        pp.FechaInicioProgramada,
+        pp.FechaFinProgramada,
+
+        CASE
+            WHEN pp.Cambio IS NULL THEN NULL
+            ELSE DATEADD
+            (
+                SECOND,
+                DATEDIFF(SECOND, CAST('00:00:00' AS TIME), CAST(pp.Cambio AS TIME)),
+                CAST(CAST(ISNULL(pp.FechaInicioProgramada, GETDATE()) AS DATE) AS DATETIME)
+            )
+        END AS FechaCambioMolde,
+
+        CASE
+            WHEN pp.Arranque IS NULL THEN ISNULL(pp.FechaInicioProgramada, GETDATE())
+            ELSE DATEADD
+            (
+                SECOND,
+                DATEDIFF(SECOND, CAST('00:00:00' AS TIME), CAST(pp.Arranque AS TIME)),
+                CAST(CAST(ISNULL(pp.FechaInicioProgramada, GETDATE()) AS DATE) AS DATETIME)
+            )
+        END AS FechaArranque,
+
+        opPrincipal.PersonaID AS OperadorPrincipalID,
+        opPrincipal.NombreCompleto AS OperadorPrincipalNombre,
+
+        opAuxiliar.PersonaID AS OperadorAuxiliarID,
+        opAuxiliar.NombreCompleto AS OperadorAuxiliarNombre
+
+    FROM dbo.Planeacion_ProgramaProduccion pp
+
+    LEFT JOIN dbo.ERP_Maquinas maq
+        ON maq.MaquinaID = pp.MaquinaID
+
+    OUTER APPLY
+    (
+        SELECT TOP (1)
+            e.EjecucionProduccionID
+        FROM dbo.Produccion_Ejecucion e
+        WHERE e.ProgramaProduccionID = pp.ProgramaProduccionID
+          AND e.Activo = 1
+        ORDER BY e.EjecucionProduccionID DESC
+    ) pe
+
+    OUTER APPLY
+    (
+        SELECT TOP (1)
+            po.PersonaID,
+            LTRIM(RTRIM(
+                ISNULL(p.Nombre, '') + ' ' +
+                ISNULL(p.ApellidoPaterno, '') + ' ' +
+                ISNULL(p.ApellidoMaterno, '')
+            )) AS NombreCompleto
+        FROM dbo.Planeacion_ProgramaOperadores po
+        LEFT JOIN dbo.Persona p
+            ON p.PersonaID = po.PersonaID
+        WHERE po.ProgramaProduccionID = pp.ProgramaProduccionID
+          AND po.Activo = 1
+          AND UPPER(ISNULL(po.RolOperador, '')) = 'PRINCIPAL'
+        ORDER BY po.ProgramaOperadorID
+    ) opPrincipal
+
+    OUTER APPLY
+    (
+        SELECT TOP (1)
+            po.PersonaID,
+            LTRIM(RTRIM(
+                ISNULL(p.Nombre, '') + ' ' +
+                ISNULL(p.ApellidoPaterno, '') + ' ' +
+                ISNULL(p.ApellidoMaterno, '')
+            )) AS NombreCompleto
+        FROM dbo.Planeacion_ProgramaOperadores po
+        LEFT JOIN dbo.Persona p
+            ON p.PersonaID = po.PersonaID
+        WHERE po.ProgramaProduccionID = pp.ProgramaProduccionID
+          AND po.Activo = 1
+          AND UPPER(ISNULL(po.RolOperador, '')) = 'AUXILIAR'
+        ORDER BY po.ProgramaOperadorID
+    ) opAuxiliar
+
+    WHERE pp.Activo = 1
+      AND pp.MaquinaID IS NOT NULL
+      AND ISNULL(pp.EstatusID, 1) IN
+      (
+          @EstatusPendiente,
+          @EstatusEnPreparacion
+      )
+),
+Alertas AS
+(
+    SELECT
+        ProgramaProduccionID,
+        EjecucionProduccionID,
+
+        MaquinaID,
+        MaquinaCodigo,
+        MaquinaNombre,
+
+        ParteID,
+        NumeroParte,
+        ReferenciaSAP,
+        DescripcionParte,
+
+        MoldeID,
+        MoldeCodigo,
+
+        CantidadProgramada,
+
+        'CAMBIO_MOLDE' AS TipoAlerta,
+        FechaCambioMolde AS FechaObjetivo,
+
+        OperadorPrincipalID,
+        OperadorPrincipalNombre,
+        OperadorAuxiliarID,
+        OperadorAuxiliarNombre
+
+    FROM ProgramasBase
+    WHERE FechaCambioMolde IS NOT NULL
+      AND FechaCambioMolde <= @Hasta
+      AND FechaCambioMolde >= DATEADD(MINUTE, -5, @Ahora)
+      AND
+      (
+          FechaArranque IS NULL
+          OR FechaCambioMolde < FechaArranque
+      )
+
+    UNION ALL
+
+    SELECT
+        ProgramaProduccionID,
+        EjecucionProduccionID,
+
+        MaquinaID,
+        MaquinaCodigo,
+        MaquinaNombre,
+
+        ParteID,
+        NumeroParte,
+        ReferenciaSAP,
+        DescripcionParte,
+
+        MoldeID,
+        MoldeCodigo,
+
+        CantidadProgramada,
+
+        'ARRANQUE' AS TipoAlerta,
+        FechaArranque AS FechaObjetivo,
+
+        OperadorPrincipalID,
+        OperadorPrincipalNombre,
+        OperadorAuxiliarID,
+        OperadorAuxiliarNombre
+
+    FROM ProgramasBase
+    WHERE FechaArranque IS NOT NULL
+      AND FechaArranque <= @Hasta
+      AND FechaArranque >= DATEADD(MINUTE, -5, @Ahora)
+)
+SELECT
+    ProgramaProduccionID,
+    EjecucionProduccionID,
+
+    MaquinaID,
+    MaquinaCodigo,
+    MaquinaNombre,
+
+    ParteID,
+    NumeroParte,
+    ReferenciaSAP,
+    DescripcionParte,
+
+    MoldeID,
+    MoldeCodigo,
+
+    CantidadProgramada,
+
+    TipoAlerta,
+    FechaObjetivo,
+    DATEDIFF(MINUTE, @Ahora, FechaObjetivo) AS MinutosRestantes,
+
+    OperadorPrincipalID,
+    OperadorPrincipalNombre,
+    OperadorAuxiliarID,
+    OperadorAuxiliarNombre
+
+FROM Alertas
+ORDER BY
+    FechaObjetivo,
+    CASE
+        WHEN TipoAlerta = 'CAMBIO_MOLDE' THEN 1
+        ELSE 2
+    END,
+    MaquinaCodigo,
+    ProgramaProduccionID;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+
+            cmd.Parameters.Add("@MinutosAntes", SqlDbType.Int).Value =
+                minutosAntes;
+
+            cmd.Parameters.Add("@EstatusPendiente", SqlDbType.Int).Value =
+                ProgramaProduccionEstatus.Pendiente;
+
+            cmd.Parameters.Add("@EstatusEnPreparacion", SqlDbType.Int).Value =
+                ProgramaProduccionEstatus.EnPreparacion;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new ProduccionAlertaProximoProgramaVm
+                {
+                    ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
+                    EjecucionProduccionID = NullableEntero(rd, "EjecucionProduccionID"),
+
+                    MaquinaID = NullableEntero(rd, "MaquinaID"),
+                    MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
+                    MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
+
+                    ParteID = NullableEntero(rd, "ParteID"),
+                    NumeroParte = TextoNullable(rd, "NumeroParte"),
+                    ReferenciaSAP = TextoNullable(rd, "ReferenciaSAP"),
+                    DescripcionParte = TextoNullable(rd, "DescripcionParte"),
+
+                    MoldeID = NullableEntero(rd, "MoldeID"),
+                    MoldeCodigo = TextoNullable(rd, "MoldeCodigo"),
+
+                    CantidadProgramada = Entero(rd, "CantidadProgramada"),
+
+                    TipoAlerta = TextoNullable(rd, "TipoAlerta") ?? "",
+                    FechaObjetivo = Convert.ToDateTime(rd["FechaObjetivo"]),
+                    MinutosRestantes = Entero(rd, "MinutosRestantes"),
+
+                    OperadorPrincipalID = NullableEntero(rd, "OperadorPrincipalID"),
+                    OperadorPrincipalNombre = TextoNullable(rd, "OperadorPrincipalNombre"),
+
+                    OperadorAuxiliarID = NullableEntero(rd, "OperadorAuxiliarID"),
+                    OperadorAuxiliarNombre = TextoNullable(rd, "OperadorAuxiliarNombre")
+                });
+            }
+
+            return lista;
+        }
+
 
         private async Task<PersonaOperadorInfo> ObtenerPersonaOperadorAsync(
             int usuarioId,

@@ -1,13 +1,22 @@
 ﻿@model List<ERP.NSQuell.Models.ProduccionOperadorTabletVm>
 @using System.Linq
+@using System.Collections.Generic
+@using ERP.NSQuell.Models
 
 @{
     Layout = null;
 
     var totalProducciones = Model == null ? 0 : Model.Count;
-    var totalProduciendo = Model == null ? 0 : Model.Count(x => x.EstatusID == 3);
-    var totalPausadas = Model == null ? 0 : Model.Count(x => x.EstatusID == 4);
+    var totalProduciendo = Model == null ? 0 : Model.Count(x => x.EstatusID == ProduccionEstatus.EnProduccion);
+    var totalPausadas = Model == null ? 0 : Model.Count(x => x.EstatusID == ProduccionEstatus.Pausado);
     var totalParoAbierto = Model == null ? 0 : Model.Count(x => x.TieneParoAbierto);
+
+    var alertas = ViewBag.AlertasProximosProgramas as List<ProduccionAlertaProximoProgramaVm>
+        ?? new List<ProduccionAlertaProximoProgramaVm>();
+
+    var totalAlertas = alertas.Count;
+    var totalCambiosMolde = alertas.Count(x => x.TipoAlerta == "CAMBIO_MOLDE");
+    var totalArranques = alertas.Count(x => x.TipoAlerta == "ARRANQUE");
 
     var maquinas = Model == null
         ? new List<IGrouping<string, ERP.NSQuell.Models.ProduccionOperadorTabletVm>>()
@@ -19,7 +28,7 @@
 }
 
 @functions {
-    public static string Txt(string value)
+    public static string Txt(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
     }
@@ -66,10 +75,10 @@
         if (item.TieneParoAbierto)
             return "Paro abierto";
 
-        if (item.EstatusID == 4)
+        if (item.EstatusID == ProduccionEstatus.Pausado)
             return "Pausado";
 
-        if (item.EstatusID == 3)
+        if (item.EstatusID == ProduccionEstatus.EnProduccion)
             return "En producción";
 
         return "Disponible";
@@ -80,10 +89,10 @@
         if (item.TieneParoAbierto)
             return "estado-paro";
 
-        if (item.EstatusID == 4)
+        if (item.EstatusID == ProduccionEstatus.Pausado)
             return "estado-pausado";
 
-        if (item.EstatusID == 3)
+        if (item.EstatusID == ProduccionEstatus.EnProduccion)
             return "estado-produccion";
 
         return "estado-normal";
@@ -110,6 +119,64 @@
 
         return "Programa " + item.ProgramaProduccionID.ToString();
     }
+
+    public static string AlertaIcono(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        if (alerta.TipoAlerta == "CAMBIO_MOLDE")
+            return "fa-screwdriver-wrench";
+
+        if (alerta.TipoAlerta == "ARRANQUE")
+            return "fa-play";
+
+        return "fa-bell";
+    }
+
+    public static string AlertaClase(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        if (alerta.MinutosRestantes <= 0)
+            return "alerta-critica";
+
+        if (alerta.TipoAlerta == "CAMBIO_MOLDE")
+            return "alerta-cambio";
+
+        return "alerta-arranque";
+    }
+
+    public static string AlertaTiempo(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        if (alerta.MinutosRestantes < 0)
+            return "Debió atenderse hace " + Math.Abs(alerta.MinutosRestantes).ToString() + " min";
+
+        if (alerta.MinutosRestantes == 0)
+            return "Debe atenderse ahora";
+
+        return "En " + alerta.MinutosRestantes.ToString() + " min";
+    }
+
+    public static string AlertaTitulo(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        if (alerta.TipoAlerta == "CAMBIO_MOLDE")
+            return "Cambio de molde próximo";
+
+        if (alerta.TipoAlerta == "ARRANQUE")
+            return "Arranque próximo";
+
+        return "Alerta de producción";
+    }
+
+    public static string TextoOperadorPrincipal(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        return string.IsNullOrWhiteSpace(alerta.OperadorPrincipalNombre)
+            ? "Sin operador principal"
+            : alerta.OperadorPrincipalNombre;
+    }
+
+    public static string TextoOperadorAuxiliar(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        return string.IsNullOrWhiteSpace(alerta.OperadorAuxiliarNombre)
+            ? "Sin operador auxiliar"
+            : alerta.OperadorAuxiliarNombre;
+    }
 }
 
 <!DOCTYPE html>
@@ -132,6 +199,8 @@
             --amarillo-fondo: #fff7ed;
             --rojo: #b42318;
             --rojo-fondo: #fef3f2;
+            --morado: #6941c6;
+            --morado-fondo: #f4f3ff;
             --gris: #667085;
             --borde: #d9e3f1;
             --fondo: #f4f7fb;
@@ -236,6 +305,206 @@
             line-height: 1;
             font-weight: 950;
         }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin: 22px 0 12px;
+        }
+
+            .section-title h2 {
+                margin: 0;
+                color: var(--azul-oscuro);
+                font-size: 1.25rem;
+                font-weight: 950;
+            }
+
+            .section-title span {
+                color: var(--gris);
+                font-weight: 800;
+                font-size: .9rem;
+            }
+
+        .alertas-wrap {
+            display: grid;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .alerta-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 22px;
+            border: 1px solid var(--borde);
+            background: #fff;
+            box-shadow: var(--sombra);
+        }
+
+            .alerta-card::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 8px;
+                background: var(--azul);
+            }
+
+        .alerta-cambio::before {
+            background: var(--amarillo);
+        }
+
+        .alerta-arranque::before {
+            background: var(--azul);
+        }
+
+        .alerta-critica::before {
+            background: var(--rojo);
+        }
+
+        .alerta-body {
+            display: grid;
+            grid-template-columns: 280px 1fr 250px;
+            gap: 18px;
+            padding: 18px 20px 18px 28px;
+            align-items: center;
+        }
+
+        .alerta-main {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .alerta-icon {
+            width: 54px;
+            height: 54px;
+            flex: 0 0 auto;
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            color: #fff;
+            background: var(--azul);
+        }
+
+        .alerta-cambio .alerta-icon {
+            background: var(--amarillo);
+        }
+
+        .alerta-critica .alerta-icon {
+            background: var(--rojo);
+        }
+
+        .alerta-k {
+            color: var(--gris);
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .alerta-t {
+            color: #101828;
+            font-size: 1.05rem;
+            line-height: 1.1;
+            font-weight: 950;
+        }
+
+        .alerta-time {
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: .78rem;
+            font-weight: 950;
+            background: #eff6ff;
+            color: var(--azul);
+            border: 1px solid #bfdbfe;
+        }
+
+        .alerta-cambio .alerta-time {
+            background: var(--amarillo-fondo);
+            color: var(--amarillo);
+            border-color: #fed7aa;
+        }
+
+        .alerta-critica .alerta-time {
+            background: var(--rojo-fondo);
+            color: var(--rojo);
+            border-color: #fecdca;
+        }
+
+        .alerta-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .alerta-info {
+            border: 1px solid #edf2f7;
+            border-radius: 16px;
+            background: #fbfdff;
+            padding: 10px 12px;
+        }
+
+            .alerta-info .mini-label {
+                color: var(--gris);
+                font-size: .68rem;
+                font-weight: 950;
+                letter-spacing: .04em;
+                text-transform: uppercase;
+            }
+
+            .alerta-info .mini-value {
+                margin-top: 2px;
+                color: #182437;
+                font-weight: 900;
+                line-height: 1.2;
+            }
+
+        .alerta-actions {
+            display: grid;
+            gap: 8px;
+        }
+
+        .btn-alerta {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid var(--azul);
+            background: var(--azul);
+            color: #fff;
+            padding: 11px 12px;
+            font-weight: 950;
+            text-decoration: none;
+        }
+
+            .btn-alerta:hover {
+                color: #fff;
+                background: var(--azul-oscuro);
+                border-color: var(--azul-oscuro);
+            }
+
+        .btn-alerta-sec {
+            border-color: #cbd5e1;
+            background: #fff;
+            color: #344054;
+        }
+
+            .btn-alerta-sec:hover {
+                color: var(--azul);
+                background: #f8fbff;
+                border-color: var(--azul);
+            }
 
         .alertx {
             border-radius: 18px;
@@ -479,6 +748,16 @@
                 font-weight: 700;
             }
 
+        @@media (max-width: 1400px) {
+            .alerta-body {
+                grid-template-columns: 1fr;
+            }
+
+            .alerta-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
         @@media (max-width: 1300px) {
             .production-row {
                 grid-template-columns: 1fr 1fr;
@@ -510,6 +789,10 @@
             .production-row {
                 grid-template-columns: 1fr;
             }
+
+            .alerta-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         @@media (max-width: 560px) {
@@ -536,7 +819,7 @@
                         Kiosko de Operador
                     </h1>
                     <p>
-                        Captura de producción por hora, separación de piezas OK / sospechosas / scrap y registro de paros.
+                        Alertas de próximos arranques, cambio de molde, captura por hora, separación OK / sospechoso / scrap y registro de paros.
                     </p>
                 </div>
 
@@ -572,6 +855,156 @@
 
         <section class="stats">
             <div class="stat">
+                <div class="stat-k">Alertas próximas</div>
+                <div class="stat-v @(totalAlertas > 0 ? "text-warning" : "")">@totalAlertas</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">Cambios de molde</div>
+                <div class="stat-v text-warning">@totalCambiosMolde</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">Arranques próximos</div>
+                <div class="stat-v text-primary">@totalArranques</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">Con paro abierto</div>
+                <div class="stat-v text-danger">@totalParoAbierto</div>
+            </div>
+        </section>
+
+        @if (alertas.Any())
+        {
+            <div class="section-title">
+                <h2>
+                    <i class="fa-solid fa-bell me-2"></i>
+                    Próximos programas a atender
+                </h2>
+
+                <span>
+                    Ventana de alerta: próximos 15 minutos
+                </span>
+            </div>
+
+            <section class="alertas-wrap">
+                @foreach (var alerta in alertas)
+                {
+                    var claseAlerta = AlertaClase(alerta);
+                    var icono = AlertaIcono(alerta);
+
+                    <article class="alerta-card @claseAlerta">
+                        <div class="alerta-body">
+
+                            <div class="alerta-main">
+                                <span class="alerta-icon">
+                                    <i class="fa-solid @icono"></i>
+                                </span>
+
+                                <div>
+                                    <div class="alerta-k">
+                                        @AlertaTitulo(alerta)
+                                    </div>
+
+                                    <div class="alerta-t">
+                                        @alerta.TextoMaquina
+                                    </div>
+
+                                    <div class="alerta-time">
+                                        <i class="fa-regular fa-clock"></i>
+                                        @AlertaTiempo(alerta)
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alerta-grid">
+                                <div class="alerta-info">
+                                    <div class="mini-label">Programa</div>
+                                    <div class="mini-value">
+                                        @alerta.ProgramaProduccionID
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Parte</div>
+                                    <div class="mini-value">
+                                        @alerta.TextoParte
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Molde</div>
+                                    <div class="mini-value">
+                                        @Txt(alerta.MoldeCodigo)
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Cantidad</div>
+                                    <div class="mini-value">
+                                        @alerta.CantidadProgramada.ToString("N0")
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Hora objetivo</div>
+                                    <div class="mini-value">
+                                        @alerta.FechaObjetivo.ToString("dd/MM/yyyy HH:mm")
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Operadores</div>
+                                    <div class="mini-value">
+                                        @TextoOperadorPrincipal(alerta)
+                                        <span class="d-block sub">
+                                            Aux: @TextoOperadorAuxiliar(alerta)
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alerta-actions">
+                                @if (alerta.EjecucionProduccionID.HasValue)
+                                {
+                                    <a href="@Url.Action("Detalle", "Produccion", new { id = alerta.EjecucionProduccionID.Value })"
+                                       class="btn-alerta">
+                                        <i class="fa-solid fa-clipboard-check"></i>
+                                        Ver preparación
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a href="@Url.Action("Index", "Produccion")"
+                                       class="btn-alerta">
+                                        <i class="fa-solid fa-industry"></i>
+                                        Ir a Producción
+                                    </a>
+                                }
+
+                                <a href="@Url.Action("Index", "ProduccionOperador")"
+                                   class="btn-alerta btn-alerta-sec">
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                    Actualizar
+                                </a>
+                            </div>
+
+                        </div>
+                    </article>
+                }
+            </section>
+        }
+        else
+        {
+            <div class="alertx">
+                <i class="fa-solid fa-circle-info text-primary me-1"></i>
+                No hay cambios de molde ni arranques dentro de los próximos 15 minutos.
+            </div>
+        }
+
+        <section class="stats">
+            <div class="stat">
                 <div class="stat-k">Producciones visibles</div>
                 <div class="stat-v">@totalProducciones</div>
             </div>
@@ -594,8 +1027,7 @@
 
         <div class="alertx">
             <i class="fa-solid fa-circle-info text-primary me-1"></i>
-            Aquí solo aparecen las producciones que ya fueron iniciadas en serie desde Producción.
-            Las preparaciones pendientes de Calidad no aparecen en el kiosko.
+            Aquí aparecen las producciones en serie o pausadas para captura de operador. Las alertas superiores vienen desde Planeación y permiten anticipar cambio de molde o arranque.
         </div>
 
         @if (Model == null || !Model.Any())
@@ -664,7 +1096,7 @@
                                             {
                                                 <i class="fa-solid fa-circle-pause"></i>
                                             }
-                                            else if (item.EstatusID == 4)
+                                            else if (item.EstatusID == ProduccionEstatus.Pausado)
                                             {
                                                 <i class="fa-solid fa-pause"></i>
                                             }
@@ -689,7 +1121,7 @@
                                 </div>
 
                                 <div>
-                                    <div class="label">Operador asignado</div>
+                                    <div class="label">Operador principal</div>
                                     <div class="value">
                                         @Txt(item.OperadorNombre)
                                     </div>
@@ -754,5 +1186,15 @@
             }
         }
     </div>
+
+    <script>
+        // Recarga automática cada minuto para que entren las alertas de 15 minutos
+        // sin que el operador tenga que refrescar manualmente.
+        setInterval(function () {
+            if (!document.hidden) {
+                window.location.reload();
+            }
+        }, 60000);
+    </script>
 </body>
 </html>

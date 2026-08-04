@@ -19,20 +19,7 @@ namespace ERP.NSQuell.Controllers
         private string ConnectionString =>
             _configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("No se encontró la cadena de conexión DefaultConnection.");
-
-        // Estatus usados en Planeacion_ProgramaProduccion.
-        // Los mantenemos separados de ProduccionEstatus porque Planeación puede tener su propia numeración.
-        private static class ProgramaProduccionEstatus
-        {
-            public const int Pendiente = 1;
-            public const int EnPreparacion = 2;
-            public const int EnProduccion = 3;
-            public const int Pausado = 4;
-            public const int Terminado = 5;
-            public const int Cerrado = 9;
-            public const int Cancelado = 99;
-        }
-
+     
 
 
         [HttpGet]
@@ -54,7 +41,7 @@ namespace ERP.NSQuell.Controllers
             await cn.OpenAsync();
 
             vm.Maquinas = await CargarMaquinasAsync(cn);
-            vm.Estatus = CargarEstatusProduccion();
+            vm.Estatus = await CargarEstatusProduccionAsync(cn);
             ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
 
             vm.ProgramasDisponibles = await ObtenerProgramasDisponiblesAsync(
@@ -1139,11 +1126,7 @@ VALUES
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Iniciar(
-    int programaProduccionId,
-    int? operadorId = null,
-    string? operadorNombre = null,
-    string? observaciones = null)
+        public async Task<IActionResult> Iniciar(int programaProduccionId,int? operadorId = null, string? operadorNombre = null, string? observaciones = null)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
@@ -1203,6 +1186,14 @@ VALUES
 
                 int? operadorFinalId = operadorId;
                 string? operadorFinalNombre = operadorNombre;
+
+                if (!operadorFinalId.HasValue &&
+    string.IsNullOrWhiteSpace(operadorFinalNombre) &&
+    programa.OperadorPrincipalPlaneadoID.HasValue)
+                {
+                    operadorFinalId = programa.OperadorPrincipalPlaneadoID;
+                    operadorFinalNombre = programa.OperadorPrincipalPlaneadoNombre;
+                }
 
                 if (operadorFinalId.HasValue)
                 {
@@ -2458,7 +2449,22 @@ ORDER BY
             public string? MoldeCodigo { get; set; }
 
             public int? CantidadPlaneada { get; set; }
+
+            public DateTime? FechaInicioProgramada { get; set; }
+            public DateTime? FechaFinProgramada { get; set; }
+
+            public DateTime? Cambio { get; set; }
+            public DateTime? Arranque { get; set; }
+
+            public bool EsCambioMolde { get; set; }
+
+            public int? OperadorPrincipalPlaneadoID { get; set; }
+            public string? OperadorPrincipalPlaneadoNombre { get; set; }
+
+            public int? OperadorAuxiliarID { get; set; }
+            public string? OperadorAuxiliarNombre { get; set; }
         }
+
 
         private async Task<bool> ExisteEjecucionProgramaAsync( int ejecucionProduccionId, int programaProduccionId, SqlConnection cn, SqlTransaction tx)
         {
@@ -3242,10 +3248,7 @@ ORDER BY EjecucionProduccionID DESC;";
                 : Convert.ToInt32(result);
         }
 
-        private async Task<ProgramaParaProduccion?> ObtenerProgramaParaIniciarAsync(
-     int programaProduccionId,
-     SqlConnection cn,
-     SqlTransaction tx)
+        private async Task<ProgramaParaProduccion?> ObtenerProgramaParaIniciarAsync(  int programaProduccionId,  SqlConnection cn,  SqlTransaction tx)
         {
             const string sql = @"
 SELECT TOP (1)
@@ -3267,7 +3270,26 @@ SELECT TOP (1)
     pp.MoldeID,
     pp.MoldeCodigo,
 
-    CONVERT(INT, ISNULL(pp.CantidadProgramada, 0)) AS CantidadPlaneada
+    CONVERT(INT, ISNULL(pp.CantidadProgramada, 0)) AS CantidadPlaneada,
+
+    pp.FechaInicioProgramada,
+    pp.FechaFinProgramada,
+    pp.Cambio,
+    pp.Arranque,
+
+    CASE
+        WHEN pp.Cambio IS NOT NULL
+         AND pp.Arranque IS NOT NULL
+         AND pp.Cambio < pp.Arranque
+            THEN 1
+        ELSE 0
+    END AS EsCambioMolde,
+
+    opPrincipal.PersonaID AS OperadorPrincipalPlaneadoID,
+    opPrincipal.NombreCompleto AS OperadorPrincipalPlaneadoNombre,
+
+    opAuxiliar.PersonaID AS OperadorAuxiliarID,
+    opAuxiliar.NombreCompleto AS OperadorAuxiliarNombre
 
 FROM dbo.Planeacion_ProgramaProduccion pp
 
@@ -3277,9 +3299,45 @@ LEFT JOIN dbo.Planeacion_ReleaseDetalle rd
 LEFT JOIN dbo.ERP_Maquinas maq
     ON maq.MaquinaID = pp.MaquinaID
 
+OUTER APPLY
+(
+    SELECT TOP (1)
+        po.PersonaID,
+        LTRIM(RTRIM(
+            ISNULL(p.Nombre, '') + ' ' +
+            ISNULL(p.ApellidoPaterno, '') + ' ' +
+            ISNULL(p.ApellidoMaterno, '')
+        )) AS NombreCompleto
+    FROM dbo.Planeacion_ProgramaOperadores po
+    LEFT JOIN dbo.Persona p
+        ON p.PersonaID = po.PersonaID
+    WHERE po.ProgramaProduccionID = pp.ProgramaProduccionID
+      AND po.Activo = 1
+      AND UPPER(ISNULL(po.RolOperador, '')) = 'PRINCIPAL'
+    ORDER BY po.ProgramaOperadorID
+) opPrincipal
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        po.PersonaID,
+        LTRIM(RTRIM(
+            ISNULL(p.Nombre, '') + ' ' +
+            ISNULL(p.ApellidoPaterno, '') + ' ' +
+            ISNULL(p.ApellidoMaterno, '')
+        )) AS NombreCompleto
+    FROM dbo.Planeacion_ProgramaOperadores po
+    LEFT JOIN dbo.Persona p
+        ON p.PersonaID = po.PersonaID
+    WHERE po.ProgramaProduccionID = pp.ProgramaProduccionID
+      AND po.Activo = 1
+      AND UPPER(ISNULL(po.RolOperador, '')) = 'AUXILIAR'
+    ORDER BY po.ProgramaOperadorID
+) opAuxiliar
+
 WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
   AND pp.Activo = 1
-  AND ISNULL(pp.EstatusID, 1) NOT IN (3, 4, 5, 9, 99);";
+  AND ISNULL(pp.EstatusID, 1) NOT IN (3, 4, 5, 8, 9, 99);";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
 
@@ -3311,19 +3369,26 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                 MoldeID = NullableEntero(rd, "MoldeID"),
                 MoldeCodigo = TextoNullable(rd, "MoldeCodigo"),
 
-                CantidadPlaneada = NullableEntero(rd, "CantidadPlaneada")
+                CantidadPlaneada = NullableEntero(rd, "CantidadPlaneada"),
+
+                FechaInicioProgramada = NullableFecha(rd, "FechaInicioProgramada"),
+                FechaFinProgramada = NullableFecha(rd, "FechaFinProgramada"),
+
+                Cambio = NullableFecha(rd, "Cambio"),
+                Arranque = NullableFecha(rd, "Arranque"),
+
+                EsCambioMolde = Booleano(rd, "EsCambioMolde"),
+
+                OperadorPrincipalPlaneadoID = NullableEntero(rd, "OperadorPrincipalPlaneadoID"),
+                OperadorPrincipalPlaneadoNombre = TextoNullable(rd, "OperadorPrincipalPlaneadoNombre"),
+
+                OperadorAuxiliarID = NullableEntero(rd, "OperadorAuxiliarID"),
+                OperadorAuxiliarNombre = TextoNullable(rd, "OperadorAuxiliarNombre")
             };
         }
 
 
-        private async Task<int> InsertarEjecucionAsync(
-            ProgramaParaProduccion programa,
-            int? operadorId,
-            string? operadorNombre,
-            string? observaciones,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task<int> InsertarEjecucionAsync(   ProgramaParaProduccion programa, int? operadorId,   string? operadorNombre,string? observaciones,  int usuarioId, SqlConnection cn,  SqlTransaction tx)
         {
             const string sql = @"
 INSERT INTO dbo.Produccion_Ejecucion
@@ -3348,6 +3413,13 @@ INSERT INTO dbo.Produccion_Ejecucion
 
     OperadorID,
     OperadorNombre,
+
+    OperadorAuxiliarID,
+    OperadorAuxiliarNombre,
+
+    EsCambioMolde,
+    FechaCambioMoldeProgramada,
+    FechaArranqueProgramada,
 
     FechaInicioReal,
 
@@ -3386,6 +3458,13 @@ VALUES
 
     @OperadorID,
     @OperadorNombre,
+
+    @OperadorAuxiliarID,
+    @OperadorAuxiliarNombre,
+
+    @EsCambioMolde,
+    @FechaCambioMoldeProgramada,
+    @FechaArranqueProgramada,
 
     GETDATE(),
 
@@ -3452,11 +3531,28 @@ VALUES
             cmd.Parameters.Add("@OperadorNombre", SqlDbType.NVarChar, 200).Value =
                 (object?)operadorNombre ?? DBNull.Value;
 
+            cmd.Parameters.Add("@OperadorAuxiliarID", SqlDbType.Int).Value =
+                (object?)programa.OperadorAuxiliarID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@OperadorAuxiliarNombre", SqlDbType.NVarChar, 200).Value =
+                (object?)programa.OperadorAuxiliarNombre ?? DBNull.Value;
+
+            cmd.Parameters.Add("@EsCambioMolde", SqlDbType.Bit).Value =
+                programa.EsCambioMolde;
+
+            cmd.Parameters.Add("@FechaCambioMoldeProgramada", SqlDbType.DateTime).Value =
+                (object?)programa.Cambio ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FechaArranqueProgramada", SqlDbType.DateTime).Value =
+                (object?)programa.Arranque ??
+                (object?)programa.FechaInicioProgramada ??
+                DBNull.Value;
+
             cmd.Parameters.Add("@CantidadPlaneada", SqlDbType.Int).Value =
                 (object?)programa.CantidadPlaneada ?? DBNull.Value;
 
             cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value =
-     ProduccionEstatus.EnPreparacion;
+                ProduccionEstatus.EnPreparacion;
 
             cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
                 (object?)observaciones ?? DBNull.Value;
@@ -3467,7 +3563,6 @@ VALUES
             return Convert.ToInt32(await cmd.ExecuteScalarAsync());
         }
 
-  
         private async Task InsertarRegistroHoraAsync(
             ProduccionEjecucionVm ejecucion,
             ProduccionRegistroHoraPostVm vm,
@@ -3968,20 +4063,44 @@ ORDER BY Codigo;";
             return lista;
         }
 
-        private static List<SelectListItem> CargarEstatusProduccion()
+        private async Task<List<SelectListItem>> CargarEstatusProduccionAsync(
+     SqlConnection cn)
         {
-            return new List<SelectListItem>
+            var lista = new List<SelectListItem>
+    {
+        new SelectListItem
+        {
+            Value = "",
+            Text = "Todos los estatus"
+        }
+    };
+
+            const string sql = @"
+SELECT
+    EstatusID,
+    Nombre
+FROM dbo.ERP_ProduccionEstatus
+WHERE TipoEstatus = @TipoEstatus
+  AND Activo = 1
+ORDER BY Orden, EstatusID;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+
+            cmd.Parameters.Add("@TipoEstatus", SqlDbType.NVarChar, 30).Value =
+                ProduccionTipoEstatus.Ejecucion;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
             {
-                new() { Value = "", Text = "Todos los estatus" },
-                new() { Value = ProduccionEstatus.Pendiente.ToString(), Text = ProduccionEstatus.Nombre(ProduccionEstatus.Pendiente) },
-                new() { Value = ProduccionEstatus.EnPreparacion.ToString(), Text = ProduccionEstatus.Nombre(ProduccionEstatus.EnPreparacion) },
-                new() { Value = ProduccionEstatus.EnProduccion.ToString(), Text = ProduccionEstatus.Nombre(ProduccionEstatus.EnProduccion) },
-                new() { Value = ProduccionEstatus.Pausado.ToString(), Text = ProduccionEstatus.Nombre(ProduccionEstatus.Pausado) },
-                new() { Value = ProduccionEstatus.TerminadoParcial.ToString(), Text = ProduccionEstatus.Nombre(ProduccionEstatus.TerminadoParcial) },
-                new() { Value = ProduccionEstatus.Terminado.ToString(), Text = ProduccionEstatus.Nombre(ProduccionEstatus.Terminado) },
-                new() { Value = ProduccionEstatus.Cerrado.ToString(), Text = ProduccionEstatus.Nombre(ProduccionEstatus.Cerrado) },
-                new() { Value = ProduccionEstatus.Cancelado.ToString(), Text = ProduccionEstatus.Nombre(ProduccionEstatus.Cancelado) }
-            };
+                lista.Add(new SelectListItem
+                {
+                    Value = rd["EstatusID"].ToString(),
+                    Text = rd["Nombre"].ToString()
+                });
+            }
+
+            return lista;
         }
 
         private async Task<List<SelectListItem>> CargarMotivosParoAsync(

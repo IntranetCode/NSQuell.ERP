@@ -10,6 +10,10 @@ public static class ProduccionEstatus
     public const int Pausado = 4;
     public const int TerminadoParcial = 5;
     public const int Terminado = 6;
+
+    // Almacén ya recibió todas las cajas, pero falta cierre documental.
+    public const int ListaCierreDocumental = 8;
+
     public const int Cerrado = 9;
     public const int Cancelado = 99;
 
@@ -23,6 +27,7 @@ public static class ProduccionEstatus
             Pausado => "Pausado",
             TerminadoParcial => "Terminado parcial",
             Terminado => "Terminado",
+            ListaCierreDocumental => "Lista para cierre documental",
             Cerrado => "Cerrado",
             Cancelado => "Cancelado",
             _ => "Desconocido"
@@ -39,6 +44,7 @@ public static class ProduccionEstatus
             Pausado => "bg-danger",
             TerminadoParcial => "bg-info text-dark",
             Terminado => "bg-primary",
+            ListaCierreDocumental => "bg-warning text-dark",
             Cerrado => "bg-dark",
             Cancelado => "bg-danger",
             _ => "bg-secondary"
@@ -69,15 +75,106 @@ public static class ProduccionEstatus
                estatusId == TerminadoParcial;
     }
 
+    public static bool PuedeCerrarDocumentalmente(int estatusId)
+    {
+        return estatusId == ListaCierreDocumental;
+    }
+
     public static bool EstaBloqueadoParaPlaneacion(int estatusId)
     {
         return estatusId == EnProduccion ||
                estatusId == Pausado ||
                estatusId == TerminadoParcial ||
                estatusId == Terminado ||
+               estatusId == ListaCierreDocumental ||
                estatusId == Cerrado;
     }
 }
+
+public static class ProgramaProduccionEstatus
+{
+    public const int Pendiente = 1;
+    public const int EnPreparacion = 2;
+    public const int EnProduccion = 3;
+    public const int Pausado = 4;
+
+    // Planeacion_ProgramaProduccion:
+    // La producción terminó físicamente.
+    public const int Terminado = 5;
+
+    // Almacén ya recibió todas las cajas, pero falta cierre documental.
+    public const int ListaCierreDocumental = 8;
+
+    public const int Cerrado = 9;
+    public const int Cancelado = 99;
+
+    public static string Nombre(int estatusId)
+    {
+        return estatusId switch
+        {
+            Pendiente => "Pendiente",
+            EnPreparacion => "En preparación",
+            EnProduccion => "En producción",
+            Pausado => "Pausado",
+            Terminado => "Terminado",
+            ListaCierreDocumental => "Lista para cierre documental",
+            Cerrado => "Cerrado",
+            Cancelado => "Cancelado",
+            _ => "Desconocido"
+        };
+    }
+
+    public static string ClaseBadge(int estatusId)
+    {
+        return estatusId switch
+        {
+            Pendiente => "bg-secondary",
+            EnPreparacion => "bg-warning text-dark",
+            EnProduccion => "bg-success",
+            Pausado => "bg-danger",
+            Terminado => "bg-primary",
+            ListaCierreDocumental => "bg-warning text-dark",
+            Cerrado => "bg-dark",
+            Cancelado => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+}
+
+public static class ProduccionCajaEstatus
+{
+    public const int FormadaProduccion = 1;
+    public const int PendienteCalidad = 2;
+    public const int LiberadaCalidad = 3;
+    public const int RetenidaGp12Scrap = 4;
+    public const int ZonaVerde = 5;
+    public const int SalidaProduccion = 6;
+    public const int RecibidaAlmacenPt = 7;
+
+    public static string Nombre(int estatusId)
+    {
+        return estatusId switch
+        {
+            FormadaProduccion => "Formada en Producción",
+            PendienteCalidad => "Pendiente de Calidad",
+            LiberadaCalidad => "Liberada por Calidad",
+            RetenidaGp12Scrap => "Retenida / GP12 / Scrap",
+            ZonaVerde => "Zona verde",
+            SalidaProduccion => "Salida de Producción escaneada",
+            RecibidaAlmacenPt => "Recibida por Almacén PT",
+            _ => "Desconocido"
+        };
+    }
+}
+
+public static class ProduccionTipoEstatus
+{
+    public const string Programa = "PROGRAMA";
+    public const string Ejecucion = "EJECUCION";
+    public const string Caja = "CAJA";
+}
+
+
 
 public sealed class ProduccionEjecucionVm
 {
@@ -933,6 +1030,9 @@ public sealed class ProduccionCalidadResumenVm
         _ => "bg-warning text-dark"
     };
 }
+
+
+
 
 public sealed class ProduccionProgramaDisponibleVm
 {
