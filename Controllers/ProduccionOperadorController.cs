@@ -908,6 +908,12 @@ SET
     FechaSolicitudCalidad = GETDATE(),
     UsuarioSolicitudCalidadID = @UsuarioID,
     EstatusCalidad = N'PENDIENTE',
+    EtiquetaVerde = 0,
+    FechaLiberacionCalidad = NULL,
+    AuditorCalidadUsuarioID = NULL,
+    UsuarioCalidadID = NULL,
+    ResultadoCalidad = NULL,
+    MotivoCalidad = NULL,
     UsuarioModificacionID = @UsuarioID,
     FechaModificacion = GETDATE()
 WHERE CajaProduccionID = @CajaProduccionID
@@ -1003,7 +1009,7 @@ WHERE CajaProduccionID = @CajaProduccionID
 
                 await using var cmd = new SqlCommand(sql, cn, tx);
 
-                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.Int).Value =
+                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
                     cajaProduccionId;
 
                 cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value =
@@ -1104,7 +1110,7 @@ WHERE CajaProduccionID = @CajaProduccionID
 
                 await using var cmd = new SqlCommand(sql, cn, tx);
 
-                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.Int).Value =
+                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
                     cajaProduccionId;
 
                 cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value =
@@ -1340,7 +1346,7 @@ ORDER BY
         }
 
         private async Task<ProduccionOperadorCajaVm?> ObtenerCajaOperadorAsync(
-            int cajaProduccionId,
+            long cajaProduccionId,
             SqlConnection cn,
             SqlTransaction tx)
         {
@@ -1392,7 +1398,7 @@ WHERE CajaProduccionID = @CajaProduccionID
 
             await using var cmd = new SqlCommand(sql, cn, tx);
 
-            cmd.Parameters.Add("@CajaProduccionID", SqlDbType.Int).Value =
+            cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
                 cajaProduccionId;
 
             await using var rd = await cmd.ExecuteReaderAsync();
@@ -1408,7 +1414,7 @@ WHERE CajaProduccionID = @CajaProduccionID
         {
             return new ProduccionOperadorCajaVm
             {
-                CajaProduccionID = Entero(rd, "CajaProduccionID"),
+                CajaProduccionID = EnteroLargo(rd, "CajaProduccionID"),
                 EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
                 ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
 
@@ -2964,6 +2970,15 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
                 ejecucionProduccionId;
 
             return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
+        }
+
+        private static long EnteroLargo(SqlDataReader rd, string columna)
+        {
+            var ordinal = rd.GetOrdinal(columna);
+
+            return rd.IsDBNull(ordinal)
+                ? 0L
+                : Convert.ToInt64(rd.GetValue(ordinal));
         }
 
         private static int Entero(SqlDataReader rd, string columna)

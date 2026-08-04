@@ -1149,7 +1149,7 @@
                                                 <td>
                                                     <div class="actions-grid">
 
-                                                        @if (caja.PuedeSolicitarLiberacion)
+                                                        @if (caja.PuedeSolicitarCalidad)
                                                         {
                                                             <form method="post"
                                                                   action="@Url.Action("SolicitarLiberacionCaja", "ProduccionOperador")"
@@ -1201,7 +1201,7 @@
                                                             </button>
                                                         }
 
-                                                        @if (caja.PuedeEscanearSalida)
+                                                        @if (caja.PuedeEscanearSalidaProduccion)
                                                         {
                                                             <form method="post"
                                                                   action="@Url.Action("EscanearSalidaCaja", "ProduccionOperador")"

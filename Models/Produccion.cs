@@ -571,6 +571,30 @@ public sealed class ProduccionRecepcionOFVm
     public DateTime FechaRecepcion { get; set; }
     public string? Observaciones { get; set; }
 
+    public long MovimientoID { get; set; }
+
+    public string OrigenRegistro { get; set; } = string.Empty;
+
+    public string TipoMovimiento { get; set; } = string.Empty;
+
+    public int? SolicitudProduccionID { get; set; }
+
+    public string? NumeroOF { get; set; }
+
+    public string? ReferenciaOperacion { get; set; }
+
+    public bool EsRegistroAutomaticoAlmacen =>
+        string.Equals(
+            OrigenRegistro,
+            "ALMACEN",
+            StringComparison.OrdinalIgnoreCase);
+
+    public bool EsRegistroManualProduccion =>
+        string.Equals(
+            OrigenRegistro,
+            "PRODUCCION",
+            StringComparison.OrdinalIgnoreCase);
+
     public string TextoTipo
     {
         get
@@ -591,32 +615,6 @@ public sealed class ProduccionRecepcionOFVm
         }
     }
 }
-
-public sealed class ProduccionRecepcionOFPostVm
-{
-    public int EjecucionProduccionID { get; set; }
-    public int ProgramaProduccionID { get; set; }
-
-    public string TipoRecepcion { get; set; } = "";
-    public string? Codigo { get; set; }
-    public string? Descripcion { get; set; }
-
-    public string? Lote { get; set; }
-    public string? NumeroUI { get; set; }
-    public string? EtiquetaInicio { get; set; }
-    public string? EtiquetaFin { get; set; }
-
-    public decimal? Cantidad { get; set; }
-    public string? Unidad { get; set; }
-
-    public string? EntregadoPor { get; set; }
-    public string? RecibidoPor { get; set; }
-
-    public DateTime? FechaRecepcion { get; set; }
-    public string? Observaciones { get; set; }
-}
-
-
 public static class ProduccionChecklistEstatus
 {
     public const int PendienteProduccion = 1;
@@ -1214,68 +1212,3 @@ public sealed class ProduccionOperadorCajasVm
                 ? MaquinaCodigo
                 : $"{MaquinaCodigo} - {MaquinaNombre}";
 }
-
-public sealed class ProduccionOperadorCajaVm
-{
-    public long CajaProduccionID { get; set; }
-
-    public int EjecucionProduccionID { get; set; }
-    public int ProgramaProduccionID { get; set; }
-
-    public int NumeroCaja { get; set; }
-    public string? FolioCaja { get; set; }
-
-    public int CantidadPiezas { get; set; }
-    public string TipoCaja { get; set; } = "OK";
-
-    public string? LoteMaterial { get; set; }
-    public string? EtiquetaFolio { get; set; }
-
-    public bool EtiquetaVerde { get; set; }
-
-    public int EstadoCajaID { get; set; }
-    public string EstadoCajaNombre { get; set; } = "Formada en Producción";
-
-    public DateTime FechaFormacion { get; set; }
-    public int? UsuarioFormacionID { get; set; }
-
-    public DateTime? FechaSolicitudCalidad { get; set; }
-    public int? UsuarioSolicitudCalidadID { get; set; }
-
-    public DateTime? FechaLiberacionCalidad { get; set; }
-    public int? UsuarioCalidadID { get; set; }
-
-    public string? ResultadoCalidad { get; set; }
-    public string? MotivoCalidad { get; set; }
-
-    public DateTime? FechaZonaVerde { get; set; }
-    public int? UsuarioZonaVerdeID { get; set; }
-
-    public DateTime? FechaSalidaProduccion { get; set; }
-    public int? UsuarioSalidaProduccionID { get; set; }
-
-    public DateTime? FechaRecepcionAlmacen { get; set; }
-    public int? UsuarioAlmacenID { get; set; }
-
-    public string? Observaciones { get; set; }
-
-    public bool PuedeSolicitarLiberacion =>
-        EstadoCajaID == 1;
-
-    public bool PuedeMoverZonaVerde =>
-        EstadoCajaID == 3 && EtiquetaVerde;
-
-    public bool PuedeEscanearSalida =>
-        EstadoCajaID == 5;
-
-    public string TipoCajaTexto =>
-        TipoCaja switch
-        {
-            "OK" => "Producto conforme",
-            "SOSPECHOSO" => "Producto sospechoso",
-            "SCRAP" => "Scrap",
-            "RETENCION" => "Retención",
-            _ => TipoCaja
-        };
-}
-

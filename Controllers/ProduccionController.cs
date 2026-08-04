@@ -148,13 +148,15 @@ ORDER BY
             return View(vm);
         }
 
-       
 
         [HttpGet]
         public async Task<IActionResult> Detalle(int id)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
+
+            if (id <= 0)
+                return NotFound();
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
@@ -164,349 +166,490 @@ ORDER BY
             if (ejecucion == null)
                 return NotFound();
 
-
-
             var vm = new ProduccionDetalleVm
             {
-
                 Ejecucion = ejecucion,
-                RegistrosHora = await ObtenerRegistrosHoraAsync(id, cn),
-                Paros = await ObtenerParosAsync(id, cn),
-                MotivosParo = await CargarMotivosParoAsync(cn),
-                ChecklistResumen = await ObtenerResumenChecklistArranqueAsync(id, cn),
-                CalidadResumen = await ObtenerResumenCalidadAsync(id, cn)
+
+                RegistrosHora =
+                    await ObtenerRegistrosHoraAsync(
+                        id,
+                        cn),
+
+                Paros =
+                    await ObtenerParosAsync(
+                        id,
+                        cn),
+
+                MotivosParo =
+                    await CargarMotivosParoAsync(
+                        cn),
+
+                ChecklistResumen =
+                    await ObtenerResumenChecklistArranqueAsync(
+                        id,
+                        cn),
+
+                CalidadResumen =
+                    await ObtenerResumenCalidadAsync(
+                        id,
+                        cn)
             };
-            vm.RecepcionesOF = await ObtenerRecepcionesOFAsync(
-    vm.Ejecucion.EjecucionProduccionID,
-    cn,
-    null
-);
+
+            vm.RecepcionesOF =
+                await ObtenerEntregasAlmacenOFAsync(
+                    ejecucion,
+                    cn,
+                    null);
+
             return View(vm);
         }
 
-        private async Task<List<ProduccionRecepcionOFVm>> ObtenerRecepcionesOFAsync(
-    int ejecucionProduccionId,
-    SqlConnection cn,
-    SqlTransaction? tx)
+
+        private async Task<List<ProduccionRecepcionOFVm>>
+    ObtenerEntregasAlmacenOFAsync(
+        ProduccionEjecucionVm ejecucion,
+        SqlConnection cn,
+        SqlTransaction? tx)
         {
             var lista = new List<ProduccionRecepcionOFVm>();
 
+            if (!ejecucion.SolicitudProduccionID.HasValue ||
+                ejecucion.SolicitudProduccionID.Value <= 0)
+            {
+                return lista;
+            }
+
             const string sql = @"
+DECLARE @FolioSolicitud NVARCHAR(100);
+DECLARE @NumeroOFRecibida NVARCHAR(100);
+
+SELECT TOP (1)
+    @FolioSolicitud =
+        NULLIF(
+            LTRIM(RTRIM(ISNULL(FolioSolicitud, N''))),
+            N''
+        ),
+
+    @NumeroOFRecibida =
+        NULLIF(
+            LTRIM(RTRIM(ISNULL(NumeroOFRecibida, N''))),
+            N''
+        )
+FROM dbo.SolicitudesProduccion
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;
+
+/* ============================================================
+   MATERIA PRIMA Y COMPONENTES
+   ============================================================ */
 SELECT
-    RecepcionOFID,
-    EjecucionProduccionID,
-    ProgramaProduccionID,
-    TipoRecepcion,
-    Codigo,
-    Descripcion,
-    Lote,
-    NumeroUI,
-    EtiquetaInicio,
-    EtiquetaFin,
-    Cantidad,
-    Unidad,
-    EntregadoPor,
-    RecibidoPor,
-    FechaRecepcion,
-    Observaciones
-FROM dbo.Produccion_RecepcionOF
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1
+    CONVERT(BIGINT, movimiento.MovimientoID) AS MovimientoID,
+    N'MP' AS AreaAlmacen,
+
+    ISNULL(movimiento.TipoMovimiento, N'')
+        AS TipoMovimiento,
+
+    ISNULL(material.Codigo, N'')
+        AS Codigo,
+
+    ISNULL(material.Nombre, N'')
+        AS Descripcion,
+
+    ISNULL(movimiento.Lote, N'')
+        AS Lote,
+
+    ISNULL(movimiento.TipoMP, N'')
+        AS NumeroUI,
+
+    CONVERT
+    (
+        DECIMAL(18,4),
+        CASE
+            WHEN movimiento.TipoMovimiento = N'Retorno'
+                THEN -ABS(ISNULL(movimiento.Cantidad, 0))
+            ELSE ABS(ISNULL(movimiento.Cantidad, 0))
+        END
+    ) AS Cantidad,
+
+    ISNULL
+    (
+        NULLIF(
+            LTRIM(RTRIM(movimiento.Unidad)),
+            N''
+        ),
+        N'KG'
+    ) AS Unidad,
+
+    ISNULL(movimiento.EntregadoPorNombre, N'')
+        AS EntregadoPor,
+
+    movimiento.FechaMovimiento
+        AS FechaRecepcion,
+
+    ISNULL(movimiento.Seguimiento, N'')
+        AS Observaciones,
+
+    ISNULL(movimiento.NumeroOF, N'')
+        AS NumeroOF,
+
+    ISNULL(movimiento.ReferenciaOperacion, N'')
+        AS ReferenciaOperacion,
+
+    movimiento.SolicitudProduccionID
+
+FROM dbo.AlmacenMP_Movimientos movimiento
+
+INNER JOIN dbo.ERP_Materiales material
+    ON material.MaterialID =
+       movimiento.MaterialID
+
+WHERE movimiento.Activo = 1
+
+  AND movimiento.TipoMovimiento IN
+  (
+      N'Salida',
+      N'Consumo',
+      N'Retorno'
+  )
+
+  AND
+  (
+      movimiento.SolicitudProduccionID =
+          @SolicitudProduccionID
+
+      OR
+      (
+          movimiento.SolicitudProduccionID IS NULL
+
+          AND
+          (
+              (
+                  @FolioSolicitud IS NOT NULL
+
+                  AND LTRIM(
+                      RTRIM(
+                          ISNULL(
+                              movimiento.NumeroOF,
+                              N''
+                          )
+                      )
+                  ) = @FolioSolicitud
+              )
+
+              OR
+
+              (
+                  @NumeroOFRecibida IS NOT NULL
+
+                  AND LTRIM(
+                      RTRIM(
+                          ISNULL(
+                              movimiento.NumeroOF,
+                              N''
+                          )
+                      )
+                  ) = @NumeroOFRecibida
+              )
+          )
+      )
+  )
+
+UNION ALL
+
+/* ============================================================
+   EMBALAJES Y ETIQUETAS
+   ============================================================ */
+SELECT
+    CONVERT(BIGINT, movimiento.MovimientoID) AS MovimientoID,
+    N'EMBALAJE' AS AreaAlmacen,
+
+    ISNULL(movimiento.TipoMovimiento, N'')
+        AS TipoMovimiento,
+
+    ISNULL(embalaje.Codigo, N'')
+        AS Codigo,
+
+    ISNULL(embalaje.Nombre, N'')
+        AS Descripcion,
+
+    ISNULL(movimiento.Lote, N'')
+        AS Lote,
+
+    N'' AS NumeroUI,
+
+    CONVERT
+    (
+        DECIMAL(18,4),
+        CASE
+            WHEN movimiento.TipoMovimiento = N'Retorno'
+                THEN -ABS(ISNULL(movimiento.Cantidad, 0))
+            ELSE ABS(ISNULL(movimiento.Cantidad, 0))
+        END
+    ) AS Cantidad,
+
+    ISNULL(movimiento.Unidad, N'')
+        AS Unidad,
+
+    ISNULL(movimiento.EntregadoPorNombre, N'')
+        AS EntregadoPor,
+
+    movimiento.FechaMovimiento
+        AS FechaRecepcion,
+
+    ISNULL(movimiento.Seguimiento, N'')
+        AS Observaciones,
+
+    ISNULL(movimiento.NumeroOF, N'')
+        AS NumeroOF,
+
+    ISNULL(movimiento.ReferenciaOperacion, N'')
+        AS ReferenciaOperacion,
+
+    movimiento.SolicitudProduccionID
+
+FROM dbo.AlmacenEmbalajes_Movimientos movimiento
+
+INNER JOIN dbo.ERP_Embalajes embalaje
+    ON embalaje.EmbalajeID =
+       movimiento.EmbalajeID
+
+WHERE movimiento.Activo = 1
+
+  AND movimiento.TipoMovimiento IN
+  (
+      N'Salida',
+      N'Consumo',
+      N'Retorno'
+  )
+
+  AND
+  (
+      movimiento.SolicitudProduccionID =
+          @SolicitudProduccionID
+
+      OR
+      (
+          movimiento.SolicitudProduccionID IS NULL
+
+          AND
+          (
+              (
+                  @FolioSolicitud IS NOT NULL
+
+                  AND LTRIM(
+                      RTRIM(
+                          ISNULL(
+                              movimiento.NumeroOF,
+                              N''
+                          )
+                      )
+                  ) = @FolioSolicitud
+              )
+
+              OR
+
+              (
+                  @NumeroOFRecibida IS NOT NULL
+
+                  AND LTRIM(
+                      RTRIM(
+                          ISNULL(
+                              movimiento.NumeroOF,
+                              N''
+                          )
+                      )
+                  ) = @NumeroOFRecibida
+              )
+          )
+      )
+  )
+
 ORDER BY
     FechaRecepcion DESC,
-    RecepcionOFID DESC;";
+    MovimientoID DESC;";
 
-            using (var cmd = tx == null
+            using var cmd = tx == null
                 ? new SqlCommand(sql, cn)
-                : new SqlCommand(sql, cn, tx))
+                : new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add(
+                "@SolicitudProduccionID",
+                SqlDbType.Int).Value =
+                ejecucion.SolicitudProduccionID.Value;
+
+            using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
             {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                    ejecucionProduccionId;
+                var area =
+                    rd["AreaAlmacen"] == DBNull.Value
+                        ? string.Empty
+                        : rd["AreaAlmacen"].ToString()
+                          ?? string.Empty;
 
-                using (var rd = await cmd.ExecuteReaderAsync())
-                {
-                    while (await rd.ReadAsync())
+                var codigo =
+                    rd["Codigo"] == DBNull.Value
+                        ? null
+                        : rd["Codigo"].ToString();
+
+                var descripcion =
+                    rd["Descripcion"] == DBNull.Value
+                        ? null
+                        : rd["Descripcion"].ToString();
+
+                lista.Add(
+                    new ProduccionRecepcionOFVm
                     {
-                        lista.Add(new ProduccionRecepcionOFVm
-                        {
-                            RecepcionOFID = Convert.ToInt32(rd["RecepcionOFID"]),
-                            EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
-                            ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                        RecepcionOFID = 0,
 
-                            TipoRecepcion = rd["TipoRecepcion"] == DBNull.Value
-                                ? ""
-                                : rd["TipoRecepcion"].ToString() ?? "",
+                        MovimientoID =
+                            rd["MovimientoID"] == DBNull.Value
+                                ? 0L
+                                : Convert.ToInt64(
+                                    rd["MovimientoID"]),
 
-                            Codigo = rd["Codigo"] == DBNull.Value
-                                ? null
-                                : rd["Codigo"].ToString(),
+                        EjecucionProduccionID =
+                            ejecucion.EjecucionProduccionID,
 
-                            Descripcion = rd["Descripcion"] == DBNull.Value
-                                ? null
-                                : rd["Descripcion"].ToString(),
+                        ProgramaProduccionID =
+                            ejecucion.ProgramaProduccionID,
 
-                            Lote = rd["Lote"] == DBNull.Value
+                        SolicitudProduccionID =
+                            rd["SolicitudProduccionID"] == DBNull.Value
+                                ? ejecucion.SolicitudProduccionID
+                                : Convert.ToInt32(
+                                    rd["SolicitudProduccionID"]),
+
+                        OrigenRegistro = "ALMACEN",
+
+                        TipoMovimiento =
+                            rd["TipoMovimiento"] == DBNull.Value
+                                ? string.Empty
+                                : rd["TipoMovimiento"].ToString()
+                                  ?? string.Empty,
+
+                        TipoRecepcion =
+                            ClasificarTipoRecepcionAlmacen(
+                                area,
+                                codigo,
+                                descripcion),
+
+                        Codigo = codigo,
+
+                        Descripcion = descripcion,
+
+                        Lote =
+                            rd["Lote"] == DBNull.Value
                                 ? null
                                 : rd["Lote"].ToString(),
 
-                            NumeroUI = rd["NumeroUI"] == DBNull.Value
+                        NumeroUI =
+                            rd["NumeroUI"] == DBNull.Value
                                 ? null
                                 : rd["NumeroUI"].ToString(),
 
-                            EtiquetaInicio = rd["EtiquetaInicio"] == DBNull.Value
+                        EtiquetaInicio = null,
+                        EtiquetaFin = null,
+
+                        Cantidad =
+                            rd["Cantidad"] == DBNull.Value
                                 ? null
-                                : rd["EtiquetaInicio"].ToString(),
+                                : Convert.ToDecimal(
+                                    rd["Cantidad"]),
 
-                            EtiquetaFin = rd["EtiquetaFin"] == DBNull.Value
-                                ? null
-                                : rd["EtiquetaFin"].ToString(),
-
-                            Cantidad = rd["Cantidad"] == DBNull.Value
-                                ? (decimal?)null
-                                : Convert.ToDecimal(rd["Cantidad"]),
-
-                            Unidad = rd["Unidad"] == DBNull.Value
+                        Unidad =
+                            rd["Unidad"] == DBNull.Value
                                 ? null
                                 : rd["Unidad"].ToString(),
 
-                            EntregadoPor = rd["EntregadoPor"] == DBNull.Value
+                        EntregadoPor =
+                            rd["EntregadoPor"] == DBNull.Value
                                 ? null
                                 : rd["EntregadoPor"].ToString(),
 
-                            RecibidoPor = rd["RecibidoPor"] == DBNull.Value
-                                ? null
-                                : rd["RecibidoPor"].ToString(),
+                        RecibidoPor =
+                            string.IsNullOrWhiteSpace(
+                                ejecucion.OperadorNombre)
+                                ? "Producción"
+                                : ejecucion.OperadorNombre,
 
-                            FechaRecepcion = Convert.ToDateTime(rd["FechaRecepcion"]),
+                        FechaRecepcion =
+                            rd["FechaRecepcion"] == DBNull.Value
+                                ? DateTime.MinValue
+                                : Convert.ToDateTime(
+                                    rd["FechaRecepcion"]),
 
-                            Observaciones = rd["Observaciones"] == DBNull.Value
+                        Observaciones =
+                            rd["Observaciones"] == DBNull.Value
                                 ? null
-                                : rd["Observaciones"].ToString()
-                        });
-                    }
-                }
+                                : rd["Observaciones"].ToString(),
+
+                        NumeroOF =
+                            rd["NumeroOF"] == DBNull.Value
+                                ? null
+                                : rd["NumeroOF"].ToString(),
+
+                        ReferenciaOperacion =
+                            rd["ReferenciaOperacion"] == DBNull.Value
+                                ? null
+                                : rd["ReferenciaOperacion"].ToString()
+                    });
             }
 
             return lista;
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> GuardarRecepcionOF(ProduccionRecepcionOFPostVm vm)
+
+        private static string ClasificarTipoRecepcionAlmacen(
+    string areaAlmacen,
+    string? codigo,
+    string? descripcion)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
+            var area =
+                areaAlmacen?
+                    .Trim()
+                    .ToUpperInvariant()
+                ?? string.Empty;
 
-            if (vm.EjecucionProduccionID <= 0)
+            var texto =
+                (
+                    (codigo ?? string.Empty)
+                    + " "
+                    + (descripcion ?? string.Empty)
+                )
+                .Trim()
+                .ToUpperInvariant();
+
+            if (area == "EMBALAJE")
             {
-                TempData["Error"] = "No se recibió la ejecución de producción.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            if (vm.ProgramaProduccionID <= 0)
-            {
-                TempData["Error"] = "No se recibió el programa de producción.";
-                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
-            }
-
-            if (string.IsNullOrWhiteSpace(vm.TipoRecepcion))
-            {
-                TempData["Error"] = "Selecciona el tipo de recepción.";
-                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
-            }
-
-            var tipo = vm.TipoRecepcion.Trim().ToUpperInvariant();
-
-            if (tipo != "MP" &&
-                tipo != "COMPONENTE" &&
-                tipo != "EMBALAJE" &&
-                tipo != "ETIQUETA")
-            {
-                TempData["Error"] = "El tipo de recepción no es válido.";
-                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
-            }
-
-            if (tipo != "ETIQUETA" &&
-                (!vm.Cantidad.HasValue || vm.Cantidad.Value <= 0))
-            {
-                TempData["Error"] = "Captura una cantidad mayor a cero.";
-                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
-            }
-
-            if (tipo == "ETIQUETA" &&
-                string.IsNullOrWhiteSpace(vm.EtiquetaInicio) &&
-                string.IsNullOrWhiteSpace(vm.EtiquetaFin) &&
-                (!vm.Cantidad.HasValue || vm.Cantidad.Value <= 0))
-            {
-                TempData["Error"] = "Para etiquetas captura rango inicio/fin o cantidad.";
-                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
-            }
-
-            var usuarioId = ObtenerUsuarioID();
-
-            using (var cn = new SqlConnection(ConnectionString))
-            {
-                await cn.OpenAsync();
-
-                using (var tx = cn.BeginTransaction())
+                if (texto.Contains("ETIQUETA") ||
+                    texto.Contains("LABEL") ||
+                    texto.Contains("STICKER"))
                 {
-                    try
-                    {
-                        var existe = await ExisteEjecucionProgramaAsync(
-                            vm.EjecucionProduccionID,
-                            vm.ProgramaProduccionID,
-                            cn,
-                            tx
-                        );
-
-                        if (!existe)
-                        {
-                            tx.Rollback();
-
-                            TempData["Error"] =
-                                "La ejecución no corresponde al programa indicado.";
-
-                            return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
-                        }
-
-                        const string sql = @"
-INSERT INTO dbo.Produccion_RecepcionOF
-(
-    EjecucionProduccionID,
-    ProgramaProduccionID,
-    TipoRecepcion,
-    Codigo,
-    Descripcion,
-    Lote,
-    NumeroUI,
-    EtiquetaInicio,
-    EtiquetaFin,
-    Cantidad,
-    Unidad,
-    EntregadoPor,
-    RecibidoPor,
-    FechaRecepcion,
-    Observaciones,
-    Activo,
-    UsuarioCreacionID,
-    FechaCreacion
-)
-VALUES
-(
-    @EjecucionProduccionID,
-    @ProgramaProduccionID,
-    @TipoRecepcion,
-    @Codigo,
-    @Descripcion,
-    @Lote,
-    @NumeroUI,
-    @EtiquetaInicio,
-    @EtiquetaFin,
-    @Cantidad,
-    @Unidad,
-    @EntregadoPor,
-    @RecibidoPor,
-    @FechaRecepcion,
-    @Observaciones,
-    1,
-    @UsuarioCreacionID,
-    GETDATE()
-);";
-
-                        using (var cmd = new SqlCommand(sql, cn, tx))
-                        {
-                            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                                vm.EjecucionProduccionID;
-
-                            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
-                                vm.ProgramaProduccionID;
-
-                            cmd.Parameters.Add("@TipoRecepcion", SqlDbType.NVarChar, 30).Value =
-                                tipo;
-
-                            cmd.Parameters.Add("@Codigo", SqlDbType.NVarChar, 100).Value =
-                                string.IsNullOrWhiteSpace(vm.Codigo)
-                                    ? DBNull.Value
-                                    : vm.Codigo.Trim();
-
-                            cmd.Parameters.Add("@Descripcion", SqlDbType.NVarChar, 300).Value =
-                                string.IsNullOrWhiteSpace(vm.Descripcion)
-                                    ? DBNull.Value
-                                    : vm.Descripcion.Trim();
-
-                            cmd.Parameters.Add("@Lote", SqlDbType.NVarChar, 100).Value =
-                                string.IsNullOrWhiteSpace(vm.Lote)
-                                    ? DBNull.Value
-                                    : vm.Lote.Trim();
-
-                            cmd.Parameters.Add("@NumeroUI", SqlDbType.NVarChar, 100).Value =
-                                string.IsNullOrWhiteSpace(vm.NumeroUI)
-                                    ? DBNull.Value
-                                    : vm.NumeroUI.Trim();
-
-                            cmd.Parameters.Add("@EtiquetaInicio", SqlDbType.NVarChar, 100).Value =
-                                string.IsNullOrWhiteSpace(vm.EtiquetaInicio)
-                                    ? DBNull.Value
-                                    : vm.EtiquetaInicio.Trim();
-
-                            cmd.Parameters.Add("@EtiquetaFin", SqlDbType.NVarChar, 100).Value =
-                                string.IsNullOrWhiteSpace(vm.EtiquetaFin)
-                                    ? DBNull.Value
-                                    : vm.EtiquetaFin.Trim();
-
-                            var cantidadParam = cmd.Parameters.Add("@Cantidad", SqlDbType.Decimal);
-                            cantidadParam.Precision = 18;
-                            cantidadParam.Scale = 4;
-                            cantidadParam.Value = vm.Cantidad.HasValue
-                                ? vm.Cantidad.Value
-                                : DBNull.Value;
-
-                            cmd.Parameters.Add("@Unidad", SqlDbType.NVarChar, 30).Value =
-                                string.IsNullOrWhiteSpace(vm.Unidad)
-                                    ? DBNull.Value
-                                    : vm.Unidad.Trim();
-
-                            cmd.Parameters.Add("@EntregadoPor", SqlDbType.NVarChar, 200).Value =
-                                string.IsNullOrWhiteSpace(vm.EntregadoPor)
-                                    ? DBNull.Value
-                                    : vm.EntregadoPor.Trim();
-
-                            cmd.Parameters.Add("@RecibidoPor", SqlDbType.NVarChar, 200).Value =
-                                string.IsNullOrWhiteSpace(vm.RecibidoPor)
-                                    ? DBNull.Value
-                                    : vm.RecibidoPor.Trim();
-
-                            cmd.Parameters.Add("@FechaRecepcion", SqlDbType.DateTime).Value =
-                                vm.FechaRecepcion.HasValue
-                                    ? vm.FechaRecepcion.Value
-                                    : DateTime.Now;
-
-                            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
-                                string.IsNullOrWhiteSpace(vm.Observaciones)
-                                    ? DBNull.Value
-                                    : vm.Observaciones.Trim();
-
-                            cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value =
-                                usuarioId > 0 ? usuarioId : DBNull.Value;
-
-                            await cmd.ExecuteNonQueryAsync();
-                        }
-
-                        tx.Commit();
-
-                        TempData["Success"] = "Recepción registrada correctamente.";
-                    }
-                    catch (Exception ex)
-                    {
-                        tx.Rollback();
-
-                        TempData["Error"] =
-                            "No fue posible guardar la recepción: " + ex.Message;
-                    }
+                    return "ETIQUETA";
                 }
+
+                return "EMBALAJE";
             }
 
-            return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+            if (area == "MP")
+            {
+                if (texto.Contains("COMPONENTE") ||
+                    texto.Contains("INSERTO") ||
+                    texto.Contains("INSERT") ||
+                    texto.Contains("BUJE") ||
+                    texto.Contains("TORNILLO") ||
+                    texto.Contains("TUERCA") ||
+                    texto.Contains("ARANDELA") ||
+                    texto.Contains("RESORTE"))
+                {
+                    return "COMPONENTE";
+                }
+
+                return "MP";
+            }
+
+            return area;
         }
 
 
@@ -1503,11 +1646,21 @@ VALUES
                         new { id = vm.EjecucionProduccionID });
                 }
 
-                await InsertarRegistroHoraAsync(
+                var registroHoraId = await InsertarRegistroHoraAsync(
+    ejecucion,
+    vm,
+    horaInicio,
+    horaFin,
+    usuarioId,
+    cn,
+    tx);
+
+                await VincularRegistroHoraConMonitoreoAsync(
                     ejecucion,
                     vm,
                     horaInicio,
                     horaFin,
+                    registroHoraId,
                     usuarioId,
                     cn,
                     tx);
@@ -3563,14 +3716,15 @@ VALUES
             return Convert.ToInt32(await cmd.ExecuteScalarAsync());
         }
 
-        private async Task InsertarRegistroHoraAsync(
-            ProduccionEjecucionVm ejecucion,
-            ProduccionRegistroHoraPostVm vm,
-            TimeSpan horaInicio,
-            TimeSpan horaFin,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+
+        private async Task<int> InsertarRegistroHoraAsync(
+    ProduccionEjecucionVm ejecucion,
+    ProduccionRegistroHoraPostVm vm,
+    TimeSpan horaInicio,
+    TimeSpan horaFin,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
         {
             const string sql = @"
 INSERT INTO dbo.Produccion_RegistroHora
@@ -3580,17 +3734,22 @@ INSERT INTO dbo.Produccion_RegistroHora
     SolicitudProduccionID,
     MaquinaID,
     OperadorID,
+
     FechaProduccion,
     HoraInicio,
     HoraFin,
+
     CantidadOK,
     CantidadSospechosa,
     CantidadScrap,
+
     Observaciones,
+
     UsuarioCreacionID,
     FechaCreacion,
     Activo
 )
+OUTPUT INSERTED.RegistroHoraID
 VALUES
 (
     @EjecucionProduccionID,
@@ -3598,13 +3757,17 @@ VALUES
     @SolicitudProduccionID,
     @MaquinaID,
     @OperadorID,
+
     @FechaProduccion,
     @HoraInicio,
     @HoraFin,
+
     @CantidadOK,
     @CantidadSospechosa,
     @CantidadScrap,
+
     @Observaciones,
+
     @UsuarioID,
     GETDATE(),
     1
@@ -3612,46 +3775,83 @@ VALUES
 
             await using var cmd = new SqlCommand(sql, cn, tx);
 
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
                 ejecucion.EjecucionProduccionID;
 
-            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@ProgramaProduccionID",
+                SqlDbType.Int).Value =
                 ejecucion.ProgramaProduccionID;
 
-            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@SolicitudProduccionID",
+                SqlDbType.Int).Value =
                 (object?)ejecucion.SolicitudProduccionID ?? DBNull.Value;
 
-            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@MaquinaID",
+                SqlDbType.Int).Value =
                 (object?)ejecucion.MaquinaID ?? DBNull.Value;
 
-            cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@OperadorID",
+                SqlDbType.Int).Value =
                 (object?)ejecucion.OperadorID ?? DBNull.Value;
 
-            cmd.Parameters.Add("@FechaProduccion", SqlDbType.Date).Value =
+            cmd.Parameters.Add(
+                "@FechaProduccion",
+                SqlDbType.Date).Value =
                 vm.FechaProduccion.Date;
 
-            cmd.Parameters.Add("@HoraInicio", SqlDbType.Time).Value =
+            cmd.Parameters.Add(
+                "@HoraInicio",
+                SqlDbType.Time).Value =
                 horaInicio;
 
-            cmd.Parameters.Add("@HoraFin", SqlDbType.Time).Value =
+            cmd.Parameters.Add(
+                "@HoraFin",
+                SqlDbType.Time).Value =
                 horaFin;
 
-            cmd.Parameters.Add("@CantidadOK", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@CantidadOK",
+                SqlDbType.Int).Value =
                 vm.CantidadOK;
 
-            cmd.Parameters.Add("@CantidadSospechosa", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@CantidadSospechosa",
+                SqlDbType.Int).Value =
                 vm.CantidadSospechosa;
 
-            cmd.Parameters.Add("@CantidadScrap", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@CantidadScrap",
+                SqlDbType.Int).Value =
                 vm.CantidadScrap;
 
-            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
-                (object?)vm.Observaciones ?? DBNull.Value;
+            cmd.Parameters.Add(
+                "@Observaciones",
+                SqlDbType.NVarChar,
+                500).Value =
+                string.IsNullOrWhiteSpace(vm.Observaciones)
+                    ? DBNull.Value
+                    : vm.Observaciones.Trim();
 
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
                 usuarioId;
 
-            await cmd.ExecuteNonQueryAsync();
+            var resultado = await cmd.ExecuteScalarAsync();
+
+            if (resultado == null || resultado == DBNull.Value)
+            {
+                throw new InvalidOperationException(
+                    "No fue posible obtener el identificador del registro por hora.");
+            }
+
+            return Convert.ToInt32(resultado);
         }
 
         private async Task<ProduccionChecklistResumenVm?> ObtenerResumenChecklistArranqueAsync(
@@ -4176,9 +4376,6 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
             return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
         }
 
-        // ============================================================
-        // MAPEO Y HELPERS
-        // ============================================================
 
         private static ProduccionEjecucionVm MapearEjecucion(
             SqlDataReader rd)

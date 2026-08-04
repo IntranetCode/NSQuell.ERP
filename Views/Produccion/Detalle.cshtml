@@ -36,10 +36,6 @@
         return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
     }
 
-    public static string FechaInput(DateTime value)
-    {
-        return value.ToString("yyyy-MM-ddTHH:mm");
-    }
 
     public static string Dec4(decimal? value)
     {
@@ -251,21 +247,18 @@
                 box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
             }
 
-        .recepcion-form {
-            border: 1px solid #d7e2f1;
-            border-radius: 16px;
-            background: #fbfdff;
-            padding: 14px;
-        }
-
-        .recepcion-alert {
-            border: 1px solid #fed7aa;
-            background: #fff7ed;
-            color: #9a3412;
+        .almacen-note {
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
             border-radius: 14px;
             padding: 12px 14px;
             font-size: .86rem;
             font-weight: 700;
+        }
+
+        .movimiento-retorno {
+            background: #fff7ed;
         }
 
         .soft-box {
@@ -655,76 +648,7 @@
                     </div>
                 }
 
-                @if (e.PuedeRegistrarProduccion && !Model.TieneParoAbierto)
-                {
-                    <div class="panel mb-4">
-                        <div class="panel-header">
-                            <i class="bi bi-plus-circle me-1"></i>
-                            Registrar piezas por hora
-                        </div>
-
-                        <div class="panel-body">
-                            <form method="post" action="@Url.Action("RegistrarHora", "Produccion")">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Fecha</label>
-                                    <input type="date"
-                                           name="FechaProduccion"
-                                           value="@DateTime.Today.ToString("yyyy-MM-dd")"
-                                           class="form-control" />
-                                </div>
-
-                                <div class="row g-2 mb-3">
-                                    <div class="col-6">
-                                        <label class="form-label fw-bold">Hora inicio</label>
-                                        <input type="time"
-                                               name="HoraInicio"
-                                               value="@horaInicio.ToString(@"hh\:mm")"
-                                               class="form-control" />
-                                    </div>
-
-                                    <div class="col-6">
-                                        <label class="form-label fw-bold">Hora fin</label>
-                                        <input type="time"
-                                               name="HoraFin"
-                                               value="@horaFin.ToString(@"hh\:mm")"
-                                               class="form-control" />
-                                    </div>
-                                </div>
-
-                                <div class="row g-2 mb-3">
-                                    <div class="col-4">
-                                        <label class="form-label fw-bold text-success">OK</label>
-                                        <input type="number" name="CantidadOK" min="0" value="0" class="form-control form-control-lg text-center fw-bold" />
-                                    </div>
-
-                                    <div class="col-4">
-                                        <label class="form-label fw-bold text-warning">Sospechoso</label>
-                                        <input type="number" name="CantidadSospechosa" min="0" value="0" class="form-control form-control-lg text-center fw-bold" />
-                                    </div>
-
-                                    <div class="col-4">
-                                        <label class="form-label fw-bold text-danger">Scrap</label>
-                                        <input type="number" name="CantidadScrap" min="0" value="0" class="form-control form-control-lg text-center fw-bold" />
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Observaciones</label>
-                                    <textarea name="Observaciones" rows="2" maxlength="500" class="form-control"></textarea>
-                                </div>
-
-                                <button type="submit" class="btn btn-success w-100 btn-strong">
-                                    <i class="bi bi-save me-1"></i>
-                                    Guardar captura
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                }
+               
 
                 @if (Model.TieneParoAbierto)
                 {
@@ -844,126 +768,37 @@
             <div class="col-12 col-xl-8">
 
                 <div class="panel mb-4">
-                    <div class="panel-header">
-                        <i class="bi bi-box-seam me-1"></i>
-                        Recepciones parciales contra OF
+                    <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span>
+                            <i class="bi bi-box-seam me-1"></i>
+                            Entregas de Almacén contra OF
+                        </span>
+
+                        <span class="badge bg-primary">
+                            @(Model.RecepcionesOF?.Count ?? 0) movimiento(s)
+                        </span>
                     </div>
 
                     <div class="panel-body">
-                        <div class="recepcion-alert mb-3">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Este registro es manual mientras Almacén termina su integración. Puede capturarse por partes:
-                            materia prima, componentes, embalaje o etiquetas. No descuenta inventario.
+                        <div class="almacen-note mb-3">
+                            <i class="bi bi-arrow-repeat me-1"></i>
+                            Esta información se obtiene automáticamente de los movimientos de Almacén.
+                            Las salidas y consumos representan entregas a Producción; los retornos se muestran con cantidad negativa.
                         </div>
-
-                        <form method="post" action="@Url.Action("GuardarRecepcionOF", "Produccion")" class="recepcion-form mb-4" id="formRecepcionOF">
-                            @Html.AntiForgeryToken()
-
-                            <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
-                            <input type="hidden" name="ProgramaProduccionID" value="@e.ProgramaProduccionID" />
-
-                            <div class="row g-3">
-                                <div class="col-md-3">
-                                    <label class="form-label">Tipo</label>
-                                    <select name="TipoRecepcion" id="TipoRecepcion" class="form-select" required>
-                                        <option value="">-- Selecciona --</option>
-                                        <option value="MP">Materia prima</option>
-                                        <option value="COMPONENTE">Componente</option>
-                                        <option value="EMBALAJE">Embalaje</option>
-                                        <option value="ETIQUETA">Etiqueta</option>
-                                    </select>
-                                </div>
-
-                                <div class="col-md-3">
-                                    <label class="form-label">Código</label>
-                                    <input type="text" name="Codigo" class="form-control" maxlength="100" placeholder="Código interno / SAP" />
-                                </div>
-
-                                <div class="col-md-6">
-                                    <label class="form-label">Descripción</label>
-                                    <input type="text" name="Descripcion" class="form-control" maxlength="300" placeholder="Material, componente, caja, etiqueta..." />
-                                </div>
-
-                                <div class="col-md-3">
-                                    <label class="form-label">Lote</label>
-                                    <input type="text" name="Lote" class="form-control" maxlength="100" placeholder="Lote material" />
-                                </div>
-
-                                <div class="col-md-3">
-                                    <label class="form-label">N.UI / Embalaje</label>
-                                    <input type="text" name="NumeroUI" class="form-control" maxlength="100" placeholder="N.UI Emb" />
-                                </div>
-
-                                <div class="col-md-3 etiqueta-field">
-                                    <label class="form-label">Etiqueta inicio</label>
-                                    <input type="text" name="EtiquetaInicio" class="form-control" maxlength="100" placeholder="Inicio" />
-                                </div>
-
-                                <div class="col-md-3 etiqueta-field">
-                                    <label class="form-label">Etiqueta fin</label>
-                                    <input type="text" name="EtiquetaFin" class="form-control" maxlength="100" placeholder="Fin" />
-                                </div>
-
-                                <div class="col-md-3">
-                                    <label class="form-label">Cantidad</label>
-                                    <input type="number" name="Cantidad" class="form-control" step="0.0001" min="0" placeholder="0.0000" />
-                                </div>
-
-                                <div class="col-md-3">
-                                    <label class="form-label">Unidad</label>
-                                    <select name="Unidad" class="form-select">
-                                        <option value="">-- Unidad --</option>
-                                        <option value="KG">KG</option>
-                                        <option value="PZA">PZA</option>
-                                        <option value="CAJA">CAJA</option>
-                                        <option value="ROLLO">ROLLO</option>
-                                        <option value="RANGO">RANGO</option>
-                                        <option value="N/A">N/A</option>
-                                    </select>
-                                </div>
-
-                                <div class="col-md-3">
-                                    <label class="form-label">Entregó</label>
-                                    <input type="text" name="EntregadoPor" class="form-control" maxlength="200" placeholder="Persona / área" />
-                                </div>
-
-                                <div class="col-md-3">
-                                    <label class="form-label">Recibió</label>
-                                    <input type="text" name="RecibidoPor" class="form-control" maxlength="200" value="@e.TextoOperador" />
-                                </div>
-
-                                <div class="col-md-4">
-                                    <label class="form-label">Fecha recepción</label>
-                                    <input type="datetime-local" name="FechaRecepcion" class="form-control" value="@FechaInput(DateTime.Now)" />
-                                </div>
-
-                                <div class="col-md-8">
-                                    <label class="form-label">Observaciones</label>
-                                    <input type="text" name="Observaciones" class="form-control" maxlength="500" placeholder="Parcial, complemento, cambio de lote, entrega manual..." />
-                                </div>
-
-                                <div class="col-12 d-flex justify-content-end">
-                                    <button type="submit" class="btn btn-primary btn-strong">
-                                        <i class="bi bi-save me-1"></i>
-                                        Guardar recepción
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
 
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
                                 <thead>
                                     <tr>
                                         <th>Tipo</th>
+                                        <th>Movimiento</th>
                                         <th>Código / descripción</th>
-                                        <th>Lote / N.UI</th>
-                                        <th>Etiqueta</th>
+                                        <th>Lote / tipo MP</th>
                                         <th class="text-end">Cantidad</th>
                                         <th>Entregó / recibió</th>
                                         <th>Fecha</th>
+                                        <th>OF / referencia</th>
                                         <th>Observaciones</th>
-                                        <th class="text-end">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -971,7 +806,8 @@
                                     {
                                         <tr>
                                             <td colspan="9" class="text-center text-muted py-4">
-                                                Sin recepciones registradas contra la OF.
+                                                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                                Almacén todavía no registra entregas para esta OF.
                                             </td>
                                         </tr>
                                     }
@@ -979,11 +815,31 @@
                                     {
                                         foreach (var r in Model.RecepcionesOF)
                                         {
-                                            <tr>
+                                            var esRetorno = string.Equals(
+                                            r.TipoMovimiento,
+                                            "Retorno",
+                                            StringComparison.OrdinalIgnoreCase);
+
+                                            var claseMovimiento = esRetorno
+                                            ? "badge bg-warning text-dark"
+                                            : string.Equals(r.TipoMovimiento, "Consumo", StringComparison.OrdinalIgnoreCase)
+                                            ? "badge bg-info text-dark"
+                                            : "badge bg-success";
+
+                                            <tr class="@(esRetorno ? "movimiento-retorno" : "")">
                                                 <td>
                                                     <span class="@TipoClase(r.TipoRecepcion)">
                                                         @r.TextoTipo
                                                     </span>
+                                                </td>
+
+                                                <td>
+                                                    <span class="@claseMovimiento">
+                                                        @Txt(r.TipoMovimiento)
+                                                    </span>
+                                                    <div class="text-muted small mt-1">
+                                                        Movimiento #@r.MovimientoID
+                                                    </div>
                                                 </td>
 
                                                 <td>
@@ -993,22 +849,21 @@
 
                                                 <td>
                                                     <div><strong>Lote:</strong> @Txt(r.Lote)</div>
-                                                    <div class="text-muted small"><strong>N.UI:</strong> @Txt(r.NumeroUI)</div>
+                                                    <div class="text-muted small">
+                                                        <strong>Tipo MP:</strong> @Txt(r.NumeroUI)
+                                                    </div>
                                                 </td>
 
-                                                <td>
-                                                    <div><strong>Ini:</strong> @Txt(r.EtiquetaInicio)</div>
-                                                    <div class="text-muted small"><strong>Fin:</strong> @Txt(r.EtiquetaFin)</div>
-                                                </td>
-
-                                                <td class="text-end fw-bold">
+                                                <td class="text-end fw-bold @(esRetorno ? "text-danger" : "text-success")">
                                                     @Dec4(r.Cantidad)
                                                     <div class="text-muted small">@Txt(r.Unidad)</div>
                                                 </td>
 
                                                 <td>
                                                     <div><strong>Entregó:</strong> @Txt(r.EntregadoPor)</div>
-                                                    <div class="text-muted small"><strong>Recibió:</strong> @Txt(r.RecibidoPor)</div>
+                                                    <div class="text-muted small">
+                                                        <strong>Recibió:</strong> @Txt(r.RecibidoPor)
+                                                    </div>
                                                 </td>
 
                                                 <td>
@@ -1016,20 +871,14 @@
                                                 </td>
 
                                                 <td>
-                                                    @Txt(r.Observaciones)
+                                                    <div><strong>OF:</strong> @Txt(r.NumeroOF)</div>
+                                                    <div class="text-muted small text-break">
+                                                        <strong>Ref.:</strong> @Txt(r.ReferenciaOperacion)
+                                                    </div>
                                                 </td>
 
-                                                <td class="text-end">
-                                                    <button type="button"
-                                                            class="btn btn-sm btn-outline-danger btn-strong"
-                                                            data-bs-toggle="modal"
-                                                            data-bs-target="#modalCancelarRecepcion"
-                                                            data-recepcion-id="@r.RecepcionOFID"
-                                                            data-tipo="@r.TextoTipo"
-                                                            data-descripcion="@Txt(r.Descripcion)">
-                                                        <i class="bi bi-x-circle me-1"></i>
-                                                        Cancelar
-                                                    </button>
+                                                <td>
+                                                    @Txt(r.Observaciones)
                                                 </td>
                                             </tr>
                                         }
@@ -1146,90 +995,8 @@
 
     </div>
 
-    <div class="modal fade" id="modalCancelarRecepcion" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <form method="post" action="@Url.Action("CancelarRecepcionOF", "Produccion")">
-                    @Html.AntiForgeryToken()
-
-                    <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title fw-bold">
-                            <i class="bi bi-x-circle me-1"></i>
-                            Cancelar recepción
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-
-                    <div class="modal-body">
-                        <input type="hidden" name="recepcionOFId" id="cancelarRecepcionOFId" />
-                        <input type="hidden" name="ejecucionProduccionId" value="@e.EjecucionProduccionID" />
-
-                        <div class="soft-box mb-3">
-                            <div class="data-label">Recepción</div>
-                            <div class="data-value" id="cancelarRecepcionTexto">-</div>
-                        </div>
-
-                        <label class="form-label">Motivo de cancelación</label>
-                        <textarea name="motivoCancelacion"
-                                  class="form-control"
-                                  rows="3"
-                                  maxlength="500"
-                                  required
-                                  placeholder="Explica por qué se cancela esta recepción..."></textarea>
-                    </div>
-
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-light btn-strong" data-bs-dismiss="modal">
-                            Cerrar
-                        </button>
-                        <button type="submit" class="btn btn-danger btn-strong">
-                            Confirmar cancelación
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-    <script>
-        const tipoRecepcion = document.getElementById('TipoRecepcion');
-        const etiquetaFields = document.querySelectorAll('.etiqueta-field');
 
-        function actualizarCamposEtiqueta() {
-            const tipo = (tipoRecepcion?.value || '').toUpperCase();
-
-            etiquetaFields.forEach(function (el) {
-                el.style.display = tipo === 'ETIQUETA' ? '' : 'none';
-            });
-        }
-
-        tipoRecepcion?.addEventListener('change', actualizarCamposEtiqueta);
-        actualizarCamposEtiqueta();
-
-        const modalCancelarRecepcion = document.getElementById('modalCancelarRecepcion');
-
-        modalCancelarRecepcion?.addEventListener('show.bs.modal', function (event) {
-            const btn = event.relatedTarget;
-
-            if (!btn) return;
-
-            const recepcionId = btn.getAttribute('data-recepcion-id') || '';
-            const tipo = btn.getAttribute('data-tipo') || '';
-            const descripcion = btn.getAttribute('data-descripcion') || '';
-
-            const inputId = document.getElementById('cancelarRecepcionOFId');
-            const texto = document.getElementById('cancelarRecepcionTexto');
-
-            if (inputId) {
-                inputId.value = recepcionId;
-            }
-
-            if (texto) {
-                texto.textContent = tipo + ' · ' + descripcion;
-            }
-        });
-    </script>
 </body>
 </html>

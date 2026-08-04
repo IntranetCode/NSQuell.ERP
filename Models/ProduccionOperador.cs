@@ -1,99 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace ERP.NSQuell.Models
 {
-    public sealed class ProduccionOperadorCajasVm
-    {
-        public int EjecucionProduccionID { get; set; }
-        public int ProgramaProduccionID { get; set; }
-        public int? SolicitudProduccionID { get; set; }
-
-        public string? FolioSolicitud { get; set; }
-        public string? NumeroOFRecibida { get; set; }
-
-        public string? ClienteNombre { get; set; }
-
-        public string? MaquinaCodigo { get; set; }
-        public string? MaquinaNombre { get; set; }
-
-        public string? NumeroParte { get; set; }
-        public string? ReferenciaSAP { get; set; }
-        public string? DescripcionParte { get; set; }
-
-        public string? MoldeCodigo { get; set; }
-
-        public string? MaterialCodigo { get; set; }
-        public string? MaterialDescripcion { get; set; }
-
-        public string? EmbalajeCodigo { get; set; }
-        public string? EmbalajeDescripcion { get; set; }
-
-        public int CantidadPlaneada { get; set; }
-        public int CantidadOKTotal { get; set; }
-        public int CantidadSospechosaTotal { get; set; }
-        public int CantidadScrapTotal { get; set; }
-
-        public int CantidadOKEnCajas { get; set; }
-        public int CantidadSospechosaEnCajas { get; set; }
-        public int CantidadScrapEnCajas { get; set; }
-        public int CantidadRetencionEnCajas { get; set; }
-
-        public int SiguienteNumeroCaja { get; set; }
-
-        public bool PuedeFormarCaja { get; set; }
-        public bool TieneParoAbierto { get; set; }
-        public int EstatusID { get; set; }
-
-        public List<ProduccionOperadorCajaVm> Cajas { get; set; } =
-            new List<ProduccionOperadorCajaVm>();
-
-        public int DisponibleOK
-        {
-            get
-            {
-                var disponible = CantidadOKTotal - CantidadOKEnCajas;
-                return disponible < 0 ? 0 : disponible;
-            }
-        }
-
-        public int DisponibleSospechoso
-        {
-            get
-            {
-                var disponible = CantidadSospechosaTotal - CantidadSospechosaEnCajas;
-                return disponible < 0 ? 0 : disponible;
-            }
-        }
-
-        public int DisponibleScrap
-        {
-            get
-            {
-                var disponible = CantidadScrapTotal - CantidadScrapEnCajas;
-                return disponible < 0 ? 0 : disponible;
-            }
-        }
-
-        public int TotalEnCajas
-        {
-            get
-            {
-                return CantidadOKEnCajas +
-                       CantidadSospechosaEnCajas +
-                       CantidadScrapEnCajas +
-                       CantidadRetencionEnCajas;
-            }
-        }
-    }
-
-
     public sealed class ProduccionAlertaProximoProgramaVm
     {
         public int ProgramaProduccionID { get; set; }
         public int? EjecucionProduccionID { get; set; }
 
-        public string TipoAlerta { get; set; } = "";
+        public string TipoAlerta { get; set; } = string.Empty;
+
         public string TipoAlertaNombre
         {
             get
@@ -127,12 +42,18 @@ namespace ERP.NSQuell.Models
 
         public bool YaDebeAtenderse
         {
-            get { return MinutosRestantes <= 0; }
+            get
+            {
+                return MinutosRestantes <= 0;
+            }
         }
 
         public bool EsCambioMolde
         {
-            get { return TipoAlerta == "CAMBIO_MOLDE"; }
+            get
+            {
+                return TipoAlerta == "CAMBIO_MOLDE";
+            }
         }
 
         public int? OperadorPrincipalID { get; set; }
@@ -203,9 +124,10 @@ namespace ERP.NSQuell.Models
             }
         }
     }
+
     public sealed class ProduccionOperadorCajaVm
     {
-        public int CajaProduccionID { get; set; }
+        public long CajaProduccionID { get; set; }
         public int EjecucionProduccionID { get; set; }
         public int ProgramaProduccionID { get; set; }
 
@@ -221,7 +143,9 @@ namespace ERP.NSQuell.Models
         public bool EtiquetaVerde { get; set; }
 
         public int EstadoCajaID { get; set; }
-        public string EstadoCajaNombre { get; set; } = "Formada en Producción";
+
+        public string EstadoCajaNombre { get; set; } =
+            "Formada en Producción";
 
         public DateTime FechaFormacion { get; set; }
         public int? UsuarioFormacionID { get; set; }
@@ -248,52 +172,82 @@ namespace ERP.NSQuell.Models
 
         public bool EstaFormada
         {
-            get { return EstadoCajaID == 1; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.FormadaProduccion;
+            }
         }
 
         public bool EstaPendienteCalidad
         {
-            get { return EstadoCajaID == 2; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.PendienteCalidad;
+            }
         }
 
         public bool EstaLiberadaCalidad
         {
-            get { return EstadoCajaID == 3 && EtiquetaVerde; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.LiberadaCalidad && EtiquetaVerde;
+            }
         }
 
         public bool EstaRetenida
         {
-            get { return EstadoCajaID == 4; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.RetenidaGp12Scrap;
+            }
         }
 
         public bool EstaEnZonaVerde
         {
-            get { return EstadoCajaID == 5; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.ZonaVerde;
+            }
         }
 
         public bool TieneSalidaProduccion
         {
-            get { return EstadoCajaID == 6; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.SalidaProduccion;
+            }
         }
 
         public bool RecibidaAlmacen
         {
-            get { return EstadoCajaID == 7; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.RecibidaAlmacenPt;
+            }
         }
 
         public bool PuedeSolicitarCalidad
         {
-            get { return EstadoCajaID == 1; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.FormadaProduccion;
+            }
         }
 
         public bool PuedeMoverZonaVerde
         {
-            get { return EstadoCajaID == 3 && EtiquetaVerde; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.LiberadaCalidad && EtiquetaVerde;
+            }
         }
 
         public bool PuedeEscanearSalidaProduccion
         {
-            get { return EstadoCajaID == 5; }
+            get
+            {
+                return EstadoCajaID == ProduccionCajaEstatus.ZonaVerde;
+            }
         }
     }
 }
