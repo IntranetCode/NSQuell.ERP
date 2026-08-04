@@ -63,111 +63,8 @@ public sealed class AlmacenEmbalajesController : AlmacenBaseController
             return View(vm);
         }
 
-        // SOLICITADO EMBALAJE:
-        // requerido por Planeación menos lo ya entregado a la misma OF.
+        // ALMACEN_RESERVAS_V5_0
         const string sql = @"
-WITH Requerido AS
-(
-    SELECT
-        s.SolicitudProduccionID,
-        s.FolioSolicitud,
-        s.NumeroOFRecibida,
-        embalaje.EmbalajeID,
-        SUM
-        (
-            CONVERT
-            (
-                DECIMAL(18,4),
-                ISNULL(detalle.CantidadEmbalajes, 0)
-            )
-        ) AS CantidadRequerida
-    FROM dbo.SolicitudesProduccion s
-    INNER JOIN dbo.SolicitudesProduccionDetalle detalle
-        ON detalle.SolicitudProduccionID =
-           s.SolicitudProduccionID
-       AND detalle.Activo = 1
-    INNER JOIN dbo.ERP_Embalajes embalaje
-        ON embalaje.Activo = 1
-       AND UPPER
-           (
-               LTRIM
-               (
-                   RTRIM
-                   (
-                       ISNULL(detalle.EmbalajeCodigo, N'')
-                   )
-               )
-           ) =
-           UPPER(LTRIM(RTRIM(embalaje.Codigo)))
-    WHERE s.Activo = 1
-      AND ISNULL(detalle.CantidadEmbalajes, 0) > 0
-    GROUP BY
-        s.SolicitudProduccionID,
-        s.FolioSolicitud,
-        s.NumeroOFRecibida,
-        embalaje.EmbalajeID
-),
-PendientePorEmbalaje AS
-(
-    SELECT
-        requerido.EmbalajeID,
-        SUM
-        (
-            CASE
-                WHEN requerido.CantidadRequerida
-                     - ISNULL(entregado.CantidadEntregada, 0) > 0
-                    THEN requerido.CantidadRequerida
-                         - ISNULL(entregado.CantidadEntregada, 0)
-                ELSE 0
-            END
-        ) AS Solicitado
-    FROM Requerido requerido
-    OUTER APPLY
-    (
-        SELECT
-            SUM
-            (
-                CASE
-                    WHEN movimiento.TipoMovimiento IN
-                         (
-                             N'Salida',
-                             N'Consumo'
-                         )
-                        THEN movimiento.Cantidad
-                    WHEN movimiento.TipoMovimiento = N'Retorno'
-                        THEN -movimiento.Cantidad
-                    ELSE 0
-                END
-            ) AS CantidadEntregada
-        FROM dbo.AlmacenEmbalajes_Movimientos movimiento
-        WHERE movimiento.Activo = 1
-          AND movimiento.EmbalajeID =
-              requerido.EmbalajeID
-          AND
-          (
-              (
-                  NULLIF
-                  (
-                      LTRIM(RTRIM(requerido.FolioSolicitud)),
-                      N''
-                  ) IS NOT NULL
-                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                      LTRIM(RTRIM(requerido.FolioSolicitud))
-              )
-              OR
-              (
-                  NULLIF
-                  (
-                      LTRIM(RTRIM(requerido.NumeroOFRecibida)),
-                      N''
-                  ) IS NOT NULL
-                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                      LTRIM(RTRIM(requerido.NumeroOFRecibida))
-              )
-          )
-    ) entregado
-    GROUP BY requerido.EmbalajeID
-)
 SELECT TOP (500)
     inventario.EmbalajeID AS MaterialID,
     inventario.Codigo,
@@ -175,32 +72,21 @@ SELECT TOP (500)
     inventario.Unidad,
     inventario.Entradas,
     inventario.Salidas,
-    inventario.Saldo,
-    CONVERT
-    (
-        DECIMAL(18,4),
-        ISNULL(pendiente.Solicitado, 0)
-    ) AS Solicitado,
+    inventario.Disponible AS Saldo,
+    CONVERT(DECIMAL(18,4), 0) AS Solicitado,
     inventario.StockMinimo,
     inventario.StockAviso,
     inventario.StockConfigurado,
     inventario.Semaforo,
     inventario.UltimoMovimiento
 FROM dbo.vw_AlmacenEmbalajesInventario inventario
-LEFT JOIN PendientePorEmbalaje pendiente
-    ON pendiente.EmbalajeID =
-       inventario.EmbalajeID
 WHERE
     (
         @Q IS NULL
         OR inventario.Codigo LIKE N'%' + @Q + N'%'
         OR inventario.Nombre LIKE N'%' + @Q + N'%'
     )
-    AND
-    (
-        @Estado IS NULL
-        OR inventario.Semaforo = @Estado
-    )
+    AND (@Estado IS NULL OR inventario.Semaforo = @Estado)
 ORDER BY
     CASE inventario.Semaforo
         WHEN N'SIN_CONFIGURAR' THEN 0
@@ -1128,9 +1014,13 @@ WHERE EmbalajeID=@Id AND Activo=1;";
 
             if (EsSalidaMP(model.TipoMovimiento))
             {
-                const string saldoSql = "SELECT ISNULL(Saldo,0) FROM dbo.vw_AlmacenEmbalajesInventario WHERE EmbalajeID=@MaterialID;";
+                const string saldoSql = @"
+SELECT CASE WHEN @EsEntregaOF = 1 THEN Fisico ELSE Disponible END
+FROM dbo.vw_AlmacenEmbalajesInventario
+WHERE EmbalajeID = @MaterialID;";
                 await using var saldoCommand = new SqlCommand(saldoSql, connection, transaction);
                 saldoCommand.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
+                saldoCommand.Parameters.Add("@EsEntregaOF", SqlDbType.Bit).Value = model.EsEntregaOF;
                 var saldo = Convert.ToDecimal(await saldoCommand.ExecuteScalarAsync(cancellationToken) ?? 0m);
                 if (saldo < model.Cantidad)
                 {
@@ -1145,10 +1035,10 @@ WHERE EmbalajeID=@Id AND Activo=1;";
 INSERT dbo.AlmacenEmbalajes_Movimientos
 (FechaMovimiento, EmbalajeID, TipoMovimiento, Lote, Cantidad, Unidad, UbicacionID, NumeroOF,
  ResponsableUsuarioID, EntregadoPorNombre, Seguimiento, FechaCreacion, CreadoPor, Activo,
- RequiereValidacionProduccion, ValidadoProduccion, ReferenciaOperacion)
+ RequiereValidacionProduccion, ValidadoProduccion, ReferenciaOperacion, SolicitudProduccionID)
 VALUES
 (SYSDATETIME(), @EmbalajeID, @Tipo, @Lote, @Cantidad, @Unidad, @UbicacionID, @NumeroOF,
- @UsuarioID, @Responsable, @Observaciones, SYSUTCDATETIME(), @Responsable, 1, 0, 1, @Referencia);";
+ @UsuarioID, @Responsable, @Observaciones, SYSUTCDATETIME(), @Responsable, 1, 0, 1, @Referencia, @SolicitudProduccionID);";
             await using var insert = new SqlCommand(insertSql, connection, transaction);
             insert.Parameters.Add("@EmbalajeID", SqlDbType.Int).Value = model.MaterialID;
             insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value = model.TipoMovimiento;
@@ -1164,6 +1054,7 @@ VALUES
             insert.Parameters.Add("@Responsable", SqlDbType.NVarChar, 180).Value = UsuarioNombre;
             insert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value = string.IsNullOrWhiteSpace(model.Observaciones) ? DBNull.Value : model.Observaciones;
             insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = referencia;
+            insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = model.SolicitudProduccionID.HasValue ? model.SolicitudProduccionID.Value : DBNull.Value;
             await insert.ExecuteNonQueryAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -1244,6 +1135,3 @@ SELECT DISTINCT TOP(500) LTRIM(RTRIM(Lote)) AS Valor FROM dbo.AlmacenEmbalajes_M
         Responsable=Texto(reader,"Responsable"),Observaciones=Texto(reader,"Observaciones"),ReferenciaOperacion=Texto(reader,"ReferenciaOperacion")
     };
 }
-
-
-

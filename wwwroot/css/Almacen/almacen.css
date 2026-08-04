@@ -1251,3 +1251,245 @@ body {
         vertical-align: middle;
     }
 }
+
+/* ALMACEN_RESERVAS_V5_0 */
+.inv5-catalog { overflow: hidden; }
+.inv5-filter { grid-template-columns: minmax(240px, 1fr) minmax(180px, 240px) 90px auto auto; }
+.inv5-type-filter { max-width: 90px; }
+.inv5-stock-table { min-width: 980px; }
+.inv5-type-col { width: 58px; text-align: center; }
+.inv5-type-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-weight: 800;
+    border: 1px solid var(--alm-border);
+    background: var(--alm-surface-soft);
+}
+.inv5-type-badge.v { color: #59d58c; }
+.inv5-type-badge.m { color: #e6b85c; }
+.inv5-number { white-space: nowrap; }
+.inv5-number.reserved strong { color: #e6b85c; }
+.inv5-number.retained strong { color: #d78bff; }
+.inv5-number.available strong { font-weight: 800; }
+@media (max-width: 900px) {
+    .inv5-filter { grid-template-columns: 1fr; }
+    .inv5-type-filter { max-width: none; }
+}
+
+/* ALMACEN_STOCK_UNICO_V5_0_3 */
+.stock-only-catalog { overflow: hidden; }
+.stock-only-filter { grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px) auto auto; }
+.stock-only-table { min-width: 760px; }
+.stock-only-table .pt-stock { white-space: nowrap; }
+
+.mp-stock-detail__total {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    padding: 1.25rem;
+    margin: 1rem;
+    border: 1px solid var(--alm-border);
+    border-radius: 16px;
+    background: var(--alm-surface-soft);
+}
+
+.mp-stock-detail__total small,
+.mp-stock-detail__item small {
+    font-size: .72rem;
+    letter-spacing: .08em;
+    opacity: .72;
+}
+
+.mp-stock-detail__total strong {
+    font-size: clamp(1.8rem, 4vw, 3rem);
+}
+
+.mp-stock-detail__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 0 1rem 1rem;
+}
+
+.mp-stock-detail__item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--alm-border);
+    border-radius: 16px;
+    background: var(--alm-surface-soft);
+}
+
+.mp-stock-detail__item > div {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+}
+
+.mp-stock-detail__item > div strong {
+    font-size: 1.45rem;
+}
+
+.mp-stock-detail__item > div span {
+    font-size: .8rem;
+    opacity: .7;
+}
+
+.mp-stock-detail__type {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    border: 1px solid var(--alm-border);
+    background: var(--alm-surface);
+}
+
+@media (max-width: 800px) {
+    .stock-only-filter,
+    .mp-stock-detail__grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ALMACEN_STOCK_Y_DETALLE_V5_0_4 */
+.alm-table thead th,
+.alm-table-fit thead th,
+.alm-table-history thead th,
+.alm-table-history-pt thead th {
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+.stock-only-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.stock-only-table .stock-col-code {
+    width: 20%;
+}
+
+.stock-only-table .stock-col-description {
+    width: auto;
+}
+
+.stock-only-table .stock-col-quantity {
+    width: 145px;
+}
+
+.stock-only-table .stock-col-date {
+    width: 185px;
+}
+
+.stock-only-table .stock-col-actions {
+    width: 190px;
+}
+
+.stock-only-table .stock-quantity-cell,
+.stock-only-table .pt-stock {
+    width: 145px;
+    max-width: 145px;
+    text-align: center;
+}
+
+.stock-only-table .pt-stock-badge {
+    width: fit-content;
+    min-width: 76px;
+    justify-content: center;
+}
+
+.mp-stock-breakdown-table {
+    min-width: 850px;
+    table-layout: fixed;
+}
+
+.mp-stock-breakdown-table .mp-detail-col-type {
+    width: 86px;
+}
+
+.mp-stock-breakdown-table .mp-detail-col-number {
+    width: 165px;
+}
+
+.mp-stock-breakdown-table .mp-detail-col-date {
+    width: 205px;
+}
+
+.mp-stock-breakdown-table .mp-detail-col-actions {
+    width: 90px;
+}
+
+.mp-stock-breakdown-table tbody td {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.mp-stock-total-row td {
+    border-top: 2px solid var(--alm-border) !important;
+    background: var(--alm-surface-soft);
+}
+
+.mp-stock-detail__type.is-small {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    font-size: .9rem;
+}
+
+.mp-detail-movements-table {
+    min-width: 1180px;
+}
+
+.mp-detail-movements-table tbody td {
+    vertical-align: middle;
+}
+
+.mp-stock-selector-help {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.mp-stock-selector-help span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 10px;
+    border: 1px solid var(--alm-border);
+    border-radius: 999px;
+    background: var(--alm-surface-soft);
+    font-size: .82rem;
+}
+
+.mp-stock-selector-help strong {
+    color: var(--alm-text);
+}
+
+@media (max-width: 900px) {
+    .stock-only-table {
+        table-layout: auto;
+    }
+
+    .stock-only-table .stock-col-code,
+    .stock-only-table .stock-col-description,
+    .stock-only-table .stock-col-quantity,
+    .stock-only-table .stock-col-date,
+    .stock-only-table .stock-col-actions,
+    .stock-only-table .stock-quantity-cell,
+    .stock-only-table .pt-stock {
+        width: auto;
+        max-width: none;
+    }
+}
+/* ALMACEN_STOCK_Y_DETALLE_V5_0_4_END */

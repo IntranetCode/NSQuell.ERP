@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models.ViewModels.Almacen;
+using ERP.NSQuell.Models.ViewModels.Almacen;
 using ERP.NSQuell.Servicios.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -8,7 +8,7 @@ using System.Text;
 namespace ERP.NSQuell.Controllers;
 
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AlmacenMPController : AlmacenBaseController
+public sealed partial class AlmacenMPController : AlmacenBaseController
 {
     private static readonly string[] TiposPermitidos =
     {
@@ -58,118 +58,46 @@ public sealed class AlmacenMPController : AlmacenBaseController
                 connection,
                 "dbo.AlmacenMP_Movimientos",
                 "TipoMP",
+                cancellationToken)
+            || !await ExisteColumnaAsync(
+                connection,
+                "dbo.AlmacenMP_Movimientos",
+                "MaterialSolicitadoID",
                 cancellationToken))
         {
             vm.Configurado = false;
             vm.MensajeConfiguracion =
-                "Falta ejecutar la instalacion completa del almacen MP y la migracion MOLIDO/VIRGEN.";
+                "Falta ejecutar la instalacion completa de Almacen MP y el SQL de sustitucion v5.0.4.";
 
             return View(vm);
         }
 
+        // ALMACEN_RESERVAS_V5_0
         const string sql = @"
-WITH Tipos AS
-(
-    SELECT N'VIRGEN' AS TipoMP, 0 AS OrdenTipo
-    UNION ALL
-    SELECT N'MOLIDO' AS TipoMP, 1 AS OrdenTipo
-),
-Movimientos AS
-(
-    SELECT
-        movimiento.MaterialID,
-        CASE
-            WHEN UPPER(LTRIM(RTRIM(ISNULL(movimiento.TipoMP, N'')))) = N'MOLIDO'
-                THEN N'MOLIDO'
-            ELSE N'VIRGEN'
-        END AS TipoMP,
-        SUM
-        (
-            CASE
-                WHEN movimiento.TipoMovimiento IN
-                     (N'Entrada', N'Retorno', N'Ajuste', N'AjustePositivo')
-                    THEN movimiento.Cantidad
-                ELSE 0
-            END
-        ) AS Entradas,
-        SUM
-        (
-            CASE
-                WHEN movimiento.TipoMovimiento IN
-                     (N'Salida', N'Consumo', N'Scrap', N'AjusteNegativo')
-                    THEN movimiento.Cantidad
-                ELSE 0
-            END
-        ) AS Salidas,
-        MAX(movimiento.FechaMovimiento) AS UltimoMovimiento
-    FROM dbo.AlmacenMP_Movimientos movimiento
-    WHERE movimiento.Activo = 1
-    GROUP BY
-        movimiento.MaterialID,
-        CASE
-            WHEN UPPER(LTRIM(RTRIM(ISNULL(movimiento.TipoMP, N'')))) = N'MOLIDO'
-                THEN N'MOLIDO'
-            ELSE N'VIRGEN'
-        END
-),
-Inventario AS
-(
-    SELECT
-        material.MaterialID,
-        material.Codigo,
-        material.Nombre,
-        N'KG' AS Unidad,
-        tipo.TipoMP,
-        tipo.OrdenTipo,
-        ISNULL(movimiento.Entradas, 0) AS Entradas,
-        ISNULL(movimiento.Salidas, 0) AS Salidas,
-        ISNULL(movimiento.Entradas, 0) - ISNULL(movimiento.Salidas, 0) AS Saldo,
-        CONVERT(DECIMAL(18,4), 0) AS Solicitado,
-        material.StockMinimo,
-        material.StockAviso,
-        CASE
-            WHEN movimiento.MaterialID IS NULL THEN CONVERT(BIT, 0)
-            ELSE material.StockConfigurado
-        END AS StockConfigurado,
-        CASE
-            WHEN movimiento.MaterialID IS NULL THEN N'SIN_CONFIGURAR'
-            WHEN material.StockConfigurado = 0 THEN N'SIN_CONFIGURAR'
-            WHEN ISNULL(movimiento.Entradas, 0) - ISNULL(movimiento.Salidas, 0) <= material.StockMinimo THEN N'ROJO'
-            WHEN ISNULL(movimiento.Entradas, 0) - ISNULL(movimiento.Salidas, 0) <= material.StockAviso THEN N'AMARILLO'
-            ELSE N'VERDE'
-        END AS Semaforo,
-        movimiento.UltimoMovimiento
-    FROM dbo.ERP_Materiales material
-    CROSS JOIN Tipos tipo
-    LEFT JOIN Movimientos movimiento
-        ON movimiento.MaterialID = material.MaterialID
-       AND movimiento.TipoMP = tipo.TipoMP
-    WHERE material.Activo = 1
-)
 SELECT TOP (1000)
-    MaterialID, Codigo, Nombre, Unidad, TipoMP,
-    Entradas, Salidas, Saldo, Solicitado,
-    StockMinimo, StockAviso, StockConfigurado,
-    Semaforo, UltimoMovimiento
-FROM Inventario
+    MaterialID,
+    Codigo,
+    Nombre,
+    Unidad,
+    TipoMP,
+    Entradas,
+    Salidas,
+    Disponible AS Saldo,
+    CONVERT(DECIMAL(18,4), 0) AS Solicitado,
+    StockMinimo,
+    StockAviso,
+    StockConfigurado,
+    Semaforo,
+    UltimoMovimiento
+FROM dbo.vw_AlmacenMPInventario
 WHERE
     (
         @Q IS NULL
         OR Codigo LIKE N'%' + @Q + N'%'
         OR Nombre LIKE N'%' + @Q + N'%'
     )
-    AND (@Estado IS NULL OR Semaforo = @Estado)
     AND (@TipoMP IS NULL OR TipoMP = @TipoMP)
-ORDER BY
-    OrdenTipo,
-    CASE Semaforo
-        WHEN N'ROJO' THEN 0
-        WHEN N'AMARILLO' THEN 1
-        WHEN N'VERDE' THEN 2
-        ELSE 3
-    END,
-    Nombre,
-    Codigo;";
+ORDER BY Codigo, OrdenTipo, Nombre;";
 
         await using (var command =
             new SqlCommand(sql, connection))
@@ -326,129 +254,7 @@ ORDER BY
                     });
             }
         }
-        // ALMACEN_MP_SOLICITADO_POR_MATERIAL_V1_0
-        // Mientras Planeacion no distinga VIRGEN y MOLIDO, la demanda de OF
-        // se presenta solamente en VIRGEN para no duplicar el solicitado.
-        const string solicitadoPorMaterialSql = @"
-WITH Requerido AS
-(
-    SELECT
-        solicitud.SolicitudProduccionID,
-        solicitud.FolioSolicitud,
-        solicitud.NumeroOFRecibida,
-        material.MaterialID,
-        SUM
-        (
-            CONVERT
-            (
-                DECIMAL(18,4),
-                ISNULL(detalle.CantidadMpKg, 0)
-            )
-        ) AS CantidadRequerida
-    FROM dbo.SolicitudesProduccion solicitud
-    INNER JOIN dbo.SolicitudesProduccionDetalle detalle
-        ON detalle.SolicitudProduccionID = solicitud.SolicitudProduccionID
-       AND detalle.Activo = 1
-    INNER JOIN dbo.ERP_Materiales material
-        ON material.Activo = 1
-       AND
-       (
-           detalle.MaterialID = material.MaterialID
-           OR
-           (
-               detalle.MaterialID IS NULL
-               AND UPPER(LTRIM(RTRIM(ISNULL(detalle.MaterialCodigo, N'')))) =
-                   UPPER(LTRIM(RTRIM(material.Codigo)))
-           )
-       )
-    WHERE solicitud.Activo = 1
-      AND ISNULL(detalle.CantidadMpKg, 0) > 0
-    GROUP BY
-        solicitud.SolicitudProduccionID,
-        solicitud.FolioSolicitud,
-        solicitud.NumeroOFRecibida,
-        material.MaterialID
-),
-Pendiente AS
-(
-    SELECT
-        requerido.MaterialID,
-        CASE
-            WHEN requerido.CantidadRequerida
-                 - ISNULL(entregado.CantidadEntregada, 0) > 0
-                THEN requerido.CantidadRequerida
-                     - ISNULL(entregado.CantidadEntregada, 0)
-            ELSE 0
-        END AS CantidadPendiente
-    FROM Requerido requerido
-    OUTER APPLY
-    (
-        SELECT
-            SUM
-            (
-                CASE
-                    WHEN movimiento.TipoMovimiento IN (N'Salida', N'Consumo')
-                        THEN movimiento.Cantidad
-                    WHEN movimiento.TipoMovimiento = N'Retorno'
-                        THEN -movimiento.Cantidad
-                    ELSE 0
-                END
-            ) AS CantidadEntregada
-        FROM dbo.AlmacenMP_Movimientos movimiento
-        WHERE movimiento.Activo = 1
-          AND movimiento.MaterialID = requerido.MaterialID
-          AND
-          (
-              (
-                  NULLIF(LTRIM(RTRIM(requerido.FolioSolicitud)), N'') IS NOT NULL
-                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                      LTRIM(RTRIM(requerido.FolioSolicitud))
-              )
-              OR
-              (
-                  NULLIF(LTRIM(RTRIM(requerido.NumeroOFRecibida)), N'') IS NOT NULL
-                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                      LTRIM(RTRIM(requerido.NumeroOFRecibida))
-              )
-          )
-    ) entregado
-)
-SELECT
-    MaterialID,
-    CONVERT(DECIMAL(18,4), SUM(CantidadPendiente)) AS Solicitado
-FROM Pendiente
-WHERE CantidadPendiente > 0.0005
-GROUP BY MaterialID;";
-
-        var solicitadoPorMaterial = new Dictionary<int, decimal>();
-
-        await using (var solicitadoCommand =
-            new SqlCommand(solicitadoPorMaterialSql, connection))
-        await using (var solicitadoReader =
-            await solicitadoCommand.ExecuteReaderAsync(cancellationToken))
-        {
-            while (await solicitadoReader.ReadAsync(cancellationToken))
-            {
-                solicitadoPorMaterial[
-                    Entero(solicitadoReader, "MaterialID")] =
-                    DecimalValor(solicitadoReader, "Solicitado");
-            }
-        }
-
-        foreach (var existencia in vm.Existencias)
-        {
-            decimal solicitado;
-            existencia.Solicitado =
-                string.Equals(
-                    existencia.TipoMP,
-                    "VIRGEN",
-                    StringComparison.OrdinalIgnoreCase)
-                && solicitadoPorMaterial.TryGetValue(
-                    existencia.MaterialID,
-                    out solicitado)
-                    ? solicitado
-                    : 0m;
-        }
+        // ALMACEN_RESERVAS_V5_0: Reservado ya proviene de la vista de inventario.
         // Misma estructura operativa utilizada en Inventario PT.
         const string resumenSql = @"
 WITH Requerido AS
@@ -532,28 +338,39 @@ Pendiente AS
             ) AS CantidadEntregada
         FROM dbo.AlmacenMP_Movimientos movimiento
         WHERE movimiento.Activo = 1
-          AND movimiento.MaterialID =
-              requerido.MaterialID
+          AND COALESCE
+              (
+                  movimiento.MaterialSolicitadoID,
+                  movimiento.MaterialID
+              ) = requerido.MaterialID
           AND
           (
-              (
-                  NULLIF
-                  (
-                      LTRIM(RTRIM(requerido.FolioSolicitud)),
-                      N''
-                  ) IS NOT NULL
-                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                      LTRIM(RTRIM(requerido.FolioSolicitud))
-              )
+              movimiento.SolicitudProduccionID = requerido.SolicitudProduccionID
               OR
               (
-                  NULLIF
+                  movimiento.SolicitudProduccionID IS NULL
+                  AND
                   (
-                      LTRIM(RTRIM(requerido.NumeroOFRecibida)),
-                      N''
-                  ) IS NOT NULL
-                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                      LTRIM(RTRIM(requerido.NumeroOFRecibida))
+                      (
+                          NULLIF
+                          (
+                              LTRIM(RTRIM(requerido.FolioSolicitud)),
+                              N''
+                          ) IS NOT NULL
+                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                              LTRIM(RTRIM(requerido.FolioSolicitud))
+                      )
+                      OR
+                      (
+                          NULLIF
+                          (
+                              LTRIM(RTRIM(requerido.NumeroOFRecibida)),
+                              N''
+                          ) IS NOT NULL
+                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                              LTRIM(RTRIM(requerido.NumeroOFRecibida))
+                      )
+                  )
               )
           )
     ) entregado
@@ -1271,9 +1088,11 @@ WHERE MaterialID=@Id AND Activo=1;";
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
 
+        var materialSolicitadoID = materialId.GetValueOrDefault();
+
         var vm = new AlmacenMPMovimientoFormVm
         {
-            MaterialID = materialId.GetValueOrDefault(),
+            MaterialID = materialSolicitadoID,
             TipoMovimiento = entregaOF
                 ? "Salida"
                 : TiposPermitidos.Contains(tipo ?? string.Empty)
@@ -1290,11 +1109,13 @@ WHERE MaterialID=@Id AND Activo=1;";
             OperacionToken = AlmacenOFEntregaService.CrearToken()
         };
 
+        AlmacenOFEntregaContexto? contexto = null;
+
         if (entregaOF)
         {
             if (!solicitudProduccionId.HasValue
                 || solicitudProduccionId.Value <= 0
-                || vm.MaterialID <= 0)
+                || materialSolicitadoID <= 0)
             {
                 Mensaje("warning", "No se recibio una OF y un material validos.");
                 return RedirectToAction("Index", "AlmacenOF");
@@ -1303,16 +1124,16 @@ WHERE MaterialID=@Id AND Activo=1;";
             await using var connection =
                 await AbrirConexionAsync(cancellationToken);
 
-            var contexto = await AlmacenOFEntregaService.CargarMateriaPrimaAsync(
+            contexto = await AlmacenOFEntregaService.CargarMateriaPrimaAsync(
                 connection,
                 null,
                 solicitudProduccionId.Value,
-                vm.MaterialID,
+                materialSolicitadoID,
                 cancellationToken);
 
             if (contexto == null)
             {
-                Mensaje("warning", "El material no pertenece a la OF seleccionada.");
+                Mensaje("warning", "El material solicitado no pertenece a la OF seleccionada.");
                 return RedirectToAction("Index", "AlmacenOF");
             }
 
@@ -1324,7 +1145,7 @@ WHERE MaterialID=@Id AND Activo=1;";
 
             if (contexto.Pendiente <= 0.0005m)
             {
-                Mensaje("warning", "La materia prima seleccionada ya fue entregada completamente.");
+                Mensaje("warning", "La materia prima solicitada ya fue entregada completamente.");
                 return RedirectToAction("Index", "AlmacenOF");
             }
 
@@ -1335,7 +1156,9 @@ WHERE MaterialID=@Id AND Activo=1;";
             vm.Observaciones = $"Entrega de materia prima para {contexto.NumeroOF}.";
         }
 
-        await CargarMovimientoAsync(vm, cancellationToken);
+        await CargarMovimientoAsync(vm, cancellationToken, materialSolicitadoID);
+        PrepararVistaEntregaMP(vm, materialSolicitadoID, contexto?.Codigo);
+
         return View(vm);
     }
 
@@ -1343,6 +1166,7 @@ WHERE MaterialID=@Id AND Activo=1;";
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Movimiento(
         AlmacenMPMovimientoFormVm model,
+        int? materialSolicitadoId,
         CancellationToken cancellationToken)
     {
         var sesion = ValidarSesion();
@@ -1357,6 +1181,10 @@ WHERE MaterialID=@Id AND Activo=1;";
         model.FechaMovimiento = DateTime.Now;
         model.EsEntregaOF = model.EsEntregaOF || model.SolicitudProduccionID.HasValue;
 
+        var materialSolicitadoID = model.EsEntregaOF
+            ? materialSolicitadoId.GetValueOrDefault()
+            : model.MaterialID;
+
         ModelState.Remove(nameof(model.Unidad));
         ModelState.Remove(nameof(model.Lote));
         ModelState.Remove(nameof(model.TipoMP));
@@ -1368,9 +1196,9 @@ WHERE MaterialID=@Id AND Activo=1;";
                 "La operacion expiro. Regresa al formulario e intentalo nuevamente.");
         }
 
-        if (model.TipoMP is not ("VIRGEN" or "MOLIDO"))
+        if (model.TipoMP is not ("V" or "M"))
         {
-            ModelState.AddModelError(nameof(model.TipoMP), "Selecciona VIRGEN o MOLIDO.");
+            ModelState.AddModelError(nameof(model.TipoMP), "Selecciona V o M.");
         }
 
         if (model.EsEntregaOF)
@@ -1394,18 +1222,25 @@ WHERE MaterialID=@Id AND Activo=1;";
                     "La orden de fabricacion es obligatoria.");
             }
 
+            if (materialSolicitadoID <= 0)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "No se pudo identificar la materia prima solicitada originalmente.");
+            }
+
             if (model.MaterialID <= 0)
             {
                 ModelState.AddModelError(
                     nameof(model.MaterialID),
-                    "El material es obligatorio.");
+                    "Selecciona la materia prima que se entregara.");
             }
 
             if (string.IsNullOrWhiteSpace(model.Observaciones))
             {
                 ModelState.AddModelError(
                     nameof(model.Observaciones),
-                    "Las observaciones son obligatorias.");
+                    "Las observaciones son obligatorias para la entrega a una OF.");
             }
         }
 
@@ -1427,7 +1262,8 @@ WHERE MaterialID=@Id AND Activo=1;";
 
         if (!ModelState.IsValid)
         {
-            await CargarMovimientoAsync(model, cancellationToken);
+            await CargarMovimientoAsync(model, cancellationToken, materialSolicitadoID);
+            PrepararVistaEntregaMP(model, materialSolicitadoID);
             return View(model);
         }
 
@@ -1459,31 +1295,33 @@ WHERE MaterialID=@Id AND Activo=1;";
                     : RedirectToAction(nameof(Index));
             }
 
-            string codigo;
+            AlmacenOFEntregaContexto? contexto = null;
+            var codigoSolicitado = string.Empty;
 
             if (model.EsEntregaOF)
             {
-                var contexto = await AlmacenOFEntregaService.CargarMateriaPrimaAsync(
+                contexto = await AlmacenOFEntregaService.CargarMateriaPrimaAsync(
                     connection,
                     transaction,
                     model.SolicitudProduccionID!.Value,
-                    model.MaterialID,
+                    materialSolicitadoID,
                     cancellationToken);
 
                 if (contexto == null)
                 {
                     ModelState.AddModelError(
-                        nameof(model.MaterialID),
-                        "El material no pertenece a la OF seleccionada.");
+                        string.Empty,
+                        "La materia prima solicitada originalmente no pertenece a la OF.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(model, cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken, materialSolicitadoID);
+                    PrepararVistaEntregaMP(model, materialSolicitadoID);
                     return View(model);
                 }
 
                 model.NumeroOF = contexto.NumeroOF;
                 model.Unidad = "KG";
                 model.CantidadPendienteOF = contexto.Pendiente;
-                codigo = contexto.Codigo;
+                codigoSolicitado = contexto.Codigo;
 
                 if (string.IsNullOrWhiteSpace(contexto.NumeroOF))
                 {
@@ -1491,7 +1329,8 @@ WHERE MaterialID=@Id AND Activo=1;";
                         nameof(model.SolicitudProduccionID),
                         "Planeacion todavia no asigna un numero de OF valido.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(model, cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken, materialSolicitadoID);
+                    PrepararVistaEntregaMP(model, materialSolicitadoID, codigoSolicitado);
                     return View(model);
                 }
 
@@ -1499,9 +1338,10 @@ WHERE MaterialID=@Id AND Activo=1;";
                 {
                     ModelState.AddModelError(
                         nameof(model.Cantidad),
-                        "La entrega de este material ya esta completa.");
+                        "La entrega de la materia prima solicitada ya esta completa.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(model, cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken, materialSolicitadoID);
+                    PrepararVistaEntregaMP(model, materialSolicitadoID, codigoSolicitado);
                     return View(model);
                 }
 
@@ -1511,70 +1351,87 @@ WHERE MaterialID=@Id AND Activo=1;";
                         nameof(model.Cantidad),
                         $"La cantidad excede lo pendiente. Maximo permitido: {contexto.Pendiente:0.###} KG.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(model, cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken, materialSolicitadoID);
+                    PrepararVistaEntregaMP(model, materialSolicitadoID, codigoSolicitado);
                     return View(model);
                 }
             }
-            else
-            {
-                const string materialSql = @"
+
+            const string materialSql = @"
 SELECT Codigo, Nombre
 FROM dbo.ERP_Materiales WITH (UPDLOCK, HOLDLOCK)
 WHERE MaterialID = @Id
   AND Activo = 1;";
 
-                await using var materialCommand =
-                    new SqlCommand(materialSql, connection, transaction);
+            string codigoEntregado;
+            string nombreEntregado;
+
+            await using (var materialCommand =
+                new SqlCommand(materialSql, connection, transaction))
+            {
                 materialCommand.Parameters.Add("@Id", SqlDbType.Int).Value = model.MaterialID;
 
-                await using var reader =
+                await using var materialReader =
                     await materialCommand.ExecuteReaderAsync(cancellationToken);
 
-                if (!await reader.ReadAsync(cancellationToken))
+                if (!await materialReader.ReadAsync(cancellationToken))
                 {
                     ModelState.AddModelError(
                         nameof(model.MaterialID),
-                        "El material no existe o esta inactivo.");
+                        "La materia prima seleccionada no existe o esta inactiva.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(model, cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken, materialSolicitadoID);
+                    PrepararVistaEntregaMP(model, materialSolicitadoID, codigoSolicitado);
                     return View(model);
                 }
 
-                codigo = Texto(reader, "Codigo");
+                codigoEntregado = Texto(materialReader, "Codigo");
+                nombreEntregado = Texto(materialReader, "Nombre");
+            }
+
+            var mismoMaterial = !model.EsEntregaOF
+                || model.MaterialID == materialSolicitadoID;
+
+            if (model.EsEntregaOF && mismoMaterial)
+            {
+                const string asignarTipoSql = @"
+IF OBJECT_ID(N'dbo.sp_AlmacenMP_AsignarTipoReserva', N'P') IS NOT NULL
+BEGIN
+    EXEC dbo.sp_AlmacenMP_AsignarTipoReserva
+        @SolicitudProduccionID = @SolicitudProduccionID,
+        @MaterialID = @MaterialID,
+        @TipoMP = @TipoMP,
+        @Usuario = @Usuario;
+END;";
+
+                await using var asignarTipo =
+                    new SqlCommand(asignarTipoSql, connection, transaction);
+                asignarTipo.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+                    model.SolicitudProduccionID!.Value;
+                asignarTipo.Parameters.Add("@MaterialID", SqlDbType.Int).Value = materialSolicitadoID;
+                asignarTipo.Parameters.Add("@TipoMP", SqlDbType.NChar, 1).Value = model.TipoMP;
+                asignarTipo.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
+                await asignarTipo.ExecuteNonQueryAsync(cancellationToken);
             }
 
             if (EsSalidaMP(model.TipoMovimiento))
             {
                 const string saldoSql = @"
-SELECT ISNULL
-(
-    SUM
-    (
-        CASE
-            WHEN TipoMovimiento IN
-                 (N'Entrada', N'Retorno', N'Ajuste', N'AjustePositivo')
-                THEN Cantidad
-            WHEN TipoMovimiento IN
-                 (N'Salida', N'Consumo', N'Scrap', N'AjusteNegativo')
-                THEN -Cantidad
-            ELSE 0
-        END
-    ),
-    0
-)
-FROM dbo.AlmacenMP_Movimientos
-WHERE Activo = 1
-  AND MaterialID = @MaterialID
-  AND CASE
-          WHEN UPPER(LTRIM(RTRIM(ISNULL(TipoMP, N'')))) = N'MOLIDO'
-              THEN N'MOLIDO'
-          ELSE N'VIRGEN'
-      END = @TipoMP;";
+SELECT
+    CASE
+        WHEN @UsarFisico = 1 THEN Fisico
+        ELSE Disponible
+    END
+FROM dbo.vw_AlmacenMPInventario
+WHERE MaterialID = @MaterialID
+  AND TipoMP = @TipoMP;";
 
                 await using var saldoCommand =
                     new SqlCommand(saldoSql, connection, transaction);
                 saldoCommand.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
                 saldoCommand.Parameters.Add("@TipoMP", SqlDbType.NVarChar, 20).Value = model.TipoMP;
+                saldoCommand.Parameters.Add("@UsarFisico", SqlDbType.Bit).Value =
+                    model.EsEntregaOF && mismoMaterial;
 
                 var saldo = Convert.ToDecimal(
                     await saldoCommand.ExecuteScalarAsync(cancellationToken) ?? 0m);
@@ -1583,36 +1440,55 @@ WHERE Activo = 1
                 {
                     ModelState.AddModelError(
                         nameof(model.Cantidad),
-                        $"Stock insuficiente para {codigo} ({model.TipoMP}). Disponible: {saldo:0.###} KG.");
+                        $"Stock insuficiente para {codigoEntregado} ({model.TipoMP}). Disponible para esta operacion: {saldo:0.###} KG.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(model, cancellationToken);
+                    await CargarMovimientoAsync(model, cancellationToken, materialSolicitadoID);
+                    PrepararVistaEntregaMP(model, materialSolicitadoID, codigoSolicitado);
                     return View(model);
                 }
             }
 
+            var observacionesGuardar = model.Observaciones ?? string.Empty;
+
+            if (model.EsEntregaOF)
+            {
+                var encabezado = mismoMaterial
+                    ? $"[ENTREGA MP] Solicitado y entregado: {codigoEntregado}. Tipo {model.TipoMP}."
+                    : $"[SUSTITUCION MP] Solicitado: {codigoSolicitado}. Entregado: {codigoEntregado} - {nombreEntregado}. Tipo {model.TipoMP}.";
+
+                observacionesGuardar = $"{encabezado} {observacionesGuardar}".Trim();
+            }
+
+            if (observacionesGuardar.Length > 800)
+                observacionesGuardar = observacionesGuardar[..800];
+
             const string insertSql = @"
 INSERT dbo.AlmacenMP_Movimientos
 (
-    FechaMovimiento, MaterialID, TipoMovimiento, TipoMP,
+    FechaMovimiento, MaterialID, MaterialSolicitadoID,
+    TipoMovimiento, TipoMP,
     Lote, Cantidad, Unidad, UbicacionID, NumeroOF,
     ResponsableUsuarioID, EntregadoPorNombre, Seguimiento,
     FechaCreacion, CreadoPor, Activo,
     RequiereValidacionProduccion, ValidadoProduccion,
-    ReferenciaOperacion
+    ReferenciaOperacion, SolicitudProduccionID
 )
 VALUES
 (
-    SYSDATETIME(), @MaterialID, @Tipo, @TipoMP,
+    SYSDATETIME(), @MaterialID, @MaterialSolicitadoID,
+    @Tipo, @TipoMP,
     N'S/L', @Cantidad, N'KG', @UbicacionID, @NumeroOF,
     @UsuarioID, @Responsable, @Observaciones,
     SYSUTCDATETIME(), @Responsable, 1,
-    0, 1, @Referencia
+    0, 1, @Referencia, @SolicitudProduccionID
 );";
 
             await using var insert =
                 new SqlCommand(insertSql, connection, transaction);
 
             insert.Parameters.Add("@MaterialID", SqlDbType.Int).Value = model.MaterialID;
+            insert.Parameters.Add("@MaterialSolicitadoID", SqlDbType.Int).Value =
+                model.EsEntregaOF ? materialSolicitadoID : DBNull.Value;
             insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value = model.TipoMovimiento;
             insert.Parameters.Add("@TipoMP", SqlDbType.NVarChar, 20).Value = model.TipoMP;
 
@@ -1638,10 +1514,14 @@ VALUES
 
             insert.Parameters.Add("@Responsable", SqlDbType.NVarChar, 180).Value = UsuarioNombre;
             insert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value =
-                string.IsNullOrWhiteSpace(model.Observaciones)
+                string.IsNullOrWhiteSpace(observacionesGuardar)
                     ? DBNull.Value
-                    : model.Observaciones;
+                    : observacionesGuardar;
             insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = referencia;
+            insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+                model.SolicitudProduccionID.HasValue
+                    ? model.SolicitudProduccionID.Value
+                    : DBNull.Value;
 
             await insert.ExecuteNonQueryAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -1663,7 +1543,7 @@ VALUES
         Mensaje(
             "success",
             model.EsEntregaOF
-                ? $"Entrega de materia prima {model.TipoMP} registrada para la OF."
+                ? "Entrega de materia prima registrada para la OF."
                 : $"Movimiento de Almacen MP {model.TipoMP} registrado correctamente.");
 
         return model.EsEntregaOF
@@ -1673,7 +1553,8 @@ VALUES
 
     private async Task CargarMovimientoAsync(
         AlmacenMPMovimientoFormVm vm,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? materialSolicitadoID = null)
     {
         await using var connection =
             await AbrirConexionAsync(cancellationToken);
@@ -1705,6 +1586,74 @@ ORDER BY Codigo;";
                     });
             }
         }
+
+        const string stockSql = @"
+WITH ReservaPropia AS
+(
+    SELECT
+        MaterialID,
+        TipoMP,
+        SUM(CantidadReservada) AS CantidadReservada
+    FROM dbo.AlmacenMP_Reservas
+    WHERE Activo = 1
+      AND @SolicitudProduccionID IS NOT NULL
+      AND SolicitudProduccionID = @SolicitudProduccionID
+      AND MaterialID = @MaterialSolicitadoID
+    GROUP BY MaterialID, TipoMP
+)
+SELECT
+    inventario.MaterialID,
+    SUM
+    (
+        CASE
+            WHEN inventario.TipoMP = N'V'
+                THEN inventario.Disponible + ISNULL(reserva.CantidadReservada, 0)
+            ELSE 0
+        END
+    ) AS StockV,
+    SUM
+    (
+        CASE
+            WHEN inventario.TipoMP = N'M'
+                THEN inventario.Disponible + ISNULL(reserva.CantidadReservada, 0)
+            ELSE 0
+        END
+    ) AS StockM
+FROM dbo.vw_AlmacenMPInventario inventario
+LEFT JOIN ReservaPropia reserva
+    ON reserva.MaterialID = inventario.MaterialID
+   AND reserva.TipoMP = inventario.TipoMP
+GROUP BY inventario.MaterialID;";
+
+        var stockPorMaterial = new Dictionary<int, AlmacenMPStockSelectorVm>();
+
+        await using (var stockCommand = new SqlCommand(stockSql, connection))
+        {
+            stockCommand.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+                vm.EsEntregaOF && vm.SolicitudProduccionID.HasValue
+                    ? vm.SolicitudProduccionID.Value
+                    : DBNull.Value;
+            stockCommand.Parameters.Add("@MaterialSolicitadoID", SqlDbType.Int).Value =
+                vm.EsEntregaOF && materialSolicitadoID.GetValueOrDefault() > 0
+                    ? materialSolicitadoID.Value
+                    : DBNull.Value;
+
+        await using (var stockReader =
+            await stockCommand.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await stockReader.ReadAsync(cancellationToken))
+            {
+                stockPorMaterial[Entero(stockReader, "MaterialID")] =
+                    new AlmacenMPStockSelectorVm
+                    {
+                        StockV = Math.Max(0m, DecimalValor(stockReader, "StockV")),
+                        StockM = Math.Max(0m, DecimalValor(stockReader, "StockM"))
+                    };
+            }
+        }
+        }
+
+        ViewData["StockPorMaterialMP"] = stockPorMaterial;
 
         var ordenes = new List<string>();
         if (await ExisteObjetoAsync(
@@ -1767,14 +1716,29 @@ ORDER BY NumeroOF DESC;";
         vm.TipoMP = NormalizarTipoMP(vm.TipoMP);
     }
 
+    private void PrepararVistaEntregaMP(
+        AlmacenMPMovimientoFormVm vm,
+        int materialSolicitadoID,
+        string? codigoSolicitado = null)
+    {
+        ViewData["MaterialSolicitadoID"] = materialSolicitadoID;
+
+        var texto = vm.Materiales
+            .FirstOrDefault(x => x.Id == materialSolicitadoID)
+            ?.Texto;
+
+        ViewData["MaterialSolicitadoTexto"] =
+            !string.IsNullOrWhiteSpace(texto)
+                ? texto
+                : string.IsNullOrWhiteSpace(codigoSolicitado)
+                    ? "Material solicitado no encontrado"
+                    : codigoSolicitado;
+    }
+
     private static string NormalizarTipoMP(string? tipoMP)
     {
-        return string.Equals(
-            tipoMP?.Trim(),
-            "MOLIDO",
-            StringComparison.OrdinalIgnoreCase)
-                ? "MOLIDO"
-                : "VIRGEN";
+        var valor = tipoMP?.Trim().ToUpperInvariant();
+        return valor is "M" or "MOLIDO" ? "M" : "V";
     }
 
     private static string? NormalizarTipoMPFiltro(string? tipoMP)
@@ -1783,9 +1747,12 @@ ORDER BY NumeroOF DESC;";
             return null;
 
         var valor = tipoMP.Trim().ToUpperInvariant();
-        return valor is "MOLIDO" or "VIRGEN"
-            ? valor
-            : null;
+        return valor switch
+        {
+            "V" or "VIRGEN" => "V",
+            "M" or "MOLIDO" => "M",
+            _ => null
+        };
     }
     private static async Task<List<AlmacenSelectVm>> CargarUbicacionesAsync(SqlConnection connection, string almacen, CancellationToken cancellationToken)
     {

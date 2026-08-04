@@ -1,0 +1,161 @@
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPDetalleStockVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Detalle de resina";
+    var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+}
+
+<section class="alm-hero">
+    <div>
+        <small>MATERIA PRIMA · DETALLE</small>
+        <h1>@Model.Codigo</h1>
+        <p>@Model.Nombre</p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn"
+           asp-action="Movimiento"
+           asp-route-materialId="@Model.MaterialID">
+            <i class="fa-solid fa-arrow-right-arrow-left"></i>
+            Registrar movimiento
+        </a>
+        <a class="alm-btn secondary"
+           asp-controller="AlmacenCompras"
+           asp-action="Confirmar"
+           asp-route-modulo="MP"
+           asp-route-catalogoID="@Model.MaterialID"
+           asp-route-variante="V"
+           asp-route-returnUrl="@returnUrl">
+            <i class="fa-solid fa-cart-plus"></i>
+            Solicitar compra
+        </a>
+        <a class="alm-btn secondary" asp-action="Index">
+            <i class="fa-solid fa-arrow-left"></i>
+            Volver al inventario
+        </a>
+    </div>
+</section>
+
+<section class="alm-card mp-stock-detail">
+    <header>
+        <span><i class="fa-solid fa-layer-group"></i> Existencia de la resina</span>
+        <span>Unidad: @Model.Unidad</span>
+    </header>
+
+    <div class="alm-table-wrap">
+        <table class="alm-table alm-table-fit mp-stock-breakdown-table">
+            <colgroup>
+                <col class="mp-detail-col-type" />
+                <col class="mp-detail-col-number" />
+                <col class="mp-detail-col-number" />
+                <col class="mp-detail-col-number" />
+                <col class="mp-detail-col-date" />
+                <col class="mp-detail-col-actions" />
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Existencia física</th>
+                    <th>Solicitado</th>
+                    <th>Stock</th>
+                    <th>Último movimiento</th>
+                    <th aria-label="Acciones"></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td data-label="Tipo"><span class="mp-stock-detail__type">V</span></td>
+                    <td data-label="Existencia física" class="alm-number">@Model.FisicoV.ToString("0.###") @Model.Unidad</td>
+                    <td data-label="Solicitado" class="alm-number">@Model.SolicitadoV.ToString("0.###") @Model.Unidad</td>
+                    <td data-label="Stock" class="alm-number"><strong>@Model.StockV.ToString("0.###") @Model.Unidad</strong></td>
+                    <td data-label="Último movimiento">
+                        @(Model.UltimoMovimientoV?.ToString("dd/MM/yyyy HH:mm") ?? "Sin movimientos")
+                    </td>
+                    <td data-label="Acciones">
+                        <div class="pt-actions">
+                            <a class="pt-action"
+                               asp-action="Movimiento"
+                               asp-route-materialId="@Model.MaterialID"
+                               asp-route-tipoMP="V"
+                               title="Registrar movimiento V">
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td data-label="Tipo"><span class="mp-stock-detail__type">M</span></td>
+                    <td data-label="Existencia física" class="alm-number">@Model.FisicoM.ToString("0.###") @Model.Unidad</td>
+                    <td data-label="Solicitado" class="alm-number">@Model.SolicitadoM.ToString("0.###") @Model.Unidad</td>
+                    <td data-label="Stock" class="alm-number"><strong>@Model.StockM.ToString("0.###") @Model.Unidad</strong></td>
+                    <td data-label="Último movimiento">
+                        @(Model.UltimoMovimientoM?.ToString("dd/MM/yyyy HH:mm") ?? "Sin movimientos")
+                    </td>
+                    <td data-label="Acciones">
+                        <div class="pt-actions">
+                            <a class="pt-action"
+                               asp-action="Movimiento"
+                               asp-route-materialId="@Model.MaterialID"
+                               asp-route-tipoMP="M"
+                               title="Registrar movimiento M">
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                <tr class="mp-stock-total-row">
+                    <td data-label="Tipo"><strong>Total</strong></td>
+                    <td data-label="Existencia física" class="alm-number"><strong>@Model.FisicoTotal.ToString("0.###") @Model.Unidad</strong></td>
+                    <td data-label="Solicitado" class="alm-number"><strong>@Model.SolicitadoTotal.ToString("0.###") @Model.Unidad</strong></td>
+                    <td data-label="Stock" class="alm-number"><strong>@Model.StockTotal.ToString("0.###") @Model.Unidad</strong></td>
+                    <td data-label="Último movimiento" colspan="2">Totales de la resina</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="alm-card mp-detail-movements">
+    <header>
+        <span><i class="fa-solid fa-clock-rotate-left"></i> Movimientos MP de la resina</span>
+        <span>Últimos @Model.Movimientos.Count registro(s)</span>
+    </header>
+
+    <div class="alm-table-wrap">
+        <table class="alm-table alm-table-fit mp-detail-movements-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Movimiento</th>
+                    <th>Cantidad</th>
+                    <th>OF</th>
+                    <th>Ubicación</th>
+                    <th>Responsable</th>
+                    <th>Observaciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var movimiento in Model.Movimientos)
+                {
+                    <tr>
+                        <td data-label="Fecha">@movimiento.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td data-label="Tipo"><span class="mp-stock-detail__type is-small">@movimiento.TipoExistencia</span></td>
+                        <td data-label="Movimiento">@movimiento.TipoMovimiento</td>
+                        <td data-label="Cantidad" class="alm-number">@movimiento.Cantidad.ToString("0.###") @movimiento.Unidad</td>
+                        <td data-label="OF">@(string.IsNullOrWhiteSpace(movimiento.NumeroOF) ? "Sin OF" : movimiento.NumeroOF)</td>
+                        <td data-label="Ubicación">@(string.IsNullOrWhiteSpace(movimiento.Ubicacion) ? "Sin ubicación" : movimiento.Ubicacion)</td>
+                        <td data-label="Responsable">@(string.IsNullOrWhiteSpace(movimiento.Responsable) ? "Sin responsable" : movimiento.Responsable)</td>
+                        <td data-label="Observaciones">@(string.IsNullOrWhiteSpace(movimiento.Observaciones) ? "Sin observaciones" : movimiento.Observaciones)</td>
+                    </tr>
+                }
+
+                @if (!Model.Movimientos.Any())
+                {
+                    <tr>
+                        <td colspan="8" class="alm-empty">Esta resina todavía no tiene movimientos.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
