@@ -74,6 +74,11 @@ namespace ERP.NSQuell.Models
         public int? ReleaseID { get; set; }
         public string? FolioRelease { get; set; }
 
+        // Cuando el Release proviene de una OF manual, estos campos
+        // conservan la liga con la OF ya existente y evitan duplicarla.
+        public int? SolicitudProduccionID { get; set; }
+        public int? SolicitudProduccionDetalleID { get; set; }
+
         public int? ClienteID { get; set; }
         public string? ClienteNombre { get; set; }
 
@@ -267,6 +272,7 @@ namespace ERP.NSQuell.Models
 
         public int? ProgramaProduccionID { get; set; }
         public int? SolicitudProduccionID { get; set; }
+        public int? SolicitudProduccionDetalleID { get; set; }
 
         public int EstatusID { get; set; }
 

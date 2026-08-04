@@ -28,7 +28,8 @@ namespace ERP.NSQuell.Controllers
             public const int EnPreparacion = 2;
             public const int EnProduccion = 3;
             public const int Pausado = 4;
-            public const int Terminado = 5;
+            public const int TerminadoParcial = 5;
+            public const int Terminado = 6;
             public const int Cerrado = 9;
             public const int Cancelado = 99;
         }
@@ -98,6 +99,21 @@ namespace ERP.NSQuell.Controllers
                     {
                         ok = false,
                         mensaje = "No se encontró el programa."
+                    });
+                }
+
+                var motivoBloqueo = await ObtenerMotivoBloqueoMovimientoAsync(
+                    programaProduccionId,
+                    cn,
+                    null,
+                    bloquear: false);
+
+                if (!string.IsNullOrWhiteSpace(motivoBloqueo))
+                {
+                    return Json(new
+                    {
+                        ok = false,
+                        mensaje = motivoBloqueo
                     });
                 }
 
@@ -192,15 +208,20 @@ namespace ERP.NSQuell.Controllers
                     });
                 }
 
-                if (!PuedeMover(programa.EstatusID))
+                var motivoBloqueo = await ObtenerMotivoBloqueoMovimientoAsync(
+                    programa.ProgramaProduccionID,
+                    cn,
+                    tx,
+                    bloquear: true);
+
+                if (!string.IsNullOrWhiteSpace(motivoBloqueo))
                 {
                     await tx.RollbackAsync();
 
                     return Json(new
                     {
                         ok = false,
-                        mensaje =
-                            "Este programa ya no se puede mover. Está en producción, terminado, cerrado o cancelado."
+                        mensaje = motivoBloqueo
                     });
                 }
 
@@ -430,6 +451,14 @@ namespace ERP.NSQuell.Controllers
                     cn,
                     tx);
 
+                await RecalcularOperadoresProgramaAsync(
+                    programa.ProgramaProduccionID,
+                    maquinaDestino.MaquinaID,
+                    fechaCambio,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 await InsertarHistorialMovimientoAsync(
                     programa,
                     maquinaDestino,
@@ -600,10 +629,22 @@ SELECT
 
     pe.EjecucionProduccionID,
     pe.EstatusID AS EstatusProduccionID,
-    pe.OperadorNombre,
+    pe.OperadorID AS OperadorRealID,
+    pe.OperadorNombre AS OperadorRealNombre,
 
-    CAST(NULL AS INT) AS EscalaAsignacionID,
-    CAST(NULL AS NVARCHAR(200)) AS TurnoProgramadoNombre
+    opPrincipal.PersonaID AS OperadorProgramadoID,
+    opPrincipal.NombreCompleto AS OperadorProgramadoNombre,
+    opAuxiliar.PersonaID AS OperadorAuxiliarProgramadoID,
+    opAuxiliar.NombreCompleto AS OperadorAuxiliarProgramadoNombre,
+
+    turno.EscalaAsignacionID,
+    turno.TurnoProgramadoNombre,
+    turno.TurnoProgramadoColor,
+
+    ci.InspeccionID AS InspeccionCalidadID,
+    ci.Estado AS EstadoCalidad,
+    ISNULL(ci.ConfiguracionInvalidada, 0) AS ConfiguracionCalidadInvalidada,
+    ISNULL(ci.RequiereReliberacion, 0) AS RequiereReliberacion
 
 FROM dbo.Planeacion_ProgramaProduccion pp
 
@@ -631,12 +672,104 @@ OUTER APPLY
     SELECT TOP (1)
         e.EjecucionProduccionID,
         e.EstatusID,
+        e.OperadorID,
         e.OperadorNombre
     FROM dbo.Produccion_Ejecucion e
     WHERE e.ProgramaProduccionID = pp.ProgramaProduccionID
       AND e.Activo = 1
     ORDER BY e.EjecucionProduccionID DESC
 ) pe
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        po.PersonaID,
+        LTRIM(RTRIM(
+            ISNULL(p.Nombre, '') + ' ' +
+            ISNULL(p.ApellidoPaterno, '') + ' ' +
+            ISNULL(p.ApellidoMaterno, '')
+        )) AS NombreCompleto
+    FROM dbo.Planeacion_ProgramaOperadores po
+    LEFT JOIN dbo.Persona p
+        ON p.PersonaID = po.PersonaID
+    WHERE po.ProgramaProduccionID = pp.ProgramaProduccionID
+      AND po.Activo = 1
+      AND UPPER(ISNULL(po.RolOperador, '')) = 'PRINCIPAL'
+    ORDER BY po.ProgramaOperadorID
+) opPrincipal
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        po.PersonaID,
+        LTRIM(RTRIM(
+            ISNULL(p.Nombre, '') + ' ' +
+            ISNULL(p.ApellidoPaterno, '') + ' ' +
+            ISNULL(p.ApellidoMaterno, '')
+        )) AS NombreCompleto
+    FROM dbo.Planeacion_ProgramaOperadores po
+    LEFT JOIN dbo.Persona p
+        ON p.PersonaID = po.PersonaID
+    WHERE po.ProgramaProduccionID = pp.ProgramaProduccionID
+      AND po.Activo = 1
+      AND UPPER(ISNULL(po.RolOperador, '')) = 'AUXILIAR'
+    ORDER BY po.ProgramaOperadorID
+) opAuxiliar
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        a.AsignacionID AS EscalaAsignacionID,
+        et.Nombre AS TurnoProgramadoNombre,
+        et.Color AS TurnoProgramadoColor
+    FROM dbo.RRHH_EscalaAsignaciones a
+    INNER JOIN dbo.RRHH_EscalasPersonal esc
+        ON esc.EscalaID = a.EscalaID
+       AND esc.Activo = 1
+       AND esc.Estado = N'Publicada'
+    INNER JOIN dbo.RRHH_EscalaTurnos et
+        ON et.EscalaID = a.EscalaID
+       AND et.EscalaTurnoID = a.EscalaTurnoID
+    WHERE a.Activo = 1
+      AND a.PersonalID = opPrincipal.PersonaID
+      AND a.MaquinaID = pp.MaquinaID
+      AND CAST(pp.FechaInicioProgramada AS date) >= CAST(a.FechaInicio AS date)
+      AND CAST(pp.FechaInicioProgramada AS date) <= CAST(a.FechaFin AS date)
+      AND
+      (
+            ISNULL(et.EsFlexible, 0) = 1
+         OR et.HoraInicio IS NULL
+         OR et.HoraFin IS NULL
+         OR
+         (
+                ISNULL(et.CruzaDiaSiguiente, 0) = 0
+            AND CAST(pp.FechaInicioProgramada AS time) >= et.HoraInicio
+            AND CAST(pp.FechaInicioProgramada AS time) < et.HoraFin
+         )
+         OR
+         (
+                ISNULL(et.CruzaDiaSiguiente, 0) = 1
+            AND
+            (
+                   CAST(pp.FechaInicioProgramada AS time) >= et.HoraInicio
+                OR CAST(pp.FechaInicioProgramada AS time) < et.HoraFin
+            )
+         )
+      )
+    ORDER BY et.Orden, a.AsignacionID DESC
+) turno
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        cins.InspeccionID,
+        cins.Estado,
+        cins.ConfiguracionInvalidada,
+        cins.RequiereReliberacion
+    FROM dbo.Calidad_Inspecciones cins
+    WHERE cins.ProgramaProduccionID = pp.ProgramaProduccionID
+    ORDER BY cins.InspeccionID DESC
+) ci
 
 WHERE pp.Activo = 1
   AND pp.MaquinaID IS NOT NULL
@@ -729,12 +862,11 @@ ORDER BY
                         EstatusID = estatusId,
 
                         EstaEnLinea =
-                            estatusProduccionId == EstatusPrograma.EnProduccion ||
-                            (DateTime.Now >= inicioPrograma &&
-                             DateTime.Now < finPrograma &&
-                             estatusId != EstatusPrograma.Terminado &&
-                             estatusId != EstatusPrograma.Cerrado &&
-                             estatusId != EstatusPrograma.Cancelado),
+                            estatusProduccionId == EstatusPrograma.EnProduccion,
+
+                        DentroHorarioProgramado =
+                            DateTime.Now >= inicioPrograma &&
+                            DateTime.Now < finPrograma,
 
                         MaquinaPrincipalID =
                             NullableEntero(rd, "MaquinaPrincipalID"),
@@ -763,14 +895,44 @@ ORDER BY
                         EjecucionProduccionID =
                             NullableEntero(rd, "EjecucionProduccionID"),
 
+                        OperadorProgramadoID =
+                            NullableEntero(rd, "OperadorProgramadoID"),
+
                         OperadorProgramadoNombre =
-                            Texto(rd, "OperadorNombre") ?? string.Empty,
+                            Texto(rd, "OperadorProgramadoNombre") ?? string.Empty,
+
+                        OperadorAuxiliarProgramadoID =
+                            NullableEntero(rd, "OperadorAuxiliarProgramadoID"),
+
+                        OperadorAuxiliarProgramadoNombre =
+                            Texto(rd, "OperadorAuxiliarProgramadoNombre") ?? string.Empty,
+
+                        OperadorRealID =
+                            NullableEntero(rd, "OperadorRealID"),
+
+                        OperadorRealNombre =
+                            Texto(rd, "OperadorRealNombre") ?? string.Empty,
 
                         TurnoProgramadoNombre =
                             Texto(rd, "TurnoProgramadoNombre") ?? string.Empty,
 
+                        TurnoProgramadoColor =
+                            Texto(rd, "TurnoProgramadoColor") ?? string.Empty,
+
                         EscalaAsignacionID =
-                            NullableEntero(rd, "EscalaAsignacionID")
+                            NullableEntero(rd, "EscalaAsignacionID"),
+
+                        InspeccionCalidadID =
+                            NullableEntero(rd, "InspeccionCalidadID"),
+
+                        EstadoCalidad =
+                            Texto(rd, "EstadoCalidad") ?? string.Empty,
+
+                        ConfiguracionCalidadInvalidada =
+                            Booleano(rd, "ConfiguracionCalidadInvalidada"),
+
+                        RequiereReliberacion =
+                            Booleano(rd, "RequiereReliberacion")
                     };
 
                     bloques.Add(bloque);
@@ -1099,7 +1261,7 @@ FROM dbo.Planeacion_ProgramaProduccion WITH (UPDLOCK, HOLDLOCK)
 WHERE MaquinaID = @MaquinaID
   AND ProgramaProduccionID <> @ProgramaProduccionID
   AND Activo = 1
-  AND ISNULL(EstatusID, 1) NOT IN (5, 9, 99)
+  AND ISNULL(EstatusID, 1) NOT IN (5, 6, 9, 99)
   AND FechaInicioProgramada IS NOT NULL;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
@@ -1139,7 +1301,7 @@ FROM dbo.Planeacion_ProgramaProduccion WITH (UPDLOCK, HOLDLOCK)
 WHERE MoldeID = @MoldeID
   AND ProgramaProduccionID <> @ProgramaProduccionID
   AND Activo = 1
-  AND ISNULL(EstatusID, 1) NOT IN (5, 9, 99)
+  AND ISNULL(EstatusID, 1) NOT IN (5, 6, 9, 99)
   AND FechaInicioProgramada IS NOT NULL;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
@@ -1167,7 +1329,7 @@ FROM dbo.Planeacion_ProgramaProduccion WITH (UPDLOCK, HOLDLOCK)
 WHERE MaquinaID = @MaquinaID
   AND ProgramaProduccionID <> @ProgramaProduccionID
   AND Activo = 1
-  AND ISNULL(EstatusID, 1) NOT IN (5, 9, 99);";
+  AND ISNULL(EstatusID, 1) NOT IN (5, 6, 9, 99);";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
@@ -1230,7 +1392,7 @@ WHERE pp.Activo = 1
   AND pp.MaquinaID = @MaquinaID
   AND pp.ProgramaProduccionID <> @ProgramaProduccionID
   AND pp.FechaInicioProgramada IS NOT NULL
-  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
+  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 6, 9, 99)
   AND pp.FechaInicioProgramada <= @PuntoCola
 ORDER BY
     pp.FechaInicioProgramada DESC,
@@ -1361,8 +1523,14 @@ WHERE pp.Activo = 1
   AND pp.FechaInicioProgramada IS NOT NULL
   AND
   (
-        ISNULL(pp.EstatusID, 1) IN (2, 3, 4, 5, 9, 99)
-     OR ISNULL(pe.EstatusID, 0) IN (2, 3, 4, 5, 9, 99)
+        ISNULL(pp.EstatusID, 1) IN (2, 3, 4, 5, 6, 9, 99)
+     OR pe.EstatusID IS NOT NULL
+     OR EXISTS
+        (
+            SELECT 1
+            FROM dbo.Calidad_Inspecciones ci
+            WHERE ci.ProgramaProduccionID = pp.ProgramaProduccionID
+        )
      OR
         (
             GETDATE() >= pp.FechaInicioProgramada
@@ -1419,7 +1587,7 @@ WHERE pp.Activo = 1
   AND pp.MoldeID = @MoldeID
   AND pp.ProgramaProduccionID <> @ProgramaProduccionID
   AND pp.FechaInicioProgramada IS NOT NULL
-  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
+  AND ISNULL(pp.EstatusID, 1) NOT IN (5, 6, 9, 99)
   AND pp.FechaInicioProgramada < @Fin
   AND ISNULL
       (
@@ -1466,8 +1634,20 @@ WHERE pp.Activo = 1
   AND pp.ProgramaProduccionID <> @ProgramaProduccionID
   AND pp.FechaInicioProgramada IS NOT NULL
   AND pp.FechaInicioProgramada >= @Desde
-  AND ISNULL(pp.EstatusID, 1) NOT IN (2, 3, 4, 5, 9, 99)
-  AND ISNULL(pe.EstatusID, 0) NOT IN (2, 3, 4, 5, 9, 99);";
+  AND ISNULL(pp.EstatusID, 1) = 1
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_Ejecucion e2
+      WHERE e2.ProgramaProduccionID = pp.ProgramaProduccionID
+        AND e2.Activo = 1
+  )
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_Inspecciones ci
+      WHERE ci.ProgramaProduccionID = pp.ProgramaProduccionID
+  );";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
@@ -1540,6 +1720,7 @@ WHERE pp.Activo = 1
                 {
                     await ActualizarProgramaReacomodadoAsync(
                         programa,
+                        maquinaId,
                         calculo.Cambio,
                         calculo.Arranque,
                         calculo.Fin,
@@ -1598,8 +1779,20 @@ WHERE pp.Activo = 1
   AND pp.ProgramaProduccionID <> @ProgramaProduccionID
   AND pp.FechaInicioProgramada IS NOT NULL
   AND pp.FechaInicioProgramada >= @Desde
-  AND ISNULL(pp.EstatusID, 1) NOT IN (2, 3, 4, 5, 9, 99)
-  AND ISNULL(pe.EstatusID, 0) NOT IN (2, 3, 4, 5, 9, 99)
+  AND ISNULL(pp.EstatusID, 1) = 1
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_Ejecucion e2
+      WHERE e2.ProgramaProduccionID = pp.ProgramaProduccionID
+        AND e2.Activo = 1
+  )
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_Inspecciones ci
+      WHERE ci.ProgramaProduccionID = pp.ProgramaProduccionID
+  )
 ORDER BY
     pp.FechaInicioProgramada,
     pp.ProgramaProduccionID;";
@@ -1617,8 +1810,9 @@ ORDER BY
             return lista;
         }
 
-        private static async Task ActualizarProgramaReacomodadoAsync(
+        private async Task ActualizarProgramaReacomodadoAsync(
             ProgramaCola programa,
+            int maquinaId,
             DateTime cambio,
             DateTime arranque,
             DateTime fin,
@@ -1636,17 +1830,106 @@ SET
     UsuarioModificacionID = @UsuarioID,
     FechaModificacion = GETDATE()
 WHERE ProgramaProduccionID = @ProgramaProduccionID
-  AND Activo = 1;";
+  AND Activo = 1
+  AND ISNULL(EstatusID, 1) = 1
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_Ejecucion e
+      WHERE e.ProgramaProduccionID = @ProgramaProduccionID
+        AND e.Activo = 1
+  )
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_Inspecciones ci
+      WHERE ci.ProgramaProduccionID = @ProgramaProduccionID
+  );
 
-            await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@FechaInicio", SqlDbType.DateTime).Value = cambio;
-            cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value = fin;
-            cmd.Parameters.Add("@Cambio", SqlDbType.Time).Value = cambio.TimeOfDay;
-            cmd.Parameters.Add("@Arranque", SqlDbType.Time).Value = arranque.TimeOfDay;
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programa.ProgramaProduccionID;
+IF @@ROWCOUNT <> 1
+BEGIN
+    THROW 51003,
+        'Uno de los programas posteriores ya inició Producción o Calidad y no puede reacomodarse.',
+        1;
+END;
 
-            await cmd.ExecuteNonQueryAsync();
+UPDATE d
+SET
+    d.HorasPlaneadas = pp.HorasProgramadas,
+    d.Cambio = @Cambio,
+    d.Arranque = @Arranque
+FROM dbo.SolicitudesProduccionDetalle d
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.SolicitudProduccionDetalleID = d.SolicitudProduccionDetalleID
+WHERE pp.ProgramaProduccionID = @ProgramaProduccionID;
+
+UPDATE am
+SET
+    am.FechaProgramadaTentativa = CAST(@FechaInicio AS date),
+    am.HoraInicioTentativa = CAST(@FechaInicio AS time),
+    am.HoraFinTentativa = CAST(@FechaFin AS time),
+    am.HorasEstimadas = pp.HorasProgramadas
+FROM dbo.SolicitudesProduccionAsignacionMaquina am
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.SolicitudProduccionDetalleID = am.SolicitudProduccionDetalleID
+WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
+  AND am.Activo = 1;
+
+UPDATE s
+SET
+    s.FechaInicioPlaneada = @FechaInicio,
+    s.FechaFinPlaneada = @FechaFin
+FROM dbo.SolicitudesProduccion s
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.SolicitudProduccionID = s.SolicitudProduccionID
+WHERE pp.ProgramaProduccionID = @ProgramaProduccionID;
+
+UPDATE rd
+SET
+    rd.FechaInicioSugerida = @FechaInicio,
+    rd.FechaFinEstimada = @FechaFin,
+    rd.DaTiempo =
+        CASE
+            WHEN rd.FechaRequerida IS NULL THEN NULL
+            WHEN CONVERT(date, @FechaFin) <= CONVERT(date, rd.FechaRequerida)
+                THEN 1
+            ELSE 0
+        END,
+    rd.MensajeCapacidad =
+        CASE
+            WHEN rd.FechaRequerida IS NULL
+                THEN 'Programa reacomodado. Sin fecha requerida del cliente.'
+            WHEN CONVERT(date, @FechaFin) <= CONVERT(date, rd.FechaRequerida)
+                THEN 'Programa reacomodado dentro de la fecha requerida.'
+            ELSE 'Programa reacomodado posterior a la fecha requerida.'
+        END,
+    rd.FechaModificacion = GETDATE()
+FROM dbo.Planeacion_ReleaseDetalle rd
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.ReleaseDetalleID = rd.ReleaseDetalleID
+WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
+  AND rd.Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@FechaInicio", SqlDbType.DateTime).Value = cambio;
+                cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value = fin;
+                cmd.Parameters.Add("@Cambio", SqlDbType.Time).Value = cambio.TimeOfDay;
+                cmd.Parameters.Add("@Arranque", SqlDbType.Time).Value = arranque.TimeOfDay;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
+                    programa.ProgramaProduccionID;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await RecalcularOperadoresProgramaAsync(
+                programa.ProgramaProduccionID,
+                maquinaId,
+                cambio,
+                usuarioId,
+                cn,
+                tx);
         }
 
         private static ProgramaCola MapearProgramaCola(SqlDataReader rd)
@@ -2100,7 +2383,7 @@ END;";
         ) AS NuevaSecuencia
     FROM dbo.Planeacion_ProgramaProduccion
     WHERE Activo = 1
-      AND ISNULL(EstatusID, 1) NOT IN (5, 9, 99)
+      AND ISNULL(EstatusID, 1) NOT IN (5, 6, 9, 99)
       AND
       (
           MaquinaID = @MaquinaNuevaID
@@ -2226,6 +2509,227 @@ EXEC sys.sp_set_session_context
             catch
             {
                 // La transacción puede haber sido abortada por SQL Server.
+            }
+        }
+
+        private static async Task<string?> ObtenerMotivoBloqueoMovimientoAsync(
+            int programaProduccionId,
+            SqlConnection cn,
+            SqlTransaction? tx,
+            bool bloquear)
+        {
+            var lockSql = bloquear
+                ? " WITH (UPDLOCK, HOLDLOCK)"
+                : string.Empty;
+
+            var sql = $@"
+SELECT TOP (1)
+    ISNULL(pp.EstatusID, 1) AS EstatusProgramaID,
+    pe.EjecucionProduccionID,
+    pe.EstatusID AS EstatusProduccionID,
+    ci.InspeccionID,
+    ci.Estado AS EstadoCalidad
+FROM dbo.Planeacion_ProgramaProduccion pp{lockSql}
+OUTER APPLY
+(
+    SELECT TOP (1)
+        e.EjecucionProduccionID,
+        e.EstatusID
+    FROM dbo.Produccion_Ejecucion e
+    WHERE e.ProgramaProduccionID = pp.ProgramaProduccionID
+      AND e.Activo = 1
+    ORDER BY e.EjecucionProduccionID DESC
+) pe
+OUTER APPLY
+(
+    SELECT TOP (1)
+        c.InspeccionID,
+        c.Estado
+    FROM dbo.Calidad_Inspecciones c
+    WHERE c.ProgramaProduccionID = pp.ProgramaProduccionID
+    ORDER BY c.InspeccionID DESC
+) ci
+WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
+  AND pp.Activo = 1;";
+
+            await using var cmd = tx == null
+                ? new SqlCommand(sql, cn)
+                : new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
+                programaProduccionId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return "No se encontró el programa de producción.";
+
+            var estatusPrograma = Entero(rd, "EstatusProgramaID");
+            var ejecucionId = NullableEntero(rd, "EjecucionProduccionID");
+            var estatusProduccion = NullableEntero(rd, "EstatusProduccionID");
+            var inspeccionId = NullableEntero(rd, "InspeccionID");
+            var estadoCalidad = Texto(rd, "EstadoCalidad");
+
+            if (ejecucionId.HasValue)
+            {
+                return
+                    $"El programa ya tiene la ejecución de Producción {ejecucionId.Value} " +
+                    $"en estado {NombreEstatusProduccion(estatusProduccion)}. " +
+                    "La máquina y las fechas ya no pueden cambiarse desde Planeación.";
+            }
+
+            if (inspeccionId.HasValue)
+            {
+                return
+                    $"El programa ya tiene la inspección de Calidad {inspeccionId.Value}" +
+                    (string.IsNullOrWhiteSpace(estadoCalidad)
+                        ? "."
+                        : $" en estado {estadoCalidad.Replace("_", " ")}.") +
+                    " La configuración debe conservarse para mantener la trazabilidad.";
+            }
+
+            if (estatusPrograma != EstatusPrograma.Programado)
+            {
+                return
+                    $"Solo los programas con estatus Programado pueden moverse. " +
+                    $"El estatus actual es {NombreEstatusPrograma(estatusPrograma)}.";
+            }
+
+            return null;
+        }
+
+        private static async Task RecalcularOperadoresProgramaAsync(
+            int programaProduccionId,
+            int maquinaId,
+            DateTime fechaHora,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            var operadores = new List<OperadorEscalaPrograma>();
+
+            const string sqlOperadores = @"
+SELECT TOP (2)
+    a.AsignacionID AS EscalaAsignacionID,
+    a.PersonalID AS PersonaID,
+    et.Nombre AS TurnoNombre,
+    et.Color AS TurnoColor
+FROM dbo.RRHH_EscalaAsignaciones a
+INNER JOIN dbo.RRHH_EscalasPersonal esc
+    ON esc.EscalaID = a.EscalaID
+   AND esc.Activo = 1
+   AND esc.Estado = N'Publicada'
+INNER JOIN dbo.Persona p
+    ON p.PersonaID = a.PersonalID
+INNER JOIN dbo.RRHH_EscalaTurnos et
+    ON et.EscalaID = a.EscalaID
+   AND et.EscalaTurnoID = a.EscalaTurnoID
+WHERE a.Activo = 1
+  AND a.MaquinaID = @MaquinaID
+  AND CAST(@FechaHora AS date) >= CAST(a.FechaInicio AS date)
+  AND CAST(@FechaHora AS date) <= CAST(a.FechaFin AS date)
+  AND ISNULL(p.EsColaboradorActivo, 1) = 1
+  AND
+  (
+        ISNULL(et.EsFlexible, 0) = 1
+     OR et.HoraInicio IS NULL
+     OR et.HoraFin IS NULL
+     OR
+     (
+            ISNULL(et.CruzaDiaSiguiente, 0) = 0
+        AND CAST(@FechaHora AS time) >= et.HoraInicio
+        AND CAST(@FechaHora AS time) < et.HoraFin
+     )
+     OR
+     (
+            ISNULL(et.CruzaDiaSiguiente, 0) = 1
+        AND
+        (
+               CAST(@FechaHora AS time) >= et.HoraInicio
+            OR CAST(@FechaHora AS time) < et.HoraFin
+        )
+     )
+  )
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.RRHH_NovedadesPersonal n
+      WHERE n.EscalaID = a.EscalaID
+        AND n.PersonalID = a.PersonalID
+        AND n.Activo = 1
+        AND n.TipoNovedad IN (N'Baja', N'Incapacidad', N'Vacaciones')
+        AND CAST(@FechaHora AS date) >= CAST(n.FechaInicio AS date)
+        AND CAST(@FechaHora AS date) <= CAST(ISNULL(n.FechaFin, n.FechaInicio) AS date)
+  )
+ORDER BY et.Orden, a.AsignacionID DESC;";
+
+            await using (var cmd = new SqlCommand(sqlOperadores, cn, tx))
+            {
+                cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
+                cmd.Parameters.Add("@FechaHora", SqlDbType.DateTime).Value = fechaHora;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
+                {
+                    operadores.Add(new OperadorEscalaPrograma
+                    {
+                        PersonaID = Entero(rd, "PersonaID"),
+                        EscalaAsignacionID = Entero(rd, "EscalaAsignacionID"),
+                        TurnoNombre = Texto(rd, "TurnoNombre") ?? string.Empty,
+                        TurnoColor = Texto(rd, "TurnoColor")
+                    });
+                }
+            }
+
+            const string sqlDesactivar = @"
+UPDATE dbo.Planeacion_ProgramaOperadores
+SET
+    Activo = 0,
+    UsuarioModificacionID = @UsuarioID,
+    FechaModificacion = GETDATE()
+WHERE ProgramaProduccionID = @ProgramaProduccionID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlDesactivar, cn, tx))
+            {
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
+                    programaProduccionId;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlInsertar = @"
+INSERT INTO dbo.Planeacion_ProgramaOperadores
+(
+    ProgramaProduccionID,
+    PersonaID,
+    RolOperador,
+    Activo,
+    UsuarioCreacionID,
+    FechaCreacion
+)
+VALUES
+(
+    @ProgramaProduccionID,
+    @PersonaID,
+    @RolOperador,
+    1,
+    @UsuarioID,
+    GETDATE()
+);";
+
+            for (var i = 0; i < operadores.Count; i++)
+            {
+                await using var cmd = new SqlCommand(sqlInsertar, cn, tx);
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
+                    programaProduccionId;
+                cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value =
+                    operadores[i].PersonaID;
+                cmd.Parameters.Add("@RolOperador", SqlDbType.NVarChar, 30).Value =
+                    i == 0 ? "PRINCIPAL" : "AUXILIAR";
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
             }
         }
 
@@ -2471,10 +2975,7 @@ EXEC sys.sp_set_session_context
 
         private static bool PuedeMover(int estatusId)
         {
-            return estatusId != EstatusPrograma.EnProduccion &&
-                   estatusId != EstatusPrograma.Terminado &&
-                   estatusId != EstatusPrograma.Cerrado &&
-                   estatusId != EstatusPrograma.Cancelado;
+            return estatusId == EstatusPrograma.Programado;
         }
 
         private static DateTime NormalizarFecha(DateTime fecha)
@@ -2585,7 +3086,8 @@ EXEC sys.sp_set_session_context
                 2 => "En preparación",
                 3 => "En producción",
                 4 => "Pausado",
-                5 => "Terminado",
+                5 => "Terminado parcial",
+                6 => "Terminado",
                 9 => "Cerrado",
                 99 => "Cancelado",
                 _ => "Sin estatus"
@@ -2597,10 +3099,12 @@ EXEC sys.sp_set_session_context
         {
             return estatusId switch
             {
+                1 => "Pendiente",
                 2 => "En preparación",
                 3 => "En producción",
                 4 => "Pausado",
-                5 => "Terminado",
+                5 => "Terminado parcial",
+                6 => "Terminado",
                 9 => "Cerrado",
                 99 => "Cancelado",
                 _ => "Sin ejecución"
@@ -2713,6 +3217,16 @@ EXEC sys.sp_set_session_context
                 : rd.GetValue(ordinal)?.ToString()?.Trim();
         }
 
+        private static bool Booleano(
+            SqlDataReader rd,
+            string columna)
+        {
+            var ordinal = rd.GetOrdinal(columna);
+
+            return !rd.IsDBNull(ordinal) &&
+                   Convert.ToBoolean(rd.GetValue(ordinal));
+        }
+
         // ============================================================
         // CLASES INTERNAS
         // ============================================================
@@ -2767,6 +3281,14 @@ EXEC sys.sp_set_session_context
             public DateTime Inicio { get; set; }
             public DateTime Fin { get; set; }
             public decimal HorasProgramadas { get; set; }
+        }
+
+        private sealed class OperadorEscalaPrograma
+        {
+            public int PersonaID { get; set; }
+            public int EscalaAsignacionID { get; set; }
+            public string TurnoNombre { get; set; } = string.Empty;
+            public string? TurnoColor { get; set; }
         }
 
         private sealed class CalculoCola

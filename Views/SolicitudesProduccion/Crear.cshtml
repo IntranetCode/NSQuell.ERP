@@ -1,5 +1,7 @@
 ﻿@model ERP.NSQuell.Models.ERP.SolicitudProduccionCrearVm
 
+@* Corrección: ParteID y MoldeID se envían mediante campos hidden sincronizados. *@
+
 @{
     Layout = null;
     ViewData["Title"] = "Nueva Solicitud de Producción";
@@ -322,11 +324,13 @@
                     <div class="erp-card-body">
                         <div class="row g-3">
 
-                            <div class="col-md-3">
+                           <div class="col-md-3">
                                 <label class="erp-label">Folio interno</label>
-                                <input name="FolioSolicitud" value="Se asignará al guardar" class="form-control erp-input"readonly />
+                                <input type="text"
+                                    value="Se asignará al guardar"
+                                    class="form-control erp-input"
+                                    readonly />
                             </div>
-
                             <div class="col-md-3">
                                 <label class="erp-label">Número OF recibida</label>
                                 <input name="NumeroOFRecibida" value="@Model.NumeroOFRecibida" class="form-control erp-input" placeholder="Ej. OF-12345" />
@@ -474,7 +478,11 @@
                                         <div class="row g-3">
                                             <div class="col-md-5">
                                                 <label class="erp-label">Parte / referencia catálogo</label>
-                                                <select name="Detalles[@i].ParteID" class="form-select erp-select parte-select" onchange="cargarParteInfo(this)">
+                                                <input type="hidden"
+                                                       name="Detalles[@i].ParteID"
+                                                       value="@detalle.ParteID"
+                                                       class="parte-id-hidden" />
+                                                <select class="form-select erp-select parte-select" onchange="cargarParteInfo(this)">
                                                     <option value="">-- Selecciona parte --</option>
                                                     @foreach (var parte in partes)
                                                     {
@@ -512,7 +520,11 @@
 
                                             <div class="col-md-3">
                                                 <label class="erp-label">Molde</label>
-                                                <select name="Detalles[@i].MoldeID" class="form-select erp-select molde-select">
+                                                <input type="hidden"
+                                                       name="Detalles[@i].MoldeID"
+                                                       value="@detalle.MoldeID"
+                                                       class="molde-id-hidden" />
+                                                <select class="form-select erp-select molde-select" onchange="sincronizarMolde(this)">
                                                     <option value="">-- Selecciona molde --</option>
                                                     @foreach (var molde in moldes)
                                                     {
@@ -768,8 +780,11 @@
                         <div class="row g-3">
                             <div class="col-md-5">
                                 <label class="erp-label">Parte / referencia catálogo</label>
-                                <select name="Detalles[${index}].ParteID" class="form-select erp-select parte-select" onchange="cargarParteInfo(this)">
-                                    
+                                <input type="hidden"
+                                       name="Detalles[${index}].ParteID"
+                                       value=""
+                                       class="parte-id-hidden" />
+                                <select class="form-select erp-select parte-select" onchange="cargarParteInfo(this)">
                                     ${partesOptions}
                                 </select>
                             </div>
@@ -796,8 +811,11 @@
 
                             <div class="col-md-3">
                                 <label class="erp-label">Molde</label>
-                                <select name="Detalles[${index}].MoldeID" class="form-select erp-select molde-select">
-                                    
+                                <input type="hidden"
+                                       name="Detalles[${index}].MoldeID"
+                                       value=""
+                                       class="molde-id-hidden" />
+                                <select class="form-select erp-select molde-select" onchange="sincronizarMolde(this)">
                                     ${moldesOptions}
                                 </select>
                             </div>
@@ -1048,14 +1066,92 @@
             }
         });
 
-        async function cargarParteInfo(select) {
-            const parteId = select.value;
+        function seleccionarValorSeguro(select, value, textFallback) {
+            if (!select) {
+                return false;
+            }
 
-            if (!parteId) {
+            const valor = value === null || value === undefined
+                ? ""
+                : String(value);
+
+            if (!valor) {
+                select.value = "";
+                return false;
+            }
+
+            let option = Array.from(select.options)
+                .find(item => String(item.value) === valor);
+
+            if (!option) {
+                option = new Option(
+                    textFallback || `ID ${valor}`,
+                    valor,
+                    false,
+                    false
+                );
+                select.add(option);
+            }
+
+            select.value = valor;
+            return select.value === valor;
+        }
+
+        function sincronizarParte(select) {
+            const renglon = select?.closest(".erp-renglon");
+            if (!renglon) {
                 return;
             }
 
+            const hidden = renglon.querySelector(".parte-id-hidden");
+            if (hidden) {
+                hidden.value = select.value || "";
+            }
+        }
+
+        function sincronizarMolde(select) {
+            const renglon = select?.closest(".erp-renglon");
+            if (!renglon) {
+                return;
+            }
+
+            const hidden = renglon.querySelector(".molde-id-hidden");
+            if (hidden) {
+                hidden.value = select.value || "";
+            }
+        }
+
+        function sincronizarIdsRenglones() {
+            document.querySelectorAll(".erp-renglon").forEach(renglon => {
+                const parteSelect = renglon.querySelector(".parte-select");
+                const parteHidden = renglon.querySelector(".parte-id-hidden");
+                const moldeSelect = renglon.querySelector(".molde-select");
+                const moldeHidden = renglon.querySelector(".molde-id-hidden");
+
+                if (parteHidden) {
+                    parteHidden.value = parteSelect?.value || "";
+                }
+
+                if (moldeHidden) {
+                    moldeHidden.value = moldeSelect?.value || "";
+                }
+            });
+        }
+
+        async function cargarParteInfo(select) {
             const renglon = select.closest(".erp-renglon");
+            const parteId = select.value;
+
+            sincronizarParte(select);
+
+            if (!parteId) {
+                const moldeSelect = renglon.querySelector(".molde-select");
+                if (moldeSelect) {
+                    moldeSelect.value = "";
+                    sincronizarMolde(moldeSelect);
+                }
+                return;
+            }
 
             try {
                 const response = await fetch(`/SolicitudesProduccion/ObtenerParteInfo?parteId=${parteId}`);
@@ -1066,6 +1162,11 @@
                     return;
                 }
 
+                const parteHidden = renglon.querySelector(".parte-id-hidden");
+                if (parteHidden) {
+                    parteHidden.value = data.parteID || parteId;
+                }
+
                 renglon.querySelector(".referencia-input").value = data.referenciaSAP || "";
                 renglon.querySelector(".designacion-input").value = data.designacionDescripcionSAP || "";
                 renglon.querySelector(".color-input").value = data.color || "";
@@ -1074,13 +1175,22 @@
                 renglon.querySelector(".piezas-caja-input").value = data.piezasPorCaja || "";
 
                 const moldeSelect = renglon.querySelector(".molde-select");
-                if (moldeSelect && data.moldeID) {
-                    moldeSelect.value = data.moldeID;
+                if (moldeSelect) {
+                    seleccionarValorSeguro(
+                        moldeSelect,
+                        data.moldeID,
+                        data.moldeCodigo || `Molde ID ${data.moldeID}`
+                    );
+                    sincronizarMolde(moldeSelect);
                 }
 
                 const primeraMaquina = renglon.querySelector(".maquina-select");
                 if (primeraMaquina && data.maquinaPrincipalID) {
-                    primeraMaquina.value = data.maquinaPrincipalID;
+                    seleccionarValorSeguro(
+                        primeraMaquina,
+                        data.maquinaPrincipalID,
+                        `Máquina ID ${data.maquinaPrincipalID}`
+                    );
                 }
 
             } catch (error) {
@@ -1090,9 +1200,23 @@
         }
 
         document.getElementById("formCrearSolicitud").addEventListener("submit", function (e) {
+            // Garantiza índices consecutivos y copia los IDs visuales a los
+            // campos hidden que sí viajan al model binder de ASP.NET Core.
+            renumerarRenglones();
+            sincronizarIdsRenglones();
+
             const renglones = document.querySelectorAll(".erp-renglon");
 
             for (const renglon of renglones) {
+                const parteId = renglon.querySelector(".parte-id-hidden")?.value || "";
+
+                if (!parteId) {
+                    e.preventDefault();
+                    alert("Selecciona una parte válida en todos los renglones antes de guardar.");
+                    renglon.querySelector(".parte-select")?.focus();
+                    return false;
+                }
+
                 const cantidad = parseInt(renglon.querySelector(".cantidad-piezas-input")?.value || "0");
                 let totalAsignado = 0;
 
@@ -1110,8 +1234,23 @@
 
         document.addEventListener("DOMContentLoaded", function () {
             document.querySelectorAll(".erp-renglon").forEach(renglon => {
+                const parteSelect = renglon.querySelector(".parte-select");
+                const parteHidden = renglon.querySelector(".parte-id-hidden");
+                const moldeSelect = renglon.querySelector(".molde-select");
+                const moldeHidden = renglon.querySelector(".molde-id-hidden");
+
+                if (parteSelect && parteHidden?.value) {
+                    seleccionarValorSeguro(parteSelect, parteHidden.value, `Parte ID ${parteHidden.value}`);
+                }
+
+                if (moldeSelect && moldeHidden?.value) {
+                    seleccionarValorSeguro(moldeSelect, moldeHidden.value, `Molde ID ${moldeHidden.value}`);
+                }
+
                 actualizarTotalRenglon(renglon);
             });
+
+            sincronizarIdsRenglones();
         });
     </script>
 </body>

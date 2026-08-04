@@ -31,6 +31,19 @@
         };
     }
 
+    string ClaseEstadoCaja(int estadoCajaId)
+    {
+        return estadoCajaId switch
+        {
+            2 => "bg-warning text-dark",
+            3 => "bg-success",
+            4 => "bg-warning text-dark",
+            5 => "bg-success",
+            6 => "bg-primary",
+            _ => "bg-secondary"
+        };
+    }
+
     var estado = (Model.Estado ?? string.Empty)
         .Trim()
         .ToUpperInvariant();
@@ -225,6 +238,10 @@
     }
 
     if (estado == CalidadEstados.ProduccionLiberada ||
+        estado == CalidadEstados.MonitoreoActivo ||
+        estado == CalidadEstados.PendienteLiberacionCaja ||
+        estado == CalidadEstados.CajaLiberada ||
+        estado == CalidadEstados.PendienteReliberacion ||
         estado == CalidadEstados.PendienteGP12 ||
         estado == CalidadEstados.EnGP12 ||
         estado == CalidadEstados.MaterialLiberado ||
@@ -1715,39 +1732,865 @@
 
                 @if (Model.Monitoreos.Any())
                 {
-                    <section class="quality-card">
+                    <section class="quality-card" id="monitoreos-calidad">
                         <div class="quality-card-header">
-                            <h2>
-                                <i class="fa-solid fa-clock"></i>
-                                Monitoreos programados cada hora
-                            </h2>
+                            <div>
+                                <h2>
+                                    <i class="fa-solid fa-clock"></i>
+                                    Monitoreos de proceso cada hora
+                                </h2>
+                                <div class="quality-help">
+                                    Cada revisión se vincula con la captura horaria realizada por Producción.
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="quality-card-body table-responsive">
-                            <table class="table table-sm align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Hora</th>
-                                        <th>Programada</th>
-                                        <th>Revisión</th>
-                                        <th>Resultado</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var monitor in Model.Monitoreos)
+                        <div class="quality-card-body">
+                            <div class="row g-3 mb-4">
+                                <div class="col-6 col-lg-2">
+                                    <div class="border rounded-3 p-3 h-100">
+                                        <div class="quality-data-label">Programados</div>
+                                        <div class="fs-4 fw-bold">@Model.TotalMonitoreos</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-lg-2">
+                                    <div class="border rounded-3 p-3 h-100">
+                                        <div class="quality-data-label">Pendientes</div>
+                                        <div class="fs-4 fw-bold text-warning">@Model.MonitoreosPendientes</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-lg-2">
+                                    <div class="border rounded-3 p-3 h-100">
+                                        <div class="quality-data-label">Vencidos</div>
+                                        <div class="fs-4 fw-bold text-danger">@Model.MonitoreosVencidos</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-lg-2">
+                                    <div class="border rounded-3 p-3 h-100">
+                                        <div class="quality-data-label">Conformes</div>
+                                        <div class="fs-4 fw-bold text-success">@Model.MonitoreosConformes</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-lg-2">
+                                    <div class="border rounded-3 p-3 h-100">
+                                        <div class="quality-data-label">Hallazgos</div>
+                                        <div class="fs-4 fw-bold text-danger">@Model.MonitoreosConHallazgo</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-lg-2">
+                                    <div class="border rounded-3 p-3 h-100">
+                                        <div class="quality-data-label">Próximo</div>
+                                        <div class="fw-bold">
+                                            @(Model.ProximoMonitoreo?.ToString("dd/MM HH:mm") ?? "Sin pendiente")
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-3">
+                                @foreach (var monitor in Model.Monitoreos)
+                                {
+                                    var monitorClase = monitor.Resultado switch
                                     {
-                                        <tr>
-                                            <td>@monitor.NumeroHora</td>
-                                            <td>@monitor.FechaHoraProgramada.ToString("dd/MM/yyyy HH:mm")</td>
-                                            <td>@(monitor.FechaHoraRevision?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</td>
-                                            <td>@monitor.Resultado</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                                        CalidadResultadoMonitoreo.Conforme => "border-success",
+                                        CalidadResultadoMonitoreo.Sospechoso => "border-warning",
+                                        CalidadResultadoMonitoreo.NoConforme => "border-danger",
+                                        CalidadResultadoMonitoreo.Reinspeccion => "border-info",
+                                        _ when monitor.EstaVencido => "border-danger",
+                                        _ => "border-secondary"
+                                    };
+
+                                    <article class="border @monitorClase rounded-3 p-3">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                                            <div>
+                                                <h3 class="h6 fw-bold mb-1">
+                                                    Revisión hora @monitor.NumeroHora
+                                                </h3>
+                                                <div class="quality-help">
+                                                    Programada: @monitor.FechaHoraProgramada.ToString("dd/MM/yyyy HH:mm")
+                                                    @if (monitor.EstaVencido)
+                                                    {
+                                                        <span class="text-danger fw-bold"> · Vencida</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <span class="badge @(monitor.Resultado == CalidadResultadoMonitoreo.Conforme ? "bg-success" : monitor.Resultado == CalidadResultadoMonitoreo.Sospechoso ? "bg-warning text-dark" : monitor.Resultado == CalidadResultadoMonitoreo.NoConforme ? "bg-danger" : monitor.Resultado == CalidadResultadoMonitoreo.Reinspeccion ? "bg-info text-dark" : "bg-secondary")">
+                                                @monitor.Resultado.Replace("_", " ")
+                                            </span>
+                                        </div>
+
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-md-3">
+                                                <div class="quality-data-label">Captura de Producción</div>
+                                                <div class="fw-semibold">@monitor.RangoProduccion</div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="quality-data-label">OK</div>
+                                                <div class="fw-bold text-success">@monitor.CantidadOKProduccion</div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="quality-data-label">Sospechoso</div>
+                                                <div class="fw-bold text-warning">@monitor.CantidadSospechosaProduccion</div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <div class="quality-data-label">Scrap reportado</div>
+                                                <div class="fw-bold text-danger">@monitor.CantidadScrapProduccion</div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="quality-data-label">Total del periodo</div>
+                                                <div class="fw-bold">@monitor.CantidadProducidaPeriodo</div>
+                                            </div>
+                                        </div>
+
+                                        @if (monitor.PuedeCapturar && estado == CalidadEstados.MonitoreoActivo)
+                                        {
+                                            <form asp-controller="Calidad"
+                                                  asp-action="RegistrarMonitoreo"
+                                                  method="post"
+                                                  class="monitor-form"
+                                                  data-monitor-form>
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="MonitoreoID" value="@monitor.MonitoreoID" />
+                                                <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+
+                                                <div class="row g-3">
+                                                    <div class="col-md-3">
+                                                        <label class="form-label fw-semibold">Muestra revisada</label>
+                                                        <input type="number"
+                                                               name="CantidadRevisadaMuestra"
+                                                               min="1"
+                                                               max="@(monitor.CantidadProducidaPeriodo > 0 ? monitor.CantidadProducidaPeriodo : int.MaxValue)"
+                                                               class="form-control"
+                                                               required />
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <label class="form-label fw-semibold">Resultado</label>
+                                                        <select name="Resultado"
+                                                                class="form-select"
+                                                                data-monitor-resultado
+                                                                required>
+                                                            <option value="">Selecciona...</option>
+                                                            <option value="@CalidadResultadoMonitoreo.Conforme">Conforme</option>
+                                                            <option value="@CalidadResultadoMonitoreo.Sospechoso">Sospechoso</option>
+                                                            <option value="@CalidadResultadoMonitoreo.NoConforme">No conforme</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-3" data-monitor-hallazgo>
+                                                        <label class="form-label fw-semibold">Defecto</label>
+                                                        <select name="DefectoCodigo" class="form-select">
+                                                            <option value="">Selecciona...</option>
+                                                            @foreach (var defecto in Model.CatalogoDefectos)
+                                                            {
+                                                                <option value="@defecto.Codigo">@defecto.Texto</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-3" data-monitor-hallazgo>
+                                                        <label class="form-label fw-semibold">Descripción adicional</label>
+                                                        <input type="text"
+                                                               name="DefectoDescripcion"
+                                                               maxlength="500"
+                                                               class="form-control" />
+                                                    </div>
+
+                                                    <div class="col-md-3" data-monitor-hallazgo>
+                                                        <label class="form-label fw-semibold">Cantidad sospechosa</label>
+                                                        <input type="number"
+                                                               name="CantidadSospechosa"
+                                                               min="0"
+                                                               value="0"
+                                                               class="form-control" />
+                                                    </div>
+                                                    <div class="col-md-3" data-monitor-hallazgo>
+                                                        <label class="form-label fw-semibold">No recuperable</label>
+                                                        <input type="number"
+                                                               name="CantidadNoRecuperable"
+                                                               min="0"
+                                                               value="0"
+                                                               class="form-control" />
+                                                    </div>
+                                                    <div class="col-md-3" data-monitor-hallazgo>
+                                                        <label class="form-label fw-semibold d-block">Tratamiento</label>
+                                                        <div class="form-check">
+                                                            <input class="form-check-input"
+                                                                   type="checkbox"
+                                                                   name="RequiereSeleccion"
+                                                                   value="true"
+                                                                   id="sel_@monitor.MonitoreoID" />
+                                                            <label class="form-check-label" for="sel_@monitor.MonitoreoID">
+                                                                Selección
+                                                            </label>
+                                                        </div>
+                                                        <div class="form-check">
+                                                            <input class="form-check-input"
+                                                                   type="checkbox"
+                                                                   name="RequiereRetrabajo"
+                                                                   value="true"
+                                                                   id="ret_@monitor.MonitoreoID" />
+                                                            <label class="form-check-label" for="ret_@monitor.MonitoreoID">
+                                                                Retrabajo
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3" data-monitor-hallazgo>
+                                                        <label class="form-label fw-semibold">Responsable del retrabajo</label>
+                                                        <select name="ResponsableRetrabajo" class="form-select">
+                                                            <option value="">No aplica</option>
+                                                            <option value="@CalidadResponsable.Produccion">Producción</option>
+                                                            <option value="@CalidadResponsable.Calidad">Calidad</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <label class="form-label fw-semibold">Observaciones</label>
+                                                        <textarea name="Observaciones"
+                                                                  rows="2"
+                                                                  maxlength="1000"
+                                                                  class="form-control"></textarea>
+                                                    </div>
+                                                    <div class="col-12 text-end">
+                                                        <button type="submit" class="quality-btn quality-btn-primary">
+                                                            <i class="fa-solid fa-floppy-disk"></i>
+                                                            Guardar revisión
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </form>
+                                        }
+                                        else if (monitor.EsPendiente && !monitor.TieneRegistroProduccion)
+                                        {
+                                            <div class="alert alert-secondary mb-0">
+                                                Pendiente de la captura horaria de Producción. Cuando Producción registre el periodo,
+                                                esta revisión quedará habilitada.
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="row g-3">
+                                                <div class="col-md-2">
+                                                    <div class="quality-data-label">Muestra</div>
+                                                    <div class="fw-bold">@monitor.CantidadRevisadaMuestra</div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="quality-data-label">Defecto</div>
+                                                    <div class="fw-semibold">@Mostrar(monitor.DefectoCodigo)</div>
+                                                    <div class="quality-help">@Mostrar(monitor.DefectoDescripcion)</div>
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <div class="quality-data-label">Afectado</div>
+                                                    <div class="fw-bold">@(monitor.CantidadSospechosa + monitor.CantidadNoRecuperable)</div>
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <div class="quality-data-label">Tratamiento</div>
+                                                    <div class="fw-semibold">
+                                                        @(monitor.RequiereRetrabajo ? "Retrabajo" : monitor.RequiereSeleccion ? "Selección" : "No aplica")
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="quality-data-label">Revisado</div>
+                                                    <div class="fw-semibold">
+                                                        @(monitor.FechaHoraRevision?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(monitor.Observaciones))
+                                            {
+                                                <div class="quality-help mt-3">@monitor.Observaciones</div>
+                                            }
+                                        }
+                                    </article>
+                                }
+                            </div>
                         </div>
                     </section>
                 }
+
+                @if (Model.Disposiciones.Any())
+                {
+                    <section class="quality-card" id="disposiciones-material">
+                        <div class="quality-card-header">
+                            <div>
+                                <h2>
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                    Material separado y disposición
+                                </h2>
+                                <div class="quality-help">
+                                    El material con hallazgo permanece identificado hasta concluir selección, retrabajo o disposición final.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="quality-card-body d-grid gap-3">
+                            @foreach (var disposicion in Model.Disposiciones)
+                            {
+                                <article class="border rounded-3 p-3 @(disposicion.ResultadoFinal == CalidadResultadoDisposicion.Pendiente ? "border-warning" : disposicion.ResultadoFinal == CalidadResultadoDisposicion.Liberado ? "border-success" : "border-danger")">
+                                    <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+                                        <div>
+                                            <h3 class="h6 fw-bold mb-1">Disposición #@disposicion.DisposicionID</h3>
+                                            <div class="quality-help">
+                                                Monitor: @(disposicion.MonitoreoID?.ToString() ?? "Sin monitor") ·
+                                                Inicio: @disposicion.FechaInicio.ToString("dd/MM/yyyy HH:mm")
+                                            </div>
+                                        </div>
+                                        <span class="badge @(disposicion.ResultadoFinal == CalidadResultadoDisposicion.Pendiente ? "bg-warning text-dark" : disposicion.ResultadoFinal == CalidadResultadoDisposicion.Liberado ? "bg-success" : "bg-danger")">
+                                            @disposicion.ResultadoFinal
+                                        </span>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Tipo</div>
+                                            <div class="fw-semibold">@disposicion.TipoMaterial</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Etiqueta</div>
+                                            <div class="fw-semibold">@Mostrar(disposicion.Etiqueta)</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Afectado</div>
+                                            <div class="fw-bold">@disposicion.CantidadAfectada</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Proceso</div>
+                                            <div class="fw-semibold">@disposicion.Disposicion</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Liberado</div>
+                                            <div class="fw-bold text-success">@disposicion.CantidadLiberada</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Scrap</div>
+                                            <div class="fw-bold text-danger">@disposicion.CantidadScrap</div>
+                                        </div>
+                                    </div>
+
+                                    @if (disposicion.ResultadoFinal == CalidadResultadoDisposicion.Pendiente)
+                                    {
+                                        <form asp-controller="Calidad"
+                                              asp-action="ResolverDisposicion"
+                                              method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="DisposicionID" value="@disposicion.DisposicionID" />
+                                            <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+
+                                            <div class="row g-3">
+                                                <div class="col-md-3">
+                                                    <label class="form-label fw-semibold">Cantidad liberada</label>
+                                                    <input type="number"
+                                                           name="CantidadLiberada"
+                                                           min="0"
+                                                           max="@disposicion.CantidadAfectada"
+                                                           value="0"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label fw-semibold">Cantidad scrap</label>
+                                                    <input type="number"
+                                                           name="CantidadScrap"
+                                                           min="0"
+                                                           max="@disposicion.CantidadAfectada"
+                                                           value="0"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-semibold">Resultado de selección / retrabajo</label>
+                                                    <textarea name="Observaciones"
+                                                              rows="2"
+                                                              maxlength="1000"
+                                                              class="form-control"></textarea>
+                                                </div>
+                                                <div class="col-md-2 d-flex align-items-end">
+                                                    <button type="submit"
+                                                            class="quality-btn quality-btn-success w-100"
+                                                            onclick="return confirm('¿Confirmas la disposición final de este material?');">
+                                                        Resolver
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="quality-help mt-2">
+                                                Liberado + scrap debe ser igual a @disposicion.CantidadAfectada.
+                                            </div>
+                                        </form>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(disposicion.Observaciones))
+                                    {
+                                        <div class="quality-help">@disposicion.Observaciones</div>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    </section>
+                }
+
+                @if (Model.CajasProduccion.Any())
+                {
+                    <section class="quality-card" id="cajas-produccion">
+                        <div class="quality-card-header">
+                            <div>
+                                <h2>
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                    Liberación de cajas de Producción
+                                </h2>
+                                <div class="quality-help">
+                                    La decisión de cada caja es independiente del estado general
+                                    de la corrida y no interrumpe el monitoreo horario.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="quality-card-body">
+                            @foreach (var caja in Model.CajasProduccion)
+                            {
+                                <article class="border rounded-4 p-3 mb-3 bg-white">
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                                        <div>
+                                            <h3 class="h5 mb-1 fw-bold">
+                                                <i class="fa-solid fa-box me-1"></i>
+                                                @Mostrar(caja.FolioCaja)
+                                            </h3>
+                                            <div class="quality-help">
+                                                Caja #@caja.NumeroCaja · ID @caja.CajaProduccionID
+                                            </div>
+                                        </div>
+
+                                        <span class="badge @ClaseEstadoCaja(caja.EstadoCajaID)">
+                                            @Mostrar(caja.EstadoCajaNombre)
+                                        </span>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Tipo</div>
+                                            <div class="fw-semibold">@caja.TipoCaja</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Cantidad</div>
+                                            <div class="fw-bold">@caja.CantidadPiezas.ToString("N0")</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Lote</div>
+                                            <div class="fw-semibold">@Mostrar(caja.LoteMaterial)</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Etiqueta / folio</div>
+                                            <div class="fw-semibold">@Mostrar(caja.EtiquetaFolio)</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Solicitud a Calidad</div>
+                                            <div class="fw-semibold">
+                                                @(caja.FechaSolicitudCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (caja.PuedeRevisar)
+                                    {
+                                        <form asp-controller="Calidad"
+                                              asp-action="ResolverCajaProduccion"
+                                              method="post">
+                                            @Html.AntiForgeryToken()
+
+                                            <input type="hidden"
+                                                   name="InspeccionID"
+                                                   value="@Model.InspeccionID" />
+                                            <input type="hidden"
+                                                   name="CajaProduccionID"
+                                                   value="@caja.CajaProduccionID" />
+
+                                            <div class="row g-3">
+                                                <div class="col-lg-4">
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input"
+                                                               type="checkbox"
+                                                               name="EstandarPackCumple"
+                                                               value="true"
+                                                               id="pack-@caja.CajaProduccionID" />
+                                                        <label class="form-check-label fw-semibold"
+                                                               for="pack-@caja.CajaProduccionID">
+                                                            Cumple estándar de empaque
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input"
+                                                               type="checkbox"
+                                                               name="EtiquetaProductoCorrecta"
+                                                               value="true"
+                                                               id="etiqueta-@caja.CajaProduccionID" />
+                                                        <label class="form-check-label fw-semibold"
+                                                               for="etiqueta-@caja.CajaProduccionID">
+                                                            Etiqueta de producto correcta
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="form-check">
+                                                        <input class="form-check-input"
+                                                               type="checkbox"
+                                                               name="TecnicoConfirmoInformacion"
+                                                               value="true"
+                                                               id="tecnico-@caja.CajaProduccionID" />
+                                                        <label class="form-check-label fw-semibold"
+                                                               for="tecnico-@caja.CajaProduccionID">
+                                                            Técnico confirmó la información
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-lg-4">
+                                                    <label class="form-label fw-semibold">
+                                                        Número de operador en etiqueta
+                                                    </label>
+                                                    <input type="text"
+                                                           name="NumeroOperadorEtiqueta"
+                                                           maxlength="50"
+                                                           class="form-control mb-3" />
+
+                                                    <label class="form-label fw-semibold">Tarima</label>
+                                                    <input type="text"
+                                                           name="Tarima"
+                                                           maxlength="100"
+                                                           class="form-control" />
+                                                </div>
+
+                                                <div class="col-lg-4">
+                                                    <label class="form-label fw-semibold">
+                                                        Motivo GP12
+                                                    </label>
+                                                    <textarea name="MotivoGP12"
+                                                              rows="2"
+                                                              maxlength="500"
+                                                              class="form-control mb-3"
+                                                              placeholder="Obligatorio al enviar a GP12..."></textarea>
+
+                                                    <label class="form-label fw-semibold">
+                                                        Observaciones / motivo de devolución
+                                                    </label>
+                                                    <textarea name="Observaciones"
+                                                              rows="2"
+                                                              maxlength="1000"
+                                                              class="form-control"
+                                                              placeholder="Describe hallazgos o correcciones requeridas..."></textarea>
+                                                </div>
+                                            </div>
+
+                                            <div class="d-flex gap-2 flex-wrap mt-3">
+                                                <button type="submit"
+                                                        name="Decision"
+                                                        value="LIBERAR"
+                                                        class="quality-btn quality-btn-success"
+                                                        data-submit-confirm="¿Confirmas la liberación de esta caja con etiqueta verde?">
+                                                    <i class="fa-solid fa-circle-check"></i>
+                                                    Liberar a Almacén
+                                                </button>
+
+                                                <button type="submit"
+                                                        name="Decision"
+                                                        value="GP12"
+                                                        class="quality-btn quality-btn-warning"
+                                                        data-submit-confirm="¿Confirmas el envío de esta caja a GP12?">
+                                                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                                                    Enviar a GP12
+                                                </button>
+
+                                                <button type="submit"
+                                                        name="Decision"
+                                                        value="DEVOLVER"
+                                                        class="quality-btn quality-btn-danger"
+                                                        data-submit-confirm="¿Confirmas la devolución de esta caja a Producción?">
+                                                    <i class="fa-solid fa-rotate-left"></i>
+                                                    Devolver a Producción
+                                                </button>
+                                            </div>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <div class="quality-help">
+                                            Resultado: @Mostrar(caja.ResultadoCalidad)
+                                            @if (!string.IsNullOrWhiteSpace(caja.MotivoCalidad))
+                                            {
+                                                <span> · @caja.MotivoCalidad</span>
+                                            }
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    </section>
+                }
+
+                @if (Model.RegistrosGP12.Any())
+                {
+                    <section class="quality-card" id="gp12-cajas">
+                        <div class="quality-card-header">
+                            <div>
+                                <h2>
+                                    <i class="fa-solid fa-microscope"></i>
+                                    Inspección reforzada GP12
+                                </h2>
+                                <div class="quality-help">
+                                    GP12 requiere revisar la caja completa. Un resultado NOK
+                                    mantiene la caja bloqueada para una nueva inspección; no genera scrap automático.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="quality-card-body">
+                            @foreach (var gp12 in Model.RegistrosGP12)
+                            {
+                                <article class="border rounded-4 p-3 mb-3 bg-white">
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                                        <div>
+                                            <h3 class="h5 mb-1 fw-bold">
+                                                <i class="fa-solid fa-box-open me-1"></i>
+                                                @Mostrar(gp12.FolioCaja)
+                                            </h3>
+                                            <div class="quality-help">
+                                                GP12 #@gp12.GP12ID · Entrada @gp12.FechaEntrada.ToString("dd/MM/yyyy HH:mm")
+                                            </div>
+                                        </div>
+
+                                        <span class="badge @(gp12.Estado == CalidadEstadoGP12.Liberado ? "bg-success" : gp12.Estado == CalidadEstadoGP12.NokReinspeccion ? "bg-danger" : "bg-warning text-dark")">
+                                            @gp12.Estado.Replace("_", " ")
+                                        </span>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Cantidad de entrada</div>
+                                            <div class="fw-bold">@gp12.CantidadEntrada.ToString("N0")</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="quality-data-label">Motivo</div>
+                                            <div class="fw-semibold">@Mostrar(gp12.Motivo)</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Salida</div>
+                                            <div class="fw-semibold">
+                                                @(gp12.FechaSalida?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (gp12.Revisiones.Any())
+                                    {
+                                        <div class="table-responsive mb-3">
+                                            <table class="table table-sm align-middle">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Revisión</th>
+                                                        <th>Fecha</th>
+                                                        <th>Revisadas</th>
+                                                        <th>OK</th>
+                                                        <th>NOK</th>
+                                                        <th>Resultado</th>
+                                                        <th>Defectos</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var revision in gp12.Revisiones)
+                                                    {
+                                                        <tr>
+                                                            <td>#@revision.NumeroRevision</td>
+                                                            <td>@revision.FechaRevision.ToString("dd/MM/yyyy HH:mm")</td>
+                                                            <td>@revision.CantidadRevisada</td>
+                                                            <td class="text-success fw-bold">@revision.CantidadOK</td>
+                                                            <td class="text-danger fw-bold">@revision.CantidadNOK</td>
+                                                            <td>
+                                                                <span class="badge @(revision.Resultado == CalidadResultadoGP12.Ok ? "bg-success" : "bg-danger")">
+                                                                    @revision.Resultado
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                @if (revision.Defectos.Any())
+                                                                {
+                                                                    @string.Join(", ", revision.Defectos.Select(x => $"{x.Codigo}: {x.Cantidad}"))
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span>—</span>
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+
+                                    @if (gp12.PuedeRevisar)
+                                    {
+                                        <form asp-controller="Calidad"
+                                              asp-action="RegistrarRevisionGP12"
+                                              method="post"
+                                              data-gp12-form>
+                                            @Html.AntiForgeryToken()
+
+                                            <input type="hidden"
+                                                   name="InspeccionID"
+                                                   value="@Model.InspeccionID" />
+                                            <input type="hidden"
+                                                   name="GP12ID"
+                                                   value="@gp12.GP12ID" />
+
+                                            <div class="row g-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-semibold">Cantidad revisada</label>
+                                                    <input type="number"
+                                                           name="CantidadRevisada"
+                                                           min="1"
+                                                           max="@gp12.CantidadEntrada"
+                                                           value="@gp12.CantidadEntrada"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-semibold">Cantidad OK</label>
+                                                    <input type="number"
+                                                           name="CantidadOK"
+                                                           min="0"
+                                                           max="@gp12.CantidadEntrada"
+                                                           value="@gp12.CantidadEntrada"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-semibold">Cantidad NOK</label>
+                                                    <input type="number"
+                                                           name="CantidadNOK"
+                                                           min="0"
+                                                           max="@gp12.CantidadEntrada"
+                                                           value="0"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+                                                    <label class="form-label fw-semibold mb-0">
+                                                        Defectos detectados
+                                                    </label>
+                                                    <button type="button"
+                                                            class="quality-btn quality-btn-light"
+                                                            data-add-defecto
+                                                            data-gp12-id="@gp12.GP12ID">
+                                                        <i class="fa-solid fa-plus"></i>
+                                                        Agregar defecto
+                                                    </button>
+                                                </div>
+
+                                                <div data-defectos-container="@gp12.GP12ID"></div>
+
+                                                <template id="defecto-template-@gp12.GP12ID">
+                                                    <div class="row g-2 align-items-end border rounded-3 p-2 mb-2" data-defecto-row>
+                                                        <div class="col-md-5">
+                                                            <label class="form-label fw-semibold">Defecto</label>
+                                                            <select name="Defectos[__index__].CatalogoDefectoID"
+                                                                    class="form-select">
+                                                                <option value="">-- Selecciona defecto --</option>
+                                                                @foreach (var defecto in Model.CatalogoDefectos)
+                                                                {
+                                                                    <option value="@defecto.CatalogoDefectoID">
+                                                                        @defecto.Texto
+                                                                    </option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <label class="form-label fw-semibold">Cantidad</label>
+                                                            <input type="number"
+                                                                   name="Defectos[__index__].Cantidad"
+                                                                   min="1"
+                                                                   value="1"
+                                                                   class="form-control" />
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <label class="form-label fw-semibold">Observaciones</label>
+                                                            <input type="text"
+                                                                   name="Defectos[__index__].Observaciones"
+                                                                   maxlength="500"
+                                                                   class="form-control" />
+                                                        </div>
+                                                        <div class="col-md-1">
+                                                            <button type="button"
+                                                                    class="btn btn-outline-danger w-100"
+                                                                    data-remove-defecto
+                                                                    title="Quitar defecto">
+                                                                <i class="fa-solid fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <label class="form-label fw-semibold">Observaciones de GP12</label>
+                                                <textarea name="Observaciones"
+                                                          rows="3"
+                                                          maxlength="1000"
+                                                          class="form-control"
+                                                          placeholder="Describe la revisión, correcciones o hallazgos..."></textarea>
+                                            </div>
+
+                                            <div class="mt-3">
+                                                <button type="submit"
+                                                        class="quality-btn quality-btn-primary"
+                                                        data-submit-confirm="¿Confirmas el resultado de esta revisión GP12?">
+                                                    <i class="fa-solid fa-floppy-disk"></i>
+                                                    Guardar revisión GP12
+                                                </button>
+                                            </div>
+                                        </form>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    </section>
+
+                    <script>
+                        document.querySelectorAll('[data-add-defecto]').forEach(function (button) {
+                            button.addEventListener('click', function () {
+                                const gp12Id = button.dataset.gp12Id;
+                                const container = document.querySelector('[data-defectos-container="' + gp12Id + '"]');
+                                const template = document.getElementById('defecto-template-' + gp12Id);
+
+                                if (!container || !template) return;
+
+                                const index = Number(container.dataset.nextIndex || '0');
+                                container.dataset.nextIndex = (index + 1).toString();
+
+                                const html = template.innerHTML.replaceAll('__index__', index.toString());
+                                container.insertAdjacentHTML('beforeend', html);
+                            });
+                        });
+
+                        document.addEventListener('click', function (event) {
+                            const button = event.target.closest('[data-remove-defecto]');
+                            if (!button) return;
+
+                            button.closest('[data-defecto-row]')?.remove();
+                        });
+                    </script>
+                }
+
+                <script>
+                    document.querySelectorAll('[data-monitor-form]').forEach(function (form) {
+                        const resultado = form.querySelector('[data-monitor-resultado]');
+                        const hallazgos = form.querySelectorAll('[data-monitor-hallazgo]');
+
+                        const actualizar = function () {
+                            const mostrarHallazgo = resultado && resultado.value && resultado.value !== 'CONFORME';
+                            hallazgos.forEach(function (elemento) {
+                                elemento.style.display = mostrarHallazgo ? '' : 'none';
+                            });
+                        };
+
+                        resultado?.addEventListener('change', actualizar);
+                        actualizar();
+                    });
+                </script>
 
                 <section class="quality-card">
                     <div class="quality-card-header">

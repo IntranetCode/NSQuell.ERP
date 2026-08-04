@@ -862,6 +862,10 @@
 
                     <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
                     <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                    <input type="hidden"
+                           id="EnviarACalidad"
+                           name="EnviarACalidad"
+                           value="false" />
 
                     <div class="flow-note">
                         <i class="bi bi-diagram-3 me-1"></i>
@@ -1079,15 +1083,15 @@
                                 </a>
 
                                 <div class="d-flex gap-2 flex-wrap">
-                                    <button type="submit"
-                                            name="EnviarACalidad"
-                                            value="false"
+                                    <button type="button"
+                                            id="btnGuardarBorrador"
                                             class="btn btn-primary btn-strong">
                                         <i class="bi bi-save me-1"></i>
                                         Guardar borrador
                                     </button>
 
                                     <button type="button"
+                                            id="btnAbrirEnviarCalidad"
                                             class="btn btn-success btn-strong"
                                             data-bs-toggle="modal"
                                             data-bs-target="#modalEnviarCalidad">
@@ -1144,9 +1148,8 @@
                                             Cancelar
                                         </button>
 
-                                        <button type="submit"
-                                                name="EnviarACalidad"
-                                                value="true"
+                                        <button type="button"
+                                                id="btnConfirmarEnviarCalidad"
                                                 class="btn btn-success btn-strong">
                                             <i class="bi bi-send-check me-1"></i>
                                             Sí, enviar a Calidad
@@ -1181,56 +1184,148 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        const formChecklist = document.getElementById('formChecklistArranque');
+        document.addEventListener('DOMContentLoaded', function () {
+            const formChecklist = document.getElementById('formChecklistArranque');
+            const campoEnviarCalidad = document.getElementById('EnviarACalidad');
+            const btnGuardarBorrador = document.getElementById('btnGuardarBorrador');
+            const btnConfirmarEnviarCalidad = document.getElementById('btnConfirmarEnviarCalidad');
+            const modalElement = document.getElementById('modalEnviarCalidad');
 
-        function validarNokConObservacion() {
-            const rows = document.querySelectorAll('.question-row');
-            let faltantes = [];
+            let enviandoFormulario = false;
+            let accionActual = 'borrador';
 
-            rows.forEach(function (row) {
-                const nok = row.querySelector('input[type="radio"][value="NOK"]');
-                const obs = row.querySelector('textarea');
+            function validarNokConObservacion() {
+                const rows = document.querySelectorAll('.question-row');
+                const faltantes = [];
 
-                if (!nok || !obs) return;
+                rows.forEach(function (row) {
+                    const nok = row.querySelector('input[type="radio"][value="NOK"]');
+                    const obs = row.querySelector('textarea');
 
-                if (nok.checked && !obs.value.trim()) {
-                    const txt = row.querySelector('.question-text');
-                    faltantes.push(txt ? txt.textContent.trim() : 'Pregunta NOK sin observación');
-                    obs.classList.add('is-invalid');
+                    if (!nok || !obs) {
+                        return;
+                    }
+
+                    if (nok.checked && !obs.value.trim()) {
+                        const txt = row.querySelector('.question-text');
+                        faltantes.push(
+                            txt ? txt.textContent.trim() : 'Pregunta NOK sin observación'
+                        );
+                        obs.classList.add('is-invalid');
+                    }
+                    else {
+                        obs.classList.remove('is-invalid');
+                    }
+                });
+
+                if (faltantes.length > 0) {
+                    alert('Las respuestas NOK requieren observación antes de guardar o enviar.');
+                    return false;
                 }
-                else {
-                    obs.classList.remove('is-invalid');
+
+                return true;
+            }
+
+            function validarChecklistCompleto() {
+                const grupos = new Map();
+
+                document
+                    .querySelectorAll('input[type="radio"][name$=".Resultado"]')
+                    .forEach(function (radio) {
+                        if (!grupos.has(radio.name)) {
+                            grupos.set(radio.name, false);
+                        }
+
+                        if (radio.checked) {
+                            grupos.set(radio.name, true);
+                        }
+                    });
+
+                const pendientes = Array.from(grupos.values())
+                    .filter(function (respondida) { return !respondida; })
+                    .length;
+
+                if (pendientes > 0) {
+                    alert(
+                        'No se puede enviar a Calidad. Faltan ' +
+                        pendientes +
+                        ' respuesta(s) del checklist.'
+                    );
+                    return false;
+                }
+
+                return true;
+            }
+
+            function bloquearBotones() {
+                if (btnGuardarBorrador) {
+                    btnGuardarBorrador.disabled = true;
+                }
+
+                if (btnConfirmarEnviarCalidad) {
+                    btnConfirmarEnviarCalidad.disabled = true;
+                }
+            }
+
+            function enviarFormulario(enviarACalidad) {
+                if (!formChecklist || !campoEnviarCalidad || enviandoFormulario) {
+                    return;
+                }
+
+                if (!validarNokConObservacion()) {
+                    return;
+                }
+
+                if (enviarACalidad && !validarChecklistCompleto()) {
+                    return;
+                }
+
+                accionActual = enviarACalidad ? 'calidad' : 'borrador';
+                campoEnviarCalidad.value = enviarACalidad ? 'true' : 'false';
+                enviandoFormulario = true;
+                bloquearBotones();
+
+                if (enviarACalidad && btnConfirmarEnviarCalidad) {
+                    btnConfirmarEnviarCalidad.innerHTML =
+                        '<span class="spinner-border spinner-border-sm me-1"></span>' +
+                        'Enviando...';
+                }
+                else if (!enviarACalidad && btnGuardarBorrador) {
+                    btnGuardarBorrador.innerHTML =
+                        '<span class="spinner-border spinner-border-sm me-1"></span>' +
+                        'Guardando...';
+                }
+
+                // submit() nativo evita que otro botón submit agregue un valor distinto
+                // para EnviarACalidad. El valor enviado será únicamente el hidden anterior.
+                HTMLFormElement.prototype.submit.call(formChecklist);
+            }
+
+            btnGuardarBorrador?.addEventListener('click', function () {
+                enviarFormulario(false);
+            });
+
+            btnConfirmarEnviarCalidad?.addEventListener('click', function () {
+                enviarFormulario(true);
+            });
+
+            formChecklist?.addEventListener('submit', function (event) {
+                // Evita envíos accidentales con Enter. El flujo debe pasar por los
+                // botones controlados para establecer correctamente EnviarACalidad.
+                if (!enviandoFormulario) {
+                    event.preventDefault();
+                    enviarFormulario(accionActual === 'calidad');
                 }
             });
 
-            if (faltantes.length > 0) {
-                alert('Las respuestas NOK requieren observación antes de guardar/enviar.');
-                return false;
-            }
-
-            return true;
-        }
-
-        formChecklist?.addEventListener('submit', function (event) {
-            if (!validarNokConObservacion()) {
-                event.preventDefault();
-                return;
-            }
-
-            const submitter = event.submitter;
-
-            if (submitter) {
-                submitter.disabled = true;
-
-                if (submitter.value === 'true') {
-                    submitter.innerHTML =
-                        '<span class="spinner-border spinner-border-sm me-1"></span> Enviando...';
+            modalElement?.addEventListener('hidden.bs.modal', function () {
+                if (!enviandoFormulario && btnConfirmarEnviarCalidad) {
+                    btnConfirmarEnviarCalidad.disabled = false;
+                    btnConfirmarEnviarCalidad.innerHTML =
+                        '<i class="bi bi-send-check me-1"></i>' +
+                        'Sí, enviar a Calidad';
                 }
-                else {
-                    submitter.innerHTML =
-                        '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
-                }
-            }
+            });
         });
     </script>
 </body>

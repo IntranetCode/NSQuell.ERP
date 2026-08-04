@@ -1,10 +1,18 @@
-﻿@model ERP.NSQuell.Models.ProduccionOperadorCajasVm
+@model ERP.NSQuell.Models.ProduccionOperadorCajasVm
+@using System.Linq
 
 @{
     Layout = null;
 
+    var cajas = Model.Cajas ?? new List<ERP.NSQuell.Models.ProduccionOperadorCajaVm>();
+
     var totalCapturado = Model.CantidadOKTotal + Model.CantidadSospechosaTotal + Model.CantidadScrapTotal;
-    var totalEnCajas = Model.TotalEnCajas;
+    var totalEnCajas = cajas.Sum(x => x.CantidadPiezas);
+
+    var pendientesCalidad = cajas.Count(x => x.EstadoCajaID == 2);
+    var liberadasCalidad = cajas.Count(x => x.EstadoCajaID >= 3 && x.EtiquetaVerde);
+    var enZonaVerde = cajas.Count(x => x.EstadoCajaID == 5);
+    var salidasProduccion = cajas.Count(x => x.EstadoCajaID >= 6);
 
     var pendienteEmpaque = totalCapturado - totalEnCajas;
     if (pendienteEmpaque < 0)
@@ -225,7 +233,7 @@
 
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(6, minmax(0, 1fr));
             gap: 12px;
             margin-bottom: 16px;
         }
@@ -302,6 +310,27 @@
         .progress-bar {
             border-radius: 999px;
             background: var(--blue);
+        }
+
+        .flow-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .availability-box {
+            border: 1px solid #bfdbfe;
+            border-radius: 16px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 12px 14px;
+            font-weight: 850;
+        }
+
+        .availability-number {
+            font-size: 1.18rem;
+            font-weight: 950;
         }
 
         .layout {
@@ -609,6 +638,10 @@
                 grid-template-columns: repeat(3, minmax(0, 1fr));
             }
 
+            .flow-metrics {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
             .info-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
@@ -629,7 +662,8 @@
                 }
 
             .metrics,
-            .info-grid {
+            .info-grid,
+            .flow-metrics {
                 grid-template-columns: 1fr;
             }
 
@@ -741,25 +775,33 @@
                     }
                 </div>
             </div>
+
+            <div class="info">
+                <div class="k">Estatus producción</div>
+                <div class="v">@Model.EstatusNombre</div>
+                <div class="sub @(Model.TieneParoAbierto ? "text-danger" : "")">
+                    @(Model.TieneParoAbierto ? "Paro abierto" : "Ejecución disponible")
+                </div>
+            </div>
         </section>
 
         <section class="metrics">
             <div class="metric">
                 <div class="k">OK capturado</div>
                 <div class="num text-success">@Numero(Model.CantidadOKTotal)</div>
-                <div class="sub">Disponible: @Numero(Model.DisponibleOK)</div>
+                <div class="sub">Disponible: @Numero(Model.CantidadOKDisponible)</div>
             </div>
 
             <div class="metric">
                 <div class="k">Sospechoso</div>
                 <div class="num text-warning">@Numero(Model.CantidadSospechosaTotal)</div>
-                <div class="sub">Disponible: @Numero(Model.DisponibleSospechoso)</div>
+                <div class="sub">Disponible: @Numero(Model.CantidadSospechosaDisponible)</div>
             </div>
 
             <div class="metric">
                 <div class="k">Scrap</div>
                 <div class="num text-danger">@Numero(Model.CantidadScrapTotal)</div>
-                <div class="sub">Disponible: @Numero(Model.DisponibleScrap)</div>
+                <div class="sub">Disponible: @Numero(Model.CantidadScrapDisponible)</div>
             </div>
 
             <div class="metric">
@@ -797,6 +839,32 @@
                      role="progressbar"
                      style="width:@avanceTexto%">
                 </div>
+            </div>
+        </section>
+
+        <section class="flow-metrics">
+            <div class="metric">
+                <div class="k">Pendientes de Calidad</div>
+                <div class="num text-warning">@Numero(pendientesCalidad)</div>
+                <div class="sub">Cajas enviadas para revisión</div>
+            </div>
+
+            <div class="metric">
+                <div class="k">Liberadas por Calidad</div>
+                <div class="num text-success">@Numero(liberadasCalidad)</div>
+                <div class="sub">Con etiqueta verde</div>
+            </div>
+
+            <div class="metric">
+                <div class="k">En zona verde</div>
+                <div class="num text-success">@Numero(enZonaVerde)</div>
+                <div class="sub">Pendientes de escanear salida</div>
+            </div>
+
+            <div class="metric">
+                <div class="k">Salidas de Producción</div>
+                <div class="num text-primary">@Numero(salidasProduccion)</div>
+                <div class="sub">Esperando o recibidas por Almacén</div>
             </div>
         </section>
 
@@ -844,14 +912,20 @@
                             <div class="mb-3">
                                 <label class="form-label">Tipo de caja</label>
                                 <select name="tipoCaja" class="form-select" id="tipoCaja" required>
-                                    <option value="OK">OK</option>
-                                    <option value="SOSPECHOSO">Sospechoso</option>
-                                    <option value="SCRAP">Scrap</option>
-                                    <option value="RETENCION">Retención</option>
+                                    <option value="OK" data-disponible="@Model.CantidadOKDisponible">Producto conforme</option>
+                                    <option value="SOSPECHOSO" data-disponible="@Model.CantidadSospechosaDisponible">Sospechoso</option>
+                                    <option value="SCRAP" data-disponible="@Model.CantidadScrapDisponible">Scrap</option>
+                                    <option value="RETENCION" data-disponible="@Model.CantidadSospechosaDisponible">Retención</option>
                                 </select>
                                 <div class="sub mt-1">
-                                    OK disponible: @Numero(Model.DisponibleOK) · Sospechoso: @Numero(Model.DisponibleSospechoso) · Scrap: @Numero(Model.DisponibleScrap)
+                                    OK disponible: @Numero(Model.CantidadOKDisponible) · Sospechoso: @Numero(Model.CantidadSospechosaDisponible) · Scrap: @Numero(Model.CantidadScrapDisponible)
                                 </div>
+                            </div>
+
+                            <div class="availability-box mb-3">
+                                Disponible para el tipo seleccionado:
+                                <span class="availability-number" id="cantidadDisponible">@Numero(Model.CantidadOKDisponible)</span>
+                                pieza(s)
                             </div>
 
                             <div class="mb-3">
@@ -860,6 +934,9 @@
                                        name="cantidadPiezas"
                                        id="cantidadPiezas"
                                        min="1"
+                                       max="@Model.CantidadOKDisponible"
+                                       step="1"
+                                       inputmode="numeric"
                                        class="form-control"
                                        required />
                             </div>
@@ -891,7 +968,7 @@
                                           placeholder="Comentarios de empaque, etiqueta, lote o condición..."></textarea>
                             </div>
 
-                            <button type="submit" class="btn-main">
+                            <button type="submit" class="btn-main" id="btnFormarCaja">
                                 <i class="fa-solid fa-box"></i>
                                 Formar caja
                             </button>
@@ -937,7 +1014,7 @@
                     </div>
 
                     <div class="panel-body">
-                        @if (Model.Cajas == null || !Model.Cajas.Any())
+                        @if (!cajas.Any())
                         {
                             <div class="empty">
                                 <i class="fa-solid fa-box-open fa-2x mb-3 d-block"></i>
@@ -965,7 +1042,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var caja in Model.Cajas)
+                                        @foreach (var caja in cajas)
                                         {
                                             <tr>
                                                 <td>
@@ -1072,11 +1149,12 @@
                                                 <td>
                                                     <div class="actions-grid">
 
-                                                        @if (caja.PuedeSolicitarCalidad)
+                                                        @if (caja.PuedeSolicitarLiberacion)
                                                         {
                                                             <form method="post"
                                                                   action="@Url.Action("SolicitarLiberacionCaja", "ProduccionOperador")"
-                                                                  class="small-form accion-form">
+                                                                  class="small-form accion-form"
+                                                                  data-confirm="¿Enviar esta caja a Calidad para su liberación?">
                                                                 @Html.AntiForgeryToken()
 
                                                                 <input type="hidden"
@@ -1101,7 +1179,8 @@
                                                         {
                                                             <form method="post"
                                                                   action="@Url.Action("MoverCajaZonaVerde", "ProduccionOperador")"
-                                                                  class="small-form accion-form">
+                                                                  class="small-form accion-form"
+                                                                  data-confirm="¿Confirmar el movimiento de esta caja a zona verde?">
                                                                 @Html.AntiForgeryToken()
 
                                                                 <input type="hidden"
@@ -1122,11 +1201,12 @@
                                                             </button>
                                                         }
 
-                                                        @if (caja.PuedeEscanearSalidaProduccion)
+                                                        @if (caja.PuedeEscanearSalida)
                                                         {
                                                             <form method="post"
                                                                   action="@Url.Action("EscanearSalidaCaja", "ProduccionOperador")"
-                                                                  class="small-form accion-form">
+                                                                  class="small-form accion-form"
+                                                                  data-confirm="¿Registrar la salida de Producción para esta caja?">
                                                                 @Html.AntiForgeryToken()
 
                                                                 <input type="hidden"
@@ -1170,56 +1250,85 @@
     </div>
 
     <script>
-        const formFormarCaja = document.getElementById('formFormarCaja');
-        const accionForms = document.querySelectorAll('.accion-form');
+        (() => {
+            const formFormarCaja = document.getElementById('formFormarCaja');
+            const tipoCaja = document.getElementById('tipoCaja');
+            const cantidadPiezas = document.getElementById('cantidadPiezas');
+            const cantidadDisponible = document.getElementById('cantidadDisponible');
+            const btnFormarCaja = document.getElementById('btnFormarCaja');
+            const accionForms = document.querySelectorAll('.accion-form');
 
-        const disponibles = {
-            OK: @Model.DisponibleOK,
-            SOSPECHOSO: @Model.DisponibleSospechoso,
-            SCRAP: @Model.DisponibleScrap,
-            RETENCION: @Model.DisponibleSospechoso
-        };
+            const disponibles = {
+                OK: @Model.CantidadOKDisponible,
+                SOSPECHOSO: @Model.CantidadSospechosaDisponible,
+                SCRAP: @Model.CantidadScrapDisponible,
+                RETENCION: @Model.CantidadSospechosaDisponible
+            };
 
-        function bloquearFormulario(form, texto) {
-            if (!form) return;
+            function obtenerDisponible() {
+                const tipo = tipoCaja?.value || '';
+                return Number(disponibles[tipo] ?? 0);
+            }
 
-            form.addEventListener('submit', function () {
-                const btn = form.querySelector('button[type="submit"]');
+            function actualizarDisponible() {
+                if (!tipoCaja || !cantidadPiezas || !cantidadDisponible || !btnFormarCaja) return;
 
-                if (!btn) return;
+                const disponible = obtenerDisponible();
+                cantidadDisponible.textContent = disponible.toLocaleString('es-MX');
+                cantidadPiezas.max = String(disponible);
 
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + texto;
+                if (Number(cantidadPiezas.value || 0) > disponible) {
+                    cantidadPiezas.value = disponible > 0 ? String(disponible) : '';
+                }
+
+                const puedeFormar = disponible > 0 && !tipoCaja.disabled;
+                cantidadPiezas.disabled = !puedeFormar;
+                btnFormarCaja.disabled = !puedeFormar;
+            }
+
+            tipoCaja?.addEventListener('change', actualizarDisponible);
+            actualizarDisponible();
+
+            formFormarCaja?.addEventListener('submit', function (event) {
+                const cantidad = Number(cantidadPiezas?.value || 0);
+                const disponible = obtenerDisponible();
+                const tipo = tipoCaja?.value || '';
+
+                if (cantidad <= 0) {
+                    event.preventDefault();
+                    alert('La cantidad de piezas debe ser mayor a cero.');
+                    return;
+                }
+
+                if (cantidad > disponible) {
+                    event.preventDefault();
+                    alert('La cantidad excede lo disponible para ' + tipo + '. Disponible: ' + disponible + ' pieza(s).');
+                    return;
+                }
+
+                if (btnFormarCaja) {
+                    btnFormarCaja.disabled = true;
+                    btnFormarCaja.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';
+                }
             });
-        }
 
-        formFormarCaja?.addEventListener('submit', function (event) {
-            const tipo = document.getElementById('tipoCaja')?.value || '';
-            const cantidad = Number(document.getElementById('cantidadPiezas')?.value || 0);
-            const disponible = disponibles[tipo] ?? 0;
+            accionForms.forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    const mensaje = form.dataset.confirm;
 
-            if (cantidad <= 0) {
-                event.preventDefault();
-                alert('La cantidad de piezas debe ser mayor a cero.');
-                return;
-            }
+                    if (mensaje && !window.confirm(mensaje)) {
+                        event.preventDefault();
+                        return;
+                    }
 
-            if (cantidad > disponible) {
-                event.preventDefault();
-                alert('La cantidad excede lo disponible para ' + tipo + '. Disponible: ' + disponible + ' pieza(s).');
-                return;
-            }
-
-            const btn = formFormarCaja.querySelector('button[type="submit"]');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';
-            }
-        });
-
-        accionForms.forEach(function (form) {
-            bloquearFormulario(form, 'Procesando...');
-        });
+                    const btn = form.querySelector('button[type="submit"]');
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
+                    }
+                });
+            });
+        })();
     </script>
 </body>
 </html>

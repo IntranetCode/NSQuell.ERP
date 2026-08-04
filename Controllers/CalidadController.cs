@@ -25,6 +25,10 @@ namespace ERP.NSQuell.Controllers
             CalidadEstados.ArranqueAutorizado,
             CalidadEstados.PendientePrimerasPiezas,
             CalidadEstados.AjustesSolicitados,
+            CalidadEstados.ProduccionLiberada,
+            CalidadEstados.MonitoreoActivo,
+            CalidadEstados.PendienteLiberacionCaja,
+            CalidadEstados.PendienteReliberacion,
             CalidadEstados.PendienteGP12,
             CalidadEstados.EnGP12,
             CalidadEstados.LegacyAbierta,
@@ -97,7 +101,8 @@ namespace ERP.NSQuell.Controllers
                 );
             }
 
-            if (!string.IsNullOrWhiteSpace(estadoFiltro))
+            if (!string.IsNullOrWhiteSpace(estadoFiltro) &&
+                estadoFiltro != CalidadEstados.PendienteLiberacionCaja)
             {
                 query = query.Where(x =>
                     x.Estado == estadoFiltro);
@@ -138,6 +143,20 @@ namespace ERP.NSQuell.Controllers
                         x.Estado ==
                         CalidadEstados.ProduccionLiberada),
 
+                TotalMonitoreoActivo =
+                    await baseQuery.CountAsync(x =>
+                        x.Estado ==
+                        CalidadEstados.MonitoreoActivo),
+
+                // Este total se carga desde Produccion_Cajas, no desde
+                // el estado general de Calidad_Inspecciones.
+                TotalPendienteLiberacionCaja = 0,
+
+                TotalPendienteReliberacion =
+                    await baseQuery.CountAsync(x =>
+                        x.Estado ==
+                        CalidadEstados.PendienteReliberacion),
+
                 TotalPendienteGP12 =
                     await baseQuery.CountAsync(x =>
                         x.Estado ==
@@ -174,7 +193,15 @@ namespace ERP.NSQuell.Controllers
                         x.Estado ==
                             CalidadEstados.PendientePrimerasPiezas ||
                         x.Estado ==
-                            CalidadEstados.AjustesSolicitados),
+                            CalidadEstados.AjustesSolicitados ||
+                        x.Estado ==
+                            CalidadEstados.ProduccionLiberada ||
+                        x.Estado ==
+                            CalidadEstados.MonitoreoActivo ||
+                        x.Estado ==
+                            CalidadEstados.PendienteLiberacionCaja ||
+                        x.Estado ==
+                            CalidadEstados.PendienteReliberacion),
 
                 TotalLiberadas =
                     await baseQuery.CountAsync(x =>
@@ -222,6 +249,12 @@ namespace ERP.NSQuell.Controllers
                         ProgramaProduccionID =
                             x.ProgramaProduccionID,
 
+                        EjecucionProduccionID =
+                            x.EjecucionProduccionID,
+
+                        ChecklistArranqueID =
+                            x.ChecklistArranqueID,
+
                         SolicitudProduccionID =
                             x.SolicitudProduccionID,
 
@@ -264,6 +297,9 @@ namespace ERP.NSQuell.Controllers
                         OperadorAuxiliarNombre =
                             x.OperadorAuxiliarNombre,
 
+                        TecnicoInyeccionNombre =
+                            x.TecnicoInyeccionNombre,
+
                         CantidadTotal =
                             x.CantidadTotal,
 
@@ -282,6 +318,9 @@ namespace ERP.NSQuell.Controllers
                         FechaNotificacionCalidad =
                             x.FechaNotificacionCalidad,
 
+                        FechaLiberacionProduccion =
+                            x.FechaLiberacionProduccion,
+
                         ResultadoCalidad =
                             x.ResultadoCalidad,
 
@@ -290,6 +329,9 @@ namespace ERP.NSQuell.Controllers
 
                         Estado =
                             x.Estado,
+
+                        RequiereReliberacion =
+                            x.RequiereReliberacion,
 
                         ConfiguracionInvalidada =
                             x.ConfiguracionInvalidada,
@@ -305,6 +347,21 @@ namespace ERP.NSQuell.Controllers
 
             model.TotalMostrados =
                 model.Inspecciones.Count;
+
+            model.CajasPendientes =
+                await CargarCajasPendientesCalidadAsync(busqueda);
+
+            model.TotalCajasPendientes =
+                model.CajasPendientes.Count;
+
+            model.TotalPendienteLiberacionCaja =
+                model.TotalCajasPendientes;
+
+            if (estadoFiltro == CalidadEstados.PendienteLiberacionCaja)
+            {
+                model.TotalMostrados =
+                    model.TotalCajasPendientes;
+            }
 
             return View(model);
         }

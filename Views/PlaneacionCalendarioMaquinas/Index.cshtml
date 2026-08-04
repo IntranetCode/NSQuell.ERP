@@ -20,10 +20,12 @@
         {
             switch (estatusProduccionId.Value)
             {
+                case 1: return "badge bg-secondary";
                 case 2: return "badge bg-info text-dark";
                 case 3: return "badge bg-warning text-dark";
                 case 4: return "badge bg-danger";
-                case 5: return "badge bg-success";
+                case 5: return "badge bg-primary";
+                case 6: return "badge bg-success";
                 case 9: return "badge bg-dark";
                 case 99: return "badge bg-secondary";
             }
@@ -41,10 +43,12 @@
         {
             switch (estatusProduccionId.Value)
             {
+                case 1: return "Pendiente";
                 case 2: return "En preparación";
                 case 3: return "En producción";
                 case 4: return "Pausado";
-                case 5: return "Terminado";
+                case 5: return "Terminado parcial";
+                case 6: return "Terminado";
                 case 9: return "Cerrado";
                 case 99: return "Cancelado";
             }
@@ -512,6 +516,10 @@
             background: #12b76a;
         }
 
+        .bloque-calidad {
+            background: #7f56d9;
+        }
+
         .bloque-cerrado {
             background: #667085;
         }
@@ -817,7 +825,7 @@
                     </strong>
 
                     <div class="small text-muted">
-                        Vista: @Model.TextoVista. Azul = timeline y se puede mover. Amarillo = produciendo/en línea. Verde = ya producido. Gris = cerrado/cancelado. Operador y turno vienen de Escala/RRHH.
+                        Vista: @Model.TextoVista. Azul = programado y movible. Morado = proceso de Calidad. Amarillo = Producción activa. Verde = producido. Gris = cerrado/cancelado. Operador planeado y operador real se muestran por separado.
                     </div>
                 </div>
 
@@ -855,7 +863,7 @@
                         maquina.Codigo,
                         maquina.Nombre,
                         string.Join(" ", maquina.Bloques.Select(x =>
-                        $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo} {x.MaquinaSugeridaTexto} {x.EstadoSemaforoTexto} {x.OperadorProgramadoNombre} {x.TurnoProgramadoNombre} {x.EstatusProduccionNombre}")))
+                        $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo} {x.MaquinaSugeridaTexto} {x.EstadoSemaforoTexto} {x.OperadorProgramadoNombre} {x.OperadorRealNombre} {x.TurnoProgramadoNombre} {x.EstatusProduccionNombre} {x.EstadoCalidad}")))
                         .ToLowerInvariant();
 
                         <div class="machine-row calendar-machine-row"
@@ -907,13 +915,13 @@
                                     ? "Arrastra para mandar a cola de otra máquina compatible."
                                     : bloque.MotivoBloqueoMovimiento;
 
-                                    var textoOperador = string.IsNullOrWhiteSpace(bloque.OperadorProgramadoNombre)
-                                    ? "Sin operador"
-                                    : bloque.OperadorProgramadoNombre;
+                                    var textoOperador = bloque.TextoOperadorVisible;
+                                    var origenOperador = bloque.TieneOperadorReal
+                                    ? "Real"
+                                    : "Planeado";
 
-                                    var textoTurno = string.IsNullOrWhiteSpace(bloque.TurnoProgramadoNombre)
-                                    ? "Sin turno"
-                                    : bloque.TurnoProgramadoNombre;
+                                    var textoTurno = bloque.TextoTurnoProgramado;
+                                    var textoCalidad = bloque.EstadoCalidadTexto;
 
                                     <button type="button"
                                             class="block @bloque.ClaseSemaforoCalendario @(puedeMover ? "" : "no-drag")"
@@ -927,12 +935,12 @@
                                             data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
                                             data-bs-toggle="modal"
                                             data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
-                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador: @textoOperador · Turno: @textoTurno · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @tituloBloqueo">
+                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @tituloBloqueo">
                                         <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
                                         <span>@(bloque.ClienteNombre ?? "Sin cliente") · @bloque.EstadoSemaforoTexto</span>
                                         <span class="operator-line">
                                             <i class="fa-solid fa-user-gear"></i>
-                                            @textoOperador · @textoTurno
+                                            @origenOperador: @textoOperador · @textoTurno
                                         </span>
                                     </button>
                                 }
@@ -946,13 +954,11 @@
 
     @foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
     {
-        var textoOperadorModal = string.IsNullOrWhiteSpace(bloque.OperadorProgramadoNombre)
-        ? "Sin operador asignado en escala"
-        : bloque.OperadorProgramadoNombre;
-
-        var textoTurnoModal = string.IsNullOrWhiteSpace(bloque.TurnoProgramadoNombre)
-        ? "Sin turno asignado"
-        : bloque.TurnoProgramadoNombre;
+        var textoOperadorModal = bloque.TextoOperadorProgramado;
+        var textoOperadorRealModal = bloque.TextoOperadorReal;
+        var textoAuxiliarModal = bloque.TextoOperadorAuxiliarProgramado;
+        var textoTurnoModal = bloque.TextoTurnoProgramado;
+        var textoCalidadModal = bloque.EstadoCalidadTexto;
 
         var textoEstatusProduccion = TextoProduccion(
         bloque.EstatusProduccionID,
@@ -982,13 +988,49 @@
 
                     <div class="modal-body">
                         <div class="row g-3">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="operator-card">
-                                    <small>Operador programado por RRHH</small>
+                                    <small>Operador planeado</small>
                                     <strong class="d-block">@textoOperadorModal</strong>
-                                    <span class="small text-muted">
-                                        Se consulta desde Escala Personal según máquina, fecha y hora programada.
-                                    </span>
+                                    <span class="small text-muted">Auxiliar: @textoAuxiliarModal</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="operator-card">
+                                    <small>Operador real de la ejecución</small>
+                                    <strong class="d-block">@textoOperadorRealModal</strong>
+                                    @if (bloque.EjecucionProduccionID.HasValue)
+                                    {
+                                        <span class="small text-muted">
+                                            Ejecución @bloque.EjecucionProduccionID
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="operator-card">
+                                    <small>Proceso de Calidad</small>
+                                    <strong class="d-block">@textoCalidadModal</strong>
+                                    @if (bloque.InspeccionCalidadID.HasValue)
+                                    {
+                                        <span class="small text-muted">
+                                            Inspección @bloque.InspeccionCalidadID
+                                        </span>
+                                    }
+                                    @if (bloque.ConfiguracionCalidadInvalidada)
+                                    {
+                                        <span class="d-block small text-danger fw-bold">
+                                            Configuración invalidada
+                                        </span>
+                                    }
+                                    @if (bloque.RequiereReliberacion)
+                                    {
+                                        <span class="d-block small text-warning fw-bold">
+                                            Reliberación pendiente
+                                        </span>
+                                    }
                                 </div>
                             </div>
 

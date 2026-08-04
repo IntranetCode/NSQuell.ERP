@@ -1,7 +1,8 @@
 ﻿@model List<ERP.NSQuell.Models.PlaneacionReleaseIndexVm>
 
 @{
-    Layout = null;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Bandeja de OF | ERP QUELL";
 
     // RELEASE_INDEX_HISTORICO_V1_0_1
     var todosReleases = Model ?? new List<ERP.NSQuell.Models.PlaneacionReleaseIndexVm>();

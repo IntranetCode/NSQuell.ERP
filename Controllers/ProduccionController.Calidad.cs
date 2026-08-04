@@ -71,8 +71,8 @@ SELECT TOP (1)
     CONVERT(INT, ISNULL(e.CantidadPlaneada, pp.CantidadProgramada)) AS CantidadPlaneada,
     pp.FechaInicioProgramada,
     pp.FechaFinProgramada,
-    COALESCE(opPrincipal.PersonaID, e.OperadorID) AS OperadorPrincipalPersonaID,
-    COALESCE(NULLIF(opPrincipal.NombreCompleto, ''), e.OperadorNombre) AS OperadorPrincipalNombre,
+    COALESCE(e.OperadorID, opPrincipal.PersonaID) AS OperadorPrincipalPersonaID,
+    COALESCE(NULLIF(e.OperadorNombre, ''), NULLIF(opPrincipal.NombreCompleto, '')) AS OperadorPrincipalNombre,
     opAuxiliar.PersonaID AS OperadorAuxiliarPersonaID,
     opAuxiliar.NombreCompleto AS OperadorAuxiliarNombre
 FROM dbo.Produccion_Ejecucion e
@@ -222,44 +222,94 @@ WHERE e.EjecucionProduccionID = @EjecucionProduccionID
         {
             const string sql = @"
 SELECT TOP (1)
-    InspeccionID,
-    EjecucionProduccionID,
-    ChecklistArranqueID,
-    Estado,
-    ResultadoCalidad,
-    Etiqueta,
-    MotivoDevolucion,
-    FechaNotificacionCalidad,
-    FechaAutorizacionPrearranque,
-    FechaLiberacionProduccion,
-    ConfiguracionInvalidada,
-    RequiereReliberacion,
-    Liberado
-FROM dbo.Calidad_Inspecciones
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-ORDER BY InspeccionID DESC;";
+    ci.InspeccionID,
+    ci.EjecucionProduccionID,
+    ci.ChecklistArranqueID,
+    ci.Estado,
+    ci.ResultadoCalidad,
+    ci.Etiqueta,
+    ci.MotivoDevolucion,
+    ci.FechaNotificacionCalidad,
+    ci.FechaAutorizacionPrearranque,
+    ci.FechaLiberacionProduccion,
+    ci.ConfiguracionInvalidada,
+    ci.RequiereReliberacion,
+    ci.Liberado,
+
+    ISNULL(mon.TotalMonitoreos, 0) AS TotalMonitoreos,
+    ISNULL(mon.MonitoreosPendientes, 0) AS MonitoreosPendientes,
+    ISNULL(mon.MonitoreosVencidos, 0) AS MonitoreosVencidos,
+    ISNULL(mon.MonitoreosConformes, 0) AS MonitoreosConformes,
+    ISNULL(mon.MonitoreosConHallazgo, 0) AS MonitoreosConHallazgo,
+    mon.ProximoMonitoreo,
+    ISNULL(disp.DisposicionesPendientes, 0) AS DisposicionesPendientes
+FROM dbo.Calidad_Inspecciones ci
+OUTER APPLY
+(
+    SELECT
+        COUNT(1) AS TotalMonitoreos,
+        SUM(CASE WHEN m.Resultado = 'PENDIENTE' THEN 1 ELSE 0 END) AS MonitoreosPendientes,
+        SUM(CASE WHEN m.Resultado = 'PENDIENTE' AND m.FechaHoraProgramada < GETDATE() THEN 1 ELSE 0 END) AS MonitoreosVencidos,
+        SUM(CASE WHEN m.Resultado = 'CONFORME' THEN 1 ELSE 0 END) AS MonitoreosConformes,
+        SUM(CASE WHEN m.Resultado IN ('SOSPECHOSO', 'NO_CONFORME') THEN 1 ELSE 0 END) AS MonitoreosConHallazgo,
+        MIN(CASE WHEN m.Resultado = 'PENDIENTE' THEN m.FechaHoraProgramada END) AS ProximoMonitoreo
+    FROM dbo.Calidad_MonitoreosProceso m
+    WHERE m.InspeccionID = ci.InspeccionID
+      AND m.Activo = 1
+) mon
+OUTER APPLY
+(
+    SELECT COUNT(1) AS DisposicionesPendientes
+    FROM dbo.Calidad_DisposicionesMaterial d
+    WHERE d.InspeccionID = ci.InspeccionID
+      AND d.Activo = 1
+      AND d.ResultadoFinal = 'PENDIENTE'
+) disp
+WHERE ci.EjecucionProduccionID = @EjecucionProduccionID
+ORDER BY ci.InspeccionID DESC;";
 
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
 
             await using var rd = await cmd.ExecuteReaderAsync();
-            if (!await rd.ReadAsync()) return null;
+            if (!await rd.ReadAsync())
+                return null;
 
             return new ProduccionCalidadResumenVm
             {
                 InspeccionID = Convert.ToInt32(rd["InspeccionID"]),
                 EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
-                ChecklistArranqueID = rd["ChecklistArranqueID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["ChecklistArranqueID"]),
+                ChecklistArranqueID = rd["ChecklistArranqueID"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["ChecklistArranqueID"]),
                 Estado = rd["Estado"] as string ?? string.Empty,
                 ResultadoCalidad = rd["ResultadoCalidad"] as string,
                 Etiqueta = rd["Etiqueta"] as string,
                 MotivoDevolucion = rd["MotivoDevolucion"] as string,
-                FechaNotificacionCalidad = rd["FechaNotificacionCalidad"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaNotificacionCalidad"]),
-                FechaAutorizacionPrearranque = rd["FechaAutorizacionPrearranque"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaAutorizacionPrearranque"]),
-                FechaLiberacionProduccion = rd["FechaLiberacionProduccion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaLiberacionProduccion"]),
-                ConfiguracionInvalidada = rd["ConfiguracionInvalidada"] != DBNull.Value && Convert.ToBoolean(rd["ConfiguracionInvalidada"]),
-                RequiereReliberacion = rd["RequiereReliberacion"] != DBNull.Value && Convert.ToBoolean(rd["RequiereReliberacion"]),
-                Liberado = rd["Liberado"] != DBNull.Value && Convert.ToBoolean(rd["Liberado"])
+                FechaNotificacionCalidad = rd["FechaNotificacionCalidad"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["FechaNotificacionCalidad"]),
+                FechaAutorizacionPrearranque = rd["FechaAutorizacionPrearranque"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["FechaAutorizacionPrearranque"]),
+                FechaLiberacionProduccion = rd["FechaLiberacionProduccion"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["FechaLiberacionProduccion"]),
+                ConfiguracionInvalidada = rd["ConfiguracionInvalidada"] != DBNull.Value &&
+                    Convert.ToBoolean(rd["ConfiguracionInvalidada"]),
+                RequiereReliberacion = rd["RequiereReliberacion"] != DBNull.Value &&
+                    Convert.ToBoolean(rd["RequiereReliberacion"]),
+                Liberado = rd["Liberado"] != DBNull.Value &&
+                    Convert.ToBoolean(rd["Liberado"]),
+                TotalMonitoreos = Convert.ToInt32(rd["TotalMonitoreos"]),
+                MonitoreosPendientes = Convert.ToInt32(rd["MonitoreosPendientes"]),
+                MonitoreosVencidos = Convert.ToInt32(rd["MonitoreosVencidos"]),
+                MonitoreosConformes = Convert.ToInt32(rd["MonitoreosConformes"]),
+                MonitoreosConHallazgo = Convert.ToInt32(rd["MonitoreosConHallazgo"]),
+                DisposicionesPendientes = Convert.ToInt32(rd["DisposicionesPendientes"]),
+                ProximoMonitoreo = rd["ProximoMonitoreo"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["ProximoMonitoreo"])
             };
         }
 
@@ -283,69 +333,174 @@ ORDER BY InspeccionID DESC;";
             SqlConnection cn,
             SqlTransaction tx)
         {
-            const string sqlLeer = @"
+            const string sql = @"
+DECLARE @InspeccionID INT;
+DECLARE @Estado VARCHAR(50);
+DECLARE @FechaInicioProgramada DATETIME2(0);
+DECLARE @FechaFinProgramada DATETIME2(0);
+DECLARE @Ahora DATETIME2(0) = SYSDATETIME();
+DECLARE @Horas INT;
+
 SELECT TOP (1)
-    InspeccionID,
-    Estado
-FROM dbo.Calidad_Inspecciones
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-ORDER BY InspeccionID DESC;";
+    @InspeccionID = ci.InspeccionID,
+    @Estado = ci.Estado,
+    @FechaInicioProgramada = ci.FechaInicioProgramada,
+    @FechaFinProgramada = ci.FechaFinProgramada
+FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK, HOLDLOCK)
+WHERE ci.EjecucionProduccionID = @EjecucionProduccionID
+ORDER BY ci.InspeccionID DESC;
 
-            int? inspeccionId = null;
-            string? estado = null;
+IF @InspeccionID IS NULL
+    THROW 51040, 'No existe una inspeccion de Calidad relacionada con la ejecucion.', 1;
 
-            await using (var cmd = new SqlCommand(sqlLeer, cn, tx))
-            {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                await using var rd = await cmd.ExecuteReaderAsync();
-                if (await rd.ReadAsync())
-                {
-                    inspeccionId = Convert.ToInt32(rd["InspeccionID"]);
-                    estado = rd["Estado"] as string;
-                }
-            }
+IF @Estado NOT IN ('PRODUCCION_LIBERADA', 'MONITOREO_ACTIVO')
+    THROW 51041, 'Calidad aun no ha liberado la produccion para iniciar el monitoreo horario.', 1;
 
-            if (!inspeccionId.HasValue || estado != CalidadEstados.ProduccionLiberada)
-                return;
+SET @Horas =
+    CASE
+        WHEN @FechaInicioProgramada IS NOT NULL
+         AND @FechaFinProgramada IS NOT NULL
+         AND @FechaFinProgramada > @FechaInicioProgramada
+            THEN CONVERT(INT, CEILING(DATEDIFF(MINUTE, @FechaInicioProgramada, @FechaFinProgramada) / 60.0))
+        ELSE 9
+    END;
 
-            const string sqlUpdate = @"
-UPDATE dbo.Calidad_Inspecciones
-SET
-    Estado = 'MONITOREO_ACTIVO',
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = GETDATE()
-WHERE InspeccionID = @InspeccionID
-  AND Estado = 'PRODUCCION_LIBERADA';
+IF @Horas < 1 SET @Horas = 1;
+IF @Horas > 9 SET @Horas = 9;
 
-INSERT INTO dbo.Calidad_InspeccionHistorial
+IF @Estado = 'PRODUCCION_LIBERADA'
+BEGIN
+    UPDATE dbo.Calidad_Inspecciones
+    SET
+        Estado = 'MONITOREO_ACTIVO',
+        UsuarioModificacionID = @UsuarioID,
+        FechaModificacion = @Ahora
+    WHERE InspeccionID = @InspeccionID;
+
+    INSERT INTO dbo.Calidad_InspeccionHistorial
+    (
+        InspeccionID,
+        Movimiento,
+        EstadoAnterior,
+        EstadoNuevo,
+        ResultadoCalidad,
+        Etiqueta,
+        Comentario,
+        UsuarioID,
+        FechaMovimiento
+    )
+    VALUES
+    (
+        @InspeccionID,
+        'INICIO_PRODUCCION_SERIE',
+        'PRODUCCION_LIBERADA',
+        'MONITOREO_ACTIVO',
+        'VERDE',
+        'VERDE',
+        N'Produccion inicio la serie. Se programaron revisiones de Calidad cada hora.',
+        @UsuarioID,
+        @Ahora
+    );
+END;
+
+;WITH Numeros AS
 (
-    InspeccionID,
-    Movimiento,
-    EstadoAnterior,
-    EstadoNuevo,
-    ResultadoCalidad,
-    Etiqueta,
-    Comentario,
-    UsuarioID,
-    FechaMovimiento
+    SELECT NumeroHora
+    FROM (VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9)) n(NumeroHora)
+    WHERE NumeroHora <= @Horas
 )
-VALUES
+INSERT INTO dbo.Calidad_MonitoreosProceso
 (
+    InspeccionID,
+    EjecucionProduccionID,
+    NumeroHora,
+    FechaHoraProgramada,
+    CantidadProducidaPeriodo,
+    CantidadRevisadaMuestra,
+    Resultado,
+    CantidadSospechosa,
+    CantidadNoRecuperable,
+    RequiereSeleccion,
+    RequiereRetrabajo,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+SELECT
     @InspeccionID,
-    'INICIO_PRODUCCION_SERIE',
-    'PRODUCCION_LIBERADA',
-    'MONITOREO_ACTIVO',
-    'VERDE',
-    'VERDE',
-    N'Produccion inicio la serie. Comienza el monitoreo horario de Calidad.',
+    @EjecucionProduccionID,
+    n.NumeroHora,
+    DATEADD(HOUR, n.NumeroHora, @Ahora),
+    0,
+    0,
+    'PENDIENTE',
+    0,
+    0,
+    0,
+    0,
     @UsuarioID,
-    GETDATE()
+    @Ahora,
+    1
+FROM Numeros n
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.Calidad_MonitoreosProceso m
+    WHERE m.InspeccionID = @InspeccionID
+      AND m.NumeroHora = n.NumeroHora
+      AND m.Activo = 1
 );";
 
-            await using var update = new SqlCommand(sqlUpdate, cn, tx);
-            update.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId.Value;
-            update.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-            await update.ExecuteNonQueryAsync();
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private async Task VincularRegistroHoraConMonitoreoAsync(
+            ProduccionEjecucionVm ejecucion,
+            ProduccionRegistroHoraPostVm vm,
+            TimeSpan horaInicio,
+            TimeSpan horaFin,
+            int registroHoraId,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            var fechaHoraFin = vm.FechaProduccion.Date.Add(horaFin);
+            var cantidadPeriodo = vm.CantidadOK + vm.CantidadSospechosa + vm.CantidadScrap;
+
+            const string sql = @"
+;WITH Candidato AS
+(
+    SELECT TOP (1)
+        m.MonitoreoID
+    FROM dbo.Calidad_MonitoreosProceso m WITH (UPDLOCK, READPAST)
+    WHERE m.EjecucionProduccionID = @EjecucionProduccionID
+      AND m.Activo = 1
+      AND m.RegistroHoraID IS NULL
+    ORDER BY
+        CASE WHEN m.Resultado = 'PENDIENTE' THEN 0 ELSE 1 END,
+        ABS(DATEDIFF(MINUTE, m.FechaHoraProgramada, @FechaHoraFin)),
+        m.NumeroHora
+)
+UPDATE m
+SET
+    m.RegistroHoraID = @RegistroHoraID,
+    m.CantidadProducidaPeriodo = @CantidadProducidaPeriodo,
+    m.UsuarioModificacionID = @UsuarioID,
+    m.FechaModificacion = SYSDATETIME()
+FROM dbo.Calidad_MonitoreosProceso m
+INNER JOIN Candidato c
+    ON c.MonitoreoID = m.MonitoreoID;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
+            cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
+            cmd.Parameters.Add("@CantidadProducidaPeriodo", SqlDbType.Int).Value = cantidadPeriodo;
+            cmd.Parameters.Add("@FechaHoraFin", SqlDbType.DateTime2).Value = fechaHoraFin;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await cmd.ExecuteNonQueryAsync();
         }
     }
 }
