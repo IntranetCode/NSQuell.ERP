@@ -496,4 +496,50 @@ namespace ERP.NSQuell.Models
         public const string Ok = "OK";
         public const string Nok = "NOK";
     }
+    public static class CalidadChecklistResultado
+    {
+        public const string Ok = "OK";
+        public const string Nok = "NOK";
+        public const string NoAplica = "NA";
+
+        public static bool EsValido(string? resultado)
+        {
+            if (string.IsNullOrWhiteSpace(resultado))
+                return false;
+
+            var valor = resultado.Trim().ToUpperInvariant();
+
+            return valor == Ok ||
+                   valor == Nok ||
+                   valor == NoAplica ||
+                   valor == "N/A";
+        }
+    }
+
+    public static class CalidadTipoProceso
+    {
+        public const string LiberacionPrearranque =
+            "LIBERACIÓN DE PREARRANQUE";
+
+        public const string ReliberacionParoMayor15 =
+            "RELIBERACIÓN POR PARO MAYOR A 15 MIN";
+
+        public static bool EsReliberacion(string? proceso)
+        {
+            if (string.IsNullOrWhiteSpace(proceso))
+                return false;
+
+            var valor = proceso
+                .Trim()
+                .ToUpperInvariant()
+                .Replace("Á", "A")
+                .Replace("É", "E")
+                .Replace("Í", "I")
+                .Replace("Ó", "O")
+                .Replace("Ú", "U");
+
+            return valor.Contains("RELIBERACION", StringComparison.Ordinal);
+        }
+    }
+
 }

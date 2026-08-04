@@ -226,8 +226,47 @@ namespace ERP.NSQuell.Models.ViewModels
         public List<CalidadCajaProduccionItemViewModel> CajasProduccion { get; set; } = new();
         public List<CalidadGP12ItemViewModel> RegistrosGP12 { get; set; } = new();
         public List<CalidadReliberacionItemViewModel> Reliberaciones { get; set; } = new();
+
+        // El checklist se divide por responsabilidad. Producción se muestra
+        // únicamente como evidencia de origen; Calidad/Auditor es editable.
+        public List<CalidadChecklistPreguntaViewModel> PreguntasChecklistProduccion { get; set; } = new();
         public List<CalidadChecklistPreguntaViewModel> PreguntasChecklistCalidad { get; set; } = new();
+
+        public int? EstatusChecklistArranqueID { get; set; }
+        public string? ObservacionesChecklistProduccion { get; set; }
+        public string? ObservacionesChecklistCalidad { get; set; }
+
         public List<CalidadCatalogoDefectoItemViewModel> CatalogoDefectos { get; set; } = new();
+
+        public int TotalPreguntasProduccion => PreguntasChecklistProduccion.Count;
+        public int TotalRespondidasProduccion => PreguntasChecklistProduccion.Count(x => x.EstaRespondida);
+        public int TotalNokProduccion => PreguntasChecklistProduccion.Count(x => x.EsNok);
+        public int TotalPendientesProduccion => TotalPreguntasProduccion - TotalRespondidasProduccion;
+
+        public int TotalPreguntasCalidad => PreguntasChecklistCalidad.Count;
+        public int TotalRespondidasCalidad => PreguntasChecklistCalidad.Count(x => x.EstaRespondida);
+        public int TotalNokCalidad => PreguntasChecklistCalidad.Count(x => x.EsNok);
+        public int TotalPendientesCalidad => TotalPreguntasCalidad - TotalRespondidasCalidad;
+        public int TotalNokCalidadSinObservacion => PreguntasChecklistCalidad.Count(x => x.EsNokSinObservacion);
+
+        public bool ChecklistProduccionCompleto =>
+            TotalPreguntasProduccion > 0 &&
+            TotalPendientesProduccion == 0;
+
+        public bool ChecklistCalidadCompleto =>
+            TotalPreguntasCalidad > 0 &&
+            TotalPendientesCalidad == 0;
+
+        public bool ChecklistCalidadListoParaAutorizar =>
+            ChecklistProduccionCompleto &&
+            TotalNokProduccion == 0 &&
+            ChecklistCalidadCompleto &&
+            TotalNokCalidad == 0 &&
+            TotalNokCalidadSinObservacion == 0;
+
+        public bool EsReliberacion =>
+            CalidadTipoProceso.EsReliberacion(Proceso) ||
+            RequiereReliberacion;
 
         public int TotalMonitoreos => Monitoreos.Count;
         public int MonitoreosPendientes => Monitoreos.Count(x => x.EsPendiente);
@@ -337,9 +376,55 @@ namespace ERP.NSQuell.Models.ViewModels
         public int OrdenSeccion { get; set; }
         public int OrdenPregunta { get; set; }
         public string TextoPregunta { get; set; } = string.Empty;
+        public string? ResponsableSugerido { get; set; }
         public bool RequiereObservacionSiNOK { get; set; }
         public string? Resultado { get; set; }
         public string? Observaciones { get; set; }
+
+        public string? ResultadoNormalizado =>
+            string.IsNullOrWhiteSpace(Resultado)
+                ? null
+                : Resultado.Trim().ToUpperInvariant() switch
+                {
+                    "N/A" => CalidadChecklistResultado.NoAplica,
+                    var valor => valor
+                };
+
+        public bool EstaRespondida =>
+            ResultadoNormalizado == CalidadChecklistResultado.Ok ||
+            ResultadoNormalizado == CalidadChecklistResultado.Nok ||
+            ResultadoNormalizado == CalidadChecklistResultado.NoAplica;
+
+        public bool EsOk =>
+            ResultadoNormalizado == CalidadChecklistResultado.Ok;
+
+        public bool EsNok =>
+            ResultadoNormalizado == CalidadChecklistResultado.Nok;
+
+        public bool EsNoAplica =>
+            ResultadoNormalizado == CalidadChecklistResultado.NoAplica;
+
+        public bool EsNokSinObservacion =>
+            EsNok &&
+            string.IsNullOrWhiteSpace(Observaciones);
+
+        public string ResultadoTexto =>
+            EsOk
+                ? "OK"
+                : EsNok
+                    ? "NOK"
+                    : EsNoAplica
+                        ? "N/A"
+                        : "Pendiente";
+
+        public string ResultadoClase =>
+            EsOk
+                ? "quality-result-ok"
+                : EsNok
+                    ? "quality-result-nok"
+                    : EsNoAplica
+                        ? "quality-result-na"
+                        : "quality-result-pending";
     }
 
     public class CalidadChecklistGuardarViewModel

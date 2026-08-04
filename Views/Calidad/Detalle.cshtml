@@ -719,6 +719,196 @@
         box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
     }
 
+    .quality-checklist-instructions {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-bottom: 14px;
+        padding: 11px 13px;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        background: #eff6ff;
+        color: #1e3a5f;
+        font-size: .8rem;
+        line-height: 1.45;
+    }
+
+    .quality-checklist-instructions i {
+        margin-top: 2px;
+        color: #2563eb;
+    }
+
+    .quality-checklist-item {
+        transition: border-color .2s ease, box-shadow .2s ease;
+    }
+
+    .quality-checklist-item.is-nok {
+        border-color: #fca5a5;
+        box-shadow: 0 0 0 2px rgba(220, 38, 38, .07);
+    }
+
+    .quality-checklist-item.is-na {
+        border-color: #cbd5e1;
+        box-shadow: 0 0 0 2px rgba(100, 116, 139, .07);
+    }
+
+    .quality-checklist-grid {
+        align-items: start;
+    }
+
+    .quality-result-selector {
+        min-height: 48px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 9px 12px;
+        border: 1px solid #dbe3eb;
+        border-radius: 10px;
+        background: #fff;
+    }
+
+    .quality-result-switch-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+    }
+
+    .quality-result-option {
+        min-width: 35px;
+        font-size: .77rem;
+        font-weight: 850;
+        letter-spacing: .02em;
+        text-align: center;
+        transition: opacity .2s ease, color .2s ease;
+    }
+
+    .quality-result-option-nok {
+        color: #b91c1c;
+    }
+
+    .quality-result-option-ok {
+        color: #15803d;
+    }
+
+    .quality-toggle-switch {
+        position: relative;
+        display: inline-flex;
+        width: 50px;
+        height: 27px;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .quality-toggle-switch input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .quality-toggle-slider {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: #dc2626;
+        box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .12);
+        transition: background .2s ease, opacity .2s ease;
+    }
+
+    .quality-toggle-slider::before {
+        content: "";
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 19px;
+        height: 19px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, .28);
+        transition: transform .2s ease;
+    }
+
+    .quality-toggle-switch input:checked + .quality-toggle-slider {
+        background: #16a34a;
+    }
+
+    .quality-toggle-switch input:checked + .quality-toggle-slider::before {
+        transform: translateX(23px);
+    }
+
+    .quality-toggle-switch input:focus-visible + .quality-toggle-slider {
+        box-shadow: 0 0 0 3px rgba(249, 115, 22, .22);
+    }
+
+    .quality-toggle-switch input:disabled + .quality-toggle-slider {
+        opacity: .42;
+        cursor: not-allowed;
+    }
+
+    .quality-na-option {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0;
+        padding: 6px 9px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #475569;
+        font-size: .78rem;
+        font-weight: 800;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .quality-na-option input {
+        width: 17px;
+        height: 17px;
+        margin: 0;
+        accent-color: #64748b;
+    }
+
+    .quality-result-current {
+        margin-top: 7px;
+        color: #15803d;
+        font-size: .75rem;
+        font-weight: 800;
+    }
+
+    .quality-checklist-item.is-nok .quality-result-current {
+        color: #b91c1c;
+    }
+
+    .quality-checklist-item.is-na .quality-result-current {
+        color: #64748b;
+    }
+
+    .quality-result-observation {
+        transition: background .2s ease, border-color .2s ease, opacity .2s ease;
+    }
+
+    .quality-result-observation.is-locked {
+        background: #f1f5f9;
+        color: #94a3b8;
+        cursor: not-allowed;
+        opacity: .78;
+    }
+
+    .quality-observation-help {
+        margin-top: 6px;
+        color: var(--quality-muted);
+        font-size: .73rem;
+        line-height: 1.35;
+    }
+
+    .quality-checklist-item.is-nok .quality-observation-help {
+        color: #b91c1c;
+        font-weight: 700;
+    }
+
     .quality-form-actions {
         display: flex;
         flex-wrap: wrap;
@@ -862,6 +1052,24 @@
         background: #0b1422;
         color: #f8fafc;
         border-color: rgba(255, 255, 255, .13);
+    }
+
+    html[data-nsq-theme="dark"] .quality-checklist-instructions {
+        background: rgba(37, 99, 235, .12);
+        border-color: rgba(96, 165, 250, .32);
+        color: #dbeafe;
+    }
+
+    html[data-nsq-theme="dark"] .quality-result-selector,
+    html[data-nsq-theme="dark"] .quality-na-option {
+        background: #0b1422;
+        border-color: rgba(255, 255, 255, .13);
+        color: #cbd5e1;
+    }
+
+    html[data-nsq-theme="dark"] .quality-result-observation.is-locked {
+        background: #111827;
+        color: #64748b;
     }
 
     html[data-nsq-theme="dark"] .quality-history-table td {
@@ -1272,36 +1480,93 @@
                                 <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
                                 <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
 
+                                <div class="quality-checklist-instructions">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <span>
+                                        Todas las respuestas nuevas comienzan en <strong>OK</strong>.
+                                        Cambia el interruptor a <strong>NOK</strong> o marca <strong>N/A</strong>
+                                        para habilitar las observaciones.
+                                    </span>
+                                </div>
+
                                 @for (var i = 0; i < Model.PreguntasChecklistCalidad.Count; i++)
                                 {
                                     var pregunta = Model.PreguntasChecklistCalidad[i];
+                                    var resultadoActual = string.IsNullOrWhiteSpace(pregunta.Resultado)
+                                        ? "OK"
+                                        : pregunta.Resultado.Trim().ToUpperInvariant();
+                                    var esNa = resultadoActual == "NA";
+                                    var esNok = resultadoActual == "NOK";
+                                    var esOk = !esNa && !esNok;
+                                    var observacionesHabilitadas = esNok || esNa;
 
                                     <input type="hidden"
                                            name="Respuestas[@i].ChecklistArranqueDetalleID"
                                            value="@pregunta.ChecklistArranqueDetalleID" />
 
-                                    <div class="quality-side-action mb-3">
+                                    <div class="quality-side-action quality-checklist-item mb-3"
+                                         data-quality-result>
                                         <h3>@pregunta.OrdenPregunta. @pregunta.TextoPregunta</h3>
 
-                                        <div class="quality-form-grid">
+                                        <input type="hidden"
+                                               name="Respuestas[@i].Resultado"
+                                               value="@resultadoActual"
+                                               data-result-value />
+
+                                        <div class="quality-form-grid quality-checklist-grid">
                                             <div>
                                                 <label class="quality-form-label">Resultado</label>
-                                                <select name="Respuestas[@i].Resultado"
-                                                        class="quality-form-select"
-                                                        required>
-                                                    <option value="">Selecciona</option>
-                                                    <option value="OK" selected="@(pregunta.Resultado == "OK" ? "selected" : null)">OK</option>
-                                                    <option value="NOK" selected="@(pregunta.Resultado == "NOK" ? "selected" : null)">NOK</option>
-                                                    <option value="NA" selected="@(pregunta.Resultado == "NA" ? "selected" : null)">N/A</option>
-                                                </select>
+
+                                                <div class="quality-result-selector">
+                                                    <div class="quality-result-switch-group">
+                                                        <span class="quality-result-option quality-result-option-nok">
+                                                            NOK
+                                                        </span>
+
+                                                        <label class="quality-toggle-switch"
+                                                               title="Cambiar entre NOK y OK">
+                                                            <input type="checkbox"
+                                                                   data-result-switch
+                                                                   checked="@(esOk ? "checked" : null)"
+                                                                   disabled="@(esNa ? "disabled" : null)" />
+                                                            <span class="quality-toggle-slider"></span>
+                                                        </label>
+
+                                                        <span class="quality-result-option quality-result-option-ok">
+                                                            OK
+                                                        </span>
+                                                    </div>
+
+                                                    <label class="quality-na-option">
+                                                        <input type="checkbox"
+                                                               data-result-na
+                                                               checked="@(esNa ? "checked" : null)" />
+                                                        <span>N/A</span>
+                                                    </label>
+                                                </div>
+
+                                                <div class="quality-result-current"
+                                                     data-result-caption>
+                                                    @(esNa ? "No aplica" : esNok ? "No conforme" : "Conforme")
+                                                </div>
                                             </div>
 
                                             <div>
                                                 <label class="quality-form-label">Observaciones</label>
                                                 <textarea name="Respuestas[@i].Observaciones"
-                                                          class="quality-form-control"
+                                                          class="quality-form-control quality-result-observation @(observacionesHabilitadas ? "" : "is-locked")"
                                                           maxlength="500"
-                                                          placeholder="Obligatoria cuando el resultado sea NOK">@pregunta.Observaciones</textarea>
+                                                          data-result-observation
+                                                          readonly="@(!observacionesHabilitadas ? "readonly" : null)"
+                                                          aria-readonly="@(!observacionesHabilitadas ? "true" : "false")"
+                                                          placeholder="@(esNok ? "Describe la no conformidad (obligatorio)..." : esNa ? "Explica por qué no aplica (opcional)..." : "Se habilita al seleccionar NOK o N/A")">@pregunta.Observaciones</textarea>
+                                                <div class="quality-observation-help" data-observation-help>
+                                                    @(esNok
+                                                        ? "La observación es obligatoria para un resultado NOK."
+                                                        : esNa
+                                                            ? "Puedes documentar por qué esta validación no aplica."
+                                                            : "El campo se habilitará cuando el resultado sea NOK o N/A.")
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1468,15 +1733,60 @@
                                        name="InspeccionID"
                                        value="@Model.InspeccionID" />
 
-                                <div class="quality-form-grid">
-                                    <div class="quality-field-full">
-                                        <div class="quality-form-check">
-                                            <input asp-for="CincoDisparosSegregados"
-                                                   class="form-check-input" />
+                                @{ 
+                                    var resultadoSegregados = Model.CincoDisparosSegregados ? "OK" : "NOK";
+                                    var resultadoDimensional = Model.ValidacionDimensional == false ? "NOK" : "OK";
+                                    var resultadoApariencia = Model.ValidacionApariencia == false ? "NOK" : "OK";
+                                    var resultadoGauge = Model.ValidacionGauge == false ? "NOK" : "OK";
+                                    var resultadoConductividad = Model.ValidacionConductividad == false ? "NOK" : "OK";
+                                    var habilitarObsPrimerasPiezas = !Model.CincoDisparosSegregados
+                                        || Model.CantidadDisparosConformes < 3
+                                        || Model.ValidacionDimensional == false
+                                        || Model.ValidacionApariencia == false
+                                        || Model.ValidacionGauge == false
+                                        || Model.ValidacionConductividad == false;
+                                }
 
-                                            <label asp-for="CincoDisparosSegregados">
-                                                Confirmo que los primeros cinco disparos fueron segregados
-                                            </label>
+                                <div class="quality-checklist-instructions mb-3">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <span>
+                                        Cada validación inicia en <strong>Cumple</strong>. Cambia el interruptor a <strong>No cumple</strong>
+                                        o marca <strong>No aplica</strong> cuando corresponda. Las observaciones generales se
+                                        habilitan cuando exista una no conformidad, un campo que no aplica o menos de 3 disparos conformes.
+                                    </span>
+                                </div>
+
+                                <div class="quality-form-grid" data-firstpieces-form>
+                                    <div class="quality-field-full quality-side-action quality-checklist-item mb-3"
+                                         data-first-piece-result>
+                                        <h3>1. Primeros cinco disparos segregados</h3>
+
+                                        <input type="hidden"
+                                               name="CincoDisparosSegregados"
+                                               value="@(Model.CincoDisparosSegregados ? "true" : "false")"
+                                               data-first-value />
+
+                                        <div class="quality-result-selector">
+                                            <div class="quality-result-switch-group">
+                                                <span class="quality-result-option quality-result-option-nok">No segregados</span>
+
+                                                <label class="quality-toggle-switch" title="Cambiar entre NOK y OK">
+                                                    <input type="checkbox"
+                                                           data-first-switch
+                                                           checked="@(Model.CincoDisparosSegregados ? "checked" : null)" />
+                                                    <span class="quality-toggle-slider"></span>
+                                                </label>
+
+                                                <span class="quality-result-option quality-result-option-ok">Segregados</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="quality-result-current" data-first-caption>
+                                            @(Model.CincoDisparosSegregados ? "Disparos segregados" : "Disparos no segregados")
+                                        </div>
+
+                                        <div class="quality-help">
+                                            Debe confirmarse que los primeros cinco disparos fueron segregados antes de continuar.
                                         </div>
                                     </div>
 
@@ -1490,111 +1800,180 @@
                                                type="number"
                                                min="0"
                                                max="5"
-                                               class="quality-form-control" />
+                                               class="quality-form-control"
+                                               data-first-count />
 
-                                        <div class="quality-help">
-                                            Se requieren al menos tres disparos conformes
-                                            para liberar la producción.
+                                        <div class="quality-result-current">
+                                            <strong class="@(Model.CantidadDisparosConformes >= 3 ? "quality-result-ok" : "quality-result-nok")"
+                                                    data-first-count-caption>
+                                                @(Model.CantidadDisparosConformes >= 3 ? "Cumple mínimo" : "Menos de 3 conformes")
+                                            </strong>
+                                        </div>
+
+                                        <div class="quality-help" data-first-count-help>
+                                            Se requieren al menos tres disparos conformes para liberar la producción.
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label class="quality-form-label">
-                                            Validación dimensional
-                                        </label>
+                                    <div class="quality-field-full quality-side-action quality-checklist-item mb-3"
+                                         data-first-piece-result>
+                                        <h3>2. Validación dimensional</h3>
 
-                                        <select name="ValidacionDimensional"
-                                                class="quality-form-select">
-                                            <option value=""
-                                                    selected="@(Model.ValidacionDimensional is null ? "selected" : null)">
-                                                Pendiente / no aplica
-                                            </option>
-                                            <option value="true"
-                                                    selected="@(Model.ValidacionDimensional == true ? "selected" : null)">
-                                                Cumple
-                                            </option>
-                                            <option value="false"
-                                                    selected="@(Model.ValidacionDimensional == false ? "selected" : null)">
-                                                No cumple
-                                            </option>
-                                        </select>
+                                        <input type="hidden"
+                                               name="ValidacionDimensional"
+                                               value="@(Model.ValidacionDimensional == false ? "false" : "true")"
+                                               data-first-value />
+
+                                        <div class="quality-result-selector">
+                                            <div class="quality-result-switch-group">
+                                                <span class="quality-result-option quality-result-option-nok">No cumple</span>
+                                                <label class="quality-toggle-switch" title="Cambiar entre NOK y OK">
+                                                    <input type="checkbox"
+                                                           data-first-switch
+                                                           checked="@(Model.ValidacionDimensional != false ? "checked" : null)" />
+                                                    <span class="quality-toggle-slider"></span>
+                                                </label>
+                                                <span class="quality-result-option quality-result-option-ok">Cumple</span>
+                                            </div>
+
+                                            <label class="quality-na-option">
+                                                <input type="checkbox" data-first-na />
+                                                <span>No aplica</span>
+                                            </label>
+                                        </div>
+
+                                        <div class="quality-result-current" data-first-caption>
+                                            @(resultadoDimensional == "NOK" ? "No cumple" : "Cumple")
+                                        </div>
                                     </div>
 
-                                    <div>
-                                        <label class="quality-form-label">
-                                            Apariencia
-                                        </label>
+                                    <div class="quality-field-full quality-side-action quality-checklist-item mb-3"
+                                         data-first-piece-result>
+                                        <h3>3. Apariencia</h3>
 
-                                        <select name="ValidacionApariencia"
-                                                class="quality-form-select">
-                                            <option value=""
-                                                    selected="@(Model.ValidacionApariencia is null ? "selected" : null)">
-                                                Pendiente / no aplica
-                                            </option>
-                                            <option value="true"
-                                                    selected="@(Model.ValidacionApariencia == true ? "selected" : null)">
-                                                Cumple
-                                            </option>
-                                            <option value="false"
-                                                    selected="@(Model.ValidacionApariencia == false ? "selected" : null)">
-                                                No cumple
-                                            </option>
-                                        </select>
+                                        <input type="hidden"
+                                               name="ValidacionApariencia"
+                                               value="@(Model.ValidacionApariencia == false ? "false" : "true")"
+                                               data-first-value />
+
+                                        <div class="quality-result-selector">
+                                            <div class="quality-result-switch-group">
+                                                <span class="quality-result-option quality-result-option-nok">No cumple</span>
+                                                <label class="quality-toggle-switch" title="Cambiar entre NOK y OK">
+                                                    <input type="checkbox"
+                                                           data-first-switch
+                                                           checked="@(Model.ValidacionApariencia != false ? "checked" : null)" />
+                                                    <span class="quality-toggle-slider"></span>
+                                                </label>
+                                                <span class="quality-result-option quality-result-option-ok">Cumple</span>
+                                            </div>
+
+                                            <label class="quality-na-option">
+                                                <input type="checkbox" data-first-na />
+                                                <span>No aplica</span>
+                                            </label>
+                                        </div>
+
+                                        <div class="quality-result-current" data-first-caption>
+                                            @(resultadoApariencia == "NOK" ? "No cumple" : "Cumple")
+                                        </div>
                                     </div>
 
-                                    <div>
-                                        <label class="quality-form-label">
-                                            Gauge
-                                        </label>
+                                    <div class="quality-field-full quality-side-action quality-checklist-item mb-3"
+                                         data-first-piece-result>
+                                        <h3>4. Gauge</h3>
 
-                                        <select name="ValidacionGauge"
-                                                class="quality-form-select">
-                                            <option value=""
-                                                    selected="@(Model.ValidacionGauge is null ? "selected" : null)">
-                                                No aplica / pendiente
-                                            </option>
-                                            <option value="true"
-                                                    selected="@(Model.ValidacionGauge == true ? "selected" : null)">
-                                                Cumple
-                                            </option>
-                                            <option value="false"
-                                                    selected="@(Model.ValidacionGauge == false ? "selected" : null)">
-                                                No cumple
-                                            </option>
-                                        </select>
+                                        <input type="hidden"
+                                               name="ValidacionGauge"
+                                               value="@(Model.ValidacionGauge == false ? "false" : "true")"
+                                               data-first-value />
+
+                                        <div class="quality-result-selector">
+                                            <div class="quality-result-switch-group">
+                                                <span class="quality-result-option quality-result-option-nok">No cumple</span>
+                                                <label class="quality-toggle-switch" title="Cambiar entre NOK y OK">
+                                                    <input type="checkbox"
+                                                           data-first-switch
+                                                           checked="@(Model.ValidacionGauge != false ? "checked" : null)" />
+                                                    <span class="quality-toggle-slider"></span>
+                                                </label>
+                                                <span class="quality-result-option quality-result-option-ok">Cumple</span>
+                                            </div>
+
+                                            <label class="quality-na-option">
+                                                <input type="checkbox" data-first-na />
+                                                <span>No aplica</span>
+                                            </label>
+                                        </div>
+
+                                        <div class="quality-result-current" data-first-caption>
+                                            @(resultadoGauge == "NOK" ? "No cumple" : "Cumple")
+                                        </div>
                                     </div>
 
-                                    <div>
-                                        <label class="quality-form-label">
-                                            Conductividad
-                                        </label>
+                                    <div class="quality-field-full quality-side-action quality-checklist-item mb-3"
+                                         data-first-piece-result>
+                                        <h3>5. Conductividad</h3>
 
-                                        <select name="ValidacionConductividad"
-                                                class="quality-form-select">
-                                            <option value=""
-                                                    selected="@(Model.ValidacionConductividad is null ? "selected" : null)">
-                                                No aplica / pendiente
-                                            </option>
-                                            <option value="true"
-                                                    selected="@(Model.ValidacionConductividad == true ? "selected" : null)">
-                                                Cumple
-                                            </option>
-                                            <option value="false"
-                                                    selected="@(Model.ValidacionConductividad == false ? "selected" : null)">
-                                                No cumple
-                                            </option>
-                                        </select>
+                                        <input type="hidden"
+                                               name="ValidacionConductividad"
+                                               value="@(Model.ValidacionConductividad == false ? "false" : "true")"
+                                               data-first-value />
+
+                                        <div class="quality-result-selector">
+                                            <div class="quality-result-switch-group">
+                                                <span class="quality-result-option quality-result-option-nok">No cumple</span>
+                                                <label class="quality-toggle-switch" title="Cambiar entre NOK y OK">
+                                                    <input type="checkbox"
+                                                           data-first-switch
+                                                           checked="@(Model.ValidacionConductividad != false ? "checked" : null)" />
+                                                    <span class="quality-toggle-slider"></span>
+                                                </label>
+                                                <span class="quality-result-option quality-result-option-ok">Cumple</span>
+                                            </div>
+
+                                            <label class="quality-na-option">
+                                                <input type="checkbox" data-first-na />
+                                                <span>No aplica</span>
+                                            </label>
+                                        </div>
+
+                                        <div class="quality-result-current" data-first-caption>
+                                            @(resultadoConductividad == "NOK" ? "No cumple" : "Cumple")
+                                        </div>
                                     </div>
+
+                                    @{
+                                        const string observacionInicialSistema =
+                                            "Solicitud recibida desde Producción para revisión de prearranque.";
+
+                                        var observacionesPrimerasPiezas =
+                                            string.Equals(
+                                                Model.Observaciones?.Trim(),
+                                                observacionInicialSistema,
+                                                StringComparison.OrdinalIgnoreCase)
+                                                ? string.Empty
+                                                : Model.Observaciones;
+                                    }
 
                                     <div class="quality-field-full">
                                         <label class="quality-form-label">
-                                            Observaciones
+                                            Observaciones generales
                                         </label>
 
                                         <textarea name="Observaciones"
-                                                  class="quality-form-control"
+                                                  class="quality-form-control quality-result-observation @(habilitarObsPrimerasPiezas ? string.Empty : "is-locked")"
                                                   maxlength="1000"
-                                                  placeholder="Registra mediciones, irregularidades o ajustes necesarios...">@Model.Observaciones</textarea>
+                                                  data-first-general-observation
+                                                  readonly="@(!habilitarObsPrimerasPiezas ? "readonly" : null)"
+                                                  aria-readonly="@(!habilitarObsPrimerasPiezas ? "true" : "false")"
+                                                  placeholder="@(habilitarObsPrimerasPiezas ? "Describe el motivo del No cumple, del No aplica o los ajustes necesarios..." : "Se habilita cuando exista algún No cumple, No aplica o menos de 3 disparos conformes")">@observacionesPrimerasPiezas</textarea>
+
+                                        <div class="quality-observation-help" data-first-general-help>
+                                            @(habilitarObsPrimerasPiezas
+                                                ? "Documenta aquí cualquier resultado No cumple, campo No aplica o ajuste requerido."
+                                                : "Las observaciones se habilitarán cuando exista un No cumple, un No aplica o menos de 3 disparos conformes.")
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1602,6 +1981,7 @@
                                     <button type="submit"
                                             formaction="@Url.Action("SolicitarAjustesFlujo", "Calidad")"
                                             class="quality-btn quality-btn-danger"
+                                            data-firstpieces-action="ajustes"
                                             data-submit-confirm="¿Confirmas que deseas solicitar ajustes a Producción?">
                                         <i class="fa-solid fa-screwdriver-wrench"></i>
                                         Solicitar ajustes
@@ -1610,6 +1990,7 @@
                                     <button type="submit"
                                             formaction="@Url.Action("RegistrarPrimerasPiezasFlujo", "Calidad")"
                                             class="quality-btn quality-btn-primary"
+                                            data-firstpieces-action="guardar"
                                             data-submit-confirm="¿Confirmas que deseas guardar esta validación?">
                                         <i class="fa-solid fa-floppy-disk"></i>
                                         Guardar validación
@@ -2969,6 +3350,273 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            function actualizarResultadoChecklist(contenedor) {
+                const interruptor = contenedor.querySelector('[data-result-switch]');
+                const noAplica = contenedor.querySelector('[data-result-na]');
+                const valor = contenedor.querySelector('[data-result-value]');
+                const observacion = contenedor.querySelector('[data-result-observation]');
+                const leyenda = contenedor.querySelector('[data-result-caption]');
+                const ayuda = contenedor.querySelector('[data-observation-help]');
+
+                if (!interruptor || !noAplica || !valor || !observacion) {
+                    return;
+                }
+
+                let resultado;
+
+                if (noAplica.checked) {
+                    resultado = 'NA';
+                    interruptor.disabled = true;
+                } else {
+                    interruptor.disabled = false;
+                    resultado = interruptor.checked ? 'OK' : 'NOK';
+                }
+
+                valor.value = resultado;
+                contenedor.classList.toggle('is-nok', resultado === 'NOK');
+                contenedor.classList.toggle('is-na', resultado === 'NA');
+
+                const habilitarObservacion = resultado === 'NOK' || resultado === 'NA';
+                observacion.readOnly = !habilitarObservacion;
+                observacion.setAttribute('aria-readonly', habilitarObservacion ? 'false' : 'true');
+                observacion.classList.toggle('is-locked', !habilitarObservacion);
+
+                if (resultado === 'NOK') {
+                    observacion.placeholder = 'Describe la no conformidad (obligatorio)...';
+                    if (leyenda) leyenda.textContent = 'No conforme';
+                    if (ayuda) ayuda.textContent = 'La observación es obligatoria para un resultado NOK.';
+                } else if (resultado === 'NA') {
+                    observacion.placeholder = 'Explica por qué no aplica (opcional)...';
+                    if (leyenda) leyenda.textContent = 'No aplica';
+                    if (ayuda) ayuda.textContent = 'Puedes documentar por qué esta validación no aplica.';
+                } else {
+                    observacion.placeholder = 'Se habilita al seleccionar NOK o N/A';
+                    if (leyenda) leyenda.textContent = 'Conforme';
+                    if (ayuda) ayuda.textContent = 'El campo se habilitará cuando el resultado sea NOK o N/A.';
+                }
+            }
+
+            document.querySelectorAll('[data-quality-result]').forEach(function (contenedor) {
+                const interruptor = contenedor.querySelector('[data-result-switch]');
+                const noAplica = contenedor.querySelector('[data-result-na]');
+
+                if (!interruptor || !noAplica) {
+                    return;
+                }
+
+                actualizarResultadoChecklist(contenedor);
+
+                interruptor.addEventListener('change', function () {
+                    actualizarResultadoChecklist(contenedor);
+                });
+
+                noAplica.addEventListener('change', function () {
+                    if (noAplica.checked) {
+                        contenedor.dataset.resultadoAnterior = interruptor.checked ? 'OK' : 'NOK';
+                    } else {
+                        interruptor.checked = contenedor.dataset.resultadoAnterior !== 'NOK';
+                    }
+
+                    actualizarResultadoChecklist(contenedor);
+                });
+            });
+
+            document.querySelectorAll('form').forEach(function (form) {
+                if (!form.querySelector('[data-quality-result]')) {
+                    return;
+                }
+
+                form.addEventListener('submit', function (event) {
+                    let primerError = null;
+
+                    form.querySelectorAll('[data-quality-result]').forEach(function (contenedor) {
+                        const valor = contenedor.querySelector('[data-result-value]');
+                        const observacion = contenedor.querySelector('[data-result-observation]');
+
+                        if (!valor || !observacion) {
+                            return;
+                        }
+
+                        const requiereObservacion = valor.value === 'NOK';
+                        const faltaObservacion = requiereObservacion && !observacion.value.trim();
+
+                        observacion.classList.toggle('is-invalid', faltaObservacion);
+
+                        if (faltaObservacion && !primerError) {
+                            primerError = observacion;
+                        }
+                    });
+
+                    if (primerError) {
+                        event.preventDefault();
+                        primerError.focus();
+                        primerError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        window.alert('Las respuestas NOK requieren una observación antes de guardar.');
+                    }
+                });
+            });
+
+            document.querySelectorAll('[data-firstpieces-form]').forEach(function (contenedorFormulario) {
+                const formulario = contenedorFormulario.closest('form');
+                const observacionGeneral = contenedorFormulario.querySelector('[data-first-general-observation]');
+                const ayudaGeneral = contenedorFormulario.querySelector('[data-first-general-help]');
+                const contador = contenedorFormulario.querySelector('[data-first-count]');
+                const leyendaContador = contenedorFormulario.querySelector('[data-first-count-caption]');
+                const ayudaContador = contenedorFormulario.querySelector('[data-first-count-help]');
+
+                function actualizarItemPrimerasPiezas(item) {
+                    const interruptor = item.querySelector('[data-first-switch]');
+                    const noAplica = item.querySelector('[data-first-na]');
+                    const valor = item.querySelector('[data-first-value]');
+                    const leyenda = item.querySelector('[data-first-caption]');
+
+                    if (!interruptor || !valor) {
+                        return;
+                    }
+
+                    let resultado;
+                    if (noAplica && noAplica.checked) {
+                        resultado = '';
+                        interruptor.disabled = true;
+                    } else {
+                        if (noAplica) {
+                            interruptor.disabled = false;
+                        }
+                        resultado = interruptor.checked ? 'true' : 'false';
+                    }
+
+                    valor.value = resultado;
+                    item.classList.toggle('is-nok', resultado === 'false');
+                    item.classList.toggle('is-na', !!(noAplica && noAplica.checked));
+
+                    if (leyenda) {
+                        leyenda.textContent = noAplica && noAplica.checked
+                            ? 'No aplica'
+                            : (interruptor.checked ? 'Cumple' : 'No cumple');
+                    }
+                }
+
+                function actualizarFormularioPrimerasPiezas() {
+                    let hayNok = false;
+                    let hayNa = false;
+
+                    contenedorFormulario.querySelectorAll('[data-first-piece-result]').forEach(function (item) {
+                        const valor = item.querySelector('[data-first-value]');
+                        if (!valor) {
+                            return;
+                        }
+
+                        if (valor.value === 'false') {
+                            hayNok = true;
+                        }
+                        if (valor.value === '') {
+                            hayNa = true;
+                        }
+                    });
+
+                    const cantidad = contador ? (parseInt(contador.value || '0', 10) || 0) : 0;
+                    const cantidadInsuficiente = cantidad < 3;
+                    const habilitarObservacion = hayNok || hayNa || cantidadInsuficiente;
+
+                    if (leyendaContador) {
+                        leyendaContador.textContent = cantidadInsuficiente ? 'Menos de 3 conformes' : 'Cumple mínimo';
+                        leyendaContador.classList.toggle('quality-result-ok', !cantidadInsuficiente);
+                        leyendaContador.classList.toggle('quality-result-nok', cantidadInsuficiente);
+                    }
+
+                    if (ayudaContador) {
+                        ayudaContador.textContent = cantidadInsuficiente
+                            ? 'Debes documentar el motivo: se requieren al menos tres disparos conformes.'
+                            : 'Se cumplen los disparos mínimos requeridos para continuar.';
+                    }
+
+                    if (observacionGeneral) {
+                        observacionGeneral.readOnly = !habilitarObservacion;
+                        observacionGeneral.setAttribute('aria-readonly', habilitarObservacion ? 'false' : 'true');
+                        observacionGeneral.classList.toggle('is-locked', !habilitarObservacion);
+
+                        if (hayNok || cantidadInsuficiente) {
+                            observacionGeneral.placeholder = 'Describe la no conformidad o el ajuste requerido...';
+                            if (ayudaGeneral) {
+                                ayudaGeneral.textContent = 'Documenta aquí la causa del No cumple o por qué hay menos de 3 disparos conformes.';
+                            }
+                        } else if (hayNa) {
+                            observacionGeneral.placeholder = 'Explica por qué la validación no aplica...';
+                            if (ayudaGeneral) {
+                                ayudaGeneral.textContent = 'Documenta aquí el motivo por el que no aplica.';
+                            }
+                        } else {
+                            observacionGeneral.placeholder = 'Se habilita cuando exista algún No cumple, No aplica o menos de 3 disparos conformes';
+                            if (ayudaGeneral) {
+                                ayudaGeneral.textContent = 'Las observaciones se habilitarán cuando exista un No cumple, un No aplica o menos de 3 disparos conformes.';
+                            }
+                        }
+                    }
+                }
+
+                contenedorFormulario.querySelectorAll('[data-first-piece-result]').forEach(function (item) {
+                    const interruptor = item.querySelector('[data-first-switch]');
+                    const noAplica = item.querySelector('[data-first-na]');
+
+                    actualizarItemPrimerasPiezas(item);
+
+                    if (interruptor) {
+                        interruptor.addEventListener('change', function () {
+                            actualizarItemPrimerasPiezas(item);
+                            actualizarFormularioPrimerasPiezas();
+                        });
+                    }
+
+                    if (noAplica) {
+                        noAplica.addEventListener('change', function () {
+                            if (noAplica.checked) {
+                                item.dataset.resultadoAnterior = interruptor && interruptor.checked ? 'OK' : 'NOK';
+                            } else if (interruptor) {
+                                interruptor.checked = item.dataset.resultadoAnterior !== 'NOK';
+                            }
+
+                            actualizarItemPrimerasPiezas(item);
+                            actualizarFormularioPrimerasPiezas();
+                        });
+                    }
+                });
+
+                if (contador) {
+                    contador.addEventListener('input', actualizarFormularioPrimerasPiezas);
+                    contador.addEventListener('change', actualizarFormularioPrimerasPiezas);
+                }
+
+                actualizarFormularioPrimerasPiezas();
+
+                if (formulario) {
+                    formulario.addEventListener('submit', function (event) {
+                        const submitter = event.submitter;
+                        if (!submitter) {
+                            return;
+                        }
+
+                        const accion = submitter.dataset.firstpiecesAction;
+                        const observaciones = (observacionGeneral && observacionGeneral.value ? observacionGeneral.value.trim() : '');
+                        const segregadosValor = contenedorFormulario.querySelector('input[name="CincoDisparosSegregados"]')?.value;
+                        const cantidad = contador ? (parseInt(contador.value || '0', 10) || 0) : 0;
+
+                        if (accion === 'guardar' && segregadosValor !== 'true') {
+                            event.preventDefault();
+                            window.alert('Debes confirmar que los primeros cinco disparos fueron segregados para guardar la validación.');
+                            return;
+                        }
+
+                        if (accion === 'ajustes' && !observaciones) {
+                            event.preventDefault();
+                            if (observacionGeneral) {
+                                observacionGeneral.focus();
+                            }
+                            window.alert('Describe los ajustes requeridos antes de enviar la solicitud a Producción.');
+                        }
+                    });
+                }
+            });
+
             document.querySelectorAll('form[data-confirm]').forEach(function (form) {
                 form.addEventListener('submit', function (event) {
                     const message = form.dataset.confirm;

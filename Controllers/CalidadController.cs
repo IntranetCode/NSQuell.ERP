@@ -669,12 +669,1219 @@ namespace ERP.NSQuell.Controllers
         [HttpGet]
         public async Task<IActionResult> Detalle(int id)
         {
+            if (id <= 0)
+                return NotFound();
+
+            var usuarioId = ObtenerUsuarioIdActual();
+
+            var inspeccionBase = await _context.CalidadInspecciones
+                .AsNoTracking()
+                .Where(x => x.InspeccionID == id)
+                .Select(x => new
+                {
+                    x.InspeccionID,
+                    x.ChecklistArranqueID,
+                    x.Estado,
+                    x.ConfiguracionInvalidada
+                })
+                .FirstOrDefaultAsync();
+
+            if (inspeccionBase == null)
+                return NotFound();
+
+            var incidenciasCarga = new List<string>();
+
+            /*
+             * Producción crea únicamente sus preguntas. Al abrir la
+             * inspección, Calidad completa de forma idempotente las
+             * preguntas asignadas a CALIDAD o AUDITOR.
+             */
+            if (inspeccionBase.ChecklistArranqueID.HasValue)
+            {
+                try
+                {
+                    await AsegurarPreguntasChecklistAuditorAsync(
+                        inspeccionBase.ChecklistArranqueID.Value,
+                        usuarioId);
+                }
+                catch (Exception ex)
+                {
+                    incidenciasCarga.Add(
+                        "No fue posible preparar las preguntas del auditor: " +
+                        ex.Message);
+                }
+            }
+
+            try
+            {
+                await RegistrarContextoReliberacionAsync(id, usuarioId);
+            }
+            catch (Exception ex)
+            {
+                incidenciasCarga.Add(
+                    "No fue posible sincronizar el contexto de reliberación: " +
+                    ex.Message);
+            }
+
+            if (!inspeccionBase.ConfiguracionInvalidada &&
+                CalidadEstados.PuedeAutorizarPrearranque(inspeccionBase.Estado))
+            {
+                try
+                {
+                    await RegistrarInicioValidacionPrearranqueAsync(id, usuarioId);
+                }
+                catch (Exception ex)
+                {
+                    incidenciasCarga.Add(
+                        "No fue posible registrar el inicio de la revisión: " +
+                        ex.Message);
+                }
+            }
+
+            if (string.Equals(
+                    inspeccionBase.Estado,
+                    CalidadEstados.MonitoreoActivo,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await ReconciliarMonitoreosConProduccionAsync(id, usuarioId);
+                }
+                catch (Exception ex)
+                {
+                    incidenciasCarga.Add(
+                        "No fue posible vincular las capturas horarias de Producción: " +
+                        ex.Message);
+                }
+            }
+
+            if (incidenciasCarga.Count > 0)
+            {
+                TempData["Error"] = string.Join(" ", incidenciasCarga);
+            }
+
             var model = await ConstruirDetalleFlujoAsync(id);
 
             if (model == null)
                 return NotFound();
 
+            await CargarChecklistArranqueParaDetalleAsync(model);
+
             return View(model);
+        }
+
+        // =========================================================
+        // CHECKLIST DE PREARRANQUE: INTEGRACIÓN PRODUCCIÓN -> CALIDAD
+        // =========================================================
+
+        private async Task AsegurarPreguntasChecklistAuditorAsync(
+            int checklistArranqueId,
+            int? usuarioId)
+        {
+            const string sql = @"
+INSERT INTO dbo.Produccion_ChecklistArranqueDetalle
+(
+    ChecklistArranqueID,
+    PreguntaID,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+SELECT
+    c.ChecklistArranqueID,
+    p.PreguntaID,
+    COALESCE(@UsuarioID, c.UsuarioCreacionID),
+    GETDATE(),
+    1
+FROM dbo.Produccion_ChecklistArranque c
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
+    ON p.CodigoFormato = c.CodigoFormato
+   AND ISNULL(p.VersionFormato, N'') = ISNULL(c.VersionFormato, N'')
+WHERE c.ChecklistArranqueID = @ChecklistArranqueID
+  AND c.Activo = 1
+  AND p.Activo = 1
+  AND
+  (
+        UPPER(ISNULL(p.Seccion, N'')) LIKE N'%CALIDAD%'
+     OR UPPER(ISNULL(p.Seccion, N'')) LIKE N'%AUDITOR%'
+     OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%CALIDAD%'
+     OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%AUDITOR%'
+  )
+  AND UPPER(ISNULL(p.Seccion, N'')) NOT LIKE N'%PARO%'
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_ChecklistArranqueDetalle d WITH (UPDLOCK, HOLDLOCK)
+      WHERE d.ChecklistArranqueID = c.ChecklistArranqueID
+        AND d.PreguntaID = p.PreguntaID
+        AND d.Activo = 1
+  );";
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
+            try
+            {
+                await using var cmd = new SqlCommand(sql, cn, tx);
+
+                cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
+                    checklistArranqueId;
+
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                    (object?)usuarioId ?? DBNull.Value;
+
+                await cmd.ExecuteNonQueryAsync();
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
+        private async Task RegistrarInicioValidacionPrearranqueAsync(
+            int inspeccionId,
+            int? usuarioId)
+        {
+            var inspeccion = await _context.CalidadInspecciones
+                .FirstOrDefaultAsync(x => x.InspeccionID == inspeccionId);
+
+            if (inspeccion == null ||
+                inspeccion.ConfiguracionInvalidada ||
+                !CalidadEstados.PuedeAutorizarPrearranque(inspeccion.Estado) ||
+                inspeccion.FechaInicioValidacionPrearranque.HasValue)
+            {
+                return;
+            }
+
+            inspeccion.FechaInicioValidacionPrearranque = DateTime.Now;
+            MarcarModificacion(inspeccion, usuarioId);
+
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task RegistrarContextoReliberacionAsync(
+            int inspeccionId,
+            int? usuarioId)
+        {
+            var inspeccion = await _context.CalidadInspecciones
+                .FirstOrDefaultAsync(x => x.InspeccionID == inspeccionId);
+
+            if (inspeccion == null ||
+                !CalidadTipoProceso.EsReliberacion(inspeccion.Proceso) ||
+                !inspeccion.EjecucionProduccionID.HasValue)
+            {
+                return;
+            }
+
+            var huboCambios = false;
+
+            if (!inspeccion.RequiereReliberacion)
+            {
+                inspeccion.RequiereReliberacion = true;
+                huboCambios = true;
+            }
+
+            const string sqlParo = @"
+SELECT TOP (1)
+    ParoID,
+    ISNULL(DuracionMinutos, 0) AS DuracionMinutos
+FROM dbo.Produccion_Paros
+WHERE EjecucionProduccionID = @EjecucionProduccionID
+  AND Activo = 1
+  AND FechaFinParo IS NOT NULL
+  AND ISNULL(EsMayorA15Minutos, 0) = 1
+ORDER BY FechaFinParo DESC, ParoID DESC;";
+
+            int? paroId = null;
+            int duracionMinutos = 0;
+
+            await using (var cn = new SqlConnection(ConnectionString))
+            {
+                await cn.OpenAsync();
+
+                await using var cmd = new SqlCommand(sqlParo, cn);
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
+                    inspeccion.EjecucionProduccionID.Value;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (await rd.ReadAsync())
+                {
+                    paroId = Convert.ToInt32(rd["ParoID"]);
+                    duracionMinutos = Convert.ToInt32(rd["DuracionMinutos"]);
+                }
+            }
+
+            if (paroId.HasValue)
+            {
+                var existe = await _context.CalidadReliberaciones
+                    .AnyAsync(x =>
+                        x.InspeccionID == inspeccionId &&
+                        x.ParoID == paroId.Value &&
+                        x.Activo);
+
+                if (!existe)
+                {
+                    var numero =
+                        (await _context.CalidadReliberaciones
+                            .Where(x =>
+                                x.EjecucionProduccionID ==
+                                    inspeccion.EjecucionProduccionID.Value)
+                            .MaxAsync(x => (int?)x.NumeroReliberacion) ?? 0) + 1;
+
+                    _context.CalidadReliberaciones.Add(
+                        new CalidadReliberacion
+                        {
+                            InspeccionID = inspeccionId,
+                            EjecucionProduccionID =
+                                inspeccion.EjecucionProduccionID.Value,
+                            ParoID = paroId.Value,
+                            NumeroReliberacion = numero,
+                            Motivo =
+                                "Paro mayor a 15 minutos. Duración registrada: " +
+                                duracionMinutos + " minuto(s).",
+                            FechaSolicitud =
+                                inspeccion.FechaNotificacionCalidad ?? DateTime.Now,
+                            UsuarioSolicitudID = inspeccion.UsuarioNotificoID,
+                            Resultado = CalidadResultadoReliberacion.Pendiente,
+                            UsuarioCreacionID = usuarioId,
+                            FechaCreacion = DateTime.Now,
+                            Activo = true
+                        });
+
+                    huboCambios = true;
+                }
+            }
+
+            if (!huboCambios)
+                return;
+
+            MarcarModificacion(inspeccion, usuarioId);
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task CargarChecklistArranqueParaDetalleAsync(
+            CalidadDetalleViewModel model)
+        {
+            model.PreguntasChecklistProduccion = new();
+            model.PreguntasChecklistCalidad = new();
+
+            if (!model.ChecklistArranqueID.HasValue)
+                return;
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            const string sqlEncabezado = @"
+SELECT TOP (1)
+    EstatusID,
+    ObservacionesGenerales,
+    ObservacionesCalidad
+FROM dbo.Produccion_ChecklistArranque
+WHERE ChecklistArranqueID = @ChecklistArranqueID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlEncabezado, cn))
+            {
+                cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
+                    model.ChecklistArranqueID.Value;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (await rd.ReadAsync())
+                {
+                    model.EstatusChecklistArranqueID =
+                        rd["EstatusID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["EstatusID"]);
+
+                    model.ObservacionesChecklistProduccion =
+                        rd["ObservacionesGenerales"] as string;
+
+                    model.ObservacionesChecklistCalidad =
+                        rd["ObservacionesCalidad"] as string;
+                }
+            }
+
+            const string sqlPreguntas = @"
+SELECT
+    d.ChecklistArranqueDetalleID,
+    d.PreguntaID,
+    ISNULL(p.Seccion, N'') AS Seccion,
+    ISNULL(p.OrdenSeccion, 0) AS OrdenSeccion,
+    ISNULL(p.OrdenPregunta, 0) AS OrdenPregunta,
+    ISNULL(p.TextoPregunta, N'') AS TextoPregunta,
+    p.ResponsableSugerido,
+    ISNULL(p.RequiereObservacionSiNOK, 0) AS RequiereObservacionSiNOK,
+    d.Resultado,
+    d.Observaciones,
+    CASE
+        WHEN
+        (
+              UPPER(ISNULL(p.Seccion, N'')) LIKE N'%CALIDAD%'
+           OR UPPER(ISNULL(p.Seccion, N'')) LIKE N'%AUDITOR%'
+           OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%CALIDAD%'
+           OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%AUDITOR%'
+        )
+        THEN 1 ELSE 0
+    END AS EsPreguntaCalidad
+FROM dbo.Produccion_ChecklistArranqueDetalle d
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
+    ON p.PreguntaID = d.PreguntaID
+WHERE d.ChecklistArranqueID = @ChecklistArranqueID
+  AND d.Activo = 1
+  AND p.Activo = 1
+  AND UPPER(ISNULL(p.Seccion, N'')) NOT LIKE N'%PARO%'
+ORDER BY
+    ISNULL(p.OrdenSeccion, 0),
+    ISNULL(p.OrdenPregunta, 0),
+    p.PreguntaID;";
+
+            await using (var cmd = new SqlCommand(sqlPreguntas, cn))
+            {
+                cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
+                    model.ChecklistArranqueID.Value;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
+                {
+                    var pregunta = new CalidadChecklistPreguntaViewModel
+                    {
+                        ChecklistArranqueDetalleID =
+                            Convert.ToInt32(rd["ChecklistArranqueDetalleID"]),
+                        PreguntaID = Convert.ToInt32(rd["PreguntaID"]),
+                        Seccion = rd["Seccion"] as string ?? string.Empty,
+                        OrdenSeccion = Convert.ToInt32(rd["OrdenSeccion"]),
+                        OrdenPregunta = Convert.ToInt32(rd["OrdenPregunta"]),
+                        TextoPregunta =
+                            rd["TextoPregunta"] as string ?? string.Empty,
+                        ResponsableSugerido =
+                            rd["ResponsableSugerido"] as string,
+                        RequiereObservacionSiNOK =
+                            Convert.ToBoolean(rd["RequiereObservacionSiNOK"]),
+                        Resultado = rd["Resultado"] as string,
+                        Observaciones = rd["Observaciones"] as string
+                    };
+
+                    if (Convert.ToBoolean(rd["EsPreguntaCalidad"]))
+                        model.PreguntasChecklistCalidad.Add(pregunta);
+                    else
+                        model.PreguntasChecklistProduccion.Add(pregunta);
+                }
+            }
+        }
+
+        private async Task ReconciliarMonitoreosConProduccionAsync(
+            int inspeccionId,
+            int? usuarioId)
+        {
+            const string sql = @"
+DECLARE @EjecucionProduccionID INT;
+
+SELECT @EjecucionProduccionID = EjecucionProduccionID
+FROM dbo.Calidad_Inspecciones
+WHERE InspeccionID = @InspeccionID
+  AND Estado = N'MONITOREO_ACTIVO';
+
+IF @EjecucionProduccionID IS NULL
+    RETURN;
+
+;WITH MonitoresPendientes AS
+(
+    SELECT
+        m.MonitoreoID,
+        ROW_NUMBER() OVER
+        (
+            ORDER BY m.FechaHoraProgramada, m.MonitoreoID
+        ) AS OrdenVinculo
+    FROM dbo.Calidad_MonitoreosProceso m
+    WHERE m.InspeccionID = @InspeccionID
+      AND m.Activo = 1
+      AND m.Resultado = N'PENDIENTE'
+      AND m.RegistroHoraID IS NULL
+),
+RegistrosDisponibles AS
+(
+    SELECT
+        rh.RegistroHoraID,
+        ISNULL(rh.CantidadOK, 0) +
+        ISNULL(rh.CantidadSospechosa, 0) +
+        ISNULL(rh.CantidadScrap, 0) AS CantidadPeriodo,
+        ROW_NUMBER() OVER
+        (
+            ORDER BY
+                rh.FechaProduccion,
+                rh.HoraInicio,
+                rh.RegistroHoraID
+        ) AS OrdenVinculo
+    FROM dbo.Produccion_RegistroHora rh
+    WHERE rh.EjecucionProduccionID = @EjecucionProduccionID
+      AND rh.Activo = 1
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.Calidad_MonitoreosProceso usado
+          WHERE usado.RegistroHoraID = rh.RegistroHoraID
+            AND usado.Activo = 1
+      )
+)
+UPDATE monitor
+SET
+    monitor.RegistroHoraID = registro.RegistroHoraID,
+    monitor.CantidadProducidaPeriodo = registro.CantidadPeriodo,
+    monitor.UsuarioModificacionID =
+        COALESCE(@UsuarioID, monitor.UsuarioModificacionID),
+    monitor.FechaModificacion = GETDATE()
+FROM dbo.Calidad_MonitoreosProceso monitor
+INNER JOIN MonitoresPendientes pendiente
+    ON pendiente.MonitoreoID = monitor.MonitoreoID
+INNER JOIN RegistrosDisponibles registro
+    ON registro.OrdenVinculo = pendiente.OrdenVinculo;";
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                (object?)usuarioId ?? DBNull.Value;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuardarChecklistAuditor(
+            CalidadChecklistGuardarViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                TempData["Error"] =
+                    "No se recibió correctamente el checklist del auditor.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            var usuarioId = ObtenerUsuarioIdActual();
+
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            var inspeccion = await _context.CalidadInspecciones
+                .FirstOrDefaultAsync(x =>
+                    x.InspeccionID == model.InspeccionID &&
+                    x.ChecklistArranqueID == model.ChecklistArranqueID);
+
+            if (inspeccion == null)
+                return NotFound();
+
+            if (!CalidadEstados.PuedeAutorizarPrearranque(inspeccion.Estado))
+            {
+                TempData["Error"] =
+                    "El checklist ya no está disponible para revisión de prearranque.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            await AsegurarPreguntasChecklistAuditorAsync(
+                model.ChecklistArranqueID,
+                usuarioId);
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
+            try
+            {
+                foreach (var respuesta in
+                    model.Respuestas ??
+                    new List<CalidadChecklistRespuestaViewModel>())
+                {
+                    var resultado =
+                        NormalizarResultadoChecklistAuditor(respuesta.Resultado);
+
+                    if (resultado == "__INVALIDO__")
+                    {
+                        throw new InvalidOperationException(
+                            "Se recibió una respuesta inválida en el checklist del auditor.");
+                    }
+
+                    if (resultado == CalidadChecklistResultado.Nok &&
+                        string.IsNullOrWhiteSpace(respuesta.Observaciones))
+                    {
+                        throw new InvalidOperationException(
+                            "Toda respuesta NOK del auditor requiere una observación.");
+                    }
+
+                    const string sqlUpdate = @"
+UPDATE d
+SET
+    d.Resultado = @Resultado,
+    d.Observaciones = @Observaciones,
+    d.UsuarioRespuestaID = @UsuarioID,
+    d.FechaRespuesta =
+        CASE WHEN @Resultado IS NULL THEN d.FechaRespuesta ELSE GETDATE() END,
+    d.UsuarioModificacionID = @UsuarioID,
+    d.FechaModificacion = GETDATE()
+FROM dbo.Produccion_ChecklistArranqueDetalle d
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
+    ON p.PreguntaID = d.PreguntaID
+WHERE d.ChecklistArranqueDetalleID = @DetalleID
+  AND d.ChecklistArranqueID = @ChecklistArranqueID
+  AND d.Activo = 1
+  AND p.Activo = 1
+  AND
+  (
+        UPPER(ISNULL(p.Seccion, N'')) LIKE N'%CALIDAD%'
+     OR UPPER(ISNULL(p.Seccion, N'')) LIKE N'%AUDITOR%'
+     OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%CALIDAD%'
+     OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%AUDITOR%'
+  );";
+
+                    await using var cmd = new SqlCommand(sqlUpdate, cn, tx);
+
+                    cmd.Parameters.Add("@Resultado", SqlDbType.NVarChar, 10).Value =
+                        (object?)resultado ?? DBNull.Value;
+
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
+                        string.IsNullOrWhiteSpace(respuesta.Observaciones)
+                            ? DBNull.Value
+                            : respuesta.Observaciones.Trim();
+
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                        usuarioId.Value;
+
+                    cmd.Parameters.Add("@DetalleID", SqlDbType.Int).Value =
+                        respuesta.ChecklistArranqueDetalleID;
+
+                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
+                        model.ChecklistArranqueID;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                const string sqlHeader = @"
+UPDATE dbo.Produccion_ChecklistArranque
+SET
+    UsuarioCalidadID = @UsuarioID,
+    ObservacionesCalidad = @ObservacionesCalidad,
+    UsuarioModificacionID = @UsuarioID,
+    FechaModificacion = GETDATE()
+WHERE ChecklistArranqueID = @ChecklistArranqueID
+  AND Activo = 1;";
+
+                await using (var cmd = new SqlCommand(sqlHeader, cn, tx))
+                {
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                        usuarioId.Value;
+
+                    cmd.Parameters.Add("@ObservacionesCalidad", SqlDbType.NVarChar, 1000).Value =
+                        string.IsNullOrWhiteSpace(model.ObservacionesCalidad)
+                            ? DBNull.Value
+                            : model.ObservacionesCalidad.Trim();
+
+                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
+                        model.ChecklistArranqueID;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+
+                inspeccion.FechaInicioValidacionPrearranque ??= DateTime.Now;
+                MarcarModificacion(inspeccion, usuarioId);
+
+                AgregarHistorial(
+                    inspeccion,
+                    CalidadMovimientos.ChecklistCalidadCapturado,
+                    inspeccion.Estado,
+                    inspeccion.Estado,
+                    inspeccion.ResultadoCalidad,
+                    inspeccion.Etiqueta,
+                    "El auditor guardó su sección del checklist de arranque.",
+                    usuarioId);
+
+                await _context.SaveChangesAsync();
+
+                TempData["Mensaje"] =
+                    "Sección del auditor de Calidad guardada correctamente.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+
+                TempData["Error"] =
+                    "No fue posible guardar el checklist del auditor: " + ex.Message;
+            }
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.InspeccionID });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AutorizarPrearranqueAuditor(
+            CalidadPrearranqueViewModel model)
+        {
+            if (!ModelState.IsValid || model.InspeccionID <= 0)
+            {
+                TempData["Error"] = "No se recibió una inspección válida.";
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            if (!model.AyudaVisualColocada ||
+                !model.HIPColocada ||
+                !model.HCCColocada ||
+                !model.MatrizPolivalenciaValidada)
+            {
+                TempData["Error"] =
+                    "Confirma ayuda visual, HIP, HCC y matriz de polivalencia antes de autorizar.";
+
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            if (!model.AlertaCalidadAplica.HasValue)
+            {
+                TempData["Error"] =
+                    "Indica expresamente si aplica una alerta de Calidad.";
+
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            if (model.AlertaCalidadAplica == true &&
+                model.AlertaCalidadColocada != true)
+            {
+                TempData["Error"] =
+                    "La alerta de Calidad aplica y debe confirmarse como colocada.";
+
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            var inspeccion = await _context.CalidadInspecciones
+                .FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID);
+
+            if (inspeccion == null)
+                return NotFound();
+
+            if (!CalidadEstados.PuedeAutorizarPrearranque(inspeccion.Estado))
+            {
+                TempData["Error"] =
+                    "La inspección ya no está pendiente de prearranque.";
+
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            if (inspeccion.ConfiguracionInvalidada)
+            {
+                TempData["Error"] =
+                    "La configuración fue invalidada y debe generarse una nueva revisión.";
+
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            if (!inspeccion.ChecklistArranqueID.HasValue)
+            {
+                TempData["Error"] =
+                    "La inspección no tiene un checklist de Producción relacionado.";
+
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            var validacionConfiguracion =
+                await ValidarConfiguracionActualAsync(inspeccion);
+
+            if (!validacionConfiguracion.Valida)
+            {
+                await InvalidarConfiguracionAsync(
+                    inspeccion,
+                    validacionConfiguracion.Motivo);
+
+                TempData["Error"] = validacionConfiguracion.Motivo;
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            await AsegurarPreguntasChecklistAuditorAsync(
+                inspeccion.ChecklistArranqueID.Value,
+                ObtenerUsuarioIdActual());
+
+            var validacionChecklist =
+                await ValidarChecklistCompletoParaAutorizarAsync(
+                    inspeccion.ChecklistArranqueID.Value);
+
+            if (!validacionChecklist.Valido)
+            {
+                TempData["Error"] = validacionChecklist.Mensaje;
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            var usuarioId = ObtenerUsuarioIdActual();
+
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var ahora = DateTime.Now;
+                var estadoAnterior = inspeccion.Estado;
+
+                inspeccion.AyudaVisualColocada = model.AyudaVisualColocada;
+                inspeccion.AlertaCalidadAplica = model.AlertaCalidadAplica;
+                inspeccion.AlertaCalidadColocada =
+                    model.AlertaCalidadAplica == true
+                        ? model.AlertaCalidadColocada
+                        : null;
+                inspeccion.HIPColocada = model.HIPColocada;
+                inspeccion.HCCColocada = model.HCCColocada;
+                inspeccion.MatrizPolivalenciaValidada =
+                    model.MatrizPolivalenciaValidada;
+                inspeccion.ChecklistValidado = true;
+                inspeccion.HojaInspeccionProducto = true;
+                inspeccion.HojaValidacionCalidad = true;
+                inspeccion.FechaInicioValidacionPrearranque ??= ahora;
+                inspeccion.FechaFinValidacionPrearranque = ahora;
+                inspeccion.FechaAutorizacionPrearranque = ahora;
+                inspeccion.UsuarioAutorizacionPrearranqueID = usuarioId;
+                inspeccion.MotivoDevolucion = null;
+                inspeccion.Estado = CalidadEstados.ArranqueAutorizado;
+
+                MarcarModificacion(inspeccion, usuarioId);
+
+                AgregarHistorial(
+                    inspeccion,
+                    CalidadMovimientos.PrearranqueAutorizado,
+                    estadoAnterior,
+                    inspeccion.Estado,
+                    inspeccion.ResultadoCalidad,
+                    inspeccion.Etiqueta,
+                    string.IsNullOrWhiteSpace(model.Motivo)
+                        ? "Calidad autorizó el arranque controlado."
+                        : model.Motivo.Trim(),
+                    usuarioId);
+
+                await _context.SaveChangesAsync();
+
+                await _context.Database.ExecuteSqlInterpolatedAsync($@"
+UPDATE dbo.Produccion_ChecklistArranque
+SET
+    EstatusID = {ProduccionChecklistEstatus.ValidadoPorCalidad},
+    UsuarioCalidadID = {usuarioId.Value},
+    FechaValidacionCalidad = {ahora},
+    ObservacionesCalidad = {model.Motivo},
+    UsuarioModificacionID = {usuarioId.Value},
+    FechaModificacion = {ahora}
+WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
+  AND Activo = 1;");
+
+                await tx.CommitAsync();
+
+                TempData["Mensaje"] =
+                    "Prearranque autorizado. Producción puede generar las primeras piezas, pero todavía no iniciar la serie.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] =
+                    "No fue posible autorizar el prearranque: " + ex.Message;
+            }
+
+            return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DevolverPrearranqueAuditor(
+            CalidadPrearranqueViewModel model)
+        {
+            model.Motivo = model.Motivo?.Trim();
+
+            if (model.InspeccionID <= 0 || string.IsNullOrWhiteSpace(model.Motivo))
+            {
+                TempData["Error"] =
+                    "Captura el motivo obligatorio de la devolución.";
+
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            var inspeccion = await _context.CalidadInspecciones
+                .FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID);
+
+            if (inspeccion == null)
+                return NotFound();
+
+            if (!CalidadEstados.PuedeAutorizarPrearranque(inspeccion.Estado))
+            {
+                TempData["Error"] =
+                    "La inspección ya no está pendiente de prearranque.";
+
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+            }
+
+            var usuarioId = ObtenerUsuarioIdActual();
+
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var ahora = DateTime.Now;
+                var estadoAnterior = inspeccion.Estado;
+
+                inspeccion.Estado = CalidadEstados.DevueltoPrearranque;
+                inspeccion.MotivoDevolucion = model.Motivo;
+                inspeccion.ChecklistValidado = false;
+                inspeccion.Liberado = false;
+                inspeccion.FechaFinValidacionPrearranque = ahora;
+
+                MarcarModificacion(inspeccion, usuarioId);
+
+                AgregarHistorial(
+                    inspeccion,
+                    CalidadMovimientos.PrearranqueDevuelto,
+                    estadoAnterior,
+                    inspeccion.Estado,
+                    inspeccion.ResultadoCalidad,
+                    inspeccion.Etiqueta,
+                    model.Motivo,
+                    usuarioId);
+
+                await _context.SaveChangesAsync();
+
+                if (inspeccion.ChecklistArranqueID.HasValue)
+                {
+                    await _context.Database.ExecuteSqlInterpolatedAsync($@"
+UPDATE dbo.Produccion_ChecklistArranque
+SET
+    EstatusID = {ProduccionChecklistEstatus.RechazadoRequiereAjuste},
+    UsuarioCalidadID = {usuarioId.Value},
+    FechaValidacionCalidad = {ahora},
+    ObservacionesCalidad = {model.Motivo},
+    UsuarioModificacionID = {usuarioId.Value},
+    FechaModificacion = {ahora}
+WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
+  AND Activo = 1;");
+                }
+
+                await tx.CommitAsync();
+
+                TempData["Mensaje"] =
+                    "La revisión fue devuelta a Producción para corrección.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] =
+                    "No fue posible devolver la revisión: " + ex.Message;
+            }
+
+            return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LiberarProduccionAuditor(int id)
+        {
+            var inspeccion = await _context.CalidadInspecciones
+                .FirstOrDefaultAsync(x => x.InspeccionID == id);
+
+            if (inspeccion == null)
+                return NotFound();
+
+            if (inspeccion.ConfiguracionInvalidada)
+            {
+                TempData["Error"] =
+                    "La configuración fue invalidada y no puede liberarse.";
+
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            if (inspeccion.Estado != CalidadEstados.PendientePrimerasPiezas &&
+                inspeccion.Estado != CalidadEstados.AjustesSolicitados &&
+                inspeccion.Estado != CalidadEstados.LegacyAbierta)
+            {
+                TempData["Error"] =
+                    "La inspección no se encuentra lista para liberar Producción.";
+
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            var validacionConfiguracion =
+                await ValidarConfiguracionActualAsync(inspeccion);
+
+            if (!validacionConfiguracion.Valida)
+            {
+                await InvalidarConfiguracionAsync(
+                    inspeccion,
+                    validacionConfiguracion.Motivo);
+
+                TempData["Error"] = validacionConfiguracion.Motivo;
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            var intento = await _context.CalidadPrimerasPiezasIntentos
+                .Where(x => x.InspeccionID == id && x.Activo)
+                .OrderByDescending(x => x.NumeroIntento)
+                .FirstOrDefaultAsync();
+
+            if (intento == null)
+            {
+                TempData["Error"] =
+                    "Primero registra la validación de las primeras piezas.";
+
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            if (!intento.CincoDisparosSegregados ||
+                intento.CantidadDisparosPresentados < 3 ||
+                intento.ValidacionDimensional != true ||
+                intento.ValidacionApariencia != true ||
+                intento.ValidacionGauge == false ||
+                intento.ValidacionConductividad == false)
+            {
+                TempData["Error"] =
+                    "El último intento no cumple los requisitos para liberar la producción.";
+
+                return RedirectToAction(nameof(Detalle), new { id });
+            }
+
+            var usuarioId = ObtenerUsuarioIdActual();
+
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var ahora = DateTime.Now;
+                var estadoAnterior = inspeccion.Estado;
+                var eraReliberacion =
+                    inspeccion.RequiereReliberacion ||
+                    CalidadTipoProceso.EsReliberacion(inspeccion.Proceso);
+
+                intento.Resultado = CalidadResultadoIntento.Ok;
+                intento.AjusteSolicitado = false;
+                intento.FechaFin = ahora;
+                intento.UsuarioModificacionID = usuarioId;
+                intento.FechaModificacion = ahora;
+
+                inspeccion.CincoDisparosSegregados =
+                    intento.CincoDisparosSegregados;
+                inspeccion.CantidadDisparosConformes =
+                    intento.CantidadDisparosPresentados;
+                inspeccion.ValidacionDimensional =
+                    intento.ValidacionDimensional;
+                inspeccion.ValidacionApariencia =
+                    intento.ValidacionApariencia;
+                inspeccion.ValidacionGauge = intento.ValidacionGauge;
+                inspeccion.ValidacionConductividad =
+                    intento.ValidacionConductividad;
+                inspeccion.ResultadoCalidad = "VERDE";
+                inspeccion.Etiqueta = "VERDE";
+                inspeccion.Liberado = true;
+                inspeccion.RequiereGP12 = false;
+                inspeccion.EnContencion = false;
+                inspeccion.EsScrap = false;
+                inspeccion.RequiereReliberacion = false;
+                inspeccion.Estado = CalidadEstados.ProduccionLiberada;
+                inspeccion.FechaLiberacionProduccion = ahora;
+                inspeccion.UsuarioLiberacionProduccionID = usuarioId;
+                inspeccion.FechaValidacionPrimerasPiezas = ahora;
+                inspeccion.UsuarioValidacionPrimerasPiezasID = usuarioId;
+
+                if (inspeccion.FechaNotificacionCalidad.HasValue)
+                {
+                    var minutos = (int)Math.Max(
+                        0,
+                        Math.Round(
+                            (ahora - inspeccion.FechaNotificacionCalidad.Value)
+                                .TotalMinutes));
+
+                    inspeccion.MinutosLiberacionInicial = minutos;
+                    inspeccion.CumplioTiempoObjetivoInicial =
+                        minutos >= 10 && minutos <= 20;
+                }
+
+                if (eraReliberacion)
+                {
+                    var pendientes = await _context.CalidadReliberaciones
+                        .Where(x =>
+                            x.InspeccionID == id &&
+                            x.Activo &&
+                            x.Resultado == CalidadResultadoReliberacion.Pendiente)
+                        .ToListAsync();
+
+                    foreach (var reliberacion in pendientes)
+                    {
+                        reliberacion.Resultado =
+                            CalidadResultadoReliberacion.Autorizada;
+                        reliberacion.FechaValidacion = ahora;
+                        reliberacion.UsuarioCalidadID = usuarioId;
+                        reliberacion.Observaciones =
+                            "Reliberación autorizada después de validar primeras piezas conformes.";
+                        reliberacion.UsuarioModificacionID = usuarioId;
+                        reliberacion.FechaModificacion = ahora;
+                    }
+                }
+
+                MarcarModificacion(inspeccion, usuarioId);
+
+                AgregarHistorial(
+                    inspeccion,
+                    eraReliberacion
+                        ? CalidadMovimientos.ReliberacionAutorizada
+                        : CalidadMovimientos.ProduccionLiberada,
+                    estadoAnterior,
+                    inspeccion.Estado,
+                    inspeccion.ResultadoCalidad,
+                    inspeccion.Etiqueta,
+                    eraReliberacion
+                        ? "Reliberación autorizada con etiqueta verde. Producción puede reiniciar la serie."
+                        : "Calidad liberó la producción y asignó etiqueta verde.",
+                    usuarioId);
+
+                /*
+                 * Deja preparados los periodos de revisión que después
+                 * se enlazan con las capturas por hora de Producción.
+                 * El helper es idempotente y no duplica monitoreos.
+                 */
+                if (inspeccion.EjecucionProduccionID.HasValue)
+                {
+                    await GenerarMonitoreosHorariosAsync(
+                        inspeccion,
+                        ahora,
+                        usuarioId.Value);
+                }
+
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                TempData["Mensaje"] = eraReliberacion
+                    ? "Reliberación autorizada con etiqueta verde. Ya puede reiniciarse la serie."
+                    : "Producción liberada con etiqueta verde. Ya puede iniciarse la serie.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] =
+                    "No fue posible liberar la producción: " + ex.Message;
+            }
+
+            return RedirectToAction(nameof(Detalle), new { id });
+        }
+
+        private async Task<(bool Valido, string Mensaje)>
+            ValidarChecklistCompletoParaAutorizarAsync(
+                int checklistArranqueId)
+        {
+            const string sql = @"
+;WITH Preguntas AS
+(
+    SELECT
+        d.Resultado,
+        d.Observaciones,
+        ISNULL(p.RequiereObservacionSiNOK, 0) AS RequiereObservacionSiNOK,
+        CASE
+            WHEN
+            (
+                  UPPER(ISNULL(p.Seccion, N'')) LIKE N'%CALIDAD%'
+               OR UPPER(ISNULL(p.Seccion, N'')) LIKE N'%AUDITOR%'
+               OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%CALIDAD%'
+               OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%AUDITOR%'
+            )
+            THEN 1 ELSE 0
+        END AS EsCalidad
+    FROM dbo.Produccion_ChecklistArranqueDetalle d
+    INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
+        ON p.PreguntaID = d.PreguntaID
+    WHERE d.ChecklistArranqueID = @ChecklistArranqueID
+      AND d.Activo = 1
+      AND p.Activo = 1
+      AND UPPER(ISNULL(p.Seccion, N'')) NOT LIKE N'%PARO%'
+)
+SELECT
+    ISNULL(SUM(CASE WHEN EsCalidad = 0 THEN 1 ELSE 0 END), 0) AS TotalProduccion,
+    ISNULL(SUM(CASE WHEN EsCalidad = 0 AND (Resultado IS NULL OR LTRIM(RTRIM(Resultado)) = N'') THEN 1 ELSE 0 END), 0) AS PendientesProduccion,
+    ISNULL(SUM(CASE WHEN EsCalidad = 0 AND Resultado = N'NOK' THEN 1 ELSE 0 END), 0) AS NokProduccion,
+    ISNULL(SUM(CASE WHEN EsCalidad = 1 THEN 1 ELSE 0 END), 0) AS TotalCalidad,
+    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND (Resultado IS NULL OR LTRIM(RTRIM(Resultado)) = N'') THEN 1 ELSE 0 END), 0) AS PendientesCalidad,
+    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND Resultado = N'NOK' THEN 1 ELSE 0 END), 0) AS NokCalidad,
+    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND Resultado = N'NOK' AND ISNULL(RequiereObservacionSiNOK, 0) = 1 AND (Observaciones IS NULL OR LTRIM(RTRIM(Observaciones)) = N'') THEN 1 ELSE 0 END), 0) AS NokSinObservacion
+FROM Preguntas;";
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
+                checklistArranqueId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return (false, "No fue posible leer el checklist de arranque.");
+
+            var totalProduccion = Convert.ToInt32(rd["TotalProduccion"]);
+            var pendientesProduccion = Convert.ToInt32(rd["PendientesProduccion"]);
+            var nokProduccion = Convert.ToInt32(rd["NokProduccion"]);
+            var totalCalidad = Convert.ToInt32(rd["TotalCalidad"]);
+            var pendientesCalidad = Convert.ToInt32(rd["PendientesCalidad"]);
+            var nokCalidad = Convert.ToInt32(rd["NokCalidad"]);
+            var nokSinObservacion = Convert.ToInt32(rd["NokSinObservacion"]);
+
+            if (totalProduccion <= 0)
+                return (false, "No se encontraron preguntas de preparación respondidas por Producción.");
+
+            if (pendientesProduccion > 0)
+                return (false, "El checklist de Producción todavía tiene preguntas pendientes.");
+
+            if (nokProduccion > 0)
+                return (false, "El checklist de Producción contiene resultados NOK y debe devolverse para corrección.");
+
+            if (totalCalidad <= 0)
+                return (false, "No se encontraron preguntas asignadas a Calidad o al auditor.");
+
+            if (pendientesCalidad > 0)
+                return (false, "Responde todas las preguntas del auditor antes de autorizar el prearranque.");
+
+            if (nokSinObservacion > 0)
+                return (false, "Existen respuestas NOK del auditor sin observación.");
+
+            if (nokCalidad > 0)
+                return (false, "El checklist del auditor contiene resultados NOK. Debe devolverse a Producción.");
+
+            return (true, string.Empty);
+        }
+
+        private static string? NormalizarResultadoChecklistAuditor(
+            string? resultado)
+        {
+            if (string.IsNullOrWhiteSpace(resultado))
+                return null;
+
+            var valor = resultado.Trim().ToUpperInvariant();
+
+            return valor switch
+            {
+                CalidadChecklistResultado.Ok => CalidadChecklistResultado.Ok,
+                CalidadChecklistResultado.Nok => CalidadChecklistResultado.Nok,
+                CalidadChecklistResultado.NoAplica => CalidadChecklistResultado.NoAplica,
+                "N/A" => CalidadChecklistResultado.NoAplica,
+                _ => "__INVALIDO__"
+            };
         }
 
         // =========================================================
