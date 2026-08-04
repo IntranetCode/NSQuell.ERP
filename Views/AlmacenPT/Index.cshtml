@@ -1,10 +1,8 @@
-﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTIndexVm
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTIndexVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = "Inventario PT";
 
-    // ALMACEN_PT_AGRUPACION_CLIENTES_V1_0
-    // ALMACEN_PT_CLIENTE_CANONICO_V1_5
     string NombreClienteCatalogo(string? nombre)
     {
         var valor = string.IsNullOrWhiteSpace(nombre)
@@ -18,9 +16,7 @@
     }
 
     var gruposClientes = Model.Existencias
-        .GroupBy(
-            x => NombreClienteCatalogo(x.Cliente),
-            System.StringComparer.OrdinalIgnoreCase)
+        .GroupBy(x => NombreClienteCatalogo(x.Cliente), System.StringComparer.OrdinalIgnoreCase)
         .OrderBy(x => x.Key)
         .ToList();
 
@@ -39,28 +35,15 @@
     <div>
         <small>PRODUCTO TERMINADO</small>
         <h1>Inventario PT</h1>
-        <p>
-            Inventario de producto terminado organizado por cliente. Cada grupo concentra
-            sus números de parte, existencia física, solicitado pendiente y trazabilidad.
-        </p>
+        <p>Inventario organizado por cliente, mostrando unicamente el stock utilizable.</p>
     </div>
-
     <div class="alm-actions">
-        <a class="alm-btn" asp-action="Entrada">
-            <i class="fa-solid fa-box"></i>
-            Entrada PT
-        </a>
+        <a class="alm-btn" asp-action="Entrada"><i class="fa-solid fa-box"></i> Entrada PT</a>
         <a class="alm-btn secondary" asp-action="Movimiento">Movimiento</a>
-        <a class="alm-btn secondary" asp-action="NivelesStock">
-            <i class="fa-solid fa-sliders"></i>
-            Niveles de stock
-        </a>
-        <a class="alm-btn secondary" asp-action="Historial">
-            <i class="fa-solid fa-clock-rotate-left"></i>
-            Historial
-        </a>
+        <a class="alm-btn secondary" asp-action="NivelesStock"><i class="fa-solid fa-sliders"></i> Niveles de stock</a>
+        <a class="alm-btn secondary" asp-action="Historial"><i class="fa-solid fa-clock-rotate-left"></i> Historial</a>
         <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="AjustePositivo">Ajuste +</a>
-        <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="AjusteNegativo">Ajuste −</a>
+        <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="AjusteNegativo">Ajuste -</a>
     </div>
 </section>
 
@@ -69,59 +52,9 @@
     <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
 }
 
-<!-- ALMACEN_PT_KPIS_OPERATIVOS_V1_0 -->
-<section class="alm-grid alm-grid-6">
-    <div class="alm-kpi alm-kpi-demand">
-        <small>Solicitado pendiente</small>
-        <strong>
-            @(Model.PiezasSolicitadasPendientes > 0
-                ? $"-{Model.PiezasSolicitadasPendientes:N0}"
-                : "0")
-        </strong>
-        <span class="alm-kpi-note">Piezas de OF programadas todavía no recibidas.</span>
-    </div>
-
-    <div class="alm-kpi">
-        <small>OF pendientes PT</small>
-        <strong>@Model.OFPendientesRecepcion.ToString("N0")</strong>
-        <span class="alm-kpi-note">Órdenes con producto pendiente de ingresar.</span>
-    </div>
-
-    <div class="alm-kpi">
-        <small>Cajas recibidas hoy</small>
-        <strong>@Model.CajasRecibidasHoy.ToString("N0")</strong>
-        <span class="alm-kpi-note">Cajas escaneadas con movimiento de entrada.</span>
-    </div>
-
-    <div class="alm-kpi">
-        <small>Piezas recibidas hoy</small>
-        <strong>@Model.PiezasRecibidasHoy.ToString("N0")</strong>
-        <span class="alm-kpi-note">Total ingresado desde Producción.</span>
-    </div>
-
-    <div class="alm-kpi alm-kpi-out">
-        <small>Salidas de hoy</small>
-        <strong>
-            @(Model.PiezasSalidasHoy > 0
-                ? $"-{Model.PiezasSalidasHoy:N0}"
-                : "0")
-        </strong>
-        <span class="alm-kpi-note">Salidas y embarques registrados hoy.</span>
-    </div>
-
-    <div class="alm-kpi alm-kpi-critical">
-        <small>Partes críticas</small>
-        <strong>@Model.Criticos.ToString("N0")</strong>
-        <span class="alm-kpi-note">Partes en semáforo rojo.</span>
-    </div>
-</section>
-
-<section class="alm-card pt-client-catalog">
+<section class="alm-card pt-client-catalog stock-only-catalog">
     <header>
-        <span>
-            <i class="fa-solid fa-users-rectangle"></i>
-            Catálogo PT por cliente
-        </span>
+        <span><i class="fa-solid fa-users-rectangle"></i> Catalogo PT por cliente</span>
         <span id="ptClientSummary">
             @Model.Existencias.Count.ToString("N0") parte@(Model.Existencias.Count == 1 ? "" : "s")
             · @gruposClientes.Count.ToString("N0") cliente@(gruposClientes.Count == 1 ? "" : "s")
@@ -130,37 +63,32 @@
 
     <form method="get" class="alm-filter pt-client-filter">
         <div class="alm-field">
-            <label for="q">Número de parte, descripción o cliente</label>
+            <label for="q">Numero de parte, descripcion o cliente</label>
             <input id="q"
                    class="alm-input"
                    type="search"
                    name="q"
                    value="@Model.Busqueda"
                    list="inventario-pt-opciones"
-                   placeholder="Escribe una parte, descripción o cliente"
+                   placeholder="Escribe una parte, descripcion o cliente"
                    autocomplete="off" />
-
             <datalist id="inventario-pt-opciones">
                 @foreach (var item in Model.Existencias)
                 {
-                    <option value="@item.NumeroParte">
-                        @item.NumeroParte · @item.Descripcion · @item.Cliente
-                    </option>
+                    <option value="@item.NumeroParte">@item.NumeroParte · @item.Descripcion · @item.Cliente</option>
                 }
             </datalist>
         </div>
-
         <div class="alm-field">
             <label for="estado">Nivel de stock</label>
             <select id="estado" class="alm-select" name="estado">
                 <option value="" selected="@(string.IsNullOrWhiteSpace(Model.Estado))">Todos los niveles</option>
-                <option value="ROJO" selected="@(Model.Estado == "ROJO")">Crítico</option>
+                <option value="ROJO" selected="@(Model.Estado == "ROJO")">Critico</option>
                 <option value="AMARILLO" selected="@(Model.Estado == "AMARILLO")">Aviso</option>
                 <option value="VERDE" selected="@(Model.Estado == "VERDE")">Disponible</option>
                 <option value="SIN_CONFIGURAR" selected="@(Model.Estado == "SIN_CONFIGURAR")">Sin configurar</option>
             </select>
         </div>
-
         <div class="alm-field">
             <label for="ptClientFilter">Cliente visible</label>
             <select id="ptClientFilter" class="alm-select">
@@ -171,39 +99,20 @@
                 }
             </select>
         </div>
-
-        <button class="alm-btn" type="submit">
-            <i class="fa-solid fa-filter"></i>
-            Filtrar
-        </button>
-
-        <a class="alm-btn secondary" asp-action="Index">
-            <i class="fa-solid fa-filter-circle-xmark"></i>
-            Limpiar
-        </a>
+        <button class="alm-btn" type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
+        <a class="alm-btn secondary" asp-action="Index"><i class="fa-solid fa-filter-circle-xmark"></i> Limpiar</a>
     </form>
 
     @if (gruposClientes.Any())
     {
         <div class="pt-client-list" id="ptClientList">
-            @{
-                var clienteIndex = 0;
-            }
-
+            @{ var clienteIndex = 0; }
             @foreach (var grupo in gruposClientes)
             {
                 clienteIndex++;
-
                 var collapseId = IdCliente(clienteIndex);
-                var partesCliente = grupo
-                    .OrderBy(x => x.NumeroParte)
-                    .ThenBy(x => x.Descripcion)
-                    .ToList();
-
-                var existenciaCliente = partesCliente.Sum(x => (long)x.SaldoFisico);
-                var disponibleCliente = partesCliente.Sum(x => (long)x.Disponible);
-                var solicitadoCliente = partesCliente.Sum(x => x.Solicitado);
-                var criticasCliente = partesCliente.Count(x => x.Semaforo == "ROJO");
+                var partesCliente = grupo.OrderBy(x => x.NumeroParte).ThenBy(x => x.Descripcion).ToList();
+                var stockCliente = partesCliente.Sum(x => (long)Math.Max(0, x.Disponible));
 
                 <article class="pt-client-card"
                          data-pt-client-card
@@ -216,67 +125,36 @@
                             aria-expanded="false"
                             aria-controls="@collapseId">
                         <span class="pt-client-head-main">
-                            <span class="pt-client-avatar" aria-hidden="true">
-                                @InicialCliente(grupo.Key)
-                            </span>
-
+                            <span class="pt-client-avatar" aria-hidden="true">@InicialCliente(grupo.Key)</span>
                             <span class="pt-client-copy">
                                 <strong>@grupo.Key</strong>
-                                <small>
-                                    @partesCliente.Count.ToString("N0") número@(partesCliente.Count == 1 ? "" : "s") de parte
-                                </small>
+                                <small>@partesCliente.Count.ToString("N0") numero@(partesCliente.Count == 1 ? "" : "s") de parte</small>
                             </span>
                         </span>
-
                         <span class="pt-client-metrics">
-                            <span class="pt-client-pill">
-                                <small>Partes</small>
-                                <strong>@partesCliente.Count.ToString("N0")</strong>
-                            </span>
-                            <span class="pt-client-pill">
-                                <small>Existencia</small>
-                                <strong>@existenciaCliente.ToString("N0")</strong>
-                            </span>
-                            <span class="pt-client-pill is-available">
-                                <small>Disponible</small>
-                                <strong>@disponibleCliente.ToString("N0")</strong>
-                            </span>
-                            <span class="pt-client-pill @(solicitadoCliente > 0 ? "is-demand" : string.Empty)">
-                                <small>Solicitado</small>
-                                <strong>@solicitadoCliente.ToString("N0")</strong>
-                            </span>
-                            @if (criticasCliente > 0)
-                            {
-                                <span class="pt-client-pill is-critical">
-                                    <small>Críticas</small>
-                                    <strong>@criticasCliente.ToString("N0")</strong>
-                                </span>
-                            }
-                            <span class="pt-client-chevron" aria-hidden="true">
-                                <i class="fa-solid fa-chevron-down"></i>
-                            </span>
+                            <span class="pt-client-pill"><small>Partes</small><strong>@partesCliente.Count.ToString("N0")</strong></span>
+                            <span class="pt-client-pill is-available"><small>Stock</small><strong>@stockCliente.ToString("N0")</strong></span>
+                            <span class="pt-client-chevron" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
                         </span>
                     </button>
 
                     <div id="@collapseId" class="collapse">
                         <div class="pt-client-body">
                             <div class="alm-table-wrap pt-client-table-wrap">
-                                <table class="alm-table alm-table-fit pt-client-table">
+                                <table class="alm-table alm-table-fit pt-client-table stock-only-table">
                                     <colgroup>
-                                        <col class="ptc-col-part" />
-                                        <col class="ptc-col-description" />
-                                        <col class="ptc-col-stock" />
-                                        <col class="ptc-col-requested" />
-                                        <col class="ptc-col-last" />
-                                        <col class="ptc-col-actions" />
+                                        <col class="stock-col-code" />
+                                        <col class="stock-col-description" />
+                                        <col class="stock-col-quantity" />
+                                        <col class="stock-col-date" />
+                                        <col class="stock-col-actions" />
                                     </colgroup>
                                     <thead>
                                         <tr>
-                                            <th>Número de parte</th>
-                                            <th>Descripción</th>
-                                            <th>Existencia</th>
-                                            <th>Solicitado</th>
-                                            <th>Último movimiento</th>
+                                            <th>Numero de parte</th>
+                                            <th>Descripcion</th>
+                                            <th>Stock</th>
+                                            <th>Ultimo movimiento</th>
                                             <th aria-label="Acciones"></th>
                                         </tr>
                                     </thead>
@@ -285,44 +163,19 @@
                                         {
                                             <tr>
                                                 <td>
-                                                    <a class="pt-part-link"
-                                                       asp-action="Historial"
-                                                       asp-route-parte="@x.NumeroParte"
-                                                       title="Ver trazabilidad de @x.NumeroParte">
+                                                    <a class="pt-part-link" asp-action="Historial" asp-route-parte="@x.NumeroParte" title="Ver trazabilidad de @x.NumeroParte">
                                                         <strong>@x.NumeroParte</strong>
                                                         <small>@x.Cajas caja(s)</small>
                                                     </a>
                                                 </td>
-
                                                 <td>
-                                                    <a class="pt-truncate-link"
-                                                       asp-action="Historial"
-                                                       asp-route-parte="@x.NumeroParte"
-                                                       title="@x.Descripcion">
-                                                        @x.Descripcion
-                                                    </a>
+                                                    <a class="pt-truncate-link" asp-action="Historial" asp-route-parte="@x.NumeroParte" title="@x.Descripcion">@x.Descripcion</a>
                                                 </td>
-
-                                                <td class="pt-stock"
-                                                    title="Existencia física: @x.SaldoFisico PZA · Disponible real: @x.Disponible PZA">
-                                                    <span class="pt-stock-badge @x.Semaforo"
-                                                          title="Existencia física: @x.SaldoFisico PZA · Disponible real: @x.Disponible PZA">
-                                                        <strong>@x.SaldoFisico.ToString("N0") PZA</strong>
+                                                <td class="pt-stock" data-label="Stock">
+                                                    <span class="pt-stock-badge @x.Semaforo">
+                                                        <strong>@Math.Max(0, x.Disponible).ToString("N0") PZA</strong>
                                                     </span>
                                                 </td>
-
-                                                <td class="pt-requested">
-                                                    @if (x.Solicitado > 0)
-                                                    {
-                                                        <strong>-@x.Solicitado.ToString("N0") PZA</strong>
-                                                        <small>Pendiente</small>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="pt-empty-value">0 PZA</span>
-                                                    }
-                                                </td>
-
                                                 <td class="pt-last-movement">
                                                     @if (x.UltimoMovimiento.HasValue)
                                                     {
@@ -334,32 +187,11 @@
                                                         <span class="pt-empty-value">Sin movimientos</span>
                                                     }
                                                 </td>
-
                                                 <td>
                                                     <div class="pt-actions">
-                                                        <a class="pt-action"
-                                                           asp-action="Movimiento"
-                                                           asp-route-parteId="@x.ParteID"
-                                                           title="Registrar movimiento"
-                                                           aria-label="Registrar movimiento">
-                                                            <i class="fa-solid fa-arrow-right-arrow-left"></i>
-                                                        </a>
-
-                                                        <a class="pt-action"
-                                                           asp-action="Configurar"
-                                                           asp-route-id="@x.ParteID"
-                                                           title="Configurar niveles de stock"
-                                                           aria-label="Configurar niveles de stock">
-                                                            <i class="fa-solid fa-sliders"></i>
-                                                        </a>
-                                                        <!-- ALMACEN_PT_HISTORIAL_ACCION_V1_1 -->
-                                                        <a class="pt-action pt-action-history"
-                                                           asp-action="Historial"
-                                                           asp-route-parte="@x.NumeroParte"
-                                                           title="Ver historial de movimientos"
-                                                           aria-label="Ver historial de movimientos">
-                                                            <i class="fa-solid fa-clock-rotate-left"></i>
-                                                        </a>
+                                                        <a class="pt-action" asp-action="Movimiento" asp-route-parteId="@x.ParteID" title="Registrar movimiento" aria-label="Registrar movimiento"><i class="fa-solid fa-arrow-right-arrow-left"></i></a>
+                                                        <a class="pt-action" asp-action="Configurar" asp-route-id="@x.ParteID" title="Configurar niveles de stock" aria-label="Configurar niveles de stock"><i class="fa-solid fa-sliders"></i></a>
+                                                        <a class="pt-action pt-action-history" asp-action="Historial" asp-route-parte="@x.NumeroParte" title="Ver historial de movimientos" aria-label="Ver historial de movimientos"><i class="fa-solid fa-clock-rotate-left"></i></a>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -379,21 +211,15 @@
     }
     else
     {
-        <div class="alm-empty">
-            No hay existencias PT registradas para los filtros seleccionados.
-        </div>
+        <div class="alm-empty">No hay stock PT para los filtros seleccionados.</div>
     }
 </section>
 
 <section class="alm-card">
     <header>
         <span>Movimientos recientes PT</span>
-        <a class="alm-header-link" asp-action="Historial">
-            Ver historial completo
-            <i class="fa-solid fa-arrow-right"></i>
-        </a>
+        <a class="alm-header-link" asp-action="Historial">Ver historial completo <i class="fa-solid fa-arrow-right"></i></a>
     </header>
-
     <div class="alm-table-wrap">
         <table class="alm-table alm-table-movements">
             <thead>
@@ -403,23 +229,16 @@
                     <th>Etiqueta</th>
                     <th>Tipo</th>
                     <th>Cantidad</th>
-                    <th>Ubicación</th>
+                    <th>Ubicacion</th>
                     <th>OF</th>
                 </tr>
             </thead>
-
             <tbody>
                 @foreach (var x in Model.Movimientos)
                 {
                     <tr>
                         <td>@x.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
-                        <td>
-                            <a class="alm-trace-link"
-                               asp-action="Historial"
-                               asp-route-parte="@x.NumeroParte">
-                                @x.NumeroParte · @x.Descripcion
-                            </a>
-                        </td>
+                        <td><a class="alm-trace-link" asp-action="Historial" asp-route-parte="@x.NumeroParte">@x.NumeroParte · @x.Descripcion</a></td>
                         <td>@x.Etiqueta</td>
                         <td>@x.TipoMovimiento</td>
                         <td>@x.Cantidad</td>
@@ -427,12 +246,9 @@
                         <td>@x.NumeroOF</td>
                     </tr>
                 }
-
                 @if (!Model.Movimientos.Any())
                 {
-                    <tr>
-                        <td colspan="8" class="alm-empty">No hay movimientos PT.</td>
-                    </tr>
+                    <tr><td colspan="7" class="alm-empty">No hay movimientos PT.</td></tr>
                 }
             </tbody>
         </table>

@@ -1130,3 +1130,19 @@ html[data-nsq-theme="dark"] .of5-pt-kpi {
     }
 }
 /* ALMACEN_OF_HISTORICO_V4_2_END */
+
+/* ALMACEN_OF_LISTADO_PLANO_V5_0_4 */
+.of7-flat-orders {
+    display: grid;
+    gap: 14px;
+    padding: 14px;
+}
+
+.of7-flat-orders .of4-row {
+    margin: 0;
+}
+
+.of7-flat-orders .of4-identity small {
+    line-height: 1.35;
+}
+/* ALMACEN_OF_LISTADO_PLANO_V5_0_4_END */

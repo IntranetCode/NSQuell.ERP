@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Data;
 
 namespace ERP.NSQuell.Servicios.Almacen;
@@ -290,28 +290,40 @@ SELECT
                 FROM dbo.AlmacenMP_Movimientos movimiento
                     WITH (UPDLOCK, HOLDLOCK)
                 WHERE movimiento.Activo = 1
-                  AND movimiento.MaterialID =
-                      catalogo.MaterialID
+                  AND COALESCE
+                      (
+                          movimiento.MaterialSolicitadoID,
+                          movimiento.MaterialID
+                      ) = catalogo.MaterialID
                   AND
                   (
-                      (
-                          NULLIF
-                          (
-                              LTRIM(RTRIM(s.FolioSolicitud)),
-                              ''
-                          ) IS NOT NULL
-                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                              LTRIM(RTRIM(s.FolioSolicitud))
-                      )
+                      movimiento.SolicitudProduccionID =
+                          s.SolicitudProduccionID
                       OR
                       (
-                          NULLIF
+                          movimiento.SolicitudProduccionID IS NULL
+                          AND
                           (
-                              LTRIM(RTRIM(s.NumeroOFRecibida)),
-                              ''
-                          ) IS NOT NULL
-                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                              LTRIM(RTRIM(s.NumeroOFRecibida))
+                              (
+                                  NULLIF
+                                  (
+                                      LTRIM(RTRIM(s.FolioSolicitud)),
+                                      ''
+                                  ) IS NOT NULL
+                                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                                      LTRIM(RTRIM(s.FolioSolicitud))
+                              )
+                              OR
+                              (
+                                  NULLIF
+                                  (
+                                      LTRIM(RTRIM(s.NumeroOFRecibida)),
+                                      ''
+                                  ) IS NOT NULL
+                                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                                      LTRIM(RTRIM(s.NumeroOFRecibida))
+                              )
+                          )
                       )
                   )
             ),
@@ -475,8 +487,10 @@ SELECT
                 SELECT SUM
                 (
                     CASE
-                        WHEN movimiento.TipoMovimiento = N'Entrada'
+                        WHEN movimiento.TipoMovimiento IN (N'Salida', N'Embarque')
                             THEN movimiento.Cantidad
+                        WHEN movimiento.TipoMovimiento = N'Retorno'
+                            THEN -movimiento.Cantidad
                         ELSE 0
                     END
                 )
@@ -523,4 +537,3 @@ INNER JOIN dbo.ERP_Partes catalogo
 WHERE s.SolicitudProduccionID = @SolicitudID
   AND s.Activo = 1;";
 }
-

@@ -44,66 +44,8 @@ public sealed class AlmacenPTController : AlmacenBaseController
             vm.MensajeConfiguracion = "Falta ejecutar Scripts/SQL/Almacen/04_Actualizar_Stock_e_Integracion_Almacen.sql.";
             return View(vm);
         }
-        // ALMACEN_PT_SOLICITADO_QUERY_V1_0
+        // ALMACEN_RESERVAS_V5_0
         const string sql = @"
-WITH RequeridoPT AS
-(
-    SELECT
-        s.SolicitudProduccionID,
-        d.ParteID,
-        COALESCE
-        (
-            NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), N''),
-            NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), N''),
-            CONCAT(N'OF-ID-', s.SolicitudProduccionID)
-        ) AS NumeroOF,
-        SUM(CONVERT(BIGINT, ISNULL(d.CantidadPiezas, 0))) AS Requerido
-    FROM dbo.SolicitudesProduccion s
-    INNER JOIN dbo.SolicitudesProduccionDetalle d
-        ON d.SolicitudProduccionID = s.SolicitudProduccionID
-       AND d.Activo = 1
-       AND d.ParteID IS NOT NULL
-       AND ISNULL(d.CantidadPiezas, 0) > 0
-    WHERE s.Activo = 1
-      AND s.EstatusID IN (8, 9)
-    GROUP BY
-        s.SolicitudProduccionID,
-        d.ParteID,
-        s.NumeroOFRecibida,
-        s.FolioSolicitud
-),
-PendientePT AS
-(
-    SELECT
-        r.ParteID,
-        SUM
-        (
-            CASE
-                WHEN r.Requerido - ISNULL(recibido.Entregado, 0) > 0
-                    THEN r.Requerido - ISNULL(recibido.Entregado, 0)
-                ELSE 0
-            END
-        ) AS Solicitado
-    FROM RequeridoPT r
-    OUTER APPLY
-    (
-        SELECT
-            SUM
-            (
-                CASE
-                    WHEN m.TipoMovimiento = N'Entrada'
-                        THEN CONVERT(BIGINT, m.Cantidad)
-                    ELSE 0
-                END
-            ) AS Entregado
-        FROM dbo.AlmacenPT_Movimientos m
-        WHERE m.Activo = 1
-          AND m.ParteID = r.ParteID
-          AND LTRIM(RTRIM(ISNULL(m.NumeroOF, N''))) =
-              LTRIM(RTRIM(r.NumeroOF))
-    ) recibido
-    GROUP BY r.ParteID
-)
 SELECT TOP (500)
     inventario.ParteID,
     inventario.NumeroParte,
@@ -115,14 +57,11 @@ SELECT TOP (500)
     inventario.SaldoFisico,
     inventario.Retenido,
     inventario.Disponible,
-    CONVERT(BIGINT, ISNULL(pendiente.Solicitado, 0)) AS Solicitado,
+    CONVERT(BIGINT, 0) AS Solicitado,
     inventario.StockMinimo,
     inventario.StockAviso,
     inventario.StockConfigurado,
-    CASE
-        WHEN inventario.PrecioVentaUnitario IS NULL THEN 0
-        ELSE 1
-    END AS TienePrecioVenta,
+    CASE WHEN inventario.PrecioVentaUnitario IS NULL THEN 0 ELSE 1 END AS TienePrecioVenta,
     inventario.PrecioVentaUnitario,
     inventario.MonedaPrecioVenta,
     inventario.UnidadPrecioVenta,
@@ -131,8 +70,6 @@ SELECT TOP (500)
     inventario.Semaforo,
     inventario.UltimoMovimiento
 FROM dbo.vw_AlmacenPTInventario inventario
-LEFT JOIN PendientePT pendiente
-    ON pendiente.ParteID = inventario.ParteID
 WHERE
     (
         @Q IS NULL
@@ -140,11 +77,7 @@ WHERE
         OR inventario.Descripcion LIKE N'%' + @Q + N'%'
         OR inventario.Cliente LIKE N'%' + @Q + N'%'
     )
-    AND
-    (
-        @Estado IS NULL
-        OR inventario.Semaforo = @Estado
-    )
+    AND (@Estado IS NULL OR inventario.Semaforo = @Estado)
 ORDER BY
     CASE inventario.Semaforo
         WHEN N'SIN_CONFIGURAR' THEN 0
@@ -2411,19 +2344,3 @@ ORDER BY Almacen,Rack,Nivel,Posicion;";
         return rows;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

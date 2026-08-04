@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using ERP.NSQuell.Models.ViewModels.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -81,6 +81,18 @@ public sealed partial class AlmacenOFController : AlmacenBaseController
                     $"No está disponible {objeto.Nombre}. Verifica la instalación de Planeación y Almacén.";
                 return View(vm);
             }
+        }
+
+        if (!await ExisteColumnaAsync(
+                connection,
+                "dbo.AlmacenMP_Movimientos",
+                "MaterialSolicitadoID",
+                cancellationToken))
+        {
+            vm.Configurado = false;
+            vm.MensajeConfiguracion =
+                "Falta ejecutar el SQL de sustitución de materia prima v5.0.4.";
+            return View(vm);
         }
 
         const string sql = @"
@@ -235,14 +247,22 @@ Base AS
         WHERE mm.Activo = 1
           AND
           (
-              (
-                  NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), '') IS NOT NULL
-                  AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(s.FolioSolicitud))
-              )
+              mm.SolicitudProduccionID = s.SolicitudProduccionID
               OR
               (
-                  NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), '') IS NOT NULL
-                  AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(s.NumeroOFRecibida))
+                  mm.SolicitudProduccionID IS NULL
+                  AND
+                  (
+                      (
+                          NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), '') IS NOT NULL
+                          AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(s.FolioSolicitud))
+                      )
+                      OR
+                      (
+                          NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), '') IS NOT NULL
+                          AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(s.NumeroOFRecibida))
+                      )
+                  )
               )
           )
     ) mp
@@ -520,14 +540,22 @@ SELECT
                 INNER JOIN dbo.SolicitudesProduccion so
                     ON so.SolicitudProduccionID = x.SolicitudProduccionID
                 WHERE mm.Activo = 1
-                  AND mm.MaterialID = x.CatalogoID
+                  AND COALESCE(mm.MaterialSolicitadoID, mm.MaterialID) = x.CatalogoID
                   AND
                   (
-                      (NULLIF(LTRIM(RTRIM(so.FolioSolicitud)), '') IS NOT NULL
-                       AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.FolioSolicitud)))
+                      mm.SolicitudProduccionID = x.SolicitudProduccionID
                       OR
-                      (NULLIF(LTRIM(RTRIM(so.NumeroOFRecibida)), '') IS NOT NULL
-                       AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.NumeroOFRecibida)))
+                      (
+                          mm.SolicitudProduccionID IS NULL
+                          AND
+                          (
+                              (NULLIF(LTRIM(RTRIM(so.FolioSolicitud)), '') IS NOT NULL
+                               AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.FolioSolicitud)))
+                              OR
+                              (NULLIF(LTRIM(RTRIM(so.NumeroOFRecibida)), '') IS NOT NULL
+                               AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.NumeroOFRecibida)))
+                          )
+                      )
                   )
             ),
             0
