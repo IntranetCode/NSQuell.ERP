@@ -1,27 +1,18 @@
-<<<<<<< HEAD
 @model ERP.NSQuell.Models.ProduccionOperadorCajasVm
 @using System.Linq
-=======
-﻿@model ERP.NSQuell.Models.ProduccionOperadorCajasVm
->>>>>>> origin/CAMBIOS-DE-LITZI
 
 @{
     Layout = null;
 
-<<<<<<< HEAD
     var cajas = Model.Cajas ?? new List<ERP.NSQuell.Models.ProduccionOperadorCajaVm>();
+
+    var totalCapturado = Model.CantidadOKTotal + Model.CantidadSospechosaTotal + Model.CantidadScrapTotal;
     var totalEnCajas = cajas.Sum(x => x.CantidadPiezas);
+
     var pendientesCalidad = cajas.Count(x => x.EstadoCajaID == 2);
     var liberadasCalidad = cajas.Count(x => x.EstadoCajaID >= 3 && x.EtiquetaVerde);
     var enZonaVerde = cajas.Count(x => x.EstadoCajaID == 5);
     var salidasProduccion = cajas.Count(x => x.EstadoCajaID >= 6);
-}
-
-@functions {
-    public static string Txt(string? value)
-=======
-    var totalCapturado = Model.CantidadOKTotal + Model.CantidadSospechosaTotal + Model.CantidadScrapTotal;
-    var totalEnCajas = Model.TotalEnCajas;
 
     var pendienteEmpaque = totalCapturado - totalEnCajas;
     if (pendienteEmpaque < 0)
@@ -53,7 +44,6 @@
     }
 
     public static string TxtNullable(string value)
->>>>>>> origin/CAMBIOS-DE-LITZI
     {
         return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
     }
@@ -63,51 +53,13 @@
         return value.ToString("N0");
     }
 
-<<<<<<< HEAD
-    public static string FechaHora(DateTime? value)
-    {
-        return value.HasValue && value.Value != DateTime.MinValue
-=======
     public static string FechaTxt(DateTime? value)
     {
         return value.HasValue
->>>>>>> origin/CAMBIOS-DE-LITZI
             ? value.Value.ToString("dd/MM/yyyy HH:mm")
             : "-";
     }
 
-<<<<<<< HEAD
-    public static string EstadoClase(ERP.NSQuell.Models.ProduccionOperadorCajaVm caja)
-    {
-        if (caja.EstadoCajaID >= 6)
-            return "state-blue";
-
-        if (caja.EstadoCajaID == 5)
-            return "state-green";
-
-        if (caja.EstadoCajaID == 4)
-            return "state-red";
-
-        if (caja.EstadoCajaID == 3 && caja.EtiquetaVerde)
-            return "state-green";
-
-        if (caja.EstadoCajaID == 2)
-            return "state-warning";
-
-        return "state-muted";
-    }
-
-    public static string TipoClase(string? tipoCaja)
-    {
-        return (tipoCaja ?? string.Empty).Trim().ToUpperInvariant() switch
-        {
-            "OK" => "type-ok",
-            "SOSPECHOSO" => "type-warning",
-            "RETENCION" => "type-retention",
-            "SCRAP" => "type-danger",
-            _ => "type-muted"
-        };
-=======
     public static string FechaTxtNoNullable(DateTime value)
     {
         return value == DateTime.MinValue
@@ -182,7 +134,6 @@
             return "type-ret";
 
         return "type-default";
->>>>>>> origin/CAMBIOS-DE-LITZI
     }
 }
 
@@ -190,17 +141,6 @@
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-<<<<<<< HEAD
-    <title>Cajas | Produccion Operador</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
-
-    <style>
-        :root {
-            --blue: #004aad;
-=======
     <title>Cajas de Producción | Operador</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
@@ -210,7 +150,6 @@
     <style>
         :root {
             --blue: #004AAD;
->>>>>>> origin/CAMBIOS-DE-LITZI
             --blue-dark: #00347a;
             --green: #107c41;
             --green-bg: #ecfdf3;
@@ -218,11 +157,6 @@
             --orange-bg: #fff7ed;
             --red: #b42318;
             --red-bg: #fef3f2;
-<<<<<<< HEAD
-            --purple: #6941c6;
-            --purple-bg: #f4f3ff;
-=======
->>>>>>> origin/CAMBIOS-DE-LITZI
             --gray: #667085;
             --border: #d9e3f1;
             --bg: #f4f7fb;
@@ -230,13 +164,6 @@
             --shadow: 0 14px 34px rgba(15, 23, 42, .08);
         }
 
-<<<<<<< HEAD
-        * {
-            box-sizing: border-box;
-        }
-
-=======
->>>>>>> origin/CAMBIOS-DE-LITZI
         body {
             margin: 0;
             min-height: 100vh;
@@ -246,15 +173,9 @@
         }
 
         .page {
-<<<<<<< HEAD
-            width: min(100% - 32px, 1660px);
-            margin: 0 auto;
-            padding: 22px 0 42px;
-=======
             max-width: 1700px;
             margin: 0 auto;
             padding: 22px;
->>>>>>> origin/CAMBIOS-DE-LITZI
         }
 
         .hero {
@@ -262,11 +183,7 @@
             padding: 24px 26px;
             margin-bottom: 16px;
             color: #fff;
-<<<<<<< HEAD
-            background: linear-gradient(135deg, #00347a, #004aad);
-=======
             background: linear-gradient(135deg, #00347a, #004AAD);
->>>>>>> origin/CAMBIOS-DE-LITZI
             box-shadow: 0 24px 58px rgba(0, 74, 173, .22);
         }
 
@@ -280,21 +197,13 @@
 
         .hero h1 {
             margin: 0;
-<<<<<<< HEAD
-            font-size: 1.95rem;
-=======
             font-size: 1.9rem;
->>>>>>> origin/CAMBIOS-DE-LITZI
             font-weight: 950;
         }
 
         .hero p {
             margin: 8px 0 0;
-<<<<<<< HEAD
-            color: rgba(255, 255, 255, .86);
-=======
             color: rgba(255,255,255,.86);
->>>>>>> origin/CAMBIOS-DE-LITZI
             font-weight: 650;
         }
 
@@ -307,55 +216,13 @@
         .btn-hero {
             display: inline-flex;
             align-items: center;
-<<<<<<< HEAD
-            justify-content: center;
-            gap: 8px;
-            min-height: 43px;
-            border: 1px solid rgba(255, 255, 255, .36);
-=======
             gap: 8px;
             border: 1px solid rgba(255,255,255,.36);
->>>>>>> origin/CAMBIOS-DE-LITZI
             border-radius: 14px;
             padding: 10px 14px;
             color: #fff;
             text-decoration: none;
             font-weight: 900;
-<<<<<<< HEAD
-            background: rgba(255, 255, 255, .14);
-        }
-
-        .btn-hero:hover {
-            color: var(--blue);
-            background: #fff;
-        }
-
-        .alertx {
-            border-radius: 18px;
-            border: 1px solid var(--border);
-            background: #fff;
-            padding: 13px 16px;
-            margin-bottom: 16px;
-            box-shadow: var(--shadow);
-            font-weight: 800;
-        }
-
-        .alert-successx {
-            color: #067647;
-            border-color: #abefc6;
-            background: var(--green-bg);
-        }
-
-        .alert-dangerx {
-            color: var(--red);
-            border-color: #fecdca;
-            background: var(--red-bg);
-        }
-
-        .info-grid,
-        .metrics-grid {
-            display: grid;
-=======
             background: rgba(255,255,255,.14);
         }
 
@@ -366,41 +233,20 @@
 
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
->>>>>>> origin/CAMBIOS-DE-LITZI
+            grid-template-columns: repeat(6, minmax(0, 1fr));
             gap: 12px;
             margin-bottom: 16px;
         }
 
-<<<<<<< HEAD
-        .info-grid {
-            grid-template-columns: repeat(6, minmax(0, 1fr));
-        }
-
-        .metrics-grid {
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-        }
-
-        .info-card,
-        .metric-card {
-=======
         .info {
->>>>>>> origin/CAMBIOS-DE-LITZI
             border: 1px solid var(--border);
             border-radius: 18px;
             background: #fff;
             padding: 14px;
             box-shadow: var(--shadow);
-<<<<<<< HEAD
-            min-width: 0;
-        }
-
-        .label {
-=======
         }
 
         .k {
->>>>>>> origin/CAMBIOS-DE-LITZI
             color: var(--gray);
             font-size: .72rem;
             font-weight: 950;
@@ -408,29 +254,6 @@
             text-transform: uppercase;
         }
 
-<<<<<<< HEAD
-        .value {
-            margin-top: 4px;
-            color: var(--blue-dark);
-            font-size: 1.02rem;
-            font-weight: 950;
-            line-height: 1.18;
-            overflow-wrap: anywhere;
-        }
-
-        .metric-number {
-            margin-top: 5px;
-            font-size: 1.72rem;
-            line-height: 1;
-            font-weight: 950;
-        }
-
-        .metric-sub {
-            margin-top: 5px;
-            color: var(--gray);
-            font-size: .8rem;
-            font-weight: 700;
-=======
         .v {
             margin-top: 4px;
             color: var(--blue-dark);
@@ -487,58 +310,51 @@
         .progress-bar {
             border-radius: 999px;
             background: var(--blue);
->>>>>>> origin/CAMBIOS-DE-LITZI
+        }
+
+        .flow-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .availability-box {
+            border: 1px solid #bfdbfe;
+            border-radius: 16px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 12px 14px;
+            font-weight: 850;
+        }
+
+        .availability-number {
+            font-size: 1.18rem;
+            font-weight: 950;
         }
 
         .layout {
             display: grid;
-<<<<<<< HEAD
-            grid-template-columns: minmax(330px, .7fr) minmax(0, 1.3fr);
-=======
             grid-template-columns: minmax(390px, .42fr) minmax(0, .58fr);
->>>>>>> origin/CAMBIOS-DE-LITZI
             gap: 16px;
             align-items: start;
         }
 
         .panel {
-<<<<<<< HEAD
-            overflow: hidden;
-=======
->>>>>>> origin/CAMBIOS-DE-LITZI
             border: 1px solid var(--border);
             border-radius: 22px;
             background: #fff;
             box-shadow: var(--shadow);
-<<<<<<< HEAD
-=======
             overflow: hidden;
->>>>>>> origin/CAMBIOS-DE-LITZI
             margin-bottom: 16px;
         }
 
         .panel-head {
-<<<<<<< HEAD
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 16px 18px;
-            border-bottom: 1px solid var(--border);
-            background: linear-gradient(180deg, #fff, #f8fbff);
-        }
-
-        .panel-title {
-            margin: 0;
-            color: var(--blue-dark);
-            font-size: 1.06rem;
-=======
             padding: 16px 18px;
             border-bottom: 1px solid var(--border);
             background: linear-gradient(180deg, #ffffff, #f8fbff);
             color: var(--blue-dark);
             font-size: 1.05rem;
->>>>>>> origin/CAMBIOS-DE-LITZI
             font-weight: 950;
         }
 
@@ -546,8 +362,6 @@
             padding: 18px;
         }
 
-<<<<<<< HEAD
-=======
         .note {
             border: 1px solid #bfdbfe;
             border-radius: 16px;
@@ -584,7 +398,6 @@
             font-weight: 750;
         }
 
->>>>>>> origin/CAMBIOS-DE-LITZI
         .form-label {
             color: #344054;
             font-size: .76rem;
@@ -601,79 +414,6 @@
             box-shadow: none;
         }
 
-<<<<<<< HEAD
-        .form-control:focus,
-        .form-select:focus {
-            border-color: var(--blue);
-            box-shadow: 0 0 0 .22rem rgba(0, 74, 173, .12);
-        }
-
-        .availability-box {
-            border: 1px solid #bfdbfe;
-            border-radius: 16px;
-            background: #eff6ff;
-            padding: 13px 14px;
-            color: #1d4ed8;
-            font-weight: 800;
-        }
-
-        .availability-number {
-            margin-left: 4px;
-            font-size: 1.28rem;
-            font-weight: 950;
-        }
-
-        .note,
-        .warn-note,
-        .danger-note,
-        .success-note {
-            border-radius: 16px;
-            padding: 12px 14px;
-            font-weight: 750;
-        }
-
-        .note {
-            color: #1d4ed8;
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-        }
-
-        .warn-note {
-            color: #9a3412;
-            background: var(--orange-bg);
-            border: 1px solid #fed7aa;
-        }
-
-        .danger-note {
-            color: var(--red);
-            background: var(--red-bg);
-            border: 1px solid #fecdca;
-        }
-
-        .success-note {
-            color: #067647;
-            background: var(--green-bg);
-            border: 1px solid #abefc6;
-        }
-
-        .btn-main,
-        .btn-action {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            border-radius: 14px;
-            border: 1px solid transparent;
-            text-decoration: none;
-            font-weight: 950;
-            cursor: pointer;
-        }
-
-        .btn-main {
-            width: 100%;
-            min-height: 50px;
-            padding: 13px 16px;
-=======
             .form-control:focus,
             .form-select:focus {
                 border-color: var(--blue);
@@ -698,97 +438,11 @@
         }
 
         .btn-main {
->>>>>>> origin/CAMBIOS-DE-LITZI
             background: var(--blue);
             border-color: var(--blue);
             color: #fff;
         }
 
-<<<<<<< HEAD
-        .btn-main:hover:not(:disabled) {
-            background: var(--blue-dark);
-            border-color: var(--blue-dark);
-        }
-
-        .btn-main:disabled,
-        .btn-action:disabled {
-            opacity: .55;
-            cursor: not-allowed;
-        }
-
-        .disabled-area {
-            opacity: .62;
-        }
-
-        .btn-action {
-            min-height: 40px;
-            padding: 9px 12px;
-            font-size: .82rem;
-        }
-
-        .btn-warningx {
-            color: #fff;
-            background: #f79009;
-            border-color: #f79009;
-        }
-
-        .btn-successx {
-            color: #fff;
-            background: var(--green);
-            border-color: var(--green);
-        }
-
-        .btn-bluex {
-            color: #fff;
-            background: var(--blue);
-            border-color: var(--blue);
-        }
-
-        .boxes-list {
-            display: grid;
-            gap: 14px;
-        }
-
-        .box-card {
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            background: #fff;
-            overflow: hidden;
-        }
-
-        .box-card-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 15px 16px;
-            border-bottom: 1px solid var(--border);
-            background: #fbfdff;
-        }
-
-        .box-number {
-            color: var(--blue-dark);
-            font-size: 1.05rem;
-            font-weight: 950;
-        }
-
-        .box-folio {
-            margin-top: 3px;
-            color: var(--gray);
-            font-size: .82rem;
-            font-weight: 750;
-            overflow-wrap: anywhere;
-        }
-
-        .badges {
-            display: flex;
-            justify-content: flex-end;
-            gap: 7px;
-            flex-wrap: wrap;
-        }
-
-        .badge-x {
-=======
             .btn-main:hover {
                 background: var(--blue-dark);
                 border-color: var(--blue-dark);
@@ -852,62 +506,21 @@
             }
 
         .badge-flow {
->>>>>>> origin/CAMBIOS-DE-LITZI
             display: inline-flex;
             align-items: center;
             gap: 6px;
             border-radius: 999px;
             padding: 7px 10px;
-<<<<<<< HEAD
-            font-size: .72rem;
-            font-weight: 950;
-        }
-
-        .type-ok,
-        .state-green {
-            color: #067647;
-            background: var(--green-bg);
-            border: 1px solid #abefc6;
-        }
-
-        .type-warning,
-        .state-warning {
-            color: #9a3412;
-            background: var(--orange-bg);
-            border: 1px solid #fed7aa;
-        }
-
-        .type-retention {
-            color: var(--purple);
-            background: var(--purple-bg);
-            border: 1px solid #d9d6fe;
-        }
-
-        .type-danger,
-        .state-red {
-            color: var(--red);
-            background: var(--red-bg);
-            border: 1px solid #fecdca;
-        }
-
-        .type-muted,
-        .state-muted {
-            color: #475467;
-=======
             font-size: .78rem;
             font-weight: 950;
         }
 
         .badge-neutral {
             color: #344054;
->>>>>>> origin/CAMBIOS-DE-LITZI
             background: #f2f4f7;
             border: 1px solid #d0d5dd;
         }
 
-<<<<<<< HEAD
-        .state-blue {
-=======
         .badge-warning {
             color: #9a3412;
             background: #fff7ed;
@@ -933,88 +546,11 @@
         }
 
         .badge-blue {
->>>>>>> origin/CAMBIOS-DE-LITZI
             color: #1d4ed8;
             background: #eff6ff;
             border: 1px solid #bfdbfe;
         }
 
-<<<<<<< HEAD
-        .box-body {
-            padding: 16px;
-        }
-
-        .box-data-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 10px;
-        }
-
-        .box-data {
-            min-width: 0;
-            border: 1px solid #e7edf5;
-            border-radius: 14px;
-            background: #f8fafc;
-            padding: 11px;
-        }
-
-        .box-data .value {
-            font-size: .9rem;
-        }
-
-        .quality-result {
-            margin-top: 12px;
-            border: 1px solid #e7edf5;
-            border-radius: 14px;
-            background: #f8fafc;
-            padding: 12px;
-        }
-
-        .box-actions {
-            display: flex;
-            gap: 9px;
-            flex-wrap: wrap;
-            margin-top: 14px;
-            padding-top: 14px;
-            border-top: 1px solid #e7edf5;
-        }
-
-        .scan-form {
-            display: grid;
-            grid-template-columns: minmax(190px, 1fr) auto;
-            gap: 8px;
-            width: min(100%, 520px);
-        }
-
-        .empty-state {
-            border: 1px dashed #cbd7e6;
-            border-radius: 20px;
-            padding: 44px 20px;
-            text-align: center;
-            color: var(--gray);
-            background: #fff;
-        }
-
-        .empty-state i {
-            display: block;
-            margin-bottom: 12px;
-            color: #aebdce;
-            font-size: 2.6rem;
-        }
-
-        @@media (max-width: 1250px) {
-            .info-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-
-            .metrics-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-
-            .layout {
-                grid-template-columns: 1fr;
-            }
-=======
         .badge-darkx {
             color: #fff;
             background: #344054;
@@ -1102,65 +638,17 @@
                 grid-template-columns: repeat(3, minmax(0, 1fr));
             }
 
+            .flow-metrics {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
             .info-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
->>>>>>> origin/CAMBIOS-DE-LITZI
         }
 
         @@media (max-width: 760px) {
             .page {
-<<<<<<< HEAD
-                width: min(100% - 20px, 1660px);
-                padding-top: 12px;
-            }
-
-            .hero {
-                padding: 20px;
-                border-radius: 20px;
-            }
-
-            .hero h1 {
-                font-size: 1.55rem;
-            }
-
-            .hero-actions,
-            .hero-actions .btn-hero {
-                width: 100%;
-            }
-
-            .info-grid,
-            .metrics-grid,
-            .box-data-grid {
-                grid-template-columns: 1fr 1fr;
-            }
-
-            .scan-form {
-                grid-template-columns: 1fr;
-                width: 100%;
-            }
-        }
-
-        @@media (max-width: 480px) {
-            .info-grid,
-            .metrics-grid,
-            .box-data-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .box-card-head {
-                flex-direction: column;
-            }
-
-            .badges {
-                justify-content: flex-start;
-            }
-
-            .box-actions,
-            .box-actions form,
-            .box-actions .btn-action {
-                width: 100%;
-=======
                 padding: 14px;
             }
 
@@ -1174,7 +662,8 @@
                 }
 
             .metrics,
-            .info-grid {
+            .info-grid,
+            .flow-metrics {
                 grid-template-columns: 1fr;
             }
 
@@ -1186,52 +675,27 @@
             .scan-row {
                 flex-direction: column;
                 align-items: stretch;
->>>>>>> origin/CAMBIOS-DE-LITZI
             }
         }
     </style>
 </head>
-<<<<<<< HEAD
-<body>
-    <div class="page">
-=======
 
 <body>
     <div class="page">
 
->>>>>>> origin/CAMBIOS-DE-LITZI
         <section class="hero">
             <div class="hero-top">
                 <div>
                     <h1>
                         <i class="fa-solid fa-boxes-stacked me-2"></i>
-<<<<<<< HEAD
-                        Cajas de produccion
-                    </h1>
-                    <p>
-                        Forma cajas con las cantidades ya capturadas y da seguimiento a su liberacion por Calidad.
-=======
                         Cajas de Producción
                     </h1>
                     <p>
                         Punto 12 al 16: formar caja, solicitar Calidad, mover a zona verde, escanear salida y esperar recepción de Almacén.
->>>>>>> origin/CAMBIOS-DE-LITZI
                     </p>
                 </div>
 
                 <div class="hero-actions">
-<<<<<<< HEAD
-                    <a href="@Url.Action("Captura", "ProduccionOperador", new { id = Model.EjecucionProduccionID })"
-                       class="btn-hero">
-                        <i class="fa-solid fa-arrow-left"></i>
-                        Volver a captura
-                    </a>
-
-                    <a href="@Url.Action("Index", "ProduccionOperador")"
-                       class="btn-hero">
-                        <i class="fa-solid fa-table-cells-large"></i>
-                        Kiosko
-=======
                     <a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero">
                         <i class="fa-solid fa-arrow-left"></i>
                         Kiosko
@@ -1245,7 +709,6 @@
                     <a href="@Url.Action("Cajas", "ProduccionOperador", new { id = Model.EjecucionProduccionID })" class="btn-hero">
                         <i class="fa-solid fa-rotate-right"></i>
                         Actualizar
->>>>>>> origin/CAMBIOS-DE-LITZI
                     </a>
                 </div>
             </div>
@@ -1253,118 +716,21 @@
 
         @if (TempData["Success"] != null)
         {
-<<<<<<< HEAD
-            <div class="alertx alert-successx">
-                <i class="fa-solid fa-circle-check me-2"></i>
-=======
             <div class="alert alert-success rounded-4 fw-bold">
                 <i class="fa-solid fa-circle-check me-1"></i>
->>>>>>> origin/CAMBIOS-DE-LITZI
                 @TempData["Success"]
             </div>
         }
 
         @if (TempData["Error"] != null)
         {
-<<<<<<< HEAD
-            <div class="alertx alert-dangerx">
-                <i class="fa-solid fa-triangle-exclamation me-2"></i>
-=======
             <div class="alert alert-danger rounded-4 fw-bold">
                 <i class="fa-solid fa-triangle-exclamation me-1"></i>
->>>>>>> origin/CAMBIOS-DE-LITZI
                 @TempData["Error"]
             </div>
         }
 
         <section class="info-grid">
-<<<<<<< HEAD
-            <article class="info-card">
-                <div class="label">Orden / programa</div>
-                <div class="value">@Model.TextoOF</div>
-            </article>
-
-            <article class="info-card">
-                <div class="label">Cliente</div>
-                <div class="value">@Txt(Model.ClienteNombre)</div>
-            </article>
-
-            <article class="info-card">
-                <div class="label">Maquina</div>
-                <div class="value">@Model.TextoMaquina</div>
-            </article>
-
-            <article class="info-card">
-                <div class="label">Parte</div>
-                <div class="value">@Model.TextoParte</div>
-                <div class="metric-sub">@Txt(Model.DescripcionParte)</div>
-            </article>
-
-            <article class="info-card">
-                <div class="label">Molde</div>
-                <div class="value">@Txt(Model.MoldeCodigo)</div>
-            </article>
-
-            <article class="info-card">
-                <div class="label">Estatus produccion</div>
-                <div class="value">@Model.EstatusNombre</div>
-                @if (Model.TieneParoAbierto)
-                {
-                    <div class="metric-sub text-danger">Paro abierto</div>
-                }
-            </article>
-        </section>
-
-        <section class="metrics-grid">
-            <article class="metric-card">
-                <div class="label">Planeado</div>
-                <div class="metric-number text-primary">@Numero(Model.CantidadPlaneada)</div>
-                <div class="metric-sub">piezas programadas</div>
-            </article>
-
-            <article class="metric-card">
-                <div class="label">OK disponible</div>
-                <div class="metric-number text-success">@Numero(Model.CantidadOKDisponible)</div>
-                <div class="metric-sub">@Numero(Model.CantidadOKEnCajas) ya colocadas en cajas</div>
-            </article>
-
-            <article class="metric-card">
-                <div class="label">Sospechoso disponible</div>
-                <div class="metric-number text-warning">@Numero(Model.CantidadSospechosaDisponible)</div>
-                <div class="metric-sub">incluye disponible para retencion</div>
-            </article>
-
-            <article class="metric-card">
-                <div class="label">Scrap disponible</div>
-                <div class="metric-number text-danger">@Numero(Model.CantidadScrapDisponible)</div>
-                <div class="metric-sub">@Numero(Model.CantidadScrapEnCajas) ya colocadas en cajas</div>
-            </article>
-
-            <article class="metric-card">
-                <div class="label">Total en cajas</div>
-                <div class="metric-number">@Numero(totalEnCajas)</div>
-                <div class="metric-sub">@Numero(cajas.Count) caja(s) formadas</div>
-            </article>
-        </section>
-
-        <div class="layout">
-            <aside>
-                <section class="panel">
-                    <div class="panel-head">
-                        <h2 class="panel-title">
-                            <i class="fa-solid fa-box me-2"></i>
-                            Formar nueva caja
-                        </h2>
-                        <span class="badge-x state-blue">Caja @Model.SiguienteNumeroCaja</span>
-                    </div>
-
-                    <div class="panel-body">
-                        @if (!Model.PuedeFormarCaja)
-                        {
-                            <div class="danger-note mb-3">
-                                <i class="fa-solid fa-lock me-1"></i>
-                                No puedes formar cajas mientras la produccion no este en serie o exista un paro abierto.
-=======
             <div class="info">
                 <div class="k">OF / Solicitud</div>
                 <div class="v">@OFTexto(Model)</div>
@@ -1409,25 +775,33 @@
                     }
                 </div>
             </div>
+
+            <div class="info">
+                <div class="k">Estatus producción</div>
+                <div class="v">@Model.EstatusNombre</div>
+                <div class="sub @(Model.TieneParoAbierto ? "text-danger" : "")">
+                    @(Model.TieneParoAbierto ? "Paro abierto" : "Ejecución disponible")
+                </div>
+            </div>
         </section>
 
         <section class="metrics">
             <div class="metric">
                 <div class="k">OK capturado</div>
                 <div class="num text-success">@Numero(Model.CantidadOKTotal)</div>
-                <div class="sub">Disponible: @Numero(Model.DisponibleOK)</div>
+                <div class="sub">Disponible: @Numero(Model.CantidadOKDisponible)</div>
             </div>
 
             <div class="metric">
                 <div class="k">Sospechoso</div>
                 <div class="num text-warning">@Numero(Model.CantidadSospechosaTotal)</div>
-                <div class="sub">Disponible: @Numero(Model.DisponibleSospechoso)</div>
+                <div class="sub">Disponible: @Numero(Model.CantidadSospechosaDisponible)</div>
             </div>
 
             <div class="metric">
                 <div class="k">Scrap</div>
                 <div class="num text-danger">@Numero(Model.CantidadScrapTotal)</div>
-                <div class="sub">Disponible: @Numero(Model.DisponibleScrap)</div>
+                <div class="sub">Disponible: @Numero(Model.CantidadScrapDisponible)</div>
             </div>
 
             <div class="metric">
@@ -1468,6 +842,32 @@
             </div>
         </section>
 
+        <section class="flow-metrics">
+            <div class="metric">
+                <div class="k">Pendientes de Calidad</div>
+                <div class="num text-warning">@Numero(pendientesCalidad)</div>
+                <div class="sub">Cajas enviadas para revisión</div>
+            </div>
+
+            <div class="metric">
+                <div class="k">Liberadas por Calidad</div>
+                <div class="num text-success">@Numero(liberadasCalidad)</div>
+                <div class="sub">Con etiqueta verde</div>
+            </div>
+
+            <div class="metric">
+                <div class="k">En zona verde</div>
+                <div class="num text-success">@Numero(enZonaVerde)</div>
+                <div class="sub">Pendientes de escanear salida</div>
+            </div>
+
+            <div class="metric">
+                <div class="k">Salidas de Producción</div>
+                <div class="num text-primary">@Numero(salidasProduccion)</div>
+                <div class="sub">Esperando o recibidas por Almacén</div>
+            </div>
+        </section>
+
         <div class="layout">
 
             <aside>
@@ -1490,29 +890,19 @@
                             <div class="warn-note mb-3">
                                 <i class="fa-solid fa-triangle-exclamation me-1"></i>
                                 Solo puedes formar cajas cuando la producción está en serie.
->>>>>>> origin/CAMBIOS-DE-LITZI
                             </div>
                         }
                         else
                         {
                             <div class="note mb-3">
-<<<<<<< HEAD
-                                Solo puedes empacar cantidades previamente registradas por el operador.
-=======
                                 <i class="fa-solid fa-circle-info me-1"></i>
                                 Forma la caja con piezas ya capturadas por hora. Después envíala a Calidad.
->>>>>>> origin/CAMBIOS-DE-LITZI
                             </div>
                         }
 
                         <form method="post"
                               action="@Url.Action("FormarCaja", "ProduccionOperador")"
-<<<<<<< HEAD
-                              id="formFormarCaja"
-                              class="@(Model.PuedeFormarCaja ? "" : "disabled-area")">
-=======
                               id="formFormarCaja">
->>>>>>> origin/CAMBIOS-DE-LITZI
                             @Html.AntiForgeryToken()
 
                             <input type="hidden"
@@ -1520,87 +910,22 @@
                                    value="@Model.EjecucionProduccionID" />
 
                             <div class="mb-3">
-<<<<<<< HEAD
-                                <label class="form-label" for="tipoCaja">Tipo de caja</label>
-                                <select class="form-select"
-                                        id="tipoCaja"
-                                        name="tipoCaja"
-                                        @(Model.PuedeFormarCaja ? null : "disabled")>
+                                <label class="form-label">Tipo de caja</label>
+                                <select name="tipoCaja" class="form-select" id="tipoCaja" required>
                                     <option value="OK" data-disponible="@Model.CantidadOKDisponible">Producto conforme</option>
-                                    <option value="SOSPECHOSO" data-disponible="@Model.CantidadSospechosaDisponible">Producto sospechoso</option>
-                                    <option value="RETENCION" data-disponible="@Model.CantidadSospechosaDisponible">Retencion</option>
+                                    <option value="SOSPECHOSO" data-disponible="@Model.CantidadSospechosaDisponible">Sospechoso</option>
                                     <option value="SCRAP" data-disponible="@Model.CantidadScrapDisponible">Scrap</option>
+                                    <option value="RETENCION" data-disponible="@Model.CantidadSospechosaDisponible">Retención</option>
                                 </select>
+                                <div class="sub mt-1">
+                                    OK disponible: @Numero(Model.CantidadOKDisponible) · Sospechoso: @Numero(Model.CantidadSospechosaDisponible) · Scrap: @Numero(Model.CantidadScrapDisponible)
+                                </div>
                             </div>
 
                             <div class="availability-box mb-3">
-                                Disponible para este tipo:
+                                Disponible para el tipo seleccionado:
                                 <span class="availability-number" id="cantidadDisponible">@Numero(Model.CantidadOKDisponible)</span>
                                 pieza(s)
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label" for="cantidadPiezas">Cantidad de piezas</label>
-                                <input type="number"
-                                       min="1"
-                                       max="@Model.CantidadOKDisponible"
-                                       step="1"
-                                       inputmode="numeric"
-                                       class="form-control"
-                                       id="cantidadPiezas"
-                                       name="cantidadPiezas"
-                                       required
-                                       @(Model.PuedeFormarCaja ? null : "disabled") />
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label" for="loteMaterial">Lote de material</label>
-                                <input type="text"
-                                       maxlength="100"
-                                       class="form-control"
-                                       id="loteMaterial"
-                                       name="loteMaterial"
-                                       placeholder="Lote utilizado en esta caja"
-                                       @(Model.PuedeFormarCaja ? null : "disabled") />
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label" for="etiquetaFolio">Folio de etiqueta</label>
-                                <input type="text"
-                                       maxlength="100"
-                                       class="form-control"
-                                       id="etiquetaFolio"
-                                       name="etiquetaFolio"
-                                       placeholder="Opcional; el sistema genera un folio si queda vacio"
-                                       @(Model.PuedeFormarCaja ? null : "disabled") />
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label" for="observaciones">Observaciones</label>
-                                <textarea rows="4"
-                                          maxlength="500"
-                                          class="form-control"
-                                          id="observaciones"
-                                          name="observaciones"
-                                          placeholder="Empaque, separacion, material, etiqueta u otra nota..."
-                                          @(Model.PuedeFormarCaja ? null : "disabled")></textarea>
-                            </div>
-
-                            <button type="submit"
-                                    class="btn-main"
-                                    id="btnFormarCaja"
-                                    @(Model.PuedeFormarCaja && Model.CantidadOKDisponible > 0 ? null : "disabled")>
-=======
-                                <label class="form-label">Tipo de caja</label>
-                                <select name="tipoCaja" class="form-select" id="tipoCaja" required>
-                                    <option value="OK">OK</option>
-                                    <option value="SOSPECHOSO">Sospechoso</option>
-                                    <option value="SCRAP">Scrap</option>
-                                    <option value="RETENCION">Retención</option>
-                                </select>
-                                <div class="sub mt-1">
-                                    OK disponible: @Numero(Model.DisponibleOK) · Sospechoso: @Numero(Model.DisponibleSospechoso) · Scrap: @Numero(Model.DisponibleScrap)
-                                </div>
                             </div>
 
                             <div class="mb-3">
@@ -1609,6 +934,9 @@
                                        name="cantidadPiezas"
                                        id="cantidadPiezas"
                                        min="1"
+                                       max="@Model.CantidadOKDisponible"
+                                       step="1"
+                                       inputmode="numeric"
                                        class="form-control"
                                        required />
                             </div>
@@ -1640,8 +968,7 @@
                                           placeholder="Comentarios de empaque, etiqueta, lote o condición..."></textarea>
                             </div>
 
-                            <button type="submit" class="btn-main">
->>>>>>> origin/CAMBIOS-DE-LITZI
+                            <button type="submit" class="btn-main" id="btnFormarCaja">
                                 <i class="fa-solid fa-box"></i>
                                 Formar caja
                             </button>
@@ -1651,25 +978,6 @@
 
                 <section class="panel">
                     <div class="panel-head">
-<<<<<<< HEAD
-                        <h2 class="panel-title">
-                            <i class="fa-solid fa-chart-simple me-2"></i>
-                            Seguimiento
-                        </h2>
-                    </div>
-                    <div class="panel-body">
-                        <div class="warn-note mb-2">
-                            <strong>@pendientesCalidad</strong> caja(s) pendientes de Calidad.
-                        </div>
-                        <div class="success-note mb-2">
-                            <strong>@liberadasCalidad</strong> caja(s) liberadas con etiqueta verde.
-                        </div>
-                        <div class="note mb-2">
-                            <strong>@enZonaVerde</strong> caja(s) en zona verde.
-                        </div>
-                        <div class="note">
-                            <strong>@salidasProduccion</strong> caja(s) con salida de Produccion registrada.
-=======
                         <i class="fa-solid fa-route me-2"></i>
                         Flujo de la caja
                     </div>
@@ -1693,7 +1001,6 @@
 
                         <div class="danger-note">
                             <strong>16.</strong> Almacén PT confirma recepción desde su propio módulo.
->>>>>>> origin/CAMBIOS-DE-LITZI
                         </div>
                     </div>
                 </section>
@@ -1702,195 +1009,20 @@
             <main>
                 <section class="panel">
                     <div class="panel-head">
-<<<<<<< HEAD
-                        <h2 class="panel-title">
-                            <i class="fa-solid fa-list-check me-2"></i>
-                            Cajas formadas
-                        </h2>
-                        <span class="badge-x state-muted">@cajas.Count registro(s)</span>
-                    </div>
-
-                    <div class="panel-body">
-                        @if (!cajas.Any())
-                        {
-                            <div class="empty-state">
-                                <i class="fa-regular fa-folder-open"></i>
-                                <h3 class="h5 fw-bold">Todavia no hay cajas formadas</h3>
-                                <p class="mb-0">
-                                    Cuando exista cantidad capturada disponible, forma la primera caja desde el panel lateral.
-                                </p>
-=======
                         <i class="fa-solid fa-list-check me-2"></i>
                         Cajas registradas
                     </div>
 
                     <div class="panel-body">
-                        @if (Model.Cajas == null || !Model.Cajas.Any())
+                        @if (!cajas.Any())
                         {
                             <div class="empty">
                                 <i class="fa-solid fa-box-open fa-2x mb-3 d-block"></i>
                                 Todavía no hay cajas formadas para esta ejecución.
->>>>>>> origin/CAMBIOS-DE-LITZI
                             </div>
                         }
                         else
                         {
-<<<<<<< HEAD
-                            <div class="boxes-list">
-                                @foreach (var caja in cajas.OrderByDescending(x => x.NumeroCaja).ThenByDescending(x => x.CajaProduccionID))
-                                {
-                                    <article class="box-card">
-                                        <header class="box-card-head">
-                                            <div>
-                                                <div class="box-number">
-                                                    Caja @caja.NumeroCaja
-                                                </div>
-                                                <div class="box-folio">
-                                                    Folio: @Txt(caja.FolioCaja)
-                                                </div>
-                                            </div>
-
-                                            <div class="badges">
-                                                <span class="badge-x @TipoClase(caja.TipoCaja)">
-                                                    @caja.TipoCajaTexto
-                                                </span>
-                                                <span class="badge-x @EstadoClase(caja)">
-                                                    @Txt(caja.EstadoCajaNombre)
-                                                </span>
-                                                @if (caja.EtiquetaVerde)
-                                                {
-                                                    <span class="badge-x state-green">
-                                                        <i class="fa-solid fa-tag"></i>
-                                                        Etiqueta verde
-                                                    </span>
-                                                }
-                                            </div>
-                                        </header>
-
-                                        <div class="box-body">
-                                            <div class="box-data-grid">
-                                                <div class="box-data">
-                                                    <div class="label">Cantidad</div>
-                                                    <div class="value">@Numero(caja.CantidadPiezas) pieza(s)</div>
-                                                </div>
-                                                <div class="box-data">
-                                                    <div class="label">Lote</div>
-                                                    <div class="value">@Txt(caja.LoteMaterial)</div>
-                                                </div>
-                                                <div class="box-data">
-                                                    <div class="label">Etiqueta</div>
-                                                    <div class="value">@Txt(caja.EtiquetaFolio)</div>
-                                                </div>
-                                                <div class="box-data">
-                                                    <div class="label">Formacion</div>
-                                                    <div class="value">@FechaHora(caja.FechaFormacion)</div>
-                                                </div>
-                                                <div class="box-data">
-                                                    <div class="label">Solicitud a Calidad</div>
-                                                    <div class="value">@FechaHora(caja.FechaSolicitudCalidad)</div>
-                                                </div>
-                                                <div class="box-data">
-                                                    <div class="label">Liberacion Calidad</div>
-                                                    <div class="value">@FechaHora(caja.FechaLiberacionCalidad)</div>
-                                                </div>
-                                                <div class="box-data">
-                                                    <div class="label">Zona verde</div>
-                                                    <div class="value">@FechaHora(caja.FechaZonaVerde)</div>
-                                                </div>
-                                                <div class="box-data">
-                                                    <div class="label">Salida Produccion</div>
-                                                    <div class="value">@FechaHora(caja.FechaSalidaProduccion)</div>
-                                                </div>
-                                            </div>
-
-                                            @if (!string.IsNullOrWhiteSpace(caja.ResultadoCalidad) ||
-                                                 !string.IsNullOrWhiteSpace(caja.MotivoCalidad) ||
-                                                 !string.IsNullOrWhiteSpace(caja.Observaciones))
-                                            {
-                                                <div class="quality-result">
-                                                    <div class="label">Resultado y observaciones</div>
-                                                    <div class="value">@Txt(caja.ResultadoCalidad)</div>
-                                                    @if (!string.IsNullOrWhiteSpace(caja.MotivoCalidad))
-                                                    {
-                                                        <div class="metric-sub">Calidad: @caja.MotivoCalidad</div>
-                                                    }
-                                                    @if (!string.IsNullOrWhiteSpace(caja.Observaciones))
-                                                    {
-                                                        <div class="metric-sub">Produccion: @caja.Observaciones</div>
-                                                    }
-                                                </div>
-                                            }
-
-                                            <div class="box-actions">
-                                                @if (caja.PuedeSolicitarLiberacion)
-                                                {
-                                                    <form method="post"
-                                                          action="@Url.Action("SolicitarLiberacionCaja", "ProduccionOperador")"
-                                                          data-confirm="Enviar esta caja a Calidad para su liberacion?">
-                                                        @Html.AntiForgeryToken()
-                                                        <input type="hidden"
-                                                               name="cajaProduccionId"
-                                                               value="@caja.CajaProduccionID" />
-                                                        <button type="submit" class="btn-action btn-warningx">
-                                                            <i class="fa-solid fa-paper-plane"></i>
-                                                            Solicitar liberacion
-                                                        </button>
-                                                    </form>
-                                                }
-
-                                                @if (caja.PuedeMoverZonaVerde)
-                                                {
-                                                    <form method="post"
-                                                          action="@Url.Action("MoverCajaZonaVerde", "ProduccionOperador")"
-                                                          data-confirm="Confirmar movimiento de esta caja a zona verde?">
-                                                        @Html.AntiForgeryToken()
-                                                        <input type="hidden"
-                                                               name="cajaProduccionId"
-                                                               value="@caja.CajaProduccionID" />
-                                                        <button type="submit" class="btn-action btn-successx">
-                                                            <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                                                            Mover a zona verde
-                                                        </button>
-                                                    </form>
-                                                }
-
-                                                @if (caja.PuedeEscanearSalida)
-                                                {
-                                                    <form method="post"
-                                                          action="@Url.Action("EscanearSalidaCaja", "ProduccionOperador")"
-                                                          class="scan-form"
-                                                          data-confirm="Registrar la salida de Produccion para esta caja?">
-                                                        @Html.AntiForgeryToken()
-                                                        <input type="hidden"
-                                                               name="cajaProduccionId"
-                                                               value="@caja.CajaProduccionID" />
-                                                        <input type="text"
-                                                               name="etiquetaEscaneada"
-                                                               class="form-control"
-                                                               maxlength="100"
-                                                               autocomplete="off"
-                                                               placeholder="Escanea o captura la etiqueta"
-                                                               @(!string.IsNullOrWhiteSpace(caja.EtiquetaFolio) ? "required" : null) />
-                                                        <button type="submit" class="btn-action btn-bluex">
-                                                            <i class="fa-solid fa-barcode"></i>
-                                                            Registrar salida
-                                                        </button>
-                                                    </form>
-                                                }
-
-                                                @if (!caja.PuedeSolicitarLiberacion &&
-                                                     !caja.PuedeMoverZonaVerde &&
-                                                     !caja.PuedeEscanearSalida)
-                                                {
-                                                    <span class="metric-sub">
-                                                        Sin acciones pendientes para Produccion en este estado.
-                                                    </span>
-                                                }
-                                            </div>
-                                        </div>
-                                    </article>
-                                }
-=======
                             <div class="table-wrap">
                                 <table class="table">
                                     <thead>
@@ -1910,7 +1042,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var caja in Model.Cajas)
+                                        @foreach (var caja in cajas)
                                         {
                                             <tr>
                                                 <td>
@@ -2017,11 +1149,12 @@
                                                 <td>
                                                     <div class="actions-grid">
 
-                                                        @if (caja.PuedeSolicitarCalidad)
+                                                        @if (caja.PuedeSolicitarLiberacion)
                                                         {
                                                             <form method="post"
                                                                   action="@Url.Action("SolicitarLiberacionCaja", "ProduccionOperador")"
-                                                                  class="small-form accion-form">
+                                                                  class="small-form accion-form"
+                                                                  data-confirm="¿Enviar esta caja a Calidad para su liberación?">
                                                                 @Html.AntiForgeryToken()
 
                                                                 <input type="hidden"
@@ -2046,7 +1179,8 @@
                                                         {
                                                             <form method="post"
                                                                   action="@Url.Action("MoverCajaZonaVerde", "ProduccionOperador")"
-                                                                  class="small-form accion-form">
+                                                                  class="small-form accion-form"
+                                                                  data-confirm="¿Confirmar el movimiento de esta caja a zona verde?">
                                                                 @Html.AntiForgeryToken()
 
                                                                 <input type="hidden"
@@ -2067,11 +1201,12 @@
                                                             </button>
                                                         }
 
-                                                        @if (caja.PuedeEscanearSalidaProduccion)
+                                                        @if (caja.PuedeEscanearSalida)
                                                         {
                                                             <form method="post"
                                                                   action="@Url.Action("EscanearSalidaCaja", "ProduccionOperador")"
-                                                                  class="small-form accion-form">
+                                                                  class="small-form accion-form"
+                                                                  data-confirm="¿Registrar la salida de Producción para esta caja?">
                                                                 @Html.AntiForgeryToken()
 
                                                                 <input type="hidden"
@@ -2106,7 +1241,6 @@
                                         }
                                     </tbody>
                                 </table>
->>>>>>> origin/CAMBIOS-DE-LITZI
                             </div>
                         }
                     </div>
@@ -2115,69 +1249,82 @@
         </div>
     </div>
 
-<<<<<<< HEAD
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         (() => {
-            const formCaja = document.getElementById('formFormarCaja');
-            const selectTipo = document.getElementById('tipoCaja');
-            const inputCantidad = document.getElementById('cantidadPiezas');
-            const textoDisponible = document.getElementById('cantidadDisponible');
-            const botonFormar = document.getElementById('btnFormarCaja');
+            const formFormarCaja = document.getElementById('formFormarCaja');
+            const tipoCaja = document.getElementById('tipoCaja');
+            const cantidadPiezas = document.getElementById('cantidadPiezas');
+            const cantidadDisponible = document.getElementById('cantidadDisponible');
+            const btnFormarCaja = document.getElementById('btnFormarCaja');
+            const accionForms = document.querySelectorAll('.accion-form');
 
-            const actualizarDisponible = () => {
-                if (!selectTipo || !inputCantidad || !textoDisponible || !botonFormar) return;
-
-                const option = selectTipo.options[selectTipo.selectedIndex];
-                const disponible = Number(option?.dataset?.disponible || 0);
-
-                textoDisponible.textContent = disponible.toLocaleString('es-MX');
-                inputCantidad.max = String(disponible);
-
-                if (Number(inputCantidad.value || 0) > disponible) {
-                    inputCantidad.value = disponible > 0 ? String(disponible) : '';
-                }
-
-                const puedeFormar = disponible > 0 && !selectTipo.disabled;
-                inputCantidad.disabled = !puedeFormar;
-                botonFormar.disabled = !puedeFormar;
+            const disponibles = {
+                OK: @Model.CantidadOKDisponible,
+                SOSPECHOSO: @Model.CantidadSospechosaDisponible,
+                SCRAP: @Model.CantidadScrapDisponible,
+                RETENCION: @Model.CantidadSospechosaDisponible
             };
 
-            selectTipo?.addEventListener('change', actualizarDisponible);
+            function obtenerDisponible() {
+                const tipo = tipoCaja?.value || '';
+                return Number(disponibles[tipo] ?? 0);
+            }
+
+            function actualizarDisponible() {
+                if (!tipoCaja || !cantidadPiezas || !cantidadDisponible || !btnFormarCaja) return;
+
+                const disponible = obtenerDisponible();
+                cantidadDisponible.textContent = disponible.toLocaleString('es-MX');
+                cantidadPiezas.max = String(disponible);
+
+                if (Number(cantidadPiezas.value || 0) > disponible) {
+                    cantidadPiezas.value = disponible > 0 ? String(disponible) : '';
+                }
+
+                const puedeFormar = disponible > 0 && !tipoCaja.disabled;
+                cantidadPiezas.disabled = !puedeFormar;
+                btnFormarCaja.disabled = !puedeFormar;
+            }
+
+            tipoCaja?.addEventListener('change', actualizarDisponible);
             actualizarDisponible();
 
-            formCaja?.addEventListener('submit', event => {
-                const disponible = Number(
-                    selectTipo?.options[selectTipo.selectedIndex]?.dataset?.disponible || 0
-                );
-                const cantidad = Number(inputCantidad?.value || 0);
+            formFormarCaja?.addEventListener('submit', function (event) {
+                const cantidad = Number(cantidadPiezas?.value || 0);
+                const disponible = obtenerDisponible();
+                const tipo = tipoCaja?.value || '';
 
-                if (cantidad <= 0 || cantidad > disponible) {
+                if (cantidad <= 0) {
                     event.preventDefault();
-                    alert('La cantidad debe ser mayor a cero y no puede exceder lo disponible para el tipo seleccionado.');
+                    alert('La cantidad de piezas debe ser mayor a cero.');
                     return;
                 }
 
-                const boton = formCaja.querySelector('button[type="submit"]');
-                if (boton) {
-                    boton.disabled = true;
-                    boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';
+                if (cantidad > disponible) {
+                    event.preventDefault();
+                    alert('La cantidad excede lo disponible para ' + tipo + '. Disponible: ' + disponible + ' pieza(s).');
+                    return;
+                }
+
+                if (btnFormarCaja) {
+                    btnFormarCaja.disabled = true;
+                    btnFormarCaja.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';
                 }
             });
 
-            document.querySelectorAll('form[data-confirm]').forEach(form => {
-                form.addEventListener('submit', event => {
-                    const mensaje = form.dataset.confirm || 'Confirmar operacion?';
+            accionForms.forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    const mensaje = form.dataset.confirm;
 
-                    if (!window.confirm(mensaje)) {
+                    if (mensaje && !window.confirm(mensaje)) {
                         event.preventDefault();
                         return;
                     }
 
-                    const boton = form.querySelector('button[type="submit"]');
-                    if (boton) {
-                        boton.disabled = true;
-                        boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
+                    const btn = form.querySelector('button[type="submit"]');
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
                     }
                 });
             });
@@ -2185,59 +1332,3 @@
     </script>
 </body>
 </html>
-=======
-    <script>
-        const formFormarCaja = document.getElementById('formFormarCaja');
-        const accionForms = document.querySelectorAll('.accion-form');
-
-        const disponibles = {
-            OK: @Model.DisponibleOK,
-            SOSPECHOSO: @Model.DisponibleSospechoso,
-            SCRAP: @Model.DisponibleScrap,
-            RETENCION: @Model.DisponibleSospechoso
-        };
-
-        function bloquearFormulario(form, texto) {
-            if (!form) return;
-
-            form.addEventListener('submit', function () {
-                const btn = form.querySelector('button[type="submit"]');
-
-                if (!btn) return;
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + texto;
-            });
-        }
-
-        formFormarCaja?.addEventListener('submit', function (event) {
-            const tipo = document.getElementById('tipoCaja')?.value || '';
-            const cantidad = Number(document.getElementById('cantidadPiezas')?.value || 0);
-            const disponible = disponibles[tipo] ?? 0;
-
-            if (cantidad <= 0) {
-                event.preventDefault();
-                alert('La cantidad de piezas debe ser mayor a cero.');
-                return;
-            }
-
-            if (cantidad > disponible) {
-                event.preventDefault();
-                alert('La cantidad excede lo disponible para ' + tipo + '. Disponible: ' + disponible + ' pieza(s).');
-                return;
-            }
-
-            const btn = formFormarCaja.querySelector('button[type="submit"]');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';
-            }
-        });
-
-        accionForms.forEach(function (form) {
-            bloquearFormulario(form, 'Procesando...');
-        });
-    </script>
-</body>
-</html>
->>>>>>> origin/CAMBIOS-DE-LITZI

@@ -112,6 +112,12 @@ ORDER BY s.FechaCreacion DESC;";
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Crear(SolicitudProduccionCrearVm vm)
         {
+            // El folio interno siempre lo controla el servidor.
+            // Se ignora cualquier texto enviado por la vista, por ejemplo:
+            // "Se asignará al guardar".
+            vm.FolioSolicitud = null;
+            ModelState.Remove(nameof(vm.FolioSolicitud));
+
             var usuarioId = ObtenerUsuarioID();
 
             if (usuarioId <= 0)
@@ -169,10 +175,12 @@ ORDER BY s.FechaCreacion DESC;";
 
             try
             {
-                if (string.IsNullOrWhiteSpace(vm.FolioSolicitud))
-                {
-                    vm.FolioSolicitud = await GenerarFolioAsync(cn, (SqlTransaction)tx);
-                }
+                // Siempre se genera un folio nuevo dentro de la transacción.
+                // Nunca se usa el valor recibido desde el navegador.
+                vm.FolioSolicitud = await GenerarFolioAsync(
+                    cn,
+                    (SqlTransaction)tx
+                );
 
                 var clienteNombre = vm.ClienteNombre;
 
@@ -182,6 +190,16 @@ ORDER BY s.FechaCreacion DESC;";
                 }
 
                 var solicitudId = await InsertarSolicitudAsync(vm, clienteNombre, usuarioId, cn, (SqlTransaction)tx);
+
+                // Toda OF manual entra al mismo flujo de Planeación mediante
+                // un Release interno generado dentro de la misma transacción.
+                var releaseId = await InsertarReleaseAutomaticoAsync(
+                    vm,
+                    clienteNombre,
+                    usuarioId,
+                    cn,
+                    (SqlTransaction)tx
+                );
 
                 var renglon = 1;
 
@@ -197,9 +215,20 @@ ORDER BY s.FechaCreacion DESC;";
                         (SqlTransaction)tx
                     );
 
+                    var releaseRenglonId = await InsertarReleaseRenglonAutomaticoAsync(
+                        releaseId,
+                        renglon,
+                        d,
+                        usuarioId,
+                        cn,
+                        (SqlTransaction)tx
+                    );
+
                     var asignacionesValidas = d.AsignacionesMaquina
                         .Where(a => a.MaquinaID > 0 && a.CantidadAsignada > 0)
                         .ToList();
+
+                    var secuenciaEntrega = 1;
 
                     foreach (var a in asignacionesValidas)
                     {
@@ -211,10 +240,54 @@ ORDER BY s.FechaCreacion DESC;";
                             cn,
                             (SqlTransaction)tx
                         );
+
+                        await InsertarReleaseDetalleAutomaticoAsync(
+                            releaseId,
+                            releaseRenglonId,
+                            solicitudId,
+                            renglon,
+                            secuenciaEntrega,
+                            vm,
+                            d,
+                            a,
+                            usuarioId,
+                            cn,
+                            (SqlTransaction)tx
+                        );
+
+                        secuenciaEntrega++;
+                    }
+
+                    // Una OF puede capturarse todavía sin asignación de máquina.
+                    // En ese caso se genera una necesidad completa para que
+                    // Planeación seleccione posteriormente máquina y horario.
+                    if (!asignacionesValidas.Any())
+                    {
+                        await InsertarReleaseDetalleAutomaticoAsync(
+                            releaseId,
+                            releaseRenglonId,
+                            solicitudId,
+                            renglon,
+                            1,
+                            vm,
+                            d,
+                            null,
+                            usuarioId,
+                            cn,
+                            (SqlTransaction)tx
+                        );
                     }
 
                     renglon++;
                 }
+
+                await VincularSolicitudConReleaseAsync(
+                    solicitudId,
+                    releaseId,
+                    usuarioId,
+                    cn,
+                    (SqlTransaction)tx
+                );
 
                 await InsertarHistorialAsync(
                     solicitudId,
@@ -395,70 +468,529 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID;";
             }
         }
 
-        // ajax para oobtener la informacion de una parte
+        // AJAX: obtener la información técnica de una parte
         [HttpGet]
         public async Task<IActionResult> ObtenerParteInfo(int parteId)
         {
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
+            if (parteId <= 0)
+            {
+                return Json(new
+                {
+                    ok = false,
+                    mensaje = "No se recibió una parte válida."
+                });
+            }
 
-            const string sql = @"
-SELECT
+            try
+            {
+                const string sql = @"
+SELECT TOP (1)
     p.ParteID,
     p.ClienteID,
     p.NumeroParte,
     p.ReferenciaSAP,
     p.Descripcion,
     p.Designacion,
-    p.Color,
-    p.Cavidades,
-    p.ObjetivoHora,
-    p.PiezasPorCaja,
-    p.MaquinaPrincipalID,
-    p.MaquinaSustitutaID,
-    p.MoldePrincipalID,
+
+    t.Color,
+    t.Cavidades,
+    t.ObjetivoHora,
+    t.PiezasPorCaja,
+    t.MaquinaPrincipalID,
+    t.MaquinaSustitutaID,
+    t.MoldePrincipalID,
+
     m.CodigoMolde AS MoldeCodigo
+
 FROM dbo.ERP_Partes p
+
+LEFT JOIN dbo.ERP_ParteDatosTecnicos t
+    ON t.ParteID = p.ParteID
+   AND t.Activo = 1
+
 LEFT JOIN dbo.ERP_Moldes m
-    ON m.MoldeID = p.MoldePrincipalID
+    ON m.MoldeID = t.MoldePrincipalID
+   AND m.Activo = 1
+
 WHERE p.ParteID = @ParteID
   AND p.Activo = 1;";
 
-            await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
+                await using var cn = new SqlConnection(ConnectionString);
+                await cn.OpenAsync();
 
-            await using var rd = await cmd.ExecuteReaderAsync();
+                await using var cmd = new SqlCommand(sql, cn);
+                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
 
-            if (!await rd.ReadAsync())
-            {
-                return Json(new { ok = false, mensaje = "No se encontró la parte." });
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (!await rd.ReadAsync())
+                {
+                    return Json(new
+                    {
+                        ok = false,
+                        mensaje = "No se encontró la parte seleccionada."
+                    });
+                }
+
+                var numeroParte = rd["NumeroParte"] == DBNull.Value
+                    ? string.Empty
+                    : rd["NumeroParte"].ToString() ?? string.Empty;
+
+                var referenciaSap = rd["ReferenciaSAP"] == DBNull.Value
+                    ? null
+                    : rd["ReferenciaSAP"].ToString();
+
+                var descripcion = rd["Descripcion"] == DBNull.Value
+                    ? string.Empty
+                    : rd["Descripcion"].ToString() ?? string.Empty;
+
+                var designacion = rd["Designacion"] == DBNull.Value
+                    ? null
+                    : rd["Designacion"].ToString();
+
+                return Json(new
+                {
+                    ok = true,
+                    parteID = Convert.ToInt32(rd["ParteID"]),
+                    clienteID = rd["ClienteID"] == DBNull.Value
+                        ? (int?)null
+                        : Convert.ToInt32(rd["ClienteID"]),
+                    numeroParte,
+                    referenciaSAP = string.IsNullOrWhiteSpace(referenciaSap)
+                        ? numeroParte
+                        : referenciaSap,
+                    designacionDescripcionSAP = !string.IsNullOrWhiteSpace(designacion)
+                        ? designacion
+                        : descripcion,
+                    color = rd["Color"] == DBNull.Value
+                        ? null
+                        : rd["Color"].ToString(),
+                    cavidades = rd["Cavidades"] == DBNull.Value
+                        ? (int?)null
+                        : Convert.ToInt32(rd["Cavidades"]),
+                    objetivoHora = rd["ObjetivoHora"] == DBNull.Value
+                        ? (int?)null
+                        : Convert.ToInt32(rd["ObjetivoHora"]),
+                    piezasPorCaja = rd["PiezasPorCaja"] == DBNull.Value
+                        ? (int?)null
+                        : Convert.ToInt32(rd["PiezasPorCaja"]),
+                    moldeID = rd["MoldePrincipalID"] == DBNull.Value
+                        ? (int?)null
+                        : Convert.ToInt32(rd["MoldePrincipalID"]),
+                    moldeCodigo = rd["MoldeCodigo"] == DBNull.Value
+                        ? null
+                        : rd["MoldeCodigo"].ToString(),
+                    maquinaPrincipalID = rd["MaquinaPrincipalID"] == DBNull.Value
+                        ? (int?)null
+                        : Convert.ToInt32(rd["MaquinaPrincipalID"]),
+                    maquinaSustitutaID = rd["MaquinaSustitutaID"] == DBNull.Value
+                        ? (int?)null
+                        : Convert.ToInt32(rd["MaquinaSustitutaID"])
+                });
             }
-
-            var numeroParte = rd["NumeroParte"] as string ?? "";
-            var referencia = rd["ReferenciaSAP"] as string;
-            var designacion = rd["Designacion"] as string;
-            var descripcion = rd["Descripcion"] as string ?? "";
-
-            return Json(new
+            catch (Exception ex)
             {
-                ok = true,
-                parteID = Convert.ToInt32(rd["ParteID"]),
-                clienteID = Convert.ToInt32(rd["ClienteID"]),
-                numeroParte,
-                referenciaSAP = string.IsNullOrWhiteSpace(referencia) ? numeroParte : referencia,
-                designacionDescripcionSAP = !string.IsNullOrWhiteSpace(designacion) ? designacion : descripcion,
-                color = rd["Color"] == DBNull.Value ? null : rd["Color"],
-                cavidades = rd["Cavidades"] == DBNull.Value ? null : rd["Cavidades"],
-                objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? null : rd["ObjetivoHora"],
-                piezasPorCaja = rd["PiezasPorCaja"] == DBNull.Value ? null : rd["PiezasPorCaja"],
-                moldeID = rd["MoldePrincipalID"] == DBNull.Value ? null : rd["MoldePrincipalID"],
-                moldeCodigo = rd["MoldeCodigo"] == DBNull.Value ? null : rd["MoldeCodigo"],
-                maquinaPrincipalID = rd["MaquinaPrincipalID"] == DBNull.Value ? null : rd["MaquinaPrincipalID"],
-                maquinaSustitutaID = rd["MaquinaSustitutaID"] == DBNull.Value ? null : rd["MaquinaSustitutaID"]
-            });
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new
+                    {
+                        ok = false,
+                        mensaje = "No fue posible consultar la información de la parte: " + ex.Message
+                    }
+                );
+            }
         }
 
         // helpers
+        private async Task<int> InsertarReleaseAutomaticoAsync(
+            SolicitudProduccionCrearVm vm,
+            string? clienteNombre,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            var folioRelease = await GenerarFolioReleaseAutomaticoAsync(cn, tx);
+            var nivelCriticidad = NormalizarCriticidad(vm.Prioridad);
+
+            const string sql = @"
+INSERT INTO dbo.Planeacion_Releases
+(
+    FolioRelease,
+    FolioCliente,
+    ClienteID,
+    ClienteNombre,
+    FechaRecepcion,
+    VersionRelease,
+    ArchivoOrigenNombre,
+    PlantillaImportacion,
+    ImportadoDesdeArchivo,
+    NivelCriticidad,
+    ComentarioCriticidad,
+    Observaciones,
+    EstatusID,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+OUTPUT INSERTED.ReleaseID
+VALUES
+(
+    @FolioRelease,
+    @FolioCliente,
+    @ClienteID,
+    @ClienteNombre,
+    @FechaRecepcion,
+    @VersionRelease,
+    NULL,
+    N'OF_MANUAL',
+    0,
+    @NivelCriticidad,
+    @ComentarioCriticidad,
+    @Observaciones,
+    2,
+    @UsuarioCreacionID,
+    GETDATE(),
+    1
+);";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@FolioRelease", SqlDbType.NVarChar, 40).Value = folioRelease;
+            cmd.Parameters.Add("@FolioCliente", SqlDbType.NVarChar, 100).Value =
+                (object?)vm.NumeroOFRecibida ?? (object?)vm.FolioSolicitud ?? DBNull.Value;
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
+                (object?)vm.ClienteID ?? DBNull.Value;
+            cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value =
+                (object?)clienteNombre ?? DBNull.Value;
+            cmd.Parameters.Add("@FechaRecepcion", SqlDbType.Date).Value = vm.FechaSolicitud.Date;
+            cmd.Parameters.Add("@VersionRelease", SqlDbType.NVarChar, 50).Value =
+                (object?)vm.NumeroOFRecibida ?? DBNull.Value;
+            cmd.Parameters.Add("@NivelCriticidad", SqlDbType.NVarChar, 20).Value = nivelCriticidad;
+            cmd.Parameters.Add("@ComentarioCriticidad", SqlDbType.NVarChar, 300).Value =
+                nivelCriticidad == "NORMAL" ? DBNull.Value : (object?)vm.NotasGenerales ?? DBNull.Value;
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
+                $"Release interno generado automáticamente desde la OF manual {vm.FolioSolicitud}.";
+            cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
+
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        }
+
+        private async Task<int> InsertarReleaseRenglonAutomaticoAsync(
+            int releaseId,
+            int renglon,
+            SolicitudProduccionDetalleCrearVm d,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+INSERT INTO dbo.Planeacion_ReleaseRenglones
+(
+    ReleaseID,
+    Renglon,
+    ParteID,
+    NumeroParte,
+    ReferenciaSAP,
+    DesignacionDescripcionSAP,
+    UnidadMedidaCliente,
+    ContratoCliente,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+OUTPUT INSERTED.ReleaseRenglonID
+SELECT
+    @ReleaseID,
+    @Renglon,
+    @ParteID,
+    COALESCE(NULLIF(p.NumeroParte, N''), NULLIF(@ReferenciaSAP, N'')),
+    COALESCE(NULLIF(@ReferenciaSAP, N''), NULLIF(p.ReferenciaSAP, N''), NULLIF(p.NumeroParte, N'')),
+    COALESCE(NULLIF(@Descripcion, N''), NULLIF(p.Designacion, N''), NULLIF(p.Descripcion, N'')),
+    NULL,
+    NULL,
+    @Observaciones,
+    @UsuarioCreacionID,
+    GETDATE(),
+    1
+FROM (VALUES (1)) AS base(N)
+LEFT JOIN dbo.ERP_Partes p
+    ON p.ParteID = @ParteID;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = releaseId;
+            cmd.Parameters.Add("@Renglon", SqlDbType.Int).Value = renglon;
+            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = (object?)d.ParteID ?? DBNull.Value;
+            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value =
+                (object?)d.ReferenciaSAP ?? DBNull.Value;
+            cmd.Parameters.Add("@Descripcion", SqlDbType.NVarChar, 300).Value =
+                (object?)d.DesignacionDescripcionSAP ?? DBNull.Value;
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
+                (object?)d.Notas ?? "Renglón originado desde una OF manual.";
+            cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
+
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        }
+
+        private async Task InsertarReleaseDetalleAutomaticoAsync(
+            int releaseId,
+            int releaseRenglonId,
+            int solicitudProduccionId,
+            int renglon,
+            int secuenciaEntrega,
+            SolicitudProduccionCrearVm vm,
+            SolicitudProduccionDetalleCrearVm d,
+            SolicitudProduccionAsignacionMaquinaCrearVm? asignacion,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            var cantidad = asignacion?.CantidadAsignada > 0
+                ? asignacion.CantidadAsignada
+                : d.CantidadPiezas;
+
+            var fechaInicio = ConstruirFechaHora(
+                asignacion?.FechaProgramadaTentativa,
+                asignacion?.HoraInicioTentativa);
+
+            var fechaFin = ConstruirFechaHora(
+                asignacion?.FechaProgramadaTentativa,
+                asignacion?.HoraFinTentativa);
+
+            if (fechaInicio.HasValue && fechaFin.HasValue && fechaFin.Value <= fechaInicio.Value)
+                fechaFin = fechaFin.Value.AddDays(1);
+
+            var horas = asignacion?.HorasEstimadas ?? d.HorasPlaneadas;
+            if ((!horas.HasValue || horas.Value <= 0) && d.ObjetivoHora.GetValueOrDefault() > 0)
+                horas = Math.Round(cantidad / (decimal)d.ObjetivoHora!.Value, 2);
+
+            if (!fechaFin.HasValue && fechaInicio.HasValue && horas.GetValueOrDefault() > 0)
+                fechaFin = fechaInicio.Value.AddHours((double)horas!.Value);
+
+            bool? daTiempo = null;
+            if (vm.FechaRequerida.HasValue && fechaFin.HasValue)
+                daTiempo = fechaFin.Value.Date <= vm.FechaRequerida.Value.Date;
+
+            const string sql = @"
+INSERT INTO dbo.Planeacion_ReleaseDetalle
+(
+    ReleaseID,
+    ReleaseRenglonID,
+    SecuenciaEntrega,
+    Renglon,
+    ParteID,
+    NumeroParte,
+    ReferenciaSAP,
+    DesignacionDescripcionSAP,
+    FechaCarga,
+    FechaRequerida,
+    CantidadRequerida,
+    PTDisponibleAlCalcular,
+    ProduccionProgramadaPendiente,
+    PiezasDesdePT,
+    PiezasAProducir,
+    MaterialID,
+    MaterialCodigo,
+    MaterialDescripcion,
+    PesoBrutoPieza,
+    MPRequeridaKg,
+    MPDisponibleKg,
+    EmbalajeCodigo,
+    EmbalajeDescripcion,
+    PiezasPorEmbalaje,
+    EmbalajeRequerido,
+    EmbalajeDisponible,
+    MoldeID,
+    MoldeCodigo,
+    MaquinaSugeridaID,
+    MaquinaSugeridaCodigo,
+    MaquinaSugeridaNombre,
+    ObjetivoHora,
+    HorasNecesarias,
+    FechaInicioSugerida,
+    FechaFinEstimada,
+    DaTiempo,
+    MensajeCapacidad,
+    SolicitudProduccionID,
+    EstatusID,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+SELECT
+    @ReleaseID,
+    @ReleaseRenglonID,
+    @SecuenciaEntrega,
+    @Renglon,
+    @ParteID,
+    COALESCE(NULLIF(p.NumeroParte, N''), NULLIF(@ReferenciaSAP, N'')),
+    COALESCE(NULLIF(@ReferenciaSAP, N''), NULLIF(p.ReferenciaSAP, N''), NULLIF(p.NumeroParte, N'')),
+    COALESCE(NULLIF(@Descripcion, N''), NULLIF(p.Designacion, N''), NULLIF(p.Descripcion, N'')),
+    @FechaCarga,
+    @FechaRequerida,
+    @CantidadRequerida,
+    0,
+    0,
+    0,
+    @CantidadRequerida,
+    t.MaterialID,
+    t.MaterialCodigo,
+    t.MaterialDescripcion,
+    t.PesoBrutoPieza,
+    CASE
+        WHEN t.PesoBrutoPieza IS NULL OR t.PesoBrutoPieza <= 0 THEN NULL
+        ELSE ROUND((@CantidadRequerida * t.PesoBrutoPieza) / 1000.0, 4)
+    END,
+    NULL,
+    t.EmbalajeCodigo,
+    t.EmbalajeDescripcion,
+    t.PiezasPorEmbalaje,
+    CASE
+        WHEN t.PiezasPorEmbalaje IS NULL OR t.PiezasPorEmbalaje <= 0 THEN NULL
+        ELSE CEILING(@CantidadRequerida / t.PiezasPorEmbalaje)
+    END,
+    NULL,
+    COALESCE(@MoldeID, t.MoldePrincipalID),
+    mol.CodigoMolde,
+    COALESCE(@MaquinaID, t.MaquinaPrincipalID),
+    maq.Codigo,
+    maq.Nombre,
+    COALESCE(@ObjetivoHora, t.ObjetivoHora),
+    @HorasNecesarias,
+    @FechaInicio,
+    @FechaFin,
+    @DaTiempo,
+    @MensajeCapacidad,
+    @SolicitudProduccionID,
+    2,
+    @UsuarioCreacionID,
+    GETDATE(),
+    1
+FROM (VALUES (1)) AS base(N)
+LEFT JOIN dbo.ERP_Partes p
+    ON p.ParteID = @ParteID
+LEFT JOIN dbo.ERP_ParteDatosTecnicos t
+    ON t.ParteID = @ParteID
+   AND t.Activo = 1
+LEFT JOIN dbo.ERP_Moldes mol
+    ON mol.MoldeID = COALESCE(@MoldeID, t.MoldePrincipalID)
+LEFT JOIN dbo.ERP_Maquinas maq
+    ON maq.MaquinaID = COALESCE(@MaquinaID, t.MaquinaPrincipalID);";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = releaseId;
+            cmd.Parameters.Add("@ReleaseRenglonID", SqlDbType.Int).Value = releaseRenglonId;
+            cmd.Parameters.Add("@SecuenciaEntrega", SqlDbType.Int).Value = secuenciaEntrega;
+            cmd.Parameters.Add("@Renglon", SqlDbType.Int).Value = renglon;
+            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = (object?)d.ParteID ?? DBNull.Value;
+            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value =
+                (object?)d.ReferenciaSAP ?? DBNull.Value;
+            cmd.Parameters.Add("@Descripcion", SqlDbType.NVarChar, 300).Value =
+                (object?)d.DesignacionDescripcionSAP ?? DBNull.Value;
+            cmd.Parameters.Add("@FechaCarga", SqlDbType.Date).Value =
+                (object?)fechaInicio?.Date ?? vm.FechaSolicitud.Date;
+            cmd.Parameters.Add("@FechaRequerida", SqlDbType.Date).Value =
+                (object?)vm.FechaRequerida?.Date ?? (object?)fechaInicio?.Date ?? vm.FechaSolicitud.Date;
+            cmd.Parameters.Add("@CantidadRequerida", SqlDbType.Int).Value = cantidad;
+            cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value =
+                (object?)asignacion?.MoldeID ?? (object?)d.MoldeID ?? DBNull.Value;
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value =
+                (object?)asignacion?.MaquinaID ?? DBNull.Value;
+            cmd.Parameters.Add("@ObjetivoHora", SqlDbType.Int).Value =
+                (object?)d.ObjetivoHora ?? DBNull.Value;
+
+            var horasParam = cmd.Parameters.Add("@HorasNecesarias", SqlDbType.Decimal);
+            horasParam.Precision = 18;
+            horasParam.Scale = 2;
+            horasParam.Value = (object?)horas ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FechaInicio", SqlDbType.DateTime).Value =
+                (object?)fechaInicio ?? DBNull.Value;
+            cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value =
+                (object?)fechaFin ?? DBNull.Value;
+            cmd.Parameters.Add("@DaTiempo", SqlDbType.Bit).Value =
+                (object?)daTiempo ?? DBNull.Value;
+            cmd.Parameters.Add("@MensajeCapacidad", SqlDbType.NVarChar, 500).Value =
+                asignacion == null
+                    ? "OF manual incorporada a Planeación. Pendiente de confirmar máquina y horario."
+                    : "OF manual incorporada a Planeación con la máquina y horario capturados.";
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+            cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private async Task VincularSolicitudConReleaseAsync(
+            int solicitudProduccionId,
+            int releaseId,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+UPDATE dbo.SolicitudesProduccion
+SET
+    ReleaseID = @ReleaseID,
+    ReleaseDetalleID = COALESCE
+    (
+        ReleaseDetalleID,
+        (
+            SELECT TOP (1) d.ReleaseDetalleID
+            FROM dbo.Planeacion_ReleaseDetalle d
+            WHERE d.ReleaseID = @ReleaseID
+              AND d.Activo = 1
+            ORDER BY d.Renglon, d.SecuenciaEntrega, d.ReleaseDetalleID
+        )
+    ),
+    TipoOF = COALESCE(NULLIF(TipoOF, N''), N'RELEASE'),
+    OrigenOF = N'MANUAL',
+    UsuarioModificacionID = @UsuarioID,
+    FechaModificacion = GETDATE()
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = releaseId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private async Task<string> GenerarFolioReleaseAutomaticoAsync(
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            var anio = DateTime.Today.Year;
+
+            const string sql = @"
+SELECT ISNULL(MAX(ReleaseID), 0) + 1
+FROM dbo.Planeacion_Releases WITH (UPDLOCK, HOLDLOCK);";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            var consecutivo = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+            return $"REL-{consecutivo:000000}/{anio}";
+        }
+
+        private static DateTime? ConstruirFechaHora(DateTime? fecha, TimeSpan? hora)
+        {
+            if (!fecha.HasValue)
+                return null;
+
+            return fecha.Value.Date.Add(hora ?? TimeSpan.Zero);
+        }
+
+        private static string NormalizarCriticidad(string? prioridad)
+        {
+            var value = (prioridad ?? string.Empty).Trim().ToUpperInvariant();
+
+            if (value.Contains("URG"))
+                return "URGENTE";
+
+            if (value.Contains("ALTA") || value.Contains("CRIT"))
+                return "CRITICO";
+
+            return "NORMAL";
+        }
+
         private async Task<int> InsertarSolicitudAsync(
             SolicitudProduccionCrearVm vm,
             string? clienteNombre,
@@ -700,7 +1232,6 @@ VALUES
             await cmd.ExecuteNonQueryAsync();
         }
 
-   
         private async Task CargarCatalogosAsync(SolicitudProduccionCrearVm vm)
         {
             await using var cn = new SqlConnection(ConnectionString);
@@ -764,24 +1295,32 @@ WHERE ClienteID = @ClienteID;";
             SqlConnection cn,
             SqlTransaction tx)
         {
-            if (!d.ParteID.HasValue)
+            if (!d.ParteID.HasValue || d.ParteID.Value <= 0)
             {
                 return;
             }
 
             const string sql = @"
-SELECT
-    NumeroParte,
-    ReferenciaSAP,
-    Descripcion,
-    Designacion,
-    Color,
-    Cavidades,
-    ObjetivoHora,
-    PiezasPorCaja,
-    MoldePrincipalID
-FROM dbo.ERP_Partes
-WHERE ParteID = @ParteID;";
+SELECT TOP (1)
+    p.NumeroParte,
+    p.ReferenciaSAP,
+    p.Descripcion,
+    p.Designacion,
+
+    t.Color,
+    t.Cavidades,
+    t.ObjetivoHora,
+    t.PiezasPorCaja,
+    t.MoldePrincipalID
+
+FROM dbo.ERP_Partes p
+
+LEFT JOIN dbo.ERP_ParteDatosTecnicos t
+    ON t.ParteID = p.ParteID
+   AND t.Activo = 1
+
+WHERE p.ParteID = @ParteID
+  AND p.Activo = 1;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = d.ParteID.Value;
@@ -793,31 +1332,60 @@ WHERE ParteID = @ParteID;";
                 return;
             }
 
-            var numeroParte = rd["NumeroParte"] as string ?? "";
-            var referencia = rd["ReferenciaSAP"] as string;
-            var descripcion = rd["Descripcion"] as string ?? "";
-            var designacion = rd["Designacion"] as string;
+            var numeroParte = rd["NumeroParte"] == DBNull.Value
+                ? string.Empty
+                : rd["NumeroParte"].ToString() ?? string.Empty;
+
+            var referencia = rd["ReferenciaSAP"] == DBNull.Value
+                ? null
+                : rd["ReferenciaSAP"].ToString();
+
+            var descripcion = rd["Descripcion"] == DBNull.Value
+                ? string.Empty
+                : rd["Descripcion"].ToString() ?? string.Empty;
+
+            var designacion = rd["Designacion"] == DBNull.Value
+                ? null
+                : rd["Designacion"].ToString();
 
             if (string.IsNullOrWhiteSpace(d.ReferenciaSAP))
-                d.ReferenciaSAP = string.IsNullOrWhiteSpace(referencia) ? numeroParte : referencia;
+            {
+                d.ReferenciaSAP = string.IsNullOrWhiteSpace(referencia)
+                    ? numeroParte
+                    : referencia;
+            }
 
             if (string.IsNullOrWhiteSpace(d.DesignacionDescripcionSAP))
-                d.DesignacionDescripcionSAP = !string.IsNullOrWhiteSpace(designacion) ? designacion : descripcion;
+            {
+                d.DesignacionDescripcionSAP = !string.IsNullOrWhiteSpace(designacion)
+                    ? designacion
+                    : descripcion;
+            }
 
             if (string.IsNullOrWhiteSpace(d.Color) && rd["Color"] != DBNull.Value)
+            {
                 d.Color = rd["Color"].ToString();
+            }
 
             if (!d.Cavidades.HasValue && rd["Cavidades"] != DBNull.Value)
+            {
                 d.Cavidades = Convert.ToInt32(rd["Cavidades"]);
+            }
 
             if (!d.ObjetivoHora.HasValue && rd["ObjetivoHora"] != DBNull.Value)
+            {
                 d.ObjetivoHora = Convert.ToInt32(rd["ObjetivoHora"]);
+            }
 
             if (!d.PiezasPorCaja.HasValue && rd["PiezasPorCaja"] != DBNull.Value)
+            {
                 d.PiezasPorCaja = Convert.ToInt32(rd["PiezasPorCaja"]);
+            }
 
             if (!d.MoldeID.HasValue && rd["MoldePrincipalID"] != DBNull.Value)
+            {
                 d.MoldeID = Convert.ToInt32(rd["MoldePrincipalID"]);
+            }
         }
 
         private async Task<List<SolicitudProduccionDetalleVistaRenglonVm>> ObtenerDetallesAsync(int solicitudId, SqlConnection cn)

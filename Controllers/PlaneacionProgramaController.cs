@@ -102,25 +102,34 @@ SELECT
 
     d.ProgramaProduccionID,
     d.SolicitudProduccionID,
+    (
+        SELECT TOP (1) sd.SolicitudProduccionDetalleID
+        FROM dbo.SolicitudesProduccionDetalle sd
+        WHERE sd.SolicitudProduccionID = d.SolicitudProduccionID
+          AND sd.Activo = 1
+          AND sd.Renglon = d.Renglon
+          AND (sd.ParteID = d.ParteID OR (sd.ParteID IS NULL AND d.ParteID IS NULL))
+        ORDER BY sd.SolicitudProduccionDetalleID
+    ) AS SolicitudProduccionDetalleID,
     d.EstatusID,
 
-    t.MaterialID,
-    t.MaterialCodigo,
-    t.MaterialDescripcion,
-    t.PesoBrutoPieza,
+    COALESCE(d.MaterialID, t.MaterialID) AS MaterialID,
+    COALESCE(NULLIF(d.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
+    COALESCE(NULLIF(d.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
+    COALESCE(d.PesoBrutoPieza, t.PesoBrutoPieza) AS PesoBrutoPieza,
     t.PesoNetoPieza,
 
-    t.EmbalajeCodigo,
-    t.EmbalajeDescripcion,
-    t.PiezasPorEmbalaje,
+    COALESCE(NULLIF(d.EmbalajeCodigo, ''), t.EmbalajeCodigo) AS EmbalajeCodigo,
+    COALESCE(NULLIF(d.EmbalajeDescripcion, ''), t.EmbalajeDescripcion) AS EmbalajeDescripcion,
+    COALESCE(d.PiezasPorEmbalaje, t.PiezasPorEmbalaje) AS PiezasPorEmbalaje,
     t.PiezasPorCaja,
 
-    t.MoldePrincipalID AS MoldeID,
-    mol.CodigoMolde AS MoldeCodigo,
+    COALESCE(d.MoldeID, t.MoldePrincipalID) AS MoldeID,
+    COALESCE(NULLIF(d.MoldeCodigo, ''), mol.CodigoMolde) AS MoldeCodigo,
 
-    t.MaquinaPrincipalID AS MaquinaSugeridaID,
-    maq.Codigo AS MaquinaSugeridaCodigo,
-    maq.Nombre AS MaquinaSugeridaNombre,
+    COALESCE(d.MaquinaSugeridaID, t.MaquinaPrincipalID) AS MaquinaSugeridaID,
+    COALESCE(NULLIF(d.MaquinaSugeridaCodigo, ''), maq.Codigo) AS MaquinaSugeridaCodigo,
+    COALESCE(NULLIF(d.MaquinaSugeridaNombre, ''), maq.Nombre) AS MaquinaSugeridaNombre,
 
     sust.MaquinaSustitutaID AS MaquinaSustitutaID,
     sust.MaquinaSustitutaCodigo AS MaquinaSustitutaCodigo,
@@ -153,10 +162,10 @@ LEFT JOIN dbo.ERP_ParteDatosTecnicos t
    AND t.Activo = 1
 
 LEFT JOIN dbo.ERP_Moldes mol
-    ON mol.MoldeID = t.MoldePrincipalID
+    ON mol.MoldeID = COALESCE(d.MoldeID, t.MoldePrincipalID)
 
 LEFT JOIN dbo.ERP_Maquinas maq
-    ON maq.MaquinaID = t.MaquinaPrincipalID
+    ON maq.MaquinaID = COALESCE(d.MaquinaSugeridaID, t.MaquinaPrincipalID)
 
 
 OUTER APPLY
@@ -517,6 +526,7 @@ ORDER BY
 
                     ProgramaProduccionID = rd["ProgramaProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["ProgramaProduccionID"]),
                     SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
+                    SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
                     EstatusID = rd["EstatusID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["EstatusID"]),
 
                     Ciclo = rd["Ciclo"] == DBNull.Value ? null : rd["Ciclo"].ToString(),
@@ -1418,6 +1428,10 @@ VALUES
 
                 await CompletarDatosProgramaAsync(vm, cn, sqlTx);
 
+                // Recupera la OF manual vinculada al ReleaseDetalle. Se hace
+                // en servidor para no depender de campos ocultos de la vista.
+                await CompletarVinculoOFExistenteAsync(vm, cn, sqlTx);
+
                 var programaId = await InsertarProgramaAsync(
                     vm,
                     usuarioId,
@@ -1440,6 +1454,18 @@ VALUES
                     cn,
                     sqlTx
                 );
+
+                if (vm.SolicitudProduccionID.HasValue &&
+                    vm.SolicitudProduccionDetalleID.HasValue)
+                {
+                    await VincularOFManualConProgramaAsync(
+                        programaId,
+                        vm,
+                        usuarioId,
+                        cn,
+                        sqlTx
+                    );
+                }
 
                 // LANZAMIENTO TEMPORAL SIN DESCUENTO DE ALMACÉN:
                 // No vinculamos apartado PT al programa. Almacén entregará de forma manual.
@@ -1599,26 +1625,36 @@ SELECT
     d.FechaRequerida,
     d.CantidadRequerida,
     d.ProgramaProduccionID,
+    d.SolicitudProduccionID,
+    (
+        SELECT TOP (1) sd.SolicitudProduccionDetalleID
+        FROM dbo.SolicitudesProduccionDetalle sd
+        WHERE sd.SolicitudProduccionID = d.SolicitudProduccionID
+          AND sd.Activo = 1
+          AND sd.Renglon = d.Renglon
+          AND (sd.ParteID = d.ParteID OR (sd.ParteID IS NULL AND d.ParteID IS NULL))
+        ORDER BY sd.SolicitudProduccionDetalleID
+    ) AS SolicitudProduccionDetalleID,
 
     t.Color,
 
-    t.MaterialID,
-    t.MaterialCodigo,
-    t.MaterialDescripcion,
-    t.PesoBrutoPieza,
+    COALESCE(d.MaterialID, t.MaterialID) AS MaterialID,
+    COALESCE(NULLIF(d.MaterialCodigo, ''), t.MaterialCodigo) AS MaterialCodigo,
+    COALESCE(NULLIF(d.MaterialDescripcion, ''), t.MaterialDescripcion) AS MaterialDescripcion,
+    COALESCE(d.PesoBrutoPieza, t.PesoBrutoPieza) AS PesoBrutoPieza,
     t.PesoNetoPieza,
 
-    t.EmbalajeCodigo,
-    t.EmbalajeDescripcion,
-    t.PiezasPorEmbalaje,
+    COALESCE(NULLIF(d.EmbalajeCodigo, ''), t.EmbalajeCodigo) AS EmbalajeCodigo,
+    COALESCE(NULLIF(d.EmbalajeDescripcion, ''), t.EmbalajeDescripcion) AS EmbalajeDescripcion,
+    COALESCE(d.PiezasPorEmbalaje, t.PiezasPorEmbalaje) AS PiezasPorEmbalaje,
     t.PiezasPorCaja,
 
-    t.MoldePrincipalID AS MoldeID,
-    mol.CodigoMolde AS MoldeCodigo,
+    COALESCE(d.MoldeID, t.MoldePrincipalID) AS MoldeID,
+    COALESCE(NULLIF(d.MoldeCodigo, ''), mol.CodigoMolde) AS MoldeCodigo,
 
-    t.MaquinaPrincipalID AS MaquinaSugeridaID,
-    maq.Codigo AS MaquinaSugeridaCodigo,
-    maq.Nombre AS MaquinaSugeridaNombre,
+    COALESCE(d.MaquinaSugeridaID, t.MaquinaPrincipalID) AS MaquinaSugeridaID,
+    COALESCE(NULLIF(d.MaquinaSugeridaCodigo, ''), maq.Codigo) AS MaquinaSugeridaCodigo,
+    COALESCE(NULLIF(d.MaquinaSugeridaNombre, ''), maq.Nombre) AS MaquinaSugeridaNombre,
 
     sust.MaquinaSustitutaID,
     sust.MaquinaSustitutaCodigo,
@@ -1649,10 +1685,10 @@ LEFT JOIN dbo.ERP_ParteDatosTecnicos t
    AND t.Activo = 1
 
 LEFT JOIN dbo.ERP_Moldes mol
-    ON mol.MoldeID = t.MoldePrincipalID
+    ON mol.MoldeID = COALESCE(d.MoldeID, t.MoldePrincipalID)
 
 LEFT JOIN dbo.ERP_Maquinas maq
-    ON maq.MaquinaID = t.MaquinaPrincipalID
+    ON maq.MaquinaID = COALESCE(d.MaquinaSugeridaID, t.MaquinaPrincipalID)
 
 
 OUTER APPLY
@@ -1893,6 +1929,13 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
                 ReleaseID = rd["ReleaseID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseID"]),
                 FolioRelease = rd["FolioRelease"] as string,
 
+                SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["SolicitudProduccionID"]),
+                SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
+
                 TipoOF = "RELEASE",
                 MotivoTipoOF = null,
 
@@ -2015,6 +2058,260 @@ WHERE MoldeID = @MoldeID;";
             }
         }
 
+        private static async Task CompletarVinculoOFExistenteAsync(
+            PlaneacionProgramaCrearDesdeNecesidadVm vm,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT TOP (1)
+    d.SolicitudProduccionID,
+    sd.SolicitudProduccionDetalleID
+FROM dbo.Planeacion_ReleaseDetalle d
+OUTER APPLY
+(
+    SELECT TOP (1)
+        x.SolicitudProduccionDetalleID
+    FROM dbo.SolicitudesProduccionDetalle x
+    WHERE x.SolicitudProduccionID = d.SolicitudProduccionID
+      AND x.Activo = 1
+      AND x.Renglon = d.Renglon
+      AND (x.ParteID = d.ParteID OR (x.ParteID IS NULL AND d.ParteID IS NULL))
+    ORDER BY x.SolicitudProduccionDetalleID
+) sd
+WHERE d.ReleaseDetalleID = @ReleaseDetalleID
+  AND d.Activo = 1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = vm.ReleaseDetalleID;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                return;
+
+            vm.SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value
+                ? null
+                : Convert.ToInt32(rd["SolicitudProduccionID"]);
+
+            vm.SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value
+                ? null
+                : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]);
+        }
+
+        private static async Task VincularOFManualConProgramaAsync(
+            int programaProduccionId,
+            PlaneacionProgramaCrearDesdeNecesidadVm vm,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            if (!vm.SolicitudProduccionID.HasValue ||
+                !vm.SolicitudProduccionDetalleID.HasValue)
+            {
+                return;
+            }
+
+            int? estatusAnterior = null;
+
+            const string sqlEstatus = @"
+SELECT EstatusID
+FROM dbo.SolicitudesProduccion
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlEstatus, cn, tx))
+            {
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = vm.SolicitudProduccionID.Value;
+                var result = await cmd.ExecuteScalarAsync();
+                if (result != null && result != DBNull.Value)
+                    estatusAnterior = Convert.ToInt32(result);
+            }
+
+            const string sqlSolicitud = @"
+UPDATE dbo.SolicitudesProduccion
+SET
+    ReleaseID = COALESCE(ReleaseID, @ReleaseID),
+    ReleaseDetalleID = COALESCE(ReleaseDetalleID, @ReleaseDetalleID),
+    ProgramaProduccionID = COALESCE(ProgramaProduccionID, @ProgramaProduccionID),
+    OrigenOF = N'MANUAL',
+    TipoOF = COALESCE(NULLIF(TipoOF, N''), N'RELEASE'),
+    FechaInicioPlaneada = CASE
+        WHEN FechaInicioPlaneada IS NULL OR FechaInicioPlaneada > @FechaInicio THEN @FechaInicio
+        ELSE FechaInicioPlaneada
+    END,
+    FechaFinPlaneada = CASE
+        WHEN FechaFinPlaneada IS NULL OR FechaFinPlaneada < @FechaFin THEN @FechaFin
+        ELSE FechaFinPlaneada
+    END,
+    ResponsablePlaneacionUsuarioID = @UsuarioID,
+    ResponsablePlaneacionNombre = COALESCE(NULLIF(ResponsablePlaneacionNombre, N''), N'Planeación'),
+    EstatusID = CASE
+        WHEN ISNULL(EstatusID, 1) < @EstatusPlaneado THEN @EstatusPlaneado
+        ELSE EstatusID
+    END,
+    UsuarioModificacionID = @UsuarioID,
+    FechaModificacion = GETDATE()
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlSolicitud, cn, tx))
+            {
+                cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = (object?)vm.ReleaseID ?? DBNull.Value;
+                cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = vm.ReleaseDetalleID;
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                cmd.Parameters.Add("@FechaInicio", SqlDbType.DateTime).Value =
+                    (object?)vm.FechaInicioProgramada ?? DateTime.Now;
+                cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value =
+                    (object?)vm.FechaFinProgramada ?? (object?)vm.FechaInicioProgramada ?? DateTime.Now;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@EstatusPlaneado", SqlDbType.Int).Value = PlaneacionOFEstatus.PendienteValidacionMP;
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = vm.SolicitudProduccionID.Value;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlDetalle = @"
+UPDATE dbo.SolicitudesProduccionDetalle
+SET
+    MoldeID = COALESCE(@MoldeID, MoldeID),
+    MaquinaSugeridaID = COALESCE(@MaquinaID, MaquinaSugeridaID),
+    NumeroMoldeTexto = COALESCE(NULLIF(@MoldeCodigo, N''), NumeroMoldeTexto),
+    MaquinaSugeridaTexto = COALESCE(NULLIF(@MaquinaTexto, N''), MaquinaSugeridaTexto),
+    HorasPlaneadas = COALESCE(@HorasProgramadas, HorasPlaneadas),
+    MaterialID = COALESCE(@MaterialID, MaterialID),
+    MaterialCodigo = COALESCE(NULLIF(@MaterialCodigo, N''), MaterialCodigo),
+    MaterialDescripcion = COALESCE(NULLIF(@MaterialDescripcion, N''), MaterialDescripcion),
+    EmbalajeCodigo = COALESCE(NULLIF(@EmbalajeCodigo, N''), EmbalajeCodigo),
+    EmbalajeDescripcion = COALESCE(NULLIF(@EmbalajeDescripcion, N''), EmbalajeDescripcion),
+    PiezasPorEmbalaje = COALESCE(@PiezasPorEmbalaje, PiezasPorEmbalaje),
+    CantidadEmbalajes = COALESCE(@CantidadEmbalajes, CantidadEmbalajes),
+    CantidadMpKg = COALESCE(@CantidadMpKg, CantidadMpKg),
+    Cambio = COALESCE(@Cambio, Cambio),
+    Arranque = COALESCE(@Arranque, Arranque),
+    EstatusID = CASE
+        WHEN ISNULL(EstatusID, 1) < @EstatusPlaneado THEN @EstatusPlaneado
+        ELSE EstatusID
+    END
+WHERE SolicitudProduccionDetalleID = @SolicitudProduccionDetalleID
+  AND Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlDetalle, cn, tx))
+            {
+                cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value = (object?)vm.MoldeID ?? DBNull.Value;
+                cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)vm.MaquinaID ?? DBNull.Value;
+                cmd.Parameters.Add("@MoldeCodigo", SqlDbType.NVarChar, 100).Value = (object?)vm.MoldeCodigo ?? DBNull.Value;
+                cmd.Parameters.Add("@MaquinaTexto", SqlDbType.NVarChar, 200).Value =
+                    (object?)($"{vm.MaquinaCodigo} - {vm.MaquinaNombre}".Trim(' ', '-')) ?? DBNull.Value;
+
+                var horas = cmd.Parameters.Add("@HorasProgramadas", SqlDbType.Decimal);
+                horas.Precision = 18;
+                horas.Scale = 2;
+                horas.Value = (object?)vm.HorasProgramadas ?? DBNull.Value;
+
+                cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value = (object?)vm.MaterialID ?? DBNull.Value;
+                cmd.Parameters.Add("@MaterialCodigo", SqlDbType.NVarChar, 100).Value = (object?)vm.MaterialCodigo ?? DBNull.Value;
+                cmd.Parameters.Add("@MaterialDescripcion", SqlDbType.NVarChar, 250).Value = (object?)vm.MaterialDescripcion ?? DBNull.Value;
+                cmd.Parameters.Add("@EmbalajeCodigo", SqlDbType.NVarChar, 100).Value = (object?)vm.EmbalajeCodigo ?? DBNull.Value;
+                cmd.Parameters.Add("@EmbalajeDescripcion", SqlDbType.NVarChar, 250).Value = (object?)vm.EmbalajeDescripcion ?? DBNull.Value;
+
+                var ppe = cmd.Parameters.Add("@PiezasPorEmbalaje", SqlDbType.Decimal);
+                ppe.Precision = 18;
+                ppe.Scale = 4;
+                ppe.Value = (object?)vm.PiezasPorEmbalaje ?? DBNull.Value;
+
+                var ce = cmd.Parameters.Add("@CantidadEmbalajes", SqlDbType.Decimal);
+                ce.Precision = 18;
+                ce.Scale = 4;
+                ce.Value = (object?)vm.CantidadEmbalajes ?? DBNull.Value;
+
+                var mp = cmd.Parameters.Add("@CantidadMpKg", SqlDbType.Decimal);
+                mp.Precision = 18;
+                mp.Scale = 4;
+                mp.Value = (object?)vm.CantidadMpKg ?? DBNull.Value;
+
+                cmd.Parameters.Add("@Cambio", SqlDbType.Time).Value = (object?)vm.Cambio ?? DBNull.Value;
+                cmd.Parameters.Add("@Arranque", SqlDbType.Time).Value = (object?)vm.Arranque ?? DBNull.Value;
+                cmd.Parameters.Add("@EstatusPlaneado", SqlDbType.Int).Value = PlaneacionOFEstatus.PendienteValidacionMP;
+                cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value = vm.SolicitudProduccionDetalleID.Value;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlAsignacion = @"
+UPDATE dbo.SolicitudesProduccionAsignacionMaquina
+SET
+    MaquinaID = COALESCE(@MaquinaID, MaquinaID),
+    MoldeID = COALESCE(@MoldeID, MoldeID),
+    CantidadAsignada = @CantidadProgramada,
+    HorasEstimadas = @HorasProgramadas,
+    FechaProgramadaTentativa = CAST(@FechaInicio AS date),
+    HoraInicioTentativa = CAST(@FechaInicio AS time),
+    HoraFinTentativa = CAST(@FechaFin AS time),
+    CondicionProduccion = @CondicionProduccion,
+    EstatusID = @EstatusPlaneado,
+    Observaciones = LEFT(
+        COALESCE(NULLIF(Observaciones, N'') + CHAR(13) + CHAR(10), N'') +
+        N'Vinculada al Programa de Producción ID ' + CONVERT(NVARCHAR(20), @ProgramaProduccionID) + N'.',
+        500
+    )
+WHERE SolicitudProduccionDetalleID = @SolicitudProduccionDetalleID
+  AND Activo = 1
+  AND (@MaquinaID IS NULL OR MaquinaID = @MaquinaID);";
+
+            await using (var cmd = new SqlCommand(sqlAsignacion, cn, tx))
+            {
+                cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)vm.MaquinaID ?? DBNull.Value;
+                cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value = (object?)vm.MoldeID ?? DBNull.Value;
+                cmd.Parameters.Add("@CantidadProgramada", SqlDbType.Int).Value = vm.CantidadProgramada;
+
+                var horas = cmd.Parameters.Add("@HorasProgramadas", SqlDbType.Decimal);
+                horas.Precision = 18;
+                horas.Scale = 2;
+                horas.Value = (object?)vm.HorasProgramadas ?? DBNull.Value;
+
+                cmd.Parameters.Add("@FechaInicio", SqlDbType.DateTime).Value =
+                    (object?)vm.FechaInicioProgramada ?? DateTime.Now;
+                cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value =
+                    (object?)vm.FechaFinProgramada ?? (object?)vm.FechaInicioProgramada ?? DateTime.Now;
+                cmd.Parameters.Add("@CondicionProduccion", SqlDbType.NVarChar, 20).Value =
+                    (object?)vm.CondicionProduccion ?? DBNull.Value;
+                cmd.Parameters.Add("@EstatusPlaneado", SqlDbType.Int).Value = PlaneacionOFEstatus.PendienteValidacionMP;
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value = vm.SolicitudProduccionDetalleID.Value;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlHistorial = @"
+INSERT INTO dbo.SolicitudProduccionHistorial
+(
+    SolicitudProduccionID,
+    EstatusAnteriorID,
+    EstatusNuevoID,
+    Movimiento,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @SolicitudProduccionID,
+    @EstatusAnteriorID,
+    @EstatusNuevoID,
+    N'Programación de OF manual',
+    N'La OF manual fue vinculada al Programa de Producción ID ' + CONVERT(NVARCHAR(20), @ProgramaProduccionID) + N'.',
+    @UsuarioID,
+    GETDATE()
+);";
+
+            await using (var cmd = new SqlCommand(sqlHistorial, cn, tx))
+            {
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = vm.SolicitudProduccionID.Value;
+                cmd.Parameters.Add("@EstatusAnteriorID", SqlDbType.Int).Value = (object?)estatusAnterior ?? DBNull.Value;
+                cmd.Parameters.Add("@EstatusNuevoID", SqlDbType.Int).Value = PlaneacionOFEstatus.PendienteValidacionMP;
+                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
         private async Task<int> InsertarProgramaAsync(PlaneacionProgramaCrearDesdeNecesidadVm vm, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             var secuencia = await ObtenerSiguienteSecuenciaMaquinaAsync(
@@ -2033,6 +2330,8 @@ INSERT INTO dbo.Planeacion_ProgramaProduccion
 (
     ReleaseID,
     ReleaseDetalleID,
+    SolicitudProduccionID,
+    SolicitudProduccionDetalleID,
 
     ClienteID,
     ClienteNombre,
@@ -2093,6 +2392,8 @@ VALUES
 (
     @ReleaseID,
     @ReleaseDetalleID,
+    @SolicitudProduccionID,
+    @SolicitudProduccionDetalleID,
 
     @ClienteID,
     @ClienteNombre,
@@ -2157,6 +2458,10 @@ FROM @NuevoPrograma;";
 
             cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = (object?)vm.ReleaseID ?? DBNull.Value;
             cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = vm.ReleaseDetalleID;
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+                (object?)vm.SolicitudProduccionID ?? DBNull.Value;
+            cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value =
+                (object?)vm.SolicitudProduccionDetalleID ?? DBNull.Value;
 
             cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = (object?)vm.ClienteID ?? DBNull.Value;
             cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value = (object?)vm.ClienteNombre ?? DBNull.Value;
