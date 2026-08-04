@@ -1,25 +1,55 @@
-﻿@using System.Globalization
+@using System.Globalization
 @model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPMovimientoFormVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = Model.EsEntregaOF ? "Entrega de embalaje a OF" : "Movimiento de embalajes";
-    var seleccionado = Model.Materiales.FirstOrDefault(x => x.Id == Model.MaterialID)?.Texto ?? "Embalaje no encontrado";
     var maximo = Model.CantidadPendienteOF.ToString("0.###", CultureInfo.InvariantCulture);
+    var embalajeSolicitadoID = Convert.ToInt32(ViewData["EmbalajeSolicitadoID"] ?? 0);
+    var embalajeSolicitadoTexto = ViewData["EmbalajeSolicitadoTexto"]?.ToString()
+        ?? "Embalaje solicitado no encontrado";
+    var embalajeSolicitadoUnidad = ViewData["EmbalajeSolicitadoUnidad"]?.ToString()
+        ?? Model.Unidad;
+    var stockPorEmbalaje = ViewData["StockPorEmbalaje"]
+        as System.Collections.Generic.IReadOnlyDictionary<int, decimal>
+        ?? new System.Collections.Generic.Dictionary<int, decimal>();
+    stockPorEmbalaje.TryGetValue(Model.MaterialID, out var stockSeleccionado);
 }
 
-<section class="alm-hero">
+<link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
+
+<section class="alm-hero emb-movement-hero">
     <div>
         <small>ALMACÉN DE EMBALAJES</small>
         <h1>@(Model.EsEntregaOF ? "Entregar embalaje" : "Registrar movimiento")</h1>
-        <p>@(Model.EsEntregaOF
-            ? "La OF, el catálogo, la unidad, el tipo, el pendiente y la fecha se validan nuevamente en el servidor."
-            : "Las cantidades se capturan positivas; el tipo de movimiento determina si suma o resta inventario.")</p>
+        <p>
+            @(Model.EsEntregaOF
+                ? "La OF, el embalaje, la unidad y el pendiente se validan nuevamente al guardar."
+                : "Usa un solo formulario para entradas, salidas, retornos, consumos, scrap y ajustes.")
+        </p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn secondary" asp-action="Index">
+            <i class="fa-solid fa-arrow-left"></i>
+            Volver al inventario
+        </a>
     </div>
 </section>
 
-<section class="alm-card">
-    <form method="post" class="alm-form">
-        <div asp-validation-summary="ModelOnly" class="alm-field full"></div>
+<section class="alm-card emb-movement-card">
+    <header>
+        <span>
+            <i class="fa-solid fa-arrow-right-arrow-left"></i>
+            @(Model.EsEntregaOF ? "Entrega vinculada a OF" : "Datos del movimiento")
+        </span>
+        <span id="embFormHeaderHint">Captura cantidades positivas</span>
+    </header>
+
+    <form method="post" class="alm-form emb-movement-form" id="embMovementForm">
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div asp-validation-summary="ModelOnly" class="alm-alert warning full emb-validation-summary"></div>
+        }
+
         <input asp-for="EsEntregaOF" type="hidden" />
         <input asp-for="SolicitudProduccionID" type="hidden" />
         <input asp-for="OperacionToken" type="hidden" />
@@ -27,101 +57,174 @@
 
         @if (Model.EsEntregaOF)
         {
-            <input asp-for="MaterialID" type="hidden" />
             <input asp-for="TipoMovimiento" type="hidden" />
             <input asp-for="Unidad" type="hidden" />
             <input asp-for="NumeroOF" type="hidden" />
             <input asp-for="Lote" type="hidden" value="S/L" />
             <input asp-for="UbicacionID" type="hidden" />
+            <input type="hidden"
+                   name="embalajeSolicitadoId"
+                   value="@embalajeSolicitadoID" />
+
+            <div class="emb-of-summary full">
+                <div>
+                    <small>EMBALAJE SOLICITADO</small>
+                    <strong title="@embalajeSolicitadoTexto">@embalajeSolicitadoTexto</strong>
+                </div>
+                <div>
+                    <small>ORDEN DE FABRICACIÓN</small>
+                    <strong>@Model.NumeroOF</strong>
+                </div>
+                <div>
+                    <small>PENDIENTE ACTUAL</small>
+                    <strong>@Model.CantidadPendienteOF.ToString("0.###") @embalajeSolicitadoUnidad</strong>
+                </div>
+                <div>
+                    <small>STOCK DEL SELECCIONADO</small>
+                    <strong id="embSelectedStock">@stockSeleccionado.ToString("0.###") @Model.Unidad</strong>
+                </div>
+            </div>
 
             <div class="alm-field full">
-                <label>Embalaje</label>
-                <input class="alm-input" value="@seleccionado" readonly />
+                <label for="almacenCatalogoSelect">Embalaje a entregar</label>
+                <select asp-for="MaterialID"
+                        class="alm-select"
+                        id="almacenCatalogoSelect"
+                        data-requested-id="@embalajeSolicitadoID"
+                        data-requested-unit="@embalajeSolicitadoUnidad"
+                        required>
+                    <option value="">Selecciona un embalaje</option>
+                    @foreach (var x in Model.Materiales)
+                    {
+                        stockPorEmbalaje.TryGetValue(x.Id, out var stockItem);
+                        var unidadItem = string.IsNullOrWhiteSpace(x.Extra)
+                            ? "PZS"
+                            : x.Extra.Trim().ToUpperInvariant();
+                        var compatible = string.Equals(
+                            unidadItem,
+                            embalajeSolicitadoUnidad,
+                            StringComparison.OrdinalIgnoreCase);
+                        var textoCompatibilidad = compatible
+                            ? string.Empty
+                            : " · Unidad incompatible";
+
+                        <option value="@x.Id"
+                                data-unidad="@unidadItem"
+                                data-stock="@stockItem.ToString("0.###", CultureInfo.InvariantCulture)"
+                                data-compatible="@(compatible ? "true" : "false")">
+                            @x.Texto · Stock: @stockItem.ToString("0.###") @unidadItem@textoCompatibilidad
+                        </option>
+                    }
+                </select>
+                <small class="alm-filter-hint">
+                    El embalaje solicitado queda registrado. Puedes elegir otro con la misma unidad para no detener producción.
+                </small>
                 <span asp-validation-for="MaterialID"></span>
             </div>
-            <div class="alm-field">
-                <label>Tipo de movimiento</label>
-                <input class="alm-input" value="Salida · Entrega a OF" readonly />
+
+            <div id="embSubstitutionNotice"
+                 class="alm-alert warning full emb-info-message"
+                 hidden>
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>
+                    Se registrará una sustitución. Describe el motivo en Observaciones.
+                </span>
             </div>
-            <div class="alm-field">
-                <label asp-for="FechaMovimiento"></label>
-                <input class="alm-input" value="@Model.FechaMovimiento.ToString("dd/MM/yyyy HH:mm:ss")" readonly />
-            </div>
-            <div class="alm-field">
-                <label asp-for="NumeroOF"></label>
-                <input class="alm-input" value="@Model.NumeroOF" readonly />
-                <span asp-validation-for="NumeroOF"></span>
-            </div>
-            <div class="alm-field">
-                <label>Pendiente actual</label>
-                <input class="alm-input" value="@Model.CantidadPendienteOF.ToString("0.###") @Model.Unidad" readonly />
-            </div>
-            <div class="alm-field full">
-                <div class="alm-alert">
-                    El pendiente se calculará nuevamente al guardar. No se permite entregar más de lo requerido ni más de la existencia disponible.
-                </div>
+
+            <div class="alm-alert full emb-info-message">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>
+                    El pendiente y el stock se recalculan al guardar. El movimiento descontará el embalaje seleccionado, pero abonará al embalaje solicitado originalmente en la OF.
+                </span>
             </div>
         }
         else
         {
             <div class="alm-field full">
-                <label asp-for="MaterialID">Embalaje</label>
-                <select asp-for="MaterialID" class="alm-select" id="almacenCatalogoSelect">
-                    <option value="">Selecciona</option>
+                <label for="almacenCatalogoSelect">Embalaje</label>
+                <select asp-for="MaterialID" class="alm-select" id="almacenCatalogoSelect" required>
+                    <option value="">Selecciona un embalaje</option>
                     @foreach (var x in Model.Materiales)
                     {
-                        <option value="@x.Id" data-unidad="@x.Extra">@x.Texto</option>
+                        stockPorEmbalaje.TryGetValue(x.Id, out var stockItem);
+                        <option value="@x.Id"
+                                data-unidad="@x.Extra"
+                                data-stock="@stockItem.ToString("0.###", CultureInfo.InvariantCulture)">
+                            @x.Texto
+                        </option>
                     }
                 </select>
+                <small class="alm-filter-hint">Elige el artículo que recibirá el movimiento.</small>
                 <span asp-validation-for="MaterialID"></span>
             </div>
+
             <div class="alm-field">
-                <label asp-for="TipoMovimiento"></label>
-                <select asp-for="TipoMovimiento" class="alm-select">
+                <label for="TipoMovimiento">Tipo de movimiento</label>
+                <select asp-for="TipoMovimiento" class="alm-select" id="TipoMovimiento">
                     @foreach (var x in Model.TiposMovimiento)
                     {
                         <option value="@x.Extra">@x.Texto</option>
                     }
                 </select>
+                <small class="alm-filter-hint" id="embMovementTypeHelp">Selecciona cómo afectará el inventario.</small>
                 <span asp-validation-for="TipoMovimiento"></span>
             </div>
+
             <div class="alm-field">
-                <label asp-for="Unidad"></label>
+                <label for="almacenUnidadInput">Unidad</label>
                 <input asp-for="Unidad" class="alm-input" id="almacenUnidadInput" readonly />
-                <small class="alm-filter-hint">Se toma automáticamente del catálogo.</small>
+                <small class="alm-filter-hint">Se obtiene automáticamente del catálogo.</small>
+                <span asp-validation-for="Unidad"></span>
             </div>
-            <div class="alm-field">
-                <label asp-for="NumeroOF"></label>
-                <input asp-for="NumeroOF" class="alm-input" />
+
+            <div class="emb-live-summary full" aria-live="polite">
+                <div>
+                    <small>ARTÍCULO SELECCIONADO</small>
+                    <strong id="embSelectedMaterial">Sin seleccionar</strong>
+                </div>
+                <div>
+                    <small>UNIDAD</small>
+                    <strong id="embSelectedUnit">—</strong>
+                </div>
+                <div>
+                    <small>STOCK</small>
+                    <strong id="embSelectedStock">0</strong>
+                </div>
+                <div id="embImpactBox">
+                    <small>IMPACTO EN INVENTARIO</small>
+                    <strong id="embMovementImpact">Selecciona el tipo</strong>
+                </div>
             </div>
         }
 
         <div class="alm-field">
-            <label asp-for="Cantidad">@(Model.EsEntregaOF ? $"Cantidad a entregar ({Model.Unidad})" : "Cantidad")</label>
-            @if (Model.EsEntregaOF)
-            {
-                <div class="alm-unit-input">
-                    <input asp-for="Cantidad" class="alm-input" required min="0.001" max="@maximo" step="0.001" placeholder="Cantidad en @Model.Unidad" />
-                    <span class="alm-unit-input__suffix">@Model.Unidad</span>
-                </div>
-            }
-            else
-            {
-                <input asp-for="Cantidad" class="alm-input" required min="0.001" step="0.001" />
-            }
+            <label for="Cantidad">@(Model.EsEntregaOF ? $"Cantidad a entregar ({Model.Unidad})" : "Cantidad")</label>
+            <div class="alm-unit-input">
+                <input asp-for="Cantidad"
+                       class="alm-input"
+                       id="Cantidad"
+                       required
+                       min="0.001"
+                       max="@(Model.EsEntregaOF ? maximo : null)"
+                       step="0.001"
+                       placeholder="0.000" />
+                <span class="alm-unit-input__suffix" id="embQuantityUnit">@(Model.EsEntregaOF ? Model.Unidad : Model.Unidad)</span>
+            </div>
+            <small class="alm-filter-hint">Captura siempre una cantidad positiva; el tipo determina si suma o resta.</small>
             <span asp-validation-for="Cantidad"></span>
         </div>
 
         @if (!Model.EsEntregaOF)
         {
             <div class="alm-field">
-                <label asp-for="Lote">Lote</label>
-                <input asp-for="Lote" class="alm-input" />
+                <label for="Lote">Lote</label>
+                <input asp-for="Lote" class="alm-input" id="Lote" placeholder="S/L cuando no aplique" />
                 <span asp-validation-for="Lote"></span>
             </div>
-            <div class="alm-field full">
-                <label asp-for="UbicacionID"></label>
-                <select asp-for="UbicacionID" class="alm-select">
+
+            <div class="alm-field">
+                <label for="UbicacionID">Ubicación</label>
+                <select asp-for="UbicacionID" class="alm-select" id="UbicacionID">
                     <option value="">Sin ubicación</option>
                     @foreach (var x in Model.Ubicaciones)
                     {
@@ -130,17 +233,39 @@
                 </select>
                 <span asp-validation-for="UbicacionID"></span>
             </div>
+
+            <div class="alm-field" id="embOfField">
+                <label for="NumeroOF">Orden de fabricación</label>
+                <input asp-for="NumeroOF" class="alm-input" id="NumeroOF" placeholder="Opcional para movimientos generales" />
+                <small class="alm-filter-hint">Úsala únicamente cuando el movimiento corresponda a una OF.</small>
+                <span asp-validation-for="NumeroOF"></span>
+            </div>
         }
 
         <div class="alm-field full">
-            <label asp-for="Observaciones"></label>
-            <textarea asp-for="Observaciones" class="alm-textarea" required="@(Model.EsEntregaOF ? "required" : null)"></textarea>
+            <label for="Observaciones">Observaciones</label>
+            <textarea asp-for="Observaciones"
+                      class="alm-textarea"
+                      id="Observaciones"
+                      rows="4"
+                      placeholder="Describe el origen, destino o motivo del movimiento"
+                      required="@(Model.EsEntregaOF ? "required" : null)"></textarea>
+            <small class="alm-filter-hint" id="embObservationHelp">
+                En ajustes, las observaciones son obligatorias.
+            </small>
             <span asp-validation-for="Observaciones"></span>
         </div>
-        <div class="alm-field full">
-            <button class="alm-btn" type="submit">
-                <i class="fa-solid fa-truck-ramp-box"></i>
-                @(Model.EsEntregaOF ? "Registrar entrega de embalaje" : "Guardar movimiento")
+
+        <div class="emb-movement-rules full">
+            <span><i class="fa-solid fa-circle-plus"></i><strong>Entrada y retorno:</strong> aumentan inventario.</span>
+            <span><i class="fa-solid fa-circle-minus"></i><strong>Salida, consumo y scrap:</strong> disminuyen inventario.</span>
+            <span><i class="fa-solid fa-scale-balanced"></i><strong>Ajuste:</strong> requiere justificar el motivo.</span>
+        </div>
+
+        <div class="alm-field full emb-form-submit">
+            <button class="alm-btn" type="submit" id="embSubmitButton">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span id="embSubmitText">@(Model.EsEntregaOF ? "Registrar entrega de embalaje" : "Guardar movimiento")</span>
             </button>
         </div>
     </form>
@@ -151,14 +276,143 @@
         (() => {
             const catalogo = document.getElementById("almacenCatalogoSelect");
             const unidad = document.getElementById("almacenUnidadInput");
-            if (!catalogo || !unidad) return;
-            const actualizarUnidad = () => {
-                const opcion = catalogo.options[catalogo.selectedIndex];
-                unidad.value = opcion?.dataset?.unidad || "";
+            const tipo = document.getElementById("TipoMovimiento");
+            const selectedMaterial = document.getElementById("embSelectedMaterial");
+            const selectedUnit = document.getElementById("embSelectedUnit");
+            const selectedStock = document.getElementById("embSelectedStock");
+            const substitutionNotice = document.getElementById("embSubstitutionNotice");
+            const quantityUnit = document.getElementById("embQuantityUnit");
+            const impact = document.getElementById("embMovementImpact");
+            const impactBox = document.getElementById("embImpactBox");
+            const typeHelp = document.getElementById("embMovementTypeHelp");
+            const observations = document.getElementById("Observaciones");
+            const observationHelp = document.getElementById("embObservationHelp");
+            const submitText = document.getElementById("embSubmitText");
+            const headerHint = document.getElementById("embFormHeaderHint");
+
+            const movementInfo = {
+                Entrada: {
+                    impact: "Sumará existencias",
+                    help: "Usa Entrada cuando el embalaje llegue físicamente al almacén.",
+                    submit: "Registrar entrada",
+                    mode: "positive"
+                },
+                Retorno: {
+                    impact: "Sumará existencias",
+                    help: "Usa Retorno cuando producción devuelva embalaje utilizable.",
+                    submit: "Registrar retorno",
+                    mode: "positive"
+                },
+                AjustePositivo: {
+                    impact: "Aumentará existencias por ajuste",
+                    help: "El motivo del ajuste positivo es obligatorio.",
+                    submit: "Registrar ajuste positivo",
+                    mode: "warning",
+                    requiresReason: true
+                },
+                Salida: {
+                    impact: "Restará existencias",
+                    help: "Usa Salida cuando el embalaje abandone físicamente el almacén.",
+                    submit: "Registrar salida",
+                    mode: "negative"
+                },
+                Consumo: {
+                    impact: "Restará existencias",
+                    help: "Usa Consumo cuando el embalaje sea utilizado por producción.",
+                    submit: "Registrar consumo",
+                    mode: "negative"
+                },
+                Scrap: {
+                    impact: "Restará existencias por scrap",
+                    help: "Registra únicamente material descartado y documenta el motivo.",
+                    submit: "Registrar scrap",
+                    mode: "negative",
+                    requiresReason: true
+                },
+                AjusteNegativo: {
+                    impact: "Disminuirá existencias por ajuste",
+                    help: "El motivo del ajuste negativo es obligatorio.",
+                    submit: "Registrar ajuste negativo",
+                    mode: "warning",
+                    requiresReason: true
+                }
             };
-            catalogo.addEventListener("change", actualizarUnidad);
-            actualizarUnidad();
+
+            const actualizarCatalogo = () => {
+                if (!catalogo) return;
+
+                const opcion = catalogo.options[catalogo.selectedIndex];
+                const valorUnidad = opcion?.dataset?.unidad || "";
+                const valorStock = opcion?.dataset?.stock || "0";
+                const texto = catalogo.selectedIndex > 0
+                    ? opcion.textContent.trim()
+                    : "Sin seleccionar";
+                const requestedId = catalogo.dataset.requestedId || "";
+                const requestedUnit = catalogo.dataset.requestedUnit || "";
+                const isSubstitution = Boolean(requestedId)
+                    && catalogo.value
+                    && catalogo.value !== requestedId;
+                const compatible = opcion?.dataset?.compatible !== "false";
+
+                if (unidad) unidad.value = valorUnidad;
+                if (selectedMaterial) selectedMaterial.textContent = texto;
+                if (selectedUnit) selectedUnit.textContent = valorUnidad || "—";
+                if (selectedStock) {
+                    const parsed = Number.parseFloat(valorStock || "0");
+                    const formatted = Number.isFinite(parsed)
+                        ? parsed.toLocaleString("es-MX", { maximumFractionDigits: 3 })
+                        : "0";
+                    selectedStock.textContent = `${formatted} ${valorUnidad || requestedUnit || ""}`.trim();
+                }
+                if (quantityUnit) quantityUnit.textContent = valorUnidad || requestedUnit || "UNIDAD";
+                if (substitutionNotice) substitutionNotice.hidden = !isSubstitution;
+
+                catalogo.setCustomValidity(
+                    catalogo.value && !compatible
+                        ? `El embalaje sustituto debe usar la unidad ${requestedUnit}.`
+                        : "");
+
+                if (observations && isSubstitution) {
+                    observations.placeholder =
+                        "Explica por qué se entregará un embalaje diferente al solicitado";
+                }
+            };
+
+            const actualizarTipo = () => {
+                if (!tipo) return;
+
+                const info = movementInfo[tipo.value] || {
+                    impact: "Movimiento de inventario",
+                    help: "Revisa el efecto del movimiento antes de guardar.",
+                    submit: "Guardar movimiento",
+                    mode: "neutral"
+                };
+
+                if (impact) impact.textContent = info.impact;
+                if (typeHelp) typeHelp.textContent = info.help;
+                if (submitText) submitText.textContent = info.submit;
+                if (headerHint) headerHint.textContent = info.impact;
+
+                if (impactBox) {
+                    impactBox.dataset.mode = info.mode;
+                }
+
+                if (observations) {
+                    observations.required = Boolean(info.requiresReason);
+                }
+
+                if (observationHelp) {
+                    observationHelp.textContent = info.requiresReason
+                        ? "Las observaciones son obligatorias para este tipo de movimiento."
+                        : "Agrega información que permita rastrear el movimiento.";
+                }
+            };
+
+            catalogo?.addEventListener("change", actualizarCatalogo);
+            tipo?.addEventListener("change", actualizarTipo);
+
+            actualizarCatalogo();
+            actualizarTipo();
         })();
     </script>
 }
-

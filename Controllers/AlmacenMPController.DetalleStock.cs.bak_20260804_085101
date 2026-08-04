@@ -65,50 +65,47 @@ FROM dbo.vw_AlmacenMPInventario
 WHERE MaterialID = @MaterialID
 ORDER BY OrdenTipo, TipoMP;";
 
+        await using var command =
+            new SqlCommand(inventarioSql, connection);
+
+        command.Parameters.Add("@MaterialID", SqlDbType.Int).Value = id;
+
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
         AlmacenMPDetalleStockVm? vm = null;
 
-        // El reader de inventario debe cerrarse antes de ejecutar la consulta
-        // de movimientos sobre la misma conexion.
-        await using (var command =
-            new SqlCommand(inventarioSql, connection))
+        while (await reader.ReadAsync(cancellationToken))
         {
-            command.Parameters.Add("@MaterialID", SqlDbType.Int).Value = id;
-
-            await using var reader =
-                await command.ExecuteReaderAsync(cancellationToken);
-
-            while (await reader.ReadAsync(cancellationToken))
+            vm ??= new AlmacenMPDetalleStockVm
             {
-                vm ??= new AlmacenMPDetalleStockVm
-                {
-                    MaterialID = Entero(reader, "MaterialID"),
-                    Codigo = Texto(reader, "Codigo"),
-                    Nombre = Texto(reader, "Nombre"),
-                    Unidad = string.IsNullOrWhiteSpace(Texto(reader, "Unidad"))
-                        ? "KG"
-                        : Texto(reader, "Unidad")
-                };
+                MaterialID = Entero(reader, "MaterialID"),
+                Codigo = Texto(reader, "Codigo"),
+                Nombre = Texto(reader, "Nombre"),
+                Unidad = string.IsNullOrWhiteSpace(Texto(reader, "Unidad"))
+                    ? "KG"
+                    : Texto(reader, "Unidad")
+            };
 
-                var tipo = Texto(reader, "TipoMP").Trim().ToUpperInvariant();
-                var fisico = Math.Max(0m, DecimalValor(reader, "Fisico"));
-                var solicitado = Math.Max(0m, DecimalValor(reader, "Reservado"));
-                var stock = Math.Max(0m, DecimalValor(reader, "Disponible"));
-                var ultimoMovimiento = Fecha(reader, "UltimoMovimiento");
+            var tipo = Texto(reader, "TipoMP").Trim().ToUpperInvariant();
+            var fisico = Math.Max(0m, DecimalValor(reader, "Fisico"));
+            var solicitado = Math.Max(0m, DecimalValor(reader, "Reservado"));
+            var stock = Math.Max(0m, DecimalValor(reader, "Disponible"));
+            var ultimoMovimiento = Fecha(reader, "UltimoMovimiento");
 
-                if (tipo == "M")
-                {
-                    vm.FisicoM = fisico;
-                    vm.SolicitadoM = solicitado;
-                    vm.StockM = stock;
-                    vm.UltimoMovimientoM = ultimoMovimiento;
-                }
-                else
-                {
-                    vm.FisicoV = fisico;
-                    vm.SolicitadoV = solicitado;
-                    vm.StockV = stock;
-                    vm.UltimoMovimientoV = ultimoMovimiento;
-                }
+            if (tipo == "M")
+            {
+                vm.FisicoM = fisico;
+                vm.SolicitadoM = solicitado;
+                vm.StockM = stock;
+                vm.UltimoMovimientoM = ultimoMovimiento;
+            }
+            else
+            {
+                vm.FisicoV = fisico;
+                vm.SolicitadoV = solicitado;
+                vm.StockV = stock;
+                vm.UltimoMovimientoV = ultimoMovimiento;
             }
         }
 
@@ -157,30 +154,28 @@ WHERE m.Activo = 1
   AND m.MaterialID = @MaterialID
 ORDER BY m.FechaMovimiento DESC, m.MovimientoID DESC;";
 
-        await using (var movimientosCommand =
-            new SqlCommand(movimientosSql, connection))
+        await using var movimientosCommand =
+            new SqlCommand(movimientosSql, connection);
+        movimientosCommand.Parameters.Add("@MaterialID", SqlDbType.Int).Value = id;
+
+        await using var movimientosReader =
+            await movimientosCommand.ExecuteReaderAsync(cancellationToken);
+
+        while (await movimientosReader.ReadAsync(cancellationToken))
         {
-            movimientosCommand.Parameters.Add("@MaterialID", SqlDbType.Int).Value = id;
-
-            await using var movimientosReader =
-                await movimientosCommand.ExecuteReaderAsync(cancellationToken);
-
-            while (await movimientosReader.ReadAsync(cancellationToken))
+            vm.Movimientos.Add(new AlmacenMPDetalleMovimientoVm
             {
-                vm.Movimientos.Add(new AlmacenMPDetalleMovimientoVm
-                {
-                    MovimientoID = Convert.ToInt64(movimientosReader["MovimientoID"]),
-                    FechaMovimiento = Fecha(movimientosReader, "FechaMovimiento") ?? DateTime.MinValue,
-                    TipoExistencia = Texto(movimientosReader, "TipoExistencia"),
-                    TipoMovimiento = Texto(movimientosReader, "TipoMovimiento"),
-                    Cantidad = DecimalValor(movimientosReader, "Cantidad"),
-                    Unidad = Texto(movimientosReader, "Unidad"),
-                    NumeroOF = Texto(movimientosReader, "NumeroOF"),
-                    Ubicacion = Texto(movimientosReader, "Ubicacion"),
-                    Responsable = Texto(movimientosReader, "Responsable"),
-                    Observaciones = Texto(movimientosReader, "Observaciones")
-                });
-            }
+                MovimientoID = Convert.ToInt64(movimientosReader["MovimientoID"]),
+                FechaMovimiento = Fecha(movimientosReader, "FechaMovimiento") ?? DateTime.MinValue,
+                TipoExistencia = Texto(movimientosReader, "TipoExistencia"),
+                TipoMovimiento = Texto(movimientosReader, "TipoMovimiento"),
+                Cantidad = DecimalValor(movimientosReader, "Cantidad"),
+                Unidad = Texto(movimientosReader, "Unidad"),
+                NumeroOF = Texto(movimientosReader, "NumeroOF"),
+                Ubicacion = Texto(movimientosReader, "Ubicacion"),
+                Responsable = Texto(movimientosReader, "Responsable"),
+                Observaciones = Texto(movimientosReader, "Observaciones")
+            });
         }
 
         return View(vm);

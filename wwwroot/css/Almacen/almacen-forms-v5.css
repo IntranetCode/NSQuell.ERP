@@ -1,0 +1,156 @@
+/* ALMACEN_FORMS_V5_0_5 */
+.pt-validation-summary,
+.emb-validation-summary {
+    margin: 0 0 1rem;
+}
+
+.pt-validation-summary:empty,
+.emb-validation-summary:empty {
+    display: none !important;
+}
+
+.emb-movement-card {
+    overflow: hidden;
+}
+
+.emb-movement-form {
+    align-items: start;
+}
+
+.emb-of-summary,
+.emb-live-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    padding: 4px 0 8px;
+}
+
+.emb-of-summary > div,
+.emb-live-summary > div {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--alm-border);
+    border-radius: 14px;
+    background: var(--alm-surface-soft);
+}
+
+.emb-of-summary small,
+.emb-live-summary small {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--alm-muted);
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+}
+
+.emb-of-summary strong,
+.emb-live-summary strong {
+    display: block;
+    overflow: hidden;
+    color: var(--alm-text);
+    font-size: .95rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.emb-live-summary [data-mode="positive"] {
+    border-color: color-mix(in srgb, #14885f 40%, var(--alm-border));
+    background: color-mix(in srgb, #14885f 8%, var(--alm-surface-soft));
+}
+
+.emb-live-summary [data-mode="negative"] {
+    border-color: color-mix(in srgb, #ba3030 35%, var(--alm-border));
+    background: color-mix(in srgb, #ba3030 7%, var(--alm-surface-soft));
+}
+
+.emb-live-summary [data-mode="warning"] {
+    border-color: color-mix(in srgb, #e77f0e 45%, var(--alm-border));
+    background: color-mix(in srgb, #e77f0e 8%, var(--alm-surface-soft));
+}
+
+.emb-info-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.emb-info-message i {
+    margin-top: 3px;
+}
+
+.emb-movement-rules {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--alm-border);
+    border-radius: 14px;
+    background: var(--alm-surface-soft);
+}
+
+.emb-movement-rules span {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    color: var(--alm-muted);
+    font-size: .8rem;
+    line-height: 1.4;
+}
+
+.emb-movement-rules i {
+    margin-top: 2px;
+}
+
+.emb-movement-rules strong {
+    color: var(--alm-text);
+}
+
+.emb-form-submit {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.emb-form-submit .alm-btn {
+    min-width: 220px;
+    justify-content: center;
+}
+
+.pt-scan-layout > .alm-card:first-of-type,
+.pt-scan-layout > .alm-card {
+    scroll-margin-top: 18px;
+}
+
+.pt-scan-zone__title small,
+.pt-scan-message,
+.pt-context label {
+    text-rendering: optimizeLegibility;
+}
+
+@media (max-width: 1000px) {
+    .emb-of-summary,
+    .emb-live-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .emb-movement-rules {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .emb-of-summary,
+    .emb-live-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .emb-form-submit {
+        justify-content: stretch;
+    }
+
+    .emb-form-submit .alm-btn {
+        width: 100%;
+    }
+}
+/* ALMACEN_FORMS_V5_0_5_END */
