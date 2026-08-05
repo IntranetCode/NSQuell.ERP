@@ -12,9 +12,9 @@ namespace ERP.NSQuell.Controllers
 {
     public partial class CalidadController
     {
-        private const string DecisionCajaLiberar = "LIBERAR";
-        private const string DecisionCajaGP12 = "GP12";
-        private const string DecisionCajaDevolver = "DEVOLVER";
+        private const string DecisionCajaLiberar = CalidadDecisionCaja.Liberar;
+        private const string DecisionCajaGP12 = CalidadDecisionCaja.GP12;
+        private const string DecisionCajaDevolver = CalidadDecisionCaja.Devolver;
 
         private sealed class CajaProduccionCalidadOrigen
         {
@@ -34,6 +34,8 @@ namespace ERP.NSQuell.Controllers
             public DateTime FechaFormacion { get; set; }
             public int? UsuarioFormacionID { get; set; }
             public string EstadoInspeccion { get; set; } = string.Empty;
+            public bool ConfiguracionInvalidada { get; set; }
+            public int DisposicionesPendientes { get; set; }
         }
 
         private async Task<List<CalidadCajaProduccionItemViewModel>>
@@ -301,6 +303,55 @@ ORDER BY
                         new { id = model.InspeccionID });
                 }
 
+                if (caja.ConfiguracionInvalidada)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "La configuración de la corrida fue invalidada. No se puede resolver la caja hasta completar la reliberación correspondiente.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                if (EstadoBloqueaRevisionCaja(caja.EstadoInspeccion))
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "El proceso de Calidad se encuentra cerrado o bloqueado y ya no permite decisiones sobre cajas.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                if (caja.CantidadPiezas <= 0)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "La caja no tiene una cantidad válida de piezas para revisión.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                if (decision == DecisionCajaLiberar &&
+                    caja.DisposicionesPendientes > 0)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        $"No se puede liberar la caja a Almacén mientras existan {caja.DisposicionesPendientes} disposición(es) de material pendientes. Resuélvelas o envía la caja a GP12.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
                 var ahora = DateTime.Now;
 
                 string resultadoCalidad;
@@ -452,7 +503,15 @@ SELECT TOP (1)
     pc.EstatusCalidad,
     ISNULL(pc.FechaFormacion, pc.FechaCreacion) AS FechaFormacion,
     pc.UsuarioFormacionID,
-    ci.Estado AS EstadoInspeccion
+    ci.Estado AS EstadoInspeccion,
+    ISNULL(ci.ConfiguracionInvalidada, 0) AS ConfiguracionInvalidada,
+    (
+        SELECT COUNT(1)
+        FROM dbo.Calidad_DisposicionesMaterial d
+        WHERE d.InspeccionID = ci.InspeccionID
+          AND d.Activo = 1
+          AND d.ResultadoFinal = 'PENDIENTE'
+    ) AS DisposicionesPendientes
 FROM dbo.Produccion_Cajas pc WITH (UPDLOCK, HOLDLOCK)
 INNER JOIN dbo.Calidad_Inspecciones ci
     ON ci.InspeccionID = @InspeccionID
@@ -488,7 +547,9 @@ WHERE pc.CajaProduccionID = @CajaProduccionID
                 EstatusCalidad = LeerTextoCaja(rd, "EstatusCalidad"),
                 FechaFormacion = Convert.ToDateTime(rd["FechaFormacion"]),
                 UsuarioFormacionID = LeerEnteroNullableCaja(rd, "UsuarioFormacionID"),
-                EstadoInspeccion = rd["EstadoInspeccion"]?.ToString()?.Trim() ?? string.Empty
+                EstadoInspeccion = rd["EstadoInspeccion"]?.ToString()?.Trim() ?? string.Empty,
+                ConfiguracionInvalidada = Convert.ToBoolean(rd["ConfiguracionInvalidada"]),
+                DisposicionesPendientes = Convert.ToInt32(rd["DisposicionesPendientes"])
             };
         }
 
@@ -1092,6 +1153,8 @@ ORDER BY c.Codigo, d.DefectoGP12ID;";
                     new { id = model.InspeccionID });
             }
 
+            model.Observaciones = model.Observaciones?.Trim();
+
             var usuarioId = ObtenerUsuarioIdActual();
 
             if (!usuarioId.HasValue || usuarioId.Value <= 0)
@@ -1129,6 +1192,29 @@ ORDER BY c.Codigo, d.DefectoGP12ID;";
             {
                 TempData["Error"] =
                     "La suma de defectos debe ser igual a la cantidad NOK.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            if (model.CantidadNOK > 0 &&
+                string.IsNullOrWhiteSpace(model.Observaciones))
+            {
+                TempData["Error"] =
+                    "Describe la condición detectada y las acciones requeridas cuando GP12 tenga piezas NOK.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            if (defectos
+                .GroupBy(x => x.CatalogoDefectoID)
+                .Any(x => x.Count() > 1))
+            {
+                TempData["Error"] =
+                    "Cada defecto debe registrarse una sola vez. Agrupa la cantidad del mismo defecto en un único renglón.";
 
                 return RedirectToAction(
                     nameof(Detalle),
@@ -1659,6 +1745,18 @@ VALUES
             cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
 
             await cmd.ExecuteNonQueryAsync();
+        }
+
+        private static bool EstadoBloqueaRevisionCaja(string? estado)
+        {
+            if (string.IsNullOrWhiteSpace(estado))
+                return false;
+
+            var valor = estado.Trim().ToUpperInvariant();
+
+            return valor == CalidadEstados.Cerrada ||
+                   valor == CalidadEstados.LegacyDetenida ||
+                   valor == CalidadEstados.LegacyScrap;
         }
 
         private static CalidadCajaProduccionItemViewModel
