@@ -770,20 +770,7 @@
                 <div class="sub">@TxtNullable(Model.DescripcionParte)</div>
             </div>
 
-            <div class="info">
-                <div class="k">Operador asignado</div>
-                <div class="v">@TxtNullable(Model.OperadorNombre)</div>
-                <div class="sub">
-                    @if (Model.OperadorID.HasValue)
-                    {
-                        <span>ID @Model.OperadorID.Value</span>
-                    }
-                    else
-                    {
-                        <span>Sin operador asignado</span>
-                    }
-                </div>
-            </div>
+           
 
             <div class="info">
                 <div class="k">Cantidad planeada</div>
@@ -1108,51 +1095,7 @@
                     </section>
                 }
 
-                <section class="panel">
-                    <div class="panel-head">
-                        <i class="fa-solid fa-route me-2"></i>
-                        Flujo desde este punto
-                    </div>
-
-                    <div class="panel-body">
-                        <div class="note mb-2">
-                            <strong>10.</strong> Registrar producción por hora.
-                        </div>
-
-                        <div class="note mb-2">
-                            <strong>11.</strong> Separar OK, sospechoso y scrap.
-                        </div>
-
-                        <div class="warn-note mb-2">
-                            <strong>Paro menor o igual a 15 min:</strong> se cierra y continúa la producción.
-                        </div>
-
-                        <div class="danger-note">
-                            <strong>Paro mayor a 15 min:</strong> se cierra, se solicita reliberación y vuelve a 5 disparos de prueba.
-                        </div>
-                    </div>
-                </section>
-
-                <section class="panel">
-                    <div class="panel-head">
-                        <i class="fa-solid fa-list-check me-2"></i>
-                        Reglas de captura
-                    </div>
-
-                    <div class="panel-body">
-                        <div class="success-note mb-2">
-                            <strong>OK</strong>: piezas conformes para avance de producción.
-                        </div>
-
-                        <div class="warn-note mb-2">
-                            <strong>Sospechoso</strong>: piezas separadas para revisión.
-                        </div>
-
-                        <div class="danger-note">
-                            <strong>Scrap</strong>: piezas rechazadas o no recuperables.
-                        </div>
-                    </div>
-                </section>
+               
             </aside>
         </div>
     </div>

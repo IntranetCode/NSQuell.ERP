@@ -655,58 +655,94 @@ ORDER BY
 
 
         [HttpGet]
-        public async Task<IActionResult> ChecklistArranque(int ejecucionProduccionId)
+        public async Task<IActionResult> ChecklistArranque(
+      int ejecucionProduccionId)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
 
+            if (ejecucionProduccionId <= 0)
+                return NotFound();
+
             var usuarioId = ObtenerUsuarioID();
 
-            await using var cn = new SqlConnection(ConnectionString);
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
             await cn.OpenAsync();
 
-            var ejecucion = await ObtenerEjecucionAsync(ejecucionProduccionId, cn);
+            var ejecucion =
+                await ObtenerEjecucionAsync(
+                    ejecucionProduccionId,
+                    cn);
 
             if (ejecucion == null)
                 return NotFound();
 
-            await using (var tx = (SqlTransaction)await cn.BeginTransactionAsync())
+            int checklistArranqueId;
+
+            await using (
+                var tx = (SqlTransaction)
+                    await cn.BeginTransactionAsync())
             {
                 try
                 {
-                    await ObtenerOCrearChecklistArranqueAsync(
-                        ejecucion,
-                        usuarioId,
-                        cn,
-                        tx);
+                    /*
+                     * Genera todos los formatos que corresponden
+                     * al inicio de esta OF.
+                     */
+                    checklistArranqueId =
+                        await ObtenerOCrearChecklistsInicialesAsync(
+                            ejecucion,
+                            usuarioId,
+                            cn,
+                            tx);
 
                     await tx.CommitAsync();
                 }
-                catch
+                catch (Exception ex)
                 {
                     await tx.RollbackAsync();
-                    throw;
+
+                    TempData["Error"] =
+                        "No fue posible preparar los checklist: "
+                        + ex.Message;
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
                 }
             }
 
-            var checklist = await ObtenerChecklistArranquePorEjecucionAsync(
-                ejecucionProduccionId,
-                cn);
+            var checklist =
+                await ObtenerChecklistArranqueAsync(
+                    checklistArranqueId,
+                    cn);
 
             if (checklist == null)
             {
                 TempData["Error"] =
-                    "No fue posible generar el checklist de arranque.";
+                    "No fue posible obtener el checklist de arranque.";
 
                 return RedirectToAction(
                     nameof(Detalle),
-                    new { id = ejecucionProduccionId });
+                    new
+                    {
+                        id = ejecucionProduccionId
+                    });
             }
 
-            await CargarEstadoCalidadChecklistAsync(checklist, cn);
+            await CargarEstadoCalidadChecklistAsync(
+                checklist,
+                cn);
 
             return View(checklist);
         }
+
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -754,28 +790,23 @@ ORDER BY
 
                 foreach (var respuesta in vm.Respuestas ?? new List<ProduccionChecklistRespuestaPostVm>())
                 {
-                    var resultadoNormalizado =
-                        NormalizarResultadoChecklist(respuesta.Resultado);
+                    var resultadoNormalizado = NormalizarResultadoChecklist(respuesta.Resultado);
+
+                    if (respuesta.Confirmado && resultadoNormalizado == null)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Una pregunta confirmada debe tener una respuesta OK, NOK o N/A.";
+                        return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                    }
 
                     if (resultadoNormalizado == "__INVALIDO__")
                     {
                         await tx.RollbackAsync();
-
-                        TempData["Error"] =
-                            "Una o más respuestas del checklist tienen un valor inválido.";
-
-                        return RedirectToAction(
-                            nameof(ChecklistArranque),
-                            new { ejecucionProduccionId = vm.EjecucionProduccionID });
+                        TempData["Error"] = "Una o más respuestas tienen un valor inválido.";
+                        return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
                     }
 
-                    await ActualizarRespuestaChecklistAsync(
-                        respuesta.ChecklistArranqueDetalleID,
-                        resultadoNormalizado,
-                        respuesta.Observaciones,
-                        usuarioId,
-                        cn,
-                        tx);
+                    await ActualizarRespuestaChecklistAsync(respuesta.ChecklistArranqueDetalleID, resultadoNormalizado, respuesta.Observaciones, respuesta.Confirmado, respuesta.ValorCapturado, usuarioId, cn, tx);
                 }
 
                 if (vm.EnviarACalidad)
@@ -2707,25 +2738,269 @@ WHERE RecepcionOFID = @RecepcionOFID
             return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
         }
 
-        private async Task<int> ObtenerOCrearChecklistArranqueAsync( ProduccionEjecucionVm ejecucion,int usuarioId, SqlConnection cn,  SqlTransaction tx)
+        private async Task<int>
+    ObtenerOCrearChecklistsInicialesAsync(
+        ProduccionEjecucionVm ejecucion,
+        int usuarioId,
+        SqlConnection cn,
+        SqlTransaction tx)
         {
+            if (!ejecucion.SolicitudProduccionID.HasValue ||
+                ejecucion.SolicitudProduccionID.Value <= 0)
+            {
+                throw new InvalidOperationException(
+                    "La ejecución no está relacionada con una OF.");
+            }
+
+            var fechaOperacion = DateTime.Today;
+
+            /*
+             * 1. Siempre se crea el checklist de arranque
+             *    y liberación de máquina.
+             */
+            var checklistArranqueId =
+                await ObtenerOCrearChecklistFormatoAsync(
+                    ejecucion: ejecucion,
+                    codigoFormato: "GQ-F-PR01-06",
+                    versionFormato: "Ver.10",
+                    tipoChecklist: "ARRANQUE_LIBERACION",
+                    momentoProceso: "INICIO_PRODUCCION",
+                    fechaOperacion: fechaOperacion,
+                    turnoId: null,
+                    turnoNombre: null,
+                    esRecurrente: false,
+                    requiereCambioMolde: ejecucion.EsCambioMolde,
+                    numeroAplicacion: 1,
+                    usuarioId: usuarioId,
+                    cn: cn,
+                    tx: tx);
+
+            /*
+             * 2. Solo se crea cuando Planeación indicó
+             *    que existe cambio de molde.
+             */
+            if (ejecucion.EsCambioMolde)
+            {
+                await ObtenerOCrearChecklistFormatoAsync(
+                    ejecucion: ejecucion,
+                    codigoFormato: "GQ-F-PR01-03",
+                    versionFormato: "Ver.09",
+                    tipoChecklist: "CAMBIO_MOLDE",
+                    momentoProceso: "INICIO_PRODUCCION",
+                    fechaOperacion: fechaOperacion,
+                    turnoId: null,
+                    turnoNombre: null,
+                    esRecurrente: false,
+                    requiereCambioMolde: true,
+                    numeroAplicacion: 1,
+                    usuarioId: usuarioId,
+                    cn: cn,
+                    tx: tx);
+            }
+
+            /*
+             * 3. El monitoreo de parámetros se realiza
+             *    una vez al inicio de la OF.
+             */
+            await ObtenerOCrearChecklistFormatoAsync(
+                ejecucion: ejecucion,
+                codigoFormato: "GQ-F-PR01-05",
+                versionFormato: "Ver.10",
+                tipoChecklist: "MONITOREO_PARAMETROS",
+                momentoProceso: "INICIO_PRODUCCION",
+                fechaOperacion: fechaOperacion,
+                turnoId: null,
+                turnoNombre: null,
+                esRecurrente: false,
+                requiereCambioMolde: ejecucion.EsCambioMolde,
+                numeroAplicacion: 1,
+                usuarioId: usuarioId,
+                cn: cn,
+                tx: tx);
+
+            /*
+             * 4. El monitoreo de periféricos se genera
+             *    para el turno vigente.
+             */
+            await ObtenerOCrearChecklistPerifericosTurnoAsync(
+                ejecucion,
+                DateTime.Now,
+                usuarioId,
+                cn,
+                tx);
+
+            return checklistArranqueId;
+        }
+
+        private async Task<int>   ObtenerOCrearChecklistFormatoAsync( ProduccionEjecucionVm ejecucion,  string codigoFormato,
+        string versionFormato,
+        string tipoChecklist,
+        string momentoProceso,
+        DateTime fechaOperacion,
+        int? turnoId,
+        string? turnoNombre,
+        bool esRecurrente,
+        bool requiereCambioMolde,
+        int numeroAplicacion,
+        int usuarioId,
+        SqlConnection cn,
+        SqlTransaction tx)
+        {
+            codigoFormato =
+                codigoFormato?.Trim()
+                ?? string.Empty;
+
+            versionFormato =
+                versionFormato?.Trim()
+                ?? string.Empty;
+
+            tipoChecklist =
+                tipoChecklist?.Trim().ToUpperInvariant()
+                ?? string.Empty;
+
+            momentoProceso =
+                momentoProceso?.Trim().ToUpperInvariant()
+                ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(codigoFormato))
+            {
+                throw new InvalidOperationException(
+                    "El código del formato es obligatorio.");
+            }
+
+            if (string.IsNullOrWhiteSpace(versionFormato))
+            {
+                throw new InvalidOperationException(
+                    "La versión del formato es obligatoria.");
+            }
+
+            if (!ejecucion.SolicitudProduccionID.HasValue ||
+                ejecucion.SolicitudProduccionID.Value <= 0)
+            {
+                throw new InvalidOperationException(
+                    "La ejecución no está relacionada con una OF.");
+            }
+
+            /*
+             * Primero se busca una aplicación existente.
+             *
+             * Para formatos no recurrentes:
+             * ejecución + OF + formato + aplicación.
+             *
+             * Para periféricos:
+             * ejecución + OF + formato + fecha + turno.
+             */
             const string sqlExiste = @"
 SELECT TOP (1)
     ChecklistArranqueID
-FROM dbo.Produccion_ChecklistArranque
+FROM dbo.Produccion_ChecklistArranque WITH (UPDLOCK, HOLDLOCK)
 WHERE EjecucionProduccionID = @EjecucionProduccionID
+  AND SolicitudProduccionID = @SolicitudProduccionID
+  AND CodigoFormato = @CodigoFormato
+  AND VersionFormato = @VersionFormato
+  AND TipoChecklist = @TipoChecklist
   AND Activo = 1
+  AND
+  (
+      (
+          @EsRecurrente = 0
+          AND ISNULL(EsRecurrente, 0) = 0
+          AND ISNULL(NumeroAplicacion, 1) =
+              @NumeroAplicacion
+      )
+      OR
+      (
+          @EsRecurrente = 1
+          AND ISNULL(EsRecurrente, 0) = 1
+          AND FechaOperacion = @FechaOperacion
+          AND TurnoID = @TurnoID
+      )
+  )
 ORDER BY ChecklistArranqueID DESC;";
 
-            await using (var cmd = new SqlCommand(sqlExiste, cn, tx))
+            int? checklistExistenteId = null;
+
+            await using (
+                var cmd = new SqlCommand(
+                    sqlExiste,
+                    cn,
+                    tx))
             {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
                     ejecucion.EjecucionProduccionID;
 
-                var existente = await cmd.ExecuteScalarAsync();
+                cmd.Parameters.Add(
+                    "@SolicitudProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucion.SolicitudProduccionID.Value;
 
-                if (existente != null && existente != DBNull.Value)
-                    return Convert.ToInt32(existente);
+                cmd.Parameters.Add(
+                    "@CodigoFormato",
+                    SqlDbType.NVarChar,
+                    30).Value =
+                    codigoFormato;
+
+                cmd.Parameters.Add(
+                    "@VersionFormato",
+                    SqlDbType.NVarChar,
+                    20).Value =
+                    versionFormato;
+
+                cmd.Parameters.Add(
+                    "@TipoChecklist",
+                    SqlDbType.NVarChar,
+                    50).Value =
+                    tipoChecklist;
+
+                cmd.Parameters.Add(
+                    "@FechaOperacion",
+                    SqlDbType.Date).Value =
+                    fechaOperacion.Date;
+
+                cmd.Parameters.Add(
+                    "@TurnoID",
+                    SqlDbType.Int).Value =
+                    (object?)turnoId
+                    ?? DBNull.Value;
+
+                cmd.Parameters.Add(
+                    "@EsRecurrente",
+                    SqlDbType.Bit).Value =
+                    esRecurrente;
+
+                cmd.Parameters.Add(
+                    "@NumeroAplicacion",
+                    SqlDbType.Int).Value =
+                    numeroAplicacion;
+
+                var resultado =
+                    await cmd.ExecuteScalarAsync();
+
+                if (resultado != null &&
+                    resultado != DBNull.Value)
+                {
+                    checklistExistenteId =
+                        Convert.ToInt32(resultado);
+                }
+            }
+
+            if (checklistExistenteId.HasValue)
+            {
+                /*
+                 * Si se agregaron preguntas nuevas al catálogo,
+                 * se incorporan al checklist existente.
+                 */
+                await CrearDetalleChecklistFormatoAsync(
+                    checklistExistenteId.Value,
+                    codigoFormato,
+                    versionFormato,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                return checklistExistenteId.Value;
             }
 
             const string sqlInsert = @"
@@ -2754,6 +3029,17 @@ INSERT INTO dbo.Produccion_ChecklistArranque
 
     CodigoFormato,
     VersionFormato,
+
+    TipoChecklist,
+    MomentoProceso,
+    FechaOperacion,
+
+    TurnoID,
+    TurnoNombre,
+
+    NumeroAplicacion,
+    EsRecurrente,
+    RequiereCambioMolde,
 
     EstatusID,
 
@@ -2785,8 +3071,19 @@ VALUES
     @ReferenciaSAP,
     @DescripcionParte,
 
-    'GQ-F-PR01-06',
-    'Ver.10',
+    @CodigoFormato,
+    @VersionFormato,
+
+    @TipoChecklist,
+    @MomentoProceso,
+    @FechaOperacion,
+
+    @TurnoID,
+    @TurnoNombre,
+
+    @NumeroAplicacion,
+    @EsRecurrente,
+    @RequiereCambioMolde,
 
     @EstatusID,
 
@@ -2797,65 +3094,161 @@ VALUES
 
             int checklistArranqueId;
 
-            await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
+            await using (
+                var cmd = new SqlCommand(
+                    sqlInsert,
+                    cn,
+                    tx))
             {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                    ejecucion.EjecucionProduccionID;
+                cmd.Parameters.Add( "@EjecucionProduccionID",  SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
 
-                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
-                    ejecucion.ProgramaProduccionID;
+                cmd.Parameters.Add( "@ProgramaProduccionID", SqlDbType.Int).Value = ejecucion.ProgramaProduccionID;
 
-                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
-                    (object?)ejecucion.SolicitudProduccionID ?? DBNull.Value;
+                cmd.Parameters.Add(  "@SolicitudProduccionID",  SqlDbType.Int).Value =  ejecucion.SolicitudProduccionID.Value;
 
-                cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value =
-                    (object?)ejecucion.SolicitudProduccionDetalleID ?? DBNull.Value;
+                cmd.Parameters.Add(  "@SolicitudProduccionDetalleID",  SqlDbType.Int).Value =  (object?)ejecucion.SolicitudProduccionDetalleID ?? DBNull.Value;
 
-                cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value =
-                    (object?)ejecucion.ReleaseID ?? DBNull.Value;
+                cmd.Parameters.Add(  "@ReleaseID",  SqlDbType.Int).Value =   (object?)ejecucion.ReleaseID   ?? DBNull.Value;
 
-                cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value =
-                    (object?)ejecucion.ReleaseDetalleID ?? DBNull.Value;
+                cmd.Parameters.Add(   "@ReleaseDetalleID",  SqlDbType.Int).Value =    (object?)ejecucion.ReleaseDetalleID   ?? DBNull.Value;
 
-                cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value =
-                    (object?)ejecucion.MaquinaID ?? DBNull.Value;
+                cmd.Parameters.Add(  "@MaquinaID",  SqlDbType.Int).Value =   (object?)ejecucion.MaquinaID  ?? DBNull.Value;
 
-                cmd.Parameters.Add("@MaquinaCodigo", SqlDbType.NVarChar, 100).Value =
-                    (object?)ejecucion.MaquinaCodigo ?? DBNull.Value;
+                cmd.Parameters.Add( "@MaquinaCodigo",  SqlDbType.NVarChar, 100).Value =     string.IsNullOrWhiteSpace(     ejecucion.MaquinaCodigo)  ? DBNull.Value  : ejecucion.MaquinaCodigo.Trim();
 
-                cmd.Parameters.Add("@MaquinaNombre", SqlDbType.NVarChar, 200).Value =
-                    (object?)ejecucion.MaquinaNombre ?? DBNull.Value;
+                cmd.Parameters.Add( "@MaquinaNombre", SqlDbType.NVarChar,  200).Value = string.IsNullOrWhiteSpace(  ejecucion.MaquinaNombre)  ? DBNull.Value   : ejecucion.MaquinaNombre.Trim();
 
-                cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value =
-                    (object?)ejecucion.MoldeID ?? DBNull.Value;
+                cmd.Parameters.Add( "@MoldeID", SqlDbType.Int).Value = (object?)ejecucion.MoldeID ?? DBNull.Value;
 
-                cmd.Parameters.Add("@MoldeCodigo", SqlDbType.NVarChar, 100).Value =
-                    (object?)ejecucion.MoldeCodigo ?? DBNull.Value;
+                cmd.Parameters.Add(
+                    "@MoldeCodigo",
+                    SqlDbType.NVarChar,
+                    100).Value =
+                    string.IsNullOrWhiteSpace(
+                        ejecucion.MoldeCodigo)
+                        ? DBNull.Value
+                        : ejecucion.MoldeCodigo.Trim();
 
-                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value =
-                    (object?)ejecucion.ParteID ?? DBNull.Value;
+                cmd.Parameters.Add(
+                    "@ParteID",
+                    SqlDbType.Int).Value =
+                    (object?)ejecucion.ParteID
+                    ?? DBNull.Value;
 
-                cmd.Parameters.Add("@NumeroParte", SqlDbType.NVarChar, 120).Value =
-                    (object?)ejecucion.NumeroParte ?? DBNull.Value;
+                cmd.Parameters.Add(
+                    "@NumeroParte",
+                    SqlDbType.NVarChar,
+                    120).Value =
+                    string.IsNullOrWhiteSpace(
+                        ejecucion.NumeroParte)
+                        ? DBNull.Value
+                        : ejecucion.NumeroParte.Trim();
 
-                cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value =
-                    (object?)ejecucion.ReferenciaSAP ?? DBNull.Value;
+                cmd.Parameters.Add(
+                    "@ReferenciaSAP",
+                    SqlDbType.NVarChar,
+                    150).Value =
+                    string.IsNullOrWhiteSpace(
+                        ejecucion.ReferenciaSAP)
+                        ? DBNull.Value
+                        : ejecucion.ReferenciaSAP.Trim();
 
-                cmd.Parameters.Add("@DescripcionParte", SqlDbType.NVarChar, 300).Value =
-                    (object?)ejecucion.DescripcionParte ?? DBNull.Value;
+                cmd.Parameters.Add(
+                    "@DescripcionParte",
+                    SqlDbType.NVarChar,
+                    300).Value =
+                    string.IsNullOrWhiteSpace(
+                        ejecucion.DescripcionParte)
+                        ? DBNull.Value
+                        : ejecucion.DescripcionParte.Trim();
 
-                cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value =
-                    ProduccionChecklistEstatus.PendienteProduccion;
+                cmd.Parameters.Add(
+                    "@CodigoFormato",
+                    SqlDbType.NVarChar,
+                    30).Value =
+                    codigoFormato;
 
-                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                cmd.Parameters.Add(
+                    "@VersionFormato",
+                    SqlDbType.NVarChar,
+                    20).Value =
+                    versionFormato;
+
+                cmd.Parameters.Add(
+                    "@TipoChecklist",
+                    SqlDbType.NVarChar,
+                    50).Value =
+                    tipoChecklist;
+
+                cmd.Parameters.Add(
+                    "@MomentoProceso",
+                    SqlDbType.NVarChar,
+                    40).Value =
+                    momentoProceso;
+
+                cmd.Parameters.Add(
+                    "@FechaOperacion",
+                    SqlDbType.Date).Value =
+                    fechaOperacion.Date;
+
+                cmd.Parameters.Add(
+                    "@TurnoID",
+                    SqlDbType.Int).Value =
+                    (object?)turnoId
+                    ?? DBNull.Value;
+
+                cmd.Parameters.Add(
+                    "@TurnoNombre",
+                    SqlDbType.NVarChar,
+                    50).Value =
+                    string.IsNullOrWhiteSpace(turnoNombre)
+                        ? DBNull.Value
+                        : turnoNombre.Trim();
+
+                cmd.Parameters.Add(
+                    "@NumeroAplicacion",
+                    SqlDbType.Int).Value =
+                    numeroAplicacion;
+
+                cmd.Parameters.Add(
+                    "@EsRecurrente",
+                    SqlDbType.Bit).Value =
+                    esRecurrente;
+
+                cmd.Parameters.Add(
+                    "@RequiereCambioMolde",
+                    SqlDbType.Bit).Value =
+                    requiereCambioMolde;
+
+                cmd.Parameters.Add(
+                    "@EstatusID",
+                    SqlDbType.Int).Value =
+                    ProduccionChecklistEstatus
+                        .PendienteProduccion;
+
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
                     usuarioId;
 
+                var resultado =
+                    await cmd.ExecuteScalarAsync();
+
+                if (resultado == null ||
+                    resultado == DBNull.Value)
+                {
+                    throw new InvalidOperationException(
+                        "No fue posible obtener el ID del checklist.");
+                }
+
                 checklistArranqueId =
-                    Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                    Convert.ToInt32(resultado);
             }
 
-            await CrearDetalleChecklistArranqueAsync(
+            await CrearDetalleChecklistFormatoAsync(
                 checklistArranqueId,
+                codigoFormato,
+                versionFormato,
                 usuarioId,
                 cn,
                 tx);
@@ -2863,17 +3256,24 @@ VALUES
             return checklistArranqueId;
         }
 
-        private async Task CrearDetalleChecklistArranqueAsync(
-       int checklistArranqueId,
-       int usuarioId,
-       SqlConnection cn,
-       SqlTransaction tx)
+
+        private async Task CrearDetalleChecklistFormatoAsync(
+    int checklistArranqueId,
+    string codigoFormato,
+    string versionFormato,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
         {
             const string sql = @"
 INSERT INTO dbo.Produccion_ChecklistArranqueDetalle
 (
     ChecklistArranqueID,
     PreguntaID,
+
+    Resultado,
+    Confirmado,
+
     UsuarioCreacionID,
     FechaCreacion,
     Activo
@@ -2881,136 +3281,280 @@ INSERT INTO dbo.Produccion_ChecklistArranqueDetalle
 SELECT
     @ChecklistArranqueID,
     p.PreguntaID,
+
+    CASE
+        WHEN NULLIF(
+            LTRIM(RTRIM(p.EstadoPredeterminado)),
+            N''
+        ) IS NULL
+            THEN N'OK'
+        ELSE UPPER(
+            LTRIM(RTRIM(p.EstadoPredeterminado))
+        )
+    END,
+
+    0,
+
     @UsuarioID,
     GETDATE(),
     1
+
 FROM dbo.ERP_ChecklistArranquePreguntas p
-WHERE p.CodigoFormato = 'GQ-F-PR01-06'
-  AND p.VersionFormato = 'Ver.10'
+
+WHERE p.CodigoFormato = @CodigoFormato
+  AND p.VersionFormato = @VersionFormato
   AND p.Activo = 1
-
-  -- Producción solo debe llenar preparación.
-  -- Calidad leerá sus propias preguntas desde el mismo catálogo.
-  AND ISNULL(p.ResponsableSugerido, '') NOT LIKE '%CALIDAD%'
-  AND ISNULL(p.ResponsableSugerido, '') NOT LIKE '%AUDITOR%'
-  AND ISNULL(p.Seccion, '') NOT LIKE '%CALIDAD%'
-
-  -- Paros no pertenecen al checklist de arranque.
-  -- Se manejan desde Producción_Paros.
-  AND ISNULL(p.Seccion, '') NOT LIKE '%PARO%'
 
   AND NOT EXISTS
   (
       SELECT 1
       FROM dbo.Produccion_ChecklistArranqueDetalle d
-      WHERE d.ChecklistArranqueID = @ChecklistArranqueID
+      WHERE d.ChecklistArranqueID =
+            @ChecklistArranqueID
         AND d.PreguntaID = p.PreguntaID
         AND d.Activo = 1
   )
+
 ORDER BY
     p.OrdenSeccion,
     p.OrdenPregunta,
     p.PreguntaID;";
 
-            await using var cmd = new SqlCommand(sql, cn, tx);
+            await using var cmd =
+                new SqlCommand(
+                    sql,
+                    cn,
+                    tx);
 
-            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@ChecklistArranqueID",
+                SqlDbType.Int).Value =
                 checklistArranqueId;
 
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+            cmd.Parameters.Add(
+                "@CodigoFormato",
+                SqlDbType.NVarChar,
+                30).Value =
+                codigoFormato.Trim();
+
+            cmd.Parameters.Add(
+                "@VersionFormato",
+                SqlDbType.NVarChar,
+                20).Value =
+                versionFormato.Trim();
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
                 usuarioId;
 
             await cmd.ExecuteNonQueryAsync();
         }
 
-        private async Task<ProduccionChecklistArranqueVm?> ObtenerChecklistArranquePorEjecucionAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn)
+        private async Task<int>
+    ObtenerOCrearChecklistPerifericosTurnoAsync(
+        ProduccionEjecucionVm ejecucion,
+        DateTime fechaHora,
+        int usuarioId,
+        SqlConnection cn,
+        SqlTransaction tx)
+        {
+            var turno =
+                ObtenerTurnoProduccion(fechaHora);
+
+            return await ObtenerOCrearChecklistFormatoAsync(
+                ejecucion: ejecucion,
+                codigoFormato: "GQ-F-PR01-14",
+                versionFormato: "Ver.01",
+                tipoChecklist: "MONITOREO_PERIFERICOS",
+                momentoProceso: "CAMBIO_TURNO",
+                fechaOperacion: turno.FechaOperacion,
+                turnoId: turno.TurnoID,
+                turnoNombre: turno.TurnoNombre,
+                esRecurrente: true,
+                requiereCambioMolde: ejecucion.EsCambioMolde,
+                numeroAplicacion: 1,
+                usuarioId: usuarioId,
+                cn: cn,
+                tx: tx);
+        }
+
+        private static ProduccionTurnoActual
+    ObtenerTurnoProduccion(
+        DateTime fechaHora)
+        {
+            var hora = fechaHora.TimeOfDay;
+
+            /*
+             * Matutino:
+             * 07:00:00 a 14:59:59
+             */
+            if (hora >= new TimeSpan(7, 0, 0) &&
+                hora < new TimeSpan(15, 0, 0))
+            {
+                return new ProduccionTurnoActual
+                {
+                    TurnoID = 1,
+                    TurnoNombre = "Matutino",
+                    FechaOperacion = fechaHora.Date,
+                    FechaInicio =
+                        fechaHora.Date.AddHours(7),
+                    FechaFin =
+                        fechaHora.Date.AddHours(15)
+                };
+            }
+
+            /*
+             * Vespertino:
+             * 15:00:00 a 22:59:59
+             */
+            if (hora >= new TimeSpan(15, 0, 0) &&
+                hora < new TimeSpan(23, 0, 0))
+            {
+                return new ProduccionTurnoActual
+                {
+                    TurnoID = 2,
+                    TurnoNombre = "Vespertino",
+                    FechaOperacion = fechaHora.Date,
+                    FechaInicio =
+                        fechaHora.Date.AddHours(15),
+                    FechaFin =
+                        fechaHora.Date.AddHours(23)
+                };
+            }
+
+            /*
+             * Nocturno:
+             * 23:00 a 07:00.
+             *
+             * Entre 00:00 y 06:59 la fecha operativa
+             * corresponde al día anterior.
+             */
+            var fechaOperacion =
+                hora < new TimeSpan(7, 0, 0)
+                    ? fechaHora.Date.AddDays(-1)
+                    : fechaHora.Date;
+
+            return new ProduccionTurnoActual
+            {
+                TurnoID = 3,
+                TurnoNombre = "Nocturno",
+                FechaOperacion = fechaOperacion,
+                FechaInicio =
+                    fechaOperacion.AddHours(23),
+                FechaFin =
+                    fechaOperacion
+                        .AddDays(1)
+                        .AddHours(7)
+            };
+        }
+
+        private sealed class ProduccionTurnoActual
+        {
+            public int TurnoID { get; set; }
+
+            public string TurnoNombre { get; set; } =
+                string.Empty;
+
+            public DateTime FechaOperacion { get; set; }
+
+            public DateTime FechaInicio { get; set; }
+
+            public DateTime FechaFin { get; set; }
+        }
+
+        private async Task<ProduccionChecklistArranqueVm?>
+      ObtenerChecklistArranquePorEjecucionAsync(
+          int ejecucionProduccionId,
+          SqlConnection cn)
         {
             const string sqlId = @"
 SELECT TOP (1)
     ChecklistArranqueID
 FROM dbo.Produccion_ChecklistArranque
-WHERE EjecucionProduccionID = @EjecucionProduccionID
+WHERE EjecucionProduccionID =
+      @EjecucionProduccionID
+  AND CodigoFormato =
+      N'GQ-F-PR01-06'
+  AND TipoChecklist =
+      N'ARRANQUE_LIBERACION'
   AND Activo = 1
-ORDER BY ChecklistArranqueID DESC;";
+ORDER BY
+    NumeroAplicacion DESC,
+    ChecklistArranqueID DESC;";
 
-            int? checklistArranqueId = null;
+            await using var cmd =
+                new SqlCommand(
+                    sqlId,
+                    cn);
 
-            await using (var cmd = new SqlCommand(sqlId, cn))
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            var resultado =
+                await cmd.ExecuteScalarAsync();
+
+            if (resultado == null ||
+                resultado == DBNull.Value)
             {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                    ejecucionProduccionId;
-
-                var result = await cmd.ExecuteScalarAsync();
-
-                if (result != null && result != DBNull.Value)
-                    checklistArranqueId = Convert.ToInt32(result);
+                return null;
             }
 
-            if (!checklistArranqueId.HasValue)
-                return null;
-
             return await ObtenerChecklistArranqueAsync(
-                checklistArranqueId.Value,
+                Convert.ToInt32(resultado),
                 cn);
         }
 
-        private async Task<ProduccionChecklistArranqueVm?> ObtenerChecklistArranqueAsync(
-            int checklistArranqueId,
-            SqlConnection cn)
+        [HttpGet]
+        public async Task<IActionResult> ChecklistFormato(
+    int id)
         {
-            const string sqlEncabezado = @"
-SELECT
-    ChecklistArranqueID,
-    EjecucionProduccionID,
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    SolicitudProduccionDetalleID,
-    ReleaseID,
-    ReleaseDetalleID,
-    FechaChecklist,
+            if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
 
-    MaquinaID,
-    MaquinaCodigo,
-    MaquinaNombre,
+            if (id <= 0)
+                return NotFound();
 
-    MoldeID,
-    MoldeCodigo,
+            await using var cn =
+                new SqlConnection(ConnectionString);
 
-    ParteID,
-    NumeroParte,
-    ReferenciaSAP,
-    DescripcionParte,
+            await cn.OpenAsync();
 
-    CodigoFormato,
-    VersionFormato,
-    EstatusID,
+            var checklist =
+                await ObtenerChecklistArranqueAsync(
+                    id,
+                    cn);
 
-    UsuarioProduccionID,
-    FechaCapturaProduccion,
-    UsuarioCalidadID,
-    FechaValidacionCalidad,
+            if (checklist == null)
+                return NotFound();
 
-    ObservacionesGenerales,
-    ObservacionesCalidad,
+            /*
+             * Temporalmente reutiliza la vista actual.
+             * Después construiremos una vista general
+             * que cambie según TipoChecklist.
+             */
+            return View(
+                "ChecklistArranque",
+                checklist);
+        }
 
-    UsuarioCreacionID,
-    FechaCreacion,
-    UsuarioModificacionID,
-    FechaModificacion,
-    Activo
+        private async Task<ProduccionChecklistArranqueVm?> ObtenerChecklistArranqueAsync(int checklistArranqueId, SqlConnection cn)
+        {
+            const string sql = @"
+SELECT ChecklistArranqueID,EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,
+       FechaChecklist,FechaOperacion,MaquinaID,MaquinaCodigo,MaquinaNombre,MoldeID,MoldeCodigo,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,
+       CodigoFormato,VersionFormato,TipoChecklist,MomentoProceso,TurnoID,TurnoNombre,NumeroAplicacion,EsRecurrente,RequiereCambioMolde,EstatusID,
+       UsuarioProduccionID,FechaCapturaProduccion,UsuarioCalidadID,FechaValidacionCalidad,ObservacionesGenerales,ObservacionesCalidad,
+       UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion,Activo
 FROM dbo.Produccion_ChecklistArranque
-WHERE ChecklistArranqueID = @ChecklistArranqueID
-  AND Activo = 1;";
+WHERE ChecklistArranqueID=@ChecklistArranqueID AND Activo=1;";
 
             ProduccionChecklistArranqueVm? vm = null;
-
-            await using (var cmd = new SqlCommand(sqlEncabezado, cn))
+            await using (var cmd = new SqlCommand(sql, cn))
             {
-                cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
-                    checklistArranqueId;
-
+                cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
                 await using var rd = await cmd.ExecuteReaderAsync();
 
                 if (await rd.ReadAsync())
@@ -3018,42 +3562,39 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
                     vm = new ProduccionChecklistArranqueVm
                     {
                         ChecklistArranqueID = Entero(rd, "ChecklistArranqueID"),
-
                         EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
                         ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
                         SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
                         SolicitudProduccionDetalleID = NullableEntero(rd, "SolicitudProduccionDetalleID"),
                         ReleaseID = NullableEntero(rd, "ReleaseID"),
                         ReleaseDetalleID = NullableEntero(rd, "ReleaseDetalleID"),
-
                         FechaChecklist = Fecha(rd, "FechaChecklist"),
-
+                        FechaOperacion = NullableFecha(rd, "FechaOperacion"),
                         MaquinaID = NullableEntero(rd, "MaquinaID"),
                         MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
                         MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
-
                         MoldeID = NullableEntero(rd, "MoldeID"),
                         MoldeCodigo = TextoNullable(rd, "MoldeCodigo"),
-
                         ParteID = NullableEntero(rd, "ParteID"),
                         NumeroParte = TextoNullable(rd, "NumeroParte"),
                         ReferenciaSAP = TextoNullable(rd, "ReferenciaSAP"),
                         DescripcionParte = TextoNullable(rd, "DescripcionParte"),
-
-                        CodigoFormato = TextoNullable(rd, "CodigoFormato") ?? "GQ-F-PR01-06",
+                        CodigoFormato = TextoNullable(rd, "CodigoFormato") ?? string.Empty,
                         VersionFormato = TextoNullable(rd, "VersionFormato"),
-
+                        TipoChecklist = TextoNullable(rd, "TipoChecklist") ?? string.Empty,
+                        MomentoProceso = TextoNullable(rd, "MomentoProceso") ?? string.Empty,
+                        TurnoID = NullableEntero(rd, "TurnoID"),
+                        TurnoNombre = TextoNullable(rd, "TurnoNombre"),
+                        NumeroAplicacion = Entero(rd, "NumeroAplicacion"),
+                        EsRecurrente = Booleano(rd, "EsRecurrente"),
+                        RequiereCambioMolde = Booleano(rd, "RequiereCambioMolde"),
                         EstatusID = Entero(rd, "EstatusID"),
-
                         UsuarioProduccionID = NullableEntero(rd, "UsuarioProduccionID"),
                         FechaCapturaProduccion = NullableFecha(rd, "FechaCapturaProduccion"),
-
                         UsuarioCalidadID = NullableEntero(rd, "UsuarioCalidadID"),
                         FechaValidacionCalidad = NullableFecha(rd, "FechaValidacionCalidad"),
-
                         ObservacionesGenerales = TextoNullable(rd, "ObservacionesGenerales"),
                         ObservacionesCalidad = TextoNullable(rd, "ObservacionesCalidad"),
-
                         UsuarioCreacionID = NullableEntero(rd, "UsuarioCreacionID"),
                         FechaCreacion = Fecha(rd, "FechaCreacion"),
                         UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
@@ -3063,66 +3604,28 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
                 }
             }
 
-            if (vm == null)
-                return null;
-
-            await CargarPreguntasChecklistArranqueAsync(
-                vm,
-                cn);
-
+            if (vm == null) return null;
+            await CargarPreguntasChecklistArranqueAsync(vm, cn);
             return vm;
         }
 
-        private async Task CargarPreguntasChecklistArranqueAsync(
-    ProduccionChecklistArranqueVm vm,
-    SqlConnection cn)
+        private async Task CargarPreguntasChecklistArranqueAsync(ProduccionChecklistArranqueVm vm, SqlConnection cn)
         {
             vm.Secciones.Clear();
 
             const string sql = @"
-SELECT
-    d.ChecklistArranqueDetalleID,
-    d.ChecklistArranqueID,
-    d.PreguntaID,
-    d.Resultado,
-    d.Observaciones,
-    d.UsuarioRespuestaID,
-    d.FechaRespuesta,
-    d.Activo,
-
-    p.CodigoFormato,
-    p.VersionFormato,
-    p.Seccion,
-    p.OrdenSeccion,
-    p.OrdenPregunta,
-    p.TextoPregunta,
-    p.ResponsableSugerido,
-    p.RequiereObservacionSiNOK
+SELECT d.ChecklistArranqueDetalleID,d.ChecklistArranqueID,d.PreguntaID,d.Resultado,d.Observaciones,d.Confirmado,
+       d.ValorCapturado,d.Unidad,d.Especificacion,d.Tolerancia,d.UsuarioRespuestaID,d.FechaRespuesta,d.Activo,
+       p.CodigoFormato,p.VersionFormato,p.TipoChecklist,p.MomentoProceso,p.TipoRespuesta,p.EstadoPredeterminado,
+       p.Seccion,p.OrdenSeccion,p.OrdenPregunta,p.TextoPregunta,p.ResponsableSugerido,p.GrupoResponsable,
+       p.RequiereObservacionSiNOK,p.RequiereObservacionSiNA,p.EsPreguntaCalidad,p.EsRecurrente
 FROM dbo.Produccion_ChecklistArranqueDetalle d
-INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
-    ON p.PreguntaID = d.PreguntaID
-WHERE d.ChecklistArranqueID = @ChecklistArranqueID
-  AND d.Activo = 1
-  AND p.Activo = 1
-
-  -- En la vista de Producción NO se muestran preguntas de Calidad.
-  AND ISNULL(p.ResponsableSugerido, '') NOT LIKE '%CALIDAD%'
-  AND ISNULL(p.ResponsableSugerido, '') NOT LIKE '%AUDITOR%'
-  AND ISNULL(p.Seccion, '') NOT LIKE '%CALIDAD%'
-
-  -- Paros se manejan como paros, no como checklist.
-  AND ISNULL(p.Seccion, '') NOT LIKE '%PARO%'
-
-ORDER BY
-    p.OrdenSeccion,
-    p.OrdenPregunta,
-    p.PreguntaID;";
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p ON p.PreguntaID=d.PreguntaID
+WHERE d.ChecklistArranqueID=@ChecklistArranqueID AND d.Activo=1 AND p.Activo=1
+ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
 
             await using var cmd = new SqlCommand(sql, cn);
-
-            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
-                vm.ChecklistArranqueID;
-
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = vm.ChecklistArranqueID;
             await using var rd = await cmd.ExecuteReaderAsync();
 
             while (await rd.ReadAsync())
@@ -3132,32 +3635,35 @@ ORDER BY
                     ChecklistArranqueDetalleID = Entero(rd, "ChecklistArranqueDetalleID"),
                     ChecklistArranqueID = Entero(rd, "ChecklistArranqueID"),
                     PreguntaID = Entero(rd, "PreguntaID"),
-
-                    CodigoFormato = TextoNullable(rd, "CodigoFormato") ?? "GQ-F-PR01-06",
+                    CodigoFormato = TextoNullable(rd, "CodigoFormato") ?? string.Empty,
                     VersionFormato = TextoNullable(rd, "VersionFormato"),
-
+                    TipoChecklist = TextoNullable(rd, "TipoChecklist") ?? string.Empty,
+                    MomentoProceso = TextoNullable(rd, "MomentoProceso") ?? string.Empty,
+                    TipoRespuesta = TextoNullable(rd, "TipoRespuesta") ?? "ESTADO",
+                    EstadoPredeterminado = TextoNullable(rd, "EstadoPredeterminado") ?? "OK",
                     Seccion = TextoNullable(rd, "Seccion") ?? string.Empty,
                     OrdenSeccion = Entero(rd, "OrdenSeccion"),
                     OrdenPregunta = Entero(rd, "OrdenPregunta"),
-
                     TextoPregunta = TextoNullable(rd, "TextoPregunta") ?? string.Empty,
-
                     ResponsableSugerido = TextoNullable(rd, "ResponsableSugerido"),
+                    GrupoResponsable = TextoNullable(rd, "GrupoResponsable"),
                     RequiereObservacionSiNOK = Booleano(rd, "RequiereObservacionSiNOK"),
-
+                    RequiereObservacionSiNA = Booleano(rd, "RequiereObservacionSiNA"),
+                    EsPreguntaCalidad = Booleano(rd, "EsPreguntaCalidad"),
+                    EsRecurrente = Booleano(rd, "EsRecurrente"),
                     Resultado = TextoNullable(rd, "Resultado"),
                     Observaciones = TextoNullable(rd, "Observaciones"),
-
+                    Confirmado = Booleano(rd, "Confirmado"),
+                    ValorCapturado = TextoNullable(rd, "ValorCapturado"),
+                    Unidad = TextoNullable(rd, "Unidad"),
+                    Especificacion = TextoNullable(rd, "Especificacion"),
+                    Tolerancia = TextoNullable(rd, "Tolerancia"),
                     UsuarioRespuestaID = NullableEntero(rd, "UsuarioRespuestaID"),
                     FechaRespuesta = NullableFecha(rd, "FechaRespuesta"),
-
                     Activo = Booleano(rd, "Activo")
                 };
 
-                var seccion = vm.Secciones.FirstOrDefault(x =>
-                    x.OrdenSeccion == pregunta.OrdenSeccion &&
-                    x.Seccion == pregunta.Seccion);
-
+                var seccion = vm.Secciones.FirstOrDefault(x => x.OrdenSeccion == pregunta.OrdenSeccion && x.Seccion == pregunta.Seccion);
                 if (seccion == null)
                 {
                     seccion = new ProduccionChecklistSeccionVm
@@ -3166,7 +3672,6 @@ ORDER BY
                         OrdenSeccion = pregunta.OrdenSeccion,
                         ResponsableSugerido = pregunta.ResponsableSugerido
                     };
-
                     vm.Secciones.Add(seccion);
                 }
 
@@ -3199,42 +3704,23 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
             return Convert.ToInt32(result);
         }
 
-        private async Task ActualizarRespuestaChecklistAsync(
-            int checklistArranqueDetalleId,
-            string? resultado,
-            string? observaciones,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task ActualizarRespuestaChecklistAsync(int checklistArranqueDetalleId, string? resultado, string? observaciones, bool confirmado, string? valorCapturado, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
 UPDATE dbo.Produccion_ChecklistArranqueDetalle
-SET
-    Resultado = @Resultado,
-    Observaciones = @Observaciones,
-    UsuarioRespuestaID = @UsuarioID,
-    FechaRespuesta = GETDATE(),
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = GETDATE()
-WHERE ChecklistArranqueDetalleID = @ChecklistArranqueDetalleID
-  AND Activo = 1;";
+SET Resultado=@Resultado,Observaciones=@Observaciones,Confirmado=@Confirmado,ValorCapturado=@ValorCapturado,
+    UsuarioRespuestaID=CASE WHEN @Confirmado=1 THEN @UsuarioID ELSE UsuarioRespuestaID END,
+    FechaRespuesta=CASE WHEN @Confirmado=1 THEN GETDATE() ELSE FechaRespuesta END,
+    UsuarioModificacionID=@UsuarioID,FechaModificacion=GETDATE()
+WHERE ChecklistArranqueDetalleID=@ChecklistArranqueDetalleID AND Activo=1;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
-
-            cmd.Parameters.Add("@ChecklistArranqueDetalleID", SqlDbType.Int).Value =
-                checklistArranqueDetalleId;
-
-            cmd.Parameters.Add("@Resultado", SqlDbType.NVarChar, 10).Value =
-                (object?)resultado ?? DBNull.Value;
-
-            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
-                string.IsNullOrWhiteSpace(observaciones)
-                    ? DBNull.Value
-                    : observaciones.Trim();
-
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
-                usuarioId;
-
+            cmd.Parameters.Add("@ChecklistArranqueDetalleID", SqlDbType.Int).Value = checklistArranqueDetalleId;
+            cmd.Parameters.Add("@Resultado", SqlDbType.NVarChar, 10).Value = string.IsNullOrWhiteSpace(resultado) ? DBNull.Value : resultado.Trim();
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones.Trim();
+            cmd.Parameters.Add("@Confirmado", SqlDbType.Bit).Value = confirmado;
+            cmd.Parameters.Add("@ValorCapturado", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(valorCapturado) ? DBNull.Value : valorCapturado.Trim();
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -3285,75 +3771,41 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
             await cmd.ExecuteNonQueryAsync();
         }
 
-        private async Task<bool> TienePreguntasProduccionSinRespuestaAsync(
-      int checklistArranqueId,
-      SqlConnection cn,
-      SqlTransaction tx)
+        private async Task<bool> TienePreguntasProduccionSinRespuestaAsync(int checklistArranqueId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
 SELECT COUNT(1)
 FROM dbo.Produccion_ChecklistArranqueDetalle d
-INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
-    ON p.PreguntaID = d.PreguntaID
-WHERE d.ChecklistArranqueID = @ChecklistArranqueID
-  AND d.Activo = 1
-  AND p.Activo = 1
-
-  -- Solo se valida lo que corresponde a Producción.
-  AND ISNULL(p.ResponsableSugerido, '') NOT LIKE '%CALIDAD%'
-  AND ISNULL(p.ResponsableSugerido, '') NOT LIKE '%AUDITOR%'
-  AND ISNULL(p.Seccion, '') NOT LIKE '%CALIDAD%'
-  AND ISNULL(p.Seccion, '') NOT LIKE '%PARO%'
-
-  AND
-  (
-        d.Resultado IS NULL
-     OR LTRIM(RTRIM(d.Resultado)) = ''
-  );";
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p ON p.PreguntaID=d.PreguntaID
+WHERE d.ChecklistArranqueID=@ChecklistArranqueID AND d.Activo=1 AND p.Activo=1
+  AND ISNULL(p.EsPreguntaCalidad,0)=0
+  AND ISNULL(p.GrupoResponsable,N'')<>N'CALIDAD'
+  AND (ISNULL(d.Confirmado,0)=0 OR NULLIF(LTRIM(RTRIM(ISNULL(d.Resultado,N''))),N'') IS NULL);";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
-
-            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
-                checklistArranqueId;
-
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
             return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
         }
-
-        private async Task<bool> TieneNokSinObservacionAsync(
-    int checklistArranqueId,
-    SqlConnection cn,
-    SqlTransaction tx)
+        private async Task<bool> TieneNokSinObservacionAsync(int checklistArranqueId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
 SELECT COUNT(1)
 FROM dbo.Produccion_ChecklistArranqueDetalle d
-INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
-    ON p.PreguntaID = d.PreguntaID
-WHERE d.ChecklistArranqueID = @ChecklistArranqueID
-  AND d.Activo = 1
-  AND p.Activo = 1
-  AND p.RequiereObservacionSiNOK = 1
-  AND d.Resultado = 'NOK'
-
-  -- Solo se valida lo que corresponde a Producción.
-  AND ISNULL(p.ResponsableSugerido, '') NOT LIKE '%CALIDAD%'
-  AND ISNULL(p.ResponsableSugerido, '') NOT LIKE '%AUDITOR%'
-  AND ISNULL(p.Seccion, '') NOT LIKE '%CALIDAD%'
-  AND ISNULL(p.Seccion, '') NOT LIKE '%PARO%'
-
-  AND
-  (
-        d.Observaciones IS NULL
-     OR LTRIM(RTRIM(d.Observaciones)) = ''
-  );";
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p ON p.PreguntaID=d.PreguntaID
+WHERE d.ChecklistArranqueID=@ChecklistArranqueID AND d.Activo=1 AND p.Activo=1
+  AND ISNULL(p.EsPreguntaCalidad,0)=0
+  AND ISNULL(p.GrupoResponsable,N'')<>N'CALIDAD'
+  AND ISNULL(d.Confirmado,0)=1
+  AND ((d.Resultado=N'NOK' AND ISNULL(p.RequiereObservacionSiNOK,0)=1)
+    OR (d.Resultado=N'NA' AND ISNULL(p.RequiereObservacionSiNA,0)=1))
+  AND NULLIF(LTRIM(RTRIM(ISNULL(d.Observaciones,N''))),N'') IS NULL;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
-
-            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
-                checklistArranqueId;
-
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
             return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
         }
+
+
 
 
         private static string? NormalizarResultadoChecklist(string? resultado)
@@ -4357,6 +4809,21 @@ WHERE MotivoParoID = @MotivoParoID
                 : result.ToString();
         }
 
+        private async Task<bool> TieneValoresRequeridosSinCapturarAsync(int checklistArranqueId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT COUNT(1)
+FROM dbo.Produccion_ChecklistArranqueDetalle d
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p ON p.PreguntaID=d.PreguntaID
+WHERE d.ChecklistArranqueID=@ChecklistArranqueID AND d.Activo=1 AND p.Activo=1 AND ISNULL(d.Confirmado,0)=1
+  AND p.TipoRespuesta IN (N'NUMERICO',N'ESTADO_Y_VALOR')
+  AND NULLIF(LTRIM(RTRIM(ISNULL(d.ValorCapturado,N''))),N'') IS NULL;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
+        }
+
         private async Task<bool> TieneParoAbiertoAsync(
             int ejecucionProduccionId,
             SqlConnection cn,
@@ -4377,13 +4844,11 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
         }
 
 
-        private static ProduccionEjecucionVm MapearEjecucion(
-            SqlDataReader rd)
+        private static ProduccionEjecucionVm MapearEjecucion(SqlDataReader rd)
         {
             return new ProduccionEjecucionVm
             {
                 EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
-
                 ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
                 SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
                 SolicitudProduccionDetalleID = NullableEntero(rd, "SolicitudProduccionDetalleID"),
@@ -4401,6 +4866,7 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
 
                 MoldeID = NullableEntero(rd, "MoldeID"),
                 MoldeCodigo = TextoNullable(rd, "MoldeCodigo"),
+                EsCambioMolde = Booleano(rd, "EsCambioMolde"),
 
                 OperadorID = NullableEntero(rd, "OperadorID"),
                 OperadorNombre = TextoNullable(rd, "OperadorNombre"),
