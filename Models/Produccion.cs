@@ -447,6 +447,12 @@ public sealed class ProduccionDetalleVm
     public ProduccionCalidadResumenVm? CalidadResumen { get; set; }
 
     public List<ProduccionRecepcionOFVm> RecepcionesOF { get; set; } = new();
+
+    public ProduccionMonitoreoTurnoAvisoVm? MonitoreoTurnoActual { get; set; }
+
+    public bool MostrarAvisoMonitoreoTurno =>
+        MonitoreoTurnoActual?.ChecklistPendiente == true;
+
 }
 
 public sealed class ProduccionIniciarRequestVm
@@ -524,6 +530,7 @@ public sealed class ProduccionOperadorTabletVm
     public int EstatusID { get; set; }
     public string EstatusNombre => ProduccionEstatus.Nombre(EstatusID);
     public string EstatusClase => ProduccionEstatus.ClaseBadge(EstatusID);
+    public List<ProduccionCapturaHoraFilaVm> HorasCaptura { get; set; } = new();
 
     public DateTime FechaProduccion { get; set; } = DateTime.Today;
     public TimeSpan HoraInicioSugerida { get; set; }
@@ -549,6 +556,57 @@ public sealed class ProduccionOperadorTabletVm
     }
 }
 
+public sealed class ProduccionCapturaHoraFilaVm
+{
+    public int NumeroHora { get; set; }
+
+    public DateTime FechaProduccion { get; set; }
+
+    public TimeSpan HoraInicio { get; set; }
+
+    public TimeSpan HoraFin { get; set; }
+
+    public int CantidadOK { get; set; }
+
+    public int CantidadSospechosa { get; set; }
+
+    public int CantidadScrap { get; set; }
+
+    public string? Observaciones { get; set; }
+
+    public bool Capturada { get; set; }
+
+    public bool Disponible { get; set; }
+
+    public bool Vencida { get; set; }
+
+    public int? RegistroHoraID { get; set; }
+
+    public string RangoHora =>
+        $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
+
+    public string EstadoTexto
+    {
+        get
+        {
+            if (Capturada) return "Capturada";
+            if (Vencida) return "Pendiente vencida";
+            if (Disponible) return "Disponible";
+            return "Próxima";
+        }
+    }
+
+    public string EstadoClase
+    {
+        get
+        {
+            if (Capturada) return "bg-success";
+            if (Vencida) return "bg-danger";
+            if (Disponible) return "bg-warning text-dark";
+            return "bg-secondary";
+        }
+    }
+}
 public sealed class ProduccionRecepcionOFVm
 {
     public int RecepcionOFID { get; set; }
@@ -730,6 +788,16 @@ public sealed class ProduccionChecklistArranqueVm
     public DateTime? FechaNotificacionCalidad { get; set; }
     public DateTime? FechaLiberacionCalidad { get; set; }
 
+    public int? TecnicoEntregaPersonaID { get; set; }
+    public string? TecnicoEntregaNombre { get; set; }
+    public DateTime? FechaEntregaTurno { get; set; }
+
+    public int? TecnicoRecibePersonaID { get; set; }
+    public string? TecnicoRecibeNombre { get; set; }
+    public DateTime? FechaRecepcionTurno { get; set; }
+
+    public List<ProduccionMonitoreoPerifericoProblemaVm> ProblemasPerifericos { get; set; } = new();
+
     public List<ProduccionChecklistSeccionVm> Secciones { get; set; } = new();
 
     public bool TieneProcesoCalidad => CalidadInspeccionID.HasValue;
@@ -777,6 +845,31 @@ public sealed class ProduccionChecklistArranqueVm
             };
         }
     }
+}
+
+public class ProduccionMonitoreoTurnoAvisoVm
+{
+    public int ChecklistArranqueID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int TurnoID { get; set; }
+    public string TurnoNombre { get; set; } = string.Empty;
+    public DateTime FechaOperacion { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? MaquinaNombre { get; set; }
+    public int EstatusID { get; set; }
+    public int TotalPreguntas { get; set; }
+    public int TotalConfirmadas { get; set; }
+    public bool EntregaTurnoRegistrada { get; set; }
+
+    public bool ChecklistPendiente =>
+        TotalPreguntas == 0 ||
+        TotalConfirmadas < TotalPreguntas ||
+        !EntregaTurnoRegistrada;
+
+    public decimal PorcentajeAvance =>
+        TotalPreguntas > 0
+            ? Math.Round((decimal)TotalConfirmadas * 100m / TotalPreguntas, 2)
+            : 0m;
 }
 
 public sealed class ProduccionChecklistSeccionVm
@@ -1090,6 +1183,44 @@ public sealed class ProduccionProgramaDisponibleVm
         CantidadProgramada.HasValue &&
         CantidadProgramada.Value > 0;
 }
+
+public class ProduccionMonitoreoPerifericoProblemaVm
+{
+    public int MonitoreoPerifericoProblemaID { get; set; }
+    public int ChecklistArranqueID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public DateTime FechaOperacion { get; set; }
+    public int TurnoID { get; set; }
+    public string? TurnoNombre { get; set; }
+    public int? MaquinaID { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? MaquinaNombre { get; set; }
+    public string DescripcionFalla { get; set; } = string.Empty;
+    public string? CausaRaiz { get; set; }
+    public string? Acciones { get; set; }
+    public bool Solucionado { get; set; }
+    public DateTime? FechaSolucion { get; set; }
+    public int? UsuarioSolucionID { get; set; }
+    public string? UsuarioSolucionNombre { get; set; }
+}
+
+public class ProduccionMonitoreoPerifericoProblemaPostVm
+{
+    public int MonitoreoPerifericoProblemaID { get; set; }
+    public int ChecklistArranqueID { get; set; }
+    public string DescripcionFalla { get; set; } = string.Empty;
+    public string? CausaRaiz { get; set; }
+    public string? Acciones { get; set; }
+    public bool Solucionado { get; set; }
+}
+
+public class ProduccionEntregaTurnoPerifericosPostVm
+{
+    public int ChecklistArranqueID { get; set; }
+    public int? TecnicoRecibePersonaID { get; set; }
+    public string? TecnicoRecibeNombre { get; set; }
+}
+
 
 public sealed class ProduccionOperadorCajasVm
 {

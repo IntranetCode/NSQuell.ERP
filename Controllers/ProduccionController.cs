@@ -69,11 +69,12 @@ SELECT
     e.ReferenciaSAP,
     e.DescripcionParte,
 
-    e.MoldeID,
-    e.MoldeCodigo,
+   e.MoldeID,
+e.MoldeCodigo,
+ISNULL(e.EsCambioMolde,0) AS EsCambioMolde,
 
-    e.OperadorID,
-    e.OperadorNombre,
+e.OperadorID,
+e.OperadorNombre,
 
     e.FechaInicioReal,
     e.FechaFinReal,
@@ -148,58 +149,56 @@ ORDER BY
             return View(vm);
         }
 
-
         [HttpGet]
         public async Task<IActionResult> Detalle(int id)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (id <= 0) return NotFound();
 
-            if (id <= 0)
-                return NotFound();
+            var usuarioId = ObtenerUsuarioID();
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
             var ejecucion = await ObtenerEjecucionAsync(id, cn);
+            if (ejecucion == null) return NotFound();
 
-            if (ejecucion == null)
-                return NotFound();
+            ProduccionMonitoreoTurnoAvisoVm? monitoreoTurnoActual = null;
+
+            var ejecucionActivaParaMonitoreo =
+                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion ||
+                ejecucion.EstatusID == ProduccionEstatus.EnProduccion ||
+                ejecucion.EstatusID == ProduccionEstatus.Pausado;
+
+            if (ejecucionActivaParaMonitoreo && ejecucion.SolicitudProduccionID.HasValue && ejecucion.SolicitudProduccionID.Value > 0)
+            {
+                await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
+                try
+                {
+                    var checklistPerifericosId = await ObtenerOCrearChecklistPerifericosTurnoAsync(ejecucion, DateTime.Now, usuarioId, cn, tx);
+                    await tx.CommitAsync();
+                    monitoreoTurnoActual = await ObtenerAvisoMonitoreoTurnoAsync(checklistPerifericosId, cn);
+                }
+                catch (Exception ex)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No fue posible preparar el monitoreo de periféricos del turno actual: " + ex.Message;
+                }
+            }
 
             var vm = new ProduccionDetalleVm
             {
                 Ejecucion = ejecucion,
-
-                RegistrosHora =
-                    await ObtenerRegistrosHoraAsync(
-                        id,
-                        cn),
-
-                Paros =
-                    await ObtenerParosAsync(
-                        id,
-                        cn),
-
-                MotivosParo =
-                    await CargarMotivosParoAsync(
-                        cn),
-
-                ChecklistResumen =
-                    await ObtenerResumenChecklistArranqueAsync(
-                        id,
-                        cn),
-
-                CalidadResumen =
-                    await ObtenerResumenCalidadAsync(
-                        id,
-                        cn)
+                RegistrosHora = await ObtenerRegistrosHoraAsync(id, cn),
+                Paros = await ObtenerParosAsync(id, cn),
+                MotivosParo = await CargarMotivosParoAsync(cn),
+                ChecklistResumen = await ObtenerResumenChecklistArranqueAsync(id, cn),
+                CalidadResumen = await ObtenerResumenCalidadAsync(id, cn),
+                MonitoreoTurnoActual = monitoreoTurnoActual
             };
 
-            vm.RecepcionesOF =
-                await ObtenerEntregasAlmacenOFAsync(
-                    ejecucion,
-                    cn,
-                    null);
+            vm.RecepcionesOF = await ObtenerEntregasAlmacenOFAsync(ejecucion, cn, null);
 
             return View(vm);
         }
@@ -788,16 +787,18 @@ ORDER BY
                         new { ejecucionProduccionId = vm.EjecucionProduccionID });
                 }
 
-                foreach (var respuesta in vm.Respuestas ?? new List<ProduccionChecklistRespuestaPostVm>())
+                var respuestasRecibidas = vm.Respuestas ?? new List<ProduccionChecklistRespuestaPostVm>();
+
+                if (!respuestasRecibidas.Any())
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No se recibieron las respuestas del checklist. Revisa los nombres de los campos en la vista.";
+                    return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                }
+
+                foreach (var respuesta in respuestasRecibidas)
                 {
                     var resultadoNormalizado = NormalizarResultadoChecklist(respuesta.Resultado);
-
-                    if (respuesta.Confirmado && resultadoNormalizado == null)
-                    {
-                        await tx.RollbackAsync();
-                        TempData["Error"] = "Una pregunta confirmada debe tener una respuesta OK, NOK o N/A.";
-                        return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
-                    }
 
                     if (resultadoNormalizado == "__INVALIDO__")
                     {
@@ -806,7 +807,22 @@ ORDER BY
                         return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
                     }
 
-                    await ActualizarRespuestaChecklistAsync(respuesta.ChecklistArranqueDetalleID, resultadoNormalizado, respuesta.Observaciones, respuesta.Confirmado, respuesta.ValorCapturado, usuarioId, cn, tx);
+                    if (resultadoNormalizado == null)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Todas las verificaciones deben tener una respuesta OK, NOK o N/A.";
+                        return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                    }
+
+                    await ActualizarRespuestaChecklistAsync(
+                        respuesta.ChecklistArranqueDetalleID,
+                        resultadoNormalizado,
+                        respuesta.Observaciones,
+                        true,
+                        respuesta.ValorCapturado,
+                        usuarioId,
+                        cn,
+                        tx);
                 }
 
                 if (vm.EnviarACalidad)
@@ -846,6 +862,15 @@ ORDER BY
                             nameof(ChecklistArranque),
                             new { ejecucionProduccionId = vm.EjecucionProduccionID });
                     }
+
+                    var tieneValoresSinCapturar = await TieneValoresRequeridosSinCapturarAsync(vm.ChecklistArranqueID, cn, tx);
+
+                    if (tieneValoresSinCapturar)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Faltan valores requeridos en una o más preguntas del monitoreo.";
+                        return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                    }
                 }
 
                 var nuevoEstatus =
@@ -879,9 +904,10 @@ ORDER BY
                         ? "Checklist capturado y enviado a validación de Calidad."
                         : "Checklist guardado correctamente.";
 
-                return RedirectToAction(
-                    nameof(ChecklistArranque),
-                    new { ejecucionProduccionId = vm.EjecucionProduccionID });
+                return RedirectToAction(nameof(ChecklistFormato), new
+                {
+                    id = vm.ChecklistArranqueID
+                });
             }
             catch (Exception ex)
             {
@@ -890,9 +916,10 @@ ORDER BY
                 TempData["Error"] =
                     "No fue posible guardar el checklist: " + ex.Message;
 
-                return RedirectToAction(
-                    nameof(ChecklistArranque),
-                    new { ejecucionProduccionId = vm.EjecucionProduccionID });
+                return RedirectToAction(nameof(ChecklistFormato), new
+                {
+                    id = vm.ChecklistArranqueID
+                });
             }
         }
 
@@ -2158,113 +2185,38 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
             }
         }
 
-        // ============================================================
-        // LECTURAS
-        // ============================================================
-
-        private async Task<ProduccionEjecucionVm?> ObtenerEjecucionAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn)
+        private async Task<ProduccionEjecucionVm?> ObtenerEjecucionAsync(int ejecucionProduccionId, SqlConnection cn)
         {
             const string sql = @"
-SELECT
-    EjecucionProduccionID,
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    SolicitudProduccionDetalleID,
-    ReleaseID,
-    ReleaseDetalleID,
-    MaquinaID,
-    MaquinaCodigo,
-    MaquinaNombre,
-    ParteID,
-    NumeroParte,
-    ReferenciaSAP,
-    DescripcionParte,
-    MoldeID,
-    MoldeCodigo,
-    OperadorID,
-    OperadorNombre,
-    FechaInicioReal,
-    FechaFinReal,
-    CantidadPlaneada,
-    CantidadOKTotal,
-    CantidadSospechosaTotal,
-    CantidadScrapTotal,
-    EstatusID,
-    Observaciones,
-    UsuarioCreacionID,
-    FechaCreacion,
-    UsuarioModificacionID,
-    FechaModificacion,
-    Activo
+SELECT EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,
+       MaquinaID,MaquinaCodigo,MaquinaNombre,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,MoldeID,MoldeCodigo,
+       ISNULL(EsCambioMolde,0) AS EsCambioMolde,OperadorID,OperadorNombre,FechaInicioReal,FechaFinReal,CantidadPlaneada,
+       CantidadOKTotal,CantidadSospechosaTotal,CantidadScrapTotal,EstatusID,Observaciones,UsuarioCreacionID,FechaCreacion,
+       UsuarioModificacionID,FechaModificacion,Activo
 FROM dbo.Produccion_Ejecucion
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1;";
+WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
 
             await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                ejecucionProduccionId;
-
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
             await using var rd = await cmd.ExecuteReaderAsync();
-
-            if (!await rd.ReadAsync())
-                return null;
-
-            return MapearEjecucion(rd);
+            return await rd.ReadAsync() ? MapearEjecucion(rd) : null;
         }
 
-        private async Task<ProduccionEjecucionVm?> ObtenerEjecucionAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task<ProduccionEjecucionVm?> ObtenerEjecucionAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
-SELECT
-    EjecucionProduccionID,
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    SolicitudProduccionDetalleID,
-    ReleaseID,
-    ReleaseDetalleID,
-    MaquinaID,
-    MaquinaCodigo,
-    MaquinaNombre,
-    ParteID,
-    NumeroParte,
-    ReferenciaSAP,
-    DescripcionParte,
-    MoldeID,
-    MoldeCodigo,
-    OperadorID,
-    OperadorNombre,
-    FechaInicioReal,
-    FechaFinReal,
-    CantidadPlaneada,
-    CantidadOKTotal,
-    CantidadSospechosaTotal,
-    CantidadScrapTotal,
-    EstatusID,
-    Observaciones,
-    UsuarioCreacionID,
-    FechaCreacion,
-    UsuarioModificacionID,
-    FechaModificacion,
-    Activo
+SELECT EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,
+       MaquinaID,MaquinaCodigo,MaquinaNombre,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,MoldeID,MoldeCodigo,
+       ISNULL(EsCambioMolde,0) AS EsCambioMolde,OperadorID,OperadorNombre,FechaInicioReal,FechaFinReal,CantidadPlaneada,
+       CantidadOKTotal,CantidadSospechosaTotal,CantidadScrapTotal,EstatusID,Observaciones,UsuarioCreacionID,FechaCreacion,
+       UsuarioModificacionID,FechaModificacion,Activo
 FROM dbo.Produccion_Ejecucion
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1;";
+WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                ejecucionProduccionId;
-
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
             await using var rd = await cmd.ExecuteReaderAsync();
-
-            if (!await rd.ReadAsync())
-                return null;
-
-            return MapearEjecucion(rd);
+            return await rd.ReadAsync() ? MapearEjecucion(rd) : null;
         }
 
         private async Task<List<ProduccionRegistroHoraVm>> ObtenerRegistrosHoraAsync(
@@ -3508,37 +3460,23 @@ ORDER BY
         }
 
         [HttpGet]
-        public async Task<IActionResult> ChecklistFormato(
-    int id)
+        public async Task<IActionResult> ChecklistFormato(int id)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (id <= 0) return NotFound();
 
-            if (id <= 0)
-                return NotFound();
-
-            await using var cn =
-                new SqlConnection(ConnectionString);
-
+            await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
-            var checklist =
-                await ObtenerChecklistArranqueAsync(
-                    id,
-                    cn);
+            var checklist = await ObtenerChecklistArranqueAsync(id, cn);
+            if (checklist == null) return NotFound();
 
-            if (checklist == null)
-                return NotFound();
+            if (string.Equals(checklist.TipoChecklist, "MONITOREO_PERIFERICOS", StringComparison.OrdinalIgnoreCase))
+                ViewBag.TecnicosProduccion = await CargarOperadoresProduccionAsync(cn);
 
-            /*
-             * Temporalmente reutiliza la vista actual.
-             * Después construiremos una vista general
-             * que cambie según TipoChecklist.
-             */
-            return View(
-                "ChecklistArranque",
-                checklist);
+            return View("ChecklistArranque", checklist);
         }
+
 
         private async Task<ProduccionChecklistArranqueVm?> ObtenerChecklistArranqueAsync(int checklistArranqueId, SqlConnection cn)
         {
@@ -3547,11 +3485,13 @@ SELECT ChecklistArranqueID,EjecucionProduccionID,ProgramaProduccionID,SolicitudP
        FechaChecklist,FechaOperacion,MaquinaID,MaquinaCodigo,MaquinaNombre,MoldeID,MoldeCodigo,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,
        CodigoFormato,VersionFormato,TipoChecklist,MomentoProceso,TurnoID,TurnoNombre,NumeroAplicacion,EsRecurrente,RequiereCambioMolde,EstatusID,
        UsuarioProduccionID,FechaCapturaProduccion,UsuarioCalidadID,FechaValidacionCalidad,ObservacionesGenerales,ObservacionesCalidad,
+       TecnicoEntregaPersonaID,TecnicoEntregaNombre,FechaEntregaTurno,TecnicoRecibePersonaID,TecnicoRecibeNombre,FechaRecepcionTurno,
        UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion,Activo
 FROM dbo.Produccion_ChecklistArranque
 WHERE ChecklistArranqueID=@ChecklistArranqueID AND Activo=1;";
 
             ProduccionChecklistArranqueVm? vm = null;
+
             await using (var cmd = new SqlCommand(sql, cn))
             {
                 cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
@@ -3595,6 +3535,12 @@ WHERE ChecklistArranqueID=@ChecklistArranqueID AND Activo=1;";
                         FechaValidacionCalidad = NullableFecha(rd, "FechaValidacionCalidad"),
                         ObservacionesGenerales = TextoNullable(rd, "ObservacionesGenerales"),
                         ObservacionesCalidad = TextoNullable(rd, "ObservacionesCalidad"),
+                        TecnicoEntregaPersonaID = NullableEntero(rd, "TecnicoEntregaPersonaID"),
+                        TecnicoEntregaNombre = TextoNullable(rd, "TecnicoEntregaNombre"),
+                        FechaEntregaTurno = NullableFecha(rd, "FechaEntregaTurno"),
+                        TecnicoRecibePersonaID = NullableEntero(rd, "TecnicoRecibePersonaID"),
+                        TecnicoRecibeNombre = TextoNullable(rd, "TecnicoRecibeNombre"),
+                        FechaRecepcionTurno = NullableFecha(rd, "FechaRecepcionTurno"),
                         UsuarioCreacionID = NullableEntero(rd, "UsuarioCreacionID"),
                         FechaCreacion = Fecha(rd, "FechaCreacion"),
                         UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
@@ -3605,8 +3551,335 @@ WHERE ChecklistArranqueID=@ChecklistArranqueID AND Activo=1;";
             }
 
             if (vm == null) return null;
+
             await CargarPreguntasChecklistArranqueAsync(vm, cn);
+
+            if (string.Equals(vm.TipoChecklist, "MONITOREO_PERIFERICOS", StringComparison.OrdinalIgnoreCase))
+                vm.ProblemasPerifericos = await ObtenerProblemasPerifericosAsync(vm.ChecklistArranqueID, cn);
+
             return vm;
+        }
+
+        private async Task<List<ProduccionMonitoreoPerifericoProblemaVm>> ObtenerProblemasPerifericosAsync(int checklistArranqueId, SqlConnection cn)
+        {
+            var lista = new List<ProduccionMonitoreoPerifericoProblemaVm>();
+
+            const string sql = @"
+SELECT MonitoreoPerifericoProblemaID,ChecklistArranqueID,EjecucionProduccionID,FechaOperacion,TurnoID,TurnoNombre,
+       MaquinaID,MaquinaCodigo,MaquinaNombre,DescripcionFalla,CausaRaiz,Acciones,Solucionado,FechaSolucion,
+       UsuarioSolucionID,UsuarioSolucionNombre,UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion,Activo
+FROM dbo.Produccion_MonitoreoPerifericosProblemas
+WHERE ChecklistArranqueID=@ChecklistArranqueID AND Activo=1
+ORDER BY Solucionado,FechaCreacion DESC,MonitoreoPerifericoProblemaID DESC;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new ProduccionMonitoreoPerifericoProblemaVm
+                {
+                    MonitoreoPerifericoProblemaID = Entero(rd, "MonitoreoPerifericoProblemaID"),
+                    ChecklistArranqueID = Entero(rd, "ChecklistArranqueID"),
+                    EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
+                    FechaOperacion = Fecha(rd, "FechaOperacion"),
+                    TurnoID = Entero(rd, "TurnoID"),
+                    TurnoNombre = TextoNullable(rd, "TurnoNombre"),
+                    MaquinaID = NullableEntero(rd, "MaquinaID"),
+                    MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
+                    MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
+                    DescripcionFalla = TextoNullable(rd, "DescripcionFalla") ?? string.Empty,
+                    CausaRaiz = TextoNullable(rd, "CausaRaiz"),
+                    Acciones = TextoNullable(rd, "Acciones"),
+                    Solucionado = Booleano(rd, "Solucionado"),
+                    FechaSolucion = NullableFecha(rd, "FechaSolucion"),
+                    UsuarioSolucionID = NullableEntero(rd, "UsuarioSolucionID"),
+                    UsuarioSolucionNombre = TextoNullable(rd, "UsuarioSolucionNombre")
+                });
+            }
+
+            return lista;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuardarProblemaPerifericos(ProduccionMonitoreoPerifericoProblemaPostVm vm)
+        {
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
+            if (vm.ChecklistArranqueID <= 0)
+            {
+                TempData["Error"] = "No se recibió correctamente el checklist.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (string.IsNullOrWhiteSpace(vm.DescripcionFalla))
+            {
+                TempData["Error"] = "Captura la descripción del problema.";
+                return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+            }
+
+            var usuarioId = ObtenerUsuarioID();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
+            try
+            {
+                const string sqlChecklist = @"
+SELECT TOP(1) EjecucionProduccionID,FechaOperacion,TurnoID,TurnoNombre,MaquinaID,MaquinaCodigo,MaquinaNombre,TipoChecklist,EstatusID
+FROM dbo.Produccion_ChecklistArranque WITH(UPDLOCK,HOLDLOCK)
+WHERE ChecklistArranqueID=@ChecklistArranqueID AND Activo=1;";
+
+                int ejecucionProduccionId;
+                DateTime fechaOperacion;
+                int turnoId;
+                string? turnoNombre;
+                int? maquinaId;
+                string? maquinaCodigo;
+                string? maquinaNombre;
+                string tipoChecklist;
+                int estatusId;
+
+                await using (var cmd = new SqlCommand(sqlChecklist, cn, tx))
+                {
+                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = vm.ChecklistArranqueID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "No se encontró el checklist.";
+                        return RedirectToAction(nameof(Index));
+                    }
+
+                    ejecucionProduccionId = Entero(rd, "EjecucionProduccionID");
+                    fechaOperacion = NullableFecha(rd, "FechaOperacion") ?? DateTime.Today;
+                    turnoId = NullableEntero(rd, "TurnoID") ?? 0;
+                    turnoNombre = TextoNullable(rd, "TurnoNombre");
+                    maquinaId = NullableEntero(rd, "MaquinaID");
+                    maquinaCodigo = TextoNullable(rd, "MaquinaCodigo");
+                    maquinaNombre = TextoNullable(rd, "MaquinaNombre");
+                    tipoChecklist = TextoNullable(rd, "TipoChecklist") ?? string.Empty;
+                    estatusId = Entero(rd, "EstatusID");
+                }
+
+                if (!string.Equals(tipoChecklist, "MONITOREO_PERIFERICOS", StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El checklist no corresponde al monitoreo de periféricos.";
+                    return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                }
+
+                if (turnoId <= 0)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El checklist no tiene un turno válido.";
+                    return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                }
+
+                if (!ProduccionChecklistEstatus.PuedeEditarProduccion(estatusId))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Este checklist ya no puede ser modificado.";
+                    return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                }
+
+                string? usuarioSolucionNombre = null;
+
+                if (vm.Solucionado)
+                {
+                    usuarioSolucionNombre = await ObtenerPersonaNombreAsync(usuarioId, cn, tx);
+                    if (string.IsNullOrWhiteSpace(usuarioSolucionNombre)) usuarioSolucionNombre = User?.Identity?.Name ?? "Usuario de producción";
+                }
+
+                if (vm.MonitoreoPerifericoProblemaID > 0)
+                {
+                    const string sqlActualizar = @"
+UPDATE dbo.Produccion_MonitoreoPerifericosProblemas
+SET DescripcionFalla=@DescripcionFalla,CausaRaiz=@CausaRaiz,Acciones=@Acciones,Solucionado=@Solucionado,
+    FechaSolucion=CASE WHEN @Solucionado=1 THEN ISNULL(FechaSolucion,GETDATE()) ELSE NULL END,
+    UsuarioSolucionID=CASE WHEN @Solucionado=1 THEN @UsuarioID ELSE NULL END,
+    UsuarioSolucionNombre=CASE WHEN @Solucionado=1 THEN @UsuarioSolucionNombre ELSE NULL END,
+    UsuarioModificacionID=@UsuarioID,FechaModificacion=GETDATE()
+WHERE MonitoreoPerifericoProblemaID=@ProblemaID AND ChecklistArranqueID=@ChecklistArranqueID AND Activo=1;";
+
+                    await using var cmd = new SqlCommand(sqlActualizar, cn, tx);
+                    cmd.Parameters.Add("@ProblemaID", SqlDbType.Int).Value = vm.MonitoreoPerifericoProblemaID;
+                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = vm.ChecklistArranqueID;
+                    cmd.Parameters.Add("@DescripcionFalla", SqlDbType.NVarChar, 1000).Value = vm.DescripcionFalla.Trim();
+                    cmd.Parameters.Add("@CausaRaiz", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(vm.CausaRaiz) ? DBNull.Value : vm.CausaRaiz.Trim();
+                    cmd.Parameters.Add("@Acciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(vm.Acciones) ? DBNull.Value : vm.Acciones.Trim();
+                    cmd.Parameters.Add("@Solucionado", SqlDbType.Bit).Value = vm.Solucionado;
+                    cmd.Parameters.Add("@UsuarioSolucionNombre", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(usuarioSolucionNombre) ? DBNull.Value : usuarioSolucionNombre.Trim();
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
+                    if (await cmd.ExecuteNonQueryAsync() <= 0) throw new InvalidOperationException("No se encontró el problema que deseas actualizar.");
+                }
+                else
+                {
+                    const string sqlInsertar = @"
+INSERT INTO dbo.Produccion_MonitoreoPerifericosProblemas
+(ChecklistArranqueID,EjecucionProduccionID,FechaOperacion,TurnoID,TurnoNombre,MaquinaID,MaquinaCodigo,MaquinaNombre,
+ DescripcionFalla,CausaRaiz,Acciones,Solucionado,FechaSolucion,UsuarioSolucionID,UsuarioSolucionNombre,UsuarioCreacionID,FechaCreacion,Activo)
+VALUES
+(@ChecklistArranqueID,@EjecucionProduccionID,@FechaOperacion,@TurnoID,@TurnoNombre,@MaquinaID,@MaquinaCodigo,@MaquinaNombre,
+ @DescripcionFalla,@CausaRaiz,@Acciones,@Solucionado,
+ CASE WHEN @Solucionado=1 THEN GETDATE() ELSE NULL END,
+ CASE WHEN @Solucionado=1 THEN @UsuarioID ELSE NULL END,
+ CASE WHEN @Solucionado=1 THEN @UsuarioSolucionNombre ELSE NULL END,
+ @UsuarioID,GETDATE(),1);";
+
+                    await using var cmd = new SqlCommand(sqlInsertar, cn, tx);
+                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = vm.ChecklistArranqueID;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                    cmd.Parameters.Add("@FechaOperacion", SqlDbType.Date).Value = fechaOperacion.Date;
+                    cmd.Parameters.Add("@TurnoID", SqlDbType.Int).Value = turnoId;
+                    cmd.Parameters.Add("@TurnoNombre", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(turnoNombre) ? DBNull.Value : turnoNombre.Trim();
+                    cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)maquinaId ?? DBNull.Value;
+                    cmd.Parameters.Add("@MaquinaCodigo", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(maquinaCodigo) ? DBNull.Value : maquinaCodigo.Trim();
+                    cmd.Parameters.Add("@MaquinaNombre", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(maquinaNombre) ? DBNull.Value : maquinaNombre.Trim();
+                    cmd.Parameters.Add("@DescripcionFalla", SqlDbType.NVarChar, 1000).Value = vm.DescripcionFalla.Trim();
+                    cmd.Parameters.Add("@CausaRaiz", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(vm.CausaRaiz) ? DBNull.Value : vm.CausaRaiz.Trim();
+                    cmd.Parameters.Add("@Acciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(vm.Acciones) ? DBNull.Value : vm.Acciones.Trim();
+                    cmd.Parameters.Add("@Solucionado", SqlDbType.Bit).Value = vm.Solucionado;
+                    cmd.Parameters.Add("@UsuarioSolucionNombre", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(usuarioSolucionNombre) ? DBNull.Value : usuarioSolucionNombre.Trim();
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+                TempData["Success"] = vm.MonitoreoPerifericoProblemaID > 0 ? "Problema actualizado correctamente." : "Problema registrado correctamente.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible guardar el problema: " + ex.Message;
+            }
+
+            return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EliminarProblemaPerifericos(int monitoreoPerifericoProblemaId, int checklistArranqueId)
+        {
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
+            if (monitoreoPerifericoProblemaId <= 0 || checklistArranqueId <= 0)
+            {
+                TempData["Error"] = "No se recibió correctamente el problema.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var usuarioId = ObtenerUsuarioID();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            const string sql = @"
+UPDATE problema
+SET problema.Activo=0,problema.UsuarioModificacionID=@UsuarioID,problema.FechaModificacion=GETDATE()
+FROM dbo.Produccion_MonitoreoPerifericosProblemas problema
+INNER JOIN dbo.Produccion_ChecklistArranque checklist ON checklist.ChecklistArranqueID=problema.ChecklistArranqueID AND checklist.Activo=1
+WHERE problema.MonitoreoPerifericoProblemaID=@ProblemaID
+  AND problema.ChecklistArranqueID=@ChecklistArranqueID
+  AND problema.Activo=1
+  AND checklist.TipoChecklist=N'MONITOREO_PERIFERICOS'
+  AND checklist.EstatusID IN(@PendienteProduccion,@CapturadoProduccion);";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@ProblemaID", SqlDbType.Int).Value = monitoreoPerifericoProblemaId;
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@PendienteProduccion", SqlDbType.Int).Value = ProduccionChecklistEstatus.PendienteProduccion;
+            cmd.Parameters.Add("@CapturadoProduccion", SqlDbType.Int).Value = ProduccionChecklistEstatus.CapturadoPorProduccion;
+
+            var afectados = await cmd.ExecuteNonQueryAsync();
+            TempData[afectados > 0 ? "Success" : "Error"] = afectados > 0 ? "Problema eliminado correctamente." : "No fue posible eliminar el problema o el checklist ya está bloqueado.";
+
+            return RedirectToAction(nameof(ChecklistFormato), new { id = checklistArranqueId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuardarEntregaTurnoPerifericos(ProduccionEntregaTurnoPerifericosPostVm vm)
+        {
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
+            if (vm.ChecklistArranqueID <= 0)
+            {
+                TempData["Error"] = "No se recibió correctamente el checklist.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (!vm.TecnicoRecibePersonaID.HasValue || vm.TecnicoRecibePersonaID.Value <= 0)
+            {
+                TempData["Error"] = "Selecciona al técnico que recibe el turno.";
+                return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+            }
+
+            var usuarioId = ObtenerUsuarioID();
+
+            if (usuarioId == vm.TecnicoRecibePersonaID.Value)
+            {
+                TempData["Error"] = "El técnico que entrega y el técnico que recibe no pueden ser la misma persona.";
+                return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
+            try
+            {
+                var tecnicoEntregaNombre = await ObtenerPersonaNombreAsync(usuarioId, cn, tx);
+                if (string.IsNullOrWhiteSpace(tecnicoEntregaNombre)) tecnicoEntregaNombre = User?.Identity?.Name ?? "Técnico de producción";
+
+                var tecnicoRecibeNombre = await ObtenerPersonaNombreAsync(vm.TecnicoRecibePersonaID.Value, cn, tx);
+
+                if (string.IsNullOrWhiteSpace(tecnicoRecibeNombre))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No se encontró al técnico que recibe el turno.";
+                    return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                }
+
+                const string sql = @"
+UPDATE dbo.Produccion_ChecklistArranque
+SET TecnicoEntregaPersonaID=@TecnicoEntregaPersonaID,TecnicoEntregaNombre=@TecnicoEntregaNombre,FechaEntregaTurno=GETDATE(),
+    TecnicoRecibePersonaID=@TecnicoRecibePersonaID,TecnicoRecibeNombre=@TecnicoRecibeNombre,FechaRecepcionTurno=GETDATE(),
+    UsuarioModificacionID=@UsuarioID,FechaModificacion=GETDATE()
+WHERE ChecklistArranqueID=@ChecklistArranqueID
+  AND TipoChecklist=N'MONITOREO_PERIFERICOS'
+  AND Activo=1
+  AND EstatusID IN(@PendienteProduccion,@CapturadoProduccion);";
+
+                await using var cmd = new SqlCommand(sql, cn, tx);
+                cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = vm.ChecklistArranqueID;
+                cmd.Parameters.Add("@TecnicoEntregaPersonaID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@TecnicoEntregaNombre", SqlDbType.NVarChar, 200).Value = tecnicoEntregaNombre.Trim();
+                cmd.Parameters.Add("@TecnicoRecibePersonaID", SqlDbType.Int).Value = vm.TecnicoRecibePersonaID.Value;
+                cmd.Parameters.Add("@TecnicoRecibeNombre", SqlDbType.NVarChar, 200).Value = tecnicoRecibeNombre.Trim();
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@PendienteProduccion", SqlDbType.Int).Value = ProduccionChecklistEstatus.PendienteProduccion;
+                cmd.Parameters.Add("@CapturadoProduccion", SqlDbType.Int).Value = ProduccionChecklistEstatus.CapturadoPorProduccion;
+
+                if (await cmd.ExecuteNonQueryAsync() <= 0)
+                    throw new InvalidOperationException("El checklist no existe, no corresponde a periféricos o ya está bloqueado.");
+
+                await tx.CommitAsync();
+                TempData["Success"] = "Entrega de turno registrada correctamente.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible registrar la entrega de turno: " + ex.Message;
+            }
+
+            return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
         }
 
         private async Task CargarPreguntasChecklistArranqueAsync(ProduccionChecklistArranqueVm vm, SqlConnection cn)
@@ -4304,6 +4577,77 @@ VALUES
             }
 
             return Convert.ToInt32(resultado);
+        }
+
+        private async Task<ProduccionMonitoreoTurnoAvisoVm?> ObtenerAvisoMonitoreoTurnoAsync(int checklistArranqueId, SqlConnection cn)
+        {
+            const string sql = @"
+SELECT
+    c.ChecklistArranqueID,
+    c.EjecucionProduccionID,
+    ISNULL(c.TurnoID,0) AS TurnoID,
+    ISNULL(c.TurnoNombre,N'') AS TurnoNombre,
+    ISNULL(c.FechaOperacion,CONVERT(DATE,c.FechaChecklist)) AS FechaOperacion,
+    c.MaquinaCodigo,
+    c.MaquinaNombre,
+    c.EstatusID,
+    COUNT(CASE WHEN p.PreguntaID IS NOT NULL THEN 1 END) AS TotalPreguntas,
+    SUM(CASE WHEN p.PreguntaID IS NOT NULL AND ISNULL(d.Confirmado,0)=1 THEN 1 ELSE 0 END) AS TotalConfirmadas,
+    CASE
+        WHEN c.TecnicoEntregaPersonaID IS NOT NULL
+         AND c.TecnicoRecibePersonaID IS NOT NULL
+         AND c.FechaEntregaTurno IS NOT NULL
+         AND c.FechaRecepcionTurno IS NOT NULL
+        THEN CONVERT(BIT,1)
+        ELSE CONVERT(BIT,0)
+    END AS EntregaTurnoRegistrada
+FROM dbo.Produccion_ChecklistArranque c
+LEFT JOIN dbo.Produccion_ChecklistArranqueDetalle d
+    ON d.ChecklistArranqueID=c.ChecklistArranqueID
+   AND d.Activo=1
+LEFT JOIN dbo.ERP_ChecklistArranquePreguntas p
+    ON p.PreguntaID=d.PreguntaID
+   AND p.Activo=1
+   AND ISNULL(p.EsPreguntaCalidad,0)=0
+WHERE c.ChecklistArranqueID=@ChecklistArranqueID
+  AND c.CodigoFormato=N'GQ-F-PR01-14'
+  AND c.TipoChecklist=N'MONITOREO_PERIFERICOS'
+  AND c.Activo=1
+GROUP BY
+    c.ChecklistArranqueID,
+    c.EjecucionProduccionID,
+    c.TurnoID,
+    c.TurnoNombre,
+    c.FechaOperacion,
+    c.FechaChecklist,
+    c.MaquinaCodigo,
+    c.MaquinaNombre,
+    c.EstatusID,
+    c.TecnicoEntregaPersonaID,
+    c.TecnicoRecibePersonaID,
+    c.FechaEntregaTurno,
+    c.FechaRecepcionTurno;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync()) return null;
+
+            return new ProduccionMonitoreoTurnoAvisoVm
+            {
+                ChecklistArranqueID = Entero(rd, "ChecklistArranqueID"),
+                EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
+                TurnoID = Entero(rd, "TurnoID"),
+                TurnoNombre = TextoNullable(rd, "TurnoNombre") ?? string.Empty,
+                FechaOperacion = Fecha(rd, "FechaOperacion"),
+                MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
+                MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
+                EstatusID = Entero(rd, "EstatusID"),
+                TotalPreguntas = Entero(rd, "TotalPreguntas"),
+                TotalConfirmadas = Entero(rd, "TotalConfirmadas"),
+                EntregaTurnoRegistrada = Booleano(rd, "EntregaTurnoRegistrada")
+            };
         }
 
         private async Task<ProduccionChecklistResumenVm?> ObtenerResumenChecklistArranqueAsync(
