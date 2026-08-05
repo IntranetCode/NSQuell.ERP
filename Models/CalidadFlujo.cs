@@ -468,6 +468,34 @@ namespace ERP.NSQuell.Models
         public const string Cancelada = "CANCELADA";
     }
 
+    public static class CalidadDecisionCaja
+    {
+        public const string Liberar = "LIBERAR";
+        public const string GP12 = "GP12";
+        public const string Devolver = "DEVOLVER";
+
+        public static bool EsValida(string? decision)
+        {
+            if (string.IsNullOrWhiteSpace(decision))
+                return false;
+
+            var valor = decision.Trim().ToUpperInvariant();
+
+            return valor == Liberar ||
+                   valor == GP12 ||
+                   valor == Devolver;
+        }
+    }
+
+    public static class CalidadResultadoCaja
+    {
+        public const string Liberada = "LIBERADA";
+        public const string GP12 = "GP12";
+        public const string Devuelta = "DEVUELTA";
+        public const string LiberadaGP12 = "LIBERADA_GP12";
+        public const string GP12Nok = "GP12_NOK";
+    }
+
     public static class CalidadMomentoMuestra
     {
         public const string FinProduccion = "FIN_PRODUCCION";

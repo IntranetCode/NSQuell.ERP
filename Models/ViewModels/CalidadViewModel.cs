@@ -226,6 +226,8 @@ namespace ERP.NSQuell.Models.ViewModels
         public List<CalidadCajaProduccionItemViewModel> CajasProduccion { get; set; } = new();
         public List<CalidadGP12ItemViewModel> RegistrosGP12 { get; set; } = new();
         public List<CalidadReliberacionItemViewModel> Reliberaciones { get; set; } = new();
+        public List<CalidadMuestraResguardoItemViewModel> MuestrasResguardo { get; set; } = new();
+        public CalidadCierreEstadoViewModel Cierre { get; set; } = new();
 
         // El checklist se divide por responsabilidad. Producción se muestra
         // únicamente como evidencia de origen; Calidad/Auditor es editable.
@@ -271,17 +273,72 @@ namespace ERP.NSQuell.Models.ViewModels
         public int TotalMonitoreos => Monitoreos.Count;
         public int MonitoreosPendientes => Monitoreos.Count(x => x.EsPendiente);
         public int MonitoreosVencidos => Monitoreos.Count(x => x.EstaVencido);
+        public int MonitoreosDisponiblesCaptura => Monitoreos.Count(x => x.PuedeCapturar);
+        public int MonitoreosEsperandoProduccion => Monitoreos.Count(x => x.EsPendiente && !x.TieneRegistroProduccion);
+        public int MonitoreosAtendidos => Monitoreos.Count(x => !x.EsPendiente);
         public int MonitoreosConformes => Monitoreos.Count(x => x.Resultado == CalidadResultadoMonitoreo.Conforme);
         public int MonitoreosConHallazgo => Monitoreos.Count(x =>
             x.Resultado == CalidadResultadoMonitoreo.Sospechoso ||
             x.Resultado == CalidadResultadoMonitoreo.NoConforme);
         public int MonitoreosReinspeccionados => Monitoreos.Count(x => x.Resultado == CalidadResultadoMonitoreo.Reinspeccion);
+        public int TotalMuestraRevisada => Monitoreos.Sum(x => x.CantidadRevisadaMuestra);
+        public int TotalMaterialAfectado => Monitoreos.Sum(x => x.CantidadAfectadaCalidad);
         public int DisposicionesPendientes => Disposiciones.Count(x => x.ResultadoFinal == CalidadResultadoDisposicion.Pendiente);
+
+        public int TotalCajasProduccion => CajasProduccion.Count;
+        public int CajasPendientesRevision => CajasProduccion.Count(x => x.PuedeRevisar);
+        public int CajasLiberadasCalidad => CajasProduccion.Count(x => x.EsLiberada);
+        public int CajasEnGP12 => CajasProduccion.Count(x => x.EstaEnGP12);
+        public int CajasDevueltasCalidad => CajasProduccion.Count(x => x.EstaDevuelta);
+        public int PiezasPendientesRevisionCaja => CajasProduccion
+            .Where(x => x.PuedeRevisar)
+            .Sum(x => x.CantidadPiezas);
+
+        public int TotalRegistrosGP12 => RegistrosGP12.Count;
+        public int GP12Pendientes => RegistrosGP12.Count(x => x.PuedeRevisar);
+        public int GP12EnReinspeccion => RegistrosGP12.Count(x => x.RequiereReinspeccion);
+        public int GP12Liberados => RegistrosGP12.Count(x => x.EsLiberado);
+
+        public decimal PorcentajeMonitoreosAtendidos => TotalMonitoreos <= 0
+            ? 0
+            : Math.Round((decimal)MonitoreosAtendidos * 100m / TotalMonitoreos, 1);
         public DateTime? ProximoMonitoreo => Monitoreos
             .Where(x => x.EsPendiente)
             .OrderBy(x => x.FechaHoraProgramada)
             .Select(x => (DateTime?)x.FechaHoraProgramada)
             .FirstOrDefault();
+
+        public int TotalReliberaciones => Reliberaciones.Count;
+        public int ReliberacionesPendientes => Reliberaciones.Count(x => x.EsPendiente);
+        public int ReliberacionesAutorizadas => Reliberaciones.Count(x => x.EsAutorizada);
+        public int ReliberacionesRechazadas => Reliberaciones.Count(x => x.EsRechazada);
+
+        public CalidadReliberacionItemViewModel? UltimaReliberacion =>
+            Reliberaciones
+                .OrderByDescending(x => x.NumeroReliberacion)
+                .ThenByDescending(x => x.FechaSolicitud)
+                .FirstOrDefault();
+
+        public bool TieneReliberacionPendiente =>
+            Reliberaciones.Any(x => x.EsPendiente);
+
+        public CalidadMuestraResguardoItemViewModel? MuestraFinProduccion =>
+            MuestrasResguardo
+                .Where(x => x.Momento == CalidadMomentoMuestra.FinProduccion)
+                .OrderByDescending(x => x.FechaModificacion ?? x.FechaCreacion)
+                .FirstOrDefault();
+
+        public bool MuestraFinProduccionCompleta =>
+            MuestraFinProduccion?.EstaCompleta == true;
+
+        public CalidadHistorialItemViewModel? MovimientoCierre =>
+            Historial
+                .Where(x => x.Movimiento == CalidadMovimientos.Cierre)
+                .OrderByDescending(x => x.FechaMovimiento)
+                .FirstOrDefault();
+
+        public DateTime? FechaCierre => MovimientoCierre?.FechaMovimiento;
+        public int? UsuarioCierreID => MovimientoCierre?.UsuarioID;
     }
 
     public class CalidadCorridaOrigenViewModel
@@ -507,6 +564,131 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? Observaciones { get; set; }
     }
 
+    public class CalidadMuestraResguardoGuardarViewModel
+    {
+        [Range(1, int.MaxValue)]
+        public int InspeccionID { get; set; }
+
+        [Required]
+        [StringLength(30)]
+        public string Momento { get; set; } = CalidadMomentoMuestra.FinProduccion;
+
+        [Range(1, 50, ErrorMessage = "La cantidad de disparos debe estar entre 1 y 50.")]
+        public int CantidadDisparos { get; set; } = 2;
+
+        public bool MuestraCalidadConfirmada { get; set; }
+        public bool MuestraProduccionConfirmada { get; set; }
+
+        [StringLength(250)]
+        public string? UbicacionCalidad { get; set; }
+
+        [StringLength(250)]
+        public string? UbicacionProduccion { get; set; }
+
+        [StringLength(1000)]
+        public string? Observaciones { get; set; }
+    }
+
+    public class CalidadMuestraResguardoItemViewModel
+    {
+        public int MuestraResguardoID { get; set; }
+        public int InspeccionID { get; set; }
+        public int EjecucionProduccionID { get; set; }
+        public string Momento { get; set; } = CalidadMomentoMuestra.FinProduccion;
+        public int CantidadDisparos { get; set; }
+        public bool MuestraCalidadConfirmada { get; set; }
+        public bool MuestraProduccionConfirmada { get; set; }
+        public string? UbicacionCalidad { get; set; }
+        public string? UbicacionProduccion { get; set; }
+        public DateTime? FechaResguardo { get; set; }
+        public int? UsuarioResponsableID { get; set; }
+        public string? Observaciones { get; set; }
+        public DateTime FechaCreacion { get; set; }
+        public DateTime? FechaModificacion { get; set; }
+
+        public bool EstaCompleta =>
+            MuestraCalidadConfirmada &&
+            MuestraProduccionConfirmada &&
+            !string.IsNullOrWhiteSpace(UbicacionCalidad) &&
+            !string.IsNullOrWhiteSpace(UbicacionProduccion) &&
+            FechaResguardo.HasValue;
+
+        public string MomentoTexto => Momento switch
+        {
+            CalidadMomentoMuestra.CambioMolde => "Cambio de molde",
+            _ => "Fin de producción"
+        };
+
+        public string EstadoTexto => EstaCompleta
+            ? "Resguardo confirmado"
+            : "Resguardo incompleto";
+
+        public string EstadoBadgeClase => EstaCompleta
+            ? "bg-success"
+            : "bg-warning text-dark";
+    }
+
+    public class CalidadCierreEstadoViewModel
+    {
+        public bool YaCerrada { get; set; }
+        public bool ConfiguracionInvalidada { get; set; }
+        public int MonitoreosPendientes { get; set; }
+        public int DisposicionesPendientes { get; set; }
+        public int CajasPendientesCalidad { get; set; }
+        public int CajasDevueltasSinResolver { get; set; }
+        public int GP12Abiertos { get; set; }
+        public int ReliberacionesPendientes { get; set; }
+        public bool MuestraFinProduccionCompleta { get; set; }
+
+        public bool PuedeCerrar =>
+            !YaCerrada &&
+            !ConfiguracionInvalidada &&
+            MonitoreosPendientes == 0 &&
+            DisposicionesPendientes == 0 &&
+            CajasPendientesCalidad == 0 &&
+            CajasDevueltasSinResolver == 0 &&
+            GP12Abiertos == 0 &&
+            ReliberacionesPendientes == 0 &&
+            MuestraFinProduccionCompleta;
+
+        public List<string> Bloqueos
+        {
+            get
+            {
+                var bloqueos = new List<string>();
+
+                if (YaCerrada)
+                    bloqueos.Add("La inspección ya está cerrada.");
+
+                if (ConfiguracionInvalidada)
+                    bloqueos.Add("La configuración de la inspección está invalidada.");
+
+                if (MonitoreosPendientes > 0)
+                    bloqueos.Add($"Faltan {MonitoreosPendientes} monitoreo(s) por atender.");
+
+                if (DisposicionesPendientes > 0)
+                    bloqueos.Add($"Existen {DisposicionesPendientes} disposición(es) pendientes.");
+
+                if (CajasPendientesCalidad > 0)
+                    bloqueos.Add($"Existen {CajasPendientesCalidad} caja(s) pendientes de revisión de Calidad.");
+
+                if (CajasDevueltasSinResolver > 0)
+                    bloqueos.Add($"Existen {CajasDevueltasSinResolver} caja(s) devueltas aún sin resolver.");
+
+                if (GP12Abiertos > 0)
+                    bloqueos.Add($"Existen {GP12Abiertos} registro(s) GP12 abiertos.");
+
+                if (ReliberacionesPendientes > 0)
+                    bloqueos.Add($"Existen {ReliberacionesPendientes} reliberación(es) pendientes.");
+
+                if (!MuestraFinProduccionCompleta)
+                    bloqueos.Add("La muestra de resguardo de fin de producción no está completa.");
+
+                return bloqueos;
+            }
+        }
+    }
+
     public class CalidadCajaDecisionViewModel
     {
         [Range(1, int.MaxValue)]
@@ -665,8 +847,37 @@ namespace ERP.NSQuell.Models.ViewModels
 
         public bool EsPendiente => Resultado == CalidadResultadoMonitoreo.Pendiente;
         public bool TieneRegistroProduccion => RegistroHoraID.HasValue;
-        public bool PuedeCapturar => EsPendiente && TieneRegistroProduccion;
+        public bool PuedeCapturar =>
+            EsPendiente &&
+            TieneRegistroProduccion &&
+            CantidadProducidaPeriodo > 0;
+        public bool EsperandoProduccion => EsPendiente && !TieneRegistroProduccion;
         public bool EstaVencido => EsPendiente && FechaHoraProgramada < DateTime.Now;
+        public bool TieneHallazgo =>
+            Resultado == CalidadResultadoMonitoreo.Sospechoso ||
+            Resultado == CalidadResultadoMonitoreo.NoConforme;
+
+        public int CantidadAfectadaCalidad =>
+            CantidadSospechosa + CantidadNoRecuperable;
+
+        public string ResultadoTexto => Resultado switch
+        {
+            CalidadResultadoMonitoreo.Conforme => "Conforme",
+            CalidadResultadoMonitoreo.Sospechoso => "Sospechoso",
+            CalidadResultadoMonitoreo.NoConforme => "No conforme",
+            CalidadResultadoMonitoreo.Reinspeccion => "Reinspeccionado",
+            _ => "Pendiente"
+        };
+
+        public string ResultadoBadgeClase => Resultado switch
+        {
+            CalidadResultadoMonitoreo.Conforme => "bg-success",
+            CalidadResultadoMonitoreo.Sospechoso => "bg-warning text-dark",
+            CalidadResultadoMonitoreo.NoConforme => "bg-danger",
+            CalidadResultadoMonitoreo.Reinspeccion => "bg-info text-dark",
+            _ when EstaVencido => "bg-danger",
+            _ => "bg-secondary"
+        };
 
         public string RangoProduccion =>
             HoraInicioProduccion.HasValue && HoraFinProduccion.HasValue
@@ -686,6 +897,11 @@ namespace ERP.NSQuell.Models.ViewModels
     {
         public int DisposicionID { get; set; }
         public int? MonitoreoID { get; set; }
+        public int? NumeroHora { get; set; }
+        public DateTime? FechaHoraRevision { get; set; }
+        public string? ResultadoMonitoreoOrigen { get; set; }
+        public string? DefectoCodigo { get; set; }
+        public string? DefectoDescripcion { get; set; }
         public string TipoMaterial { get; set; } = string.Empty;
         public int CantidadAfectada { get; set; }
         public string? Etiqueta { get; set; }
@@ -697,6 +913,76 @@ namespace ERP.NSQuell.Models.ViewModels
         public int CantidadScrap { get; set; }
         public string ResultadoFinal { get; set; } = string.Empty;
         public string? Observaciones { get; set; }
+
+        public bool EsPendiente =>
+            ResultadoFinal == CalidadResultadoDisposicion.Pendiente;
+
+        public bool EsLiberacionTotal =>
+            !EsPendiente &&
+            CantidadAfectada > 0 &&
+            CantidadLiberada == CantidadAfectada &&
+            CantidadScrap == 0;
+
+        public bool EsLiberacionParcial =>
+            !EsPendiente &&
+            CantidadLiberada > 0 &&
+            CantidadScrap > 0;
+
+        public bool EsScrapTotal =>
+            !EsPendiente &&
+            CantidadAfectada > 0 &&
+            CantidadLiberada == 0 &&
+            CantidadScrap == CantidadAfectada;
+
+        public int CantidadPendiente =>
+            EsPendiente
+                ? Math.Max(0, CantidadAfectada - CantidadLiberada - CantidadScrap)
+                : 0;
+
+        public string TratamientoTexto => Disposicion switch
+        {
+            CalidadTipoDisposicion.Seleccion => "Selección",
+            CalidadTipoDisposicion.Retrabajo => "Retrabajo",
+            CalidadTipoDisposicion.Liberado => "Liberación",
+            CalidadTipoDisposicion.Scrap => "Scrap",
+            _ => "Pendiente"
+        };
+
+        public string ResponsableTexto => Responsable switch
+        {
+            CalidadResponsable.Produccion => "Producción",
+            CalidadResponsable.Calidad => "Calidad",
+            _ => "Sin responsable"
+        };
+
+        public string ResultadoFinalTexto =>
+            EsPendiente
+                ? "Material bloqueado"
+                : EsLiberacionTotal
+                    ? "Liberado completamente"
+                    : EsLiberacionParcial
+                        ? "Liberado parcialmente con scrap"
+                        : EsScrapTotal
+                            ? "Scrap total"
+                            : ResultadoFinal.Replace("_", " ");
+
+        public string ResultadoFinalBadgeClase =>
+            EsPendiente
+                ? "bg-warning text-dark"
+                : EsLiberacionTotal
+                    ? "bg-success"
+                    : EsLiberacionParcial
+                        ? "bg-warning text-dark"
+                        : "bg-danger";
+
+        public string ResultadoFinalBordeClase =>
+            EsPendiente
+                ? "border-warning"
+                : EsLiberacionTotal
+                    ? "border-success"
+                    : EsLiberacionParcial
+                        ? "border-warning"
+                        : "border-danger";
     }
 
     public class CalidadCajaItemViewModel
@@ -742,8 +1028,53 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? Molde { get; set; }
 
         public bool EstaPendiente => EstadoCajaID == 2;
+        public bool EsLiberada =>
+            EstadoCajaID == 3 ||
+            string.Equals(ResultadoCalidad, CalidadResultadoCaja.Liberada, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(ResultadoCalidad, CalidadResultadoCaja.LiberadaGP12, StringComparison.OrdinalIgnoreCase);
+        public bool EstaEnGP12 =>
+            EstadoCajaID == 4 ||
+            string.Equals(ResultadoCalidad, CalidadResultadoCaja.GP12, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(ResultadoCalidad, CalidadResultadoCaja.GP12Nok, StringComparison.OrdinalIgnoreCase);
+        public bool EstaDevuelta =>
+            string.Equals(ResultadoCalidad, CalidadResultadoCaja.Devuelta, StringComparison.OrdinalIgnoreCase);
 
         public bool PuedeRevisar => EstadoCajaID == 2;
+
+        public string EstadoVisualTexto =>
+            PuedeRevisar
+                ? "Pendiente de Calidad"
+                : EsLiberada
+                    ? "Liberada"
+                    : EstaEnGP12
+                        ? "En GP12"
+                        : EstaDevuelta
+                            ? "Devuelta"
+                            : string.IsNullOrWhiteSpace(EstadoCajaNombre)
+                                ? "Sin estado"
+                                : EstadoCajaNombre;
+
+        public string EstadoBadgeClase =>
+            PuedeRevisar
+                ? "bg-warning text-dark"
+                : EsLiberada
+                    ? "bg-success"
+                    : EstaEnGP12
+                        ? "bg-warning text-dark"
+                        : EstaDevuelta
+                            ? "bg-danger"
+                            : "bg-secondary";
+
+        public string EstadoBordeClase =>
+            PuedeRevisar
+                ? "border-warning"
+                : EsLiberada
+                    ? "border-success"
+                    : EstaEnGP12
+                        ? "border-warning"
+                        : EstaDevuelta
+                            ? "border-danger"
+                            : "border-secondary";
     }
 
     public class CalidadGP12ItemViewModel
@@ -765,6 +1096,46 @@ namespace ERP.NSQuell.Models.ViewModels
         public bool PuedeRevisar =>
             Estado == CalidadEstadoGP12.EnInspeccion ||
             Estado == CalidadEstadoGP12.NokReinspeccion;
+
+        public bool RequiereReinspeccion =>
+            Estado == CalidadEstadoGP12.NokReinspeccion;
+
+        public bool EsLiberado =>
+            Estado == CalidadEstadoGP12.Liberado ||
+            Estado == CalidadEstadoGP12.Cerrado;
+
+        public int TotalRevisiones => Revisiones.Count;
+        public int TotalNokAcumulado => Revisiones.Sum(x => x.CantidadNOK);
+        public CalidadGP12RevisionItemViewModel? UltimaRevision =>
+            Revisiones.OrderByDescending(x => x.NumeroRevision).FirstOrDefault();
+
+        public string EstadoTexto => Estado switch
+        {
+            CalidadEstadoGP12.EnInspeccion => "En inspección",
+            CalidadEstadoGP12.NokReinspeccion => "Requiere reinspección",
+            CalidadEstadoGP12.Liberado => "Liberado",
+            CalidadEstadoGP12.Cerrado => "Cerrado",
+            CalidadEstadoGP12.Cancelado => "Cancelado",
+            _ => Estado.Replace("_", " ")
+        };
+
+        public string EstadoBadgeClase =>
+            EsLiberado
+                ? "bg-success"
+                : RequiereReinspeccion
+                    ? "bg-danger"
+                    : Estado == CalidadEstadoGP12.Cancelado
+                        ? "bg-secondary"
+                        : "bg-warning text-dark";
+
+        public string EstadoBordeClase =>
+            EsLiberado
+                ? "border-success"
+                : RequiereReinspeccion
+                    ? "border-danger"
+                    : Estado == CalidadEstadoGP12.Cancelado
+                        ? "border-secondary"
+                        : "border-warning";
     }
 
     public class CalidadGP12RevisionItemViewModel
@@ -778,6 +1149,14 @@ namespace ERP.NSQuell.Models.ViewModels
         public string Resultado { get; set; } = CalidadResultadoGP12.Nok;
         public string? Observaciones { get; set; }
         public List<CalidadGP12DefectoItemViewModel> Defectos { get; set; } = new();
+
+        public string ResultadoTexto =>
+            Resultado == CalidadResultadoGP12.Ok ? "Conforme" : "No conforme";
+
+        public string ResultadoBadgeClase =>
+            Resultado == CalidadResultadoGP12.Ok ? "bg-success" : "bg-danger";
+
+        public int TotalDefectos => Defectos.Sum(x => x.Cantidad);
     }
 
     public class CalidadGP12DefectoItemViewModel
@@ -800,6 +1179,96 @@ namespace ERP.NSQuell.Models.ViewModels
         public DateTime? FechaValidacion { get; set; }
         public string Resultado { get; set; } = CalidadResultadoReliberacion.Pendiente;
         public string? Observaciones { get; set; }
+
+        public DateTime? FechaInicioParo { get; set; }
+        public DateTime? FechaFinParo { get; set; }
+        public int DuracionMinutos { get; set; }
+        public string? MotivoParoTexto { get; set; }
+        public string? DescripcionParo { get; set; }
+        public bool EsMayorA15Minutos { get; set; }
+        public int? UsuarioSolicitudID { get; set; }
+        public int? UsuarioCalidadID { get; set; }
+
+        public bool EsPendiente =>
+            string.Equals(
+                Resultado,
+                CalidadResultadoReliberacion.Pendiente,
+                StringComparison.OrdinalIgnoreCase);
+
+        public bool EsAutorizada =>
+            string.Equals(
+                Resultado,
+                CalidadResultadoReliberacion.Autorizada,
+                StringComparison.OrdinalIgnoreCase);
+
+        public bool EsRechazada =>
+            string.Equals(
+                Resultado,
+                CalidadResultadoReliberacion.Rechazada,
+                StringComparison.OrdinalIgnoreCase);
+
+        public bool EsCancelada =>
+            string.Equals(
+                Resultado,
+                CalidadResultadoReliberacion.Cancelada,
+                StringComparison.OrdinalIgnoreCase);
+
+        public string ResultadoTexto =>
+            EsPendiente
+                ? "Pendiente de validación"
+                : EsAutorizada
+                    ? "Reliberación autorizada"
+                    : EsRechazada
+                        ? "Reliberación rechazada"
+                        : EsCancelada
+                            ? "Cancelada"
+                            : string.IsNullOrWhiteSpace(Resultado)
+                                ? "Sin resultado"
+                                : Resultado.Replace("_", " ");
+
+        public string ResultadoBadgeClase =>
+            EsPendiente
+                ? "bg-warning text-dark"
+                : EsAutorizada
+                    ? "bg-success"
+                    : EsRechazada
+                        ? "bg-danger"
+                        : "bg-secondary";
+
+        public string ResultadoBordeClase =>
+            EsPendiente
+                ? "border-warning"
+                : EsAutorizada
+                    ? "border-success"
+                    : EsRechazada
+                        ? "border-danger"
+                        : "border-secondary";
+
+        public string DuracionTexto
+        {
+            get
+            {
+                if (DuracionMinutos <= 0)
+                    return "Sin duración registrada";
+
+                if (DuracionMinutos < 60)
+                    return $"{DuracionMinutos} min";
+
+                var horas = DuracionMinutos / 60;
+                var minutos = DuracionMinutos % 60;
+
+                return minutos == 0
+                    ? $"{horas} h"
+                    : $"{horas} h {minutos} min";
+            }
+        }
+
+        public string RangoParo =>
+            FechaInicioParo.HasValue && FechaFinParo.HasValue
+                ? $"{FechaInicioParo.Value:dd/MM/yyyy HH:mm} - {FechaFinParo.Value:dd/MM/yyyy HH:mm}"
+                : FechaInicioParo.HasValue
+                    ? $"Inició {FechaInicioParo.Value:dd/MM/yyyy HH:mm}"
+                    : "Sin horario de paro";
     }
 
     public class CalidadHistorialItemViewModel

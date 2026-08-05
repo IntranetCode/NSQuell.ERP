@@ -2649,79 +2649,13 @@ FROM Preguntas;";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Cerrar(
-            int id)
+        public Task<IActionResult> Cerrar(
+            int id,
+            string? observaciones)
         {
-            var inspeccion =
-                await _context.CalidadInspecciones
-                    .FirstOrDefaultAsync(x =>
-                        x.InspeccionID == id);
-
-            if (inspeccion == null)
-                return NotFound();
-
-            var esFinal =
-                CalidadEstados
-                    .EsEstadoFinal(
-                        inspeccion.Estado) ||
-
-                inspeccion.Estado ==
-                    CalidadEstados
-                        .LegacyLiberada ||
-
-                inspeccion.Estado ==
-                    CalidadEstados
-                        .LegacyContencion ||
-
-                inspeccion.Estado ==
-                    CalidadEstados
-                        .LegacyScrap;
-
-            if (!esFinal)
-            {
-                TempData["Error"] =
-                    "El proceso todavía está activo y no puede cerrarse.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id }
-                );
-            }
-
-            var usuarioId =
-                ObtenerUsuarioIdActual();
-
-            var estadoAnterior =
-                inspeccion.Estado;
-
-            inspeccion.Estado =
-                CalidadEstados.Cerrada;
-
-            MarcarModificacion(
-                inspeccion,
-                usuarioId
-            );
-
-            AgregarHistorial(
-                inspeccion,
-                CalidadMovimientos.Cierre,
-                estadoAnterior,
-                inspeccion.Estado,
-                inspeccion.ResultadoCalidad,
-                inspeccion.Etiqueta,
-                "Registro de Calidad cerrado.",
-                usuarioId
-            );
-
-            await _context.SaveChangesAsync();
-
-            TempData["Mensaje"] =
-                "Registro cerrado correctamente.";
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id }
-            );
+            return CerrarInspeccionCalidadAsync(
+                id,
+                observaciones);
         }
 
         // =========================================================
