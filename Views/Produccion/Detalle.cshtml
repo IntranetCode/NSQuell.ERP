@@ -11,6 +11,53 @@
     {
         horaFin = new TimeSpan(23, 59, 0);
     }
+
+    var avancePct = e.PorcentajeAvance;
+
+    if (avancePct < 0)
+    {
+        avancePct = 0;
+    }
+
+    if (avancePct > 100)
+    {
+        avancePct = 100;
+    }
+}
+
+@functions {
+    public static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    public static string Fecha(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+
+    public static string Dec4(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N4") : "-";
+    }
+
+    public static string TipoClase(string? tipo)
+    {
+        if (string.Equals(tipo, "MP", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-primary";
+
+        if (string.Equals(tipo, "COMPONENTE", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-info text-dark";
+
+        if (string.Equals(tipo, "EMBALAJE", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-success";
+
+        if (string.Equals(tipo, "ETIQUETA", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-warning text-dark";
+
+        return "badge bg-secondary";
+    }
 }
 
 <!DOCTYPE html>
@@ -30,7 +77,7 @@
         }
 
         .page-shell {
-            max-width: 1450px;
+            max-width: 1500px;
             margin: 0 auto;
             padding: 22px;
         }
@@ -178,6 +225,60 @@
             font-weight: 900;
             border-radius: 12px;
         }
+
+        .form-label {
+            color: #344054;
+            font-size: .78rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 12px;
+            border: 1px solid #d7e2f1;
+            box-shadow: none;
+        }
+
+            .form-control:focus,
+            .form-select:focus {
+                border-color: #7ca8e8;
+                box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
+            }
+
+        .almacen-note {
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-size: .86rem;
+            font-weight: 700;
+        }
+
+        .movimiento-retorno {
+            background: #fff7ed;
+        }
+
+        .soft-box {
+            border: 1px solid #e5eaf3;
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        .modal-content {
+            border-radius: 20px;
+            border: 0;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .25);
+        }
+
+        @@media (max-width: 992px) {
+            .page-shell {
+                padding: 14px;
+            }
+        }
     </style>
 </head>
 
@@ -275,7 +376,7 @@
             <div class="col-6 col-lg">
                 <div class="metric-card">
                     <div class="metric-label">Avance</div>
-                    <div class="metric-value">@e.PorcentajeAvance%</div>
+                    <div class="metric-value">@e.PorcentajeAvance.ToString("0.##")%</div>
                 </div>
             </div>
         </div>
@@ -284,11 +385,11 @@
             <div class="panel-body">
                 <div class="d-flex justify-content-between small mb-1">
                     <span class="fw-bold text-primary">Avance de producción</span>
-                    <span>@e.PorcentajeAvance%</span>
+                    <span>@e.PorcentajeAvance.ToString("0.##")%</span>
                 </div>
                 <div class="progress">
                     <div class="progress-bar"
-                         style="width:@Math.Min(100, e.PorcentajeAvance)%">
+                         style="width:@avancePct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">
                     </div>
                 </div>
             </div>
@@ -443,6 +544,70 @@
                     </div>
                 </div>
 
+                <div class="panel mb-4">
+                    <div class="panel-header">
+                        <i class="bi bi-patch-check me-1"></i>
+                        Liberación de Calidad
+                    </div>
+
+                    <div class="panel-body">
+                        @if (Model.CalidadResumen == null)
+                        {
+                            <div class="alert alert-secondary mb-0">
+                                El checklist todavía no ha sido enviado a Calidad.
+                            </div>
+                        }
+                        else
+                        {
+                            var calidad = Model.CalidadResumen;
+
+                            <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+                                <div>
+                                    <div class="data-label">Estado de Calidad</div>
+                                    <span class="badge @calidad.ClaseBadge fs-6 mt-1">
+                                        @calidad.EstadoTexto
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <div class="data-label">Notificación</div>
+                                    <div class="data-value">
+                                        @(calidad.FechaNotificacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="data-label">Etiqueta verde</div>
+                                    <div class="data-value">
+                                        @(calidad.FechaLiberacionProduccion?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(calidad.MotivoDevolucion))
+                            {
+                                <div class="alert alert-danger mb-3">
+                                    <strong>Corrección solicitada por Calidad:</strong><br />
+                                    @calidad.MotivoDevolucion
+                                </div>
+                            }
+
+                            @if (calidad.ConfiguracionInvalidada)
+                            {
+                                <div class="alert alert-danger mb-3">
+                                    La configuración de la corrida fue invalidada por cambios en Planeación.
+                                </div>
+                            }
+
+                            <a href="@Url.Action("Detalle", "Calidad", new { id = calidad.InspeccionID })"
+                               class="btn btn-outline-primary w-100 btn-strong">
+                                <i class="bi bi-box-arrow-up-right me-1"></i>
+                                Abrir seguimiento de Calidad
+                            </a>
+                        }
+                    </div>
+                </div>
+
                 @if (e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion && !Model.TieneParoAbierto)
                 {
                     <div class="panel mb-4">
@@ -454,7 +619,7 @@
                         <div class="panel-body">
                             <div class="flow-note mb-3">
                                 Este paso cambia la ejecución de preparación a producción en serie.
-                                Solo se permite si el checklist de arranque ya fue capturado y enviado a Calidad.
+                                Solo se permite después de que Calidad libere las primeras piezas con etiqueta verde.
                             </div>
 
                             <form method="post" action="@Url.Action("IniciarSerie", "Produccion")">
@@ -466,85 +631,24 @@
 
                                 <button type="submit"
                                         class="btn btn-success w-100 btn-strong"
+                                        disabled="@(Model.CalidadResumen?.PuedeIniciarSerie != true)"
                                         onclick="return confirm('¿Confirmas iniciar producción en serie?');">
                                     <i class="bi bi-play-fill me-1"></i>
                                     Iniciar serie
                                 </button>
+
+                                @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
+                                {
+                                    <div class="text-danger fw-bold small mt-2">
+                                        Pendiente de liberación verde por Calidad.
+                                    </div>
+                                }
                             </form>
                         </div>
                     </div>
                 }
 
-                @if (e.PuedeRegistrarProduccion && !Model.TieneParoAbierto)
-                {
-                    <div class="panel mb-4">
-                        <div class="panel-header">
-                            <i class="bi bi-plus-circle me-1"></i>
-                            Registrar piezas por hora
-                        </div>
-
-                        <div class="panel-body">
-                            <form method="post" action="@Url.Action("RegistrarHora", "Produccion")">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Fecha</label>
-                                    <input type="date"
-                                           name="FechaProduccion"
-                                           value="@DateTime.Today.ToString("yyyy-MM-dd")"
-                                           class="form-control" />
-                                </div>
-
-                                <div class="row g-2 mb-3">
-                                    <div class="col-6">
-                                        <label class="form-label fw-bold">Hora inicio</label>
-                                        <input type="time"
-                                               name="HoraInicio"
-                                               value="@horaInicio.ToString(@"hh\:mm")"
-                                               class="form-control" />
-                                    </div>
-
-                                    <div class="col-6">
-                                        <label class="form-label fw-bold">Hora fin</label>
-                                        <input type="time"
-                                               name="HoraFin"
-                                               value="@horaFin.ToString(@"hh\:mm")"
-                                               class="form-control" />
-                                    </div>
-                                </div>
-
-                                <div class="row g-2 mb-3">
-                                    <div class="col-4">
-                                        <label class="form-label fw-bold text-success">OK</label>
-                                        <input type="number" name="CantidadOK" min="0" value="0" class="form-control form-control-lg text-center fw-bold" />
-                                    </div>
-
-                                    <div class="col-4">
-                                        <label class="form-label fw-bold text-warning">Sospechoso</label>
-                                        <input type="number" name="CantidadSospechosa" min="0" value="0" class="form-control form-control-lg text-center fw-bold" />
-                                    </div>
-
-                                    <div class="col-4">
-                                        <label class="form-label fw-bold text-danger">Scrap</label>
-                                        <input type="number" name="CantidadScrap" min="0" value="0" class="form-control form-control-lg text-center fw-bold" />
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Observaciones</label>
-                                    <textarea name="Observaciones" rows="2" maxlength="500" class="form-control"></textarea>
-                                </div>
-
-                                <button type="submit" class="btn btn-success w-100 btn-strong">
-                                    <i class="bi bi-save me-1"></i>
-                                    Guardar captura
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                }
+               
 
                 @if (Model.TieneParoAbierto)
                 {
@@ -664,6 +768,128 @@
             <div class="col-12 col-xl-8">
 
                 <div class="panel mb-4">
+                    <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span>
+                            <i class="bi bi-box-seam me-1"></i>
+                            Entregas de Almacén contra OF
+                        </span>
+
+                        <span class="badge bg-primary">
+                            @(Model.RecepcionesOF?.Count ?? 0) movimiento(s)
+                        </span>
+                    </div>
+
+                    <div class="panel-body">
+                        <div class="almacen-note mb-3">
+                            <i class="bi bi-arrow-repeat me-1"></i>
+                            Esta información se obtiene automáticamente de los movimientos de Almacén.
+                            Las salidas y consumos representan entregas a Producción; los retornos se muestran con cantidad negativa.
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Movimiento</th>
+                                        <th>Código / descripción</th>
+                                        <th>Lote / tipo MP</th>
+                                        <th class="text-end">Cantidad</th>
+                                        <th>Entregó / recibió</th>
+                                        <th>Fecha</th>
+                                        <th>OF / referencia</th>
+                                        <th>Observaciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (Model.RecepcionesOF == null || !Model.RecepcionesOF.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted py-4">
+                                                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                                Almacén todavía no registra entregas para esta OF.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var r in Model.RecepcionesOF)
+                                        {
+                                            var esRetorno = string.Equals(
+                                            r.TipoMovimiento,
+                                            "Retorno",
+                                            StringComparison.OrdinalIgnoreCase);
+
+                                            var claseMovimiento = esRetorno
+                                            ? "badge bg-warning text-dark"
+                                            : string.Equals(r.TipoMovimiento, "Consumo", StringComparison.OrdinalIgnoreCase)
+                                            ? "badge bg-info text-dark"
+                                            : "badge bg-success";
+
+                                            <tr class="@(esRetorno ? "movimiento-retorno" : "")">
+                                                <td>
+                                                    <span class="@TipoClase(r.TipoRecepcion)">
+                                                        @r.TextoTipo
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    <span class="@claseMovimiento">
+                                                        @Txt(r.TipoMovimiento)
+                                                    </span>
+                                                    <div class="text-muted small mt-1">
+                                                        Movimiento #@r.MovimientoID
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    <div class="fw-bold">@Txt(r.Codigo)</div>
+                                                    <div class="text-muted small">@Txt(r.Descripcion)</div>
+                                                </td>
+
+                                                <td>
+                                                    <div><strong>Lote:</strong> @Txt(r.Lote)</div>
+                                                    <div class="text-muted small">
+                                                        <strong>Tipo MP:</strong> @Txt(r.NumeroUI)
+                                                    </div>
+                                                </td>
+
+                                                <td class="text-end fw-bold @(esRetorno ? "text-danger" : "text-success")">
+                                                    @Dec4(r.Cantidad)
+                                                    <div class="text-muted small">@Txt(r.Unidad)</div>
+                                                </td>
+
+                                                <td>
+                                                    <div><strong>Entregó:</strong> @Txt(r.EntregadoPor)</div>
+                                                    <div class="text-muted small">
+                                                        <strong>Recibió:</strong> @Txt(r.RecibidoPor)
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    @r.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")
+                                                </td>
+
+                                                <td>
+                                                    <div><strong>OF:</strong> @Txt(r.NumeroOF)</div>
+                                                    <div class="text-muted small text-break">
+                                                        <strong>Ref.:</strong> @Txt(r.ReferenciaOperacion)
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    @Txt(r.Observaciones)
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel mb-4">
                     <div class="panel-header">
                         <i class="bi bi-clock-history me-1"></i>
                         Capturas por hora
@@ -770,5 +996,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+
 </body>
 </html>

@@ -459,7 +459,7 @@
     }
 
     <div class="erp-page-breadcrumb">
-        <a href="javascript:history.back()" class="erp-btn-back">← Regresar</a>
+        <a asp-controller="Compras" asp-action="Index" class="erp-btn-back">← Panel compras</a>
         <span>Inicio</span>
         <span>›</span>
         <span>Compras</span>
@@ -476,13 +476,13 @@
 
                 <p class="page-subtitle">
                     Consulta las solicitudes registradas, revisa su estatus y da seguimiento al flujo de compras.
-                    El proceso se divide por responsables: Dirección, Compras y Almacén.
+                    Las bandejas operativas se consultan desde el panel principal de Compras.
                 </p>
             </div>
 
             <div class="col-12 col-lg-4">
                 <div class="d-flex gap-2 justify-content-lg-end flex-wrap">
-                    <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+                    <a asp-controller="Compras" asp-action="CrearSolicitud" asp-route-returnTo="Solicitudes" class="btn-compras-main">
                         + Nueva solicitud
                     </a>
 
@@ -521,26 +521,6 @@
                 <div class="summary-label">Cerradas</div>
                 <div class="summary-number">@cerradas</div>
             </div>
-        </div>
-    </section>
-
-    <section class="row g-3 mb-3">
-        <div class="col-12 col-md-4">
-            <a asp-controller="Compras" asp-action="BandejaDireccion" class="btn-compras-blue w-100">
-                Bandeja Dirección
-            </a>
-        </div>
-
-        <div class="col-12 col-md-4">
-            <a asp-controller="Compras" asp-action="BandejaCompras" class="btn-compras-secondary w-100">
-                Bandeja Compras
-            </a>
-        </div>
-
-        <div class="col-12 col-md-4">
-            <a asp-controller="Compras" asp-action="BandejaAlmacen" class="btn-compras-secondary w-100">
-                Bandeja Almacén
-            </a>
         </div>
     </section>
 
@@ -649,6 +629,7 @@
                                         <a asp-controller="Compras"
                                            asp-action="DetalleSolicitud"
                                            asp-route-id="@item.SolicitudCompraID"
+                                           asp-route-returnTo="Solicitudes"
                                            class="btn-table-view">
                                             Ver detalle
                                         </a>
@@ -661,6 +642,7 @@
                                                   method="post"
                                                   onsubmit="return confirm('¿Seguro que deseas cancelar esta solicitud?');">
                                                 @Html.AntiForgeryToken()
+                                                <input type="hidden" name="returnTo" value="Solicitudes" />
                                                 <button type="submit" class="btn-table-cancel">
                                                     Cancelar
                                                 </button>
@@ -685,7 +667,7 @@
                 <div class="empty-title">Aún no hay solicitudes registradas</div>
                 Crea la primera solicitud de compra para comenzar el flujo.
                 <br /><br />
-                <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+                <a asp-controller="Compras" asp-action="CrearSolicitud" asp-route-returnTo="Solicitudes" class="btn-compras-main">
                     Crear primera solicitud
                 </a>
             </div>

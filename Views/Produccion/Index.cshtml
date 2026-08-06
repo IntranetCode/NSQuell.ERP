@@ -1,7 +1,88 @@
 ﻿@model ERP.NSQuell.Models.ProduccionBandejaVm
+@using Microsoft.AspNetCore.Mvc.Rendering
 
 @{
-    Layout = null;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var operadoresProduccion =
+        ViewBag.OperadoresProduccion as List<SelectListItem>
+        ?? new List<SelectListItem>();
+
+    var totalGeneral = Model.Total + Model.TotalDisponibles;
+
+    var programasPorMaquina = Model.ProgramasDisponibles
+        .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
+        .ThenBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+        .ThenBy(x => x.ProgramaProduccionID)
+        .GroupBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN_MAQUINA" : x.MaquinaCodigo)
+        .ToList();
+
+    var ejecucionesPorMaquina = Model.Ejecuciones
+     .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
+     .ThenBy(x => x.ProgramaProduccionID)
+     .ThenBy(x => x.EjecucionProduccionID)
+     .GroupBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN_MAQUINA" : x.MaquinaCodigo)
+     .ToList();
+}
+
+@functions {
+    public static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    public static string Fecha(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    public static string Num(int? value)
+    {
+        return value.HasValue ? value.Value.ToString("N0") : "-";
+    }
+
+    public static string Num0(int value)
+    {
+        return value.ToString("N0");
+    }
+
+    public static string Data(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? ""
+            : value.Replace("\"", "&quot;").Replace("\r", " ").Replace("\n", " ");
+    }
+
+    public static string PorcentajeClase(decimal porcentaje)
+    {
+        if (porcentaje >= 100) return "bg-success";
+        if (porcentaje >= 60) return "bg-primary";
+        if (porcentaje > 0) return "bg-warning";
+        return "bg-secondary";
+    }
+
+    public static string EstatusRowClase(int estatusId)
+    {
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion) return "row-produccion";
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion) return "row-preparacion";
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Pausado) return "row-pausado";
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
+            estatusId == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial) return "row-terminado";
+
+        return "";
+    }
+
+    public static string MachineKey(string? value)
+    {
+        var raw = string.IsNullOrWhiteSpace(value) ? "SIN_MAQUINA" : value.Trim();
+
+        return raw
+            .Replace(" ", "_")
+            .Replace("-", "_")
+            .Replace("/", "_")
+            .Replace(".", "_")
+            .Replace(":", "_");
+    }
 }
 
 <!DOCTYPE html>
@@ -15,143 +96,445 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
     <style>
+        :root {
+            --azul: #003b82;
+            --azul2: #0056b3;
+            --borde: #d7e2f1;
+            --bg: #f4f7fb;
+            --txt: #102033;
+            --muted: #667085;
+            --success: #107c41;
+            --warning: #b54708;
+            --danger: #b42318;
+            --purple: #6650a4;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            background: #f4f7fb;
-            font-family: Arial, Helvetica, sans-serif;
-        }
-
-        .page-shell {
-            max-width: 1500px;
-            margin: 0 auto;
-            padding: 22px;
-        }
-
-        .hero {
-            background: linear-gradient(135deg, #0f2f63, #194c9b);
-            color: white;
-            border-radius: 22px;
-            padding: 24px;
-            box-shadow: 0 18px 38px rgba(15, 47, 99, .20);
-        }
-
-        .hero-title {
-            font-size: 1.8rem;
-            font-weight: 900;
             margin: 0;
+            background: var(--bg);
+            color: var(--txt);
+            font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+            font-size: 14px;
         }
 
-        .hero-subtitle {
-            opacity: .86;
+        .page {
+            max-width: 1740px;
+            margin: 0 auto;
+            padding: 18px;
+        }
+
+        .topbar {
+            border: 1px solid #bcd2f0;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+            color: #fff;
+            padding: 18px 20px;
+            margin-bottom: 14px;
+        }
+
+        .topbar-title {
+            margin: 0;
+            font-size: 1.45rem;
+            font-weight: 950;
+            letter-spacing: -.02em;
+        }
+
+        .topbar-sub {
             margin-top: 4px;
+            color: rgba(255,255,255,.82);
+            font-weight: 600;
         }
 
-        .metric-card {
-            background: white;
-            border-radius: 18px;
-            padding: 16px;
-            border: 1px solid #e5eaf3;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, .06);
-            height: 100%;
+        .summary-strip {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
         }
 
-        .metric-label {
-            color: #667085;
-            font-size: .82rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
-        .metric-value {
-            font-size: 1.8rem;
+        .summary-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 13px;
+            border: 1px solid var(--borde);
+            border-radius: 999px;
+            background: #fff;
+            color: var(--azul);
             font-weight: 900;
-            color: #102a56;
-            line-height: 1;
-            margin-top: 8px;
         }
 
-        .filter-card {
-            background: white;
-            border-radius: 18px;
-            border: 1px solid #e5eaf3;
-            padding: 16px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
-        }
+            .summary-item span {
+                color: var(--muted);
+                font-weight: 750;
+            }
 
-        .table-card {
-            background: white;
-            border-radius: 20px;
-            border: 1px solid #e5eaf3;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, .06);
+        .section {
+            border: 1px solid var(--borde);
+            border-radius: 16px;
+            background: #fff;
             overflow: hidden;
+            margin-bottom: 14px;
         }
 
-        .table thead th {
-            background: #f8fafc;
+        .section-head {
+            padding: 13px 16px;
+            border-bottom: 1px solid var(--borde);
+            background: #f8fbff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .section-title {
+            margin: 0;
+            color: var(--azul);
+            font-size: 1rem;
+            font-weight: 950;
+        }
+
+        .section-sub {
+            color: var(--muted);
+            font-size: .82rem;
+            font-weight: 650;
+            margin-top: 2px;
+        }
+
+        .filters {
+            padding: 14px 16px;
+        }
+
+        .form-label {
             color: #344054;
-            font-size: .78rem;
+            font-size: .76rem;
             text-transform: uppercase;
             letter-spacing: .04em;
-            border-bottom: 1px solid #e5eaf3;
+            font-weight: 900;
+            margin-bottom: 5px;
+        }
+
+        .form-control,
+        .form-select {
+            border: 1px solid var(--borde);
+            border-radius: 12px;
+            min-height: 40px;
+            box-shadow: none;
+        }
+
+            .form-control:focus,
+            .form-select:focus {
+                border-color: #7ca8e8;
+                box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .12);
+            }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+            .table thead th {
+                background: #f8fafc;
+                color: #344054;
+                font-size: .72rem;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                font-weight: 950;
+                white-space: nowrap;
+                border-bottom: 1px solid var(--borde);
+                padding: 10px;
+            }
+
+            .table tbody td {
+                vertical-align: middle;
+                padding: 10px;
+                border-color: #edf2f7;
+            }
+
+        .table-hover tbody tr.production-row:hover {
+            background: #f6faff;
+        }
+
+        .machine-row td {
+            padding: 11px 14px !important;
+            background: linear-gradient(90deg, #eaf2ff, #f8fbff);
+            border-top: 2px solid #bcd2f0;
+            border-bottom: 1px solid #c7d7fe;
+        }
+
+        .machine-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .machine-title {
+            color: var(--azul);
+            font-weight: 950;
+            font-size: .98rem;
+        }
+
+        .machine-sub {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 650;
+            margin-top: 2px;
+        }
+
+        .machine-toggle {
+            border: 1px solid #bcd2f0;
+            background: #fff;
+            color: var(--azul);
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: .76rem;
+            font-weight: 900;
+        }
+
+            .machine-toggle:hover {
+                background: #eff6ff;
+            }
+
+        .queue-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 30px;
+            height: 30px;
+            border-radius: 999px;
+            background: #eff6ff;
+            border: 1px solid #bcd2f0;
+            color: var(--azul);
+            font-weight: 950;
+            font-size: .78rem;
+        }
+
+        .id-main {
+            color: var(--azul);
+            font-weight: 950;
+        }
+
+        .line-main {
+            color: #182437;
+            font-weight: 900;
+        }
+
+        .line-sub {
+            color: var(--muted);
+            font-size: .78rem;
+            font-weight: 600;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            border: 1px solid #d0d5dd;
+            background: #fff;
+            color: #344054;
+            font-size: .75rem;
+            font-weight: 850;
             white-space: nowrap;
         }
 
-        .table tbody td {
-            vertical-align: middle;
-            font-size: .88rem;
+        .tag-ok {
+            border-color: #abefc6;
+            background: #ecfdf3;
+            color: #067647;
         }
 
-        .part-title {
-            font-weight: 900;
-            color: #102a56;
+        .tag-warn {
+            border-color: #fed7aa;
+            background: #fff7ed;
+            color: #b54708;
         }
 
-        .muted-small {
-            color: #667085;
+        .tag-blue {
+            border-color: #bcd2f0;
+            background: #eff6ff;
+            color: var(--azul);
+        }
+
+        .operator-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 9px;
+            border-radius: 12px;
+            background: #eef4ff;
+            border: 1px solid #c7d7fe;
+            color: #194185;
             font-size: .78rem;
+            font-weight: 850;
         }
+
+        .operator-empty {
+            background: #f2f4f7;
+            border-color: #d0d5dd;
+            color: #667085;
+        }
+
+        .btn-action {
+            border-radius: 11px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .empty {
+            padding: 34px 20px;
+            text-align: center;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+            .empty i {
+                display: block;
+                font-size: 2.1rem;
+                margin-bottom: 8px;
+                color: #98a2b3;
+            }
 
         .progress {
-            height: 8px;
+            height: 9px;
             background: #e9eef7;
             border-radius: 999px;
+            overflow: hidden;
         }
 
         .progress-bar {
             border-radius: 999px;
         }
 
-        .empty-state {
-            padding: 48px 20px;
-            text-align: center;
-            color: #667085;
+        .row-preparacion {
+            background: #fffaf0;
         }
 
-        .btn-soft {
-            border: 1px solid #d9e3f2;
-            background: #f8fbff;
-            color: #194c9b;
-            font-weight: 800;
+        .row-produccion {
+            background: #eff8ff;
         }
 
-            .btn-soft:hover {
-                background: #eef5ff;
-                color: #103b7c;
+        .row-pausado {
+            background: #fff1f3;
+        }
+
+        .row-terminado {
+            background: #f0fdf4;
+        }
+
+        .modal-content {
+            border: 0;
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow: 0 28px 80px rgba(15, 23, 42, .28);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+            color: #fff;
+            border: 0;
+            padding: 18px 20px;
+        }
+
+        .modal-title {
+            font-weight: 950;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .info-line {
+            display: grid;
+            grid-template-columns: 150px minmax(0, 1fr);
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #eef2f7;
+        }
+
+            .info-line:last-child {
+                border-bottom: 0;
             }
+
+        .info-k {
+            color: var(--muted);
+            font-size: .77rem;
+            text-transform: uppercase;
+            font-weight: 950;
+            letter-spacing: .04em;
+        }
+
+        .info-v {
+            color: #182437;
+            font-weight: 850;
+        }
+
+        .operator-box {
+            border: 1px solid #c7d7fe;
+            background: #eff6ff;
+            border-radius: 14px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+
+            .operator-box.warn {
+                border-color: #fed7aa;
+                background: #fff7ed;
+            }
+
+        .operator-title {
+            color: var(--azul);
+            font-weight: 950;
+        }
+
+            .operator-title.warn {
+                color: var(--warning);
+            }
+
+        .is-hidden {
+            display: none !important;
+        }
+
+        @@media (max-width: 900px) {
+            .page {
+                padding: 10px;
+            }
+
+            .topbar {
+                border-radius: 14px;
+            }
+
+            .table {
+                min-width: 1180px;
+            }
+
+            .info-line {
+                grid-template-columns: 1fr;
+                gap: 2px;
+            }
+        }
     </style>
 </head>
-<body>
-    <div class="page-shell">
 
-        <div class="hero mb-4">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+<body>
+    <div class="page">
+
+        <header class="topbar">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
-                    <h1 class="hero-title">
+                    <h1 class="topbar-title">
                         <i class="bi bi-gear-wide-connected me-2"></i>
                         Producción
                     </h1>
-                    <div class="hero-subtitle">
-                        Bandeja de ejecuciones reales de producción.
+                    <div class="topbar-sub">
+                        Bandeja organizada por máquina y cola programada desde Planeación.
                     </div>
                 </div>
 
@@ -160,7 +543,7 @@
                     <div class="fw-bold">@DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
                 </div>
             </div>
-        </div>
+        </header>
 
         @if (TempData["Success"] != null)
         {
@@ -189,250 +572,358 @@
             </div>
         }
 
-        <div class="row g-3 mb-4">
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Total</div>
-                    <div class="metric-value">@(Model.Total + Model.TotalDisponibles)</div>
-                </div>
+        <div class="summary-strip">
+            <div class="summary-item">
+                @totalGeneral.ToString("N0")
+                <span>Total</span>
             </div>
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Pendientes</div>
-                    <div class="metric-value">@Model.TotalDisponibles</div>
-                </div>
+
+            <div class="summary-item">
+                @Model.TotalDisponibles.ToString("N0")
+                <span>Por iniciar</span>
             </div>
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Preparación</div>
-                    <div class="metric-value">@Model.EnPreparacion</div>
-                </div>
+
+            <div class="summary-item">
+                @Model.EnPreparacion.ToString("N0")
+                <span>Preparación</span>
             </div>
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">En producción</div>
-                    <div class="metric-value">@Model.EnProduccion</div>
-                </div>
+
+            <div class="summary-item">
+                @Model.EnProduccion.ToString("N0")
+                <span>En producción</span>
             </div>
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Pausados</div>
-                    <div class="metric-value">@Model.Pausados</div>
-                </div>
+
+            <div class="summary-item">
+                @Model.Pausados.ToString("N0")
+                <span>Pausados</span>
             </div>
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Terminados</div>
-                    <div class="metric-value">@Model.Terminados</div>
-                </div>
+
+            <div class="summary-item">
+                @Model.Terminados.ToString("N0")
+                <span>Terminados</span>
             </div>
         </div>
 
-        <div class="filter-card mb-4">
-            <form method="get" action="@Url.Action("Index", "Produccion")" class="row g-3 align-items-end">
-                <div class="col-12 col-lg-3">
-                    <label class="form-label fw-bold">Buscar</label>
-                    <input type="text"
-                           name="busqueda"
-                           value="@Model.Busqueda"
-                           class="form-control"
-                           placeholder="Máquina, parte, molde, programa..." />
+        <section class="section">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">
+                        <i class="bi bi-funnel me-1"></i>
+                        Filtros
+                    </h2>
+                    <div class="section-sub">
+                        Busca por máquina, parte, molde, operador, programa u OF.
+                    </div>
                 </div>
+            </div>
 
-                <div class="col-12 col-lg-2">
-                    <label class="form-label fw-bold">Máquina</label>
-                    <select name="maquinaId" class="form-select">
-                        @foreach (var item in Model.Maquinas)
-                        {
-                            <option value="@item.Value" selected="@(item.Value == Model.MaquinaID?.ToString())">
-                                @item.Text
-                            </option>
-                        }
-                    </select>
-                </div>
-
-                <div class="col-12 col-lg-2">
-                    <label class="form-label fw-bold">Estatus</label>
-                    <select name="estatusId" class="form-select">
-                        @foreach (var item in Model.Estatus)
-                        {
-                            <option value="@item.Value" selected="@(item.Value == Model.EstatusID?.ToString())">
-                                @item.Text
-                            </option>
-                        }
-                    </select>
-                </div>
-
-                <div class="col-6 col-lg-2">
-                    <label class="form-label fw-bold">Desde</label>
-                    <input type="date"
-                           name="fechaDesde"
-                           value="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
-                           class="form-control" />
-                </div>
-
-                <div class="col-6 col-lg-2">
-                    <label class="form-label fw-bold">Hasta</label>
-                    <input type="date"
-                           name="fechaHasta"
-                           value="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))"
-                           class="form-control" />
-                </div>
-
-                <div class="col-12 col-lg-1 d-grid">
-                    <button type="submit" class="btn btn-primary fw-bold">
-                        <i class="bi bi-search"></i>
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div class="table-card mb-4">
-            <div class="p-3 border-bottom bg-white">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                    <div>
-                        <h5 class="mb-0 fw-black text-primary">
-                            <i class="bi bi-play-circle me-1"></i>
-                            Programas listos para iniciar producción
-                        </h5>
-                        <div class="text-muted small">
-                            Vienen de Planeación / Calendario. Al iniciar, se crea la ejecución real de producción.
-                        </div>
+            <div class="filters">
+                <form method="get" action="@Url.Action("Index", "Produccion")" class="row g-3 align-items-end">
+                    <div class="col-12 col-xl-3">
+                        <label class="form-label">Buscar</label>
+                        <input type="text"
+                               name="busqueda"
+                               value="@Model.Busqueda"
+                               class="form-control"
+                               placeholder="Máquina, parte, molde, operador..." />
                     </div>
 
-                    <span class="badge bg-primary fs-6">
-                        @Model.TotalDisponibles disponible(s)
-                    </span>
+                    <div class="col-12 col-md-6 col-xl-2">
+                        <label class="form-label">Máquina</label>
+                        <select name="maquinaId" class="form-select">
+                            @foreach (var item in Model.Maquinas)
+                            {
+                                <option value="@item.Value" selected="@(item.Value == Model.MaquinaID?.ToString())">
+                                    @item.Text
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-2">
+                        <label class="form-label">Estatus</label>
+                        <select name="estatusId" class="form-select">
+                            @foreach (var item in Model.Estatus)
+                            {
+                                <option value="@item.Value" selected="@(item.Value == Model.EstatusID?.ToString())">
+                                    @item.Text
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-6 col-xl-2">
+                        <label class="form-label">Desde</label>
+                        <input type="date"
+                               name="fechaDesde"
+                               value="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
+                               class="form-control" />
+                    </div>
+
+                    <div class="col-6 col-xl-2">
+                        <label class="form-label">Hasta</label>
+                        <input type="date"
+                               name="fechaHasta"
+                               value="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))"
+                               class="form-control" />
+                    </div>
+
+                    <div class="col-12 col-xl-1 d-grid">
+                        <button type="submit" class="btn btn-primary btn-action">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">
+                        <i class="bi bi-list-ol me-1"></i>
+                        Cola por máquina para iniciar preparación
+                    </h2>
+                    <div class="section-sub">
+                        Cada máquina muestra sus programas asignados en orden de fecha programada, de más antiguo a más nuevo.
+                    </div>
                 </div>
+
+                <span class="tag tag-blue">
+                    <i class="bi bi-list-check"></i>
+                    @Model.TotalDisponibles.ToString("N0") disponible(s)
+                </span>
             </div>
 
             <div class="table-responsive">
-                <table class="table table-hover mb-0 align-middle">
+                <table class="table table-hover align-middle">
                     <thead>
                         <tr>
+                            <th style="width:70px;">Orden</th>
                             <th>Programa / OF</th>
-                            <th>Máquina</th>
                             <th>Parte</th>
                             <th>Molde</th>
+                            <th>Operador sugerido</th>
                             <th class="text-center">Cantidad</th>
                             <th>Inicio programado</th>
                             <th>Fin programado</th>
                             <th class="text-end">Acción</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         @if (!Model.ProgramasDisponibles.Any())
                         {
                             <tr>
-                                <td colspan="8">
-                                    <div class="empty-state">
-                                        <i class="bi bi-calendar-check fs-1 d-block mb-2"></i>
-                                        No hay programas pendientes para iniciar producción.
+                                <td colspan="9">
+                                    <div class="empty">
+                                        <i class="bi bi-calendar-check"></i>
+                                        No hay programas pendientes para iniciar preparación.
                                     </div>
                                 </td>
                             </tr>
                         }
                         else
                         {
-                            foreach (var item in Model.ProgramasDisponibles)
+                            foreach (var grupo in programasPorMaquina)
                             {
-                                <tr>
-                                    <td>
-                                        <div class="fw-bold text-primary">
-                                            Programa @item.ProgramaProduccionID
+                                var primera = grupo.FirstOrDefault();
+                                var maquinaCodigo = Txt(primera?.MaquinaCodigo);
+                                var maquinaNombre = Txt(primera?.MaquinaNombre);
+                                var machineKey = "pend_" + MachineKey(grupo.Key);
+                                var totalMaquina = grupo.Count();
+
+                                <tr class="machine-row">
+                                    <td colspan="9">
+                                        <div class="machine-header">
+                                            <div>
+                                                <div class="machine-title">
+                                                    <i class="bi bi-hdd-network me-1"></i>
+                                                    Máquina @maquinaCodigo
+                                                </div>
+                                                <div class="machine-sub">
+                                                    @maquinaNombre · @totalMaquina programa(s) en cola de preparación
+                                                </div>
+                                            </div>
+
+                                            <button type="button"
+                                                    class="machine-toggle"
+                                                    data-machine-toggle="@machineKey">
+                                                <i class="bi bi-chevron-up me-1"></i>
+                                                Ocultar / mostrar
+                                            </button>
                                         </div>
-                                        <div class="muted-small">
-                                            @item.TituloPrograma
-                                        </div>
                                     </td>
+                                </tr>
 
-                                    <td>
-                                        <div class="fw-bold">@item.MaquinaCodigo</div>
-                                        <div class="muted-small">@item.MaquinaNombre</div>
-                                    </td>
+                                var orden = 0;
 
-                                    <td>
-                                        <div class="part-title">@item.TextoParte</div>
-                                        <div class="muted-small">@item.DescripcionParte</div>
-                                    </td>
+                                foreach (var item in grupo
+                                .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+                                .ThenBy(x => x.ProgramaProduccionID))
+                                {
+                                    orden++;
 
-                                    <td>
-                                        <span class="badge bg-light text-dark border">
-                                            @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
-                                        </span>
-                                    </td>
+                                    var operadorSugerido = string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre)
+                                    ? ""
+                                    : item.OperadorSugeridoNombre;
 
-                                    <td class="text-center fw-bold">
-                                        @(item.CantidadProgramada?.ToString("N0") ?? "-")
-                                    </td>
+                                    var turnoSugerido = string.IsNullOrWhiteSpace(item.TurnoSugeridoNombre)
+                                    ? ""
+                                    : item.TurnoSugeridoNombre;
 
-                                    <td>
-                                        @(item.FechaInicioProgramada?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                    </td>
+                                    <tr class="production-row" data-machine-row="@machineKey">
+                                        <td>
+                                            <span class="queue-badge">@orden</span>
+                                        </td>
 
-                                    <td>
-                                        @(item.FechaFinProgramada?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                    </td>
+                                        <td>
+                                            <div class="id-main">Programa @item.ProgramaProduccionID</div>
+                                            <div class="line-sub">@Txt(item.TituloPrograma)</div>
 
-                                    <td class="text-end">
-                                        @if (item.PuedeIniciar)
-                                        {
-                                            <form method="post"
-                                                  action="@Url.Action("Iniciar", "Produccion")"
-                                                  class="d-inline">
-                                                @Html.AntiForgeryToken()
+                                            @if (item.SolicitudProduccionID.HasValue)
+                                            {
+                                                <div class="line-sub">OF ID @item.SolicitudProduccionID</div>
+                                            }
 
-                                                <input type="hidden"
-                                                       name="programaProduccionId"
-                                                       value="@item.ProgramaProduccionID" />
+                                            @if (item.ReleaseID.HasValue)
+                                            {
+                                                <div class="line-sub">Release @item.ReleaseID</div>
+                                            }
+                                        </td>
 
-                                                <button type="submit"
-                                                        class="btn btn-sm btn-success fw-bold">
+                                        <td>
+                                            <div class="line-main">@Txt(item.TextoParte)</div>
+                                            <div class="line-sub">@Txt(item.DescripcionParte)</div>
+                                        </td>
+
+                                        <td>
+                                            <span class="tag">
+                                                <i class="bi bi-nut"></i>
+                                                @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            @if (string.IsNullOrWhiteSpace(operadorSugerido))
+                                            {
+                                                <span class="operator-pill operator-empty">
+                                                    <i class="bi bi-person-dash"></i>
+                                                    Sin operador sugerido
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <div class="operator-pill">
+                                                    <i class="bi bi-person-check"></i>
+                                                    @operadorSugerido
+                                                </div>
+
+                                                @if (!string.IsNullOrWhiteSpace(turnoSugerido))
+                                                {
+                                                    <div class="line-sub mt-1">
+                                                        Turno: @turnoSugerido
+                                                    </div>
+                                                }
+                                            }
+                                        </td>
+
+                                        <td class="text-center fw-bold">
+                                            @Num(item.CantidadProgramada)
+                                        </td>
+
+                                        <td>
+                                            @Fecha(item.FechaInicioProgramada)
+                                        </td>
+
+                                        <td>
+                                            @Fecha(item.FechaFinProgramada)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @if (item.PuedeIniciar)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-success btn-action btn-iniciar-preparacion"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#modalIniciarPreparacion"
+                                                        data-programa-id="@item.ProgramaProduccionID"
+                                                        data-titulo="@Data(item.TituloPrograma)"
+                                                        data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
+                                                        data-parte="@Data(item.TextoParte)"
+                                                        data-descripcion="@Data(item.DescripcionParte)"
+                                                        data-molde="@Data(item.MoldeCodigo)"
+                                                        data-cantidad="@Num(item.CantidadProgramada)"
+                                                        data-inicio="@Fecha(item.FechaInicioProgramada)"
+                                                        data-fin="@Fecha(item.FechaFinProgramada)"
+                                                        data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
+                                                        data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
+                                                        data-turno="@Data(item.TurnoSugeridoNombre)">
                                                     <i class="bi bi-play-fill me-1"></i>
                                                     Iniciar preparación
                                                 </button>
-                                            </form>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-warning text-dark">
-                                                Falta máquina o cantidad
-                                            </span>
-                                        }
-                                    </td>
-                                </tr>
+                                            }
+                                            else
+                                            {
+                                                <span class="tag tag-warn">
+                                                    <i class="bi bi-exclamation-triangle"></i>
+                                                    Falta máquina o cantidad
+                                                </span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
                             }
                         }
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
 
-        <div class="table-card">
+        <section class="section">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">
+                        <i class="bi bi-activity me-1"></i>
+                        Ejecuciones por máquina
+                    </h2>
+                    <div class="section-sub">
+                        Programas ya tomados por producción, agrupados por máquina y ordenados por fecha programada.
+                    </div>
+                </div>
+
+                <span class="tag">
+                    <i class="bi bi-clock-history"></i>
+                    @Model.Total.ToString("N0") ejecución(es)
+                </span>
+            </div>
+
             <div class="table-responsive">
-                <table class="table table-hover mb-0 align-middle">
+                <table class="table table-hover align-middle">
                     <thead>
                         <tr>
+                            <th style="width:70px;">Orden</th>
                             <th>Programa</th>
-                            <th>Máquina</th>
                             <th>Parte</th>
                             <th>Molde</th>
                             <th>Operador</th>
                             <th class="text-center">Planeado</th>
                             <th class="text-center">OK</th>
+                            <th class="text-center">Sospechoso</th>
                             <th class="text-center">Scrap</th>
-                            <th style="min-width:180px;">Avance</th>
+                            <th style="min-width:190px;">Avance</th>
                             <th>Estatus</th>
                             <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         @if (!Model.Ejecuciones.Any())
                         {
                             <tr>
-                                <td colspan="11">
-                                    <div class="empty-state">
-                                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                <td colspan="12">
+                                    <div class="empty">
+                                        <i class="bi bi-inbox"></i>
                                         No hay ejecuciones de producción con los filtros actuales.
                                     </div>
                                 </td>
@@ -440,102 +931,489 @@
                         }
                         else
                         {
-                            foreach (var item in Model.Ejecuciones)
+                            foreach (var grupo in ejecucionesPorMaquina)
                             {
-                                <tr>
-                                    <td>
-                                        <div class="fw-bold text-primary">
-                                            Programa @item.ProgramaProduccionID
-                                        </div>
-                                        @if (item.SolicitudProduccionID.HasValue)
-                                        {
-                                            <div class="muted-small">
-                                                OF ID @item.SolicitudProduccionID
+                                var primera = grupo.FirstOrDefault();
+                                var maquinaCodigo = Txt(primera?.MaquinaCodigo);
+                                var maquinaNombre = Txt(primera?.MaquinaNombre);
+                                var machineKey = "ejec_" + MachineKey(grupo.Key);
+                                var totalMaquina = grupo.Count();
+
+                                <tr class="machine-row">
+                                    <td colspan="12">
+                                        <div class="machine-header">
+                                            <div>
+                                                <div class="machine-title">
+                                                    <i class="bi bi-hdd-network me-1"></i>
+                                                    Máquina @maquinaCodigo
+                                                </div>
+                                                <div class="machine-sub">
+                                                    @maquinaNombre · @totalMaquina ejecución(es)
+                                                </div>
                                             </div>
-                                        }
-                                        @if (item.ReleaseID.HasValue)
-                                        {
-                                            <div class="muted-small">
-                                                Release @item.ReleaseID
-                                            </div>
-                                        }
-                                    </td>
 
-                                    <td>
-                                        <div class="fw-bold">@item.MaquinaCodigo</div>
-                                        <div class="muted-small">@item.MaquinaNombre</div>
-                                    </td>
-
-                                    <td>
-                                        <div class="part-title">@item.TituloPrograma</div>
-                                        <div class="muted-small">@item.DescripcionParte</div>
-                                    </td>
-
-                                    <td>
-                                        <span class="badge bg-light text-dark border">
-                                            @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
-                                        </span>
-                                    </td>
-
-                                    <td>
-                                        @if (string.IsNullOrWhiteSpace(item.OperadorNombre))
-                                        {
-                                            <span class="text-muted">Sin operador</span>
-                                        }
-                                        else
-                                        {
-                                            <span>@item.OperadorNombre</span>
-                                        }
-                                    </td>
-
-                                    <td class="text-center fw-bold">
-                                        @(item.CantidadPlaneada?.ToString("N0") ?? "-")
-                                    </td>
-
-                                    <td class="text-center fw-bold text-success">
-                                        @item.CantidadOKTotal.ToString("N0")
-                                    </td>
-
-                                    <td class="text-center fw-bold text-danger">
-                                        @item.CantidadScrapTotal.ToString("N0")
-                                    </td>
-
-                                    <td>
-                                        <div class="d-flex justify-content-between small mb-1">
-                                            <span>@item.PorcentajeAvance%</span>
-                                            <span>@item.CantidadPendiente.ToString("N0") pend.</span>
+                                            <button type="button"
+                                                    class="machine-toggle"
+                                                    data-machine-toggle="@machineKey">
+                                                <i class="bi bi-chevron-up me-1"></i>
+                                                Ocultar / mostrar
+                                            </button>
                                         </div>
-                                        <div class="progress">
-                                            <div class="progress-bar"
-                                                 role="progressbar"
-                                                 style="width:@Math.Min(100, item.PorcentajeAvance)%">
-                                            </div>
-                                        </div>
-                                    </td>
-
-                                    <td>
-                                        <span class="badge @item.EstatusClase">
-                                            @item.EstatusNombre
-                                        </span>
-                                    </td>
-
-                                    <td class="text-end">
-                                        <a href="@Url.Action("Detalle", "Produccion", new { id = item.EjecucionProduccionID })"
-                                           class="btn btn-sm btn-soft">
-                                            <i class="bi bi-eye me-1"></i>
-                                            Detalle
-                                        </a>
                                     </td>
                                 </tr>
+
+                                var orden = 0;
+
+                                foreach (var item in grupo
+                                .OrderBy(x => x.ProgramaProduccionID)
+                                .ThenBy(x => x.EjecucionProduccionID))
+                                {
+                                    orden++;
+
+                                    var avancePct = item.PorcentajeAvance;
+
+                                    if (avancePct < 0)
+                                    {
+                                        avancePct = 0;
+                                    }
+
+                                    if (avancePct > 100)
+                                    {
+                                        avancePct = 100;
+                                    }
+
+                                    <tr class="production-row @EstatusRowClase(item.EstatusID)" data-machine-row="@machineKey">
+                                        <td>
+                                            <span class="queue-badge">@orden</span>
+                                        </td>
+
+                                        <td>
+                                            <div class="id-main">Programa @item.ProgramaProduccionID</div>
+
+                                            @if (item.SolicitudProduccionID.HasValue)
+                                            {
+                                                <div class="line-sub">OF ID @item.SolicitudProduccionID</div>
+                                            }
+
+                                            @if (item.ReleaseID.HasValue)
+                                            {
+                                                <div class="line-sub">Release @item.ReleaseID</div>
+                                            }
+
+                                            
+                                        </td>
+
+                                        <td>
+                                            <div class="line-main">@Txt(item.TituloPrograma)</div>
+                                            <div class="line-sub">@Txt(item.DescripcionParte)</div>
+                                        </td>
+
+                                        <td>
+                                            <span class="tag">
+                                                <i class="bi bi-nut"></i>
+                                                @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            @if (string.IsNullOrWhiteSpace(item.OperadorNombre))
+                                            {
+                                                <span class="operator-pill operator-empty">
+                                                    <i class="bi bi-person-dash"></i>
+                                                    Sin operador
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="operator-pill">
+                                                    <i class="bi bi-person-check"></i>
+                                                    @item.OperadorNombre
+                                                </span>
+                                            }
+                                        </td>
+
+                                        <td class="text-center fw-bold">
+                                            @Num(item.CantidadPlaneada)
+                                        </td>
+
+                                        <td class="text-center fw-bold text-success">
+                                            @Num0(item.CantidadOKTotal)
+                                        </td>
+
+                                        <td class="text-center fw-bold text-warning">
+                                            @Num0(item.CantidadSospechosaTotal)
+                                        </td>
+
+                                        <td class="text-center fw-bold text-danger">
+                                            @Num0(item.CantidadScrapTotal)
+                                        </td>
+
+                                        <td>
+                                            <div class="d-flex justify-content-between small mb-1">
+                                                <span class="fw-bold">@item.PorcentajeAvance.ToString("0.##")%</span>
+                                                <span class="text-muted">@item.CantidadPendiente.ToString("N0") pend.</span>
+                                            </div>
+
+                                            <div class="progress">
+                                                <div class="progress-bar @PorcentajeClase(item.PorcentajeAvance)"
+                                                     role="progressbar"
+                                                     style="width:@avancePct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <span class="badge @item.EstatusClase">
+                                                @item.EstatusNombre
+                                            </span>
+                                        </td>
+
+                                        <td class="text-end">
+                                            <a href="@Url.Action("Detalle", "Produccion", new { id = item.EjecucionProduccionID })"
+                                               class="btn btn-sm btn-outline-primary btn-action">
+                                                <i class="bi bi-eye me-1"></i>
+                                                Detalle
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
                             }
                         }
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
+    </div>
 
+    <div class="modal fade" id="modalIniciarPreparacion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" action="@Url.Action("Iniciar", "Produccion")" id="formIniciarPreparacion">
+                    @Html.AntiForgeryToken()
+
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title">
+                                <i class="bi bi-play-circle me-2"></i>
+                                Confirmar inicio de preparación
+                            </h5>
+                            <div class="small opacity-75">
+                                Revisa el programa y confirma el operador real antes de tomar la OF.
+                            </div>
+                        </div>
+
+                        <button type="button"
+                                class="btn-close btn-close-white"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar">
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+                        <input type="hidden" name="programaProduccionId" id="modalProgramaProduccionId" />
+                        <input type="hidden" name="operadorNombre" id="modalOperadorNombre" />
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="info-line">
+                                    <div class="info-k">Programa</div>
+                                    <div class="info-v" id="modalProgramaTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Máquina</div>
+                                    <div class="info-v" id="modalMaquinaTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Molde</div>
+                                    <div class="info-v" id="modalMoldeTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Cantidad</div>
+                                    <div class="info-v" id="modalCantidadTexto">-</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="info-line">
+                                    <div class="info-k">Parte</div>
+                                    <div class="info-v" id="modalParteTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Descripción</div>
+                                    <div class="info-v" id="modalDescripcionTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Inicio prog.</div>
+                                    <div class="info-v" id="modalInicioTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Fin prog.</div>
+                                    <div class="info-v" id="modalFinTexto">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="operator-box" id="boxOperadorSugerido">
+                            <div class="operator-title" id="tituloOperadorSugerido">
+                                Operador sugerido desde RRHH
+                            </div>
+                            <div class="small text-muted mt-1" id="detalleOperadorSugerido">
+                                -
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-7">
+                                <label class="form-label">Operador real al iniciar</label>
+                                <select name="operadorId" id="modalOperadorId" class="form-select">
+                                    @foreach (var op in operadoresProduccion)
+                                    {
+                                        <option value="@op.Value">
+                                            @op.Text
+                                        </option>
+                                    }
+                                </select>
+
+                                <div class="small text-muted mt-1">
+                                    Puede quedar sin operador o cambiarse a la mera hora.
+                                </div>
+                            </div>
+
+                            <div class="col-md-5">
+                                <label class="form-label">Nombre manual</label>
+                                <input type="text"
+                                       id="modalOperadorManual"
+                                       class="form-control"
+                                       maxlength="200"
+                                       placeholder="Solo si no aparece en la lista" />
+
+                                <div class="small text-muted mt-1">
+                                    Este nombre se guardará si no seleccionas operador del catálogo.
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Observaciones</label>
+                                <textarea name="observaciones"
+                                          id="modalObservaciones"
+                                          class="form-control"
+                                          rows="3"
+                                          maxlength="500"
+                                          placeholder="Observaciones de preparación, cambio de operador, indicaciones especiales..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="button"
+                                class="btn btn-light btn-action"
+                                data-bs-dismiss="modal">
+                            Cancelar
+                        </button>
+
+                        <button type="submit"
+                                class="btn btn-success btn-action"
+                                id="btnConfirmarInicio">
+                            <i class="bi bi-play-fill me-1"></i>
+                            Iniciar preparación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
+        const modalProgramaTexto = document.getElementById('modalProgramaTexto');
+        const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
+        const modalParteTexto = document.getElementById('modalParteTexto');
+        const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
+        const modalMoldeTexto = document.getElementById('modalMoldeTexto');
+        const modalCantidadTexto = document.getElementById('modalCantidadTexto');
+        const modalInicioTexto = document.getElementById('modalInicioTexto');
+        const modalFinTexto = document.getElementById('modalFinTexto');
+
+        const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
+        const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
+        const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
+
+        const modalOperadorId = document.getElementById('modalOperadorId');
+        const modalOperadorNombre = document.getElementById('modalOperadorNombre');
+        const modalOperadorManual = document.getElementById('modalOperadorManual');
+        const modalObservaciones = document.getElementById('modalObservaciones');
+
+        const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
+        const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
+
+        function texto(value) {
+            if (!value || !value.trim()) return '-';
+            return value.trim();
+        }
+
+        function seleccionarOperadorSiExiste(operadorId) {
+            if (!modalOperadorId) return false;
+
+            const id = operadorId || '';
+
+            for (const option of modalOperadorId.options) {
+                if (option.value === id) {
+                    modalOperadorId.value = id;
+                    return true;
+                }
+            }
+
+            modalOperadorId.value = '';
+            return false;
+        }
+
+        function obtenerTextoOperadorSeleccionado() {
+            if (!modalOperadorId || !modalOperadorId.value) {
+                return '';
+            }
+
+            const selected = modalOperadorId.options[modalOperadorId.selectedIndex];
+
+            if (!selected) {
+                return '';
+            }
+
+            return (selected.textContent || '').trim();
+        }
+
+        document.querySelectorAll('[data-machine-toggle]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const key = btn.getAttribute('data-machine-toggle');
+
+                if (!key) return;
+
+                const rows = document.querySelectorAll('[data-machine-row="' + key + '"]');
+                let ocultar = false;
+
+                rows.forEach(function (row) {
+                    if (!row.classList.contains('is-hidden')) {
+                        ocultar = true;
+                    }
+                });
+
+                rows.forEach(function (row) {
+                    row.classList.toggle('is-hidden', ocultar);
+                });
+
+                const icon = btn.querySelector('i');
+
+                if (icon) {
+                    icon.className = ocultar
+                        ? 'bi bi-chevron-down me-1'
+                        : 'bi bi-chevron-up me-1';
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-iniciar-preparacion').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const programaId = btn.dataset.programaId || '';
+                const titulo = btn.dataset.titulo || '';
+                const maquina = btn.dataset.maquina || '';
+                const parte = btn.dataset.parte || '';
+                const descripcion = btn.dataset.descripcion || '';
+                const molde = btn.dataset.molde || '';
+                const cantidad = btn.dataset.cantidad || '';
+                const inicio = btn.dataset.inicio || '';
+                const fin = btn.dataset.fin || '';
+                const operadorId = btn.dataset.operadorId || '';
+                const operadorNombre = btn.dataset.operadorNombre || '';
+                const turno = btn.dataset.turno || '';
+
+                if (modalProgramaProduccionId) modalProgramaProduccionId.value = programaId;
+                if (modalProgramaTexto) modalProgramaTexto.textContent = 'Programa ' + texto(programaId) + ' · ' + texto(titulo);
+                if (modalMaquinaTexto) modalMaquinaTexto.textContent = texto(maquina);
+                if (modalParteTexto) modalParteTexto.textContent = texto(parte);
+                if (modalDescripcionTexto) modalDescripcionTexto.textContent = texto(descripcion);
+                if (modalMoldeTexto) modalMoldeTexto.textContent = texto(molde);
+                if (modalCantidadTexto) modalCantidadTexto.textContent = texto(cantidad);
+                if (modalInicioTexto) modalInicioTexto.textContent = texto(inicio);
+                if (modalFinTexto) modalFinTexto.textContent = texto(fin);
+
+                if (modalObservaciones) modalObservaciones.value = '';
+                if (modalOperadorManual) modalOperadorManual.value = '';
+                if (modalOperadorNombre) modalOperadorNombre.value = '';
+
+                const pudoSeleccionar = seleccionarOperadorSiExiste(operadorId);
+
+                if (operadorNombre) {
+                    if (boxOperadorSugerido) boxOperadorSugerido.classList.remove('warn');
+                    if (tituloOperadorSugerido) {
+                        tituloOperadorSugerido.textContent = 'Operador sugerido desde RRHH';
+                        tituloOperadorSugerido.className = 'operator-title';
+                    }
+
+                    if (detalleOperadorSugerido) {
+                        detalleOperadorSugerido.textContent =
+                            operadorNombre +
+                            (turno ? ' · Turno: ' + turno : '') +
+                            (pudoSeleccionar ? '' : ' · No aparece en el catálogo, se puede capturar manual.');
+                    }
+
+                    if (!pudoSeleccionar && modalOperadorManual) {
+                        modalOperadorManual.value = operadorNombre;
+                    }
+                }
+                else {
+                    if (boxOperadorSugerido) boxOperadorSugerido.classList.add('warn');
+                    if (tituloOperadorSugerido) {
+                        tituloOperadorSugerido.textContent = 'Sin operador sugerido';
+                        tituloOperadorSugerido.className = 'operator-title warn';
+                    }
+
+                    if (detalleOperadorSugerido) {
+                        detalleOperadorSugerido.textContent =
+                            'No hay operador asignado en la escala RRHH para este horario. Puedes seleccionar uno manualmente o iniciar sin operador.';
+                    }
+                }
+            });
+        });
+
+        modalOperadorId?.addEventListener('change', function () {
+            if (modalOperadorId.value && modalOperadorManual) {
+                modalOperadorManual.value = '';
+            }
+        });
+
+        modalOperadorManual?.addEventListener('input', function () {
+            if (modalOperadorManual.value.trim() && modalOperadorId) {
+                modalOperadorId.value = '';
+            }
+        });
+
+        formIniciarPreparacion?.addEventListener('submit', function () {
+            let nombreFinal = '';
+
+            if (modalOperadorId && modalOperadorId.value) {
+                nombreFinal = obtenerTextoOperadorSeleccionado();
+            }
+            else if (modalOperadorManual && modalOperadorManual.value.trim()) {
+                nombreFinal = modalOperadorManual.value.trim();
+            }
+
+            if (modalOperadorNombre) {
+                modalOperadorNombre.value = nombreFinal;
+            }
+
+            if (btnConfirmarInicio) {
+                btnConfirmarInicio.disabled = true;
+                btnConfirmarInicio.innerHTML =
+                    '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
+            }
+        });
+    </script>
 </body>
 </html>

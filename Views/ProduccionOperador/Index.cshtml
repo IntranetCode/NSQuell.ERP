@@ -1,5 +1,1200 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model List<ERP.NSQuell.Models.ProduccionOperadorTabletVm>
+@using System.Linq
+@using System.Collections.Generic
+@using ERP.NSQuell.Models
+
 @{
+    Layout = null;
+
+    var totalProducciones = Model == null ? 0 : Model.Count;
+    var totalProduciendo = Model == null ? 0 : Model.Count(x => x.EstatusID == ProduccionEstatus.EnProduccion);
+    var totalPausadas = Model == null ? 0 : Model.Count(x => x.EstatusID == ProduccionEstatus.Pausado);
+    var totalParoAbierto = Model == null ? 0 : Model.Count(x => x.TieneParoAbierto);
+
+    var alertas = ViewBag.AlertasProximosProgramas as List<ProduccionAlertaProximoProgramaVm>
+        ?? new List<ProduccionAlertaProximoProgramaVm>();
+
+    var totalAlertas = alertas.Count;
+    var totalCambiosMolde = alertas.Count(x => x.TipoAlerta == "CAMBIO_MOLDE");
+    var totalArranques = alertas.Count(x => x.TipoAlerta == "ARRANQUE");
+
+    var maquinas = Model == null
+        ? new List<IGrouping<string, ERP.NSQuell.Models.ProduccionOperadorTabletVm>>()
+        : Model
+            .OrderBy(x => x.MaquinaCodigo)
+            .ThenBy(x => x.ProgramaProduccionID)
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN MÁQUINA" : x.MaquinaCodigo)
+            .ToList();
 }
+
+@functions {
+    public static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    public static string Numero(int? value)
+    {
+        return value.HasValue ? value.Value.ToString("N0") : "0";
+    }
+
+    public static string NumeroInt(int value)
+    {
+        return value.ToString("N0");
+    }
+
+    public static decimal PorcentajeAvance(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
+    {
+        var planeada = item.CantidadPlaneada.HasValue ? item.CantidadPlaneada.Value : 0;
+
+        if (planeada <= 0)
+            return 0;
+
+        var ok = item.CantidadOKTotal;
+        var porcentaje = ((decimal)ok * 100m) / planeada;
+
+        if (porcentaje < 0)
+            porcentaje = 0;
+
+        if (porcentaje > 100)
+            porcentaje = 100;
+
+        return Math.Round(porcentaje, 2);
+    }
+
+    public static int Pendiente(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
+    {
+        var planeada = item.CantidadPlaneada.HasValue ? item.CantidadPlaneada.Value : 0;
+        var pendiente = planeada - item.CantidadOKTotal;
+
+        return pendiente < 0 ? 0 : pendiente;
+    }
+
+    public static string EstadoTexto(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
+    {
+        if (item.TieneParoAbierto)
+            return "Paro abierto";
+
+        if (item.EstatusID == ProduccionEstatus.Pausado)
+            return "Pausado";
+
+        if (item.EstatusID == ProduccionEstatus.EnProduccion)
+            return "En producción";
+
+        return "Disponible";
+    }
+
+    public static string EstadoClase(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
+    {
+        if (item.TieneParoAbierto)
+            return "estado-paro";
+
+        if (item.EstatusID == ProduccionEstatus.Pausado)
+            return "estado-pausado";
+
+        if (item.EstatusID == ProduccionEstatus.EnProduccion)
+            return "estado-produccion";
+
+        return "estado-normal";
+    }
+
+    public static string ParteTexto(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.ReferenciaSAP))
+            return item.ReferenciaSAP;
+
+        if (!string.IsNullOrWhiteSpace(item.NumeroParte))
+            return item.NumeroParte;
+
+        return "-";
+    }
+
+    public static string OFTexto(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.NumeroOFRecibida))
+            return item.NumeroOFRecibida;
+
+        if (!string.IsNullOrWhiteSpace(item.FolioSolicitud))
+            return item.FolioSolicitud;
+
+        return "Programa " + item.ProgramaProduccionID.ToString();
+    }
+
+    public static string AlertaIcono(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        if (alerta.TipoAlerta == "CAMBIO_MOLDE")
+            return "fa-screwdriver-wrench";
+
+        if (alerta.TipoAlerta == "ARRANQUE")
+            return "fa-play";
+
+        return "fa-bell";
+    }
+
+    public static string AlertaClase(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        if (alerta.MinutosRestantes <= 0)
+            return "alerta-critica";
+
+        if (alerta.TipoAlerta == "CAMBIO_MOLDE")
+            return "alerta-cambio";
+
+        return "alerta-arranque";
+    }
+
+    public static string AlertaTiempo(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        if (alerta.MinutosRestantes < 0)
+            return "Debió atenderse hace " + Math.Abs(alerta.MinutosRestantes).ToString() + " min";
+
+        if (alerta.MinutosRestantes == 0)
+            return "Debe atenderse ahora";
+
+        return "En " + alerta.MinutosRestantes.ToString() + " min";
+    }
+
+    public static string AlertaTitulo(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        if (alerta.TipoAlerta == "CAMBIO_MOLDE")
+            return "Cambio de molde próximo";
+
+        if (alerta.TipoAlerta == "ARRANQUE")
+            return "Arranque próximo";
+
+        return "Alerta de producción";
+    }
+
+    public static string TextoOperadorPrincipal(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        return string.IsNullOrWhiteSpace(alerta.OperadorPrincipalNombre)
+            ? "Sin operador principal"
+            : alerta.OperadorPrincipalNombre;
+    }
+
+    public static string TextoOperadorAuxiliar(ERP.NSQuell.Models.ProduccionAlertaProximoProgramaVm alerta)
+    {
+        return string.IsNullOrWhiteSpace(alerta.OperadorAuxiliarNombre)
+            ? "Sin operador auxiliar"
+            : alerta.OperadorAuxiliarNombre;
+    }
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Kiosko Operador | Producción</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --azul: #004AAD;
+            --azul-oscuro: #00347a;
+            --verde: #107c41;
+            --verde-fondo: #ecfdf3;
+            --amarillo: #b54708;
+            --amarillo-fondo: #fff7ed;
+            --rojo: #b42318;
+            --rojo-fondo: #fef3f2;
+            --morado: #6941c6;
+            --morado-fondo: #f4f3ff;
+            --gris: #667085;
+            --borde: #d9e3f1;
+            --fondo: #f4f7fb;
+            --texto: #172033;
+            --sombra: 0 14px 34px rgba(15, 23, 42, .08);
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #f8fbff 0%, #eef3f9 100%);
+            color: var(--texto);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .page {
+            max-width: 1700px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .hero {
+            border-radius: 28px;
+            padding: 26px 28px;
+            margin-bottom: 18px;
+            color: #fff;
+            background: linear-gradient(135deg, #00347a, #004AAD);
+            box-shadow: 0 24px 58px rgba(0, 74, 173, .22);
+        }
+
+        .hero-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 950;
+        }
+
+        .hero p {
+            margin: 8px 0 0;
+            color: rgba(255,255,255,.86);
+            font-weight: 650;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-hero {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(255,255,255,.36);
+            border-radius: 14px;
+            padding: 10px 14px;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 900;
+            background: rgba(255,255,255,.14);
+        }
+
+            .btn-hero:hover {
+                color: var(--azul);
+                background: #fff;
+            }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .stat {
+            border: 1px solid var(--borde);
+            border-radius: 20px;
+            background: #fff;
+            padding: 16px;
+            box-shadow: var(--sombra);
+        }
+
+        .stat-k {
+            color: var(--gris);
+            font-size: .75rem;
+            font-weight: 950;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .stat-v {
+            margin-top: 4px;
+            color: var(--azul-oscuro);
+            font-size: 1.8rem;
+            line-height: 1;
+            font-weight: 950;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin: 22px 0 12px;
+        }
+
+            .section-title h2 {
+                margin: 0;
+                color: var(--azul-oscuro);
+                font-size: 1.25rem;
+                font-weight: 950;
+            }
+
+            .section-title span {
+                color: var(--gris);
+                font-weight: 800;
+                font-size: .9rem;
+            }
+
+        .alertas-wrap {
+            display: grid;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .alerta-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 22px;
+            border: 1px solid var(--borde);
+            background: #fff;
+            box-shadow: var(--sombra);
+        }
+
+            .alerta-card::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 8px;
+                background: var(--azul);
+            }
+
+        .alerta-cambio::before {
+            background: var(--amarillo);
+        }
+
+        .alerta-arranque::before {
+            background: var(--azul);
+        }
+
+        .alerta-critica::before {
+            background: var(--rojo);
+        }
+
+        .alerta-body {
+            display: grid;
+            grid-template-columns: 280px 1fr 250px;
+            gap: 18px;
+            padding: 18px 20px 18px 28px;
+            align-items: center;
+        }
+
+        .alerta-main {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .alerta-icon {
+            width: 54px;
+            height: 54px;
+            flex: 0 0 auto;
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            color: #fff;
+            background: var(--azul);
+        }
+
+        .alerta-cambio .alerta-icon {
+            background: var(--amarillo);
+        }
+
+        .alerta-critica .alerta-icon {
+            background: var(--rojo);
+        }
+
+        .alerta-k {
+            color: var(--gris);
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .alerta-t {
+            color: #101828;
+            font-size: 1.05rem;
+            line-height: 1.1;
+            font-weight: 950;
+        }
+
+        .alerta-time {
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: .78rem;
+            font-weight: 950;
+            background: #eff6ff;
+            color: var(--azul);
+            border: 1px solid #bfdbfe;
+        }
+
+        .alerta-cambio .alerta-time {
+            background: var(--amarillo-fondo);
+            color: var(--amarillo);
+            border-color: #fed7aa;
+        }
+
+        .alerta-critica .alerta-time {
+            background: var(--rojo-fondo);
+            color: var(--rojo);
+            border-color: #fecdca;
+        }
+
+        .alerta-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .alerta-info {
+            border: 1px solid #edf2f7;
+            border-radius: 16px;
+            background: #fbfdff;
+            padding: 10px 12px;
+        }
+
+            .alerta-info .mini-label {
+                color: var(--gris);
+                font-size: .68rem;
+                font-weight: 950;
+                letter-spacing: .04em;
+                text-transform: uppercase;
+            }
+
+            .alerta-info .mini-value {
+                margin-top: 2px;
+                color: #182437;
+                font-weight: 900;
+                line-height: 1.2;
+            }
+
+        .alerta-actions {
+            display: grid;
+            gap: 8px;
+        }
+
+        .btn-alerta {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid var(--azul);
+            background: var(--azul);
+            color: #fff;
+            padding: 11px 12px;
+            font-weight: 950;
+            text-decoration: none;
+        }
+
+            .btn-alerta:hover {
+                color: #fff;
+                background: var(--azul-oscuro);
+                border-color: var(--azul-oscuro);
+            }
+
+        .btn-alerta-sec {
+            border-color: #cbd5e1;
+            background: #fff;
+            color: #344054;
+        }
+
+            .btn-alerta-sec:hover {
+                color: var(--azul);
+                background: #f8fbff;
+                border-color: var(--azul);
+            }
+
+        .alertx {
+            border-radius: 18px;
+            border: 1px solid var(--borde);
+            background: #fff;
+            padding: 13px 16px;
+            margin-bottom: 18px;
+            box-shadow: var(--sombra);
+            font-weight: 800;
+        }
+
+        .machine-block {
+            overflow: hidden;
+            margin-bottom: 18px;
+            border: 1px solid var(--borde);
+            border-radius: 24px;
+            background: #fff;
+            box-shadow: var(--sombra);
+        }
+
+        .machine-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            padding: 17px 20px;
+            border-bottom: 1px solid var(--borde);
+            background: linear-gradient(180deg, #ffffff, #f8fbff);
+        }
+
+        .machine-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+            color: var(--azul-oscuro);
+            font-size: 1.25rem;
+            font-weight: 950;
+        }
+
+        .machine-icon {
+            width: 42px;
+            height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            color: #fff;
+            background: var(--azul);
+        }
+
+        .machine-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #bfdbfe;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: var(--azul);
+            padding: 7px 12px;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .production-list {
+            display: grid;
+            gap: 0;
+        }
+
+        .production-row {
+            display: grid;
+            grid-template-columns: minmax(260px, 1.2fr) minmax(260px, 1fr) minmax(230px, .9fr) minmax(220px, .8fr) 190px;
+            gap: 14px;
+            align-items: center;
+            padding: 17px 20px;
+            border-bottom: 1px solid #edf2f7;
+        }
+
+            .production-row:last-child {
+                border-bottom: 0;
+            }
+
+            .production-row:hover {
+                background: #fbfdff;
+            }
+
+        .main-title {
+            color: #101828;
+            font-weight: 950;
+            font-size: 1rem;
+        }
+
+        .sub {
+            margin-top: 3px;
+            color: var(--gris);
+            font-size: .86rem;
+            font-weight: 650;
+        }
+
+        .label {
+            color: var(--gris);
+            font-size: .70rem;
+            font-weight: 950;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .value {
+            color: #182437;
+            font-weight: 900;
+        }
+
+        .estado {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: .78rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .estado-produccion {
+            color: var(--verde);
+            background: var(--verde-fondo);
+            border: 1px solid #abefc6;
+        }
+
+        .estado-pausado {
+            color: var(--amarillo);
+            background: var(--amarillo-fondo);
+            border: 1px solid #fed7aa;
+        }
+
+        .estado-paro {
+            color: var(--rojo);
+            background: var(--rojo-fondo);
+            border: 1px solid #fecdca;
+        }
+
+        .estado-normal {
+            color: #475467;
+            background: #f2f4f7;
+            border: 1px solid #d0d5dd;
+        }
+
+        .progress {
+            height: 10px;
+            border-radius: 999px;
+            background: #e9eef7;
+        }
+
+        .progress-bar {
+            border-radius: 999px;
+            background: var(--azul);
+        }
+
+        .numbers {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        .num-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: 999px;
+            padding: 5px 8px;
+            font-size: .73rem;
+            font-weight: 950;
+            background: #f8fafc;
+            border: 1px solid #e5eaf3;
+            color: #344054;
+        }
+
+        .num-ok {
+            color: var(--verde);
+            background: var(--verde-fondo);
+            border-color: #abefc6;
+        }
+
+        .num-sos {
+            color: var(--amarillo);
+            background: var(--amarillo-fondo);
+            border-color: #fed7aa;
+        }
+
+        .num-scrap {
+            color: var(--rojo);
+            background: var(--rojo-fondo);
+            border-color: #fecdca;
+        }
+
+        .btn-captura {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            border: 1px solid var(--azul);
+            border-radius: 16px;
+            padding: 13px 14px;
+            background: var(--azul);
+            color: #fff;
+            font-weight: 950;
+            text-decoration: none;
+        }
+
+            .btn-captura:hover {
+                background: var(--azul-oscuro);
+                border-color: var(--azul-oscuro);
+                color: #fff;
+            }
+
+        .empty {
+            border: 1px dashed #b8c7dc;
+            border-radius: 24px;
+            background: #fff;
+            padding: 48px 22px;
+            text-align: center;
+            box-shadow: var(--sombra);
+        }
+
+            .empty i {
+                color: #98a2b3;
+                font-size: 3rem;
+            }
+
+            .empty h2 {
+                margin: 14px 0 6px;
+                color: var(--azul-oscuro);
+                font-weight: 950;
+            }
+
+            .empty p {
+                margin: 0;
+                color: var(--gris);
+                font-weight: 700;
+            }
+
+        @@media (max-width: 1400px) {
+            .alerta-body {
+                grid-template-columns: 1fr;
+            }
+
+            .alerta-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @@media (max-width: 1300px) {
+            .production-row {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .production-action {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @@media (max-width: 900px) {
+            .page {
+                padding: 14px;
+            }
+
+            .hero {
+                border-radius: 22px;
+                padding: 22px;
+            }
+
+                .hero h1 {
+                    font-size: 1.55rem;
+                }
+
+            .stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .production-row {
+                grid-template-columns: 1fr;
+            }
+
+            .alerta-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @@media (max-width: 560px) {
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .machine-head {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+
+        <section class="hero">
+            <div class="hero-top">
+                <div>
+                    <h1>
+                        <i class="fa-solid fa-tablet-screen-button me-2"></i>
+                        Kiosko de Operador
+                    </h1>
+                    <p>
+                        Alertas de próximos arranques, cambio de molde, captura por hora, separación OK / sospechoso / scrap y registro de paros.
+                    </p>
+                </div>
+
+                <div class="hero-actions">
+                    <a href="@Url.Action("Index", "Produccion")" class="btn-hero">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        Producción
+                    </a>
+
+                    <a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        Actualizar
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success rounded-4 fw-bold">
+                <i class="fa-solid fa-circle-check me-1"></i>
+                @TempData["Success"]
+            </div>
+        }
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger rounded-4 fw-bold">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                @TempData["Error"]
+            </div>
+        }
+
+        <section class="stats">
+            <div class="stat">
+                <div class="stat-k">Alertas próximas</div>
+                <div class="stat-v @(totalAlertas > 0 ? "text-warning" : "")">@totalAlertas</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">Cambios de molde</div>
+                <div class="stat-v text-warning">@totalCambiosMolde</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">Arranques próximos</div>
+                <div class="stat-v text-primary">@totalArranques</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">Con paro abierto</div>
+                <div class="stat-v text-danger">@totalParoAbierto</div>
+            </div>
+        </section>
+
+        @if (alertas.Any())
+        {
+            <div class="section-title">
+                <h2>
+                    <i class="fa-solid fa-bell me-2"></i>
+                    Próximos programas a atender
+                </h2>
+
+                <span>
+                    Ventana de alerta: próximos 15 minutos
+                </span>
+            </div>
+
+            <section class="alertas-wrap">
+                @foreach (var alerta in alertas)
+                {
+                    var claseAlerta = AlertaClase(alerta);
+                    var icono = AlertaIcono(alerta);
+
+                    <article class="alerta-card @claseAlerta">
+                        <div class="alerta-body">
+
+                            <div class="alerta-main">
+                                <span class="alerta-icon">
+                                    <i class="fa-solid @icono"></i>
+                                </span>
+
+                                <div>
+                                    <div class="alerta-k">
+                                        @AlertaTitulo(alerta)
+                                    </div>
+
+                                    <div class="alerta-t">
+                                        @alerta.TextoMaquina
+                                    </div>
+
+                                    <div class="alerta-time">
+                                        <i class="fa-regular fa-clock"></i>
+                                        @AlertaTiempo(alerta)
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alerta-grid">
+                                <div class="alerta-info">
+                                    <div class="mini-label">Programa</div>
+                                    <div class="mini-value">
+                                        @alerta.ProgramaProduccionID
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Parte</div>
+                                    <div class="mini-value">
+                                        @alerta.TextoParte
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Molde</div>
+                                    <div class="mini-value">
+                                        @Txt(alerta.MoldeCodigo)
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Cantidad</div>
+                                    <div class="mini-value">
+                                        @alerta.CantidadProgramada.ToString("N0")
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Hora objetivo</div>
+                                    <div class="mini-value">
+                                        @alerta.FechaObjetivo.ToString("dd/MM/yyyy HH:mm")
+                                    </div>
+                                </div>
+
+                                <div class="alerta-info">
+                                    <div class="mini-label">Operadores</div>
+                                    <div class="mini-value">
+                                        @TextoOperadorPrincipal(alerta)
+                                        <span class="d-block sub">
+                                            Aux: @TextoOperadorAuxiliar(alerta)
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alerta-actions">
+                                @if (alerta.EjecucionProduccionID.HasValue)
+                                {
+                                    <a href="@Url.Action("Detalle", "Produccion", new { id = alerta.EjecucionProduccionID.Value })"
+                                       class="btn-alerta">
+                                        <i class="fa-solid fa-clipboard-check"></i>
+                                        Ver preparación
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a href="@Url.Action("Index", "Produccion")"
+                                       class="btn-alerta">
+                                        <i class="fa-solid fa-industry"></i>
+                                        Ir a Producción
+                                    </a>
+                                }
+
+                                <a href="@Url.Action("Index", "ProduccionOperador")"
+                                   class="btn-alerta btn-alerta-sec">
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                    Actualizar
+                                </a>
+                            </div>
+
+                        </div>
+                    </article>
+                }
+            </section>
+        }
+        else
+        {
+            <div class="alertx">
+                <i class="fa-solid fa-circle-info text-primary me-1"></i>
+                No hay cambios de molde ni arranques dentro de los próximos 15 minutos.
+            </div>
+        }
+
+        <section class="stats">
+            <div class="stat">
+                <div class="stat-k">Producciones visibles</div>
+                <div class="stat-v">@totalProducciones</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">En producción</div>
+                <div class="stat-v text-success">@totalProduciendo</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">Pausadas</div>
+                <div class="stat-v text-warning">@totalPausadas</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-k">Con paro abierto</div>
+                <div class="stat-v text-danger">@totalParoAbierto</div>
+            </div>
+        </section>
+
+        <div class="alertx">
+            <i class="fa-solid fa-circle-info text-primary me-1"></i>
+            Aquí aparecen las producciones en serie o pausadas para captura de operador. Las alertas superiores vienen desde Planeación y permiten anticipar cambio de molde o arranque.
+        </div>
+
+        @if (Model == null || !Model.Any())
+        {
+            <section class="empty">
+                <i class="fa-solid fa-folder-open"></i>
+                <h2>Sin producciones disponibles</h2>
+                <p>
+                    No hay producciones en serie o pausadas para captura de operador.
+                </p>
+            </section>
+        }
+        else
+        {
+            foreach (var grupo in maquinas)
+            {
+                var primera = grupo.FirstOrDefault();
+                var nombreMaquina = primera == null ? "" : primera.MaquinaNombre;
+
+                <section class="machine-block">
+                    <div class="machine-head">
+                        <h2 class="machine-title">
+                            <span class="machine-icon">
+                                <i class="fa-solid fa-industry"></i>
+                            </span>
+
+                            <span>
+                                @grupo.Key
+                                <span class="d-block sub">
+                                    @Txt(nombreMaquina)
+                                </span>
+                            </span>
+                        </h2>
+
+                        <span class="machine-count">
+                            <i class="fa-solid fa-list-check"></i>
+                            @grupo.Count() producción(es)
+                        </span>
+                    </div>
+
+                    <div class="production-list">
+                        @foreach (var item in grupo)
+                        {
+                            var avance = PorcentajeAvance(item);
+                            var avanceTexto = avance.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                            var pendiente = Pendiente(item);
+
+                            <div class="production-row">
+                                <div>
+                                    <div class="label">OF / Programa</div>
+                                    <div class="main-title">
+                                        @OFTexto(item)
+                                    </div>
+
+                                    <div class="sub">
+                                        Programa @item.ProgramaProduccionID
+                                        @if (item.SolicitudProduccionID.HasValue)
+                                        {
+                                            <span> · Solicitud @item.SolicitudProduccionID.Value</span>
+                                        }
+                                    </div>
+
+                                    <div class="mt-2">
+                                        <span class="estado @EstadoClase(item)">
+                                            @if (item.TieneParoAbierto)
+                                            {
+                                                <i class="fa-solid fa-circle-pause"></i>
+                                            }
+                                            else if (item.EstatusID == ProduccionEstatus.Pausado)
+                                            {
+                                                <i class="fa-solid fa-pause"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fa-solid fa-play"></i>
+                                            }
+
+                                            @EstadoTexto(item)
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="label">Parte</div>
+                                    <div class="value">
+                                        @ParteTexto(item)
+                                    </div>
+                                    <div class="sub">
+                                        @Txt(item.DescripcionParte)
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="label">Operador principal</div>
+                                    <div class="value">
+                                        @Txt(item.OperadorNombre)
+                                    </div>
+
+                                    <div class="sub">
+                                        @if (item.OperadorID.HasValue)
+                                        {
+                                            <span>ID @item.OperadorID.Value</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Sin operador asignado</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="label">Avance</div>
+
+                                    <div class="d-flex justify-content-between small fw-bold mb-1">
+                                        <span>@avance.ToString("0.##")%</span>
+                                        <span>@NumeroInt(item.CantidadOKTotal) / @Numero(item.CantidadPlaneada)</span>
+                                    </div>
+
+                                    <div class="progress">
+                                        <div class="progress-bar"
+                                             role="progressbar"
+                                             style="width:@avanceTexto%">
+                                        </div>
+                                    </div>
+
+                                    <div class="numbers">
+                                        <span class="num-pill num-ok">
+                                            OK @NumeroInt(item.CantidadOKTotal)
+                                        </span>
+
+                                        <span class="num-pill num-sos">
+                                            Sos @NumeroInt(item.CantidadSospechosaTotal)
+                                        </span>
+
+                                        <span class="num-pill num-scrap">
+                                            Scrap @NumeroInt(item.CantidadScrapTotal)
+                                        </span>
+
+                                        <span class="num-pill">
+                                            Pend @pendiente.ToString("N0")
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="production-action">
+                                    <a href="@Url.Action("Captura", "ProduccionOperador", new { id = item.EjecucionProduccionID })"
+                                       class="btn-captura">
+                                        <i class="fa-solid fa-keyboard"></i>
+                                        Capturar
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+        }
+    </div>
+
+    <script>
+        // Recarga automática cada minuto para que entren las alertas de 15 minutos
+        // sin que el operador tenga que refrescar manualmente.
+        setInterval(function () {
+            if (!document.hidden) {
+                window.location.reload();
+            }
+        }, 60000);
+    </script>
+</body>
+</html>

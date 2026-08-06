@@ -2,6 +2,12 @@
 
 @{
     ViewData["Title"] = "Compras";
+
+    var puedeVerBandejaCompras = (bool)(ViewBag.PuedeVerBandejaCompras ?? false);
+    var puedeVerBandejaDireccion = (bool)(ViewBag.PuedeVerBandejaDireccion ?? false);
+    var puedeVerBandejaAlmacen = (bool)(ViewBag.PuedeVerBandejaAlmacen ?? false);
+    var puedeVerSeguimientoDireccion = (bool)(ViewBag.PuedeVerSeguimientoDireccion ?? puedeVerBandejaDireccion);
+    var puedeVerAlgunaBandeja = puedeVerBandejaCompras || puedeVerBandejaDireccion || puedeVerBandejaAlmacen;
 }
 
 @section Styles {
@@ -405,6 +411,62 @@
                     border-radius: 0 16px 16px 0;
                 }
 
+        .progress-wrap {
+            width: 100%;
+            min-width: 190px;
+        }
+
+        .progress-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--compras-muted);
+            margin-bottom: 7px;
+            line-height: 1.2;
+        }
+
+            .progress-top strong {
+                color: var(--compras-text);
+            }
+
+        .progress-track {
+            width: 100%;
+            height: 9px;
+            border-radius: 999px;
+            background: #e5e7eb;
+            overflow: hidden;
+            border: 1px solid #dbe3ea;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.25s ease;
+        }
+
+        .progress-pendiente {
+            background: linear-gradient(90deg, #ff7a00, #f97316);
+        }
+
+        .progress-proceso {
+            background: linear-gradient(90deg, #0b4f8f, #2563eb);
+        }
+
+        .progress-ok {
+            background: linear-gradient(90deg, #16a34a, #22c55e);
+        }
+
+        .progress-rechazada {
+            background: linear-gradient(90deg, #dc2626, #ef4444);
+        }
+
+        .progress-cancelada {
+            background: linear-gradient(90deg, #6b7280, #9ca3af);
+        }
+
         .folio-strong {
             color: var(--compras-text);
             font-weight: 1000;
@@ -533,7 +595,7 @@
     }
 
     <div class="erp-page-breadcrumb">
-        <a href="javascript:history.back()" class="erp-btn-back">← Regresar</a>
+        <a href="/" class="erp-btn-back">← Inicio</a>
         <span>Inicio</span>
         <span>›</span>
         <strong>Compras</strong>
@@ -558,72 +620,53 @@
     </section>
 
     <div class="compras-actions-row">
-        <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+        <a href="/" class="btn-compras-secondary">
+            ← Inicio
+        </a>
+
+        <a asp-controller="Compras" asp-action="CrearSolicitud" asp-route-returnTo="Index" class="btn-compras-main">
             + Nueva solicitud
         </a>
 
         <a asp-controller="Compras" asp-action="Solicitudes" class="btn-compras-secondary">
             Ver solicitudes
         </a>
+
+        @if (puedeVerBandejaCompras)
+        {
+            <a asp-controller="Compras" asp-action="BandejaCompras" class="btn-compras-secondary">
+                Bandeja Compras
+            </a>
+        }
+
+        @if (puedeVerBandejaDireccion)
+        {
+            <a asp-controller="Compras" asp-action="BandejaDireccion" class="btn-compras-secondary">
+                Bandeja Dirección
+            </a>
+        }
+
+        @if (puedeVerSeguimientoDireccion)
+        {
+            <a asp-controller="Compras" asp-action="SeguimientoDireccion" class="btn-compras-secondary">
+                Seguimiento Dirección
+            </a>
+        }
+
+        @if (puedeVerBandejaAlmacen)
+        {
+            <a asp-controller="Compras" asp-action="BandejaAlmacen" class="btn-compras-secondary">
+                Bandeja Almacén
+            </a>
+        }
+
+        @if (puedeVerAlgunaBandeja)
+        {
+            <a asp-controller="Compras" asp-action="MiBandeja" class="btn-compras-main">
+                Mi bandeja
+            </a>
+        }
     </div>
-
-    <section class="compras-grid">
-        <div class="compras-card">
-            <div class="compras-card-icon orange">SC</div>
-            <div class="compras-card-label">Pendientes</div>
-            <div class="compras-card-number">@Model.SolicitudesPendientes</div>
-            <p class="compras-card-title">Solicitudes nuevas por revisar</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon blue">RV</div>
-            <div class="compras-card-label">En revisión</div>
-            <div class="compras-card-number">@Model.SolicitudesEnRevision</div>
-            <p class="compras-card-title">Validación de compras</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon green">OK</div>
-            <div class="compras-card-label">Aprobadas</div>
-            <div class="compras-card-number">@Model.SolicitudesAprobadas</div>
-            <p class="compras-card-title">Listas para orden de compra</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon red">NO</div>
-            <div class="compras-card-label">Rechazadas</div>
-            <div class="compras-card-number">@Model.SolicitudesRechazadas</div>
-            <p class="compras-card-title">Solicitudes no autorizadas</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon orange">OC</div>
-            <div class="compras-card-label">Órdenes</div>
-            <div class="compras-card-number">@Model.OrdenesPendientes</div>
-            <p class="compras-card-title">Órdenes pendientes</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon blue">$</div>
-            <div class="compras-card-label">Pagos</div>
-            <div class="compras-card-number">@Model.OrdenesEnEsperaPago</div>
-            <p class="compras-card-title">En espera de comprobante</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon green">RC</div>
-            <div class="compras-card-label">Recepción</div>
-            <div class="compras-card-number">@Model.RecepcionesPendientes</div>
-            <p class="compras-card-title">Material pendiente por recibir</p>
-        </div>
-
-        <div class="compras-card">
-            <div class="compras-card-icon purple">PR</div>
-            <div class="compras-card-label">Proveedores</div>
-            <div class="compras-card-number">@Model.ProveedoresActivos</div>
-            <p class="compras-card-title">Proveedores activos</p>
-        </div>
-    </section>
 
     <section class="compras-section">
         <div class="compras-section-header">
@@ -702,7 +745,7 @@
                             <th>Fecha</th>
                             <th>Origen</th>
                             <th>Prioridad</th>
-                            <th>Tipo</th>
+                            <th>Progreso</th>
                             <th>Estatus</th>
                             <th></th>
                         </tr>
@@ -717,16 +760,36 @@
                                 <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
                                 <td>@(item.OrigenSolicitud ?? "-")</td>
                                 <td>@(item.Prioridad ?? "-")</td>
-                                <td>@(item.TipoCompra ?? "-")</td>
+                                <td style="min-width: 220px;">
+                                    @{
+                                        var progreso = GetProgresoEstatus(item.EstatusID);
+                                        var claseProgreso = GetClaseProgreso(item.EstatusID);
+                                        var textoProgreso = GetTextoProgreso(item.EstatusID);
+                                    }
+
+                                    <div class="progress-wrap">
+                                        <div class="progress-top">
+                                            <span>@textoProgreso</span>
+                                            <strong>@progreso%</strong>
+                                        </div>
+
+                                        <div class="progress-track">
+                                            <div class="progress-fill @claseProgreso"
+                                                 style="width:@progreso%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
                                 <td>
-                                    <span class="badge-compras @GetBadgeClass(item.Estatus)">
-                                        @(item.Estatus ?? "Sin estatus")
+                                    <span class="badge-compras @GetBadgeClass(item.EstatusID)">
+                                        @(item.EstatusNombre ?? item.Estatus ?? "Sin estatus")
                                     </span>
                                 </td>
                                 <td style="text-align: right;">
                                     <a asp-controller="Compras"
                                        asp-action="DetalleSolicitud"
                                        asp-route-id="@item.SolicitudCompraID"
+                                       asp-route-returnTo="Index"
                                        class="btn-table">
                                         Abrir →
                                     </a>
@@ -742,7 +805,7 @@
             <div class="compras-empty">
                 Aún no hay solicitudes registradas.
                 <br /><br />
-                <a asp-controller="Compras" asp-action="CrearSolicitud" class="btn-compras-main">
+                <a asp-controller="Compras" asp-action="CrearSolicitud" asp-route-returnTo="Index" class="btn-compras-main">
                     Crear primera solicitud
                 </a>
             </div>
@@ -751,15 +814,82 @@
 </div>
 
 @functions {
-    private string GetBadgeClass(string? estatus)
+    private int GetProgresoEstatus(int estatusId)
     {
-        return estatus switch
+        return estatusId switch
         {
-            "Pendiente" => "badge-pendiente",
-            "En revision" => "badge-revision",
-            "Aprobada" => "badge-aprobada",
-            "Rechazada" => "badge-rechazada",
-            "Cancelada" => "badge-cancelada",
+            1 => 10,   // Pendiente de aprobación
+            2 => 20,   // Aprobada para cotizar
+            3 => 30,   // Cotizando
+            4 => 40,   // Cotización enviada a dirección
+            5 => 50,   // Aprobada para orden de compra
+            6 => 60,   // Orden de compra generada
+            7 => 70,   // Enviada al proveedor
+            8 => 80,   // Pendiente de recepción
+            9 => 90,   // Recibida en almacén
+            10 => 100, // Cerrada
+            11 => 100, // Rechazada
+            12 => 100, // Cancelada
+            _ => 0
+        };
+    }
+
+    private string GetTextoProgreso(int estatusId)
+    {
+        return estatusId switch
+        {
+            1 => "Pendiente aprobación",
+            2 => "Aprobada cotizar",
+            3 => "Cotizando",
+            4 => "Autoriza Dirección",
+            5 => "Lista para O.C.",
+            6 => "O.C. generada",
+            7 => "Proveedor",
+            8 => "Recepción",
+            9 => "Recibida",
+            10 => "Cerrada",
+            11 => "Rechazada",
+            12 => "Cancelada",
+            _ => "Sin avance"
+        };
+    }
+
+    private string GetClaseProgreso(int estatusId)
+    {
+        return estatusId switch
+        {
+            1 => "progress-pendiente",
+            2 => "progress-proceso",
+            3 => "progress-proceso",
+            4 => "progress-proceso",
+            5 => "progress-proceso",
+            6 => "progress-proceso",
+            7 => "progress-proceso",
+            8 => "progress-pendiente",
+            9 => "progress-ok",
+            10 => "progress-ok",
+            11 => "progress-rechazada",
+            12 => "progress-cancelada",
+            _ => "progress-cancelada"
+        };
+    }
+
+    private string GetBadgeClass(int estatusId)
+    {
+        return estatusId switch
+        {
+            1 => "badge-pendiente",
+            2 => "badge-revision",
+            3 => "badge-revision",
+            4 => "badge-revision",
+            5 => "badge-aprobada",
+            6 => "badge-revision",
+            7 => "badge-revision",
+            8 => "badge-pendiente",
+            9 => "badge-revision",
+            10 => "badge-aprobada",
+            11 => "badge-rechazada",
+            12 => "badge-cancelada",
             _ => "badge-pendiente"
         };
     }

@@ -1,0 +1,2024 @@
+﻿@using System
+@using System.Linq
+@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.EditorVM
+
+@{
+    ViewData["Title"] = $"Editor {Model.Escala.Folio}";
+    Layout = "_Layout";
+
+    var todasLasAsignaciones = Model.Grupos
+        .SelectMany(g => g.Celdas)
+        .SelectMany(c => c.Asignaciones)
+        .ToList();
+
+    var totalPersonas = todasLasAsignaciones
+        .Select(a => a.PersonalID)
+        .Distinct()
+        .Count();
+
+    var totalColumnas = Math.Max(3, Model.Turnos.Count + 2);
+    var departamentoActual = string.Empty;
+}
+
+<style>
+    .escala-editor {
+        --ee-primary: #17324d;
+        --ee-primary-dark: #0f263a;
+        --ee-primary-soft: #eaf0f5;
+        --ee-accent: #e87524;
+        --ee-accent-dark: #c95d13;
+        --ee-success: #238657;
+        --ee-danger: #c93d3d;
+        --ee-warning: #b46d00;
+        --ee-text: #243447;
+        --ee-muted: #6b7a8c;
+        --ee-border: #dfe6ed;
+        --ee-surface: #ffffff;
+        --ee-bg: #f5f7fa;
+        color: var(--ee-text);
+        padding: 1.35rem 0 2.5rem;
+    }
+
+        .escala-editor *,
+        .escala-editor *::before,
+        .escala-editor *::after {
+            box-sizing: border-box;
+        }
+
+        .escala-editor .ee-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .escala-editor .ee-eyebrow {
+            color: var(--ee-accent);
+            font-size: .7rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin-bottom: .22rem;
+            text-transform: uppercase;
+        }
+
+        .escala-editor .ee-title {
+            color: var(--ee-primary);
+            font-size: clamp(1.45rem, 2.5vw, 2rem);
+            font-weight: 780;
+            letter-spacing: -.025em;
+            margin: 0;
+        }
+
+        .escala-editor .ee-subtitle {
+            color: var(--ee-muted);
+            font-size: .88rem;
+            margin: .35rem 0 0;
+        }
+
+        .escala-editor .ee-header-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            justify-content: flex-end;
+        }
+
+        .escala-editor .ee-btn {
+            align-items: center;
+            border: 1px solid transparent;
+            border-radius: .58rem;
+            cursor: pointer;
+            display: inline-flex;
+            font-size: .8rem;
+            font-weight: 750;
+            gap: .38rem;
+            justify-content: center;
+            min-height: 39px;
+            padding: .5rem .78rem;
+            text-decoration: none;
+            transition: .16s ease;
+        }
+
+            .escala-editor .ee-btn:hover {
+                transform: translateY(-1px);
+            }
+
+        .escala-editor .ee-btn-primary {
+            background: var(--ee-accent);
+            border-color: var(--ee-accent);
+            color: #fff;
+        }
+
+            .escala-editor .ee-btn-primary:hover {
+                background: var(--ee-accent-dark);
+                border-color: var(--ee-accent-dark);
+                color: #fff;
+            }
+
+        .escala-editor .ee-btn-dark {
+            background: var(--ee-primary);
+            border-color: var(--ee-primary);
+            color: #fff;
+        }
+
+            .escala-editor .ee-btn-dark:hover {
+                background: var(--ee-primary-dark);
+                color: #fff;
+            }
+
+        .escala-editor .ee-btn-light {
+            background: var(--ee-surface);
+            border-color: var(--ee-border);
+            color: var(--ee-primary);
+        }
+
+            .escala-editor .ee-btn-light:hover {
+                background: var(--ee-primary-soft);
+                color: var(--ee-primary);
+            }
+
+        .escala-editor .ee-btn-danger {
+            background: #fff4f4;
+            border-color: #efcaca;
+            color: #a82f2f;
+        }
+
+            .escala-editor .ee-btn-danger:hover {
+                background: #fde8e8;
+                color: #8b2525;
+            }
+
+        .escala-editor .ee-btn-sm {
+            border-radius: .46rem;
+            font-size: .7rem;
+            min-height: 31px;
+            padding: .35rem .55rem;
+        }
+
+        .escala-editor .ee-alert {
+            border: 0;
+            border-left: 4px solid;
+            border-radius: .65rem;
+            box-shadow: 0 5px 18px rgba(23, 50, 77, .06);
+            font-size: .82rem;
+            margin-bottom: .9rem;
+            padding: .78rem 1rem;
+        }
+
+        .escala-editor .ee-alert-success {
+            background: #edf8f2;
+            border-left-color: var(--ee-success);
+            color: #17613e;
+        }
+
+        .escala-editor .ee-alert-error {
+            background: #fff0f0;
+            border-left-color: var(--ee-danger);
+            color: #8b2929;
+        }
+
+        .escala-editor .ee-alert-info {
+            background: #eef5fb;
+            border-left-color: #477da8;
+            color: #2d5879;
+        }
+
+        .escala-editor .ee-summary {
+            background: var(--ee-primary);
+            border-radius: .86rem;
+            box-shadow: 0 10px 25px rgba(23, 50, 77, .15);
+            color: #fff;
+            display: grid;
+            gap: .85rem;
+            grid-template-columns: minmax(180px, 1.3fr) repeat(5, minmax(95px, .65fr));
+            margin-bottom: 1rem;
+            overflow: hidden;
+            padding: 1rem 1.15rem;
+            position: relative;
+        }
+
+            .escala-editor .ee-summary::after {
+                background: var(--ee-accent);
+                content: "";
+                height: 90px;
+                opacity: .95;
+                position: absolute;
+                right: -45px;
+                top: -48px;
+                transform: rotate(38deg);
+                width: 100px;
+            }
+
+        .escala-editor .ee-summary-main,
+        .escala-editor .ee-summary-item {
+            min-width: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .escala-editor .ee-summary-label {
+            color: #bcd0e3;
+            display: block;
+            font-size: .64rem;
+            font-weight: 750;
+            letter-spacing: .07em;
+            margin-bottom: .2rem;
+            text-transform: uppercase;
+        }
+
+        .escala-editor .ee-summary-value {
+            color: #fff;
+            display: block;
+            font-size: .84rem;
+            font-weight: 760;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .escala-editor .ee-summary-folio {
+            font-size: 1.15rem;
+            font-weight: 820;
+            letter-spacing: .01em;
+        }
+
+        .escala-editor .ee-status {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .68rem;
+            font-weight: 800;
+            padding: .27rem .55rem;
+        }
+
+        .escala-editor .ee-status-borrador {
+            background: #fff0d9;
+            color: #8a5200;
+        }
+
+        .escala-editor .ee-status-publicada {
+            background: #dff5e8;
+            color: #17613e;
+        }
+
+        .escala-editor .ee-status-cancelada {
+            background: #f6dddd;
+            color: #8b2929;
+        }
+
+        .escala-editor .ee-kpis {
+            display: grid;
+            gap: .75rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin-bottom: 1rem;
+        }
+
+        .escala-editor .ee-kpi {
+            align-items: center;
+            background: var(--ee-surface);
+            border: 1px solid var(--ee-border);
+            border-radius: .72rem;
+            display: flex;
+            gap: .75rem;
+            min-width: 0;
+            padding: .78rem .9rem;
+        }
+
+        .escala-editor .ee-kpi-mark {
+            background: var(--ee-primary-soft);
+            border-radius: .55rem;
+            color: var(--ee-primary);
+            display: grid;
+            flex: 0 0 38px;
+            font-size: .86rem;
+            font-weight: 850;
+            height: 38px;
+            place-items: center;
+        }
+
+        .escala-editor .ee-kpi-value {
+            color: var(--ee-primary);
+            display: block;
+            font-size: 1.15rem;
+            font-weight: 820;
+            line-height: 1;
+        }
+
+        .escala-editor .ee-kpi-label {
+            color: var(--ee-muted);
+            display: block;
+            font-size: .68rem;
+            font-weight: 680;
+            margin-top: .22rem;
+        }
+
+        .escala-editor .ee-toolbar {
+            align-items: center;
+            background: var(--ee-surface);
+            border: 1px solid var(--ee-border);
+            border-radius: .76rem;
+            display: flex;
+            gap: .7rem;
+            justify-content: space-between;
+            margin-bottom: .85rem;
+            padding: .72rem;
+        }
+
+        .escala-editor .ee-search {
+            min-width: 230px;
+            position: relative;
+            width: min(420px, 100%);
+        }
+
+            .escala-editor .ee-search input,
+            .escala-editor .ee-control {
+                background: var(--ee-surface);
+                border: 1px solid var(--ee-border);
+                border-radius: .53rem;
+                color: var(--ee-text);
+                font-size: .8rem;
+                min-height: 40px;
+                outline: none;
+                padding: .52rem .66rem;
+                width: 100%;
+            }
+
+                .escala-editor .ee-search input:focus,
+                .escala-editor .ee-control:focus {
+                    border-color: #7b9ab7;
+                    box-shadow: 0 0 0 3px rgba(23, 50, 77, .08);
+                }
+
+        .escala-editor textarea.ee-control {
+            min-height: 76px;
+            resize: vertical;
+        }
+
+        .escala-editor .ee-toolbar-note {
+            color: var(--ee-muted);
+            font-size: .72rem;
+            margin: 0;
+        }
+
+        .escala-editor .ee-board {
+            background: var(--ee-surface);
+            border: 1px solid var(--ee-border);
+            border-radius: .82rem;
+            overflow: hidden;
+        }
+
+        .escala-editor .ee-board-head {
+            align-items: center;
+            border-bottom: 1px solid var(--ee-border);
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: .82rem .95rem;
+        }
+
+        .escala-editor .ee-board-title {
+            color: var(--ee-primary);
+            font-size: .9rem;
+            font-weight: 780;
+            margin: 0;
+        }
+
+        .escala-editor .ee-board-help {
+            color: var(--ee-muted);
+            font-size: .68rem;
+            margin: .2rem 0 0;
+        }
+
+        .escala-editor .ee-table-wrap {
+            overflow: auto;
+            width: 100%;
+        }
+
+        .escala-editor .ee-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: .75rem;
+            min-width: max(980px, 100%);
+            width: 100%;
+        }
+
+            .escala-editor .ee-table th,
+            .escala-editor .ee-table td {
+                border-bottom: 1px solid var(--ee-border);
+                border-right: 1px solid var(--ee-border);
+                padding: .65rem;
+                text-align: left;
+                vertical-align: top;
+            }
+
+                .escala-editor .ee-table th:last-child,
+                .escala-editor .ee-table td:last-child {
+                    border-right: 0;
+                }
+
+            .escala-editor .ee-table thead th {
+                background: #f3f6f8;
+                color: #3d5065;
+                font-size: .67rem;
+                font-weight: 800;
+                letter-spacing: .025em;
+                position: sticky;
+                text-transform: uppercase;
+                top: 0;
+                z-index: 3;
+            }
+
+        .escala-editor .ee-col-role {
+            left: 0;
+            min-width: 210px;
+            position: sticky;
+            width: 210px;
+            z-index: 2;
+        }
+
+        .escala-editor thead .ee-col-role {
+            z-index: 5;
+        }
+
+        .escala-editor .ee-col-machine {
+            left: 210px;
+            min-width: 125px;
+            position: sticky;
+            width: 125px;
+            z-index: 2;
+        }
+
+        .escala-editor thead .ee-col-machine {
+            z-index: 5;
+        }
+
+        .escala-editor tbody .ee-col-role,
+        .escala-editor tbody .ee-col-machine {
+            background: var(--ee-surface);
+        }
+
+        .escala-editor .ee-turn-head {
+            border-top: 4px solid var(--turn-color, #6c757d);
+            min-width: 225px;
+            text-align: center !important;
+        }
+
+        .escala-editor .ee-turn-name {
+            color: var(--ee-primary);
+            display: block;
+            font-size: .76rem;
+            font-weight: 820;
+            text-transform: none;
+        }
+
+        .escala-editor .ee-turn-time {
+            color: var(--ee-muted);
+            display: block;
+            font-size: .64rem;
+            font-weight: 650;
+            letter-spacing: 0;
+            margin-top: .18rem;
+            text-transform: none;
+        }
+
+        .escala-editor .ee-department-row td {
+            background: var(--ee-primary);
+            border-right: 0;
+            color: #fff;
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .05em;
+            padding: .48rem .72rem;
+            text-transform: uppercase;
+        }
+
+        .escala-editor .ee-role-name {
+            color: var(--ee-primary);
+            display: block;
+            font-size: .78rem;
+            font-weight: 780;
+        }
+
+        .escala-editor .ee-role-meta {
+            color: var(--ee-muted);
+            display: block;
+            font-size: .65rem;
+            margin-top: .2rem;
+        }
+
+        .escala-editor .ee-cell {
+            background: #fbfcfd;
+            min-height: 76px;
+            min-width: 225px;
+        }
+
+        .escala-editor .ee-person-list {
+            display: grid;
+            gap: .42rem;
+        }
+
+        .escala-editor .ee-person {
+            background: var(--ee-surface);
+            border: 1px solid var(--ee-border);
+            border-left: 4px solid var(--turn-color, #6c757d);
+            border-radius: .48rem;
+            padding: .48rem .52rem;
+            transition: .15s ease;
+        }
+
+            .escala-editor .ee-person:hover {
+                border-color: #c4d0dc;
+                border-left-color: var(--turn-color, #6c757d);
+                box-shadow: 0 4px 12px rgba(23, 50, 77, .07);
+            }
+
+        .escala-editor .ee-person-main {
+            align-items: flex-start;
+            display: flex;
+            gap: .4rem;
+            justify-content: space-between;
+        }
+
+        .escala-editor .ee-person-name {
+            color: var(--ee-primary);
+            font-size: .7rem;
+            font-weight: 780;
+            line-height: 1.25;
+            margin: 0;
+        }
+
+        .escala-editor .ee-person-number {
+            color: var(--ee-muted);
+            display: block;
+            font-size: .61rem;
+            font-weight: 650;
+            margin-top: .14rem;
+        }
+
+        .escala-editor .ee-person-dates {
+            color: #526579;
+            font-size: .61rem;
+            margin-top: .32rem;
+        }
+
+        .escala-editor .ee-person-actions {
+            align-items: center;
+            display: flex;
+            flex: 0 0 auto;
+            gap: .2rem;
+        }
+
+        .escala-editor .ee-icon-btn {
+            background: transparent;
+            border: 0;
+            border-radius: .35rem;
+            color: var(--ee-muted);
+            cursor: pointer;
+            font-size: .64rem;
+            font-weight: 750;
+            padding: .2rem .28rem;
+        }
+
+            .escala-editor .ee-icon-btn:hover {
+                background: var(--ee-primary-soft);
+                color: var(--ee-primary);
+            }
+
+        .escala-editor .ee-icon-btn-danger:hover {
+            background: #fff0f0;
+            color: var(--ee-danger);
+        }
+
+        .escala-editor .ee-cell-add {
+            background: transparent;
+            border: 1px dashed #b9c6d2;
+            border-radius: .46rem;
+            color: #617286;
+            cursor: pointer;
+            font-size: .66rem;
+            font-weight: 720;
+            margin-top: .42rem;
+            min-height: 31px;
+            padding: .32rem .48rem;
+            width: 100%;
+        }
+
+            .escala-editor .ee-cell-add:hover {
+                background: var(--ee-primary-soft);
+                border-color: #7b9ab7;
+                color: var(--ee-primary);
+            }
+
+        .escala-editor .ee-empty {
+            padding: 2.8rem 1rem;
+            text-align: center;
+        }
+
+        .escala-editor .ee-empty-mark {
+            background: var(--ee-primary-soft);
+            border-radius: 50%;
+            color: var(--ee-primary);
+            display: grid;
+            font-size: 1.2rem;
+            font-weight: 850;
+            height: 54px;
+            margin: 0 auto .75rem;
+            place-items: center;
+            width: 54px;
+        }
+
+        .escala-editor .ee-empty-title {
+            color: var(--ee-primary);
+            font-size: .92rem;
+            font-weight: 780;
+            margin: 0 0 .3rem;
+        }
+
+        .escala-editor .ee-empty-text {
+            color: var(--ee-muted);
+            font-size: .76rem;
+            margin: 0 auto .8rem;
+            max-width: 480px;
+        }
+
+        .escala-editor .ee-footer-total th,
+        .escala-editor .ee-footer-total td {
+            background: #f3f6f8;
+            color: var(--ee-primary);
+            font-weight: 800;
+            padding: .58rem .65rem;
+            text-align: center;
+        }
+
+        .escala-editor .ee-novedades {
+            background: var(--ee-surface);
+            border: 1px solid var(--ee-border);
+            border-radius: .82rem;
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+
+        .escala-editor .ee-novedades-head {
+            align-items: center;
+            border-bottom: 1px solid var(--ee-border);
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: .8rem .95rem;
+        }
+
+        .escala-editor .ee-novedades-grid {
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            padding: .8rem;
+        }
+
+        .escala-editor .ee-novedad {
+            background: #f9fbfc;
+            border: 1px solid var(--ee-border);
+            border-radius: .55rem;
+            padding: .62rem .68rem;
+        }
+
+        .escala-editor .ee-novedad-type {
+            color: var(--ee-accent-dark);
+            display: block;
+            font-size: .63rem;
+            font-weight: 820;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .escala-editor .ee-novedad-name {
+            color: var(--ee-primary);
+            display: block;
+            font-size: .72rem;
+            font-weight: 760;
+            margin-top: .2rem;
+        }
+
+        .escala-editor .ee-novedad-date {
+            color: var(--ee-muted);
+            display: block;
+            font-size: .62rem;
+            margin-top: .22rem;
+        }
+
+        .escala-editor .ee-modal {
+            align-items: center;
+            background: rgba(10, 24, 38, .62);
+            display: none;
+            inset: 0;
+            justify-content: center;
+            padding: 1rem;
+            position: fixed;
+            z-index: 1080;
+        }
+
+            .escala-editor .ee-modal.is-open {
+                display: flex;
+            }
+
+        .escala-editor .ee-modal-dialog {
+            background: var(--ee-surface);
+            border-radius: .85rem;
+            box-shadow: 0 22px 65px rgba(0, 0, 0, .28);
+            max-height: calc(100vh - 2rem);
+            max-width: 760px;
+            overflow: auto;
+            width: 100%;
+        }
+
+        .escala-editor .ee-modal-sm {
+            max-width: 520px;
+        }
+
+        .escala-editor .ee-modal-head {
+            align-items: flex-start;
+            border-bottom: 1px solid var(--ee-border);
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: 1rem 1.1rem;
+        }
+
+        .escala-editor .ee-modal-title {
+            color: var(--ee-primary);
+            font-size: 1rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .escala-editor .ee-modal-subtitle {
+            color: var(--ee-muted);
+            font-size: .7rem;
+            margin: .2rem 0 0;
+        }
+
+        .escala-editor .ee-modal-close {
+            background: #f0f3f6;
+            border: 0;
+            border-radius: 50%;
+            color: #536476;
+            cursor: pointer;
+            display: grid;
+            flex: 0 0 32px;
+            font-size: 1rem;
+            height: 32px;
+            place-items: center;
+            width: 32px;
+        }
+
+        .escala-editor .ee-modal-body {
+            padding: 1rem 1.1rem;
+        }
+
+        .escala-editor .ee-modal-footer {
+            align-items: center;
+            border-top: 1px solid var(--ee-border);
+            display: flex;
+            gap: .55rem;
+            justify-content: flex-end;
+            padding: .85rem 1.1rem;
+        }
+
+        .escala-editor .ee-form-grid {
+            display: grid;
+            gap: .82rem;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+        }
+
+        .escala-editor .ee-col-4 {
+            grid-column: span 4;
+        }
+
+        .escala-editor .ee-col-6 {
+            grid-column: span 6;
+        }
+
+        .escala-editor .ee-col-12 {
+            grid-column: span 12;
+        }
+
+        .escala-editor .ee-label {
+            color: #405268;
+            display: block;
+            font-size: .72rem;
+            font-weight: 750;
+            margin-bottom: .32rem;
+        }
+
+        .escala-editor .ee-label-required::after {
+            color: var(--ee-accent);
+            content: " *";
+        }
+
+        .escala-editor .ee-field-help {
+            color: var(--ee-muted);
+            font-size: .64rem;
+            margin: .26rem 0 0;
+        }
+
+        .escala-editor .ee-machine-required {
+            color: var(--ee-warning);
+            display: none;
+            font-size: .64rem;
+            font-weight: 720;
+            margin: .26rem 0 0;
+        }
+
+        .escala-editor .ee-person-search {
+            margin-bottom: .38rem;
+            min-height: 36px;
+        }
+
+        .escala-editor .ee-readonly-note {
+            background: #fff7e9;
+            border: 1px solid #efd9af;
+            border-radius: .65rem;
+            color: #78501a;
+            font-size: .76rem;
+            margin-bottom: .85rem;
+            padding: .68rem .8rem;
+        }
+
+    body.ee-no-scroll {
+        overflow: hidden;
+    }
+
+    @@media (max-width: 1100px) {
+        .escala-editor .ee-summary {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .escala-editor .ee-summary-main {
+            grid-column: span 3;
+        }
+
+        .escala-editor .ee-novedades-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .escala-editor {
+            padding-top: .9rem;
+        }
+
+            .escala-editor .ee-header {
+                display: block;
+            }
+
+            .escala-editor .ee-header-actions {
+                justify-content: flex-start;
+                margin-top: .85rem;
+            }
+
+            .escala-editor .ee-summary {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .escala-editor .ee-summary-main {
+                grid-column: span 2;
+            }
+
+            .escala-editor .ee-kpis {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .escala-editor .ee-toolbar {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .escala-editor .ee-search {
+                min-width: 0;
+                width: 100%;
+            }
+
+            .escala-editor .ee-form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .escala-editor .ee-col-4,
+            .escala-editor .ee-col-6,
+            .escala-editor .ee-col-12 {
+                grid-column: span 1;
+            }
+    }
+
+    @@media (max-width: 520px) {
+        .escala-editor .ee-summary,
+        .escala-editor .ee-kpis,
+        .escala-editor .ee-novedades-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .escala-editor .ee-summary-main {
+            grid-column: span 1;
+        }
+
+        .escala-editor .ee-btn {
+            width: 100%;
+        }
+
+        .escala-editor .ee-header-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    html[data-bs-theme="dark"] .escala-editor,
+    body.dark-mode .escala-editor {
+        --ee-text: #dce5ed;
+        --ee-muted: #9fb0c0;
+        --ee-border: #34495d;
+        --ee-surface: #172534;
+        --ee-bg: #101a24;
+        --ee-primary-soft: #23384b;
+    }
+
+        html[data-bs-theme="dark"] .escala-editor .ee-table thead th,
+        html[data-bs-theme="dark"] .escala-editor .ee-footer-total th,
+        html[data-bs-theme="dark"] .escala-editor .ee-footer-total td,
+        body.dark-mode .escala-editor .ee-table thead th,
+        body.dark-mode .escala-editor .ee-footer-total th,
+        body.dark-mode .escala-editor .ee-footer-total td {
+            background: #1e3041;
+            color: #dce5ed;
+        }
+
+        html[data-bs-theme="dark"] .escala-editor .ee-cell,
+        html[data-bs-theme="dark"] .escala-editor .ee-novedad,
+        body.dark-mode .escala-editor .ee-cell,
+        body.dark-mode .escala-editor .ee-novedad {
+            background: #13212e;
+        }
+
+        html[data-bs-theme="dark"] .escala-editor .ee-title,
+        html[data-bs-theme="dark"] .escala-editor .ee-kpi-value,
+        html[data-bs-theme="dark"] .escala-editor .ee-board-title,
+        html[data-bs-theme="dark"] .escala-editor .ee-turn-name,
+        html[data-bs-theme="dark"] .escala-editor .ee-role-name,
+        html[data-bs-theme="dark"] .escala-editor .ee-person-name,
+        html[data-bs-theme="dark"] .escala-editor .ee-novedad-name,
+        html[data-bs-theme="dark"] .escala-editor .ee-modal-title,
+        body.dark-mode .escala-editor .ee-title,
+        body.dark-mode .escala-editor .ee-kpi-value,
+        body.dark-mode .escala-editor .ee-board-title,
+        body.dark-mode .escala-editor .ee-turn-name,
+        body.dark-mode .escala-editor .ee-role-name,
+        body.dark-mode .escala-editor .ee-person-name,
+        body.dark-mode .escala-editor .ee-novedad-name,
+        body.dark-mode .escala-editor .ee-modal-title {
+            color: #eef4f8;
+        }
+</style>
+
+<div class="escala-editor">
+    <div class="ee-header">
+        <div>
+            <div class="ee-eyebrow">Programación semanal</div>
+            <h1 class="ee-title">Editor de Escala de Personal</h1>
+            <p class="ee-subtitle">
+                Asigna al personal por área, función, máquina y horario de trabajo.
+            </p>
+        </div>
+
+        <div class="ee-header-actions">
+            <a asp-action="Index" class="ee-btn ee-btn-light">Volver</a>
+            <a asp-action="Novedades"
+               asp-route-id="@Model.Escala.EscalaID"
+               class="ee-btn ee-btn-light">
+                Novedades (@Model.Novedades.Count)
+            </a>
+            <a asp-action="Detalle"
+               asp-route-id="@Model.Escala.EscalaID"
+               class="ee-btn ee-btn-light">
+                Vista previa
+            </a>
+
+            @if (Model.PuedeEditar)
+            {
+                <button type="button"
+                        class="ee-btn ee-btn-primary"
+                        data-open-assignment>
+                    Agregar persona
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (TempData["Exito"] != null)
+    {
+        <div class="ee-alert ee-alert-success" role="alert">
+            @TempData["Exito"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="ee-alert ee-alert-error" role="alert">
+            @TempData["Error"]
+        </div>
+    }
+
+    @if (!Model.PuedeEditar)
+    {
+        <div class="ee-readonly-note">
+            Esta escala está en estado <strong>@Model.Escala.Estado</strong>.
+            La información se muestra en modo de consulta.
+        </div>
+    }
+
+    <section class="ee-summary" aria-label="Resumen de la escala">
+        <div class="ee-summary-main">
+            <span class="ee-summary-label">Folio de la escala</span>
+            <span class="ee-summary-value ee-summary-folio">@Model.Escala.Folio</span>
+        </div>
+        <div class="ee-summary-item">
+            <span class="ee-summary-label">Semana</span>
+            <span class="ee-summary-value">
+                @Model.Escala.NumeroSemana / @Model.Escala.Anio
+            </span>
+        </div>
+        <div class="ee-summary-item">
+            <span class="ee-summary-label">Periodo</span>
+            <span class="ee-summary-value">
+                @Model.Escala.FechaInicio.ToString("dd/MM") –
+                @Model.Escala.FechaFin.ToString("dd/MM/yyyy")
+            </span>
+        </div>
+        <div class="ee-summary-item">
+            <span class="ee-summary-label">Documento</span>
+            <span class="ee-summary-value">
+                @Model.Escala.CodigoDocumento · V@Model.Escala.VersionDocumento
+            </span>
+        </div>
+        <div class="ee-summary-item">
+            <span class="ee-summary-label">Elaboración</span>
+            <span class="ee-summary-value">
+                @Model.Escala.FechaElaboracion.ToString("dd/MM/yyyy")
+            </span>
+        </div>
+        <div class="ee-summary-item">
+            <span class="ee-summary-label">Estado</span>
+            <span class="ee-status ee-status-@Model.Escala.Estado.ToLowerInvariant()">
+                @Model.Escala.Estado
+            </span>
+        </div>
+    </section>
+
+    <section class="ee-kpis" aria-label="Totales">
+        <div class="ee-kpi">
+            <span class="ee-kpi-mark">P</span>
+            <span>
+                <span class="ee-kpi-value">@totalPersonas</span>
+                <span class="ee-kpi-label">Personas programadas</span>
+            </span>
+        </div>
+        <div class="ee-kpi">
+            <span class="ee-kpi-mark">A</span>
+            <span>
+                <span class="ee-kpi-value">@todasLasAsignaciones.Count</span>
+                <span class="ee-kpi-label">Asignaciones activas</span>
+            </span>
+        </div>
+        <div class="ee-kpi">
+            <span class="ee-kpi-mark">T</span>
+            <span>
+                <span class="ee-kpi-value">@Model.Turnos.Count</span>
+                <span class="ee-kpi-label">Horarios configurados</span>
+            </span>
+        </div>
+        <div class="ee-kpi">
+            <span class="ee-kpi-mark">N</span>
+            <span>
+                <span class="ee-kpi-value">@Model.Novedades.Count</span>
+                <span class="ee-kpi-label">Novedades de la semana</span>
+            </span>
+        </div>
+    </section>
+
+    <div class="ee-toolbar">
+        <div class="ee-search">
+            <input type="search"
+                   id="boardSearch"
+                   placeholder="Buscar persona, función o máquina..."
+                   autocomplete="off" />
+        </div>
+        <p class="ee-toolbar-note">
+            Los totales se calculan automáticamente con las asignaciones activas.
+        </p>
+    </div>
+
+    <section class="ee-board">
+        <div class="ee-board-head">
+            <div>
+                <h2 class="ee-board-title">Distribución semanal del personal</h2>
+                <p class="ee-board-help">
+                    Las columnas corresponden a los horarios creados en esta escala.
+                </p>
+            </div>
+
+            @if (Model.Escala.Estado == EscalaVM.Estados.Borrador)
+            {
+                <div class="ee-header-actions">
+                    @if (Model.PuedePublicar)
+                    {
+                        <button type="button"
+                                class="ee-btn ee-btn-dark ee-btn-sm"
+                                data-open-state="publishModal">
+                            Publicar escala
+                        </button>
+                    }
+                    <button type="button"
+                            class="ee-btn ee-btn-danger ee-btn-sm"
+                            data-open-state="cancelModal">
+                        Cancelar escala
+                    </button>
+                </div>
+            }
+            else if (Model.Escala.Estado == EscalaVM.Estados.Publicada)
+            {
+                <button type="button"
+                        class="ee-btn ee-btn-light ee-btn-sm"
+                        data-open-state="draftModal">
+                    Regresar a borrador
+                </button>
+            }
+        </div>
+
+        @if (Model.Turnos.Count == 0)
+        {
+            <div class="ee-empty">
+                <div class="ee-empty-mark">T</div>
+                <h3 class="ee-empty-title">La escala no tiene horarios</h3>
+                <p class="ee-empty-text">
+                    No es posible asignar personal hasta que la escala tenga por lo menos un horario configurado.
+                </p>
+            </div>
+        }
+        else if (Model.Grupos.Count == 0)
+        {
+            <div class="ee-empty">
+                <div class="ee-empty-mark">+</div>
+                <h3 class="ee-empty-title">Aún no hay personal asignado</h3>
+                <p class="ee-empty-text">
+                    Comienza agregando una persona y selecciona la función, máquina y horario que le corresponden.
+                </p>
+                @if (Model.PuedeEditar)
+                {
+                    <button type="button"
+                            class="ee-btn ee-btn-primary"
+                            data-open-assignment>
+                        Agregar primera persona
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="ee-table-wrap">
+                <table class="ee-table" id="assignmentBoard">
+                    <thead>
+                        <tr>
+                            <th class="ee-col-role">Función / rol</th>
+                            <th class="ee-col-machine">Máquina</th>
+                            @foreach (var turno in Model.Turnos.OrderBy(t => t.Orden))
+                            {
+                                <th class="ee-turn-head"
+                                    style="--turn-color: @turno.Color;">
+                                    <span class="ee-turn-name">@turno.Nombre</span>
+                                    <span class="ee-turn-time">
+                                        @turno.HorarioTexto
+                                        @if (turno.CruzaDiaSiguiente)
+                                        {
+                                            <text> · día siguiente</text>
+                                        }
+                                    </span>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var grupo in Model.Grupos)
+                        {
+                            if (!string.Equals(
+                                departamentoActual,
+                                grupo.NombreDepartamento,
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                departamentoActual = grupo.NombreDepartamento;
+                                <tr class="ee-department-row"
+                                    data-search-row="@grupo.NombreDepartamento">
+                                    <td colspan="@totalColumnas">
+                                        @grupo.NombreDepartamento
+                                    </td>
+                                </tr>
+                            }
+
+                            var textoGrupo = string.Join(
+                                " ",
+                                grupo.NombreDepartamento,
+                                grupo.NombreFuncion,
+                                grupo.NombreMaquina,
+                                string.Join(
+                                    " ",
+                                    grupo.Celdas
+                                        .SelectMany(c => c.Asignaciones)
+                                        .Select(a => $"{a.NumeroEmpleado} {a.NombrePersona}")));
+
+                            <tr class="ee-assignment-row"
+                                data-search-row="@textoGrupo">
+                                <td class="ee-col-role">
+                                    <span class="ee-role-name">@grupo.NombreFuncion</span>
+                                    <span class="ee-role-meta">
+                                        @grupo.Celdas.Sum(c => c.Asignaciones.Count)
+                                        asignación(es)
+                                    </span>
+                                </td>
+                                <td class="ee-col-machine">
+                                    @if (string.IsNullOrWhiteSpace(grupo.NombreMaquina))
+                                    {
+                                        <span class="ee-role-meta">No aplica</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="ee-role-name">@grupo.NombreMaquina</span>
+                                    }
+                                </td>
+
+                                @foreach (var celda in grupo.Celdas)
+                                {
+                                    <td class="ee-cell"
+                                        style="--turn-color: @celda.Color;">
+                                        <div class="ee-person-list">
+                                            @foreach (var asignacion in celda.Asignaciones)
+                                            {
+                                                <article class="ee-person">
+                                                    <div class="ee-person-main">
+                                                        <div>
+                                                            <p class="ee-person-name">
+                                                                @asignacion.NombrePersona
+                                                            </p>
+                                                            <span class="ee-person-number">
+                                                                ID @asignacion.NumeroEmpleado
+                                                            </span>
+                                                        </div>
+
+                                                        @if (Model.PuedeEditar)
+                                                        {
+                                                            <div class="ee-person-actions">
+                                                                <button type="button"
+                                                                        class="ee-icon-btn"
+                                                                        title="Editar asignación"
+                                                                        data-edit-assignment
+                                                                        data-assignment-id="@asignacion.AsignacionID"
+                                                                        data-person-id="@asignacion.PersonalID"
+                                                                        data-function-id="@asignacion.FuncionID"
+                                                                        data-machine-id="@asignacion.MaquinaID"
+                                                                        data-turn-id="@asignacion.EscalaTurnoID"
+                                                                        data-start="@asignacion.FechaInicio.ToString("yyyy-MM-dd")"
+                                                                        data-end="@asignacion.FechaFin.ToString("yyyy-MM-dd")"
+                                                                        data-observations="@asignacion.Observaciones">
+                                                                    Editar
+                                                                </button>
+                                                                <form asp-action="EliminarAsignacion"
+                                                                      method="post"
+                                                                      onsubmit="return confirm('¿Eliminar esta asignación de la escala?');">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <input type="hidden"
+                                                                           name="asignacionID"
+                                                                           value="@asignacion.AsignacionID" />
+                                                                    <input type="hidden"
+                                                                           name="escalaID"
+                                                                           value="@Model.Escala.EscalaID" />
+                                                                    <button type="submit"
+                                                                            class="ee-icon-btn ee-icon-btn-danger"
+                                                                            title="Eliminar asignación">
+                                                                        Quitar
+                                                                    </button>
+                                                                </form>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                    <div class="ee-person-dates">
+                                                        @if (asignacion.FechaInicio.Date == Model.Escala.FechaInicio.Date
+                                                            && asignacion.FechaFin.Date == Model.Escala.FechaFin.Date)
+                                                        {
+                                                            <text>Toda la semana</text>
+                                                        }
+                                                        else
+                                                        {
+                                                            <text>
+                                                                @asignacion.FechaInicio.ToString("dd/MM")
+                                                                –
+                                                                @asignacion.FechaFin.ToString("dd/MM")
+                                                            </text>
+                                                        }
+                                                    </div>
+                                                </article>
+                                            }
+                                        </div>
+
+                                        @if (Model.PuedeEditar)
+                                        {
+                                            <button type="button"
+                                                    class="ee-cell-add"
+                                                    data-open-assignment
+                                                    data-function-id="@grupo.FuncionID"
+                                                    data-machine-id="@grupo.MaquinaID"
+                                                    data-turn-id="@celda.EscalaTurnoID">
+                                                + Agregar en este horario
+                                            </button>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="ee-footer-total">
+                            <th colspan="2">Total por horario</th>
+                            @foreach (var turno in Model.Turnos.OrderBy(t => t.Orden))
+                            {
+                                var totalTurno = Model.Grupos
+                                    .SelectMany(g => g.Celdas)
+                                    .Where(c => c.EscalaTurnoID == turno.EscalaTurnoID)
+                                    .Sum(c => c.Asignaciones.Count);
+
+                                <td>@totalTurno</td>
+                            }
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="ee-novedades">
+        <div class="ee-novedades-head">
+            <div>
+                <h2 class="ee-board-title">Novedades de la semana</h2>
+                <p class="ee-board-help">
+                    Ingresos, bajas, incapacidades y vacaciones registradas.
+                </p>
+            </div>
+            <a asp-action="Novedades"
+               asp-route-id="@Model.Escala.EscalaID"
+               class="ee-btn ee-btn-light ee-btn-sm">
+                Administrar novedades
+            </a>
+        </div>
+
+        @if (Model.Novedades.Count == 0)
+        {
+            <div class="ee-empty" style="padding: 1.4rem 1rem;">
+                <p class="ee-empty-text" style="margin-bottom: 0;">
+                    No hay novedades registradas para esta semana.
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="ee-novedades-grid">
+                @foreach (var novedad in Model.Novedades.Take(8))
+                {
+                    <article class="ee-novedad">
+                        <span class="ee-novedad-type">@novedad.TipoNovedad</span>
+                        <span class="ee-novedad-name">@novedad.NombrePersona</span>
+                        <span class="ee-novedad-date">
+                            @novedad.FechaInicio.ToString("dd/MM/yyyy")
+                            @if (novedad.FechaFin.HasValue
+                                && novedad.FechaFin.Value.Date != novedad.FechaInicio.Date)
+                            {
+                                <text> – @novedad.FechaFin.Value.ToString("dd/MM/yyyy")</text>
+                            }
+                        </span>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    @if (Model.PuedeEditar)
+    {
+        <div class="ee-modal"
+             id="assignmentModal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="assignmentModalTitle">
+            <div class="ee-modal-dialog">
+                <form asp-action="GuardarAsignacion"
+                      method="post"
+                      id="assignmentForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden"
+                           name="EscalaID"
+                           value="@Model.Escala.EscalaID" />
+                    <input type="hidden"
+                           name="AsignacionID"
+                           id="assignmentId" />
+
+                    <div class="ee-modal-head">
+                        <div>
+                            <h2 class="ee-modal-title" id="assignmentModalTitle">
+                                Agregar persona a la escala
+                            </h2>
+                            <p class="ee-modal-subtitle">
+                                Completa la asignación de trabajo para esta semana.
+                            </p>
+                        </div>
+                        <button type="button"
+                                class="ee-modal-close"
+                                data-close-modal
+                                aria-label="Cerrar">
+                            ×
+                        </button>
+                    </div>
+
+                    <div class="ee-modal-body">
+                        <div class="ee-form-grid">
+                            <div class="ee-col-12">
+                                <label for="personSearch" class="ee-label">
+                                    Buscar persona
+                                </label>
+                                <input type="search"
+                                       id="personSearch"
+                                       class="ee-control ee-person-search"
+                                       placeholder="Escribe el nombre o número..."
+                                       autocomplete="off" />
+
+                                <label for="personalId"
+                                       class="ee-label ee-label-required">
+                                    Persona
+                                </label>
+                                <select name="PersonalID"
+                                        id="personalId"
+                                        class="ee-control"
+                                        required>
+                                    <option value="">Selecciona una persona</option>
+                                    @foreach (var persona in Model.Personas)
+                                    {
+                                        <option value="@persona.PersonalID"
+                                                data-search="@($"{persona.NumeroEmpleado} {persona.NombreCompleto} {persona.Puesto}".ToLowerInvariant())">
+                                            @persona.Texto
+                                            @if (!string.IsNullOrWhiteSpace(persona.Puesto))
+                                            {
+                                                <text> · @persona.Puesto</text>
+                                            }
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="ee-col-6">
+                                <label for="functionId"
+                                       class="ee-label ee-label-required">
+                                    Función o rol
+                                </label>
+                                <select name="FuncionID"
+                                        id="functionId"
+                                        class="ee-control"
+                                        required>
+                                    <option value="">Selecciona una función</option>
+                                    @foreach (var funcion in Model.Funciones.OrderBy(f => f.Orden))
+                                    {
+                                        <option value="@funcion.FuncionID"
+                                                data-requires-machine="@funcion.RequiereMaquina.ToString().ToLowerInvariant()">
+                                            @funcion.Nombre
+                                        </option>
+                                    }
+                                </select>
+                                <p class="ee-field-help">
+                                    Se muestran todas las funciones activas disponibles.
+                                </p>
+                            </div>
+
+                            <div class="ee-col-6">
+                                <label for="machineId" class="ee-label">
+                                    Máquina
+                                </label>
+                                <select name="MaquinaID"
+                                        id="machineId"
+                                        class="ee-control">
+                                    <option value="">No aplica</option>
+                                    @foreach (var maquina in Model.Maquinas)
+                                    {
+                                        <option value="@maquina.MaquinaID"
+                                                data-area="@maquina.Area">
+                                            @maquina.Texto
+                                        </option>
+                                    }
+                                </select>
+                                <p class="ee-machine-required" id="machineRequired">
+                                    La función seleccionada requiere una máquina.
+                                </p>
+                            </div>
+
+                            <div class="ee-col-6">
+                                <label for="turnId"
+                                       class="ee-label ee-label-required">
+                                    Horario
+                                </label>
+                                <select name="EscalaTurnoID"
+                                        id="turnId"
+                                        class="ee-control"
+                                        required>
+                                    <option value="">Selecciona un horario</option>
+                                    @foreach (var turno in Model.Turnos.OrderBy(t => t.Orden))
+                                    {
+                                        <option value="@turno.EscalaTurnoID">
+                                            @turno.Nombre · @turno.HorarioTexto
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="ee-col-6">
+                                <label for="startDate"
+                                       class="ee-label ee-label-required">
+                                    Desde
+                                </label>
+                                <input type="date"
+                                       name="FechaInicio"
+                                       id="startDate"
+                                       class="ee-control"
+                                       min="@Model.Escala.FechaInicio.ToString("yyyy-MM-dd")"
+                                       max="@Model.Escala.FechaFin.ToString("yyyy-MM-dd")"
+                                       value="@Model.Escala.FechaInicio.ToString("yyyy-MM-dd")"
+                                       required />
+                            </div>
+
+                            <div class="ee-col-6">
+                                <label for="endDate"
+                                       class="ee-label ee-label-required">
+                                    Hasta
+                                </label>
+                                <input type="date"
+                                       name="FechaFin"
+                                       id="endDate"
+                                       class="ee-control"
+                                       min="@Model.Escala.FechaInicio.ToString("yyyy-MM-dd")"
+                                       max="@Model.Escala.FechaFin.ToString("yyyy-MM-dd")"
+                                       value="@Model.Escala.FechaFin.ToString("yyyy-MM-dd")"
+                                       required />
+                            </div>
+
+                            <div class="ee-col-12">
+                                <label for="assignmentObservations"
+                                       class="ee-label">
+                                    Observaciones
+                                </label>
+                                <textarea name="Observaciones"
+                                          id="assignmentObservations"
+                                          class="ee-control"
+                                          maxlength="500"
+                                          placeholder="Información adicional de la asignación..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ee-modal-footer">
+                        <button type="button"
+                                class="ee-btn ee-btn-light"
+                                data-close-modal>
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                class="ee-btn ee-btn-primary"
+                                id="saveAssignmentButton">
+                            Guardar asignación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+
+    @if (Model.PuedePublicar)
+    {
+        <div class="ee-modal"
+             id="publishModal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="publishModalTitle">
+            <div class="ee-modal-dialog ee-modal-sm">
+                <form asp-action="Publicar" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden"
+                           name="escalaID"
+                           value="@Model.Escala.EscalaID" />
+                    <div class="ee-modal-head">
+                        <div>
+                            <h2 class="ee-modal-title" id="publishModalTitle">
+                                Publicar escala
+                            </h2>
+                            <p class="ee-modal-subtitle">
+                                Después de publicar, la programación quedará bloqueada para edición.
+                            </p>
+                        </div>
+                        <button type="button"
+                                class="ee-modal-close"
+                                data-close-modal
+                                aria-label="Cerrar">
+                            ×
+                        </button>
+                    </div>
+                    <div class="ee-modal-body">
+                        <label for="publishComment" class="ee-label">
+                            Comentario
+                        </label>
+                        <textarea id="publishComment"
+                                  name="comentario"
+                                  class="ee-control"
+                                  maxlength="500"
+                                  placeholder="Comentario opcional de publicación..."></textarea>
+                    </div>
+                    <div class="ee-modal-footer">
+                        <button type="button"
+                                class="ee-btn ee-btn-light"
+                                data-close-modal>
+                            Volver
+                        </button>
+                        <button type="submit" class="ee-btn ee-btn-dark">
+                            Confirmar publicación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+
+    @if (Model.Escala.Estado == EscalaVM.Estados.Borrador)
+    {
+        <div class="ee-modal"
+             id="cancelModal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="cancelModalTitle">
+            <div class="ee-modal-dialog ee-modal-sm">
+                <form asp-action="Cancelar" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden"
+                           name="escalaID"
+                           value="@Model.Escala.EscalaID" />
+                    <div class="ee-modal-head">
+                        <div>
+                            <h2 class="ee-modal-title" id="cancelModalTitle">
+                                Cancelar escala
+                            </h2>
+                            <p class="ee-modal-subtitle">
+                                La escala se conservará en el historial con estado Cancelada.
+                            </p>
+                        </div>
+                        <button type="button"
+                                class="ee-modal-close"
+                                data-close-modal
+                                aria-label="Cerrar">
+                            ×
+                        </button>
+                    </div>
+                    <div class="ee-modal-body">
+                        <label for="cancelComment" class="ee-label">
+                            Motivo o comentario
+                        </label>
+                        <textarea id="cancelComment"
+                                  name="comentario"
+                                  class="ee-control"
+                                  maxlength="500"
+                                  placeholder="Indica el motivo de la cancelación..."></textarea>
+                    </div>
+                    <div class="ee-modal-footer">
+                        <button type="button"
+                                class="ee-btn ee-btn-light"
+                                data-close-modal>
+                            Volver
+                        </button>
+                        <button type="submit" class="ee-btn ee-btn-danger">
+                            Confirmar cancelación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+
+    @if (Model.Escala.Estado == EscalaVM.Estados.Publicada)
+    {
+        <div class="ee-modal"
+             id="draftModal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="draftModalTitle">
+            <div class="ee-modal-dialog ee-modal-sm">
+                <form asp-action="RegresarABorrador" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden"
+                           name="escalaID"
+                           value="@Model.Escala.EscalaID" />
+                    <div class="ee-modal-head">
+                        <div>
+                            <h2 class="ee-modal-title" id="draftModalTitle">
+                                Regresar a borrador
+                            </h2>
+                            <p class="ee-modal-subtitle">
+                                La programación volverá a estar disponible para edición.
+                            </p>
+                        </div>
+                        <button type="button"
+                                class="ee-modal-close"
+                                data-close-modal
+                                aria-label="Cerrar">
+                            ×
+                        </button>
+                    </div>
+                    <div class="ee-modal-body">
+                        <label for="draftComment" class="ee-label">
+                            Motivo del cambio
+                        </label>
+                        <textarea id="draftComment"
+                                  name="comentario"
+                                  class="ee-control"
+                                  maxlength="500"
+                                  placeholder="Describe el ajuste que se realizará..."></textarea>
+                    </div>
+                    <div class="ee-modal-footer">
+                        <button type="button"
+                                class="ee-btn ee-btn-light"
+                                data-close-modal>
+                            Volver
+                        </button>
+                        <button type="submit" class="ee-btn ee-btn-dark">
+                            Regresar a borrador
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const editor = document.querySelector('.escala-editor');
+        if (!editor) {
+            return;
+        }
+
+        const assignmentModal = document.getElementById('assignmentModal');
+        const assignmentForm = document.getElementById('assignmentForm');
+        const assignmentId = document.getElementById('assignmentId');
+        const modalTitle = document.getElementById('assignmentModalTitle');
+        const saveButton = document.getElementById('saveAssignmentButton');
+        const personalSelect = document.getElementById('personalId');
+        const personSearch = document.getElementById('personSearch');
+        const functionSelect = document.getElementById('functionId');
+        const machineSelect = document.getElementById('machineId');
+        const machineRequired = document.getElementById('machineRequired');
+        const turnSelect = document.getElementById('turnId');
+        const startDate = document.getElementById('startDate');
+        const endDate = document.getElementById('endDate');
+        const observations = document.getElementById('assignmentObservations');
+        const boardSearch = document.getElementById('boardSearch');
+        const scaleStart = '@Model.Escala.FechaInicio.ToString("yyyy-MM-dd")';
+        const scaleEnd = '@Model.Escala.FechaFin.ToString("yyyy-MM-dd")';
+
+        function openModal(modal) {
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.add('is-open');
+            document.body.classList.add('ee-no-scroll');
+        }
+
+        function closeModal(modal) {
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove('is-open');
+            if (!document.querySelector('.ee-modal.is-open')) {
+                document.body.classList.remove('ee-no-scroll');
+            }
+        }
+
+        function setSelectValue(select, value) {
+            if (!select) {
+                return;
+            }
+
+            select.value = value || '';
+        }
+
+        function setFunctionValue(selectedValue) {
+            if (!functionSelect) {
+                return;
+            }
+
+            Array.from(functionSelect.options).forEach(function (option) {
+                option.hidden = false;
+                option.disabled = false;
+            });
+
+            functionSelect.value = selectedValue
+                ? String(selectedValue)
+                : '';
+
+            updateMachineRequirement();
+        }
+
+        function updateMachineRequirement() {
+            if (!functionSelect || !machineSelect || !machineRequired) {
+                return;
+            }
+
+            const selectedOption =
+                functionSelect.options[functionSelect.selectedIndex];
+            const requiresMachine = selectedOption
+                && selectedOption.dataset.requiresMachine === 'true';
+
+            machineSelect.required = Boolean(requiresMachine);
+            machineRequired.style.display =
+                requiresMachine ? 'block' : 'none';
+        }
+
+        function resetAssignmentForm() {
+            if (!assignmentForm) {
+                return;
+            }
+
+            assignmentForm.reset();
+            assignmentId.value = '';
+            startDate.value = scaleStart;
+            endDate.value = scaleEnd;
+            modalTitle.textContent = 'Agregar persona a la escala';
+            saveButton.textContent = 'Guardar asignación';
+            personSearch.value = '';
+
+            if (personalSelect) {
+                Array.from(personalSelect.options).forEach(function (option) {
+                    option.hidden = false;
+                });
+            }
+
+            setFunctionValue('');
+        }
+
+        function openNewAssignment(button) {
+            if (!assignmentModal) {
+                return;
+            }
+
+            resetAssignmentForm();
+
+            const functionId = button.dataset.functionId || '';
+            const machineId = button.dataset.machineId || '';
+            const turnId = button.dataset.turnId || '';
+
+            setFunctionValue(functionId);
+            setSelectValue(machineSelect, machineId);
+            setSelectValue(turnSelect, turnId);
+            updateMachineRequirement();
+
+            openModal(assignmentModal);
+            window.setTimeout(function () {
+                personSearch?.focus();
+            }, 50);
+        }
+
+        function openEditAssignment(button) {
+            if (!assignmentModal) {
+                return;
+            }
+
+            resetAssignmentForm();
+
+            assignmentId.value = button.dataset.assignmentId || '';
+            setSelectValue(personalSelect, button.dataset.personId);
+            setFunctionValue(button.dataset.functionId);
+            setSelectValue(machineSelect, button.dataset.machineId);
+            setSelectValue(turnSelect, button.dataset.turnId);
+            startDate.value = button.dataset.start || scaleStart;
+            endDate.value = button.dataset.end || scaleEnd;
+            observations.value = button.dataset.observations || '';
+
+            modalTitle.textContent = 'Editar asignación';
+            saveButton.textContent = 'Guardar cambios';
+            updateMachineRequirement();
+            openModal(assignmentModal);
+        }
+
+        editor.querySelectorAll('[data-open-assignment]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                openNewAssignment(button);
+            });
+        });
+
+        editor.querySelectorAll('[data-edit-assignment]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                openEditAssignment(button);
+            });
+        });
+
+        editor.querySelectorAll('[data-open-state]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                openModal(document.getElementById(button.dataset.openState));
+            });
+        });
+
+        editor.querySelectorAll('[data-close-modal]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                closeModal(button.closest('.ee-modal'));
+            });
+        });
+
+        editor.querySelectorAll('.ee-modal').forEach(function (modal) {
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    closeModal(modal);
+                }
+            });
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                const open = document.querySelector('.ee-modal.is-open');
+                closeModal(open);
+            }
+        });
+
+        functionSelect?.addEventListener('change', updateMachineRequirement);
+
+        personSearch?.addEventListener('input', function () {
+            if (!personalSelect) {
+                return;
+            }
+
+            const term = personSearch.value.trim().toLowerCase();
+            Array.from(personalSelect.options).forEach(function (option) {
+                if (!option.value) {
+                    option.hidden = false;
+                    return;
+                }
+
+                option.hidden = term.length > 0
+                    && !(option.dataset.search || '').includes(term);
+            });
+        });
+
+        startDate?.addEventListener('change', function () {
+            if (endDate && endDate.value < startDate.value) {
+                endDate.value = startDate.value;
+            }
+            if (endDate) {
+                endDate.min = startDate.value || scaleStart;
+            }
+        });
+
+        assignmentForm?.addEventListener('submit', function (event) {
+            if (startDate.value > endDate.value) {
+                event.preventDefault();
+                window.alert(
+                    'La fecha final no puede ser anterior a la fecha inicial.');
+                endDate.focus();
+            }
+        });
+
+        boardSearch?.addEventListener('input', function () {
+            const term = boardSearch.value.trim().toLowerCase();
+            const rows = Array.from(
+                document.querySelectorAll('.ee-assignment-row'));
+
+            rows.forEach(function (row) {
+                const text = (row.dataset.searchRow || '').toLowerCase();
+                row.style.display = !term || text.includes(term)
+                    ? ''
+                    : 'none';
+            });
+
+            const departmentRows = Array.from(
+                document.querySelectorAll('.ee-department-row'));
+
+            departmentRows.forEach(function (departmentRow) {
+                let next = departmentRow.nextElementSibling;
+                let hasVisibleRow = false;
+
+                while (next
+                    && !next.classList.contains('ee-department-row')) {
+                    if (next.classList.contains('ee-assignment-row')
+                        && next.style.display !== 'none') {
+                        hasVisibleRow = true;
+                    }
+                    next = next.nextElementSibling;
+                }
+
+                departmentRow.style.display = hasVisibleRow ? '' : 'none';
+            });
+        });
+    });
+</script>

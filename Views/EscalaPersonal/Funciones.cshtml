@@ -1,0 +1,1282 @@
+﻿@using EscalaVM = ERP.NSQuell.Models.EscalaPersonal
+@model EscalaVM.CatalogoFuncionesVM
+
+@{
+    ViewData["Title"] = "Catálogo de funciones";
+    Layout = "_Layout";
+
+    var totalFunciones = Model.Funciones.Count;
+    var funcionesActivas = Model.Funciones.Count(x => x.Activo);
+    var funcionesConMaquina = Model.Funciones.Count(x => x.RequiereMaquina);
+    var funcionesGenerales = Model.Funciones.Count(x => !x.DepartamentoID.HasValue);
+    var mostrarModalPorErrores = !ViewData.ModelState.IsValid;
+}
+
+<style>
+    .funciones-page {
+        --cf-primary: #17324d;
+        --cf-primary-soft: #edf3f8;
+        --cf-accent: #e87524;
+        --cf-accent-dark: #c95d13;
+        --cf-text: #243447;
+        --cf-muted: #6c7b8c;
+        --cf-border: #dce4eb;
+        --cf-surface: #ffffff;
+        --cf-success: #238657;
+        --cf-danger: #bd3b3b;
+        color: var(--cf-text);
+        padding: 1.5rem 0 2.5rem;
+    }
+
+        .funciones-page *,
+        .funciones-page *::before,
+        .funciones-page *::after {
+            box-sizing: border-box;
+        }
+
+        .funciones-page .cf-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+        }
+
+        .funciones-page .cf-eyebrow {
+            color: var(--cf-accent);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin-bottom: .25rem;
+            text-transform: uppercase;
+        }
+
+        .funciones-page .cf-title {
+            color: var(--cf-primary);
+            font-size: clamp(1.55rem, 2.5vw, 2.1rem);
+            font-weight: 780;
+            letter-spacing: -.025em;
+            margin: 0;
+        }
+
+        .funciones-page .cf-subtitle {
+            color: var(--cf-muted);
+            font-size: .93rem;
+            margin: .35rem 0 0;
+            max-width: 760px;
+        }
+
+        .funciones-page .cf-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .55rem;
+            justify-content: flex-end;
+        }
+
+        .funciones-page .cf-btn {
+            align-items: center;
+            border: 1px solid transparent;
+            border-radius: .65rem;
+            cursor: pointer;
+            display: inline-flex;
+            font: inherit;
+            font-size: .86rem;
+            font-weight: 750;
+            gap: .45rem;
+            justify-content: center;
+            min-height: 42px;
+            padding: .58rem .9rem;
+            text-decoration: none;
+            transition: .18s ease;
+        }
+
+            .funciones-page .cf-btn:hover {
+                transform: translateY(-1px);
+            }
+
+        .funciones-page .cf-btn-primary {
+            background: var(--cf-accent);
+            border-color: var(--cf-accent);
+            color: #fff;
+        }
+
+            .funciones-page .cf-btn-primary:hover {
+                background: var(--cf-accent-dark);
+                border-color: var(--cf-accent-dark);
+                color: #fff;
+            }
+
+        .funciones-page .cf-btn-secondary {
+            background: var(--cf-surface);
+            border-color: var(--cf-border);
+            color: var(--cf-primary);
+        }
+
+            .funciones-page .cf-btn-secondary:hover {
+                background: var(--cf-primary-soft);
+                color: var(--cf-primary);
+            }
+
+        .funciones-page .cf-mark {
+            align-items: center;
+            border: 1px solid currentColor;
+            border-radius: .35rem;
+            display: inline-flex;
+            font-size: .64rem;
+            font-weight: 850;
+            height: 22px;
+            justify-content: center;
+            letter-spacing: .04em;
+            width: 24px;
+        }
+
+        .funciones-page .cf-alert {
+            border: 0;
+            border-left: 4px solid;
+            border-radius: .65rem;
+            box-shadow: 0 5px 18px rgba(23, 50, 77, .07);
+            margin-bottom: 1rem;
+            padding: .8rem 1rem;
+        }
+
+        .funciones-page .cf-alert-success {
+            background: #edf8f2;
+            border-left-color: var(--cf-success);
+            color: #17613e;
+        }
+
+        .funciones-page .cf-alert-error {
+            background: #fff0f0;
+            border-left-color: var(--cf-danger);
+            color: #8b2929;
+        }
+
+        .funciones-page .cf-note {
+            align-items: flex-start;
+            background: #fff8f2;
+            border: 1px solid #f3d5be;
+            border-radius: .75rem;
+            color: #74431f;
+            display: flex;
+            font-size: .8rem;
+            gap: .65rem;
+            margin-bottom: 1rem;
+            padding: .75rem .9rem;
+        }
+
+        .funciones-page .cf-note-mark {
+            align-items: center;
+            background: #fff;
+            border: 1px solid #efc7a8;
+            border-radius: .4rem;
+            display: flex;
+            flex: 0 0 auto;
+            font-size: .65rem;
+            font-weight: 850;
+            height: 25px;
+            justify-content: center;
+            width: 27px;
+        }
+
+        .funciones-page .cf-stats {
+            display: grid;
+            gap: .8rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin-bottom: 1rem;
+        }
+
+        .funciones-page .cf-stat {
+            align-items: center;
+            background: var(--cf-surface);
+            border: 1px solid var(--cf-border);
+            border-radius: .8rem;
+            display: flex;
+            gap: .75rem;
+            min-height: 84px;
+            padding: .85rem .9rem;
+        }
+
+        .funciones-page .cf-stat-mark {
+            align-items: center;
+            background: var(--cf-primary-soft);
+            border-radius: .6rem;
+            color: var(--cf-primary);
+            display: flex;
+            flex: 0 0 auto;
+            font-size: .7rem;
+            font-weight: 850;
+            height: 42px;
+            justify-content: center;
+            letter-spacing: .04em;
+            width: 42px;
+        }
+
+        .funciones-page .cf-stat:nth-child(2) .cf-stat-mark {
+            background: #edf8f2;
+            color: var(--cf-success);
+        }
+
+        .funciones-page .cf-stat:nth-child(3) .cf-stat-mark {
+            background: #fff3e9;
+            color: var(--cf-accent-dark);
+        }
+
+        .funciones-page .cf-stat:nth-child(4) .cf-stat-mark {
+            background: #f1eefb;
+            color: #6951a3;
+        }
+
+        .funciones-page .cf-stat-value {
+            color: var(--cf-primary);
+            display: block;
+            font-size: 1.25rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .funciones-page .cf-stat-label {
+            color: var(--cf-muted);
+            display: block;
+            font-size: .73rem;
+            margin-top: .28rem;
+        }
+
+        .funciones-page .cf-panel {
+            background: var(--cf-surface);
+            border: 1px solid var(--cf-border);
+            border-radius: .9rem;
+            box-shadow: 0 8px 24px rgba(23, 50, 77, .055);
+            overflow: hidden;
+        }
+
+        .funciones-page .cf-toolbar {
+            align-items: center;
+            border-bottom: 1px solid var(--cf-border);
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: minmax(230px, 1fr) 215px 180px 170px;
+            padding: .9rem;
+        }
+
+        .funciones-page .cf-control {
+            background: var(--cf-surface);
+            border: 1px solid var(--cf-border);
+            border-radius: .6rem;
+            color: var(--cf-text);
+            font: inherit;
+            font-size: .87rem;
+            min-height: 42px;
+            outline: none;
+            padding: .58rem .72rem;
+            width: 100%;
+        }
+
+        .funciones-page textarea.cf-control {
+            min-height: 96px;
+            resize: vertical;
+        }
+
+        .funciones-page .cf-control:focus {
+            border-color: var(--cf-accent);
+            box-shadow: 0 0 0 3px rgba(232, 117, 36, .13);
+        }
+
+        .funciones-page .cf-table-wrap {
+            overflow-x: auto;
+        }
+
+        .funciones-page .cf-table {
+            border-collapse: collapse;
+            min-width: 980px;
+            width: 100%;
+        }
+
+            .funciones-page .cf-table th,
+            .funciones-page .cf-table td {
+                border-bottom: 1px solid var(--cf-border);
+                padding: .85rem .9rem;
+                text-align: left;
+                vertical-align: middle;
+            }
+
+            .funciones-page .cf-table th {
+                background: #f8fafc;
+                color: var(--cf-muted);
+                font-size: .7rem;
+                font-weight: 800;
+                letter-spacing: .065em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+
+            .funciones-page .cf-table tbody tr {
+                transition: background .16s ease;
+            }
+
+                .funciones-page .cf-table tbody tr:hover {
+                    background: #fbfcfd;
+                }
+
+                .funciones-page .cf-table tbody tr:last-child td {
+                    border-bottom: 0;
+                }
+
+        .funciones-page .cf-name-wrap {
+            align-items: center;
+            display: flex;
+            gap: .7rem;
+            min-width: 210px;
+        }
+
+        .funciones-page .cf-avatar {
+            align-items: center;
+            background: var(--cf-primary);
+            border-radius: .55rem;
+            color: #fff;
+            display: flex;
+            flex: 0 0 auto;
+            font-size: .7rem;
+            font-weight: 850;
+            height: 37px;
+            justify-content: center;
+            letter-spacing: .04em;
+            width: 37px;
+        }
+
+        .funciones-page .cf-name {
+            color: var(--cf-primary);
+            display: block;
+            font-size: .9rem;
+            font-weight: 780;
+        }
+
+        .funciones-page .cf-id {
+            color: var(--cf-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .15rem;
+        }
+
+        .funciones-page .cf-description {
+            color: var(--cf-muted);
+            display: block;
+            font-size: .78rem;
+            line-height: 1.35;
+            max-width: 330px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .funciones-page .cf-badge {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .7rem;
+            font-weight: 780;
+            padding: .3rem .55rem;
+            white-space: nowrap;
+        }
+
+        .funciones-page .cf-badge-scope {
+            background: var(--cf-primary-soft);
+            color: var(--cf-primary);
+        }
+
+        .funciones-page .cf-badge-machine {
+            background: #fff3e9;
+            color: var(--cf-accent-dark);
+        }
+
+        .funciones-page .cf-badge-free {
+            background: #f1f3f5;
+            color: #5f6c78;
+        }
+
+        .funciones-page .cf-badge-active {
+            background: #e9f7ef;
+            color: #17613e;
+        }
+
+        .funciones-page .cf-badge-inactive {
+            background: #f0f2f4;
+            color: #65717f;
+        }
+
+        .funciones-page .cf-row-actions {
+            align-items: center;
+            display: flex;
+            gap: .4rem;
+            justify-content: flex-end;
+            white-space: nowrap;
+        }
+
+        .funciones-page .cf-state-form {
+            display: inline-flex;
+            margin: 0;
+        }
+
+        .funciones-page .cf-link-btn {
+            background: transparent;
+            border: 0;
+            color: var(--cf-primary);
+            cursor: pointer;
+            font: inherit;
+            font-size: .76rem;
+            font-weight: 780;
+            padding: .35rem;
+        }
+
+            .funciones-page .cf-link-btn:hover {
+                color: var(--cf-accent-dark);
+            }
+
+        .funciones-page .cf-link-danger {
+            color: var(--cf-danger);
+        }
+
+        .funciones-page .cf-empty {
+            padding: 3.5rem 1rem;
+            text-align: center;
+        }
+
+        .funciones-page .cf-empty-mark {
+            align-items: center;
+            background: var(--cf-primary-soft);
+            border-radius: 50%;
+            color: var(--cf-primary);
+            display: flex;
+            font-size: .75rem;
+            font-weight: 850;
+            height: 54px;
+            justify-content: center;
+            margin: 0 auto .85rem;
+            width: 54px;
+        }
+
+        .funciones-page .cf-empty-title {
+            color: var(--cf-primary);
+            font-size: 1rem;
+            font-weight: 780;
+            margin: 0;
+        }
+
+        .funciones-page .cf-empty-text {
+            color: var(--cf-muted);
+            font-size: .84rem;
+            margin: .35rem 0 0;
+        }
+
+        .funciones-page .cf-modal[hidden] {
+            display: none;
+        }
+
+        .funciones-page .cf-modal {
+            align-items: center;
+            background: rgba(10, 24, 38, .62);
+            display: flex;
+            inset: 0;
+            justify-content: center;
+            padding: 1rem;
+            position: fixed;
+            z-index: 1080;
+        }
+
+        .funciones-page .cf-modal-dialog {
+            background: var(--cf-surface);
+            border: 1px solid var(--cf-border);
+            border-radius: .9rem;
+            box-shadow: 0 24px 60px rgba(6, 19, 31, .3);
+            max-height: calc(100vh - 2rem);
+            max-width: 720px;
+            overflow: auto;
+            width: 100%;
+        }
+
+        .funciones-page .cf-modal-header {
+            align-items: flex-start;
+            border-bottom: 1px solid var(--cf-border);
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: 1rem 1.1rem;
+        }
+
+        .funciones-page .cf-modal-title {
+            color: var(--cf-primary);
+            font-size: 1.08rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .funciones-page .cf-modal-subtitle {
+            color: var(--cf-muted);
+            font-size: .8rem;
+            margin: .25rem 0 0;
+        }
+
+        .funciones-page .cf-modal-close {
+            align-items: center;
+            background: transparent;
+            border: 1px solid var(--cf-border);
+            border-radius: .5rem;
+            color: var(--cf-muted);
+            cursor: pointer;
+            display: flex;
+            flex: 0 0 auto;
+            font-size: 1.1rem;
+            height: 34px;
+            justify-content: center;
+            width: 34px;
+        }
+
+        .funciones-page .cf-modal-body {
+            padding: 1rem 1.1rem;
+        }
+
+        .funciones-page .cf-modal-footer {
+            align-items: center;
+            background: #f8fafc;
+            border-top: 1px solid var(--cf-border);
+            display: flex;
+            gap: .55rem;
+            justify-content: flex-end;
+            padding: .85rem 1.1rem;
+        }
+
+        .funciones-page .cf-form-grid {
+            display: grid;
+            gap: .9rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .funciones-page .cf-field-full {
+            grid-column: 1 / -1;
+        }
+
+        .funciones-page .cf-label {
+            color: var(--cf-primary);
+            display: block;
+            font-size: .76rem;
+            font-weight: 780;
+            margin-bottom: .35rem;
+        }
+
+        .funciones-page .cf-required::after {
+            color: var(--cf-danger);
+            content: " *";
+        }
+
+        .funciones-page .cf-help {
+            color: var(--cf-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .3rem;
+        }
+
+        .funciones-page .cf-validation {
+            color: var(--cf-danger);
+            display: block;
+            font-size: .72rem;
+            margin-top: .3rem;
+        }
+
+        .funciones-page .validation-summary-valid,
+        .funciones-page .field-validation-valid {
+            display: none;
+        }
+
+        .funciones-page .cf-validation-summary {
+            background: #fff0f0;
+            border-left: 4px solid var(--cf-danger);
+            border-radius: .55rem;
+            color: #8b2929;
+            font-size: .78rem;
+            margin-bottom: .9rem;
+            padding: .7rem .85rem;
+        }
+
+            .funciones-page .cf-validation-summary ul {
+                margin: .3rem 0 0;
+                padding-left: 1.1rem;
+            }
+
+        .funciones-page .cf-check-card {
+            align-items: flex-start;
+            background: #f8fafc;
+            border: 1px solid var(--cf-border);
+            border-radius: .65rem;
+            cursor: pointer;
+            display: flex;
+            gap: .65rem;
+            padding: .75rem;
+        }
+
+            .funciones-page .cf-check-card input {
+                accent-color: var(--cf-accent);
+                height: 17px;
+                margin-top: .1rem;
+                width: 17px;
+            }
+
+        .funciones-page .cf-check-title {
+            color: var(--cf-primary);
+            display: block;
+            font-size: .8rem;
+            font-weight: 780;
+        }
+
+        .funciones-page .cf-check-text {
+            color: var(--cf-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .15rem;
+        }
+
+    body.cf-modal-open {
+        overflow: hidden;
+    }
+
+    html[data-bs-theme="dark"] .funciones-page,
+    body.dark-mode .funciones-page {
+        --cf-primary: #e3edf6;
+        --cf-primary-soft: #263b4f;
+        --cf-text: #d9e3ec;
+        --cf-muted: #9fb0bf;
+        --cf-border: #3a4d5f;
+        --cf-surface: #1e2d3a;
+    }
+
+        html[data-bs-theme="dark"] .funciones-page .cf-table th,
+        html[data-bs-theme="dark"] .funciones-page .cf-modal-footer,
+        html[data-bs-theme="dark"] .funciones-page .cf-check-card,
+        body.dark-mode .funciones-page .cf-table th,
+        body.dark-mode .funciones-page .cf-modal-footer,
+        body.dark-mode .funciones-page .cf-check-card {
+            background: #253746;
+        }
+
+        html[data-bs-theme="dark"] .funciones-page .cf-table tbody tr:hover,
+        body.dark-mode .funciones-page .cf-table tbody tr:hover {
+            background: #233442;
+        }
+
+        html[data-bs-theme="dark"] .funciones-page .cf-note,
+        body.dark-mode .funciones-page .cf-note {
+            background: #3c3027;
+            border-color: #68492f;
+            color: #f2c6a1;
+        }
+
+        html[data-bs-theme="dark"] .funciones-page .cf-note-mark,
+        body.dark-mode .funciones-page .cf-note-mark {
+            background: #2d261f;
+            border-color: #68492f;
+        }
+
+    @@media (max-width: 1050px) {
+        .funciones-page .cf-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .funciones-page .cf-toolbar {
+            grid-template-columns: 1fr 1fr;
+        }
+
+            .funciones-page .cf-toolbar .cf-search {
+                grid-column: 1 / -1;
+            }
+    }
+
+    @@media (max-width: 680px) {
+        .funciones-page {
+            padding-top: 1rem;
+        }
+
+            .funciones-page .cf-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .funciones-page .cf-actions {
+                justify-content: stretch;
+            }
+
+                .funciones-page .cf-actions .cf-btn {
+                    flex: 1 1 0;
+                }
+
+            .funciones-page .cf-stats,
+            .funciones-page .cf-toolbar,
+            .funciones-page .cf-form-grid {
+                grid-template-columns: 1fr;
+            }
+
+                .funciones-page .cf-toolbar .cf-search {
+                    grid-column: auto;
+                }
+
+            .funciones-page .cf-stat {
+                min-height: 72px;
+            }
+
+            .funciones-page .cf-modal {
+                align-items: flex-end;
+                padding: 0;
+            }
+
+            .funciones-page .cf-modal-dialog {
+                border-bottom-left-radius: 0;
+                border-bottom-right-radius: 0;
+                max-height: 94vh;
+            }
+    }
+</style>
+
+<div class="funciones-page">
+    <header class="cf-header">
+        <div>
+            <div class="cf-eyebrow">Escala de personal · Configuración</div>
+            <h1 class="cf-title">Catálogo de funciones</h1>
+            <p class="cf-subtitle">
+                Define las funciones o roles que podrán asignarse al personal en cada escala.
+            </p>
+        </div>
+
+        <div class="cf-actions">
+            <a asp-action="Index" class="cf-btn cf-btn-secondary">
+                <span class="cf-mark">←</span>
+                Volver
+            </a>
+            <button type="button"
+                    class="cf-btn cf-btn-primary"
+                    data-new-function>
+                <span class="cf-mark">+</span>
+                Nueva función
+            </button>
+        </div>
+    </header>
+
+    @if (TempData["Exito"] != null)
+    {
+        <div class="cf-alert cf-alert-success" role="status">
+            @TempData["Exito"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="cf-alert cf-alert-error" role="alert">
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="cf-note">
+        <span class="cf-note-mark">i</span>
+        <span>
+            El departamento es opcional y solo define el alcance de la función.
+            Una persona puede asignarse a la escala aunque no tenga departamento registrado.
+        </span>
+    </div>
+
+    <section class="cf-stats" aria-label="Resumen de funciones">
+        <article class="cf-stat">
+            <span class="cf-stat-mark">FR</span>
+            <span>
+                <strong class="cf-stat-value">@totalFunciones</strong>
+                <span class="cf-stat-label">Funciones registradas</span>
+            </span>
+        </article>
+        <article class="cf-stat">
+            <span class="cf-stat-mark">AC</span>
+            <span>
+                <strong class="cf-stat-value">@funcionesActivas</strong>
+                <span class="cf-stat-label">Funciones activas</span>
+            </span>
+        </article>
+        <article class="cf-stat">
+            <span class="cf-stat-mark">MQ</span>
+            <span>
+                <strong class="cf-stat-value">@funcionesConMaquina</strong>
+                <span class="cf-stat-label">Requieren máquina</span>
+            </span>
+        </article>
+        <article class="cf-stat">
+            <span class="cf-stat-mark">GL</span>
+            <span>
+                <strong class="cf-stat-value">@funcionesGenerales</strong>
+                <span class="cf-stat-label">De alcance general</span>
+            </span>
+        </article>
+    </section>
+
+    <section class="cf-panel">
+        <div class="cf-toolbar">
+            <input type="search"
+                   id="functionSearch"
+                   class="cf-control cf-search"
+                   placeholder="Buscar por función o descripción..."
+                   autocomplete="off" />
+
+            <select id="functionDepartmentFilter"
+                    class="cf-control"
+                    aria-label="Filtrar por departamento">
+                <option value="">Todos los alcances</option>
+                <option value="general">Alcance general</option>
+                @foreach (var departamento in Model.Departamentos
+                    .Where(x => !string.IsNullOrWhiteSpace(x.Value)))
+                {
+                    <option value="@departamento.Value">@departamento.Text</option>
+                }
+            </select>
+
+            <select id="functionMachineFilter"
+                    class="cf-control"
+                    aria-label="Filtrar por uso de máquina">
+                <option value="">Con o sin máquina</option>
+                <option value="si">Requiere máquina</option>
+                <option value="no">No requiere máquina</option>
+            </select>
+
+            <select id="functionStatusFilter"
+                    class="cf-control"
+                    aria-label="Filtrar por estado">
+                <option value="">Todos los estados</option>
+                <option value="activo">Activas</option>
+                <option value="inactivo">Inactivas</option>
+            </select>
+        </div>
+
+        @if (Model.Funciones.Any())
+        {
+            <div class="cf-table-wrap">
+                <table class="cf-table">
+                    <thead>
+                        <tr>
+                            <th>Función o rol</th>
+                            <th>Descripción</th>
+                            <th>Alcance</th>
+                            <th>Máquina</th>
+                            <th>Orden</th>
+                            <th>Estado</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var funcion in Model.Funciones
+                            .OrderByDescending(x => x.Activo)
+                            .ThenBy(x => x.Orden)
+                            .ThenBy(x => x.Nombre))
+                        {
+                            var estado = funcion.Activo ? "activo" : "inactivo";
+                            var maquina = funcion.RequiereMaquina ? "si" : "no";
+                            var alcance = funcion.DepartamentoID?.ToString() ?? "general";
+                            var textoBusqueda =
+                                $"{funcion.Nombre} {funcion.Descripcion} {funcion.NombreDepartamento}";
+                            var iniciales = string.Concat(
+                                funcion.Nombre
+                                    .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                                    .Take(2)
+                                    .Select(x => char.ToUpperInvariant(x[0])));
+
+                            <tr data-function-row
+                                data-search="@textoBusqueda"
+                                data-department="@alcance"
+                                data-machine="@maquina"
+                                data-status="@estado">
+                                <td>
+                                    <div class="cf-name-wrap">
+                                        <span class="cf-avatar">@iniciales</span>
+                                        <span>
+                                            <span class="cf-name">@funcion.Nombre</span>
+                                            <span class="cf-id">ID @funcion.FuncionID</span>
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="cf-description"
+                                          title="@funcion.Descripcion">
+                                        @(string.IsNullOrWhiteSpace(funcion.Descripcion)
+                                            ? "Sin descripción"
+                                            : funcion.Descripcion)
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="cf-badge cf-badge-scope">
+                                        @funcion.NombreDepartamento
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="cf-badge @(funcion.RequiereMaquina ? "cf-badge-machine" : "cf-badge-free")">
+                                        @(funcion.RequiereMaquina
+                                            ? "Requiere máquina"
+                                            : "No requiere")
+                                    </span>
+                                </td>
+                                <td>@funcion.Orden</td>
+                                <td>
+                                    <span class="cf-badge @(funcion.Activo ? "cf-badge-active" : "cf-badge-inactive")">
+                                        @(funcion.Activo ? "Activa" : "Inactiva")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="cf-row-actions">
+                                        <button type="button"
+                                                class="cf-link-btn"
+                                                data-edit-function
+                                                data-id="@funcion.FuncionID"
+                                                data-name="@funcion.Nombre"
+                                                data-description="@funcion.Descripcion"
+                                                data-department="@(funcion.DepartamentoID?.ToString() ?? string.Empty)"
+                                                data-machine="@funcion.RequiereMaquina.ToString().ToLowerInvariant()"
+                                                data-order="@funcion.Orden">
+                                            Editar
+                                        </button>
+
+                                        <form asp-action="CambiarEstadoFuncion"
+                                              method="post"
+                                              class="cf-state-form"
+                                              data-state-form
+                                              data-name="@funcion.Nombre"
+                                              data-active="@funcion.Activo.ToString().ToLowerInvariant()">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden"
+                                                   name="funcionID"
+                                                   value="@funcion.FuncionID" />
+                                            <button type="submit"
+                                                    class="cf-link-btn @(funcion.Activo ? "cf-link-danger" : string.Empty)">
+                                                @(funcion.Activo ? "Desactivar" : "Activar")
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="cf-empty" id="functionFilterEmpty" hidden>
+                <div class="cf-empty-mark">?</div>
+                <h2 class="cf-empty-title">No hay coincidencias</h2>
+                <p class="cf-empty-text">
+                    Ajusta la búsqueda o cambia los filtros seleccionados.
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="cf-empty">
+                <div class="cf-empty-mark">FR</div>
+                <h2 class="cf-empty-title">Todavía no hay funciones registradas</h2>
+                <p class="cf-empty-text">
+                    Crea el primer rol para comenzar a distribuir al personal.
+                </p>
+                <button type="button"
+                        class="cf-btn cf-btn-primary mt-3"
+                        data-new-function>
+                    Nueva función
+                </button>
+            </div>
+        }
+    </section>
+
+    <div class="cf-modal"
+         id="functionModal"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="functionModalTitle"
+         hidden>
+        <div class="cf-modal-dialog">
+            <form asp-action="GuardarFuncion"
+                  method="post"
+                  id="functionForm">
+                @Html.AntiForgeryToken()
+                <input asp-for="Formulario.FuncionID"
+                       type="hidden"
+                       id="functionId" />
+
+                <header class="cf-modal-header">
+                    <div>
+                        <h2 class="cf-modal-title" id="functionModalTitle">
+                            Nueva función
+                        </h2>
+                        <p class="cf-modal-subtitle">
+                            Configura el rol que desempeñará el personal dentro de la escala.
+                        </p>
+                    </div>
+                    <button type="button"
+                            class="cf-modal-close"
+                            data-close-function
+                            aria-label="Cerrar">
+                        ×
+                    </button>
+                </header>
+
+                <div class="cf-modal-body">
+                    <div asp-validation-summary="ModelOnly"
+                         class="cf-validation-summary"></div>
+
+                    <div class="cf-form-grid">
+                        <div class="cf-field-full">
+                            <label asp-for="Formulario.Nombre"
+                                   class="cf-label cf-required"></label>
+                            <input asp-for="Formulario.Nombre"
+                                   id="functionName"
+                                   class="cf-control"
+                                   maxlength="120"
+                                   autocomplete="off"
+                                   placeholder="Ej. Operador de inyección" />
+                            <span asp-validation-for="Formulario.Nombre"
+                                  class="cf-validation"></span>
+                        </div>
+
+                        <div class="cf-field-full">
+                            <label asp-for="Formulario.Descripcion"
+                                   class="cf-label"></label>
+                            <textarea asp-for="Formulario.Descripcion"
+                                      id="functionDescription"
+                                      class="cf-control"
+                                      maxlength="500"
+                                      placeholder="Describe brevemente las responsabilidades de esta función."></textarea>
+                            <span asp-validation-for="Formulario.Descripcion"
+                                  class="cf-validation"></span>
+                        </div>
+
+                        <div>
+                            <label asp-for="Formulario.DepartamentoID"
+                                   class="cf-label">
+                                Alcance por departamento
+                            </label>
+                            <select asp-for="Formulario.DepartamentoID"
+                                    asp-items="Model.Departamentos"
+                                    id="functionDepartment"
+                                    class="cf-control"></select>
+                            <span class="cf-help">
+                                Es opcional. Déjalo en alcance general para usarla con cualquier persona.
+                            </span>
+                            <span asp-validation-for="Formulario.DepartamentoID"
+                                  class="cf-validation"></span>
+                        </div>
+
+                        <div>
+                            <label asp-for="Formulario.Orden"
+                                   class="cf-label"></label>
+                            <input asp-for="Formulario.Orden"
+                                   id="functionOrder"
+                                   class="cf-control"
+                                   type="number"
+                                   min="0"
+                                   step="1" />
+                            <span class="cf-help">
+                                Controla la posición de la función en los listados.
+                            </span>
+                            <span asp-validation-for="Formulario.Orden"
+                                  class="cf-validation"></span>
+                        </div>
+
+                        <div class="cf-field-full">
+                            <label class="cf-check-card">
+                                <input asp-for="Formulario.RequiereMaquina"
+                                       id="functionMachine"
+                                       type="checkbox" />
+                                <span>
+                                    <span class="cf-check-title">
+                                        Esta función requiere seleccionar una máquina
+                                    </span>
+                                    <span class="cf-check-text">
+                                        Al asignarla en una escala se deberá indicar la máquina correspondiente.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="cf-modal-footer">
+                    <button type="button"
+                            class="cf-btn cf-btn-secondary"
+                            data-close-function>
+                        Cancelar
+                    </button>
+                    <button type="submit"
+                            class="cf-btn cf-btn-primary">
+                        Guardar función
+                    </button>
+                </footer>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modal = document.getElementById('functionModal');
+        const form = document.getElementById('functionForm');
+        const modalTitle = document.getElementById('functionModalTitle');
+        const idInput = document.getElementById('functionId');
+        const nameInput = document.getElementById('functionName');
+        const descriptionInput = document.getElementById('functionDescription');
+        const departmentInput = document.getElementById('functionDepartment');
+        const machineInput = document.getElementById('functionMachine');
+        const orderInput = document.getElementById('functionOrder');
+        const searchInput = document.getElementById('functionSearch');
+        const departmentFilter =
+            document.getElementById('functionDepartmentFilter');
+        const machineFilter =
+            document.getElementById('functionMachineFilter');
+        const statusFilter =
+            document.getElementById('functionStatusFilter');
+        const emptyFilter =
+            document.getElementById('functionFilterEmpty');
+        const openWithErrors =
+            @mostrarModalPorErrores.ToString().ToLowerInvariant();
+
+        if (!modal || !form) {
+            return;
+        }
+
+        function normalize(value) {
+            return (value || '')
+                .toLocaleLowerCase('es')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
+        function openModal() {
+            modal.hidden = false;
+            document.body.classList.add('cf-modal-open');
+            window.setTimeout(function () {
+                nameInput.focus();
+            }, 40);
+        }
+
+        function closeModal() {
+            modal.hidden = true;
+            document.body.classList.remove('cf-modal-open');
+        }
+
+        function prepareNew() {
+            form.reset();
+            idInput.value = '0';
+            nameInput.value = '';
+            descriptionInput.value = '';
+            departmentInput.value = '';
+            machineInput.checked = false;
+            orderInput.value = '0';
+            modalTitle.textContent = 'Nueva función';
+            openModal();
+        }
+
+        function prepareEdit(button) {
+            form.reset();
+            idInput.value = button.dataset.id || '0';
+            nameInput.value = button.dataset.name || '';
+            descriptionInput.value = button.dataset.description || '';
+            departmentInput.value = button.dataset.department || '';
+            machineInput.checked = button.dataset.machine === 'true';
+            orderInput.value = button.dataset.order || '0';
+            modalTitle.textContent = 'Editar función';
+            openModal();
+        }
+
+        function filterRows() {
+            const rows = document.querySelectorAll('[data-function-row]');
+            const query = normalize(searchInput ? searchInput.value : '');
+            const selectedDepartment =
+                departmentFilter ? departmentFilter.value : '';
+            const selectedMachine =
+                machineFilter ? machineFilter.value : '';
+            const selectedStatus =
+                statusFilter ? statusFilter.value : '';
+            let visible = 0;
+
+            rows.forEach(function (row) {
+                const matchesSearch =
+                    !query || normalize(row.dataset.search).includes(query);
+                const matchesDepartment =
+                    !selectedDepartment
+                    || row.dataset.department === selectedDepartment;
+                const matchesMachine =
+                    !selectedMachine
+                    || row.dataset.machine === selectedMachine;
+                const matchesStatus =
+                    !selectedStatus
+                    || row.dataset.status === selectedStatus;
+                const show =
+                    matchesSearch
+                    && matchesDepartment
+                    && matchesMachine
+                    && matchesStatus;
+
+                row.hidden = !show;
+                if (show) {
+                    visible += 1;
+                }
+            });
+
+            if (emptyFilter) {
+                emptyFilter.hidden = visible !== 0;
+            }
+        }
+
+        document.querySelectorAll('[data-new-function]').forEach(function (button) {
+            button.addEventListener('click', prepareNew);
+        });
+
+        document.querySelectorAll('[data-edit-function]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                prepareEdit(button);
+            });
+        });
+
+        document.querySelectorAll('[data-close-function]').forEach(function (button) {
+            button.addEventListener('click', closeModal);
+        });
+
+        document.querySelectorAll('[data-state-form]').forEach(function (stateForm) {
+            stateForm.addEventListener('submit', function (event) {
+                const isActive = stateForm.dataset.active === 'true';
+                const action = isActive ? 'desactivar' : 'activar';
+                const name = stateForm.dataset.name || 'esta función';
+
+                if (!window.confirm(
+                    '¿Deseas ' + action + ' la función "' + name + '"?')) {
+                    event.preventDefault();
+                }
+            });
+        });
+
+        [
+            searchInput,
+            departmentFilter,
+            machineFilter,
+            statusFilter
+        ].forEach(function (control) {
+            if (!control) {
+                return;
+            }
+
+            control.addEventListener(
+                control.tagName === 'INPUT' ? 'input' : 'change',
+                filterRows);
+        });
+
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !modal.hidden) {
+                closeModal();
+            }
+        });
+
+        if (openWithErrors) {
+            openModal();
+        }
+    });
+</script>
