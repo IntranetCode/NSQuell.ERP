@@ -1420,6 +1420,11 @@
 </head>
 
 <body>
+    @* PLANEACION_STANDALONE_NAV_V1_1 *@
+    <div class="pln-standalone-navbar-host" style="padding:1rem 1rem 0;position:relative;z-index:3000;">
+        @await Html.PartialAsync("_TopNavbar")
+    </div>
+
     @* PLANEACION_NAVBAR_INJECT_V1_0 *@
     @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="page">

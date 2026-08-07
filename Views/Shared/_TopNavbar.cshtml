@@ -28,22 +28,20 @@
     var plnAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
 
     var plnEsModulo =
-        plnController.Equals("Planeacion", StringComparison.OrdinalIgnoreCase) ||
-        plnController.Equals("PlaneacionRelease", StringComparison.OrdinalIgnoreCase) ||
-        plnController.Equals("PlaneacionPrograma", StringComparison.OrdinalIgnoreCase) ||
-        plnController.Equals("PlaneacionCalendarioMaquinas", StringComparison.OrdinalIgnoreCase) ||
-        plnController.Equals("PlaneacionPanorama", StringComparison.OrdinalIgnoreCase);
+        plnController.StartsWith("Planeacion", StringComparison.OrdinalIgnoreCase);
 
-    var plnSeccion = plnController switch
-    {
-        "PlaneacionRelease" => "Releases",
-        "PlaneacionPrograma" when plnAction.Equals("CalendarioMaquinas", StringComparison.OrdinalIgnoreCase) => "Calendario",
-        "PlaneacionPrograma" => "Programa",
-        "PlaneacionCalendarioMaquinas" => "Calendario",
-        "PlaneacionPanorama" => "Panorama",
-        "Planeacion" => "OF",
-        _ => "Planeacion"
-    };
+    var plnSeccion =
+        plnController.StartsWith("PlaneacionRelease", StringComparison.OrdinalIgnoreCase)
+            ? "Releases"
+            : plnController.StartsWith("PlaneacionCalendarioMaquinas", StringComparison.OrdinalIgnoreCase)
+                ? "Calendario"
+                : plnController.StartsWith("PlaneacionPrograma", StringComparison.OrdinalIgnoreCase)
+                    ? (plnAction.Equals("CalendarioMaquinas", StringComparison.OrdinalIgnoreCase) ? "Calendario" : "Programa")
+                    : plnController.StartsWith("PlaneacionPanorama", StringComparison.OrdinalIgnoreCase)
+                        ? "Panorama"
+                        : plnController.StartsWith("Planeacion", StringComparison.OrdinalIgnoreCase)
+                            ? "OF"
+                            : "Planeacion";
 }
 <style>
     .top-navbar {
