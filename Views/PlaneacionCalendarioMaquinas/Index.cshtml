@@ -75,8 +75,8 @@
 }
 
 @{
-    Layout = null;
-
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Calendario de mÃ¡quinas | PlaneaciÃ³n";
     var cultura = new CultureInfo("es-MX");
 
     var inicioPeriodo = Model.InicioPeriodo;
@@ -635,6 +635,8 @@
     </style>
 </head>
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="page">
         <section class="hero">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">

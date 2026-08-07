@@ -1,8 +1,8 @@
-@using System.Security.Claims
+﻿@using System.Security.Claims
 @using Microsoft.AspNetCore.Http
 
 @{
-    // Datos dinámicos de sesión / claims
+    // Datos dinÃ¡micos de sesiÃ³n / claims
     var nombreUsuario = Context.Session.GetString("NombreMostrar")
         ?? Context.Session.GetString("Username")
         ?? User.FindFirst(ClaimTypes.Name)?.Value
@@ -22,6 +22,29 @@
 }
 
 
+@* PLANEACION_NAV_GLOBAL_V1_2_RUTAS *@
+@{
+    var plnController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var plnAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+
+    var plnEsModulo =
+        plnController.Equals("Planeacion", StringComparison.OrdinalIgnoreCase) ||
+        plnController.Equals("PlaneacionRelease", StringComparison.OrdinalIgnoreCase) ||
+        plnController.Equals("PlaneacionPrograma", StringComparison.OrdinalIgnoreCase) ||
+        plnController.Equals("PlaneacionCalendarioMaquinas", StringComparison.OrdinalIgnoreCase) ||
+        plnController.Equals("PlaneacionPanorama", StringComparison.OrdinalIgnoreCase);
+
+    var plnSeccion = plnController switch
+    {
+        "PlaneacionRelease" => "Releases",
+        "PlaneacionPrograma" when plnAction.Equals("CalendarioMaquinas", StringComparison.OrdinalIgnoreCase) => "Calendario",
+        "PlaneacionPrograma" => "Programa",
+        "PlaneacionCalendarioMaquinas" => "Calendario",
+        "PlaneacionPanorama" => "Panorama",
+        "Planeacion" => "OF",
+        _ => "Planeacion"
+    };
+}
 <style>
     .top-navbar {
         width: min(100%, 1500px);
@@ -470,9 +493,107 @@
             display: none;
         }
     }
+    /* PLANEACION_NAV_GLOBAL_V1_2_CSS */
+    .top-navbar--planeacion {
+        width: min(100%, 1760px);
+    }
+
+    .top-navbar--planeacion .navbar-content {
+        gap: .7rem;
+    }
+
+    .planeacion-global-shortcuts {
+        min-width: 0;
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .28rem;
+        padding: 0 .25rem;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .planeacion-global-link {
+        flex: 0 0 auto;
+        min-height: 42px;
+        padding: .52rem .68rem;
+        border: 1px solid transparent;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .38rem;
+        color: #dbeafe !important;
+        background: transparent;
+        text-decoration: none !important;
+        font-size: .73rem;
+        font-weight: 900;
+        white-space: nowrap;
+        transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+    }
+
+    .planeacion-global-link:hover {
+        transform: translateY(-1px);
+        border-color: rgba(96,165,250,.35);
+        background: rgba(37,99,235,.14);
+        color: #ffffff !important;
+    }
+
+    .planeacion-global-link.active {
+        border-color: rgba(244,123,32,.42);
+        background: rgba(244,123,32,.18);
+        color: #ffffff !important;
+    }
+
+    .planeacion-global-link i {
+        color: #60a5fa;
+    }
+
+    .planeacion-global-link.active i {
+        color: #ffb86b;
+    }
+
+    html[data-nsq-theme="light"] .planeacion-global-link {
+        color: #29435f !important;
+    }
+
+    html[data-nsq-theme="light"] .planeacion-global-link:hover {
+        border-color: rgba(0,74,173,.20);
+        background: #eef5ff;
+        color: #00347a !important;
+    }
+
+    html[data-nsq-theme="light"] .planeacion-global-link.active {
+        border-color: rgba(244,123,32,.28);
+        background: #fff3e5;
+        color: #b54708 !important;
+    }
+
+    html[data-nsq-theme="light"] .planeacion-global-link i {
+        color: #004aad;
+    }
+
+    html[data-nsq-theme="light"] .planeacion-global-link.active i {
+        color: #e65f00;
+    }
+
+    @@media (max-width: 1260px) {
+        .top-navbar--planeacion .navbar-content {
+            flex-wrap: wrap;
+        }
+
+        .top-navbar--planeacion .planeacion-global-shortcuts {
+            order: 3;
+            width: 100%;
+            flex-basis: 100%;
+            justify-content: flex-start;
+            padding-top: .35rem;
+        }
+    }
 </style>
 
-<nav class="top-navbar" role="navigation" aria-label="Navegación principal">
+<nav class="top-navbar @(plnEsModulo ? "top-navbar--planeacion" : string.Empty)" role="navigation" aria-label="NavegaciÃ³n principal">
     <div class="navbar-content">
         <div class="navbar-left">
             <a href="@Url.Action("Index", "Menu")" class="navbar-brand">
@@ -489,7 +610,43 @@
             </a>
         </div>
 
-        <div class="navbar-right">
+                @* PLANEACION_NAV_GLOBAL_V1_2_LINKS *@
+        @if (plnEsModulo)
+        {
+            <nav class="planeacion-global-shortcuts" aria-label="Accesos rápidos de Planeación">
+                <a href="/Menu/Grupo/3"
+                   class="planeacion-global-link @(plnSeccion == "Planeacion" ? "active" : string.Empty)">
+                    <i class="fa-solid fa-grip" aria-hidden="true"></i>
+                    <span>Planeación</span>
+                </a>
+                <a href="/PlaneacionRelease/Index"
+                   class="planeacion-global-link @(plnSeccion == "Releases" ? "active" : string.Empty)">
+                    <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+                    <span>Releases</span>
+                </a>
+                <a href="/PlaneacionPrograma/Index"
+                   class="planeacion-global-link @(plnSeccion == "Programa" ? "active" : string.Empty)">
+                    <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                    <span>Programa</span>
+                </a>
+                <a href="/PlaneacionCalendarioMaquinas/Index"
+                   class="planeacion-global-link @(plnSeccion == "Calendario" ? "active" : string.Empty)">
+                    <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+                    <span>Calendario</span>
+                </a>
+                <a href="/Planeacion/Index"
+                   class="planeacion-global-link @(plnSeccion == "OF" ? "active" : string.Empty)">
+                    <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
+                    <span>Órdenes de fabricación</span>
+                </a>
+                <a href="/PlaneacionPanorama/Index"
+                   class="planeacion-global-link @(plnSeccion == "Panorama" ? "active" : string.Empty)">
+                    <i class="fa-solid fa-chart-column" aria-hidden="true"></i>
+                    <span>Panorama</span>
+                </a>
+            </nav>
+        }
+<div class="navbar-right">
             <button type="button"
                     class="theme-switcher"
                     id="btnThemeToggle"
@@ -514,7 +671,7 @@
             </div>
 
             <div class="user-menu">
-                <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario">
+                <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="MenÃº de usuario">
                     <div class="user-avatar" aria-hidden="true">@inicialUsuario</div>
 
                     <div class="user-info">
@@ -535,11 +692,11 @@
                        role="menuitem"
                        data-bs-toggle="modal"
                        data-bs-target="#modalDenunciaAnonima">
-                        <i class="fas fa-user-secret" aria-hidden="true"></i> Denuncia anónima
+                        <i class="fas fa-user-secret" aria-hidden="true"></i> Denuncia anÃ³nima
                     </a>
 
                     <a href="/Login/Logout" class="dropdown-item">
-                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar Sesión
+                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar SesiÃ³n
                     </a>
                 </div>
             </div>
@@ -582,7 +739,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="fw-bold"><i class="fas fa-phone"></i> Teléfono:</label>
+                        <label class="fw-bold"><i class="fas fa-phone"></i> TelÃ©fono:</label>
                         <p id="perfilTelefono" class="ms-3"></p>
                     </div>
 
@@ -592,7 +749,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="fw-bold"><i class="fas fa-info-circle"></i> Descripción del Rol:</label>
+                        <label class="fw-bold"><i class="fas fa-info-circle"></i> DescripciÃ³n del Rol:</label>
                         <p id="perfilDescripcionRol" class="ms-3"></p>
                     </div>
                 </div>
@@ -605,13 +762,13 @@
     </div>
 </div>
 
-<!-- Modal de denuncia anónima -->
+<!-- Modal de denuncia anÃ³nima -->
 <div class="modal fade" id="modalDenunciaAnonima" tabindex="-1" role="dialog" aria-labelledby="modalDenunciaAnonimaLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content modal-denuncia">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalDenunciaAnonimaLabel">
-                    Denuncia anónima y confidencial
+                    Denuncia anÃ³nima y confidencial
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
@@ -622,13 +779,13 @@
 
                 <div class="modal-body">
                     <p class="text-muted small">
-                        Tu identidad no se mostrará en ningún lado. La información se enviará de forma confidencial.
+                        Tu identidad no se mostrarÃ¡ en ningÃºn lado. La informaciÃ³n se enviarÃ¡ de forma confidencial.
                     </p>
 
                     <div class="form-group">
                         <label for="TipoDenuncia">Tipo de denuncia *</label>
                         <select id="TipoDenuncia" name="TipoDenuncia" class="form-control" required>
-                            <option value="">-- Selecciona una opción --</option>
+                            <option value="">-- Selecciona una opciÃ³n --</option>
                             <option value="Acoso">Acoso</option>
                             <option value="Fraude">Fraude</option>
                             <option value="Conducta inadecuada">Conducta inadecuada</option>
@@ -640,18 +797,18 @@
                     <div class="form-group">
                         <label for="DepartamentoAfectado">Departamento afectado *</label>
                         <select id="DepartamentoAfectado" name="DepartamentoAfectado" class="form-control" required>
-                            <option value="">-- Selecciona una opción --</option>
+                            <option value="">-- Selecciona una opciÃ³n --</option>
                             <option value="Recursos Humanos">Recursos Humanos</option>
                             <option value="Ventas">Compras</option>
                             <option value="Proyectos">Proyectos</option>
-                            <option value="Operaciones">Almacén</option>
+                            <option value="Operaciones">AlmacÃ©n</option>
                             <option value="Finanzas">Finanzas</option>
                             <option value="Otro">Otro</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label for="Descripcion">Descripción detallada *</label>
+                        <label for="Descripcion">DescripciÃ³n detallada *</label>
                         <textarea id="Descripcion" name="Descripcion" class="form-control" rows="4" required></textarea>
                     </div>
 

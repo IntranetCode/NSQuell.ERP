@@ -3,7 +3,7 @@
 @{
     Layout = null;
 
-    string Valor(string? valor) => string.IsNullOrWhiteSpace(valor) ? "-" : valor;
+    string Valor(string? valor) => string.IsNullOrWhiteSpace(valor) ? "-" : valor.Replace("GOLDEN", "GOLDE");
     string Fecha(DateTime? fecha) => fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy") : "-";
     string TextoImportado(bool importado) => importado ? "Desde archivo" : "Captura manual";
 
@@ -507,6 +507,8 @@
 </head>
 
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="erp-shell">
         <div class="erp-header">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">

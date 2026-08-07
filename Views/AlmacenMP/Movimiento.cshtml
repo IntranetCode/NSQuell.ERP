@@ -5,9 +5,10 @@
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = Model.EsEntregaOF ? "Entrega de MP a OF" : "Movimiento MP";
 
-    var maximo = Model.CantidadPendienteOF.ToString("0.###", CultureInfo.InvariantCulture);
-    var ordenes = ViewData["OrdenesFabricacionMP"] as System.Collections.Generic.IEnumerable<string>
-        ?? System.Linq.Enumerable.Empty<string>();
+    var cantidadExacta = Model.Cantidad.ToString("0.###", CultureInfo.InvariantCulture);
+    var maximo = Model.CantidadPendienteOF.ToString("0.###", CultureInfo.InvariantCulture); var ordenes =
+    ViewData["OrdenesFabricacionMP"] as System.Collections.Generic.IEnumerable<string>
+            ?? System.Linq.Enumerable.Empty<string>();
     var materialSolicitadoID = Convert.ToInt32(ViewData["MaterialSolicitadoID"] ?? 0);
     var materialSolicitadoTexto = ViewData["MaterialSolicitadoTexto"]?.ToString()
         ?? "Material solicitado no encontrado";
@@ -25,7 +26,8 @@
         <small>ALMACÉN MP</small>
         <h1>@(Model.EsEntregaOF ? "Entregar materia prima" : "Registrar movimiento")</h1>
         <p>
-            Selecciona la resina, consulta el stock V y M disponible e indica de cuál existencia se descontará la cantidad.
+            Selecciona la resina, consulta el stock V y M disponible e indica de cuál existencia se descontará la
+            cantidad.
         </p>
     </div>
 </section>
@@ -42,7 +44,7 @@
         <input asp-for="EsEntregaOF" type="hidden" />
         <input asp-for="SolicitudProduccionID" type="hidden" />
         <input asp-for="OperacionToken" type="hidden" />
-        <input asp-for="CantidadPendienteOF" type="hidden" />
+        <input type="hidden" id="CantidadPendienteOF" name="CantidadPendienteOF" value="@maximo" />
         <input asp-for="Unidad" type="hidden" value="KG" />
         <input asp-for="Lote" type="hidden" value="S/L" />
 
@@ -78,8 +80,7 @@
                     stockPorMaterial.TryGetValue(item.Id, out var stockItem);
                     var stockV = stockItem?.StockV ?? 0m;
                     var stockM = stockItem?.StockM ?? 0m;
-                    <option value="@item.Id"
-                            data-stock-v="@stockV.ToString("0.###", CultureInfo.InvariantCulture)"
+                    <option value="@item.Id" data-stock-v="@stockV.ToString("0.###", CultureInfo.InvariantCulture)"
                             data-stock-m="@stockM.ToString("0.###", CultureInfo.InvariantCulture)">
                         @item.Texto
                     </option>
@@ -88,7 +89,8 @@
             @if (Model.EsEntregaOF)
             {
                 <small class="alm-filter-hint">
-                    El material solicitado queda registrado. Puedes seleccionar otra resina cuando sea necesario para no detener producción.
+                    El material solicitado queda registrado. Puedes seleccionar otra resina cuando sea necesario para no
+                    detener producción.
                 </small>
             }
             else
@@ -138,97 +140,90 @@
                         <option value="@orden">@orden</option>
                     }
                 </select>
-                <small class="alm-filter-hint">Selecciona una OF existente cuando el movimiento corresponda a producción.</small>
-            </div>
-        }
+                <small class="alm-filter-hint">Selecciona una OF existente cuando el movimiento corresponda a
+                    producción.</small>
+                </div>
+            }
 
-        <div class="alm-field">
-            <label for="Cantidad">Cantidad</label>
-            <div class="alm-unit-input">
-                <input asp-for="Cantidad"
-                       class="alm-input"
-                       id="Cantidad"
-                       required
-                       min="0.001"
-                       max="@(Model.EsEntregaOF ? maximo : null)"
-                       step="0.001"
-                       placeholder="0.000" />
-                <span class="alm-unit-input__suffix">KG</span>
-            </div>
-            <span asp-validation-for="Cantidad"></span>
-        </div>
-
-        @if (!Model.EsEntregaOF)
-        {
             <div class="alm-field">
-                <label for="UbicacionID">Ubicación</label>
-                <select asp-for="UbicacionID" class="alm-select" id="UbicacionID">
-                    <option value="">Sin ubicación</option>
-                    @foreach (var item in Model.Ubicaciones)
-                    {
-                        <option value="@item.Id">@item.Texto</option>
-                    }
-                </select>
-                <span asp-validation-for="UbicacionID"></span>
+                <label for="Cantidad">Cantidad</label>
+                <div class="alm-unit-input">
+                    <input type="number" class="alm-input" id="Cantidad" name="Cantidad" value="@cantidadExacta" required
+                           min="0.001" max="@(Model.EsEntregaOF ? maximo : null)" step="0.001" inputmode="decimal"
+                           placeholder="0.000" />
+                    <span class="alm-unit-input__suffix">KG</span>
+                </div>
+                <span asp-validation-for="Cantidad"></span>
             </div>
-        }
 
-        <div class="alm-field full">
-            <label for="Observaciones">Observaciones</label>
-            <textarea asp-for="Observaciones"
-                      class="alm-textarea"
-                      id="Observaciones"
-                      rows="4"
-                      placeholder="@(Model.EsEntregaOF ? "Indica el motivo cuando se entregue una resina diferente a la solicitada" : "Describe el motivo, procedencia o destino del movimiento")"></textarea>
-            <span asp-validation-for="Observaciones"></span>
-        </div>
+            @if (!Model.EsEntregaOF)
+            {
+                <div class="alm-field">
+                    <label for="UbicacionID">Ubicación</label>
+                    <select asp-for="UbicacionID" class="alm-select" id="UbicacionID">
+                        <option value="">Sin ubicación</option>
+                        @foreach (var item in Model.Ubicaciones)
+                        {
+                            <option value="@item.Id">@item.Texto</option>
+                        }
+                    </select>
+                    <span asp-validation-for="UbicacionID"></span>
+                </div>
+            }
 
-        <div class="mp-movement-help full">
-            <span><i class="fa-solid fa-circle-plus"></i><strong>Entrada:</strong> suma existencia.</span>
-            <span><i class="fa-solid fa-circle-minus"></i><strong>Salida o consumo:</strong> resta existencia.</span>
-            <span><i class="fa-solid fa-scale-balanced"></i><strong>Ajuste:</strong> requiere explicar el motivo.</span>
-        </div>
+            <div class="alm-field full">
+                <label for="Observaciones">Observaciones</label>
+                <textarea asp-for="Observaciones" class="alm-textarea" id="Observaciones" rows="4"
+                          placeholder="@(Model.EsEntregaOF ? "Indica el motivo cuando se entregue una resina diferente a la solicitada" : "Describe el motivo, procedencia o destino del movimiento")"></textarea>
+                <span asp-validation-for="Observaciones"></span>
+            </div>
 
-        <div class="alm-field full mp-form-submit">
-            <button class="alm-btn" type="submit">
-                <i class="fa-solid fa-floppy-disk"></i>
-                @(Model.EsEntregaOF ? "Registrar entrega de MP" : "Guardar movimiento")
-            </button>
-        </div>
-    </form>
-</section>
+            <div class="mp-movement-help full">
+                <span><i class="fa-solid fa-circle-plus"></i><strong>Entrada:</strong> suma existencia.</span>
+                <span><i class="fa-solid fa-circle-minus"></i><strong>Salida o consumo:</strong> resta existencia.</span>
+                <span><i class="fa-solid fa-scale-balanced"></i><strong>Ajuste:</strong> requiere explicar el motivo.</span>
+            </div>
 
-@section Scripts {
-    <script>
-        (() => {
-            const material = document.getElementById('MaterialID');
-            const tipo = document.getElementById('TipoMP');
-            const stockV = document.getElementById('stockDisponibleV');
-            const stockM = document.getElementById('stockDisponibleM');
+            <div class="alm-field full mp-form-submit">
+                <button class="alm-btn" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    @(Model.EsEntregaOF ? "Registrar entrega de MP" : "Guardar movimiento")
+                </button>
+            </div>
+        </form>
+    </section>
 
-            if (!material || !tipo || !stockV || !stockM) return;
+    @section Scripts {
+        <script>
+            (() => {
+                const material = document.getElementById('MaterialID');
+                const tipo = document.getElementById('TipoMP');
+                const stockV = document.getElementById('stockDisponibleV');
+                const stockM = document.getElementById('stockDisponibleM');
 
-            const format = value => {
-                const number = Number.parseFloat(value || '0');
-                return `${Number.isFinite(number) ? number.toLocaleString('es-MX', { maximumFractionDigits: 3 }) : '0'} KG`;
-            };
+                if (!material || !tipo || !stockV || !stockM) return;
 
-            const update = () => {
-                const option = material.options[material.selectedIndex];
-                const valueV = option?.dataset.stockV || '0';
-                const valueM = option?.dataset.stockM || '0';
+                const format = value => {
+                    const number = Number.parseFloat(value || '0');
+                    return `${Number.isFinite(number) ? number.toLocaleString('es-MX', { maximumFractionDigits: 3 }) : '0'} KG`;
+                };
 
-                stockV.textContent = format(valueV);
-                stockM.textContent = format(valueM);
+                const update = () => {
+                    const option = material.options[material.selectedIndex];
+                    const valueV = option?.dataset.stockV || '0';
+                    const valueM = option?.dataset.stockM || '0';
 
-                const optionV = tipo.querySelector('option[value="V"]');
-                const optionM = tipo.querySelector('option[value="M"]');
-                if (optionV) optionV.textContent = `V — Stock: ${format(valueV)}`;
-                if (optionM) optionM.textContent = `M — Stock: ${format(valueM)}`;
-            };
+                    stockV.textContent = format(valueV);
+                    stockM.textContent = format(valueM);
 
-            material.addEventListener('change', update);
-            update();
-        })();
-    </script>
-}
+                    const optionV = tipo.querySelector('option[value="V"]');
+                    const optionM = tipo.querySelector('option[value="M"]');
+                    if (optionV) optionV.textContent = `V — Stock: ${format(valueV)}`;
+                    if (optionM) optionM.textContent = `M — Stock: ${format(valueM)}`;
+                };
+
+                material.addEventListener('change', update);
+                update();
+            })();
+        </script>
+    }

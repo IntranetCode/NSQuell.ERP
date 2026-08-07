@@ -152,9 +152,53 @@
         .edit-part{overflow:hidden;border:1px solid var(--border);border-radius:18px;background:#fff}
         .edit-part-head{padding:12px 15px;border-bottom:1px solid var(--border);background:#eef4ff;color:var(--blue-dark);font-weight:850}
         .edit-part-body{padding:15px}
-        .modal-xl{--bs-modal-width:1500px}</style>
+        .modal-xl{--bs-modal-width:1500px}
+        /* MODAL_SCROLL_DOCUMENTO_V1_1 */
+        .document-edit-modal .modal-content {
+            max-height: 100%;
+            overflow: hidden;
+        }
+
+        /* El formulario envuelve header, body y footer. Se convierte en
+           contenedor flex para conservar header/footer y desplazar solo body. */
+        .document-edit-modal .modal-content > form {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-height: 0;
+            max-height: 100%;
+            overflow: hidden;
+        }
+
+        .document-edit-modal .modal-header,
+        .document-edit-modal .modal-footer {
+            flex: 0 0 auto;
+            background: #fff;
+        }
+
+        .document-edit-modal .modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @@media (max-width: 767.98px) {
+            .document-edit-modal .modal-dialog {
+                margin: .5rem;
+            }
+
+            .document-edit-modal .modal-body {
+                padding: 1rem;
+            }
+        }</style>
 </head>
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
 <div class="page">
     <section class="hero mb-4">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">

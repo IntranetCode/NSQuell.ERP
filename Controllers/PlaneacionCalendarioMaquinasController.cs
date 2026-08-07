@@ -772,6 +772,24 @@ OUTER APPLY
 ) ci
 
 WHERE pp.Activo = 1
+  -- CALENDARIO_EXCLUIR_OF_CANCELADA_V1_0
+  AND ISNULL(pp.EstatusID, 1) <> @EstatusCancelado
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.SolicitudesProduccion sofCancelada
+      WHERE sofCancelada.ProgramaProduccionID = pp.ProgramaProduccionID
+        AND sofCancelada.Activo = 1
+        AND sofCancelada.EstatusID = @EstatusCancelado
+        AND NOT EXISTS
+        (
+            SELECT 1
+            FROM dbo.SolicitudesProduccion sofVigente
+            WHERE sofVigente.ProgramaProduccionID = pp.ProgramaProduccionID
+              AND sofVigente.Activo = 1
+              AND sofVigente.EstatusID <> @EstatusCancelado
+        )
+  )
   AND pp.MaquinaID IS NOT NULL
   AND pp.FechaInicioProgramada IS NOT NULL
   AND pp.FechaInicioProgramada < @Fin
@@ -797,6 +815,8 @@ ORDER BY
             {
                 cmd.Parameters.Add("@Inicio", SqlDbType.DateTime).Value = inicio;
                 cmd.Parameters.Add("@Fin", SqlDbType.DateTime).Value = fin;
+                cmd.Parameters.Add("@EstatusCancelado", SqlDbType.Int).Value =
+                    EstatusPrograma.Cancelado;
 
                 await using var rd = await cmd.ExecuteReaderAsync();
 

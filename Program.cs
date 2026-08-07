@@ -1,4 +1,4 @@
-﻿// Usings para nuestro módulo
+// Usings para nuestro módulo
 //Configuración y conexión a base de datos derarrollo y productivo
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -28,6 +28,7 @@ builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = 268435456; // 256 MB
     options.ValueLengthLimit = int.MaxValue;
+    options.ValueCountLimit = 10000; // RELEASE_EDICION_FORM_VALUE_LIMIT_V1_0
     options.MultipartHeadersLengthLimit = int.MaxValue;
 });
 

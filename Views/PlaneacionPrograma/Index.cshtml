@@ -267,7 +267,8 @@
 }
 
 @{
-    Layout = null;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Programa de Planeación | ERP QUELL";
     var necesidades = Model.Necesidades ?? new List<PlaneacionProgramaNecesidadVm>();
     var listos = necesidades
         .Where(ListoCambioMolde)
@@ -1473,6 +1474,8 @@
     </style>
 </head>
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="page">
         <section class="hero">
             <h1><i class="fa-solid fa-list-check me-2"></i>Programa de Planeación</h1>
