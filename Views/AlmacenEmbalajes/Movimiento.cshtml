@@ -13,6 +13,12 @@
         as System.Collections.Generic.IReadOnlyDictionary<int, decimal>
         ?? new System.Collections.Generic.Dictionary<int, decimal>();
     stockPorEmbalaje.TryGetValue(Model.MaterialID, out var stockSeleccionado);
+    // ALMACEN_EMB_MOVIMIENTO_BUSQUEDA_V9_2
+    var embalajeSeleccionado = Model.Materiales.FirstOrDefault(x => x.Id == Model.MaterialID);
+    var embalajeSeleccionadoTexto = embalajeSeleccionado?.Texto ?? string.Empty;
+    var ordenes = ViewData["OrdenesFabricacion"]
+        as System.Collections.Generic.IEnumerable<ERP.NSQuell.Models.ViewModels.Almacen.AlmacenSelectVm>
+        ?? System.Linq.Enumerable.Empty<ERP.NSQuell.Models.ViewModels.Almacen.AlmacenSelectVm>();
 }
 
 <link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
@@ -51,12 +57,12 @@
         }
 
         <input asp-for="EsEntregaOF" type="hidden" />
-        <input asp-for="SolicitudProduccionID" type="hidden" />
         <input asp-for="OperacionToken" type="hidden" />
         <input asp-for="CantidadPendienteOF" type="hidden" />
 
         @if (Model.EsEntregaOF)
         {
+            <input asp-for="SolicitudProduccionID" type="hidden" />
             <input asp-for="TipoMovimiento" type="hidden" />
             <input asp-for="Unidad" type="hidden" />
             <input asp-for="NumeroOF" type="hidden" />
@@ -87,12 +93,54 @@
 
             <div class="alm-field full">
                 <label for="almacenCatalogoSelect">Embalaje a entregar</label>
+                                <div class="alm-smart-search alm-smart-search--movement"
+                     data-alm-smart-search
+                     data-alm-smart-select-target="almacenCatalogoSelect">
+                    <input id="EmbalajeSearchOF"
+                           class="alm-input"
+                           type="search"
+                           value="@embalajeSeleccionadoTexto"
+                           placeholder="Busca por codigo o nombre de embalaje"
+                           autocomplete="off"
+                           data-alm-smart-input
+                           required />
+                    <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                        @foreach (var x in Model.Materiales)
+                        {
+                            stockPorEmbalaje.TryGetValue(x.Id, out var stockItem);
+                            var unidadItem = string.IsNullOrWhiteSpace(x.Extra)
+                                ? "PZS"
+                                : x.Extra.Trim().ToUpperInvariant();
+                            var compatible = string.Equals(
+                                unidadItem,
+                                embalajeSolicitadoUnidad,
+                                StringComparison.OrdinalIgnoreCase);
+                            var textoBusqueda = $"{x.Texto} {unidadItem} Stock {stockItem:0.###}";
+
+                            <button type="button"
+                                    class="alm-smart-search__option"
+                                    data-alm-smart-option
+                                    data-alm-smart-value="@x.Id"
+                                    data-alm-smart-display="@x.Texto"
+                                    data-alm-smart-text="@textoBusqueda">
+                                <strong>@x.Texto</strong>
+                                <span>@unidadItem</span>
+                                <small>@(compatible ? $"Stock: {stockItem:0.###}" : "Unidad incompatible")</small>
+                            </button>
+                        }
+                        <div class="alm-smart-search__empty" data-alm-smart-empty hidden>
+                            No se encontraron embalajes.
+                        </div>
+                    </div>
+                </div>
+
                 <select asp-for="MaterialID"
-                        class="alm-select"
+                        class="alm-smart-native-select"
                         id="almacenCatalogoSelect"
                         data-requested-id="@embalajeSolicitadoID"
                         data-requested-unit="@embalajeSolicitadoUnidad"
-                        required>
+                        tabindex="-1"
+                        aria-hidden="true">
                     <option value="">Selecciona un embalaje</option>
                     @foreach (var x in Model.Materiales)
                     {
@@ -106,13 +154,13 @@
                             StringComparison.OrdinalIgnoreCase);
                         var textoCompatibilidad = compatible
                             ? string.Empty
-                            : " · Unidad incompatible";
+                            : " Â· Unidad incompatible";
 
                         <option value="@x.Id"
                                 data-unidad="@unidadItem"
                                 data-stock="@stockItem.ToString("0.###", CultureInfo.InvariantCulture)"
                                 data-compatible="@(compatible ? "true" : "false")">
-                            @x.Texto · Stock: @stockItem.ToString("0.###") @unidadItem@textoCompatibilidad
+                            @x.Texto Â· Stock: @stockItem.ToString("0.###") @unidadItem@textoCompatibilidad
                         </option>
                     }
                 </select>
@@ -142,7 +190,48 @@
         {
             <div class="alm-field full">
                 <label for="almacenCatalogoSelect">Embalaje</label>
-                <select asp-for="MaterialID" class="alm-select" id="almacenCatalogoSelect" required>
+                                <div class="alm-smart-search alm-smart-search--movement"
+                     data-alm-smart-search
+                     data-alm-smart-select-target="almacenCatalogoSelect">
+                    <input id="EmbalajeSearch"
+                           class="alm-input"
+                           type="search"
+                           value="@embalajeSeleccionadoTexto"
+                           placeholder="Busca por codigo o nombre de embalaje"
+                           autocomplete="off"
+                           data-alm-smart-input
+                           required />
+                    <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                        @foreach (var x in Model.Materiales)
+                        {
+                            stockPorEmbalaje.TryGetValue(x.Id, out var stockItem);
+                            var unidadItem = string.IsNullOrWhiteSpace(x.Extra)
+                                ? "PZS"
+                                : x.Extra.Trim().ToUpperInvariant();
+                            var textoBusqueda = $"{x.Texto} {unidadItem} Stock {stockItem:0.###}";
+
+                            <button type="button"
+                                    class="alm-smart-search__option"
+                                    data-alm-smart-option
+                                    data-alm-smart-value="@x.Id"
+                                    data-alm-smart-display="@x.Texto"
+                                    data-alm-smart-text="@textoBusqueda">
+                                <strong>@x.Texto</strong>
+                                <span>@unidadItem</span>
+                                <small>Stock: @stockItem.ToString("0.###")</small>
+                            </button>
+                        }
+                        <div class="alm-smart-search__empty" data-alm-smart-empty hidden>
+                            No se encontraron embalajes.
+                        </div>
+                    </div>
+                </div>
+
+                <select asp-for="MaterialID"
+                        class="alm-smart-native-select"
+                        id="almacenCatalogoSelect"
+                        tabindex="-1"
+                        aria-hidden="true">
                     <option value="">Selecciona un embalaje</option>
                     @foreach (var x in Model.Materiales)
                     {
@@ -234,11 +323,22 @@
                 <span asp-validation-for="UbicacionID"></span>
             </div>
 
-            <div class="alm-field" id="embOfField">
-                <label for="NumeroOF">Orden de fabricación</label>
-                <input asp-for="NumeroOF" class="alm-input" id="NumeroOF" placeholder="Opcional para movimientos generales" />
-                <small class="alm-filter-hint">Úsala únicamente cuando el movimiento corresponda a una OF.</small>
-                <span asp-validation-for="NumeroOF"></span>
+            <div class="alm-field full" id="embOfField">
+                <label for="SolicitudProduccionID">Orden de fabricación</label>
+                <select asp-for="SolicitudProduccionID"
+                        class="alm-select"
+                        id="SolicitudProduccionID"
+                        required>
+                    <option value="">Selecciona una OF</option>
+                    @foreach (var orden in ordenes)
+                    {
+                        <option value="@orden.Id">@orden.Texto</option>
+                    }
+                </select>
+                <small class="alm-filter-hint">
+                    Obligatorio. No se permiten movimientos de embalajes sin enlace a una OF existente.
+                </small>
+                <span asp-validation-for="SolicitudProduccionID"></span>
             </div>
         }
 

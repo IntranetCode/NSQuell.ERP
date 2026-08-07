@@ -129,5 +129,92 @@ SELECT CASE WHEN EXISTS
 
     protected static bool EsSalidaPT(string tipo) =>
         tipo is "Salida" or "Embarque" or "Scrap" or "AjusteNegativo";
+    protected static async Task<List<ERP.NSQuell.Models.ViewModels.Almacen.AlmacenSelectVm>>
+        CargarOrdenesFabricacionAsync(
+            SqlConnection connection,
+            CancellationToken cancellationToken)
+    {
+        var rows = new List<ERP.NSQuell.Models.ViewModels.Almacen.AlmacenSelectVm>();
+
+        if (!await ExisteObjetoAsync(
+                connection,
+                "dbo.SolicitudesProduccion",
+                "U",
+                cancellationToken))
+        {
+            return rows;
+        }
+
+        const string sql = @"
+SELECT TOP (500)
+    s.SolicitudProduccionID,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), N''),
+        NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), N''),
+        CONCAT(N'OF-ID-', s.SolicitudProduccionID)
+    ) AS NumeroOF,
+    ISNULL(NULLIF(LTRIM(RTRIM(c.Nombre)), N''),
+           NULLIF(LTRIM(RTRIM(s.ClienteNombre)), N'')) AS Cliente
+FROM dbo.SolicitudesProduccion s
+LEFT JOIN dbo.ERP_Clientes c
+    ON c.ClienteID = s.ClienteID
+WHERE s.Activo = 1
+ORDER BY s.FechaCreacion DESC, s.SolicitudProduccionID DESC;";
+
+        await using var command = new SqlCommand(sql, connection);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var numeroOF = Texto(reader, "NumeroOF");
+            var cliente = Texto(reader, "Cliente");
+
+            rows.Add(new ERP.NSQuell.Models.ViewModels.Almacen.AlmacenSelectVm
+            {
+                Id = Entero(reader, "SolicitudProduccionID"),
+                Texto = string.IsNullOrWhiteSpace(cliente)
+                    ? numeroOF
+                    : $"{numeroOF} · {cliente}",
+                Extra = numeroOF
+            });
+        }
+
+        return rows;
+    }
+
+    protected static async Task<string?> ResolverNumeroOFAsync(
+        SqlConnection connection,
+        SqlTransaction? transaction,
+        int solicitudProduccionID,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT TOP (1)
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(NumeroOFRecibida)), N''),
+        NULLIF(LTRIM(RTRIM(FolioSolicitud)), N''),
+        CONCAT(N'OF-ID-', SolicitudProduccionID)
+    )
+FROM dbo.SolicitudesProduccion WITH (UPDLOCK, HOLDLOCK)
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;";
+
+        await using var command = new SqlCommand(sql, connection);
+        if (transaction != null)
+            command.Transaction = transaction;
+
+        command.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+            solicitudProduccionID;
+
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        var numeroOF = value == null || value == DBNull.Value
+            ? null
+            : value.ToString()?.Trim();
+
+        return string.IsNullOrWhiteSpace(numeroOF) ? null : numeroOF;
+    }
+
 }
 

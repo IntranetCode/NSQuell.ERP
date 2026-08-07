@@ -140,16 +140,29 @@ SELECT TOP (5)
     ISNULL(c.NumeroCaja,0) AS NumeroCaja
 FROM dbo.AlmacenPT_Movimientos m
 INNER JOIN dbo.ERP_Partes p ON p.ParteID = m.ParteID
+LEFT JOIN dbo.ERP_Clientes cli ON cli.ClienteID = p.ClienteID
 LEFT JOIN dbo.AlmacenPT_Cajas c ON c.CajaID = m.CajaID
 LEFT JOIN dbo.ERP_Ubicaciones u ON u.UbicacionID = m.UbicacionID
 LEFT JOIN dbo.Usuarios us ON us.UsuarioID = m.ResponsableUsuarioID
 LEFT JOIN dbo.Persona pers ON pers.PersonaID = us.PersonaID
 WHERE m.Activo=1
+  AND
+  (
+      @Q IS NULL
+      OR p.NumeroParte LIKE N'%' + @Q + N'%'
+      OR p.Descripcion LIKE N'%' + @Q + N'%'
+      OR cli.Nombre LIKE N'%' + @Q + N'%'
+  )
 ORDER BY m.FechaMovimiento DESC, m.MovimientoID DESC;";
 
         await using (var command = new SqlCommand(movimientosSql, connection))
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
+            command.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value =
+                string.IsNullOrWhiteSpace(vm.Busqueda)
+                    ? DBNull.Value
+                    : vm.Busqueda;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
                 vm.Movimientos.Add(new AlmacenPTMovimientoListaVm
@@ -330,6 +343,174 @@ vm.TotalPartes = vm.Existencias.Count;
         vm.PiezasRetenidas = vm.Existencias.Sum(x => x.Retenido);
         vm.PiezasDisponibles = vm.Existencias.Sum(x => x.Disponible);
         return View(vm);
+    }
+
+    // ALMACEN_PT_CAJAS_OF_V9_0
+    [HttpGet]
+    public async Task<IActionResult> Cajas(
+        string? q,
+        string? numeroOF,
+        string? estadoCalidad,
+        int pagina = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var sesion = ValidarSesion();
+        if (sesion != null) return sesion;
+
+        var vm = new AlmacenPTCajasVm
+        {
+            Busqueda = q?.Trim(),
+            NumeroOF = numeroOF?.Trim(),
+            EstadoCalidad = estadoCalidad?.Trim(),
+            Pagina = Math.Max(1, pagina),
+            TamanoPagina = 100
+        };
+
+        await using var connection = await AbrirConexionAsync(cancellationToken);
+
+        if (!await ExisteObjetoAsync(connection, "dbo.AlmacenPT_Cajas", "U", cancellationToken)
+            || !await ExisteObjetoAsync(connection, "dbo.vw_AlmacenPTInventarioCaja", "V", cancellationToken)
+            || !await ExisteObjetoAsync(connection, "dbo.SolicitudesProduccion", "U", cancellationToken)
+            || !await ExisteColumnaAsync(connection, "dbo.AlmacenPT_Cajas", "SolicitudProduccionID", cancellationToken))
+        {
+            vm.Configurado = false;
+            vm.MensajeConfiguracion =
+                "Falta ejecutar 21_Almacen_PT_Cajas_Vinculo_OF_v1.0.sql antes de consultar Cajas PT.";
+            return View(vm);
+        }
+
+        const string fromWhere = @"
+FROM dbo.AlmacenPT_Cajas c
+INNER JOIN dbo.ERP_Partes p
+    ON p.ParteID = c.ParteID
+LEFT JOIN dbo.ERP_Clientes cli
+    ON cli.ClienteID = p.ClienteID
+LEFT JOIN dbo.vw_AlmacenPTInventarioCaja inv
+    ON inv.CajaID = c.CajaID
+LEFT JOIN dbo.ERP_Ubicaciones u
+    ON u.UbicacionID = c.UbicacionID
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID = c.SolicitudProduccionID
+WHERE c.Activo = 1
+  AND
+  (
+      @Q IS NULL
+      OR c.Etiqueta LIKE N'%' + @Q + N'%'
+      OR ISNULL(c.LoteEtiqueta, N'') LIKE N'%' + @Q + N'%'
+      OR ISNULL(c.NumeroOF, N'') LIKE N'%' + @Q + N'%'
+      OR p.NumeroParte LIKE N'%' + @Q + N'%'
+      OR p.Descripcion LIKE N'%' + @Q + N'%'
+      OR ISNULL(cli.Nombre, N'') LIKE N'%' + @Q + N'%'
+  )
+  AND (@NumeroOF IS NULL OR ISNULL(c.NumeroOF, N'') LIKE N'%' + @NumeroOF + N'%')
+  AND (@EstadoCalidad IS NULL OR c.EstadoCalidad = @EstadoCalidad)";
+
+        await using (var count = new SqlCommand("SELECT COUNT_BIG(1) " + fromWhere, connection))
+        {
+            AgregarParametrosCajasPT(count, vm);
+            vm.TotalRegistros = Convert.ToInt32(
+                await count.ExecuteScalarAsync(cancellationToken) ?? 0L);
+        }
+
+        vm.Pagina = Math.Min(vm.Pagina, vm.TotalPaginas);
+
+        const string select = @"
+SELECT
+    c.CajaID,
+    c.ParteID,
+    c.SolicitudProduccionID,
+    p.NumeroParte,
+    p.Descripcion,
+    ISNULL(cli.Nombre, N'') AS Cliente,
+    ISNULL(c.NumeroOF, N'') AS NumeroOF,
+    c.Etiqueta,
+    c.NumeroCaja,
+    c.CantidadInicial,
+    ISNULL(inv.SaldoFisico, 0) AS SaldoFisico,
+    ISNULL(inv.Retenido, 0) AS Retenido,
+    ISNULL(inv.Disponible, 0) AS Disponible,
+    ISNULL(c.LoteEtiqueta, N'') AS LoteEtiqueta,
+    c.EstadoCalidad,
+    CONCAT(
+        u.Almacen, N' / ', u.Rack,
+        CASE WHEN u.Nivel IS NULL THEN N'' ELSE N' / ' + u.Nivel END,
+        CASE WHEN u.Posicion IS NULL THEN N'' ELSE N' / ' + u.Posicion END
+    ) AS Ubicacion,
+    c.FechaEntrada,
+    inv.UltimoMovimiento ";
+
+        var dataSql = select + fromWhere + @"
+ORDER BY c.FechaEntrada DESC, c.CajaID DESC
+OFFSET @Offset ROWS FETCH NEXT @Tamano ROWS ONLY;";
+
+        await using (var command = new SqlCommand(dataSql, connection))
+        {
+            AgregarParametrosCajasPT(command, vm);
+            command.Parameters.Add("@Offset", SqlDbType.Int).Value =
+                (vm.Pagina - 1) * vm.TamanoPagina;
+            command.Parameters.Add("@Tamano", SqlDbType.Int).Value = vm.TamanoPagina;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                vm.Cajas.Add(new AlmacenPTCajaListaVm
+                {
+                    CajaID = Entero(reader, "CajaID"),
+                    ParteID = Entero(reader, "ParteID"),
+                    SolicitudProduccionID = reader["SolicitudProduccionID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(reader["SolicitudProduccionID"]),
+                    NumeroParte = Texto(reader, "NumeroParte"),
+                    Descripcion = Texto(reader, "Descripcion"),
+                    Cliente = Texto(reader, "Cliente"),
+                    NumeroOF = Texto(reader, "NumeroOF"),
+                    Etiqueta = Texto(reader, "Etiqueta"),
+                    NumeroCaja = Entero(reader, "NumeroCaja"),
+                    CantidadInicial = Entero(reader, "CantidadInicial"),
+                    SaldoFisico = Entero(reader, "SaldoFisico"),
+                    Retenido = Entero(reader, "Retenido"),
+                    Disponible = Entero(reader, "Disponible"),
+                    LoteEtiqueta = Texto(reader, "LoteEtiqueta"),
+                    EstadoCalidad = Texto(reader, "EstadoCalidad"),
+                    Ubicacion = Texto(reader, "Ubicacion"),
+                    FechaEntrada = Fecha(reader, "FechaEntrada") ?? DateTime.MinValue,
+                    UltimoMovimiento = Fecha(reader, "UltimoMovimiento")
+                });
+            }
+        }
+
+        const string optionsSql = @"
+SELECT DISTINCT TOP (500) LTRIM(RTRIM(NumeroOF)) AS Valor
+FROM dbo.AlmacenPT_Cajas
+WHERE Activo = 1
+  AND NULLIF(LTRIM(RTRIM(NumeroOF)), N'') IS NOT NULL
+ORDER BY Valor;
+
+SELECT DISTINCT TOP (100) LTRIM(RTRIM(EstadoCalidad)) AS Valor
+FROM dbo.AlmacenPT_Cajas
+WHERE Activo = 1
+  AND NULLIF(LTRIM(RTRIM(EstadoCalidad)), N'') IS NOT NULL
+ORDER BY Valor;";
+
+        await using var options = new SqlCommand(optionsSql, connection);
+        await using var optionReader = await options.ExecuteReaderAsync(cancellationToken);
+        vm.OrdenesFiltro = await LeerListaTextoAsync(optionReader, cancellationToken);
+        if (await optionReader.NextResultAsync(cancellationToken))
+            vm.EstadosCalidadFiltro = await LeerListaTextoAsync(optionReader, cancellationToken);
+
+        return View(vm);
+    }
+
+    private static void AgregarParametrosCajasPT(
+        SqlCommand command,
+        AlmacenPTCajasVm filtro)
+    {
+        command.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value =
+            string.IsNullOrWhiteSpace(filtro.Busqueda) ? DBNull.Value : filtro.Busqueda;
+        command.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value =
+            string.IsNullOrWhiteSpace(filtro.NumeroOF) ? DBNull.Value : filtro.NumeroOF;
+        command.Parameters.Add("@EstadoCalidad", SqlDbType.NVarChar, 30).Value =
+            string.IsNullOrWhiteSpace(filtro.EstadoCalidad) ? DBNull.Value : filtro.EstadoCalidad;
     }
 
     [HttpGet]
@@ -1133,10 +1314,21 @@ WHERE ParteID = @ParteID
                 consecutivos[claveConsecutivo] =
                     numeroCaja;
 
+                var solicitudProduccionCajaID =
+                    model.EsEntregaOF && model.SolicitudProduccionID.HasValue
+                        ? model.SolicitudProduccionID
+                        : await ResolverSolicitudProduccionCajaAsync(
+                            db,
+                            transaction,
+                            item.ParteID,
+                            item.NumeroOF,
+                            cancellationToken);
+
                 const string cajaSql = @"
 INSERT dbo.AlmacenPT_Cajas
 (
     ParteID,
+    SolicitudProduccionID,
     NumeroOF,
     Etiqueta,
     NumeroCaja,
@@ -1153,6 +1345,7 @@ OUTPUT INSERTED.CajaID
 VALUES
 (
     @ParteID,
+    @SolicitudProduccionID,
     @NumeroOF,
     @Etiqueta,
     @NumeroCaja,
@@ -1168,6 +1361,7 @@ VALUES
 
                 int cajaID;
 
+
                 await using (var caja =
                     new SqlCommand(
                         cajaSql,
@@ -1178,6 +1372,13 @@ VALUES
                         "@ParteID",
                         SqlDbType.Int).Value =
                         item.ParteID;
+
+                    caja.Parameters.Add(
+                        "@SolicitudProduccionID",
+                        SqlDbType.Int).Value =
+                        solicitudProduccionCajaID.HasValue
+                            ? solicitudProduccionCajaID.Value
+                            : DBNull.Value;
 
                     caja.Parameters.Add(
                         "@NumeroOF",
@@ -1581,6 +1782,49 @@ SELECT CASE WHEN EXISTS
 
         return resultados;
     }
+    // ALMACEN_PT_CAJAS_RESOLVER_OF_V9_0
+    private static async Task<int?> ResolverSolicitudProduccionCajaAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int parteID,
+        string? numeroOF,
+        CancellationToken cancellationToken)
+    {
+        if (parteID <= 0 || string.IsNullOrWhiteSpace(numeroOF))
+            return null;
+
+        const string sql = @"
+SELECT DISTINCT TOP (2)
+    s.SolicitudProduccionID
+FROM dbo.SolicitudesProduccion s WITH (UPDLOCK, HOLDLOCK)
+WHERE s.Activo = 1
+  AND
+  (
+      UPPER(LTRIM(RTRIM(ISNULL(s.NumeroOFRecibida, N'')))) = UPPER(LTRIM(RTRIM(@NumeroOF)))
+      OR UPPER(LTRIM(RTRIM(ISNULL(s.FolioSolicitud, N'')))) = UPPER(LTRIM(RTRIM(@NumeroOF)))
+  )
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.SolicitudesProduccionDetalle d WITH (UPDLOCK, HOLDLOCK)
+      WHERE d.SolicitudProduccionID = s.SolicitudProduccionID
+        AND d.Activo = 1
+        AND d.ParteID = @ParteID
+  )
+ORDER BY s.SolicitudProduccionID DESC;";
+
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = numeroOF.Trim();
+        command.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteID;
+
+        var ids = new List<int>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            ids.Add(Convert.ToInt32(reader["SolicitudProduccionID"]));
+
+        return ids.Count == 1 ? ids[0] : null;
+    }
+
     private async Task InsertarMovimientoEntradaPTAsync(
         SqlConnection connection,
         SqlTransaction transaction,

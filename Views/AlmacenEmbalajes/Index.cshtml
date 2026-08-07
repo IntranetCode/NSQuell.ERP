@@ -1,4 +1,4 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPIndexVm
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPIndexVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = "Inventario de embalajes";
@@ -9,6 +9,8 @@
         .ToList();
 
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+    // ALMACEN_EMB_INDEX_BUSQUEDA_V9_0
+    var busquedaActiva = !string.IsNullOrWhiteSpace(Model.Busqueda);
 }
 
 <section class="alm-hero">
@@ -40,15 +42,23 @@
     </header>
 
     <form method="get" class="alm-filter stock-only-filter">
-        <div class="alm-field">
+                <div class="alm-field">
             <label for="q">Código o embalaje</label>
-            <input id="q"
-                   class="alm-input"
-                   type="search"
-                   name="q"
-                   value="@Model.Busqueda"
-                   placeholder="Escribe un código o nombre"
-                   autocomplete="off" />
+            <div class="alm-smart-search" data-alm-smart-search data-alm-smart-submit="true">
+                <input id="q" class="alm-input" type="search" name="q" value="@Model.Busqueda"
+                       placeholder="Escribe un código o nombre" autocomplete="off" data-alm-smart-input />
+                <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                    @foreach (var item in embalajes)
+                    {
+                        var textoBusqueda = $"{item.Codigo} {item.Nombre}";
+                        <button type="button" class="alm-smart-search__option"
+                                data-alm-smart-option data-alm-smart-value="@item.Codigo" data-alm-smart-text="@textoBusqueda">
+                            <strong>@item.Codigo</strong><span>@item.Nombre</span><small>@item.Saldo.ToString("0.###") @item.Unidad</small>
+                        </button>
+                    }
+                    <div class="alm-smart-search__empty" data-alm-smart-empty hidden>Sin coincidencias.</div>
+                </div>
+            </div>
         </div>
         <div class="alm-field">
             <label for="estado">Nivel de stock</label>
@@ -85,7 +95,7 @@
             <tbody>
                 @foreach (var x in embalajes)
                 {
-                    <tr>
+                    <tr class="@(busquedaActiva ? "alm-search-hit" : "")">
                         <td data-label="Código">
                             <a class="pt-part-link" asp-action="Historial" asp-route-embalaje="@x.Codigo">
                                 <strong>@x.Codigo</strong>
@@ -157,13 +167,13 @@
 
 <section class="alm-card inv2-recent-card">
     <header>
-        <span>5 movimientos recientes de embalajes</span>
+        <span>@(busquedaActiva ? $"Movimientos recientes de embalajes · {Model.Busqueda}" : "5 movimientos recientes de embalajes")</span>
         <a class="alm-header-link" asp-action="Historial">Ver historial completo <i class="fa-solid fa-arrow-right"></i></a>
     </header>
     <div class="inv2-recent-list">
         @foreach (var x in Model.Movimientos.Take(5))
         {
-            <article class="inv2-recent-item">
+            <article class="inv2-recent-item @(busquedaActiva ? "alm-search-hit" : "")">
                 <div><small>FECHA</small><strong>@x.FechaMovimiento.ToString("dd/MM/yyyy")</strong><span>@x.FechaMovimiento.ToString("HH:mm")</span></div>
                 <div class="inv2-recent-main"><small>EMBALAJE</small><a asp-action="Historial" asp-route-embalaje="@x.Codigo">@x.Codigo · @x.Material</a></div>
                 <div><small>MOVIMIENTO</small><strong>@x.TipoMovimiento</strong><span>@x.Cantidad.ToString("0.###") @x.Unidad</span></div>

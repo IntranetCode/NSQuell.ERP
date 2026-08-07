@@ -154,6 +154,7 @@ ORDER BY
             }
         }
 
+        // ALMACEN_EMB_BUSQUEDA_RECIENTES_V9_0
         const string movimientosSql = @"
 SELECT TOP (5)
     movimiento.MovimientoID,
@@ -170,89 +171,64 @@ SELECT TOP (5)
         ubicacion.Almacen,
         N' / ',
         ubicacion.Rack,
-        CASE
-            WHEN ubicacion.Nivel IS NULL
-                THEN N''
-            ELSE N' / ' + ubicacion.Nivel
-        END,
-        CASE
-            WHEN ubicacion.Posicion IS NULL
-                THEN N''
-            ELSE N' / ' + ubicacion.Posicion
-        END
+        CASE WHEN ubicacion.Nivel IS NULL THEN N'' ELSE N' / ' + ubicacion.Nivel END,
+        CASE WHEN ubicacion.Posicion IS NULL THEN N'' ELSE N' / ' + ubicacion.Posicion END
     ) AS Ubicacion,
     ISNULL(movimiento.NumeroOF, N'') AS NumeroOF,
     COALESCE
     (
         movimiento.EntregadoPorNombre,
-        persona.Nombre + N' '
-            + ISNULL(persona.ApellidoPaterno, N''),
+        persona.Nombre + N' ' + ISNULL(persona.ApellidoPaterno, N''),
         movimiento.CreadoPor,
         N''
     ) AS Responsable,
     ISNULL(movimiento.Seguimiento, N'') AS Observaciones,
-    ISNULL
-    (
-        movimiento.ReferenciaOperacion,
-        N''
-    ) AS ReferenciaOperacion
+    ISNULL(movimiento.ReferenciaOperacion, N'') AS ReferenciaOperacion
 FROM dbo.AlmacenEmbalajes_Movimientos movimiento
 INNER JOIN dbo.ERP_Embalajes embalaje
-    ON embalaje.EmbalajeID =
-       movimiento.EmbalajeID
+    ON embalaje.EmbalajeID = movimiento.EmbalajeID
 LEFT JOIN dbo.ERP_Ubicaciones ubicacion
-    ON ubicacion.UbicacionID =
-       movimiento.UbicacionID
+    ON ubicacion.UbicacionID = movimiento.UbicacionID
 LEFT JOIN dbo.Usuarios usuario
-    ON usuario.UsuarioID =
-       movimiento.ResponsableUsuarioID
+    ON usuario.UsuarioID = movimiento.ResponsableUsuarioID
 LEFT JOIN dbo.Persona persona
-    ON persona.PersonaID =
-       usuario.PersonaID
+    ON persona.PersonaID = usuario.PersonaID
 WHERE movimiento.Activo = 1
-ORDER BY
-    movimiento.FechaMovimiento DESC,
-    movimiento.MovimientoID DESC;";
+  AND
+  (
+      @Q IS NULL
+      OR embalaje.Codigo LIKE N'%' + @Q + N'%'
+      OR embalaje.Nombre LIKE N'%' + @Q + N'%'
+  )
+ORDER BY movimiento.FechaMovimiento DESC, movimiento.MovimientoID DESC;";
 
-        await using (var command =
-            new SqlCommand(movimientosSql, connection))
-        await using (var reader =
-            await command.ExecuteReaderAsync(cancellationToken))
+        await using (var command = new SqlCommand(movimientosSql, connection))
         {
+            command.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value =
+                string.IsNullOrWhiteSpace(vm.Busqueda)
+                    ? DBNull.Value
+                    : vm.Busqueda;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
                 vm.Movimientos.Add(
                     new AlmacenMPMovimientoListaVm
                     {
-                        MovimientoID =
-                            EnteroLargo(reader, "MovimientoID"),
-                        FechaMovimiento =
-                            Fecha(reader, "FechaMovimiento")
-                            ?? DateTime.MinValue,
-                        MaterialID =
-                            Entero(reader, "MaterialID"),
-                        Codigo =
-                            Texto(reader, "Codigo"),
-                        Material =
-                            Texto(reader, "Material"),
-                        TipoMovimiento =
-                            Texto(reader, "TipoMovimiento"),
-                        Cantidad =
-                            DecimalValor(reader, "Cantidad"),
-                        Unidad =
-                            Texto(reader, "Unidad"),
-                        Lote =
-                            Texto(reader, "Lote"),
-                        Ubicacion =
-                            Texto(reader, "Ubicacion"),
-                        NumeroOF =
-                            Texto(reader, "NumeroOF"),
-                        Responsable =
-                            Texto(reader, "Responsable"),
-                        Observaciones =
-                            Texto(reader, "Observaciones"),
-                        ReferenciaOperacion =
-                            Texto(reader, "ReferenciaOperacion")
+                        MovimientoID = EnteroLargo(reader, "MovimientoID"),
+                        FechaMovimiento = Fecha(reader, "FechaMovimiento") ?? DateTime.MinValue,
+                        MaterialID = Entero(reader, "MaterialID"),
+                        Codigo = Texto(reader, "Codigo"),
+                        Material = Texto(reader, "Material"),
+                        TipoMovimiento = Texto(reader, "TipoMovimiento"),
+                        Cantidad = DecimalValor(reader, "Cantidad"),
+                        Unidad = Texto(reader, "Unidad"),
+                        Lote = Texto(reader, "Lote"),
+                        Ubicacion = Texto(reader, "Ubicacion"),
+                        NumeroOF = Texto(reader, "NumeroOF"),
+                        Responsable = Texto(reader, "Responsable"),
+                        Observaciones = Texto(reader, "Observaciones"),
+                        ReferenciaOperacion = Texto(reader, "ReferenciaOperacion")
                     });
             }
         }
@@ -942,8 +918,8 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
         model.Observaciones = model.Observaciones?.Trim();
         model.OperacionToken = model.OperacionToken?.Trim() ?? string.Empty;
         model.FechaMovimiento = DateTime.Now;
-        model.EsEntregaOF = model.EsEntregaOF || model.SolicitudProduccionID.HasValue;
-
+        // EsEntregaOF solo identifica el flujo dirigido desde AlmacenOF;
+        // seleccionar una OF manual no convierte el movimiento en una entrega dirigida.
         var embalajeSolicitadoID = model.EsEntregaOF
             ? embalajeSolicitadoId.GetValueOrDefault()
             : model.MaterialID;
@@ -955,6 +931,15 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
             ModelState.AddModelError(
                 nameof(model.OperacionToken),
                 "La operación expiró. Regresa al formulario e inténtalo nuevamente.");
+        }
+
+        if (!model.EsEntregaOF
+            && (!model.SolicitudProduccionID.HasValue
+                || model.SolicitudProduccionID.Value <= 0))
+        {
+            ModelState.AddModelError(
+                nameof(model.SolicitudProduccionID),
+                "Selecciona una orden de fabricacion. No se permiten movimientos de embalajes sin OF.");
         }
 
         if (model.EsEntregaOF)
@@ -1031,6 +1016,25 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
         await using var connection =
             await AbrirConexionAsync(cancellationToken);
 
+        if (!await ExisteColumnaAsync(
+                connection,
+                "dbo.AlmacenEmbalajes_Movimientos",
+                "SolicitudProduccionID",
+                cancellationToken))
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "Falta ejecutar 20_Almacen_MP_EMB_OF_FolioCompra_v1.0.sql.");
+            await CargarMovimientoAsync(
+                model,
+                cancellationToken,
+                embalajeSolicitadoID);
+            PrepararVistaEntregaEmbalaje(
+                model,
+                embalajeSolicitadoID);
+            return View(model);
+        }
+
         if (model.EsEntregaOF
             && !await ExisteColumnaAsync(
                 connection,
@@ -1076,6 +1080,33 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
                 return model.EsEntregaOF
                     ? RedirectToAction("Index", "AlmacenOF")
                     : RedirectToAction(nameof(Index));
+            }
+
+            if (!model.EsEntregaOF)
+            {
+                var numeroOFVinculado = await ResolverNumeroOFAsync(
+                    connection,
+                    transaction,
+                    model.SolicitudProduccionID!.Value,
+                    cancellationToken);
+
+                if (string.IsNullOrWhiteSpace(numeroOFVinculado))
+                {
+                    ModelState.AddModelError(
+                        nameof(model.SolicitudProduccionID),
+                        "La orden de fabricacion seleccionada no existe o ya no esta activa.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    await CargarMovimientoAsync(
+                        model,
+                        cancellationToken,
+                        embalajeSolicitadoID);
+                    PrepararVistaEntregaEmbalaje(
+                        model,
+                        embalajeSolicitadoID);
+                    return View(model);
+                }
+
+                model.NumeroOF = numeroOFVinculado;
             }
 
             AlmacenOFEntregaContexto? contexto = null;
@@ -1596,6 +1627,11 @@ LEFT JOIN ReservaPropia reserva
         }
 
         ViewData["StockPorEmbalaje"] = stockPorEmbalaje;
+
+        ViewData["OrdenesFabricacion"] =
+            await CargarOrdenesFabricacionAsync(
+                connection,
+                cancellationToken);
 
         if (!vm.EsEntregaOF)
         {

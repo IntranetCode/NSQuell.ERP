@@ -44,6 +44,9 @@
            asp-action="Entrada">
             <i class="fa-solid fa-box"></i>
             Nueva entrada
+        </a>        <a class="alm-btn secondary" asp-action="Cajas">
+            <i class="fa-solid fa-boxes-stacked"></i>
+            Cajas PT
         </a>
 
         <a class="alm-btn secondary"
@@ -173,88 +176,76 @@
             </select>
         </div>
 
-        <div class="alm-field">
+                <div class="alm-field">
             <label for="parte">N&uacute;mero de parte</label>
-            <select id="parte"
-                    class="alm-select"
-                    name="parte">
-                <option value="">Todos los n&uacute;meros de parte</option>
-
-                @foreach (var item in Model.PartesFiltro)
-                {
-                    if (Model.FiltroParte == item.Extra)
+            <div class="alm-smart-search" data-alm-smart-search>
+                <input id="parte" class="alm-input" type="search" name="parte" value="@Model.FiltroParte"
+                       placeholder="Todos los números de parte" autocomplete="off" data-alm-smart-input />
+                <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                    @foreach (var item in Model.PartesFiltro)
                     {
-                        <option value="@item.Extra" selected>@item.Texto</option>
+                        <button type="button" class="alm-smart-search__option"
+                                data-alm-smart-option data-alm-smart-value="@item.Extra" data-alm-smart-text="@item.Texto">
+                            <strong>@item.Extra</strong><span>@item.Texto</span><small>PT</small>
+                        </button>
                     }
-                    else
-                    {
-                        <option value="@item.Extra">@item.Texto</option>
-                    }
-                }
-            </select>
+                    <div class="alm-smart-search__empty" data-alm-smart-empty hidden>Sin coincidencias.</div>
+                </div>
+            </div>
         </div>
 
-        <div class="alm-field">
+                <div class="alm-field">
             <label for="numeroOF">Orden de fabricaci&oacute;n</label>
-            <select id="numeroOF"
-                    class="alm-select"
-                    name="numeroOF">
-                <option value="">Todas las OF</option>
-
-                @foreach (var item in Model.OrdenesFiltro)
-                {
-                    if (Model.NumeroOF == item)
+            <div class="alm-smart-search" data-alm-smart-search>
+                <input id="numeroOF" class="alm-input" type="search" name="numeroOF" value="@Model.NumeroOF"
+                       placeholder="Todas las OF" autocomplete="off" data-alm-smart-input />
+                <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                    @foreach (var item in Model.OrdenesFiltro)
                     {
-                        <option value="@item" selected>@item</option>
+                        <button type="button" class="alm-smart-search__option"
+                                data-alm-smart-option data-alm-smart-value="@item" data-alm-smart-text="@item">
+                            <strong>@item</strong><span>Orden de fabricación</span><small>PT</small>
+                        </button>
                     }
-                    else
-                    {
-                        <option value="@item">@item</option>
-                    }
-                }
-            </select>
+                    <div class="alm-smart-search__empty" data-alm-smart-empty hidden>Sin coincidencias.</div>
+                </div>
+            </div>
         </div>
 
-        <div class="alm-field">
+                <div class="alm-field">
             <label for="responsable">Responsable</label>
-            <select id="responsable"
-                    class="alm-select"
-                    name="responsable">
-                <option value="">Todos los responsables</option>
-
-                @foreach (var item in Model.ResponsablesFiltro)
-                {
-                    if (Model.Responsable == item)
+            <div class="alm-smart-search" data-alm-smart-search>
+                <input id="responsable" class="alm-input" type="search" name="responsable" value="@Model.Responsable"
+                       placeholder="Todos los responsables" autocomplete="off" data-alm-smart-input />
+                <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                    @foreach (var item in Model.ResponsablesFiltro)
                     {
-                        <option value="@item" selected>@item</option>
+                        <button type="button" class="alm-smart-search__option"
+                                data-alm-smart-option data-alm-smart-value="@item" data-alm-smart-text="@item">
+                            <strong>@item</strong><span>Responsable</span><small>PT</small>
+                        </button>
                     }
-                    else
-                    {
-                        <option value="@item">@item</option>
-                    }
-                }
-            </select>
+                    <div class="alm-smart-search__empty" data-alm-smart-empty hidden>Sin coincidencias.</div>
+                </div>
+            </div>
         </div>
 
-        <div class="alm-field">
+                <div class="alm-field">
             <label for="etiquetaLote">Etiqueta o lote</label>
-            <select id="etiquetaLote"
-                    class="alm-select"
-                    name="etiquetaLote">
-                <option value="">Todas las etiquetas y lotes</option>
-
-                @foreach (var item in Model.EtiquetasLotesFiltro)
-                {
-                    if (Model.EtiquetaLote == item)
+            <div class="alm-smart-search" data-alm-smart-search>
+                <input id="etiquetaLote" class="alm-input" type="search" name="etiquetaLote" value="@Model.EtiquetaLote"
+                       placeholder="Todas las etiquetas y lotes" autocomplete="off" data-alm-smart-input />
+                <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                    @foreach (var item in Model.EtiquetasLotesFiltro)
                     {
-                        <option value="@item" selected>@item</option>
+                        <button type="button" class="alm-smart-search__option"
+                                data-alm-smart-option data-alm-smart-value="@item" data-alm-smart-text="@item">
+                            <strong>@item</strong><span>Etiqueta / lote</span><small>PT</small>
+                        </button>
                     }
-                    else
-                    {
-                        <option value="@item">@item</option>
-                    }
-                }
-            </select>
+                    <div class="alm-smart-search__empty" data-alm-smart-empty hidden>Sin coincidencias.</div>
+                </div>
+            </div>
         </div>
 
         <div class="alm-field pt-history-search">
