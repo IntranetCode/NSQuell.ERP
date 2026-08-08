@@ -1,0 +1,1124 @@
+@model ERP.NSQuell.Models.GP12DetalleViewModel
+@using ERP.NSQuell.Models
+@using System
+@using System.Linq
+
+@{
+    Layout = null;
+    ViewData["Title"] = $"GP12 #{Model.SolicitudGP12ID}";
+
+    var disponibilidadProgramar =
+        Model.Etiquetas
+            .Where(e => e.Activo)
+            .Select(e => new
+            {
+                Etiqueta = e,
+                Programado = Model.Programaciones
+                    .Where(p =>
+                        p.Activo &&
+                        p.SolicitudEtiquetaID == e.SolicitudEtiquetaID)
+                    .Sum(p => p.CantidadProgramada)
+            })
+            .Select(x => new
+            {
+                x.Etiqueta,
+                x.Programado,
+                Disponible = Math.Max(
+                    0,
+                    x.Etiqueta.CantidadRecibida - x.Programado)
+            })
+            .Where(x => x.Disponible > 0)
+            .ToList();
+
+    var programasConDisponible =
+        Model.Programaciones
+            .Where(p =>
+                p.Activo &&
+                p.CantidadProgramada >
+                Model.Asignaciones
+                    .Where(a =>
+                        a.Activo &&
+                        a.ProgramacionGP12ID == p.ProgramacionGP12ID)
+                    .Sum(a => a.CantidadAsignada))
+            .ToList();
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GP12 #@Model.SolicitudGP12ID</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: #f5f7fa;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #101828;
+        }
+
+        .page {
+            max-width: 1450px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #06385e, #0d5cab);
+            color: white;
+            border-radius: 17px;
+            padding: 24px 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .hero h1 { margin: 0 0 5px; }
+        .hero p { margin: 0; opacity: .9; }
+
+        .badge {
+            display: inline-flex;
+            border-radius: 999px;
+            background: #eaf3ff;
+            color: #0d5cab;
+            padding: 6px 11px;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .status {
+            background: white;
+            color: #0b3558;
+            padding: 9px 15px;
+            border-radius: 999px;
+            font-weight: 800;
+        }
+
+        .alert {
+            margin-top: 15px;
+            border-radius: 10px;
+            padding: 13px 16px;
+            font-weight: 600;
+        }
+
+        .success {
+            background: #ecfdf3;
+            border: 1px solid #abefc6;
+            color: #067647;
+        }
+
+        .error {
+            background: #fef3f2;
+            border: 1px solid #fecdca;
+            color: #b42318;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 13px;
+            margin: 18px 0;
+        }
+
+        .summary-card {
+            background: white;
+            border: 1px solid #dce3ea;
+            border-radius: 13px;
+            padding: 15px;
+        }
+
+        .summary-card label {
+            color: #667085;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .summary-card strong {
+            display: block;
+            margin-top: 5px;
+            font-size: 21px;
+            color: #0b3558;
+        }
+
+        .panel {
+            margin-top: 18px;
+            background: white;
+            border: 1px solid #dce3ea;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .panel-title {
+            background: #fbfcfe;
+            border-bottom: 1px solid #e4e9ef;
+            padding: 16px 19px;
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .panel-body { padding: 19px; }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .data label {
+            color: #667085;
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .data div { font-weight: 600; }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 13px;
+        }
+
+        .span-2 { grid-column: span 2; }
+        .span-all { grid-column: 1 / -1; }
+
+        input, select, textarea {
+            width: 100%;
+            border: 1px solid #cfd8e3;
+            border-radius: 9px;
+            padding: 10px 11px;
+            font: inherit;
+            background: white;
+        }
+
+        textarea { min-height: 75px; resize: vertical; }
+
+        .field label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #344054;
+            font-weight: 700;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 9px;
+            padding: 10px 15px;
+            text-decoration: none;
+            font-family: inherit;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .primary { background: #0d5cab; color: white; }
+        .secondary { background: #eef2f6; color: #344054; }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 15px;
+        }
+
+        .table-wrap { overflow-x: auto; }
+
+        table {
+            width: 100%;
+            min-width: 900px;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            background: #f8fafc;
+            color: #475467;
+            padding: 10px 12px;
+            font-size: 12px;
+            border-bottom: 1px solid #e4e9ef;
+        }
+
+        td {
+            padding: 11px 12px;
+            border-bottom: 1px solid #eef2f6;
+        }
+
+        .empty {
+            color: #667085;
+            text-align: center;
+            padding: 25px 10px;
+        }
+
+        .notice {
+            padding: 13px;
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 9px;
+            color: #475467;
+        }
+
+        .classification-strip {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin: 0 0 18px;
+        }
+
+        .classification-card {
+            position: relative;
+            overflow: hidden;
+            background: white;
+            border: 1px solid #dce3ea;
+            border-radius: 13px;
+            padding: 14px 15px 14px 18px;
+        }
+
+        .classification-card::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            background: #64748b;
+        }
+
+        .classification-card.yellow::before { background: #eab308; }
+        .classification-card.red::before { background: #dc2626; }
+        .classification-card.legacy::before { background: #64748b; }
+
+        .classification-card h3 {
+            margin: 0 0 10px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tag-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .tag-dot.yellow { background: #eab308; }
+        .tag-dot.red { background: #dc2626; }
+        .tag-dot.legacy { background: #64748b; }
+
+        .classification-values {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .classification-values small {
+            display: block;
+            color: #667085;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .classification-values strong {
+            display: block;
+            margin-top: 3px;
+            color: #0b3558;
+            font-size: 15px;
+        }
+
+        .receipt-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .receipt-card {
+            border: 1px solid #dce3ea;
+            border-radius: 12px;
+            padding: 13px;
+            background: #fbfcfe;
+        }
+
+        .receipt-card.yellow { border-left: 4px solid #eab308; }
+        .receipt-card.red { border-left: 4px solid #dc2626; }
+        .receipt-card.legacy { border-left: 4px solid #64748b; }
+
+        .receipt-stats {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 7px 0 10px;
+            color: #667085;
+            font-size: 11px;
+        }
+
+        .tag-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .tag-chip.yellow {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+
+        .tag-chip.red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .tag-chip.legacy {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        @@media (max-width: 900px) {
+            .summary,
+            .data-grid,
+            .form-grid,
+            .classification-strip,
+            .receipt-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @@media (max-width: 600px) {
+            .summary,
+            .data-grid,
+            .form-grid,
+            .classification-strip,
+            .receipt-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .span-2,
+            .span-all {
+                grid-column: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="page">
+
+    <header class="hero">
+        <div>
+            <h1>GP12 #@Model.SolicitudGP12ID</h1>
+            <p>
+                @GP12Origen.Nombre(Model.Origen)
+                ·
+                @(string.IsNullOrWhiteSpace(Model.OrdenFabricacion)
+                    ? "Sin OF"
+                    : Model.OrdenFabricacion)
+                ·
+                @(Model.NumeroParte ?? "Sin número de parte")
+            </p>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;">
+            <span class="status">@Model.EstatusNombre</span>
+
+            <a asp-controller="GP12"
+               asp-action="Index"
+               class="btn secondary">
+                Volver a GP12
+            </a>
+        </div>
+    </header>
+
+    @if (TempData["Mensaje"] != null)
+    {
+        <div class="alert success">@TempData["Mensaje"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert error">@TempData["Error"]</div>
+    }
+
+    <section class="summary">
+        <div class="summary-card">
+            <label>Solicitado</label>
+            <strong>@Model.CantidadSolicitada.ToString("N4")</strong>
+        </div>
+
+        <div class="summary-card">
+            <label>Recibido</label>
+            <strong>@Model.CantidadRecibida.ToString("N4")</strong>
+        </div>
+
+        <div class="summary-card">
+            <label>Procesado</label>
+            <strong>@Model.CantidadProcesada.ToString("N4")</strong>
+        </div>
+
+        <div class="summary-card">
+            <label>Inventario GP12</label>
+            <strong>@Model.SaldoInventario.ToString("N4")</strong>
+        </div>
+    </section>
+
+    @if (Model.Etiquetas.Any(x => x.Activo))
+    {
+        <section class="classification-strip">
+            @foreach (var etiqueta in Model.Etiquetas.Where(x => x.Activo))
+            {
+                var claseEtiqueta =
+                    etiqueta.EsAmarilla
+                        ? "yellow"
+                        : etiqueta.EsRoja
+                            ? "red"
+                            : "legacy";
+
+                <div class="classification-card @claseEtiqueta">
+                    <h3>
+                        <span class="tag-dot @claseEtiqueta"></span>
+                        @etiqueta.TipoEtiquetaNombre
+                    </h3>
+
+                    <div class="classification-values">
+                        <div>
+                            <small>Solicitado</small>
+                            <strong>@etiqueta.CantidadSolicitada.ToString("N4")</strong>
+                        </div>
+                        <div>
+                            <small>Recibido</small>
+                            <strong>@etiqueta.CantidadRecibida.ToString("N4")</strong>
+                        </div>
+                        <div>
+                            <small>Procesado</small>
+                            <strong>@etiqueta.CantidadProcesada.ToString("N4")</strong>
+                        </div>
+                    </div>
+                </div>
+            }
+        </section>
+    }
+
+    <section class="panel">
+        <div class="panel-title">1. Datos de la solicitud</div>
+
+        <div class="panel-body">
+            <div class="data-grid">
+                <div class="data">
+                    <label>Origen</label>
+                    <div>@GP12Origen.Nombre(Model.Origen)</div>
+                </div>
+
+                <div class="data">
+                    <label>OF</label>
+                    <div>@(Model.OrdenFabricacion ?? "-")</div>
+                </div>
+
+                <div class="data">
+                    <label>Cliente</label>
+                    <div>@(Model.ClienteNombre ?? "-")</div>
+                </div>
+
+                <div class="data">
+                    <label>Fecha solicitud</label>
+                    <div>@Model.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+
+                <div class="data">
+                    <label>Número de parte</label>
+                    <div>@(Model.NumeroParte ?? "-")</div>
+                </div>
+
+                <div class="data">
+                    <label>Descripción</label>
+                    <div>@(Model.DescripcionParte ?? "-")</div>
+                </div>
+
+                <div class="data">
+                    <label>Material</label>
+                    <div>@(string.IsNullOrWhiteSpace(Model.MaterialCodigo) ? "-" : Model.MaterialCodigo)</div>
+                </div>
+
+                <div class="data">
+                    <label>HIP / HOE</label>
+                    <div>@(Model.CodigoHIP ?? "-") / @(Model.CodigoHOE ?? "-")</div>
+                </div>
+
+                <div class="data" style="grid-column:1/-1;">
+                    <label>Motivo</label>
+                    <div>@(Model.Motivo ?? "-")</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-title">2. Recepción de material / Inventario GP12</div>
+
+        <div class="panel-body">
+            @if (Model.PuedeRecibir)
+            {
+                <form asp-controller="GP12"
+                      asp-action="RegistrarRecepcion"
+                      method="post">
+
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="SolicitudGP12ID"
+                           value="@Model.SolicitudGP12ID" />
+
+                    <div class="receipt-grid">
+                        @foreach (var etiqueta in Model.Etiquetas
+                            .Where(x => x.Activo && x.FaltaRecibir > 0))
+                        {
+                            var claseEtiqueta =
+                                etiqueta.EsAmarilla
+                                    ? "yellow"
+                                    : etiqueta.EsRoja
+                                        ? "red"
+                                        : "legacy";
+
+                            <div class="receipt-card @claseEtiqueta">
+                                <span class="tag-chip @claseEtiqueta">
+                                    @etiqueta.TipoEtiquetaNombre
+                                </span>
+
+                                <div class="receipt-stats">
+                                    <span>Solicitado: @etiqueta.CantidadSolicitada.ToString("N4")</span>
+                                    <span>Recibido: @etiqueta.CantidadRecibida.ToString("N4")</span>
+                                    <span>Falta: @etiqueta.FaltaRecibir.ToString("N4")</span>
+                                </div>
+
+                                <div class="field">
+                                    <label>Recibir ahora</label>
+
+                                    @if (etiqueta.EsAmarilla)
+                                    {
+                                        <input type="number"
+                                               name="CantidadAmarilla"
+                                               min="0"
+                                               step="0.0001"
+                                               max="@etiqueta.FaltaRecibir.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                               value="0" />
+                                    }
+                                    else if (etiqueta.EsRoja)
+                                    {
+                                        <input type="number"
+                                               name="CantidadRoja"
+                                               min="0"
+                                               step="0.0001"
+                                               max="@etiqueta.FaltaRecibir.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                               value="0" />
+                                    }
+                                    else
+                                    {
+                                        <input type="number"
+                                               name="CantidadSinClasificar"
+                                               min="0"
+                                               step="0.0001"
+                                               max="@etiqueta.FaltaRecibir.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                               value="0" />
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="field span-2">
+                            <label>Referencia / etiqueta / documento</label>
+                            <input type="text"
+                                   name="Referencia"
+                                   maxlength="250" />
+                        </div>
+
+                        <div class="field span-all">
+                            <label>Observaciones</label>
+                            <textarea name="Observaciones" maxlength="1000"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" class="btn primary">
+                            Registrar recepción
+                        </button>
+                    </div>
+                </form>
+            }
+            else
+            {
+                <div class="notice">
+                    Las cantidades clasificadas ya fueron recibidas completamente o la solicitud se encuentra finalizada.
+                </div>
+            }
+
+            <div style="margin-top:20px;" class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Clasificación</th>
+                        <th>Movimiento</th>
+                        <th>Cantidad</th>
+                        <th>Referencia</th>
+                        <th>Observaciones</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    @if (!Model.InventarioMovimientos.Any())
+                    {
+                        <tr>
+                            <td colspan="6" class="empty">
+                                Todavía no existen movimientos de inventario.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var mov in Model.InventarioMovimientos)
+                        {
+                            var claseEtiqueta =
+                                mov.TipoEtiqueta == GP12TipoEtiqueta.Amarilla
+                                    ? "yellow"
+                                    : mov.TipoEtiqueta == GP12TipoEtiqueta.Roja
+                                        ? "red"
+                                        : "legacy";
+
+                            <tr>
+                                <td>@mov.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>
+                                    <span class="tag-chip @claseEtiqueta">
+                                        @GP12TipoEtiqueta.Nombre(mov.TipoEtiqueta)
+                                    </span>
+                                </td>
+                                <td>@mov.TipoTexto</td>
+                                <td>@mov.Cantidad.ToString("N4")</td>
+                                <td>@(mov.Referencia ?? "-")</td>
+                                <td>@(mov.Observaciones ?? "-")</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-title">3. Programación GP12</div>
+
+        <div class="panel-body">
+            @if (Model.PuedeProgramar && disponibilidadProgramar.Any())
+            {
+                <form asp-controller="GP12"
+                      asp-action="GuardarProgramacion"
+                      method="post"
+                      id="formProgramacion">
+
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="SolicitudGP12ID"
+                           value="@Model.SolicitudGP12ID" />
+
+                    <div class="form-grid">
+                        <div class="field span-2">
+                            <label>Clasificación a programar</label>
+                            <select name="SolicitudEtiquetaID"
+                                    id="programacionEtiqueta"
+                                    required>
+                                <option value="">Seleccione...</option>
+
+                                @foreach (var item in disponibilidadProgramar)
+                                {
+                                    <option value="@item.Etiqueta.SolicitudEtiquetaID"
+                                            data-disponible="@item.Disponible.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                                        @item.Etiqueta.TipoEtiquetaNombre · Disponible @item.Disponible.ToString("N4")
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label>Fecha programada</label>
+                            <input type="date"
+                                   name="FechaProgramada"
+                                   value="@DateTime.Today.ToString("yyyy-MM-dd")"
+                                   required />
+                        </div>
+
+                        <div class="field">
+                            <label>Prioridad</label>
+                            <select name="Prioridad">
+                                <option value="1">1 - Muy alta</option>
+                                <option value="2">2 - Alta</option>
+                                <option value="3" selected>3 - Normal</option>
+                                <option value="4">4 - Baja</option>
+                                <option value="5">5 - Muy baja</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label>Hora inicio</label>
+                            <input type="time" name="HoraInicioProgramada" />
+                        </div>
+
+                        <div class="field">
+                            <label>Hora fin</label>
+                            <input type="time" name="HoraFinProgramada" />
+                        </div>
+
+                        <div class="field span-2">
+                            <label id="labelCantidadProgramada">
+                                Cantidad programada
+                            </label>
+
+                            <input type="number"
+                                   id="cantidadProgramada"
+                                   name="CantidadProgramada"
+                                   min="0.0001"
+                                   step="0.0001"
+                                   required />
+                        </div>
+
+                        <div class="field span-all">
+                            <label>Observaciones</label>
+                            <textarea name="Observaciones" maxlength="1000"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn primary" type="submit">
+                            Guardar programación
+                        </button>
+                    </div>
+                </form>
+            }
+            else if (Model.CantidadRecibida <= 0)
+            {
+                <div class="notice">
+                    Primero debe registrarse la recepción física del material.
+                </div>
+            }
+            else
+            {
+                <div class="notice">
+                    Todo el material recibido ya se encuentra programado por clasificación.
+                </div>
+            }
+
+            <div style="margin-top:20px;" class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Programación</th>
+                        <th>Clasificación</th>
+                        <th>Fecha</th>
+                        <th>Horario</th>
+                        <th>Prioridad</th>
+                        <th>Cantidad</th>
+                        <th>Asignado</th>
+                        <th>Disponible</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    @if (!Model.Programaciones.Any(x => x.Activo))
+                    {
+                        <tr>
+                            <td colspan="8" class="empty">Todavía no hay programación GP12.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var p in Model.Programaciones.Where(x => x.Activo))
+                        {
+                            var asignadoPrograma =
+                                Model.Asignaciones
+                                    .Where(x =>
+                                        x.Activo &&
+                                        x.ProgramacionGP12ID == p.ProgramacionGP12ID)
+                                    .Sum(x => x.CantidadAsignada);
+
+                            var disponible =
+                                Math.Max(0, p.CantidadProgramada - asignadoPrograma);
+
+                            var claseEtiqueta =
+                                p.TipoEtiqueta == GP12TipoEtiqueta.Amarilla
+                                    ? "yellow"
+                                    : p.TipoEtiqueta == GP12TipoEtiqueta.Roja
+                                        ? "red"
+                                        : "legacy";
+
+                            <tr>
+                                <td>#@p.ProgramacionGP12ID</td>
+                                <td>
+                                    <span class="tag-chip @claseEtiqueta">
+                                        @GP12TipoEtiqueta.Nombre(p.TipoEtiqueta)
+                                    </span>
+                                </td>
+                                <td>@p.FechaProgramada.ToString("dd/MM/yyyy")</td>
+                                <td>@p.HorarioTexto</td>
+                                <td>@p.Prioridad</td>
+                                <td>@p.CantidadProgramada.ToString("N4")</td>
+                                <td>@asignadoPrograma.ToString("N4")</td>
+                                <td>@disponible.ToString("N4")</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-title">4. Asignación de carga de trabajo</div>
+
+        <div class="panel-body">
+            @if (programasConDisponible.Any() &&
+                 Model.PersonalDisponible.Any() &&
+                 !GP12Estatus.EsFinal(Model.EstatusID))
+            {
+                <form asp-controller="GP12"
+                      asp-action="GuardarAsignacion"
+                      method="post">
+
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="SolicitudGP12ID"
+                           value="@Model.SolicitudGP12ID" />
+
+                    <div class="form-grid">
+                        <div class="field span-2">
+                            <label>Programación</label>
+
+                            <select name="ProgramacionGP12ID" required>
+                                <option value="">Seleccione...</option>
+
+                                @foreach (var p in programasConDisponible)
+                                {
+                                    var asignado =
+                                        Model.Asignaciones
+                                            .Where(a =>
+                                                a.Activo &&
+                                                a.ProgramacionGP12ID == p.ProgramacionGP12ID)
+                                            .Sum(a => a.CantidadAsignada);
+
+                                    var disponible =
+                                        p.CantidadProgramada - asignado;
+
+                                    <option value="@p.ProgramacionGP12ID">
+                                        #@p.ProgramacionGP12ID ·
+                                        @GP12TipoEtiqueta.Nombre(p.TipoEtiqueta) ·
+                                        @p.FechaProgramada.ToString("dd/MM/yyyy") ·
+                                        Disponible @disponible.ToString("N4")
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="field span-2">
+                            <label>Personal GP12</label>
+
+                            <select name="PersonaID" required>
+                                <option value="">Seleccione...</option>
+
+                                @foreach (var persona in Model.PersonalDisponible)
+                                {
+                                    <option value="@persona.PersonaID">
+                                        @persona.Texto
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label>Cantidad asignada</label>
+                            <input type="number"
+                                   name="CantidadAsignada"
+                                   min="0.0001"
+                                   step="0.0001"
+                                   required />
+                        </div>
+
+                        <div class="field span-all">
+                            <label>Observaciones</label>
+                            <textarea name="Observaciones" maxlength="1000"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" class="btn primary">
+                            Asignar trabajo
+                        </button>
+                    </div>
+                </form>
+            }
+            else if (!Model.Programaciones.Any(x => x.Activo))
+            {
+                <div class="notice">Primero debe existir una programación GP12.</div>
+            }
+            else if (!Model.PersonalDisponible.Any())
+            {
+                <div class="notice">
+                    No se encontraron colaboradores activos para realizar la asignación.
+                </div>
+            }
+            else
+            {
+                <div class="notice">
+                    Todas las programaciones activas ya tienen su cantidad completamente asignada.
+                </div>
+            }
+
+            <div style="margin-top:20px;" class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Asignación</th>
+                        <th>Programación</th>
+                        <th>Clasificación</th>
+                        <th>Persona</th>
+                        <th>Cantidad</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    @if (!Model.Asignaciones.Any(x => x.Activo))
+                    {
+                        <tr>
+                            <td colspan="7" class="empty">No existen asignaciones.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var a in Model.Asignaciones.Where(x => x.Activo))
+                        {
+                            <tr>
+                                <td>#@a.AsignacionGP12ID</td>
+                                <td>#@a.ProgramacionGP12ID</td>
+                                <td>@GP12TipoEtiqueta.Nombre(a.TipoEtiqueta)</td>
+                                <td>@a.PersonaNombre</td>
+                                <td>@a.CantidadAsignada.ToString("N4")</td>
+                                <td>@a.FechaAsignacion.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td><span class="badge">@a.EstadoTexto</span></td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-title">Historial GP12</div>
+
+        <div class="panel-body">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Movimiento</th>
+                        <th>Estado anterior</th>
+                        <th>Estado nuevo</th>
+                        <th>Entidad</th>
+                        <th>Comentario</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    @if (!Model.Historial.Any())
+                    {
+                        <tr>
+                            <td colspan="6" class="empty">Todavía no existe historial.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var h in Model.Historial)
+                        {
+                            <tr>
+                                <td>@h.FechaMovimiento.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                <td><strong>@h.Movimiento</strong></td>
+                                <td>@(h.EstatusAnteriorNombre ?? "-")</td>
+                                <td>@(h.EstatusNuevoNombre ?? "-")</td>
+                                <td>
+                                    @(h.Entidad ?? "-")
+                                    @if (h.EntidadID.HasValue)
+                                    {
+                                        <span>#@h.EntidadID</span>
+                                    }
+                                </td>
+                                <td>@(h.Comentario ?? "-")</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-title">Próxima etapa: inspección y retrabajo</div>
+
+        <div class="panel-body">
+            <div class="notice">
+                Esta sección se habilitará después de validar el flujo
+                Recepción → Programación → Asignación.
+                Aquí utilizaremos el catálogo D1-D15 del formato GQ-F-CA07-02.
+            </div>
+        </div>
+    </section>
+
+</div>
+<script>
+    (() => {
+        const etiquetaSelect = document.getElementById('programacionEtiqueta');
+        const cantidadInput = document.getElementById('cantidadProgramada');
+        const cantidadLabel = document.getElementById('labelCantidadProgramada');
+
+        if (!etiquetaSelect || !cantidadInput) {
+            return;
+        }
+
+        function actualizarMaximo() {
+            const option = etiquetaSelect.options[etiquetaSelect.selectedIndex];
+            const disponible = Number(option?.dataset?.disponible || 0);
+
+            if (disponible > 0) {
+                cantidadInput.max = String(disponible);
+                cantidadInput.disabled = false;
+                cantidadLabel.textContent = `Cantidad programada (Disponible: ${disponible.toLocaleString('es-MX', { maximumFractionDigits: 4 })})`;
+            } else {
+                cantidadInput.removeAttribute('max');
+                cantidadInput.disabled = !etiquetaSelect.value;
+                cantidadInput.value = '';
+                cantidadLabel.textContent = 'Cantidad programada';
+            }
+        }
+
+        etiquetaSelect.addEventListener('change', actualizarMaximo);
+        actualizarMaximo();
+    })();
+</script>
+</body>
+</html>
