@@ -95,6 +95,18 @@ public sealed partial class AlmacenOFController : AlmacenBaseController
             return View(vm);
         }
 
+        if (!await ExisteColumnaAsync(
+                connection,
+                "dbo.AlmacenEmbalajes_Movimientos",
+                "EmbalajeSolicitadoID",
+                cancellationToken))
+        {
+            vm.Configurado = false;
+            vm.MensajeConfiguracion =
+                "Falta ejecutar el SQL de sustitución de embalajes v5.0.6.";
+            return View(vm);
+        }
+
         const string sql = @"
 WITH Detalle AS
 (
@@ -610,14 +622,22 @@ SELECT
                 INNER JOIN dbo.SolicitudesProduccion so
                     ON so.SolicitudProduccionID = x.SolicitudProduccionID
                 WHERE mm.Activo = 1
-                  AND mm.EmbalajeID = x.CatalogoID
+                  AND COALESCE(mm.EmbalajeSolicitadoID, mm.EmbalajeID) = x.CatalogoID
                   AND
                   (
-                      (NULLIF(LTRIM(RTRIM(so.FolioSolicitud)), '') IS NOT NULL
-                       AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.FolioSolicitud)))
+                      mm.SolicitudProduccionID = x.SolicitudProduccionID
                       OR
-                      (NULLIF(LTRIM(RTRIM(so.NumeroOFRecibida)), '') IS NOT NULL
-                       AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.NumeroOFRecibida)))
+                      (
+                          mm.SolicitudProduccionID IS NULL
+                          AND
+                          (
+                              (NULLIF(LTRIM(RTRIM(so.FolioSolicitud)), '') IS NOT NULL
+                               AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.FolioSolicitud)))
+                              OR
+                              (NULLIF(LTRIM(RTRIM(so.NumeroOFRecibida)), '') IS NOT NULL
+                               AND LTRIM(RTRIM(mm.NumeroOF)) = LTRIM(RTRIM(so.NumeroOFRecibida)))
+                          )
+                      )
                   )
             ),
             0

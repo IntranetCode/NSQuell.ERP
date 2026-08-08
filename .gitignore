@@ -1,4 +1,4 @@
-# Carpetas de compilación
+# Carpetas de compilaciï¿½n
 bin/
 obj/
 
@@ -6,5 +6,9 @@ obj/
 .vs/
 *.user
 
-# Archivos de configuración con contraseñas reales (un ejemplo si aplica)
+# Archivos de configuraciï¿½n con contraseï¿½as reales (un ejemplo si aplica)
 appsettings.Development.json
+
+# Archivos generados durante la importacion de Releases
+App_Data/Releases/PendientesValidar/
+App_Data/Releases/Originales/

@@ -1,16 +1,23 @@
-@using System.Globalization
+﻿@using System.Globalization
 @using ERP.NSQuell.Models.ViewModels.Almacen
 @model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPMovimientoFormVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = Model.EsEntregaOF ? "Entrega de MP a OF" : "Movimiento MP";
 
+    var cantidadExacta = Model.Cantidad.ToString("0.###", CultureInfo.InvariantCulture);
+    var cantidadVirgen = Model.CantidadVirgen.ToString("0.0000", CultureInfo.InvariantCulture);
+    var cantidadMolido = Model.CantidadMolido.ToString("0.0000", CultureInfo.InvariantCulture);
     var maximo = Model.CantidadPendienteOF.ToString("0.###", CultureInfo.InvariantCulture);
-    var ordenes = ViewData["OrdenesFabricacionMP"] as System.Collections.Generic.IEnumerable<string>
-        ?? System.Linq.Enumerable.Empty<string>();
+
+    var ordenes = ViewData["OrdenesFabricacion"]
+        as System.Collections.Generic.IEnumerable<AlmacenSelectVm>
+        ?? System.Linq.Enumerable.Empty<AlmacenSelectVm>();
+
     var materialSolicitadoID = Convert.ToInt32(ViewData["MaterialSolicitadoID"] ?? 0);
     var materialSolicitadoTexto = ViewData["MaterialSolicitadoTexto"]?.ToString()
         ?? "Material solicitado no encontrado";
+
     var stockPorMaterial = ViewData["StockPorMaterialMP"]
         as System.Collections.Generic.IReadOnlyDictionary<int, AlmacenMPStockSelectorVm>
         ?? new System.Collections.Generic.Dictionary<int, AlmacenMPStockSelectorVm>();
@@ -18,14 +25,77 @@
     stockPorMaterial.TryGetValue(Model.MaterialID, out var stockSeleccionado);
     var stockVInicial = stockSeleccionado?.StockV ?? 0m;
     var stockMInicial = stockSeleccionado?.StockM ?? 0m;
+
+    // ALMACEN_MP_MOVIMIENTO_BUSQUEDA_V9_2
+    var materialSeleccionado = Model.Materiales.FirstOrDefault(x => x.Id == Model.MaterialID);
+    var materialSeleccionadoTexto = materialSeleccionado?.Texto ?? string.Empty;
 }
+
+<style>
+    .mp-split-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        width: 100%;
+    }
+
+    .mp-split-row {
+        border: 1px solid #dbe4ef;
+        border-radius: 14px;
+        padding: 14px;
+        background: #f8fbff;
+    }
+
+    .mp-split-row__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+
+    .mp-split-row__head strong {
+        font-size: 1rem;
+    }
+
+    .mp-split-stock {
+        font-size: .82rem;
+        color: #5d6b7a;
+        font-weight: 700;
+    }
+
+    .mp-total-box {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: #edf5ff;
+        border: 1px solid #cfe2ff;
+        margin-top: 12px;
+    }
+
+    .mp-required-note {
+        color: #9b3b00;
+        font-weight: 700;
+    }
+
+    @@media (max-width: 760px) {
+        .mp-split-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
 
 <section class="alm-hero mp-movement-hero">
     <div>
         <small>ALMACÉN MP</small>
         <h1>@(Model.EsEntregaOF ? "Entregar materia prima" : "Registrar movimiento")</h1>
         <p>
-            Selecciona la resina, consulta el stock V y M disponible e indica de cuál existencia se descontará la cantidad.
+            @(Model.EsEntregaOF
+                ? "La misma entrega puede descontar una parte de Virgen y otra de Molido. Uno de los dos puede quedar en 0.0000, pero no ambos."
+                : "Los movimientos deben vincularse a una orden de fabricación, excepto Entrada Molido. Para Entrada Virgen también se exige folio de compra.")
         </p>
     </div>
 </section>
@@ -36,21 +106,23 @@
         <span>Unidad fija: KG</span>
     </header>
 
-    <form method="post" class="alm-form mp-movement-form">
+    <form method="post" class="alm-form mp-movement-form" id="mpMovementForm">
         <div asp-validation-summary="ModelOnly" class="alm-field full"></div>
 
         <input asp-for="EsEntregaOF" type="hidden" />
-        <input asp-for="SolicitudProduccionID" type="hidden" />
         <input asp-for="OperacionToken" type="hidden" />
-        <input asp-for="CantidadPendienteOF" type="hidden" />
         <input asp-for="Unidad" type="hidden" value="KG" />
         <input asp-for="Lote" type="hidden" value="S/L" />
 
         @if (Model.EsEntregaOF)
         {
+            <input asp-for="SolicitudProduccionID" type="hidden" />
             <input asp-for="TipoMovimiento" type="hidden" />
             <input asp-for="NumeroOF" type="hidden" />
             <input asp-for="UbicacionID" type="hidden" />
+            <input asp-for="TipoMP" type="hidden" value="V" />
+            <input asp-for="Cantidad" type="hidden" value="0" />
+            <input asp-for="CantidadPendienteOF" type="hidden" />
             <input type="hidden" name="materialSolicitadoId" value="@materialSolicitadoID" />
 
             <div class="mp-form-summary full">
@@ -70,8 +142,50 @@
         }
 
         <div class="alm-field full">
-            <label for="MaterialID">@(Model.EsEntregaOF ? "Materia prima a entregar" : "Material MP")</label>
-            <select asp-for="MaterialID" class="alm-select" id="MaterialID" required>
+            <label for="MaterialSearch">@(Model.EsEntregaOF ? "Materia prima a entregar" : "Material MP")</label>
+
+            <div class="alm-smart-search alm-smart-search--movement"
+                 data-alm-smart-search
+                 data-alm-smart-select-target="MaterialID">
+                <input id="MaterialSearch"
+                       class="alm-input"
+                       type="search"
+                       value="@materialSeleccionadoTexto"
+                       placeholder="Busca por codigo o nombre de resina"
+                       autocomplete="off"
+                       data-alm-smart-input
+                       required />
+
+                <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                    @foreach (var item in Model.Materiales)
+                    {
+                        stockPorMaterial.TryGetValue(item.Id, out var stockItem);
+                        var stockV = stockItem?.StockV ?? 0m;
+                        var stockM = stockItem?.StockM ?? 0m;
+                        var textoBusqueda = $"{item.Texto} Virgen {stockV:0.###} Molido {stockM:0.###}";
+
+                        <button type="button"
+                                class="alm-smart-search__option"
+                                data-alm-smart-option
+                                data-alm-smart-value="@item.Id"
+                                data-alm-smart-display="@item.Texto"
+                                data-alm-smart-text="@textoBusqueda">
+                            <strong>@item.Texto</strong>
+                            <span>Virgen: @stockV.ToString("0.###") KG</span>
+                            <small>Molido: @stockM.ToString("0.###") KG</small>
+                        </button>
+                    }
+                    <div class="alm-smart-search__empty" data-alm-smart-empty hidden>
+                        No se encontraron resinas.
+                    </div>
+                </div>
+            </div>
+
+            <select asp-for="MaterialID"
+                    class="alm-smart-native-select"
+                    id="MaterialID"
+                    tabindex="-1"
+                    aria-hidden="true">
                 <option value="">Selecciona un material</option>
                 @foreach (var item in Model.Materiales)
                 {
@@ -85,35 +199,91 @@
                     </option>
                 }
             </select>
+
             @if (Model.EsEntregaOF)
             {
                 <small class="alm-filter-hint">
-                    El material solicitado queda registrado. Puedes seleccionar otra resina cuando sea necesario para no detener producción.
+                    El material solicitado queda registrado. Se conserva la sustitucion cuando se seleccione otra resina.
                 </small>
             }
             else
             {
-                <small class="alm-filter-hint">No se muestran cajas, bolsas ni embalajes.</small>
+                <small class="alm-filter-hint">Escribe codigo o nombre. Se muestran todas las resinas del catalogo.</small>
             }
             <span asp-validation-for="MaterialID"></span>
         </div>
 
-        <div class="alm-field">
-            <label for="TipoMP">Tipo de existencia</label>
-            <select asp-for="TipoMP" class="alm-select" id="TipoMP">
-                <option value="V">V — Stock: @stockVInicial.ToString("0.###") KG</option>
-                <option value="M">M — Stock: @stockMInicial.ToString("0.###") KG</option>
-            </select>
-            <div class="mp-stock-selector-help" aria-live="polite">
-                <span>V: <strong id="stockDisponibleV">@stockVInicial.ToString("0.###") KG</strong></span>
-                <span>M: <strong id="stockDisponibleM">@stockMInicial.ToString("0.###") KG</strong></span>
-            </div>
-            <small class="alm-filter-hint">Selecciona la existencia de la que se descontarán los kilogramos.</small>
-            <span asp-validation-for="TipoMP"></span>
-        </div>
-
-        @if (!Model.EsEntregaOF)
+        @if (Model.EsEntregaOF)
         {
+            <div class="alm-field full">
+                <label>Tipo de existencia y cantidad</label>
+
+                <div class="mp-split-grid">
+                    <div class="mp-split-row">
+                        <div class="mp-split-row__head">
+                            <strong>Virgen</strong>
+                            <span class="mp-split-stock">Stock: <span id="stockDisponibleV">@stockVInicial.ToString("0.###") KG</span></span>
+                        </div>
+                        <div class="alm-unit-input">
+                            <input asp-for="CantidadVirgen"
+                                   class="alm-input"
+                                   id="CantidadVirgen"
+                                   type="number"
+                                   value="@cantidadVirgen"
+                                   min="0"
+                                   max="@maximo"
+                                   step="0.001"
+                                   inputmode="decimal" />
+                            <span class="alm-unit-input__suffix">KG</span>
+                        </div>
+                        <span asp-validation-for="CantidadVirgen"></span>
+                    </div>
+
+                    <div class="mp-split-row">
+                        <div class="mp-split-row__head">
+                            <strong>Molido</strong>
+                            <span class="mp-split-stock">Stock: <span id="stockDisponibleM">@stockMInicial.ToString("0.###") KG</span></span>
+                        </div>
+                        <div class="alm-unit-input">
+                            <input asp-for="CantidadMolido"
+                                   class="alm-input"
+                                   id="CantidadMolido"
+                                   type="number"
+                                   value="@cantidadMolido"
+                                   min="0"
+                                   max="@maximo"
+                                   step="0.001"
+                                   inputmode="decimal" />
+                            <span class="alm-unit-input__suffix">KG</span>
+                        </div>
+                        <span asp-validation-for="CantidadMolido"></span>
+                    </div>
+                </div>
+
+                <div class="mp-total-box" aria-live="polite">
+                    <span>Total de la entrega</span>
+                    <strong id="mpSplitTotal">0.0000 KG</strong>
+                </div>
+                <small class="alm-filter-hint">
+                    Se permiten 0.0000 KG en Virgen o Molido, pero la suma debe ser mayor que cero y no puede exceder el pendiente de la OF.
+                </small>
+            </div>
+        }
+        else
+        {
+            <div class="alm-field">
+                <label for="TipoMP">Tipo de existencia</label>
+                <select asp-for="TipoMP" class="alm-select" id="TipoMP">
+                    <option value="V">Virgen — Stock: @stockVInicial.ToString("0.###") KG</option>
+                    <option value="M">Molido — Stock: @stockMInicial.ToString("0.###") KG</option>
+                </select>
+                <div class="mp-stock-selector-help" aria-live="polite">
+                    <span>Virgen: <strong id="stockDisponibleV">@stockVInicial.ToString("0.###") KG</strong></span>
+                    <span>Molido: <strong id="stockDisponibleM">@stockMInicial.ToString("0.###") KG</strong></span>
+                </div>
+                <span asp-validation-for="TipoMP"></span>
+            </div>
+
             <div class="alm-field">
                 <label for="TipoMovimiento">Tipo de movimiento</label>
                 <select asp-for="TipoMovimiento" class="alm-select" id="TipoMovimiento">
@@ -126,40 +296,51 @@
             </div>
 
             <div class="alm-field full">
-                <label for="NumeroOF">Orden de fabricación</label>
-                <select asp-for="NumeroOF" class="alm-select" id="NumeroOF">
-                    <option value="">Sin OF / movimiento general</option>
-                    @if (!string.IsNullOrWhiteSpace(Model.NumeroOF) && !ordenes.Contains(Model.NumeroOF))
-                    {
-                        <option value="@Model.NumeroOF">@Model.NumeroOF</option>
-                    }
+                <label for="SolicitudProduccionID">Orden de fabricación</label>
+                <select asp-for="SolicitudProduccionID" class="alm-select" id="SolicitudProduccionID">
+                    <option value="">Selecciona una OF</option>
                     @foreach (var orden in ordenes)
                     {
-                        <option value="@orden">@orden</option>
+                        <option value="@orden.Id">@orden.Texto</option>
                     }
                 </select>
-                <small class="alm-filter-hint">Selecciona una OF existente cuando el movimiento corresponda a producción.</small>
+                <small class="alm-filter-hint mp-required-note" id="mpOfRequirementHelp">
+                    Obligatorio excepto cuando el movimiento es Entrada de Molido.
+                </small>
+                <span asp-validation-for="SolicitudProduccionID"></span>
             </div>
-        }
 
-        <div class="alm-field">
-            <label for="Cantidad">Cantidad</label>
-            <div class="alm-unit-input">
-                <input asp-for="Cantidad"
+            <div class="alm-field full" id="FolioCompraField">
+                <label for="FolioCompra">Folio de compra</label>
+                <input asp-for="FolioCompra"
                        class="alm-input"
-                       id="Cantidad"
-                       required
-                       min="0.001"
-                       max="@(Model.EsEntregaOF ? maximo : null)"
-                       step="0.001"
-                       placeholder="0.000" />
-                <span class="alm-unit-input__suffix">KG</span>
+                       id="FolioCompra"
+                       maxlength="120"
+                       placeholder="Folio de compra de la materia prima Virgen" />
+                <small class="alm-filter-hint" id="FolioCompraHelp">
+                    Obligatorio únicamente cuando el movimiento es Entrada y la existencia es Virgen.
+                </small>
+                <span asp-validation-for="FolioCompra"></span>
             </div>
-            <span asp-validation-for="Cantidad"></span>
-        </div>
 
-        @if (!Model.EsEntregaOF)
-        {
+            <div class="alm-field">
+                <label for="Cantidad">Cantidad</label>
+                <div class="alm-unit-input">
+                    <input type="number"
+                           class="alm-input"
+                           id="Cantidad"
+                           name="Cantidad"
+                           value="@cantidadExacta"
+                           required
+                           min="0.001"
+                           step="0.001"
+                           inputmode="decimal"
+                           placeholder="0.000" />
+                    <span class="alm-unit-input__suffix">KG</span>
+                </div>
+                <span asp-validation-for="Cantidad"></span>
+            </div>
+
             <div class="alm-field">
                 <label for="UbicacionID">Ubicación</label>
                 <select asp-for="UbicacionID" class="alm-select" id="UbicacionID">
@@ -179,7 +360,7 @@
                       class="alm-textarea"
                       id="Observaciones"
                       rows="4"
-                      placeholder="@(Model.EsEntregaOF ? "Indica el motivo cuando se entregue una resina diferente a la solicitada" : "Describe el motivo, procedencia o destino del movimiento")"></textarea>
+                      placeholder="@(Model.EsEntregaOF ? "Describe la entrega o el motivo de una sustitución" : "Describe el origen, destino o motivo del movimiento")"></textarea>
             <span asp-validation-for="Observaciones"></span>
         </div>
 
@@ -203,32 +384,100 @@
         (() => {
             const material = document.getElementById('MaterialID');
             const tipo = document.getElementById('TipoMP');
+            const tipoMovimiento = document.getElementById('TipoMovimiento');
             const stockV = document.getElementById('stockDisponibleV');
             const stockM = document.getElementById('stockDisponibleM');
+            const folioField = document.getElementById('FolioCompraField');
+            const folio = document.getElementById('FolioCompra');
+            const ofSelect = document.getElementById('SolicitudProduccionID');
+            const ofHelp = document.getElementById('mpOfRequirementHelp');
+            const cantidadV = document.getElementById('CantidadVirgen');
+            const cantidadM = document.getElementById('CantidadMolido');
+            const total = document.getElementById('mpSplitTotal');
+            const pendiente = Number.parseFloat('@maximo' || '0');
 
-            if (!material || !tipo || !stockV || !stockM) return;
-
-            const format = value => {
-                const number = Number.parseFloat(value || '0');
-                return `${Number.isFinite(number) ? number.toLocaleString('es-MX', { maximumFractionDigits: 3 }) : '0'} KG`;
+            const number = value => {
+                const parsed = Number.parseFloat(value || '0');
+                return Number.isFinite(parsed) ? parsed : 0;
             };
 
-            const update = () => {
+            const formatStock = value =>
+                `${number(value).toLocaleString('es-MX', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} KG`;
+
+            const formatFour = value =>
+                `${number(value).toLocaleString('es-MX', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} KG`;
+
+            const updateStock = () => {
+                if (!material) return;
+
                 const option = material.options[material.selectedIndex];
                 const valueV = option?.dataset.stockV || '0';
                 const valueM = option?.dataset.stockM || '0';
 
-                stockV.textContent = format(valueV);
-                stockM.textContent = format(valueM);
+                if (stockV) stockV.textContent = formatStock(valueV);
+                if (stockM) stockM.textContent = formatStock(valueM);
 
-                const optionV = tipo.querySelector('option[value="V"]');
-                const optionM = tipo.querySelector('option[value="M"]');
-                if (optionV) optionV.textContent = `V — Stock: ${format(valueV)}`;
-                if (optionM) optionM.textContent = `M — Stock: ${format(valueM)}`;
+                if (tipo) {
+                    const optionV = tipo.querySelector('option[value="V"]');
+                    const optionM = tipo.querySelector('option[value="M"]');
+                    if (optionV) optionV.textContent = `Virgen — Stock: ${formatStock(valueV)}`;
+                    if (optionM) optionM.textContent = `Molido — Stock: ${formatStock(valueM)}`;
+                }
+
+                if (cantidadV) {
+                    cantidadV.max = String(Math.max(0, Math.min(number(valueV), pendiente)));
+                }
+
+                if (cantidadM) {
+                    cantidadM.max = String(Math.max(0, Math.min(number(valueM), pendiente)));
+                }
             };
 
-            material.addEventListener('change', update);
-            update();
+            const updateFolio = () => {
+                if (!folioField || !folio) return;
+
+                const requires =
+                    tipoMovimiento?.value === 'Entrada'
+                    && tipo?.value === 'V';
+
+                folioField.hidden = !requires;
+                folio.required = requires;
+                folio.setAttribute('aria-required', requires ? 'true' : 'false');
+            };
+
+            const updateOFRequirement = () => {
+                if (!ofSelect) return;
+
+                const libre =
+                    tipoMovimiento?.value === 'Entrada'
+                    && tipo?.value === 'M';
+
+                ofSelect.required = !libre;
+                ofSelect.setAttribute('aria-required', libre ? 'false' : 'true');
+
+                if (ofHelp) {
+                    ofHelp.textContent = libre
+                        ? 'Opcional para Entrada de Molido. Si eliges una OF, el movimiento quedará vinculado.'
+                        : 'Obligatorio. Selecciona una OF existente para este movimiento.';
+                }
+            };
+            const updateTotal = () => {
+                if (!total) return;
+                total.textContent = formatFour(number(cantidadV?.value) + number(cantidadM?.value));
+            };
+
+            material?.addEventListener('change', updateStock);
+            tipo?.addEventListener('change', updateFolio);
+            tipo?.addEventListener('change', updateOFRequirement);
+            tipoMovimiento?.addEventListener('change', updateFolio);
+            tipoMovimiento?.addEventListener('change', updateOFRequirement);
+            cantidadV?.addEventListener('input', updateTotal);
+            cantidadM?.addEventListener('input', updateTotal);
+
+            updateStock();
+            updateFolio();
+            updateOFRequirement();
+            updateTotal();
         })();
     </script>
 }

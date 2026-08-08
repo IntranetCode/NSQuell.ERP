@@ -267,7 +267,8 @@
 }
 
 @{
-    Layout = null;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Programa de Planeación | ERP QUELL";
     var necesidades = Model.Necesidades ?? new List<PlaneacionProgramaNecesidadVm>();
     var listos = necesidades
         .Where(ListoCambioMolde)
@@ -1473,6 +1474,8 @@
     </style>
 </head>
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="page">
         <section class="hero">
             <h1><i class="fa-solid fa-list-check me-2"></i>Programa de Planeación</h1>
@@ -2049,6 +2052,147 @@
                 ).forEach(el => setCollapse(el, false));
             });
         });
+    </script>
+    <script>
+        /* PROGRAMA_CLIENTE_FULLSCREEN_CIERRE_CAPTURA_V1_4 */
+        document.addEventListener("DOMContentLoaded", function () {
+            function cerrarClienteFullscreen(client, head) {
+                if (!client) return;
+
+                const collapseEl = client.querySelector("[data-collapse-level='client']");
+
+                // Primero retirar las clases que fuerzan el panel como fixed y
+                // mantienen el collapse visible con display:block !important.
+                document.body.classList.remove("client-focus");
+
+                document.querySelectorAll("[data-section]").forEach(function (section) {
+                    section.classList.remove("has-focus");
+                });
+
+                document.querySelectorAll("[data-client]").forEach(function (item) {
+                    item.classList.remove("is-fullscreen");
+                });
+
+                if (head) {
+                    head.setAttribute("aria-expanded", "false");
+                }
+
+                if (collapseEl) {
+                    const instance = bootstrap.Collapse.getOrCreateInstance(
+                        collapseEl,
+                        { toggle: false }
+                    );
+
+                    instance.hide();
+
+                    // Fallback determinista: si Bootstrap conserva el estado
+                    // por la transicion, retirar show garantiza el minimizado.
+                    collapseEl.classList.remove("show");
+                }
+            }
+
+            // Captura = true: este listener se ejecuta antes del data-api
+            // delegado de Bootstrap. Asi el mismo clic no vuelve a abrirlo.
+            document.addEventListener("click", function (event) {
+                const target = event.target instanceof Element ? event.target : null;
+                const head = target ? target.closest(".client-panel-head") : null;
+
+                if (!head) return;
+
+                const client = head.closest("[data-client]");
+                if (!client || !client.classList.contains("is-fullscreen")) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+
+                cerrarClienteFullscreen(client, head);
+            }, true);
+
+            document.addEventListener("keydown", function (event) {
+                if (event.key !== "Escape") return;
+
+                const client = document.querySelector(".client-panel.is-fullscreen");
+                if (!client) return;
+
+                const head = client.querySelector(".client-panel-head");
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+
+                cerrarClienteFullscreen(client, head);
+            }, true);
+        });
+    </script>
+    <script>
+        /* PROGRAMA_CLIENTE_FULLSCREEN_CIERRE_FINAL_V1_5 */
+        (function () {
+            function cerrarClienteFullscreen(client, head) {
+                if (!client) return;
+
+                const collapseEl = client.querySelector("[data-collapse-level='client']");
+                const section = client.closest("[data-section]");
+
+                // 1. Salir primero del modo visual fullscreen.
+                document.body.classList.remove("client-focus");
+
+                if (section) {
+                    section.classList.remove("has-focus");
+                }
+
+                document.querySelectorAll("[data-client].is-fullscreen").forEach(function (item) {
+                    item.classList.remove("is-fullscreen");
+                });
+
+                // 2. Cerrar el collapse SIN volver a pasar por el toggle de Bootstrap.
+                if (collapseEl) {
+                    collapseEl.classList.remove("show");
+                    collapseEl.classList.remove("collapsing");
+                    collapseEl.style.height = "";
+                }
+
+                // 3. Sincronizar el encabezado.
+                if (head) {
+                    head.classList.add("collapsed");
+                    head.setAttribute("aria-expanded", "false");
+                }
+            }
+
+            // CAPTURE = true: este manejador corre antes del data-api de Bootstrap.
+            document.addEventListener("click", function (event) {
+                const head = event.target.closest(".client-panel-head");
+                if (!head) return;
+
+                const client = head.closest("[data-client]");
+                if (!client || !client.classList.contains("is-fullscreen")) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+
+                cerrarClienteFullscreen(client, head);
+            }, true);
+
+            document.addEventListener("keydown", function (event) {
+                if (event.key !== "Escape") return;
+
+                const client = document.querySelector("[data-client].is-fullscreen");
+                if (!client) return;
+
+                const head = client.querySelector(".client-panel-head");
+
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+
+                cerrarClienteFullscreen(client, head);
+            }, true);
+        })();
     </script>
 </body>
 </html>

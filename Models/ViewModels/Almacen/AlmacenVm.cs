@@ -112,7 +112,18 @@ public sealed class AlmacenMaterialFormVm
 public sealed class AlmacenMPMovimientoFormVm
 {
     public string TipoMP { get; set; } = "VIRGEN";
-    [Required]
+
+    [Range(typeof(decimal), "0", "999999999", ErrorMessage = "La cantidad Virgen no puede ser negativa.")]
+    [Display(Name = "Cantidad Virgen")]
+    public decimal CantidadVirgen { get; set; }
+
+    [Range(typeof(decimal), "0", "999999999", ErrorMessage = "La cantidad Molido no puede ser negativa.")]
+    [Display(Name = "Cantidad Molido")]
+    public decimal CantidadMolido { get; set; }
+
+    [StringLength(120)]
+    [Display(Name = "Folio de compra")]
+    public string? FolioCompra { get; set; }[Required]
     [Display(Name = "Material")]
     public int MaterialID { get; set; }
 
@@ -231,6 +242,45 @@ public sealed class AlmacenPTMovimientoListaVm
     public string ReferenciaOperacion { get; set; } = string.Empty;
     public string LoteEtiqueta { get; set; } = string.Empty;
     public int NumeroCaja { get; set; }
+}
+
+// ALMACEN_PT_CAJAS_OF_V9_0
+public sealed class AlmacenPTCajasVm
+{
+    public bool Configurado { get; set; } = true;
+    public string? MensajeConfiguracion { get; set; }
+    public string? Busqueda { get; set; }
+    public string? NumeroOF { get; set; }
+    public string? EstadoCalidad { get; set; }
+    public int Pagina { get; set; } = 1;
+    public int TamanoPagina { get; set; } = 100;
+    public int TotalRegistros { get; set; }
+    public int TotalPaginas => Math.Max(1, (int)Math.Ceiling(TotalRegistros / (double)Math.Max(1, TamanoPagina)));
+    public List<string> OrdenesFiltro { get; set; } = new();
+    public List<string> EstadosCalidadFiltro { get; set; } = new();
+    public List<AlmacenPTCajaListaVm> Cajas { get; set; } = new();
+}
+
+public sealed class AlmacenPTCajaListaVm
+{
+    public int CajaID { get; set; }
+    public int ParteID { get; set; }
+    public int? SolicitudProduccionID { get; set; }
+    public string NumeroParte { get; set; } = string.Empty;
+    public string Descripcion { get; set; } = string.Empty;
+    public string Cliente { get; set; } = string.Empty;
+    public string NumeroOF { get; set; } = string.Empty;
+    public string Etiqueta { get; set; } = string.Empty;
+    public int NumeroCaja { get; set; }
+    public int CantidadInicial { get; set; }
+    public int SaldoFisico { get; set; }
+    public int Retenido { get; set; }
+    public int Disponible { get; set; }
+    public string LoteEtiqueta { get; set; } = string.Empty;
+    public string EstadoCalidad { get; set; } = string.Empty;
+    public string Ubicacion { get; set; } = string.Empty;
+    public DateTime FechaEntrada { get; set; }
+    public DateTime? UltimoMovimiento { get; set; }
 }
 
 public sealed class AlmacenPTEntradaFormVm

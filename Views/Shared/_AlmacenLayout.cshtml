@@ -24,19 +24,75 @@
         _ => "Almacenes"
     };
 
+    // ALMACEN_BACK_ROUTES_V9_2
+    var entregaOfRuta = string.Equals(
+        Context.Request.Query["entregaOF"].ToString(),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
+
+    var numeroOfRuta = Context.Request.Query["numeroOF"].ToString().Trim();
+    var tipoRuta = Context.Request.Query["tipo"].ToString().Trim();
+    var returnUrlRuta = Context.Request.Query["returnUrl"].ToString().Trim();
+    var returnUrlSeguro =
+        !string.IsNullOrWhiteSpace(returnUrlRuta)
+        && returnUrlRuta.StartsWith("/", StringComparison.Ordinal)
+        && !returnUrlRuta.StartsWith("//", StringComparison.Ordinal)
+            ? returnUrlRuta
+            : null;
     var regresoPredeterminado = controller switch
     {
         "Almacen" => "/Menu/Grupo/1",
-        "AlmacenMP" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+        "AlmacenAlmacenes" => "/Menu/Grupo/1",
+
+        "AlmacenCompras" when
+            action.Equals("Confirmar", StringComparison.OrdinalIgnoreCase)
+            && returnUrlSeguro is not null
+                => returnUrlSeguro,
+        "AlmacenCompras" => "/Menu/Grupo/1",
+
+        "AlmacenMP" when action.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenMP" when action.Equals("Material", StringComparison.OrdinalIgnoreCase)
+            => "/AlmacenMP/Materiales",
+        "AlmacenMP" when
+            action.Equals("Movimiento", StringComparison.OrdinalIgnoreCase)
+            && entregaOfRuta
+                => "/AlmacenOF/Index",
         "AlmacenMP" => "/AlmacenMP/Index",
-        "AlmacenEmbalajes" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+
+        "AlmacenEmbalajes" when action.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenEmbalajes" when action.Equals("Embalaje", StringComparison.OrdinalIgnoreCase)
+            => "/AlmacenEmbalajes/Embalajes",
+        "AlmacenEmbalajes" when
+            action.Equals("Movimiento", StringComparison.OrdinalIgnoreCase)
+            && entregaOfRuta
+                => "/AlmacenOF/Index",
         "AlmacenEmbalajes" => "/AlmacenEmbalajes/Index",
-        "AlmacenOF" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
-        "AlmacenOF" => "/AlmacenOF/Index",
-        "AlmacenPT" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+
+        "AlmacenPT" when action.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenPT" when action.Equals("Configurar", StringComparison.OrdinalIgnoreCase)
+            => "/AlmacenPT/NivelesStock",
+        "AlmacenPT" when
+            action.Equals("Entrada", StringComparison.OrdinalIgnoreCase)
+            && entregaOfRuta
+                => "/AlmacenOF/Index",
+        "AlmacenPT" when
+            action.Equals("Movimiento", StringComparison.OrdinalIgnoreCase)
+            && tipoRuta.Equals("Salida", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(numeroOfRuta)
+                => "/AlmacenOF/Index",
         "AlmacenPT" => "/AlmacenPT/Index",
-        "AlmacenUbicaciones" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/1",
+
+        "AlmacenOF" when action.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenOF" => "/AlmacenOF/Index",
+
+        "AlmacenUbicaciones" when action.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
         "AlmacenUbicaciones" => "/AlmacenUbicaciones/Index",
+
         _ => "/Menu/Grupo/1"
     };
 }
@@ -263,18 +319,157 @@
             if (!button) return;
 
             button.addEventListener('click', () => {
+                // ALMACEN_BACK_ROUTES_V9_2: ruta logica, no historial accidental del navegador.
                 const fallback = button.dataset.fallbackUrl || '/Menu/Grupo/1';
-
-                if (window.history.length > 1) {
-                    window.history.back();
-                    return;
-                }
-
-                window.location.replace(fallback);
+                window.location.assign(fallback);
             });
         })();
     </script>
-    @await RenderSectionAsync("Scripts", required: false)
+        <!-- ALMACEN_SMART_SEARCH_V9_0 -->
+    <script>
+        (() => {
+            const normalize = value => (value || '')
+                .toString()
+                .toLocaleLowerCase('es-MX')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            const initialize = root => {
+                const scope = root && root.querySelectorAll ? root : document;
+
+                scope.querySelectorAll('[data-alm-smart-search]').forEach(component => {
+                    if (component.dataset.smartReady === '1') return;
+                    component.dataset.smartReady = '1';
+
+                    const input = component.querySelector('[data-alm-smart-input]');
+                    const menu = component.querySelector('[data-alm-smart-menu]');
+                    const options = Array.from(component.querySelectorAll('[data-alm-smart-option]'));
+                    const empty = component.querySelector('[data-alm-smart-empty]');
+                    const submitOnSelect = component.dataset.almSmartSubmit === 'true';
+                    const maxVisible = Number.POSITIVE_INFINITY; // ALMACEN_SMART_SEARCH_SIN_LIMITE_V9_1
+
+                    if (!input || !menu) return;
+
+                    const close = () => { menu.hidden = true; };
+
+                    const refresh = () => {
+                        const query = normalize(input.value);
+                        let visible = 0;
+
+                        options.forEach(option => {
+                            const text = normalize(option.dataset.almSmartText || option.textContent);
+                            const match = !query || text.includes(query);
+                            const show = match && visible < maxVisible;
+                            option.hidden = !show;
+                            if (show) visible++;
+                        });
+
+                        if (empty) empty.hidden = visible !== 0;
+                        menu.hidden = visible === 0 && !empty;
+                        if (empty && visible === 0) menu.hidden = false;
+                    };
+
+                    // ALMACEN_SMART_SEARCH_TARGET_SELECT_V9_2
+                    const targetSelectId = component.dataset.almSmartSelectTarget || '';
+                    const targetSelect = targetSelectId
+                        ? document.getElementById(targetSelectId)
+                        : null;
+
+                    const displayForValue = value => {
+                        const option = options.find(item =>
+                            (item.dataset.almSmartValue || '') === (value || ''));
+                        return option?.dataset.almSmartDisplay
+                            || option?.dataset.almSmartValue
+                            || '';
+                    };
+
+                    const syncTargetValidity = () => {
+                        if (!targetSelect) return;
+                        input.setCustomValidity(
+                            targetSelect.value
+                                ? ''
+                                : 'Selecciona una opcion valida del listado.');
+                    };
+
+                    if (targetSelect && targetSelect.value && !input.value) {
+                        input.value = displayForValue(targetSelect.value);
+                    }
+                    syncTargetValidity();
+
+                    input.addEventListener('focus', refresh);
+                    input.addEventListener('input', () => {
+                        if (targetSelect) {
+                            targetSelect.value = '';
+                            targetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                            syncTargetValidity();
+                        }
+                        refresh();
+                    });
+
+                    input.addEventListener('keydown', event => {
+                        if (event.key === 'Escape') {
+                            close();
+                            return;
+                        }
+
+                        if (event.key === 'ArrowDown' && !menu.hidden) {
+                            const first = options.find(option => !option.hidden);
+                            if (first) {
+                                event.preventDefault();
+                                first.focus();
+                            }
+                        }
+                    });
+
+                    options.forEach(option => {
+                        option.addEventListener('click', () => {
+                            const value = option.dataset.almSmartValue || '';
+                            const display = option.dataset.almSmartDisplay || value;
+
+                            input.value = display;
+
+                            if (targetSelect) {
+                                targetSelect.value = value;
+                                targetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                syncTargetValidity();
+                            }
+                            else {
+                                input.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
+                            close();
+
+                            if (submitOnSelect) {
+                                component.closest('form')?.requestSubmit();
+                            }
+                        });
+
+                        option.addEventListener('keydown', event => {
+                            if (event.key === 'Escape') {
+                                input.focus();
+                                close();
+                            }
+                        });
+                    });
+
+                    document.addEventListener('click', event => {
+                        if (!component.contains(event.target)) close();
+                    });
+                });
+            };
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => initialize(document));
+            }
+            else {
+                initialize(document);
+            }
+        })();
+    </script>
+
+@await RenderSectionAsync("Scripts", required: false)
 <!-- ALMACEN_REVISION_V8_START -->
 <script>
 (() => {
@@ -401,5 +596,111 @@
 })();
 </script>
 <!-- ALMACEN_REVISION_V8_END -->
+
+    <!-- ALMACEN_ETIQUETAS_VM_V9_3 -->
+    <script>
+        (() => {
+            const normalizeVmLabel = value => {
+                if (!value) return value;
+
+                return value
+                    .replace(/\bVIRGEN\b/gi, "V")
+                    .replace(/\bMOLIDO\b/gi, "M");
+            };
+
+            const ignoredParents = new Set([
+                "SCRIPT",
+                "STYLE",
+                "TEXTAREA",
+                "NOSCRIPT"
+            ]);
+
+            const normalizeNode = root => {
+                if (!root) return;
+
+                if (root.nodeType === Node.TEXT_NODE) {
+                    const parent = root.parentElement;
+                    if (!parent || ignoredParents.has(parent.tagName)) return;
+
+                    const updated = normalizeVmLabel(root.nodeValue);
+                    if (updated !== root.nodeValue) {
+                        root.nodeValue = updated;
+                    }
+                    return;
+                }
+
+                if (root.nodeType !== Node.ELEMENT_NODE &&
+                    root.nodeType !== Node.DOCUMENT_NODE &&
+                    root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) {
+                    return;
+                }
+
+                if (root.nodeType === Node.ELEMENT_NODE) {
+                    const element = root;
+
+                    for (const attr of ["placeholder", "title", "aria-label"]) {
+                        if (!element.hasAttribute(attr)) continue;
+
+                        const current = element.getAttribute(attr);
+                        const updated = normalizeVmLabel(current);
+
+                        if (updated !== current) {
+                            element.setAttribute(attr, updated);
+                        }
+                    }
+                }
+
+                const walker = document.createTreeWalker(
+                    root,
+                    NodeFilter.SHOW_TEXT
+                );
+
+                const nodes = [];
+                while (walker.nextNode()) {
+                    nodes.push(walker.currentNode);
+                }
+
+                for (const node of nodes) {
+                    const parent = node.parentElement;
+                    if (!parent || ignoredParents.has(parent.tagName)) continue;
+
+                    const updated = normalizeVmLabel(node.nodeValue);
+                    if (updated !== node.nodeValue) {
+                        node.nodeValue = updated;
+                    }
+                }
+            };
+
+            const initialize = () => {
+                normalizeNode(document.body);
+
+                const observer = new MutationObserver(mutations => {
+                    for (const mutation of mutations) {
+                        for (const node of mutation.addedNodes) {
+                            normalizeNode(node);
+                        }
+
+                        if (mutation.type === "characterData") {
+                            normalizeNode(mutation.target);
+                        }
+                    }
+                });
+
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    characterData: true
+                });
+            };
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", initialize, {
+                    once: true
+                });
+            } else {
+                initialize();
+            }
+        })();
+    </script>
 </body>
 </html>
