@@ -463,6 +463,85 @@
             pointer-events: none
         }
 
+
+
+        .paro-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+
+            .paro-toolbar.open {
+                border-color: #fda29b;
+                background: #fff8f6;
+            }
+
+        .paro-title {
+            font-weight: 950;
+            color: var(--blue-dark);
+        }
+
+        .paro-subtitle {
+            color: var(--muted);
+            font-size: .84rem;
+            font-weight: 650;
+        }
+
+        .btn-paro-start,
+        .btn-paro-close {
+            border: 0;
+            border-radius: 13px;
+            padding: 11px 15px;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .btn-paro-start {
+            background: #b42318;
+            color: #fff;
+        }
+
+            .btn-paro-start:hover {
+                background: #7f1d1d;
+                color: #fff;
+            }
+
+        .btn-paro-close {
+            background: #107c41;
+            color: #fff;
+        }
+
+            .btn-paro-close:hover {
+                background: #0b5d31;
+                color: #fff;
+            }
+
+        .modal-paro .modal-header {
+            background: linear-gradient(135deg,#7f1d1d,#b42318);
+        }
+
+        .modal-reanudar .modal-header {
+            background: linear-gradient(135deg,#065f46,#107c41);
+        }
+
+        .paro-warning {
+            border: 1px solid #fedf89;
+            background: #fffcf5;
+            color: #93370d;
+            border-radius: 14px;
+            padding: 12px;
+            font-weight: 750;
+        }
+
         @@media(max-width:1000px) {
             .summary-grid {
                 grid-template-columns: repeat(2,1fr)
@@ -524,6 +603,41 @@
             <div class="summary"><div class="k">OK</div><div class="v text-success">@Numero(Model.CantidadOKTotal)</div></div>
             <div class="summary"><div class="k">Amarillos</div><div class="v text-warning">@Numero(Model.CantidadSospechosaTotal)</div></div>
             <div class="summary"><div class="k">Scrap</div><div class="v text-danger">@Numero(Model.CantidadScrapTotal)</div></div>
+        </section>
+
+        <section class="paro-toolbar @(Model.TieneParoAbierto ? "open" : "")">
+            <div>
+                <div class="paro-title">
+                    <i class="fa-solid @(Model.TieneParoAbierto ? "fa-circle-pause text-danger" : "fa-triangle-exclamation text-warning") me-2"></i>
+                    @(Model.TieneParoAbierto ? "Paro de máquina activo" : "Control de paro de máquina")
+                </div>
+                <div class="paro-subtitle">
+                    @(Model.TieneParoAbierto
+                                        ? "La producción está pausada. Finaliza el paro cuando la máquina esté lista para continuar."
+                                        : "El operador puede reportar un paro cuando la máquina o el proceso deban detenerse.")
+                </div>
+            </div>
+
+            @if (Model.TieneParoAbierto && Model.ParoAbiertoID.HasValue)
+            {
+                <button type="button"
+                        class="btn-paro-close"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalCerrarParo">
+                    <i class="fa-solid fa-play"></i>
+                    Finalizar paro
+                </button>
+            }
+            else if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+            {
+                <button type="button"
+                        class="btn-paro-start"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalIniciarParo">
+                    <i class="fa-solid fa-stop"></i>
+                    Reportar paro
+                </button>
+            }
         </section>
 
         <section class="panel">
@@ -632,6 +746,106 @@
         </section>
     </div>
 
+    <div class="modal fade modal-paro" id="modalIniciarParo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa-solid fa-triangle-exclamation me-2"></i>Reportar paro de máquina</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form method="post" action="@Url.Action("IniciarParo", "ProduccionOperador")" id="formIniciarParo">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+
+                        <div class="paro-warning mb-3">
+                            <i class="fa-solid fa-circle-info me-1"></i>
+                            Al confirmar, la ejecución quedará pausada y se bloqueará la captura por hora hasta cerrar el paro.
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Motivo del paro</label>
+                            <select name="MotivoParoID" id="motivoParoId" class="form-select form-select-lg">
+                                @foreach (var motivo in Model.MotivosParo ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>())
+                                {
+                                    <option value="@motivo.Value">@motivo.Text</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Otro motivo</label>
+                            <input type="text"
+                                   name="MotivoParoTexto"
+                                   id="motivoParoTexto"
+                                   maxlength="200"
+                                   class="form-control"
+                                   placeholder="Úsalo cuando el motivo no esté en el catálogo" />
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-bold">Descripción</label>
+                            <textarea name="Descripcion"
+                                      id="descripcionParo"
+                                      rows="4"
+                                      maxlength="500"
+                                      class="form-control"
+                                      placeholder="Describe brevemente qué ocurrió"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-danger fw-bold" id="btnConfirmarParo">
+                            <i class="fa-solid fa-stop me-1"></i>Iniciar paro
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade modal-reanudar" id="modalCerrarParo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa-solid fa-play me-2"></i>Finalizar paro de máquina</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form method="post" action="@Url.Action("CerrarParo", "ProduccionOperador")" id="formCerrarParo">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="ParoID" value="@Model.ParoAbiertoID" />
+
+                        <div class="alert alert-success fw-bold rounded-4">
+                            <i class="fa-solid fa-circle-check me-1"></i>
+                            Confirma que la máquina está lista para continuar.
+                        </div>
+
+                        <div class="paro-warning mb-3">
+                            <i class="fa-solid fa-clock me-1"></i>
+                            Si el paro duró más de 15 minutos, el sistema regresará la producción a preparación y solicitará reliberación de Calidad.
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-bold">Observaciones de cierre</label>
+                            <textarea name="ObservacionesCierre"
+                                      rows="4"
+                                      maxlength="500"
+                                      class="form-control"
+                                      placeholder="Describe la corrección o condición para reanudar"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success fw-bold" id="btnConfirmarCierreParo">
+                            <i class="fa-solid fa-play me-1"></i>Finalizar y continuar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="modalCapturaHora" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
@@ -676,7 +890,15 @@
                 document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'';
                 document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
             }
-            document.querySelectorAll('.btn-open-hour').forEach(btn=>btn.addEventListener('click',function(){const row=this.closest('[data-hour-row]');cargarFila(row);modal?.show();}));
+            const capturaHabilitada = @capturaHabilitada.ToString().ToLowerInvariant();
+            const tieneParoAbierto = @Model.TieneParoAbierto.ToString().ToLowerInvariant();
+
+            document.querySelectorAll('.btn-open-hour').forEach(btn=>btn.addEventListener('click',function(){
+                if (!capturaHabilitada || tieneParoAbierto) return;
+                const row=this.closest('[data-hour-row]');
+                cargarFila(row);
+                modal?.show();
+            }));
             form?.addEventListener('submit',function(e){
                 const ok=Number(document.getElementById('modalOK').value||0),yellow=Number(document.getElementById('modalYellow').value||0),scrap=Number(document.getElementById('modalScrap').value||0),obs=(document.getElementById('modalObs').value||'').trim();
                 if(ok<0||yellow<0||scrap<0){e.preventDefault();alert('Las cantidades no pueden ser negativas.');return;}
@@ -684,7 +906,32 @@
                 const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';}
             });
             const obligatoria=document.querySelector('[data-hour-row][data-obligatoria="true"]');
-            if(obligatoria){cargarFila(obligatoria);modal?.show();}
+            if(capturaHabilitada && !tieneParoAbierto && obligatoria){
+                cargarFila(obligatoria);
+                modal?.show();
+            } else {
+                modal?.hide();
+            }
+
+            const formIniciarParo=document.getElementById('formIniciarParo');
+            formIniciarParo?.addEventListener('submit',function(e){
+                const motivoId=(document.getElementById('motivoParoId')?.value||'').trim();
+                const motivoTexto=(document.getElementById('motivoParoTexto')?.value||'').trim();
+                if(!motivoId&&!motivoTexto){
+                    e.preventDefault();
+                    alert('Selecciona un motivo o captura otro motivo para el paro.');
+                    return;
+                }
+                const button=document.getElementById('btnConfirmarParo');
+                if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Iniciando paro...';}
+            });
+
+            const formCerrarParo=document.getElementById('formCerrarParo');
+            formCerrarParo?.addEventListener('submit',function(){
+                const button=document.getElementById('btnConfirmarCierreParo');
+                if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Finalizando...';}
+            });
+
             setTimeout(()=>window.location.reload(),60000);
         });
     </script>

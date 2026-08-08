@@ -400,7 +400,32 @@
         {
 
             <div class="table-wrap"><table class="prod-table"><thead><tr><th>Máquina</th><th>OF / Programa</th><th>Parte</th><th>Operador</th><th>Estado</th><th>Cantidades</th><th>Avance</th><th>Acción</th></tr></thead><tbody>@foreach(var item in producciones.OrderBy(x=>x.MaquinaCodigo).ThenBy(x=>x.ProgramaProduccionID)){var maquina=string.IsNullOrWhiteSpace(item.MaquinaCodigo)?"SIN MÁQUINA":item.MaquinaCodigo.Trim();var avance=Avance(item);var avanceCss=avance.ToString("0.##",System.Globalization.CultureInfo.InvariantCulture);
-            <tr data-maquina="@maquina"><td><div class="main">@maquina</div><div class="sub">@Txt(item.MaquinaNombre)</div></td><td><div class="main">@OFTexto(item)</div><div class="sub">Programa @item.ProgramaProduccionID</div></td><td><div class="main">@ParteTexto(item)</div><div class="sub">@Txt(item.DescripcionParte)</div></td><td><div class="main">@Txt(item.OperadorNombre)</div><div class="sub">@(item.OperadorID.HasValue ? "ID " + item.OperadorID.Value : "Sin operador")</div></td><td><span class="estado @EstadoClase(item)">@EstadoTexto(item)</span></td><td><div class="qty"><span class="pill ok">OK @item.CantidadOKTotal.ToString("N0")</span><span class="pill sos">Amarillos @item.CantidadSospechosaTotal.ToString("N0")</span><span class="pill scrap">Scrap @item.CantidadScrapTotal.ToString("N0")</span></div></td><td><div class="d-flex justify-content-between small fw-bold mb-1"><span>@avance.ToString("0.##")%</span><span>@item.CantidadOKTotal.ToString("N0") / @((item.CantidadPlaneada ?? 0).ToString("N0"))</span></div><div class="progress"><div class="progress-bar" style="width:@avanceCss%"></div></div></td><td><a href="@Url.Action("Captura", "ProduccionOperador", new { id = item.EjecucionProduccionID })" class="btn-captura"><i class="fa-solid fa-keyboard"></i>Capturar</a></td></tr>
+            <tr data-maquina="@maquina"><td><div class="main">@maquina</div><div class="sub">@Txt(item.MaquinaNombre)</div></td><td><div class="main">@OFTexto(item)</div><div class="sub">Programa @item.ProgramaProduccionID</div></td><td><div class="main">@ParteTexto(item)</div><div class="sub">@Txt(item.DescripcionParte)</div></td><td><div class="main">@Txt(item.OperadorNombre)</div><div class="sub">@(item.OperadorID.HasValue ? "ID " + item.OperadorID.Value : "Sin operador")</div></td><td><span class="estado @EstadoClase(item)">@EstadoTexto(item)</span></td><td><div class="qty"><span class="pill ok">OK @item.CantidadOKTotal.ToString("N0")</span><span class="pill sos">Amarillos @item.CantidadSospechosaTotal.ToString("N0")</span><span class="pill scrap">Scrap @item.CantidadScrapTotal.ToString("N0")</span></div></td><td><div class="d-flex justify-content-between small fw-bold mb-1"><span>@avance.ToString("0.##")%</span><span>@item.CantidadOKTotal.ToString("N0") / @((item.CantidadPlaneada ?? 0).ToString("N0"))</span></div><div class="progress"><div class="progress-bar" style="width:@avanceCss%"></div></div></td>
+                                        <td>
+                                            <div class="d-flex gap-2 flex-wrap">
+
+                                                <a href="@Url.Action(
+                                                               "Captura",
+                                                               "ProduccionOperador",
+                                                               new { id = item.EjecucionProduccionID })"
+                                           class="btn-captura">
+                                            <i class="fa-solid fa-keyboard"></i>
+                                            Capturar
+                                        </a>
+
+                                                <a href="@Url.Action(
+                                                       "Cajas",
+                                                       "ProduccionOperador",
+                                                       new { id = item.EjecucionProduccionID })"
+                                           class="btn-captura"
+                                           style="background:#107c41;">
+                                            <i class="fa-solid fa-box"></i>
+                                            Cajas
+                                        </a>
+
+                                            </div>
+                                        </td>
+            </tr>
         }
 </tbody></table></div>
                 }

@@ -17,6 +17,19 @@
         .GroupBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN_MAQUINA" : x.MaquinaCodigo)
         .ToList();
 
+    var proximosPorMaquina = Model.ProximosAIniciar
+        .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
+        .ThenBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+        .ThenBy(x => x.ProgramaProduccionID)
+        .GroupBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN_MAQUINA" : x.MaquinaCodigo)
+        .ToList();
+
+    var alertasOrdenadas = Model.AlertasReprogramacion
+        .OrderByDescending(x => x.EsMuyReciente)
+        .ThenByDescending(x => x.FechaCambio)
+        .ThenByDescending(x => x.ReprogramacionHistorialID)
+        .ToList();
+
     var ejecucionesPorMaquina = Model.Ejecuciones
      .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
      .ThenBy(x => x.ProgramaProduccionID)
@@ -413,20 +426,63 @@
             border-radius: 999px;
         }
 
-        .row-preparacion {
-            background: #fffaf0;
+        /* ============================================================
+                   COLORES SUAVES POR ESTADO OPERATIVO
+
+                   Amarillo = preparación / esperando Calidad
+                   Azul     = producción activa
+                   Rosa     = paro / pausado
+                   Verde    = terminado
+
+                   Se aplica sobre las celdas para que Bootstrap no tape
+                   el color de la fila.
+                   ============================================================ */
+        .production-row.row-preparacion > td {
+            background: #fff9e8 !important;
         }
 
-        .row-produccion {
-            background: #eff8ff;
+        .production-row.row-produccion > td {
+            background: #eef7ff !important;
         }
 
-        .row-pausado {
-            background: #fff1f3;
+        .production-row.row-pausado > td {
+            background: #fff0f2 !important;
         }
 
-        .row-terminado {
-            background: #f0fdf4;
+        .production-row.row-terminado > td {
+            background: #eefbf3 !important;
+        }
+
+        .production-row.row-preparacion > td:first-child {
+            box-shadow: inset 4px 0 0 #e6b422;
+        }
+
+        .production-row.row-produccion > td:first-child {
+            box-shadow: inset 4px 0 0 #4b8fd8;
+        }
+
+        .production-row.row-pausado > td:first-child {
+            box-shadow: inset 4px 0 0 #d46a78;
+        }
+
+        .production-row.row-terminado > td:first-child {
+            box-shadow: inset 4px 0 0 #4f9f72;
+        }
+
+        .table-hover tbody tr.production-row.row-preparacion:hover > td {
+            background: #fff5d6 !important;
+        }
+
+        .table-hover tbody tr.production-row.row-produccion:hover > td {
+            background: #e5f2ff !important;
+        }
+
+        .table-hover tbody tr.production-row.row-pausado:hover > td {
+            background: #ffe6ea !important;
+        }
+
+        .table-hover tbody tr.production-row.row-terminado:hover > td {
+            background: #e4f8ec !important;
         }
 
         .modal-content {
@@ -498,6 +554,212 @@
                 color: var(--warning);
             }
 
+        .next-start-section {
+            border-color: #f6c75c;
+            box-shadow: 0 10px 28px rgba(181, 71, 8, .08);
+        }
+
+            .next-start-section .section-head {
+                background: linear-gradient(90deg, #fff8e7, #fffdf7);
+                border-bottom-color: #f6d98f;
+            }
+
+            .next-start-section .section-title {
+                color: #92400e;
+            }
+
+        .next-start-row {
+            background: #fffdf6;
+        }
+
+        .next-start-time {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 9px;
+            border: 1px solid #fed7aa;
+            border-radius: 999px;
+            background: #fff7ed;
+            color: #b54708;
+            font-size: .76rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .alerts-section {
+            border-color: #bcd2f0;
+        }
+
+        .alerts-list {
+            display: grid;
+            gap: 10px;
+            padding: 14px 16px;
+        }
+
+        .program-alert {
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: start;
+            padding: 13px 14px;
+            border: 1px solid #d7e2f1;
+            border-left: 5px solid #7ca8e8;
+            border-radius: 14px;
+            background: #f8fbff;
+        }
+
+            .program-alert.is-highlighted {
+                border-color: #f6c75c;
+                border-left-color: #f59e0b;
+                background: linear-gradient(90deg, #fff8e7, #fffdf8);
+                box-shadow: 0 8px 20px rgba(181, 71, 8, .08);
+            }
+
+        .program-alert-icon {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background: #eaf2ff;
+            color: var(--azul);
+            font-size: 1.05rem;
+        }
+
+        .program-alert.is-highlighted .program-alert-icon {
+            background: #ffedd5;
+            color: #b54708;
+        }
+
+        .program-alert-title {
+            color: #182437;
+            font-weight: 950;
+        }
+
+        .program-alert-message {
+            margin-top: 3px;
+            color: #475467;
+            font-size: .84rem;
+            font-weight: 700;
+        }
+
+        .program-alert-meta {
+            margin-top: 6px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 650;
+        }
+
+        .program-alert-date {
+            color: var(--muted);
+            font-size: .74rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .alerts-floating-button {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            z-index: 1040;
+            width: 58px;
+            height: 58px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+            color: #fff;
+            box-shadow: 0 16px 36px rgba(15, 47, 99, .32);
+            font-size: 1.35rem;
+            transition: transform .18s ease, box-shadow .18s ease;
+        }
+
+            .alerts-floating-button:hover {
+                transform: translateY(-2px) scale(1.03);
+                color: #fff;
+                box-shadow: 0 20px 42px rgba(15, 47, 99, .4);
+            }
+
+            .alerts-floating-button:focus {
+                outline: 0;
+                box-shadow: 0 0 0 .25rem rgba(25, 76, 155, .2), 0 16px 36px rgba(15, 47, 99, .32);
+            }
+
+        .alerts-floating-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            min-width: 24px;
+            height: 24px;
+            padding: 0 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid #fff;
+            border-radius: 999px;
+            background: #dc3545;
+            color: #fff;
+            font-size: .68rem;
+            font-weight: 950;
+            line-height: 1;
+        }
+
+        .alerts-floating-button.has-highlight {
+            animation: alertBellPulse 2.2s infinite;
+        }
+
+        @@keyframes alertBellPulse {
+            0%, 100% {
+                box-shadow: 0 16px 36px rgba(15, 47, 99, .32);
+            }
+
+            50% {
+                box-shadow: 0 16px 36px rgba(15, 47, 99, .32), 0 0 0 10px rgba(245, 158, 11, .12);
+            }
+        }
+
+        .alerts-modal .modal-dialog {
+            max-width: min(1040px, calc(100vw - 24px));
+        }
+
+        .alerts-modal .modal-header {
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+        }
+
+        .alerts-modal-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--borde);
+            background: #f8fbff;
+        }
+
+        .alerts-modal .alerts-list {
+            max-height: min(68vh, 680px);
+            overflow-y: auto;
+            padding: 16px 18px 20px;
+        }
+
+        .alerts-modal-empty {
+            padding: 48px 20px;
+            text-align: center;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+            .alerts-modal-empty i {
+                display: block;
+                margin-bottom: 10px;
+                color: #98a2b3;
+                font-size: 2.3rem;
+            }
+
         .is-hidden {
             display: none !important;
         }
@@ -518,6 +780,26 @@
             .info-line {
                 grid-template-columns: 1fr;
                 gap: 2px;
+            }
+
+            .program-alert {
+                grid-template-columns: 38px minmax(0, 1fr);
+            }
+
+            .program-alert-date {
+                grid-column: 2;
+            }
+
+            .alerts-floating-button {
+                right: 14px;
+                bottom: 14px;
+                width: 54px;
+                height: 54px;
+            }
+
+            .alerts-modal .alerts-list {
+                max-height: 65vh;
+                padding: 12px;
             }
         }
     </style>
@@ -581,6 +863,16 @@
             <div class="summary-item">
                 @Model.TotalDisponibles.ToString("N0")
                 <span>Por iniciar</span>
+            </div>
+
+            <div class="summary-item">
+                @Model.TotalProximosAIniciar.ToString("N0")
+                <span>En 15 min</span>
+            </div>
+
+            <div class="summary-item">
+                @Model.TotalAlertasReprogramacion.ToString("N0")
+                <span>Cambios 24 h</span>
             </div>
 
             <div class="summary-item">
@@ -674,6 +966,198 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </section>
+
+        <section class="section next-start-section">
+            <div class="section-head">
+                <div>
+                    <h2 class="section-title">
+                        <i class="bi bi-alarm me-1"></i>
+                        Próximos a iniciar en 15 minutos
+                    </h2>
+                    <div class="section-sub">
+                        Programas disponibles cuya hora de inicio está dentro de los próximos 15 minutos.
+                    </div>
+                </div>
+
+                <span class="tag tag-warn">
+                    <i class="bi bi-clock"></i>
+                    @Model.TotalProximosAIniciar.ToString("N0") próximo(s)
+                </span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width:70px;">Orden</th>
+                            <th>Programa / OF</th>
+                            <th>Parte</th>
+                            <th>Molde</th>
+                            <th>Operador sugerido</th>
+                            <th class="text-center">Cantidad</th>
+                            <th>Inicio programado</th>
+                            <th>Tiempo restante</th>
+                            <th class="text-end">Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @if (!Model.ProximosAIniciar.Any())
+                        {
+                            <tr>
+                                <td colspan="9">
+                                    <div class="empty">
+                                        <i class="bi bi-clock"></i>
+                                        No hay programas programados para iniciar en los próximos 15 minutos.
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var grupo in proximosPorMaquina)
+                            {
+                                var primera = grupo.FirstOrDefault();
+                                var maquinaCodigo = Txt(primera?.MaquinaCodigo);
+                                var maquinaNombre = Txt(primera?.MaquinaNombre);
+                                var machineKey = "prox_" + MachineKey(grupo.Key);
+                                var totalMaquina = grupo.Count();
+
+                                <tr class="machine-row">
+                                    <td colspan="9">
+                                        <div class="machine-header">
+                                            <div>
+                                                <div class="machine-title">
+                                                    <i class="bi bi-hdd-network me-1"></i>
+                                                    Máquina @maquinaCodigo
+                                                </div>
+                                                <div class="machine-sub">
+                                                    @maquinaNombre · @totalMaquina programa(s) próximos a iniciar
+                                                </div>
+                                            </div>
+
+                                            <button type="button"
+                                                    class="machine-toggle"
+                                                    data-machine-toggle="@machineKey">
+                                                <i class="bi bi-chevron-up me-1"></i>
+                                                Ocultar / mostrar
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                var orden = 0;
+
+                                foreach (var item in grupo
+                                .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+                                .ThenBy(x => x.ProgramaProduccionID))
+                                {
+                                    orden++;
+
+                                    var operadorSugerido = string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre)
+                                    ? ""
+                                    : item.OperadorSugeridoNombre;
+
+                                    var turnoSugerido = string.IsNullOrWhiteSpace(item.TurnoSugeridoNombre)
+                                    ? ""
+                                    : item.TurnoSugeridoNombre;
+
+                                    <tr class="production-row next-start-row" data-machine-row="@machineKey">
+                                        <td>
+                                            <span class="queue-badge">@orden</span>
+                                        </td>
+
+                                        <td>
+                                            <div class="id-main">Programa @item.ProgramaProduccionID</div>
+                                            <div class="line-sub">@Txt(item.TituloPrograma)</div>
+
+                                            @if (item.SolicitudProduccionID.HasValue)
+                                            {
+                                                <div class="line-sub">OF ID @item.SolicitudProduccionID</div>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            <div class="line-main">@Txt(item.TextoParte)</div>
+                                            <div class="line-sub">@Txt(item.DescripcionParte)</div>
+                                        </td>
+
+                                        <td>
+                                            <span class="tag">
+                                                <i class="bi bi-nut"></i>
+                                                @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            @if (string.IsNullOrWhiteSpace(operadorSugerido))
+                                            {
+                                                <span class="operator-pill operator-empty">
+                                                    <i class="bi bi-person-dash"></i>
+                                                    Sin operador sugerido
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <div class="operator-pill">
+                                                    <i class="bi bi-person-check"></i>
+                                                    @operadorSugerido
+                                                </div>
+
+                                                @if (!string.IsNullOrWhiteSpace(turnoSugerido))
+                                                {
+                                                    <div class="line-sub mt-1">Turno: @turnoSugerido</div>
+                                                }
+                                            }
+                                        </td>
+
+                                        <td class="text-center fw-bold">
+                                            @Num(item.CantidadProgramada)
+                                        </td>
+
+                                        <td>
+                                            @Fecha(item.FechaInicioProgramada)
+                                        </td>
+
+                                        <td>
+                                            <span class="next-start-time">
+                                                <i class="bi bi-alarm"></i>
+                                                @item.TextoInicioProximo
+                                            </span>
+                                        </td>
+
+                                        <td class="text-end">
+                                            @if (item.PuedeIniciar)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-success btn-action btn-iniciar-preparacion"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#modalIniciarPreparacion"
+                                                        data-programa-id="@item.ProgramaProduccionID"
+                                                        data-titulo="@Data(item.TituloPrograma)"
+                                                        data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
+                                                        data-parte="@Data(item.TextoParte)"
+                                                        data-descripcion="@Data(item.DescripcionParte)"
+                                                        data-molde="@Data(item.MoldeCodigo)"
+                                                        data-cantidad="@Num(item.CantidadProgramada)"
+                                                        data-inicio="@Fecha(item.FechaInicioProgramada)"
+                                                        data-fin="@Fecha(item.FechaFinProgramada)"
+                                                        data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
+                                                        data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
+                                                        data-turno="@Data(item.TurnoSugeridoNombre)">
+                                                    <i class="bi bi-play-fill me-1"></i>
+                                                    Iniciar preparación
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
             </div>
         </section>
 
@@ -1000,7 +1484,7 @@
                                                 <div class="line-sub">Release @item.ReleaseID</div>
                                             }
 
-                                            
+
                                         </td>
 
                                         <td>
@@ -1083,6 +1567,153 @@
                 </table>
             </div>
         </section>
+    </div>
+
+    <button type="button"
+            class="alerts-floating-button @(Model.TotalAlertasMuyRecientes > 0 ? "has-highlight" : "")"
+            data-bs-toggle="modal"
+            data-bs-target="#modalMovimientosProgramacion"
+            title="Ver movimientos de programación"
+            aria-label="Ver movimientos de programación">
+        <i class="bi bi-bell-fill"></i>
+
+        @if (Model.TotalAlertasReprogramacion > 0)
+        {
+            <span class="alerts-floating-badge">
+                @(Model.TotalAlertasReprogramacion > 99
+                            ? "99+"
+                            : Model.TotalAlertasReprogramacion.ToString())
+        </span>
+                }
+    </button>
+
+    <div class="modal fade alerts-modal"
+         id="modalMovimientosProgramacion"
+         tabindex="-1"
+         aria-labelledby="modalMovimientosProgramacionLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="modalMovimientosProgramacionLabel">
+                            <i class="bi bi-bell-fill me-2"></i>
+                            Movimientos de programación
+                        </h5>
+                        <div class="small opacity-75 mt-1">
+                            Destacadas: últimas 2 horas. Visibles: últimas 24 horas.
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            class="btn-close btn-close-white"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar">
+                    </button>
+                </div>
+
+                <div class="alerts-modal-summary">
+                    @if (Model.TotalAlertasMuyRecientes > 0)
+                    {
+                        <span class="tag tag-warn">
+                            <i class="bi bi-lightning-charge"></i>
+                            @Model.TotalAlertasMuyRecientes destacada(s)
+                        </span>
+                    }
+
+                    <span class="tag tag-blue">
+                        <i class="bi bi-bell"></i>
+                        @Model.TotalAlertasReprogramacion cambio(s)
+                    </span>
+                </div>
+
+                @if (ViewBag.ErrorAlertasReprogramacion != null)
+                {
+                    <div class="alert alert-warning mx-3 mt-3 mb-0">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        @ViewBag.ErrorAlertasReprogramacion
+                    </div>
+                }
+
+                <div class="alerts-list">
+                    @if (!alertasOrdenadas.Any())
+                    {
+                        <div class="alerts-modal-empty">
+                            <i class="bi bi-bell-slash"></i>
+                            No hay movimientos de programación en las últimas 24 horas.
+                        </div>
+                    }
+                    else
+                    {
+                        foreach (var alerta in alertasOrdenadas)
+                        {
+                            <article class="program-alert @(alerta.EsMuyReciente ? "is-highlighted" : "")">
+                                <div class="program-alert-icon">
+                                    <i class="bi @(alerta.EsMovimientoAutomatico ? "bi-shuffle" : alerta.CambioMaquina ? "bi-arrow-left-right" : "bi-calendar2-week")"></i>
+                                </div>
+
+                                <div>
+                                    <div class="program-alert-title">
+                                        @alerta.Titulo · Programa @alerta.ProgramaProduccionID · @alerta.TextoParte
+                                    </div>
+
+                                    <div class="program-alert-message">
+                                        @alerta.Mensaje
+                                    </div>
+
+                                    <div class="program-alert-meta">
+                                        @if (!string.IsNullOrWhiteSpace(alerta.Motivo))
+                                        {
+                                            <span>
+                                                <i class="bi bi-chat-left-text me-1"></i>
+                                                Motivo: @alerta.Motivo
+                                            </span>
+                                        }
+
+                                        @if (alerta.EsMovimientoAutomatico && alerta.ProgramaOrigenMovimientoID.HasValue)
+                                        {
+                                            <span>
+                                                <i class="bi bi-diagram-3 me-1"></i>
+                                                Originado por programa @alerta.ProgramaOrigenMovimientoID
+                                            </span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(alerta.UsuarioNombre))
+                                        {
+                                            <span>
+                                                <i class="bi bi-person me-1"></i>
+                                                @alerta.UsuarioNombre
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="program-alert-date">
+                                    @if (alerta.EsMuyReciente)
+                                    {
+                                        <span class="badge bg-warning text-dark mb-1">
+                                            Destacada
+                                        </span>
+                                        <br />
+                                    }
+
+                                    @alerta.FechaCambioTexto
+                                </div>
+                            </article>
+                        }
+                    }
+                </div>
+
+                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                    <button type="button"
+                            class="btn btn-primary btn-action"
+                            data-bs-dismiss="modal">
+                        <i class="bi bi-check2 me-1"></i>
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="modal fade" id="modalIniciarPreparacion" tabindex="-1" aria-hidden="true">

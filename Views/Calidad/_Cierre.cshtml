@@ -1,0 +1,682 @@
+﻿@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
+@using ERP.NSQuell.Models
+@{
+    string Mostrar(string? valor) => string.IsNullOrWhiteSpace(valor) ? "—" : valor.Trim();
+    var estado = (Model.Estado ?? string.Empty).Trim().ToUpperInvariant();
+    var muestraFinProduccion = Model.MuestraFinProduccion;
+}
+<style>
+    .quality-close {
+        --qc-border: #dfe5ec;
+        --qc-text: #1e293b;
+        --qc-muted: #64748b;
+        --qc-navy: #14213d;
+        --qc-orange: #f97316;
+        color: var(--qc-text)
+    }
+
+        .quality-close .quality-card {
+            margin-bottom: 20px;
+            overflow: hidden;
+            border: 1px solid var(--qc-border);
+            border-radius: 14px;
+            background: #fff
+        }
+
+        .quality-close .quality-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 17px 20px;
+            border-bottom: 1px solid var(--qc-border);
+            background: #fbfcfd
+        }
+
+            .quality-close .quality-card-header h2 {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin: 0;
+                color: var(--qc-navy);
+                font-size: 1rem;
+                font-weight: 800
+            }
+
+                .quality-close .quality-card-header h2 i {
+                    color: var(--qc-orange)
+                }
+
+        .quality-close .quality-card-body {
+            padding: 20px
+        }
+
+        .quality-close .quality-data-grid {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 14px
+        }
+
+        .quality-close .quality-data-item {
+            min-width: 0;
+            padding: 14px;
+            border: 1px solid #e9edf2;
+            border-radius: 10px;
+            background: #fbfcfe
+        }
+
+        .quality-close .quality-data-label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--qc-muted);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .04em;
+            text-transform: uppercase
+        }
+
+        .quality-close .quality-data-value {
+            display: block;
+            overflow-wrap: anywhere;
+            color: var(--qc-text);
+            font-size: .9rem;
+            font-weight: 700
+        }
+
+        .quality-close .quality-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: .78rem;
+            font-weight: 800
+        }
+
+        .quality-close .quality-check-ok {
+            color: #15803d
+        }
+
+        .quality-close .quality-check-pending {
+            color: #b45309
+        }
+
+        .quality-close .quality-alert {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 15px 17px;
+            border: 1px solid;
+            border-radius: 10px
+        }
+
+        .quality-close .quality-alert-success {
+            background: #effcf4;
+            color: #166534;
+            border-color: #bbf7d0
+        }
+
+        .quality-close .quality-alert-warning {
+            background: #fff8e6;
+            color: #92400e;
+            border-color: #fde68a
+        }
+
+        .quality-close .quality-side-action {
+            padding: 16px;
+            border: 1px solid #e6ebf1;
+            border-radius: 10px;
+            background: #fbfcfd
+        }
+
+            .quality-close .quality-side-action h3 {
+                margin: 0 0 7px;
+                color: var(--qc-navy);
+                font-size: .95rem;
+                font-weight: 800
+            }
+
+            .quality-close .quality-side-action p {
+                color: var(--qc-muted);
+                font-size: .82rem;
+                line-height: 1.5
+            }
+
+        .quality-close .quality-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 15px
+        }
+
+        .quality-close .quality-field-full {
+            grid-column: 1/-1
+        }
+
+        .quality-close .quality-form-control {
+            width: 100%;
+            min-height: 44px;
+            padding: 9px 12px;
+            border: 1px solid #cfd8e3;
+            border-radius: 9px;
+            background: #fff;
+            color: #1e293b;
+            outline: none
+        }
+
+        .quality-close textarea.quality-form-control {
+            min-height: 92px;
+            resize: vertical
+        }
+
+        .quality-close .quality-form-control:focus {
+            border-color: var(--qc-orange);
+            box-shadow: 0 0 0 3px rgba(249,115,22,.12)
+        }
+
+        .quality-close .quality-help {
+            margin-top: 6px;
+            color: var(--qc-muted);
+            font-size: .78rem;
+            line-height: 1.45
+        }
+
+        .quality-close .quality-btn {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 9px 15px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            font-size: .86rem;
+            font-weight: 750;
+            text-decoration: none
+        }
+
+        .quality-close .quality-btn-primary {
+            background: var(--qc-orange);
+            color: #fff;
+            border-color: var(--qc-orange)
+        }
+
+        .quality-close .quality-btn-dark {
+            background: var(--qc-navy);
+            color: #fff;
+            border-color: var(--qc-navy)
+        }
+
+        .quality-close .quality-history-wrap {
+            overflow-x: auto
+        }
+
+        .quality-close .quality-history-table {
+            width: 100%;
+            min-width: 760px;
+            border-collapse: collapse
+        }
+
+            .quality-close .quality-history-table th, .quality-close .quality-history-table td {
+                padding: 12px 14px;
+                border-bottom: 1px solid #e8edf2;
+                text-align: left;
+                vertical-align: top;
+                font-size: .82rem
+            }
+
+            .quality-close .quality-history-table th {
+                background: #f7f9fb;
+                color: #475569;
+                font-size: .72rem;
+                font-weight: 850;
+                letter-spacing: .03em;
+                text-transform: uppercase
+            }
+
+    html[data-nsq-theme="dark"] .quality-close {
+        --qc-border: rgba(255,255,255,.10);
+        --qc-text: #e5e7eb;
+        --qc-muted: #94a3b8;
+        --qc-navy: #f8fafc
+    }
+
+        html[data-nsq-theme="dark"] .quality-close .quality-card {
+            background: #111c2d
+        }
+
+        html[data-nsq-theme="dark"] .quality-close .quality-card-header, html[data-nsq-theme="dark"] .quality-close .quality-data-item, html[data-nsq-theme="dark"] .quality-close .quality-side-action, html[data-nsq-theme="dark"] .quality-close .quality-history-table th {
+            background: #0e1828
+        }
+
+        html[data-nsq-theme="dark"] .quality-close .quality-form-control {
+            background: #0b1422;
+            color: #f8fafc;
+            border-color: rgba(255,255,255,.13)
+        }
+
+    @@media(max-width:900px) {
+        .quality-close .quality-data-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+    }
+
+    @@media(max-width:680px) {
+        .quality-close .quality-card-header {
+            align-items: flex-start;
+            flex-direction: column
+        }
+
+        .quality-close .quality-card-body {
+            padding: 15px
+        }
+
+        .quality-close .quality-data-grid, .quality-close .quality-form-grid {
+            grid-template-columns: 1fr
+        }
+
+        .quality-close .quality-field-full {
+            grid-column: auto
+        }
+    }
+</style>
+<div class="quality-close">
+    <section class="quality-card" id="cierre-calidad">
+        <div class="quality-card-header">
+            <h2>
+                <i class="fa-solid fa-box-archive"></i>
+                Muestras de resguardo y cierre final
+            </h2>
+
+            @if (estado == CalidadEstados.Cerrada)
+            {
+                <span class="badge bg-dark">Cerrada</span>
+            }
+            else if (Model.Cierre.PuedeCerrar)
+            {
+                <span class="badge bg-success">Lista para cerrar</span>
+            }
+            else
+            {
+                <span class="badge bg-warning text-dark">Pendientes por resolver</span>
+            }
+        </div>
+
+        <div class="quality-card-body">
+            @if (estado == CalidadEstados.Cerrada)
+            {
+                <div class="quality-alert quality-alert-success mb-4">
+                    <i class="fa-solid fa-lock"></i>
+                    <div>
+                        <strong>Inspección cerrada.</strong>
+                        <div>
+                            Fecha:
+                            @(Model.FechaCierre?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                            · Usuario:
+                            @(Model.UsuarioCierreID?.ToString() ?? "—")
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="quality-data-grid mb-4">
+                <div class="quality-data-item">
+                    <span class="quality-data-label">Monitoreos pendientes</span>
+                    <span class="quality-check @(Model.Cierre.MonitoreosPendientes == 0 ? "quality-check-ok" : "quality-check-pending")">
+                        @(Model.Cierre.MonitoreosPendientes == 0
+                                                ? "Completo"
+                                                : Model.Cierre.MonitoreosPendientes.ToString())
+                    </span>
+                </div>
+
+                <div class="quality-data-item">
+                    <span class="quality-data-label">Disposiciones pendientes</span>
+                    <span class="quality-check @(Model.Cierre.DisposicionesPendientes == 0 ? "quality-check-ok" : "quality-check-pending")">
+                        @(Model.Cierre.DisposicionesPendientes == 0
+                                                ? "Completo"
+                                                : Model.Cierre.DisposicionesPendientes.ToString())
+                    </span>
+                </div>
+
+                <div class="quality-data-item">
+                    <span class="quality-data-label">Cajas pendientes de Calidad</span>
+                    <span class="quality-check @(Model.Cierre.CajasPendientesCalidad == 0 ? "quality-check-ok" : "quality-check-pending")">
+                        @(Model.Cierre.CajasPendientesCalidad == 0
+                                                ? "Completo"
+                                                : Model.Cierre.CajasPendientesCalidad.ToString())
+                    </span>
+                </div>
+
+                <div class="quality-data-item">
+                    <span class="quality-data-label">Cajas devueltas sin resolver</span>
+                    <span class="quality-check @(Model.Cierre.CajasDevueltasSinResolver == 0 ? "quality-check-ok" : "quality-check-pending")">
+                        @(Model.Cierre.CajasDevueltasSinResolver == 0
+                                                ? "Completo"
+                                                : Model.Cierre.CajasDevueltasSinResolver.ToString())
+                    </span>
+                </div>
+
+                <div class="quality-data-item">
+                    <span class="quality-data-label">GP12 abiertos</span>
+                    <span class="quality-check @(Model.Cierre.GP12Abiertos == 0 ? "quality-check-ok" : "quality-check-pending")">
+                        @(Model.Cierre.GP12Abiertos == 0
+                                                ? "Completo"
+                                                : Model.Cierre.GP12Abiertos.ToString())
+                    </span>
+                </div>
+
+                <div class="quality-data-item">
+                    <span class="quality-data-label">Reliberaciones pendientes</span>
+                    <span class="quality-check @(Model.Cierre.ReliberacionesPendientes == 0 ? "quality-check-ok" : "quality-check-pending")">
+                        @(Model.Cierre.ReliberacionesPendientes == 0
+                                                ? "Completo"
+                                                : Model.Cierre.ReliberacionesPendientes.ToString())
+                    </span>
+                </div>
+
+                <div class="quality-data-item">
+                    <span class="quality-data-label">Muestra final</span>
+                    <span class="quality-check @(Model.Cierre.MuestraFinProduccionCompleta ? "quality-check-ok" : "quality-check-pending")">
+                        @(Model.Cierre.MuestraFinProduccionCompleta
+                                                ? "Resguardada"
+                                                : "Pendiente")
+                    </span>
+                </div>
+            </div>
+
+            <div class="quality-side-action mb-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                    <div>
+                        <h3 class="mb-1">Muestra de fin de producción</h3>
+                        <p class="mb-0">
+                            Confirma el resguardo físico de las muestras de Calidad y Producción.
+                            El cierre permanece bloqueado hasta completar ambas ubicaciones.
+                        </p>
+                    </div>
+
+                    @if (muestraFinProduccion != null)
+                    {
+                        <span class="badge @muestraFinProduccion.EstadoBadgeClase">
+                            @muestraFinProduccion.EstadoTexto
+                        </span>
+                    }
+                </div>
+
+                @if (estado != CalidadEstados.Cerrada)
+                {
+                    <form asp-controller="Calidad"
+                          asp-action="GuardarMuestraResguardo"
+                          method="post"
+                          data-sample-form>
+
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden"
+                               name="InspeccionID"
+                               value="@Model.InspeccionID" />
+
+                        <input type="hidden"
+                               name="Momento"
+                               value="@CalidadMomentoMuestra.FinProduccion" />
+
+                        <div class="quality-form-grid">
+                            <div class="quality-field">
+                                <label class="form-label fw-semibold">Cantidad de disparos</label>
+                                <input type="number"
+                                       name="CantidadDisparos"
+                                       class="quality-form-control"
+                                       min="1"
+                                       max="50"
+                                       value="@(muestraFinProduccion?.CantidadDisparos ?? 2)"
+                                       required />
+                                <div class="quality-help">
+                                    Cantidad física resguardada para cada muestra.
+                                </div>
+                            </div>
+
+                            <div class="quality-field">
+                                <label class="form-label fw-semibold">Responsable del registro</label>
+                                <input type="text"
+                                       class="quality-form-control"
+                                       value="@(muestraFinProduccion?.UsuarioResponsableID?.ToString() ?? "Usuario actual")"
+                                       readonly />
+                            </div>
+
+                            <div class="quality-field quality-field-full">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="muestraCalidadConfirmada"
+                                           name="MuestraCalidadConfirmada"
+                                           value="true"
+                                           data-sample-confirm="quality"
+                                           checked="@(muestraFinProduccion?.MuestraCalidadConfirmada == true ? "checked" : null)" />
+                                    <label class="form-check-label fw-semibold"
+                                           for="muestraCalidadConfirmada">
+                                        Muestra de Calidad confirmada
+                                    </label>
+                                </div>
+
+                                <input type="text"
+                                       name="UbicacionCalidad"
+                                       class="quality-form-control"
+                                       maxlength="250"
+                                       data-sample-location="quality"
+                                       value="@muestraFinProduccion?.UbicacionCalidad"
+                                       placeholder="Ej. Gabinete de muestras, nivel 2, posición A-14" />
+                            </div>
+
+                            <div class="quality-field quality-field-full">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="muestraProduccionConfirmada"
+                                           name="MuestraProduccionConfirmada"
+                                           value="true"
+                                           data-sample-confirm="production"
+                                           checked="@(muestraFinProduccion?.MuestraProduccionConfirmada == true ? "checked" : null)" />
+                                    <label class="form-check-label fw-semibold"
+                                           for="muestraProduccionConfirmada">
+                                        Muestra de Producción confirmada
+                                    </label>
+                                </div>
+
+                                <input type="text"
+                                       name="UbicacionProduccion"
+                                       class="quality-form-control"
+                                       maxlength="250"
+                                       data-sample-location="production"
+                                       value="@muestraFinProduccion?.UbicacionProduccion"
+                                       placeholder="Ej. Rack de Producción, bahía 3, contenedor B-08" />
+                            </div>
+
+                            <div class="quality-field quality-field-full">
+                                <label class="form-label fw-semibold">Observaciones</label>
+                                <textarea name="Observaciones"
+                                      class="quality-form-control"
+                                      maxlength="1000"
+                                      rows="3"
+                                      placeholder="Lote, condición de la muestra, empaque o referencia adicional...">@muestraFinProduccion?.Observaciones</textarea>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="submit"
+                                    class="quality-btn quality-btn-primary">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                Guardar resguardo final
+                            </button>
+                        </div>
+                    </form>
+                }
+                else if (muestraFinProduccion != null)
+                {
+                    <div class="quality-data-grid">
+                        <div class="quality-data-item">
+                            <span class="quality-data-label">Disparos</span>
+                            <span class="quality-data-value">@muestraFinProduccion.CantidadDisparos</span>
+                        </div>
+                        <div class="quality-data-item">
+                            <span class="quality-data-label">Ubicación Calidad</span>
+                            <span class="quality-data-value">@Mostrar(muestraFinProduccion.UbicacionCalidad)</span>
+                        </div>
+                        <div class="quality-data-item">
+                            <span class="quality-data-label">Ubicación Producción</span>
+                            <span class="quality-data-value">@Mostrar(muestraFinProduccion.UbicacionProduccion)</span>
+                        </div>
+                        <div class="quality-data-item">
+                            <span class="quality-data-label">Fecha de resguardo</span>
+                            <span class="quality-data-value">
+                                @(muestraFinProduccion.FechaResguardo?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (Model.MuestrasResguardo.Count > 1)
+            {
+                <div class="quality-side-action mb-4">
+                    <h3>Historial de muestras</h3>
+                    <div class="quality-history-wrap">
+                        <table class="quality-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Momento</th>
+                                    <th>Disparos</th>
+                                    <th>Calidad</th>
+                                    <th>Producción</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var muestra in Model.MuestrasResguardo)
+                                {
+                                    <tr>
+                                        <td>@muestra.MomentoTexto</td>
+                                        <td>@muestra.CantidadDisparos</td>
+                                        <td>@(muestra.MuestraCalidadConfirmada ? "Confirmada" : "Pendiente")</td>
+                                        <td>@(muestra.MuestraProduccionConfirmada ? "Confirmada" : "Pendiente")</td>
+                                        <td>@(muestra.FechaResguardo?.ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                                        <td>
+                                            <span class="badge @muestra.EstadoBadgeClase">
+                                                @muestra.EstadoTexto
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            @if (estado != CalidadEstados.Cerrada)
+            {
+                if (Model.Cierre.PuedeCerrar)
+                {
+                    <div class="quality-alert quality-alert-success mb-3">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <div>
+                            <strong>Todos los requisitos de cierre están completos.</strong>
+                            <div>El cierre es definitivo y dejará la inspección disponible únicamente para consulta.</div>
+                        </div>
+                    </div>
+
+                    <form asp-controller="Calidad"
+                          asp-action="Cerrar"
+                          method="post"
+                          data-confirm="¿Confirmas que deseas cerrar definitivamente esta inspección de Calidad?">
+
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden"
+                               name="id"
+                               value="@Model.InspeccionID" />
+
+                        <div class="quality-field mb-3">
+                            <label class="form-label fw-semibold">Observaciones finales</label>
+                            <textarea name="observaciones"
+                              class="quality-form-control"
+                              maxlength="1000"
+                              rows="3"
+                              placeholder="Conclusión final, referencia documental o comentario del auditor..."></textarea>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit"
+                                    class="quality-btn quality-btn-dark">
+                                <i class="fa-solid fa-lock"></i>
+                                Cerrar inspección de Calidad
+                            </button>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <div class="quality-alert quality-alert-warning mb-0">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <div>
+                            <strong>El cierre todavía está bloqueado.</strong>
+                            <ul class="mb-0 mt-2">
+                                @foreach (var bloqueo in Model.Cierre.Bloqueos)
+                                {
+                                    <li>@bloqueo</li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </section>
+
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded',function(){
+        document.querySelectorAll('.quality-close [data-sample-form]').forEach(function(form){
+            if(form.dataset.sampleInitialized==='true') return;
+            form.dataset.sampleInitialized='true';
+            const qualityConfirm=form.querySelector('[data-sample-confirm="quality"]');
+            const productionConfirm=form.querySelector('[data-sample-confirm="production"]');
+            const qualityLocation=form.querySelector('[data-sample-location="quality"]');
+            const productionLocation=form.querySelector('[data-sample-location="production"]');
+            function sincronizarMuestra(){
+                if(qualityLocation&&qualityConfirm){
+                    qualityLocation.required=qualityConfirm.checked;
+                    qualityLocation.classList.toggle('is-invalid',qualityConfirm.checked&&!qualityLocation.value.trim());
+                }
+                if(productionLocation&&productionConfirm){
+                    productionLocation.required=productionConfirm.checked;
+                    productionLocation.classList.toggle('is-invalid',productionConfirm.checked&&!productionLocation.value.trim());
+                }
+            }
+            [qualityConfirm,productionConfirm,qualityLocation,productionLocation].filter(Boolean).forEach(function(element){
+                element.addEventListener('change',sincronizarMuestra);
+                element.addEventListener('input',sincronizarMuestra);
+            });
+            sincronizarMuestra();
+            form.addEventListener('submit',function(event){
+                const qualityChecked=!!(qualityConfirm&&qualityConfirm.checked);
+                const productionChecked=!!(productionConfirm&&productionConfirm.checked);
+                sincronizarMuestra();
+                if(!qualityChecked&&!productionChecked){
+                    event.preventDefault();
+                    window.alert('Confirma al menos una muestra antes de guardar el resguardo.');
+                    return;
+                }
+                if((qualityChecked&&qualityLocation&&!qualityLocation.value.trim())||(productionChecked&&productionLocation&&!productionLocation.value.trim())){
+                    event.preventDefault();
+                    window.alert('Captura la ubicación de cada muestra confirmada.');
+                }
+            });
+        });
+        document.querySelectorAll('.quality-close form[data-confirm]').forEach(function(form){
+            if(form.dataset.confirmInitialized==='true') return;
+            form.dataset.confirmInitialized='true';
+            form.addEventListener('submit',function(event){
+                const message=form.dataset.confirm;
+                if(message&&!window.confirm(message)) event.preventDefault();
+            });
+        });
+    });
+</script>

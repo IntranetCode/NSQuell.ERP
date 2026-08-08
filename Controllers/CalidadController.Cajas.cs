@@ -1557,84 +1557,218 @@ VALUES
         }
 
         private static async Task LiberarCajaDesdeGP12Async(
-            GP12RevisionOrigen origen,
-            CalidadGP12RevisionGuardarViewModel model,
-            DateTime ahora,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+    GP12RevisionOrigen origen,
+    CalidadGP12RevisionGuardarViewModel model,
+    DateTime ahora,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
         {
+            if (origen == null) throw new ArgumentNullException(nameof(origen));
+            if (model == null) throw new ArgumentNullException(nameof(model));
+            if (origen.GP12ID <= 0) throw new InvalidOperationException("El registro GP12 no es válido.");
+            if (origen.CajaLiberadaID <= 0) throw new InvalidOperationException("La caja de Calidad relacionada con GP12 no es válida.");
+            if (model.CantidadRevisada <= 0) throw new InvalidOperationException("La cantidad revisada en GP12 debe ser mayor que cero.");
+            if (model.CantidadNOK > 0) throw new InvalidOperationException("No puede liberarse la caja desde GP12 mientras existan piezas NOK.");
+            if (model.CantidadOK <= 0) throw new InvalidOperationException("La cantidad OK de GP12 debe ser mayor que cero.");
+
             const string sql = @"
+DECLARE @EstadoGP12Actual NVARCHAR(50);
+DECLARE @CajaProduccionActual BIGINT;
+DECLARE @EstadoCajaActual INT;
+
+SELECT
+    @EstadoGP12Actual=UPPER(LTRIM(RTRIM(ISNULL(g.Estado,N''))))
+FROM dbo.Calidad_GP12 g WITH (UPDLOCK,HOLDLOCK)
+WHERE g.GP12ID=@GP12ID
+  AND g.CajaLiberadaID=@CajaLiberadaID
+  AND g.Activo=1;
+
+IF @EstadoGP12Actual IS NULL
+    THROW 51100,'No se encontró el registro GP12 activo relacionado con la caja.',1;
+
+IF @EstadoGP12Actual=N'LIBERADO'
+BEGIN
+    IF @CajaProduccionID IS NULL
+        RETURN;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM dbo.Produccion_Cajas c
+        WHERE c.CajaProduccionID=@CajaProduccionID
+          AND c.Activo=1
+          AND c.EstadoCajaID IN (@EstadoZonaVerde,@EstadoSalidaProduccion,@EstadoRecibidaAlmacen)
+          AND ISNULL(c.EtiquetaVerde,0)=1
+          AND UPPER(LTRIM(RTRIM(ISNULL(c.ResultadoCalidad,N''))))=N'LIBERADA_GP12'
+    )
+        RETURN;
+END;
+
+IF @EstadoGP12Actual NOT IN (N'EN_GP12',N'NOK_REINSPECCION',N'PENDIENTE',N'ABIERTO')
+    THROW 51101,'El estado actual de GP12 no permite liberar la caja.',1;
+
+IF @CajaProduccionID IS NOT NULL
+BEGIN
+    SELECT
+        @CajaProduccionActual=c.CajaProduccionID,
+        @EstadoCajaActual=c.EstadoCajaID
+    FROM dbo.Produccion_Cajas c WITH (UPDLOCK,HOLDLOCK)
+    WHERE c.CajaProduccionID=@CajaProduccionID
+      AND c.Activo=1;
+
+    IF @CajaProduccionActual IS NULL
+        THROW 51102,'No se encontró la caja activa de Producción relacionada con GP12.',1;
+
+    IF @EstadoCajaActual IN (@EstadoSalidaProduccion,@EstadoRecibidaAlmacen)
+        THROW 51103,'La caja ya registró salida de Producción o recepción de Almacén y no puede liberarse nuevamente desde GP12.',1;
+END;
+
 UPDATE dbo.Calidad_GP12
-SET
-    Estado = 'LIBERADO',
-    FechaSalida = @Ahora,
-    CantidadSalida = @CantidadSalida,
-    UsuarioSalidaID = @UsuarioID,
-    Observaciones =
+SET Estado=N'LIBERADO',
+    FechaSalida=@Ahora,
+    CantidadSalida=@CantidadSalida,
+    UsuarioSalidaID=@UsuarioID,
+    Observaciones=
         CASE
-            WHEN @Observaciones IS NULL THEN Observaciones
-            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones)) = '' THEN @Observaciones
-            ELSE Observaciones + CHAR(13) + CHAR(10) + @Observaciones
+            WHEN @ObservacionesGP12 IS NULL THEN
+                CASE
+                    WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N''
+                        THEN N'GP12 aprobado. Caja entregada a Producción para escaneo de salida con destino final Almacén PT.'
+                    ELSE Observaciones+CHAR(13)+CHAR(10)+N'GP12 aprobado. Caja entregada a Producción para escaneo de salida con destino final Almacén PT.'
+                END
+            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N''
+                THEN @ObservacionesGP12
+            ELSE Observaciones+CHAR(13)+CHAR(10)+@ObservacionesGP12
         END,
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = @Ahora
-WHERE GP12ID = @GP12ID
-  AND Activo = 1;
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE GP12ID=@GP12ID
+  AND CajaLiberadaID=@CajaLiberadaID
+  AND Activo=1;
+
+IF @@ROWCOUNT<>1
+    THROW 51104,'No fue posible registrar la liberación de GP12.',1;
 
 UPDATE dbo.Calidad_CajasLiberadas
-SET
-    EtiquetaLiberacion = N'VERDE',
-    Destino = 'ALMACEN',
-    Estado = 'LIBERADA',
-    FechaValidacionCalidad = @Ahora,
-    UsuarioValidacionCalidadID = @UsuarioID,
-    Observaciones =
+SET EtiquetaLiberacion=N'VERDE',
+    Destino=N'ALMACEN',
+    Estado=N'LIBERADA',
+    FechaValidacionCalidad=@Ahora,
+    UsuarioValidacionCalidadID=@UsuarioID,
+    Observaciones=
         CASE
-            WHEN @Observaciones IS NULL THEN Observaciones
-            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones)) = '' THEN @Observaciones
-            ELSE Observaciones + CHAR(13) + CHAR(10) + @Observaciones
+            WHEN @ObservacionesCaja IS NULL THEN
+                CASE
+                    WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N''
+                        THEN N'Caja aprobada por GP12. Destino final Almacén PT, pendiente escaneo de salida en Producción.'
+                    ELSE Observaciones+CHAR(13)+CHAR(10)+N'Caja aprobada por GP12. Destino final Almacén PT, pendiente escaneo de salida en Producción.'
+                END
+            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N''
+                THEN @ObservacionesCaja
+            ELSE Observaciones+CHAR(13)+CHAR(10)+@ObservacionesCaja
         END,
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = @Ahora
-WHERE CajaLiberadaID = @CajaLiberadaID
-  AND Activo = 1;
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE CajaLiberadaID=@CajaLiberadaID
+  AND Activo=1;
+
+IF @@ROWCOUNT<>1
+    THROW 51105,'No fue posible actualizar la caja liberada de Calidad.',1;
 
 IF @CajaProduccionID IS NOT NULL
 BEGIN
     UPDATE dbo.Produccion_Cajas
-    SET
-        EstadoCajaID = 3,
-        EstadoCajaNombre = N'Liberada por GP12',
-        EstatusCalidad = N'LIBERADA',
-        EtiquetaVerde = 1,
-        FechaLiberacionCalidad = @Ahora,
-        AuditorCalidadUsuarioID = @UsuarioID,
-        UsuarioCalidadID = @UsuarioID,
-        ResultadoCalidad = N'LIBERADA_GP12',
-        MotivoCalidad = @Observaciones,
-        UsuarioModificacionID = @UsuarioID,
-        FechaModificacion = @Ahora
-    WHERE CajaProduccionID = @CajaProduccionID
-      AND Activo = 1;
-END;";
+    SET EstadoCajaID=@EstadoZonaVerde,
+        EstadoCajaNombre=@NombreEstadoZonaVerde,
+        EstatusCalidad=N'LIBERADA',
+        EtiquetaVerde=1,
+        FechaLiberacionCalidad=@Ahora,
+        AuditorCalidadUsuarioID=@UsuarioID,
+        UsuarioCalidadID=@UsuarioID,
+        ResultadoCalidad=N'LIBERADA_GP12',
+        MotivoCalidad=@ObservacionesGP12,
+        FechaSalidaProduccion=NULL,
+        UsuarioSalidaProduccionID=NULL,
+        FechaRecepcionAlmacen=NULL,
+        UsuarioAlmacenID=NULL,
+        UsuarioModificacionID=@UsuarioID,
+        FechaModificacion=@Ahora
+    WHERE CajaProduccionID=@CajaProduccionID
+      AND Activo=1
+      AND EstadoCajaID NOT IN (@EstadoSalidaProduccion,@EstadoRecibidaAlmacen);
+
+    IF @@ROWCOUNT<>1
+        THROW 51106,'No fue posible colocar la caja liberada por GP12 en la zona de escaneo de Producción.',1;
+END;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+SELECT
+    @InspeccionID,
+    N'GP12_ENTREGADO_PARA_SALIDA',
+    ci.Estado,
+    ci.Estado,
+    N'LIBERADA_GP12',
+    N'VERDE',
+    CONCAT(
+        N'GP12 aprobó la caja ',
+        ISNULL(NULLIF(LTRIM(RTRIM(@FolioCaja)),N''),CONVERT(NVARCHAR(30),@CajaProduccionID)),
+        N'. Cantidad liberada: ',
+        CONVERT(NVARCHAR(20),@CantidadSalida),
+        N' pieza(s). La caja quedó disponible en Producción para escaneo de salida con destino final Almacén PT.'
+    ),
+    @UsuarioID,
+    @Ahora
+FROM dbo.Calidad_Inspecciones ci
+WHERE ci.InspeccionID=@InspeccionID
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_InspeccionHistorial h
+      WHERE h.InspeccionID=@InspeccionID
+        AND h.Movimiento=N'GP12_ENTREGADO_PARA_SALIDA'
+        AND h.Comentario LIKE N'%'+ISNULL(NULLIF(LTRIM(RTRIM(@FolioCaja)),N''),CONVERT(NVARCHAR(30),@CajaProduccionID))+N'%'
+  );";
+
+            var observacionBase = "GP12 aprobado. Caja entregada a Producción para escaneo de salida con destino final Almacén PT.";
+            var observacionesGp12 = string.IsNullOrWhiteSpace(model.Observaciones)
+                ? observacionBase
+                : observacionBase + " " + model.Observaciones.Trim();
+
+            if (observacionesGp12.Length > 1000) observacionesGp12 = observacionesGp12[..1000];
+
+            var observacionesCaja = $"Caja liberada por GP12 con {model.CantidadOK} pieza(s) OK. Pendiente escaneo de salida en Producción. Destino final: Almacén PT.";
+            if (!string.IsNullOrWhiteSpace(model.Observaciones)) observacionesCaja += " " + model.Observaciones.Trim();
+            if (observacionesCaja.Length > 1000) observacionesCaja = observacionesCaja[..1000];
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@GP12ID", SqlDbType.Int).Value = origen.GP12ID;
             cmd.Parameters.Add("@CajaLiberadaID", SqlDbType.Int).Value = origen.CajaLiberadaID;
-            cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
-                (object?)origen.CajaProduccionID ?? DBNull.Value;
+            cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = (object?)origen.CajaProduccionID ?? DBNull.Value;
+            cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = origen.InspeccionID;
+            cmd.Parameters.Add("@FolioCaja", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(origen.FolioCaja) ? DBNull.Value : origen.FolioCaja.Trim();
             cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
             cmd.Parameters.Add("@CantidadSalida", SqlDbType.Int).Value = model.CantidadOK;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value =
-                string.IsNullOrWhiteSpace(model.Observaciones)
-                    ? DBNull.Value
-                    : model.Observaciones.Trim();
-
+            cmd.Parameters.Add("@ObservacionesGP12", SqlDbType.NVarChar, 1000).Value = observacionesGp12;
+            cmd.Parameters.Add("@ObservacionesCaja", SqlDbType.NVarChar, 1000).Value = observacionesCaja;
+            cmd.Parameters.Add("@EstadoZonaVerde", SqlDbType.Int).Value = ProduccionCajaEstatus.ZonaVerde;
+            cmd.Parameters.Add("@NombreEstadoZonaVerde", SqlDbType.NVarChar, 100).Value = ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.ZonaVerde);
+            cmd.Parameters.Add("@EstadoSalidaProduccion", SqlDbType.Int).Value = ProduccionCajaEstatus.SalidaProduccion;
+            cmd.Parameters.Add("@EstadoRecibidaAlmacen", SqlDbType.Int).Value = ProduccionCajaEstatus.RecibidaAlmacenPt;
             await cmd.ExecuteNonQueryAsync();
         }
-
         private static async Task MarcarGP12ParaReinspeccionAsync(
             GP12RevisionOrigen origen,
             CalidadGP12RevisionGuardarViewModel model,

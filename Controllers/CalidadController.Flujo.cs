@@ -383,63 +383,87 @@ ORDER BY
                 null);
         }
 
-        private static async Task<CalidadCierreEstadoViewModel>
-            LeerEstadoCierreAsync(
-                int inspeccionId,
-                SqlConnection cn,
-                SqlTransaction? tx)
+        private static async Task<CalidadCierreEstadoViewModel> LeerEstadoCierreAsync(int inspeccionId, SqlConnection cn, SqlTransaction? tx)
         {
+            if (inspeccionId <= 0) return new CalidadCierreEstadoViewModel();
+
             const string sql = @"
 SELECT TOP (1)
-    CAST(CASE WHEN UPPER(ISNULL(i.Estado, '')) = @EstadoCerrado THEN 1 ELSE 0 END AS BIT) AS YaCerrada,
-    CAST(ISNULL(i.ConfiguracionInvalidada, 0) AS BIT) AS ConfiguracionInvalidada,
+    CAST(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(i.Estado,N''))))=@EstadoCerrado THEN 1 ELSE 0 END AS BIT) AS YaCerrada,
+    CAST(ISNULL(i.ConfiguracionInvalidada,0) AS BIT) AS ConfiguracionInvalidada,
+    CAST(CASE WHEN e.EjecucionProduccionID IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS EjecucionProduccionExiste,
+    CAST
+    (
+        CASE
+            WHEN e.EjecucionProduccionID IS NOT NULL
+             AND e.FechaFinReal IS NOT NULL
+             AND ISNULL(e.EstatusID,0) NOT IN (@EnPreparacion,@EnProduccion,@Pausado)
+                THEN 1
+            ELSE 0
+        END AS BIT
+    ) AS EjecucionProduccionTerminada,
+    CAST(CASE WHEN e.FechaFinReal IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS FechaFinProduccionRegistrada,
+    (
+        SELECT COUNT(1)
+        FROM dbo.Produccion_Paros p
+        WHERE p.EjecucionProduccionID=i.EjecucionProduccionID
+          AND p.Activo=1
+          AND p.FechaFinParo IS NULL
+    ) AS ParosAbiertos,
     (
         SELECT COUNT(1)
         FROM dbo.Calidad_MonitoreosProceso m
-        WHERE m.InspeccionID = i.InspeccionID
-          AND m.Activo = 1
-          AND UPPER(ISNULL(m.Resultado, '')) = @MonitoreoPendiente
+        WHERE m.InspeccionID=i.InspeccionID
+          AND m.Activo=1
+          AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N''))))=@MonitoreoPendiente
     ) AS MonitoreosPendientes,
     (
         SELECT COUNT(1)
         FROM dbo.Calidad_DisposicionesMaterial d
-        WHERE d.InspeccionID = i.InspeccionID
-          AND d.Activo = 1
-          AND UPPER(ISNULL(d.ResultadoFinal, '')) = @DisposicionPendiente
+        WHERE d.InspeccionID=i.InspeccionID
+          AND d.Activo=1
+          AND UPPER(LTRIM(RTRIM(ISNULL(d.ResultadoFinal,N''))))=@DisposicionPendiente
     ) AS DisposicionesPendientes,
     (
         SELECT COUNT(1)
         FROM dbo.Produccion_Cajas pc
-        WHERE pc.EjecucionProduccionID = i.EjecucionProduccionID
-          AND pc.Activo = 1
-          AND ISNULL(pc.EstadoCajaID, 1) = 2
+        WHERE pc.EjecucionProduccionID=i.EjecucionProduccionID
+          AND pc.Activo=1
+          AND ISNULL(pc.EstadoCajaID,1)=@CajaPendienteCalidad
     ) AS CajasPendientesCalidad,
     (
         SELECT COUNT(1)
         FROM dbo.Produccion_Cajas pc
-        WHERE pc.EjecucionProduccionID = i.EjecucionProduccionID
-          AND pc.Activo = 1
-          AND ISNULL(pc.EstadoCajaID, 1) = 1
+        WHERE pc.EjecucionProduccionID=i.EjecucionProduccionID
+          AND pc.Activo=1
+          AND ISNULL(pc.EstadoCajaID,1)=@CajaFormadaProduccion
           AND
           (
-              UPPER(ISNULL(pc.EstatusCalidad, '')) = 'DEVUELTA'
-              OR UPPER(ISNULL(pc.ResultadoCalidad, '')) = 'DEVUELTA'
+              UPPER(LTRIM(RTRIM(ISNULL(pc.EstatusCalidad,N''))))=N'DEVUELTA'
+              OR UPPER(LTRIM(RTRIM(ISNULL(pc.ResultadoCalidad,N''))))=N'DEVUELTA'
           )
     ) AS CajasDevueltasSinResolver,
     (
         SELECT COUNT(1)
+        FROM dbo.Produccion_Cajas pc
+        WHERE pc.EjecucionProduccionID=i.EjecucionProduccionID
+          AND pc.Activo=1
+          AND ISNULL(pc.EstadoCajaID,@CajaFormadaProduccion)<@CajaSalidaProduccion
+    ) AS CajasSinSalidaProduccion,
+    (
+        SELECT COUNT(1)
         FROM dbo.Calidad_GP12 g
-        WHERE g.InspeccionID = i.InspeccionID
-          AND g.Activo = 1
-          AND UPPER(ISNULL(g.Estado, '')) NOT IN
-              (@GP12Liberado, @GP12Cerrado, @GP12Cancelado)
+        WHERE g.InspeccionID=i.InspeccionID
+          AND g.Activo=1
+          AND UPPER(LTRIM(RTRIM(ISNULL(g.Estado,N'')))) NOT IN
+              (@GP12Liberado,@GP12Cerrado,@GP12Cancelado)
     ) AS GP12Abiertos,
     (
         SELECT COUNT(1)
         FROM dbo.Calidad_Reliberaciones r
-        WHERE r.InspeccionID = i.InspeccionID
-          AND r.Activo = 1
-          AND UPPER(ISNULL(r.Resultado, '')) = @ReliberacionPendiente
+        WHERE r.InspeccionID=i.InspeccionID
+          AND r.Activo=1
+          AND UPPER(LTRIM(RTRIM(ISNULL(r.Resultado,N''))))=@ReliberacionPendiente
     ) AS ReliberacionesPendientes,
     CAST
     (
@@ -456,61 +480,63 @@ SELECT TOP (1)
                     mr.UbicacionProduccion,
                     mr.FechaResguardo
                 FROM dbo.Calidad_MuestrasResguardo mr
-                WHERE mr.InspeccionID = i.InspeccionID
-                  AND mr.Activo = 1
-                  AND UPPER(ISNULL(mr.Momento, '')) = @MomentoFinProduccion
+                WHERE mr.InspeccionID=i.InspeccionID
+                  AND mr.Activo=1
+                  AND UPPER(LTRIM(RTRIM(ISNULL(mr.Momento,N''))))=@MomentoFinProduccion
                 ORDER BY mr.MuestraResguardoID DESC
             ) muestraFinal
-            WHERE muestraFinal.CantidadDisparos > 0
-              AND muestraFinal.MuestraCalidadConfirmada = 1
-              AND muestraFinal.MuestraProduccionConfirmada = 1
-              AND NULLIF(LTRIM(RTRIM(muestraFinal.UbicacionCalidad)), '') IS NOT NULL
-              AND NULLIF(LTRIM(RTRIM(muestraFinal.UbicacionProduccion)), '') IS NOT NULL
+            WHERE ISNULL(muestraFinal.CantidadDisparos,0)>0
+              AND ISNULL(muestraFinal.MuestraCalidadConfirmada,0)=1
+              AND ISNULL(muestraFinal.MuestraProduccionConfirmada,0)=1
+              AND NULLIF(LTRIM(RTRIM(muestraFinal.UbicacionCalidad)),N'') IS NOT NULL
+              AND NULLIF(LTRIM(RTRIM(muestraFinal.UbicacionProduccion)),N'') IS NOT NULL
               AND muestraFinal.FechaResguardo IS NOT NULL
-        ) THEN 1 ELSE 0 END
-        AS BIT
+        ) THEN 1 ELSE 0 END AS BIT
     ) AS MuestraFinProduccionCompleta
-FROM dbo.Calidad_Inspecciones i
-WHERE i.InspeccionID = @InspeccionID;";
+FROM dbo.Calidad_Inspecciones i WITH (UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.Produccion_Ejecucion e WITH (UPDLOCK,HOLDLOCK)
+    ON e.EjecucionProduccionID=i.EjecucionProduccionID
+   AND e.Activo=1
+WHERE i.InspeccionID=@InspeccionID;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
-            cmd.Parameters.Add("@EstadoCerrado", SqlDbType.NVarChar, 50).Value =
-                CalidadEstados.Cerrada;
-            cmd.Parameters.Add("@MonitoreoPendiente", SqlDbType.NVarChar, 20).Value =
-                CalidadResultadoMonitoreo.Pendiente;
-            cmd.Parameters.Add("@DisposicionPendiente", SqlDbType.NVarChar, 20).Value =
-                CalidadResultadoDisposicion.Pendiente;
-            cmd.Parameters.Add("@GP12Liberado", SqlDbType.NVarChar, 30).Value =
-                CalidadEstadoGP12.Liberado;
-            cmd.Parameters.Add("@GP12Cerrado", SqlDbType.NVarChar, 30).Value =
-                CalidadEstadoGP12.Cerrado;
-            cmd.Parameters.Add("@GP12Cancelado", SqlDbType.NVarChar, 30).Value =
-                CalidadEstadoGP12.Cancelado;
-            cmd.Parameters.Add("@ReliberacionPendiente", SqlDbType.NVarChar, 20).Value =
-                CalidadResultadoReliberacion.Pendiente;
-            cmd.Parameters.Add("@MomentoFinProduccion", SqlDbType.NVarChar, 30).Value =
-                CalidadMomentoMuestra.FinProduccion;
+            cmd.Parameters.Add("@EstadoCerrado", SqlDbType.NVarChar, 50).Value = CalidadEstados.Cerrada;
+            cmd.Parameters.Add("@MonitoreoPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoMonitoreo.Pendiente;
+            cmd.Parameters.Add("@DisposicionPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Pendiente;
+            cmd.Parameters.Add("@GP12Liberado", SqlDbType.NVarChar, 30).Value = CalidadEstadoGP12.Liberado;
+            cmd.Parameters.Add("@GP12Cerrado", SqlDbType.NVarChar, 30).Value = CalidadEstadoGP12.Cerrado;
+            cmd.Parameters.Add("@GP12Cancelado", SqlDbType.NVarChar, 30).Value = CalidadEstadoGP12.Cancelado;
+            cmd.Parameters.Add("@ReliberacionPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoReliberacion.Pendiente;
+            cmd.Parameters.Add("@MomentoFinProduccion", SqlDbType.NVarChar, 30).Value = CalidadMomentoMuestra.FinProduccion;
+            cmd.Parameters.Add("@EnPreparacion", SqlDbType.Int).Value = ProduccionEstatus.EnPreparacion;
+            cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = ProduccionEstatus.EnProduccion;
+            cmd.Parameters.Add("@Pausado", SqlDbType.Int).Value = ProduccionEstatus.Pausado;
+            cmd.Parameters.Add("@CajaFormadaProduccion", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
+            cmd.Parameters.Add("@CajaPendienteCalidad", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
+            cmd.Parameters.Add("@CajaSalidaProduccion", SqlDbType.Int).Value = ProduccionCajaEstatus.SalidaProduccion;
 
             await using var rd = await cmd.ExecuteReaderAsync();
-
-            if (!await rd.ReadAsync())
-                return new CalidadCierreEstadoViewModel();
+            if (!await rd.ReadAsync()) return new CalidadCierreEstadoViewModel();
 
             return new CalidadCierreEstadoViewModel
             {
                 YaCerrada = Convert.ToBoolean(rd["YaCerrada"]),
                 ConfiguracionInvalidada = Convert.ToBoolean(rd["ConfiguracionInvalidada"]),
+                EjecucionProduccionExiste = Convert.ToBoolean(rd["EjecucionProduccionExiste"]),
+                EjecucionProduccionTerminada = Convert.ToBoolean(rd["EjecucionProduccionTerminada"]),
+                FechaFinProduccionRegistrada = Convert.ToBoolean(rd["FechaFinProduccionRegistrada"]),
+                ParosAbiertos = Convert.ToInt32(rd["ParosAbiertos"]),
                 MonitoreosPendientes = Convert.ToInt32(rd["MonitoreosPendientes"]),
                 DisposicionesPendientes = Convert.ToInt32(rd["DisposicionesPendientes"]),
                 CajasPendientesCalidad = Convert.ToInt32(rd["CajasPendientesCalidad"]),
                 CajasDevueltasSinResolver = Convert.ToInt32(rd["CajasDevueltasSinResolver"]),
+                CajasSinSalidaProduccion = Convert.ToInt32(rd["CajasSinSalidaProduccion"]),
                 GP12Abiertos = Convert.ToInt32(rd["GP12Abiertos"]),
                 ReliberacionesPendientes = Convert.ToInt32(rd["ReliberacionesPendientes"]),
                 MuestraFinProduccionCompleta = Convert.ToBoolean(rd["MuestraFinProduccionCompleta"])
             };
         }
-
         private async Task<List<CalidadChecklistPreguntaViewModel>> ObtenerPreguntasChecklistCalidadAsync(
             int? checklistArranqueId)
         {
@@ -892,9 +918,10 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RegistrarPrimerasPiezasFlujo(
-            CalidadPrimerasPiezasViewModel model)
+     CalidadPrimerasPiezasViewModel model)
         {
-            if (!ModelState.IsValid || !model.CincoDisparosSegregados)
+            if (!ModelState.IsValid ||
+                !model.CincoDisparosSegregados)
             {
                 TempData["Error"] =
                     "Confirma la segregación de los primeros cinco disparos y revisa los datos.";
@@ -904,67 +931,206 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                     new { id = model.InspeccionID });
             }
 
-            var inspeccion = await _context.CalidadInspecciones
-                .FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID);
+            var inspeccion =
+                await _context.CalidadInspecciones
+                    .FirstOrDefaultAsync(x =>
+                        x.InspeccionID == model.InspeccionID);
 
             if (inspeccion == null)
                 return NotFound();
 
-            if (!CalidadEstados.PuedeValidarPrimerasPiezas(inspeccion.Estado))
+            /*
+             * Se conserva el estado actual antes de modificar
+             * cualquier información de la inspección.
+             */
+            var estadoActual =
+                (inspeccion.Estado ?? string.Empty)
+                    .Trim()
+                    .ToUpperInvariant();
+
+            /*
+             * El método general PuedeValidarPrimerasPiezas
+             * contempla el flujo normal.
+             *
+             * PENDIENTE_RELIBERACION también debe permitir
+             * registrar nuevas primeras piezas después de un
+             * paro que requiere una nueva autorización de Calidad.
+             */
+            var puedeRegistrarPrimerasPiezas =
+                CalidadEstados.PuedeValidarPrimerasPiezas(
+                    inspeccion.Estado) ||
+                estadoActual ==
+                    CalidadEstados.PendienteReliberacion;
+
+            if (!puedeRegistrarPrimerasPiezas)
             {
                 TempData["Error"] =
-                    "La inspección no permite registrar primeras piezas en su estado actual.";
+                    "La inspección no permite registrar primeras piezas en su estado actual: " +
+                    (string.IsNullOrWhiteSpace(inspeccion.Estado)
+                        ? "SIN ESTADO"
+                        : inspeccion.Estado) +
+                    ".";
 
                 return RedirectToAction(
                     nameof(Detalle),
                     new { id = model.InspeccionID });
             }
 
-            var usuarioId = ObtenerUsuarioIdActual();
-            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+            if (inspeccion.ConfiguracionInvalidada)
+            {
+                TempData["Error"] =
+                    "La configuración de la inspección fue invalidada y no permite registrar primeras piezas.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            var usuarioId =
+                ObtenerUsuarioIdActual();
+
+            if (!usuarioId.HasValue ||
+                usuarioId.Value <= 0)
+            {
                 return Unauthorized();
+            }
 
-            var intento = await ObtenerOCrearIntentoPendienteAsync(
-                inspeccion.InspeccionID,
-                usuarioId.Value);
-
-            AplicarDatosIntento(intento, model, usuarioId.Value);
-
+            /*
+             * Identificamos la reliberación ANTES de cambiar
+             * el estado de la inspección.
+             */
             var esReliberacion =
                 inspeccion.RequiereReliberacion ||
-                CalidadTipoProceso.EsReliberacion(inspeccion.Proceso);
+                estadoActual ==
+                    CalidadEstados.PendienteReliberacion ||
+                CalidadTipoProceso.EsReliberacion(
+                    inspeccion.Proceso);
+
+            /*
+             * Obtiene el intento pendiente actual o crea
+             * uno nuevo si ya no existe uno pendiente.
+             */
+            var intento =
+                await ObtenerOCrearIntentoPendienteAsync(
+                    inspeccion.InspeccionID,
+                    usuarioId.Value);
+
+            AplicarDatosIntento(
+                intento,
+                model,
+                usuarioId.Value);
 
             var reliberacionReactivada = false;
 
+            /*
+             * Si estamos trabajando una reliberación,
+             * verificamos que exista su registro asociado.
+             */
             if (esReliberacion)
             {
-                var reliberacion = await _context.CalidadReliberaciones
-                    .Where(x =>
-                        x.InspeccionID == inspeccion.InspeccionID &&
-                        x.Activo)
-                    .OrderByDescending(x => x.NumeroReliberacion)
-                    .FirstOrDefaultAsync();
+                var reliberacion =
+                    await _context.CalidadReliberaciones
+                        .Where(x =>
+                            x.InspeccionID ==
+                                inspeccion.InspeccionID &&
+                            x.Activo)
+                        .OrderByDescending(x =>
+                            x.NumeroReliberacion)
+                        .FirstOrDefaultAsync();
 
-                if (reliberacion != null &&
-                    reliberacion.Resultado == CalidadResultadoReliberacion.Rechazada)
+                if (reliberacion == null)
                 {
-                    reliberacion.Resultado = CalidadResultadoReliberacion.Pendiente;
-                    reliberacion.FechaValidacion = null;
-                    reliberacion.UsuarioCalidadID = null;
-                    reliberacion.Observaciones = UnirObservaciones(
-                        reliberacion.Observaciones,
-                        $"Se inició una nueva validación con el intento {intento.NumeroIntento} de primeras piezas.");
-                    reliberacion.UsuarioModificacionID = usuarioId;
-                    reliberacion.FechaModificacion = DateTime.Now;
-                    reliberacionReactivada = true;
+                    TempData["Error"] =
+                        "No se encontró la solicitud de reliberación asociada a esta inspección.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                /*
+                 * Si la reliberación anterior había sido
+                 * rechazada y Producción presenta nuevas piezas,
+                 * vuelve a quedar pendiente para una nueva
+                 * decisión de Calidad.
+                 */
+                if (reliberacion.Resultado ==
+                    CalidadResultadoReliberacion.Rechazada)
+                {
+                    reliberacion.Resultado =
+                        CalidadResultadoReliberacion.Pendiente;
+
+                    reliberacion.FechaValidacion =
+                        null;
+
+                    reliberacion.UsuarioCalidadID =
+                        null;
+
+                    reliberacion.Observaciones =
+                        UnirObservaciones(
+                            reliberacion.Observaciones,
+                            $"Se inició una nueva validación con el intento {intento.NumeroIntento} de primeras piezas.");
+
+                    reliberacion.UsuarioModificacionID =
+                        usuarioId.Value;
+
+                    reliberacion.FechaModificacion =
+                        DateTime.Now;
+
+                    reliberacionReactivada =
+                        true;
                 }
             }
 
-            AplicarResumenPrimerasPiezas(inspeccion, model, usuarioId.Value);
+            /*
+             * Guarda el resumen de la nueva validación
+             * también en Calidad_Inspecciones.
+             */
+            AplicarResumenPrimerasPiezas(
+                inspeccion,
+                model,
+                usuarioId.Value);
 
-            var estadoAnterior = inspeccion.Estado;
-            inspeccion.Estado = CalidadEstados.PendientePrimerasPiezas;
-            MarcarModificacion(inspeccion, usuarioId);
+            var estadoAnterior =
+                inspeccion.Estado;
+
+            /*
+             * IMPORTANTE:
+             *
+             * En el flujo normal:
+             * ARRANQUE_AUTORIZADO
+             *      ->
+             * PENDIENTE_PRIMERAS_PIEZAS
+             *
+             * En una reliberación:
+             * PENDIENTE_RELIBERACION
+             *      ->
+             * PENDIENTE_RELIBERACION
+             *
+             * No debemos perder el estado de reliberación
+             * hasta que Calidad autorice o rechace.
+             */
+            inspeccion.Estado =
+                esReliberacion
+                    ? CalidadEstados.PendienteReliberacion
+                    : CalidadEstados.PendientePrimerasPiezas;
+
+            /*
+             * Registrar primeras piezas NO significa todavía
+             * que Producción haya sido liberada.
+             */
+            inspeccion.Liberado =
+                false;
+
+            if (esReliberacion)
+            {
+                inspeccion.RequiereReliberacion =
+                    true;
+            }
+
+            MarcarModificacion(
+                inspeccion,
+                usuarioId.Value);
 
             AgregarHistorial(
                 inspeccion,
@@ -973,16 +1139,28 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                 inspeccion.Estado,
                 inspeccion.ResultadoCalidad,
                 inspeccion.Etiqueta,
-                string.IsNullOrWhiteSpace(model.Observaciones)
-                    ? $"Se registró el intento {intento.NumeroIntento} de primeras piezas."
+                string.IsNullOrWhiteSpace(
+                    model.Observaciones)
+                    ? esReliberacion
+                        ? $"Se registró el intento {intento.NumeroIntento} de primeras piezas para reliberación."
+                        : $"Se registró el intento {intento.NumeroIntento} de primeras piezas."
                     : model.Observaciones.Trim(),
-                usuarioId);
+                usuarioId.Value);
 
             await _context.SaveChangesAsync();
 
-            TempData["Mensaje"] = reliberacionReactivada
-                ? $"Intento {intento.NumeroIntento} guardado. La reliberación volvió a quedar pendiente de decisión de Calidad."
-                : $"Intento {intento.NumeroIntento} de primeras piezas guardado.";
+            if (esReliberacion)
+            {
+                TempData["Mensaje"] =
+                    reliberacionReactivada
+                        ? $"Intento {intento.NumeroIntento} guardado. La reliberación volvió a quedar pendiente de decisión de Calidad."
+                        : $"Intento {intento.NumeroIntento} de primeras piezas guardado. Ya puedes autorizar o rechazar la reliberación.";
+            }
+            else
+            {
+                TempData["Mensaje"] =
+                    $"Intento {intento.NumeroIntento} de primeras piezas guardado.";
+            }
 
             return RedirectToAction(
                 nameof(Detalle),
@@ -1109,112 +1287,100 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> LiberarProduccionFlujo(int id)
         {
-            var inspeccion = await _context.CalidadInspecciones
-                .FirstOrDefaultAsync(x => x.InspeccionID == id);
-
-            if (inspeccion == null)
-                return NotFound();
-
-            if (inspeccion.ConfiguracionInvalidada)
-            {
-                TempData["Error"] =
-                    "La configuración fue invalidada y no puede liberarse.";
-
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
-
-            var validacionConfiguracion =
-                await ValidarConfiguracionActualAsync(inspeccion);
-
-            if (!validacionConfiguracion.Valida)
-            {
-                await InvalidarConfiguracionAsync(
-                    inspeccion,
-                    validacionConfiguracion.Motivo);
-
-                TempData["Error"] = validacionConfiguracion.Motivo;
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
-
-            var intento = await _context.CalidadPrimerasPiezasIntentos
-                .Where(x => x.InspeccionID == id && x.Activo)
-                .OrderByDescending(x => x.NumeroIntento)
-                .FirstOrDefaultAsync();
-
-            if (intento == null)
-            {
-                TempData["Error"] =
-                    "Primero registra la validación de las primeras piezas.";
-
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
-
-            if (!intento.CincoDisparosSegregados ||
-                intento.CantidadDisparosPresentados < 3 ||
-                intento.ValidacionDimensional != true ||
-                intento.ValidacionApariencia != true ||
-                intento.ValidacionGauge == false ||
-                intento.ValidacionConductividad == false)
-            {
-                TempData["Error"] =
-                    "El último intento no cumple los requisitos para liberar la producción.";
-
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
+            if (id <= 0) return NotFound();
 
             var usuarioId = ObtenerUsuarioIdActual();
-            if (!usuarioId.HasValue || usuarioId.Value <= 0)
-                return Unauthorized();
-
-            var eraReliberacion =
-                inspeccion.RequiereReliberacion ||
-                CalidadTipoProceso.EsReliberacion(inspeccion.Proceso);
-
-            CalidadReliberacion? reliberacionPendiente = null;
-
-            if (eraReliberacion)
-            {
-                reliberacionPendiente = await _context.CalidadReliberaciones
-                    .Where(x =>
-                        x.InspeccionID == id &&
-                        x.Activo &&
-                        x.Resultado == CalidadResultadoReliberacion.Pendiente)
-                    .OrderByDescending(x => x.NumeroReliberacion)
-                    .FirstOrDefaultAsync();
-
-                if (reliberacionPendiente == null)
-                {
-                    TempData["Error"] =
-                        "La reliberación no está pendiente. Guarda una nueva validación después de corregir las primeras piezas.";
-
-                    return RedirectToAction(nameof(Detalle), new { id });
-                }
-            }
+            if (!usuarioId.HasValue || usuarioId.Value <= 0) return Unauthorized();
 
             await using var tx = await _context.Database.BeginTransactionAsync();
-
             try
             {
+                var inspeccion = await _context.CalidadInspecciones
+                    .FirstOrDefaultAsync(x => x.InspeccionID == id);
+
+                if (inspeccion == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+
+                if (inspeccion.ConfiguracionInvalidada)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La configuración fue invalidada y no puede liberarse.";
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                var validacionConfiguracion = await ValidarConfiguracionActualAsync(inspeccion);
+                if (!validacionConfiguracion.Valida)
+                {
+                    await InvalidarConfiguracionAsync(inspeccion, validacionConfiguracion.Motivo);
+                    await tx.CommitAsync();
+                    TempData["Error"] = validacionConfiguracion.Motivo;
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                var intento = await _context.CalidadPrimerasPiezasIntentos
+                    .Where(x => x.InspeccionID == id && x.Activo)
+                    .OrderByDescending(x => x.NumeroIntento)
+                    .FirstOrDefaultAsync();
+
+                if (intento == null)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Primero registra la validación de las primeras piezas.";
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                if (!intento.CincoDisparosSegregados ||
+                    intento.CantidadDisparosPresentados < 3 ||
+                    intento.ValidacionDimensional != true ||
+                    intento.ValidacionApariencia != true ||
+                    intento.ValidacionGauge == false ||
+                    intento.ValidacionConductividad == false)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El último intento no cumple los requisitos para liberar la producción.";
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                var eraReliberacion = inspeccion.RequiereReliberacion ||
+                                      CalidadTipoProceso.EsReliberacion(inspeccion.Proceso);
+
+                CalidadReliberacion? reliberacionPendiente = null;
+                if (eraReliberacion)
+                {
+                    reliberacionPendiente = await _context.CalidadReliberaciones
+                        .Where(x =>
+                            x.InspeccionID == id &&
+                            x.Activo &&
+                            x.Resultado == CalidadResultadoReliberacion.Pendiente)
+                        .OrderByDescending(x => x.NumeroReliberacion)
+                        .FirstOrDefaultAsync();
+
+                    if (reliberacionPendiente == null)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La reliberación no está pendiente. Guarda una nueva validación después de corregir las primeras piezas.";
+                        return RedirectToAction(nameof(Detalle), new { id });
+                    }
+                }
+
                 var ahora = DateTime.Now;
                 var estadoAnterior = inspeccion.Estado;
 
                 intento.Resultado = CalidadResultadoIntento.Ok;
                 intento.AjusteSolicitado = false;
                 intento.FechaFin = ahora;
-                intento.UsuarioModificacionID = usuarioId;
+                intento.UsuarioModificacionID = usuarioId.Value;
                 intento.FechaModificacion = ahora;
 
-                inspeccion.CincoDisparosSegregados =
-                    intento.CincoDisparosSegregados;
-                inspeccion.CantidadDisparosConformes =
-                    intento.CantidadDisparosPresentados;
-                inspeccion.ValidacionDimensional =
-                    intento.ValidacionDimensional;
-                inspeccion.ValidacionApariencia =
-                    intento.ValidacionApariencia;
+                inspeccion.CincoDisparosSegregados = intento.CincoDisparosSegregados;
+                inspeccion.CantidadDisparosConformes = intento.CantidadDisparosPresentados;
+                inspeccion.ValidacionDimensional = intento.ValidacionDimensional;
+                inspeccion.ValidacionApariencia = intento.ValidacionApariencia;
                 inspeccion.ValidacionGauge = intento.ValidacionGauge;
-                inspeccion.ValidacionConductividad =
-                    intento.ValidacionConductividad;
+                inspeccion.ValidacionConductividad = intento.ValidacionConductividad;
                 inspeccion.ResultadoCalidad = "VERDE";
                 inspeccion.Etiqueta = "VERDE";
                 inspeccion.Liberado = true;
@@ -1224,37 +1390,30 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                 inspeccion.RequiereReliberacion = false;
                 inspeccion.Estado = CalidadEstados.ProduccionLiberada;
                 inspeccion.FechaLiberacionProduccion = ahora;
-                inspeccion.UsuarioLiberacionProduccionID = usuarioId;
+                inspeccion.UsuarioLiberacionProduccionID = usuarioId.Value;
                 inspeccion.FechaValidacionPrimerasPiezas = ahora;
-                inspeccion.UsuarioValidacionPrimerasPiezasID = usuarioId;
+                inspeccion.UsuarioValidacionPrimerasPiezasID = usuarioId.Value;
 
                 if (inspeccion.FechaNotificacionCalidad.HasValue)
                 {
-                    var minutos = (int)Math.Max(
-                        0,
-                        Math.Round(
-                            (ahora - inspeccion.FechaNotificacionCalidad.Value)
-                                .TotalMinutes));
-
+                    var minutos = (int)Math.Max(0, Math.Round((ahora - inspeccion.FechaNotificacionCalidad.Value).TotalMinutes));
                     inspeccion.MinutosLiberacionInicial = minutos;
-                    inspeccion.CumplioTiempoObjetivoInicial =
-                        minutos >= 10 && minutos <= 20;
+                    inspeccion.CumplioTiempoObjetivoInicial = minutos >= 10 && minutos <= 20;
                 }
 
                 if (reliberacionPendiente != null)
                 {
-                    reliberacionPendiente.Resultado =
-                        CalidadResultadoReliberacion.Autorizada;
+                    reliberacionPendiente.Resultado = CalidadResultadoReliberacion.Autorizada;
                     reliberacionPendiente.FechaValidacion = ahora;
-                    reliberacionPendiente.UsuarioCalidadID = usuarioId;
+                    reliberacionPendiente.UsuarioCalidadID = usuarioId.Value;
                     reliberacionPendiente.Observaciones = UnirObservaciones(
                         reliberacionPendiente.Observaciones,
                         $"Reliberación autorizada con el intento {intento.NumeroIntento} de primeras piezas conformes.");
-                    reliberacionPendiente.UsuarioModificacionID = usuarioId;
+                    reliberacionPendiente.UsuarioModificacionID = usuarioId.Value;
                     reliberacionPendiente.FechaModificacion = ahora;
                 }
 
-                MarcarModificacion(inspeccion, usuarioId);
+                MarcarModificacion(inspeccion, usuarioId.Value);
 
                 AgregarHistorial(
                     inspeccion,
@@ -1267,30 +1426,20 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                     inspeccion.Etiqueta,
                     eraReliberacion
                         ? $"Reliberación {reliberacionPendiente?.NumeroReliberacion} autorizada con etiqueta verde. Producción puede reiniciar la serie."
-                        : $"Intento {intento.NumeroIntento} conforme. Calidad asignó etiqueta verde.",
-                    usuarioId);
-
-                if (inspeccion.EjecucionProduccionID.HasValue)
-                {
-                    await GenerarMonitoreosHorariosAsync(
-                        inspeccion,
-                        ahora,
-                        usuarioId.Value);
-                }
+                        : $"Intento {intento.NumeroIntento} conforme. Calidad asignó etiqueta verde. Producción debe confirmar el inicio de serie.",
+                    usuarioId.Value);
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
 
                 TempData["Mensaje"] = eraReliberacion
                     ? "Reliberación autorizada con etiqueta verde. Producción puede reiniciar la serie."
-                    : "Producción liberada con etiqueta verde. Ya puede iniciarse la serie.";
+                    : "Producción liberada con etiqueta verde. Producción debe confirmar el inicio de serie.";
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                TempData["Error"] = eraReliberacion
-                    ? "No fue posible autorizar la reliberación: " + ex.Message
-                    : "No fue posible liberar la producción: " + ex.Message;
+                TempData["Error"] = "No fue posible liberar la producción: " + ex.Message;
             }
 
             return RedirectToAction(nameof(Detalle), new { id });
@@ -1300,39 +1449,34 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SincronizarMonitoreosCalidad(int id)
         {
-            if (id <= 0)
-                return NotFound();
+            if (id <= 0) return NotFound();
 
             var usuarioId = ObtenerUsuarioIdActual();
-            if (!usuarioId.HasValue || usuarioId.Value <= 0)
-                return Unauthorized();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0) return Unauthorized();
 
             var inspeccion = await _context.CalidadInspecciones
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.InspeccionID == id);
 
-            if (inspeccion == null)
-                return NotFound();
+            if (inspeccion == null) return NotFound();
 
             if (inspeccion.Estado != CalidadEstados.MonitoreoActivo)
             {
-                TempData["Error"] =
-                    "La inspección todavía no se encuentra en monitoreo horario activo.";
+                TempData["Error"] = inspeccion.Estado == CalidadEstados.ProduccionLiberada
+                    ? "Calidad ya liberó la producción, pero Producción todavía no confirma el inicio de serie."
+                    : "La inspección no se encuentra en monitoreo horario activo.";
 
                 return RedirectToAction(nameof(Detalle), new { id });
             }
 
             if (!inspeccion.EjecucionProduccionID.HasValue)
             {
-                TempData["Error"] =
-                    "La inspección no tiene una ejecución relacionada y no puede sincronizar periodos.";
-
+                TempData["Error"] = "La inspección no tiene una ejecución relacionada y no puede sincronizar periodos.";
                 return RedirectToAction(nameof(Detalle), new { id });
             }
 
             try
             {
-                var creados = await AsegurarMonitoreosActivosAsync(id, usuarioId);
                 await ReconciliarMonitoreosConProduccionAsync(id, usuarioId);
 
                 var total = await _context.CalidadMonitoreosProceso
@@ -1346,18 +1490,23 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                         x.Activo &&
                         x.RegistroHoraID.HasValue);
 
+                var pendientesProduccion = await _context.CalidadMonitoreosProceso
+                    .AsNoTracking()
+                    .CountAsync(x =>
+                        x.InspeccionID == id &&
+                        x.Activo &&
+                        !x.RegistroHoraID.HasValue);
+
                 TempData["Mensaje"] =
-                    $"Seguimiento horario actualizado. Periodos: {total}; vinculados: {vinculados}; creados ahora: {creados}.";
+                    $"Seguimiento actualizado. Periodos: {total}; vinculados con Producción: {vinculados}; pendientes de captura: {pendientesProduccion}.";
             }
             catch (Exception ex)
             {
-                TempData["Error"] =
-                    "No fue posible sincronizar los monitoreos de Calidad: " + ex.Message;
+                TempData["Error"] = "No fue posible sincronizar los monitoreos de Calidad: " + ex.Message;
             }
 
             return RedirectToAction(nameof(Detalle), new { id });
         }
-
         private async Task<int> AsegurarMonitoreosActivosAsync(
             int inspeccionId,
             int? usuarioId)
@@ -2260,41 +2409,37 @@ WHERE InspeccionID = @InspeccionID;";
             return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
         }
 
-        private async Task<IActionResult> CerrarInspeccionCalidadAsync(
-            int id,
-            string? observaciones)
+        private async Task<IActionResult> CerrarInspeccionCalidadAsync(int id, string? observaciones)
         {
             observaciones = observaciones?.Trim();
 
-            if (id <= 0)
-                return NotFound();
+            if (id <= 0) return NotFound();
 
-            if (!string.IsNullOrWhiteSpace(observaciones) &&
-                observaciones.Length > 1000)
+            if (!string.IsNullOrWhiteSpace(observaciones) && observaciones.Length > 1000)
             {
-                TempData["Error"] =
-                    "Las observaciones del cierre no pueden superar 1000 caracteres.";
+                TempData["Error"] = "Las observaciones del cierre no pueden superar 1000 caracteres.";
                 return RedirectToAction(nameof(Detalle), new { id });
             }
 
             var usuarioId = ObtenerUsuarioIdActual();
-            if (!usuarioId.HasValue || usuarioId.Value <= 0)
-                return Unauthorized();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0) return Unauthorized();
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
             {
                 const string sqlInspeccion = @"
 SELECT TOP (1)
-    Estado,
-    ResultadoCalidad,
-    Etiqueta
-FROM dbo.Calidad_Inspecciones WITH (UPDLOCK, HOLDLOCK)
-WHERE InspeccionID = @InspeccionID;";
+    i.EjecucionProduccionID,
+    UPPER(LTRIM(RTRIM(ISNULL(i.Estado,N'')))) AS Estado,
+    i.ResultadoCalidad,
+    i.Etiqueta
+FROM dbo.Calidad_Inspecciones i WITH (UPDLOCK,HOLDLOCK)
+WHERE i.InspeccionID=@InspeccionID;";
 
+                int ejecucionProduccionId;
                 string estadoAnterior;
                 string? resultadoCalidad;
                 string? etiqueta;
@@ -2310,14 +2455,22 @@ WHERE InspeccionID = @InspeccionID;";
                         return NotFound();
                     }
 
+                    if (rd["EjecucionProduccionID"] == DBNull.Value)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La inspección no tiene una ejecución de Producción relacionada.";
+                        return RedirectToAction(nameof(Detalle), new { id });
+                    }
+
+                    ejecucionProduccionId = Convert.ToInt32(rd["EjecucionProduccionID"]);
                     estadoAnterior = rd["Estado"]?.ToString()?.Trim() ?? string.Empty;
-                    resultadoCalidad = rd["ResultadoCalidad"] as string;
-                    etiqueta = rd["Etiqueta"] as string;
+                    resultadoCalidad = rd["ResultadoCalidad"] == DBNull.Value ? null : rd["ResultadoCalidad"].ToString();
+                    etiqueta = rd["Etiqueta"] == DBNull.Value ? null : rd["Etiqueta"].ToString();
                 }
 
                 if (estadoAnterior == CalidadEstados.Cerrada)
                 {
-                    await tx.RollbackAsync();
+                    await tx.CommitAsync();
                     TempData["Mensaje"] = "La inspección ya se encontraba cerrada.";
                     return RedirectToAction(nameof(Detalle), new { id });
                 }
@@ -2326,66 +2479,91 @@ WHERE InspeccionID = @InspeccionID;";
                 if (!cierre.PuedeCerrar)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] =
-                        "La inspección todavía no puede cerrarse. " +
-                        string.Join(" ", cierre.Bloqueos);
+                    TempData["Error"] = "La inspección todavía no puede cerrarse. " + string.Join(" ", cierre.Bloqueos);
                     return RedirectToAction(nameof(Detalle), new { id });
                 }
 
                 var ahora = DateTime.Now;
+                var comentario = "Inspección cerrada después de confirmar que Producción terminó, no existen paros abiertos, todos los monitoreos y disposiciones fueron resueltos, todas las cajas registraron salida de Producción, GP12 y reliberaciones están concluidos y las muestras finales fueron resguardadas.";
+                if (!string.IsNullOrWhiteSpace(observaciones)) comentario += " " + observaciones;
+                if (comentario.Length > 1000) comentario = comentario[..1000];
 
                 const string sqlCerrar = @"
 UPDATE dbo.Calidad_Inspecciones
-SET
-    Estado = @EstadoCerrado,
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = @Ahora
-WHERE InspeccionID = @InspeccionID
-  AND UPPER(ISNULL(Estado, '')) <> @EstadoCerrado;";
+SET Estado=@EstadoCerrado,
+    Liberado=0,
+    RequiereReliberacion=0,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora,
+    Observaciones=
+        CASE
+            WHEN @ObservacionesCierre IS NULL THEN Observaciones
+            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @ObservacionesCierre
+            WHEN Observaciones LIKE N'%'+@MarcaCierre+N'%' THEN Observaciones
+            ELSE Observaciones+CHAR(13)+CHAR(10)+@ObservacionesCierre
+        END
+WHERE InspeccionID=@InspeccionID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND UPPER(LTRIM(RTRIM(ISNULL(Estado,N''))))<>@EstadoCerrado;
+
+IF @@ROWCOUNT<>1
+    THROW 51200,'La inspección cambió de estado mientras se intentaba cerrar.',1;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+SELECT
+    @InspeccionID,
+    @Movimiento,
+    @EstadoAnterior,
+    @EstadoCerrado,
+    @ResultadoCalidad,
+    @Etiqueta,
+    @Comentario,
+    @UsuarioID,
+    @Ahora
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.Calidad_InspeccionHistorial h
+    WHERE h.InspeccionID=@InspeccionID
+      AND h.Movimiento=@Movimiento
+      AND UPPER(LTRIM(RTRIM(ISNULL(h.EstadoNuevo,N''))))=@EstadoCerrado
+);";
 
                 await using (var cmd = new SqlCommand(sqlCerrar, cn, tx))
                 {
-                    cmd.Parameters.Add("@EstadoCerrado", SqlDbType.NVarChar, 50).Value =
-                        CalidadEstados.Cerrada;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = id;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                    cmd.Parameters.Add("@EstadoCerrado", SqlDbType.NVarChar, 50).Value = CalidadEstados.Cerrada;
+                    cmd.Parameters.Add("@Movimiento", SqlDbType.NVarChar, 100).Value = CalidadMovimientos.Cierre;
+                    cmd.Parameters.Add("@EstadoAnterior", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(estadoAnterior) ? DBNull.Value : estadoAnterior;
+                    cmd.Parameters.Add("@ResultadoCalidad", SqlDbType.NVarChar, 30).Value = string.IsNullOrWhiteSpace(resultadoCalidad) ? DBNull.Value : resultadoCalidad;
+                    cmd.Parameters.Add("@Etiqueta", SqlDbType.NVarChar, 30).Value = string.IsNullOrWhiteSpace(etiqueta) ? DBNull.Value : etiqueta;
+                    cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = comentario;
+                    cmd.Parameters.Add("@ObservacionesCierre", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : $"Cierre de Calidad: {observaciones}";
+                    cmd.Parameters.Add("@MarcaCierre", SqlDbType.NVarChar, 100).Value = "Cierre de Calidad:";
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
                     cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
-                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = id;
-
-                    var afectados = await cmd.ExecuteNonQueryAsync();
-                    if (afectados != 1)
-                        throw new InvalidOperationException(
-                            "La inspección cambió de estado mientras se intentaba cerrar.");
+                    await cmd.ExecuteNonQueryAsync();
                 }
 
-                var comentario =
-                    "Inspección cerrada después de confirmar monitoreos, disposiciones, " +
-                    "cajas, GP12, reliberaciones y muestras de resguardo.";
-
-                if (!string.IsNullOrWhiteSpace(observaciones))
-                    comentario += " " + observaciones;
-
-                await InsertarHistorialCalidadSqlAsync(
-                    id,
-                    CalidadMovimientos.Cierre,
-                    estadoAnterior,
-                    CalidadEstados.Cerrada,
-                    resultadoCalidad,
-                    etiqueta,
-                    comentario,
-                    usuarioId.Value,
-                    ahora,
-                    cn,
-                    tx);
-
                 await tx.CommitAsync();
-                TempData["Mensaje"] =
-                    "Inspección de Calidad cerrada correctamente.";
+                TempData["Mensaje"] = "Inspección de Calidad cerrada correctamente. La ejecución de Producción permanece terminada y conserva su trazabilidad.";
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                TempData["Error"] =
-                    "No fue posible cerrar la inspección: " + ex.Message;
+                TempData["Error"] = "No fue posible cerrar la inspección: " + ex.Message;
             }
 
             return RedirectToAction(nameof(Detalle), new { id });
@@ -2680,41 +2858,7 @@ WHERE d.ChecklistArranqueID = @ChecklistArranqueID
                 inspeccion.Observaciones = model.Observaciones.Trim();
         }
 
-        private async Task GenerarMonitoreosHorariosAsync(
-            CalidadInspeccion inspeccion,
-            DateTime fechaLiberacion,
-            int usuarioId)
-        {
-            if (!inspeccion.EjecucionProduccionID.HasValue)
-                throw new InvalidOperationException("La inspeccion no tiene ejecucion de Produccion relacionada.");
-
-            var yaExisten = await _context.CalidadMonitoreosProceso
-                .AnyAsync(x => x.InspeccionID == inspeccion.InspeccionID && x.Activo);
-            if (yaExisten) return;
-
-            var horas = 9;
-            if (inspeccion.FechaInicioProgramada.HasValue && inspeccion.FechaFinProgramada.HasValue)
-            {
-                var duracion = (inspeccion.FechaFinProgramada.Value - inspeccion.FechaInicioProgramada.Value).TotalHours;
-                if (duracion > 0)
-                    horas = Math.Clamp((int)Math.Ceiling(duracion), 1, 9);
-            }
-
-            for (var numeroHora = 1; numeroHora <= horas; numeroHora++)
-            {
-                _context.CalidadMonitoreosProceso.Add(new CalidadMonitoreoProceso
-                {
-                    InspeccionID = inspeccion.InspeccionID,
-                    EjecucionProduccionID = inspeccion.EjecucionProduccionID.Value,
-                    NumeroHora = numeroHora,
-                    FechaHoraProgramada = fechaLiberacion.AddHours(numeroHora),
-                    Resultado = CalidadResultadoMonitoreo.Pendiente,
-                    UsuarioCreacionID = usuarioId,
-                    FechaCreacion = DateTime.Now,
-                    Activo = true
-                });
-            }
-        }
+      
 
         private static string? NormalizarMomentoMuestra(string? momento)
         {
