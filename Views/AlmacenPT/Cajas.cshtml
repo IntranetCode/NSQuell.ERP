@@ -1,21 +1,22 @@
-﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTCajasVm
+﻿@* LOGISTICA_UX_RAPIDA_V1_4 *@
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTCajasVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
-    ViewData["Title"] = "Cajas PT";
+    ViewData["Title"] = "Lotes PT";
     var anterior = Math.Max(1, Model.Pagina - 1);
     var siguiente = Math.Min(Model.TotalPaginas, Model.Pagina + 1);
 }
+<link rel="stylesheet" href="~/css/Almacen/almacen-pt-cajas.css" asp-append-version="true" />
 
-<section class="alm-hero">
+<section class="ptl-head">
     <div>
-        <small>PRODUCTO TERMINADO</small>
-        <h1>Cajas PT</h1>
-        <p>Consulta cada caja recibida, su etiqueta, existencia actual y la orden de fabricación a la que quedó vinculada.</p>
+        <span>PRODUCTO TERMINADO</span>
+        <h1>Lotes PT</h1>
+        <p>El lote de la etiqueta es el identificador operativo. El número interno de caja queda solo como referencia técnica.</p>
     </div>
-    <div class="alm-actions">
-        <a class="alm-btn" asp-action="Entrada"><i class="fa-solid fa-barcode"></i> Recibir cajas</a>
+    <div class="ptl-head-actions">
+        <a class="alm-btn" asp-action="Entrada"><i class="fa-solid fa-barcode"></i> Recibir / escanear</a>
         <a class="alm-btn secondary" asp-action="Index"><i class="fa-solid fa-boxes-stacked"></i> Inventario PT</a>
-        <a class="alm-btn secondary" asp-action="Historial"><i class="fa-solid fa-clock-rotate-left"></i> Historial PT</a>
     </div>
 </section>
 
@@ -25,163 +26,103 @@
 }
 else
 {
-    <section class="alm-card">
-        <header>
-            <span><i class="fa-solid fa-box"></i> Cajas registradas</span>
-            <span>@Model.TotalRegistros.ToString("N0") caja(s)</span>
-        </header>
+    <form method="get" class="ptl-filters">
+        <div class="ptl-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="search" name="q" value="@Model.Busqueda" placeholder="Lote, etiqueta, parte, cliente u OF" autocomplete="off" />
+        </div>
+        <input type="search" name="numeroOF" value="@Model.NumeroOF" placeholder="OF, ej. 0812/26" />
+        <select name="estadoCalidad">
+            <option value="">Calidad: todas</option>
+            @foreach (var estado in Model.EstadosCalidadFiltro)
+            {
+                if (Model.EstadoCalidad == estado) { <option value="@estado" selected>@estado</option> }
+                else { <option value="@estado">@estado</option> }
+            }
+        </select>
+        <button class="alm-btn" type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
+        <a class="alm-btn secondary" asp-action="Cajas">Limpiar</a>
+        <span class="ptl-count">@Model.TotalRegistros.ToString("N0") lote(s)</span>
+    </form>
 
-        <form method="get" class="alm-filter alm-filter-history">
-            <div class="alm-field">
-                <label for="q">Caja, etiqueta, parte o cliente</label>
-                <div class="alm-smart-search" data-alm-smart-search data-alm-smart-limit="10">
-                    <input id="q" class="alm-input" type="search" name="q" value="@Model.Busqueda"
-                           placeholder="Etiqueta, parte, descripción o cliente" autocomplete="off" data-alm-smart-input />
-                    <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
-                        @foreach (var x in Model.Cajas)
-                        {
-                            var texto = $"{x.Etiqueta} {x.NumeroParte} {x.Descripcion} {x.Cliente} {x.NumeroOF}";
-                            <button type="button" class="alm-smart-search__option"
-                                    data-alm-smart-option data-alm-smart-value="@x.Etiqueta" data-alm-smart-text="@texto">
-                                <strong>@x.Etiqueta</strong>
-                                <span>@x.NumeroParte · @x.Descripcion</span>
-                                <small>@(string.IsNullOrWhiteSpace(x.NumeroOF) ? "Sin OF" : x.NumeroOF)</small>
-                            </button>
-                        }
-                        <div class="alm-smart-search__empty" data-alm-smart-empty hidden>Sin coincidencias.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="alm-field">
-                <label for="numeroOF">Orden de fabricación</label>
-                <div class="alm-smart-search" data-alm-smart-search data-alm-smart-limit="10">
-                    <input id="numeroOF" class="alm-input" type="search" name="numeroOF" value="@Model.NumeroOF"
-                           placeholder="Todas las OF" autocomplete="off" data-alm-smart-input />
-                    <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
-                        @foreach (var item in Model.OrdenesFiltro)
-                        {
-                            <button type="button" class="alm-smart-search__option"
-                                    data-alm-smart-option data-alm-smart-value="@item" data-alm-smart-text="@item">
-                                <strong>@item</strong><span>Orden de fabricación</span><small>PT</small>
-                            </button>
-                        }
-                        <div class="alm-smart-search__empty" data-alm-smart-empty hidden>Sin coincidencias.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="alm-field">
-                <label for="estadoCalidad">Estado de calidad</label>
-                <select id="estadoCalidad" class="alm-select" name="estadoCalidad">
-                    <option value="">Todos</option>
-                    @foreach (var estado in Model.EstadosCalidadFiltro)
-                    {
-                        <option value="@estado" selected="@(Model.EstadoCalidad == estado)">@estado</option>
-                    }
-                </select>
-            </div>
-
-            <div class="alm-filter-actions">
-                <button class="alm-btn" type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
-                <a class="alm-btn secondary" asp-action="Cajas"><i class="fa-solid fa-filter-circle-xmark"></i> Limpiar</a>
-            </div>
-        </form>
-    </section>
-
-    <section class="alm-card">
-        <header>
-            <span>Detalle de cajas PT</span>
-            <span>Página @Model.Pagina de @Model.TotalPaginas</span>
-        </header>
-
-        <div class="alm-table-wrap">
-            <table class="alm-table pt-box-table">
+    <section class="ptl-table-shell">
+        <div class="ptl-table-wrap">
+            <table class="ptl-table">
                 <thead>
                     <tr>
-                        <th>Caja / etiqueta</th>
-                        <th>Parte / cliente</th>
-                        <th>Existencia</th>
-                        <th>Calidad / lote</th>
-                        <th>Orden de fabricación</th>
+                        <th>Lote / etiqueta</th>
+                        <th>Parte</th>
+                        <th>Cliente</th>
+                        <th>OF vinculada</th>
+                        <th class="num">Disponible</th>
+                        <th>Calidad</th>
                         <th>Ubicación</th>
-                        <th>Entrada / último movimiento</th>
+                        <th>Entrada</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var x in Model.Cajas)
-                    {
-                        <tr>
-                            <td>
-                                <div class="pt-box-id">
-                                    <strong>Caja @x.NumeroCaja</strong>
-                                    <small>@x.Etiqueta</small>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="pt-box-part">
-                                    <a class="alm-trace-link" asp-action="Historial" asp-route-parte="@x.NumeroParte" asp-route-periodo="TODO">
-                                        <strong>@x.NumeroParte</strong>
-                                    </a>
-                                    <small>@x.Descripcion</small>
-                                    <small>@(string.IsNullOrWhiteSpace(x.Cliente) ? "Sin cliente" : x.Cliente)</small>
-                                </div>
-                            </td>
-                            <td class="alm-number">
-                                <strong>@x.Disponible.ToString("N0") PZA</strong>
-                                <small class="alm-subtext">Físico @x.SaldoFisico.ToString("N0") · Retenido @x.Retenido.ToString("N0")</small>
-                            </td>
-                            <td>
-                                <strong>@x.EstadoCalidad</strong>
-                                <small class="alm-subtext">@(string.IsNullOrWhiteSpace(x.LoteEtiqueta) ? "Sin lote" : x.LoteEtiqueta)</small>
-                            </td>
-                            <td>
-                                <div class="pt-box-of">
-                                    @if (x.SolicitudProduccionID.HasValue)
-                                    {
-                                        <a class="pt-box-of-link" asp-controller="AlmacenOF" asp-action="Detalle" asp-route-id="@x.SolicitudProduccionID.Value">
-                                            <strong>@(string.IsNullOrWhiteSpace(x.NumeroOF) ? $"OF-ID-{x.SolicitudProduccionID.Value}" : x.NumeroOF)</strong>
-                                        </a>
-                                        <span class="pt-box-link-state linked">OF vinculada</span>
-                                    }
-                                    else
-                                    {
-                                        <strong>@(string.IsNullOrWhiteSpace(x.NumeroOF) ? "Sin OF" : x.NumeroOF)</strong>
-                                        <span class="pt-box-link-state unlinked">Sin vínculo interno</span>
-                                    }
-                                </div>
-                            </td>
-                            <td>@(string.IsNullOrWhiteSpace(x.Ubicacion) ? "Sin ubicación" : x.Ubicacion)</td>
-                            <td>
-                                <strong>@x.FechaEntrada.ToString("dd/MM/yyyy HH:mm")</strong>
-                                <small class="alm-subtext">Último: @(x.UltimoMovimiento?.ToString("dd/MM/yyyy HH:mm") ?? "Sin movimientos")</small>
-                            </td>
-                            <td>
-                                <a class="pt-action" asp-action="Historial" asp-route-etiquetaLote="@x.Etiqueta" asp-route-periodo="TODO" title="Ver trazabilidad de la caja">
-                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                @foreach (var x in Model.Cajas)
+                {
+                    var lote = string.IsNullOrWhiteSpace(x.LoteEtiqueta) ? x.Etiqueta : x.LoteEtiqueta;
+                    <tr>
+                        <td>
+                            <div class="ptl-lote">
+                                <span>LOTE</span>
+                                <strong>@lote</strong>
+                                <small>@x.Etiqueta</small>
+                                <em>Caja interna #@x.NumeroCaja</em>
+                            </div>
+                        </td>
+                        <td>
+                            <a class="ptl-part" asp-action="Historial" asp-route-parte="@x.NumeroParte" asp-route-periodo="TODO">
+                                <strong>@x.NumeroParte</strong>
+                                <small>@x.Descripcion</small>
+                            </a>
+                        </td>
+                        <td><span class="ptl-client">@(string.IsNullOrWhiteSpace(x.Cliente) ? "Sin cliente" : x.Cliente)</span></td>
+                        <td>
+                            @if (x.SolicitudProduccionID.HasValue)
+                            {
+                                <a class="ptl-of linked" asp-controller="AlmacenOF" asp-action="Detalle" asp-route-id="@x.SolicitudProduccionID.Value">
+                                    <strong>@(string.IsNullOrWhiteSpace(x.NumeroOF) ? $"OF-ID-{x.SolicitudProduccionID.Value}" : x.NumeroOF)</strong>
+                                    <small><i class="fa-solid fa-link"></i> enlazada</small>
                                 </a>
-                            </td>
-                        </tr>
-                    }
-                    @if (!Model.Cajas.Any())
-                    {
-                        <tr><td colspan="8" class="alm-empty">No se encontraron cajas PT con los filtros seleccionados.</td></tr>
-                    }
+                            }
+                            else
+                            {
+                                <div class="ptl-of unlinked">
+                                    <strong>@(string.IsNullOrWhiteSpace(x.NumeroOF) ? "Sin OF" : x.NumeroOF)</strong>
+                                    <small><i class="fa-solid fa-link-slash"></i> sin vínculo interno</small>
+                                </div>
+                            }
+                        </td>
+                        <td class="num">
+                            <strong class="ptl-stock">@x.Disponible.ToString("N0") PZA</strong>
+                            <small>Físico @x.SaldoFisico.ToString("N0") · Ret. @x.Retenido.ToString("N0")</small>
+                        </td>
+                        <td><span class="ptl-quality ptl-quality-@x.EstadoCalidad.ToLowerInvariant()">@x.EstadoCalidad</span></td>
+                        <td>@(string.IsNullOrWhiteSpace(x.Ubicacion) ? "Sin ubicación" : x.Ubicacion)</td>
+                        <td><strong>@x.FechaEntrada.ToString("dd/MM/yy HH:mm")</strong><small>Últ. @(x.UltimoMovimiento?.ToString("dd/MM/yy HH:mm") ?? "—")</small></td>
+                        <td>
+                            <a class="ptl-trace" asp-action="Historial" asp-route-etiquetaLote="@lote" asp-route-periodo="TODO" title="Trazabilidad del lote"><i class="fa-solid fa-clock-rotate-left"></i></a>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Cajas.Any())
+                {
+                    <tr><td colspan="9" class="ptl-empty">No se encontraron lotes PT con los filtros seleccionados.</td></tr>
+                }
                 </tbody>
             </table>
         </div>
 
         @if (Model.TotalPaginas > 1)
         {
-            <nav class="alm-pager" aria-label="Paginación de cajas PT">
-                <a class="alm-btn secondary small @(Model.Pagina <= 1 ? "disabled" : "")"
-                   asp-action="Cajas" asp-route-pagina="@anterior" asp-route-q="@Model.Busqueda"
-                   asp-route-numeroOF="@Model.NumeroOF" asp-route-estadoCalidad="@Model.EstadoCalidad">Anterior</a>
-                <span>Página <strong>@Model.Pagina</strong> de <strong>@Model.TotalPaginas</strong></span>
-                <a class="alm-btn secondary small @(Model.Pagina >= Model.TotalPaginas ? "disabled" : "")"
-                   asp-action="Cajas" asp-route-pagina="@siguiente" asp-route-q="@Model.Busqueda"
-                   asp-route-numeroOF="@Model.NumeroOF" asp-route-estadoCalidad="@Model.EstadoCalidad">Siguiente</a>
+            <nav class="ptl-pager">
+                <a class="alm-btn secondary small @(Model.Pagina <= 1 ? "disabled" : "")" asp-action="Cajas" asp-route-pagina="@anterior" asp-route-q="@Model.Busqueda" asp-route-numeroOF="@Model.NumeroOF" asp-route-estadoCalidad="@Model.EstadoCalidad">Anterior</a>
+                <span>Página <b>@Model.Pagina</b> de <b>@Model.TotalPaginas</b></span>
+                <a class="alm-btn secondary small @(Model.Pagina >= Model.TotalPaginas ? "disabled" : "")" asp-action="Cajas" asp-route-pagina="@siguiente" asp-route-q="@Model.Busqueda" asp-route-numeroOF="@Model.NumeroOF" asp-route-estadoCalidad="@Model.EstadoCalidad">Siguiente</a>
             </nav>
         }
     </section>

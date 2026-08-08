@@ -1,0 +1,34 @@
+﻿@* LOGISTICA_FASE1_TEST_20260807_v1_3 *@
+@using ERP.NSQuell.Models.ViewModels.Logistica
+@model LogisticaCatalogosVm
+@{
+    Layout = "_LogisticaLayout";
+    ViewData["Title"] = "Rutas y unidades";
+}
+<section class="log-page-head"><div><span class="log-kicker">CATÁLOGOS</span><h1>Rutas y unidades</h1><p>Catálogos propios de la operación logística.</p></div><a class="log-btn log-btn-ghost" asp-action="Index">Regresar</a></section>
+<section class="log-split">
+    <div class="log-panel">
+        <div class="log-panel-head"><div><span class="log-kicker">RUTAS</span><h2>Nueva ruta</h2></div></div>
+        <form asp-action="GuardarRuta" method="post" class="log-form-grid">
+            @Html.AntiForgeryToken()
+            <div class="log-field"><label>Código</label><input name="Codigo" required /></div>
+            <div class="log-field"><label>Nombre</label><input name="Nombre" required /></div>
+            <div class="log-field log-span-2"><label>Descripción</label><input name="Descripcion" /></div>
+            <button class="log-btn log-btn-primary" type="submit">Guardar ruta</button>
+        </form>
+        <div class="log-list">@foreach (var r in Model.Rutas) { <div><strong>@r.Codigo · @r.Nombre</strong><small>@r.Descripcion</small></div> } @if (!Model.Rutas.Any()) { <div class="log-empty-inline">Sin rutas capturadas.</div> }</div>
+    </div>
+    <div class="log-panel">
+        <div class="log-panel-head"><div><span class="log-kicker">TRANSPORTE</span><h2>Nueva unidad</h2></div></div>
+        <form asp-action="GuardarUnidad" method="post" class="log-form-grid">
+            @Html.AntiForgeryToken()
+            <div class="log-field"><label>Número económico</label><input name="NumeroEconomico" required /></div>
+            <div class="log-field"><label>Placas</label><input name="Placas" /></div>
+            <div class="log-field"><label>Marca</label><input name="Marca" /></div>
+            <div class="log-field"><label>Modelo</label><input name="Modelo" /></div>
+            <div class="log-field"><label>Capacidad piezas</label><input name="CapacidadPiezas" type="number" min="1" /></div>
+            <button class="log-btn log-btn-primary" type="submit">Guardar unidad</button>
+        </form>
+        <div class="log-list">@foreach (var u in Model.Unidades) { <div><strong>@u.NumeroEconomico · @u.Placas</strong><small>@u.Marca @u.Modelo · @(u.CapacidadPiezas?.ToString("N0") ?? "Sin capacidad") pzas</small></div> } @if (!Model.Unidades.Any()) { <div class="log-empty-inline">Sin unidades capturadas.</div> }</div>
+    </div>
+</section>

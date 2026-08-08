@@ -1,0 +1,166 @@
+﻿@* LOGISTICA_UX_RAPIDA_V1_4 *@
+@using ERP.NSQuell.Models.ViewModels.Logistica
+@model LogisticaDetalleVm
+@{
+    Layout = "_LogisticaLayout";
+    ViewData["Title"] = Model.Folio;
+    string Fecha(DateTime? d) => d?.ToString("dd/MM/yyyy") ?? "—";
+    string FechaHora(DateTime? d) => d?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+    string Hora(TimeSpan? t) => t?.ToString(@"hh\:mm") ?? "";
+    bool editable = Model.Estatus is "Programado" or "Preparando";
+}
+
+<section class="log-page-head">
+    <div><span class="log-kicker">@Model.Estatus</span><h1>@Model.Folio</h1><p>@Model.Cliente · @Model.Destino</p></div>
+    <a class="log-btn log-btn-ghost" asp-action="Index">Regresar al tablero</a>
+</section>
+
+<section class="log-timeline">
+@foreach (var step in new[] { "Programado", "Preparando", "Preparado", "Cargado", "En ruta", "Entregado" })
+{
+    <div class="@(Model.Estatus == step ? "is-current" : "")"><span></span><strong>@step</strong></div>
+}
+</section>
+
+<section class="log-kpis log-kpis-4">
+    <article><span>Carga programada</span><strong>@Fecha(Model.FechaCargaProgramada)</strong><small>@Hora(Model.HoraCargaProgramada)</small></article>
+    <article><span>Entrega programada</span><strong>@Fecha(Model.FechaEntregaProgramada)</strong><small>@Hora(Model.HoraEntregaProgramada)</small></article>
+    <article><span>Carga real</span><strong>@FechaHora(Model.FechaCarga)</strong></article>
+    <article><span>Salida real</span><strong>@FechaHora(Model.FechaSalida)</strong></article>
+</section>
+
+<section class="log-panel">
+    <div class="log-panel-head"><div><span class="log-kicker">PARTIDAS</span><h2>Release / OF / cajas</h2></div></div>
+    <div class="log-detail-grid">
+    @foreach (var p in Model.Partidas)
+    {
+        var pct = p.CantidadSolicitada <= 0 ? 0 : Math.Min(100, (int)Math.Round(p.CantidadAsignada * 100d / p.CantidadSolicitada));
+        var disponibles = Model.CajasDisponibles.Where(x => x.EmbarqueDetalleID == p.EmbarqueDetalleID).ToList();
+        var asignadas = Model.CajasAsignadas.Where(x => x.EmbarqueDetalleID == p.EmbarqueDetalleID).ToList();
+        <article class="log-part-card">
+            <div class="log-part-head">
+                <div><small>@p.FolioRelease · Entrega @Fecha(p.FechaEntregaRelease)</small><h3>@p.NumeroParte</h3><p>@p.Descripcion</p></div>
+                <span class="log-of">@(string.IsNullOrWhiteSpace(p.NumeroOF) ? "OF PENDIENTE" : p.NumeroOF)</span>
+            </div>
+            <div class="log-progress"><div style="width:@pct%"></div></div>
+            <div class="log-progress-row"><span>Preparado: @p.CantidadAsignada.ToString("N0") / @p.CantidadSolicitada.ToString("N0")</span><strong>Pendiente @p.PendienteAsignar.ToString("N0")</strong></div>
+
+            @if (asignadas.Any())
+            {
+                <div class="log-box-list">
+                @foreach (var c in asignadas)
+                {
+                    <div class="log-box-chip">
+                        <div><strong>Lote @(string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote)</strong><small>@c.CantidadAsignada.ToString("N0") PZA · @c.NumeroParte · OF @c.NumeroOF · @c.Estatus</small><small class="log-tech-id">Etiqueta: @c.Etiqueta · Caja interna #@c.NumeroCaja</small></div>
+                        @if (editable && c.Estatus != "Despachada")
+                        {
+                            <form asp-action="LiberarCaja" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                <input type="hidden" name="embarqueCajaId" value="@c.EmbarqueCajaID" />
+                                <button class="log-link-danger" type="submit">Liberar</button>
+                            </form>
+                        }
+                    </div>
+                }
+                </div>
+            }
+
+            @if (editable)
+            {
+                <div class="log-available-boxes">
+                    <h4>Lotes PT disponibles de esta OF</h4>
+                    @foreach (var c in disponibles)
+                    {
+                        <form asp-action="ReservarCaja" method="post" class="log-available-row">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                            <input type="hidden" name="embarqueDetalleId" value="@p.EmbarqueDetalleID" />
+                            <input type="hidden" name="cajaId" value="@c.CajaID" />
+                            <div><strong>Lote @(string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote)</strong><small>@c.Disponible.ToString("N0") PZA · @c.Ubicacion · OF @c.NumeroOF</small><small class="log-tech-id">Etiqueta: @c.Etiqueta</small></div>
+                            <button class="log-btn log-btn-small" type="submit" disabled="@(c.Disponible > p.PendienteAsignar)">Reservar</button>
+                        </form>
+                    }
+                    @if (!disponibles.Any())
+                    {
+                        <div class="log-empty-inline">@(p.SolicitudProduccionID.HasValue ? "No hay lotes PT liberados y disponibles para esta OF." : "La entrega todavía no tiene OF; no se pueden reservar cajas.")</div>
+                    }
+                </div>
+            }
+        </article>
+    }
+    </div>
+</section>
+
+@if (editable && Model.DemandasDisponibles.Any())
+{
+    <section class="log-panel">
+        <div class="log-panel-head"><div><span class="log-kicker">CONSOLIDAR CARGA</span><h2>Agregar otra entrega del mismo cliente</h2></div></div>
+        <form asp-action="AgregarDetalle" method="post" class="log-inline-form">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+            <select name="ReleaseDetalleID" required>
+                <option value="">Selecciona Release / parte / fecha</option>
+                @foreach (var d in Model.DemandasDisponibles)
+                {
+                    <option value="@d.ReleaseDetalleID">@d.FechaCarga?.ToString("dd/MM") → @d.FechaEntrega.ToString("dd/MM") · @d.FolioRelease · @d.NumeroParte · @(string.IsNullOrWhiteSpace(d.NumeroOF) ? "OF pendiente" : d.NumeroOF) · pendiente @d.PendienteProgramar</option>
+                }
+            </select>
+            <input name="CantidadSolicitada" type="number" min="1" placeholder="Cantidad" required />
+            <button class="log-btn" type="submit">Agregar partida</button>
+        </form>
+    </section>
+}
+
+<section class="log-panel">
+    <div class="log-panel-head"><div><span class="log-kicker">DATOS DE CARGA</span><h2>Transporte y destino</h2></div></div>
+    <dl class="log-definition log-definition-grid">
+        <div><dt>Destino</dt><dd>@Model.Destino</dd></div>
+        <div><dt>Dirección</dt><dd>@(string.IsNullOrWhiteSpace(Model.DireccionEntrega) ? "—" : Model.DireccionEntrega)</dd></div>
+        <div><dt>Ruta</dt><dd>@(string.IsNullOrWhiteSpace(Model.Ruta) ? "Sin asignar" : Model.Ruta)</dd></div>
+        <div><dt>Unidad</dt><dd>@(string.IsNullOrWhiteSpace(Model.Unidad) ? "Sin asignar" : Model.Unidad)</dd></div>
+        <div><dt>Operador</dt><dd>@(string.IsNullOrWhiteSpace(Model.Operador) ? "Sin asignar" : Model.Operador)</dd></div>
+        <div><dt>Entrega real</dt><dd>@FechaHora(Model.FechaEntrega)</dd></div>
+    </dl>
+</section>
+
+<section class="log-actions-panel">
+    @if (Model.Estatus is "Programado" or "Preparando")
+    {
+        <form asp-action="MarcarPreparado" method="post">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><button class="log-btn log-btn-primary" type="submit">Confirmar preparación completa</button></form>
+    }
+    else if (Model.Estatus == "Preparado")
+    {
+        <form asp-action="MarcarCargado" method="post">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><button class="log-btn log-btn-primary" type="submit">Confirmar carga física</button></form>
+    }
+    else if (Model.Estatus == "Cargado")
+    {
+        <form asp-action="Despachar" method="post" onsubmit="return confirm('¿Confirmar salida? Esta acción generará movimientos Embarque y descontará PT.');">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><button class="log-btn log-btn-danger" type="submit">Validar salida y descontar PT</button></form>
+    }
+    else if (Model.Estatus == "En ruta")
+    {
+        <form asp-action="Entregar" method="post" class="log-inline-form">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+            <input name="ReceptorNombre" required placeholder="Nombre de quien recibe" />
+            <input name="FolioRemision" placeholder="Folio remisión" />
+            <input name="Observaciones" placeholder="Observaciones de entrega" />
+            <button class="log-btn log-btn-primary" type="submit">Confirmar entrega</button>
+        </form>
+    }
+
+    @if (Model.Estatus is "Programado" or "Preparando" or "Preparado")
+    {
+        <details class="log-cancel"><summary>Cancelar programación</summary><form asp-action="Cancelar" method="post">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><input name="motivo" required placeholder="Motivo de cancelación" /><button class="log-btn log-btn-danger" type="submit">Cancelar y liberar cajas</button></form></details>
+    }
+</section>
+
+<section class="log-panel">
+    <div class="log-panel-head"><div><span class="log-kicker">TRAZABILIDAD</span><h2>Historial</h2></div></div>
+    <div class="log-history">
+    @foreach (var h in Model.Historial)
+    {
+        <div><time>@h.Fecha.ToString("dd/MM/yyyy HH:mm")</time><strong>@h.Evento</strong><span>@h.EstadoAnterior → @h.EstadoNuevo</span><p>@h.Observaciones</p><small>@h.Usuario</small></div>
+    }
+    </div>
+</section>

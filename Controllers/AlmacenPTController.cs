@@ -360,7 +360,7 @@ vm.TotalPartes = vm.Existencias.Count;
         var vm = new AlmacenPTCajasVm
         {
             Busqueda = q?.Trim(),
-            NumeroOF = numeroOF?.Trim(),
+            NumeroOF = string.IsNullOrWhiteSpace(numeroOF) ? null : NormalizarNumeroOFPT(numeroOF),
             EstadoCalidad = estadoCalidad?.Trim(),
             Pagina = Math.Max(1, pagina),
             TamanoPagina = 100
@@ -553,7 +553,7 @@ ORDER BY Valor;";
             FiltroParte = parte?.Trim(),
             Busqueda = q?.Trim(),
             TipoMovimiento = TiposPermitidos.Concat(new[] { "Entrada" }).Contains(tipo ?? string.Empty) ? tipo : null,
-            NumeroOF = numeroOF?.Trim(),
+            NumeroOF = string.IsNullOrWhiteSpace(numeroOF) ? null : NormalizarNumeroOFPT(numeroOF),
             Responsable = responsable?.Trim(),
             EtiquetaLote = etiquetaLote?.Trim(),
             Desde = desde?.Date,
@@ -679,7 +679,7 @@ OFFSET @Offset ROWS FETCH NEXT @Tamano ROWS ONLY;";
             FiltroParte = parte?.Trim(),
             Busqueda = q?.Trim(),
             TipoMovimiento = new[] { "Entrada" }.Concat(TiposPermitidos).Contains(tipo ?? string.Empty) ? tipo : null,
-            NumeroOF = numeroOF?.Trim(),
+            NumeroOF = string.IsNullOrWhiteSpace(numeroOF) ? null : NormalizarNumeroOFPT(numeroOF),
             Responsable = responsable?.Trim(),
             EtiquetaLote = etiquetaLote?.Trim(),
             Desde = desde?.Date,
@@ -1580,7 +1580,7 @@ VALUES
             }
 
             item.Parseado = true;
-            item.NumeroOF = parseado.NumeroOF;
+            item.NumeroOF = NormalizarNumeroOFPT(parseado.NumeroOF); // ALMACEN_PT_OF_CANONICA_V10_0
             item.NumeroParte = parseado.NumeroParte;
             item.Designacion = parseado.Designacion;
             item.Cantidad = parseado.Cantidad;
@@ -1814,7 +1814,7 @@ WHERE s.Activo = 1
 ORDER BY s.SolicitudProduccionID DESC;";
 
         await using var command = new SqlCommand(sql, connection, transaction);
-        command.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = numeroOF.Trim();
+        command.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = NormalizarNumeroOFPT(numeroOF);
         command.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteID;
 
         var ids = new List<int>();
@@ -2155,6 +2155,18 @@ ORDER BY ParteID;";
             lista.Add(candidato);
         }
     }
+    // ALMACEN_PT_OF_CANONICA_V10_0
+    private static string NormalizarNumeroOFPT(string? numeroOF)
+    {
+        if (string.IsNullOrWhiteSpace(numeroOF))
+            return string.Empty;
+
+        return numeroOF.Trim()
+            .Replace("'", "/", StringComparison.Ordinal)
+            .Replace("’", "/", StringComparison.Ordinal)
+            .Replace("´", "/", StringComparison.Ordinal)
+            .Replace("`", "/", StringComparison.Ordinal);
+    }
     private static string NormalizarNumeroParte(
         string? numeroParte)
     {
@@ -2205,7 +2217,7 @@ ORDER BY ParteID;";
             ParteID = parteId.GetValueOrDefault(),
             CajaID = cajaId,
             TipoMovimiento = TiposPermitidos.Contains(tipo ?? string.Empty) ? tipo! : "Salida",
-            NumeroOF = numeroOF?.Trim(),
+            NumeroOF = string.IsNullOrWhiteSpace(numeroOF) ? null : NormalizarNumeroOFPT(numeroOF),
             Cantidad = cantidad.GetValueOrDefault() > 0 ? cantidad.GetValueOrDefault() : 0,
             Observaciones = !string.IsNullOrWhiteSpace(numeroOF)
                 ? $"Surtimiento de producto terminado para la OF {numeroOF.Trim()}."

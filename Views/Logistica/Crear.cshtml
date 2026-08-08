@@ -1,0 +1,186 @@
+﻿@* LOGISTICA_UX_RAPIDA_V1_4 *@
+@using ERP.NSQuell.Models.ViewModels.Logistica
+@model LogisticaCrearVm
+@{
+    Layout = "_LogisticaLayout";
+    ViewData["Title"] = "Preparar salida";
+    string Fecha(DateTime? d) => d?.ToString("dd/MM/yyyy") ?? "—";
+    var demanda = Model.Demanda;
+    var seleccionadas = Model.CajaIDs?.ToHashSet() ?? new HashSet<int>();
+    var piezasSugeridas = Model.CajasDisponibles.Where(x => seleccionadas.Contains(x.CajaID)).Sum(x => x.Disponible);
+}
+
+@if (demanda == null)
+{
+    <div class="log-empty-state">
+        <strong>No se pudo cargar la salida seleccionada.</strong>
+        <a class="log-btn log-btn-primary" asp-action="Index">Volver a programación</a>
+    </div>
+}
+else
+{
+    <section class="log-titlebar log-titlebar-compact">
+        <div>
+            <a class="log-back" asp-action="Index"><i class="fa-solid fa-arrow-left"></i> Programación</a>
+            <span class="log-eyebrow">PREPARAR SALIDA</span>
+            <h1>@demanda.Cliente</h1>
+            <p>@demanda.NumeroParte · @(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "OF pendiente" : $"OF {demanda.NumeroOF}")</p>
+        </div>
+        <div class="log-big-date">
+            <span>CARGA</span>
+            <strong>@Fecha(Model.FechaCargaProgramada)</strong>
+            <small>Entrega @Fecha(Model.FechaEntregaProgramada)</small>
+        </div>
+    </section>
+
+    <form asp-action="Crear" method="post" id="programacionRapidaForm" class="log-prepare-grid">
+        @Html.AntiForgeryToken()
+        <input asp-for="ReleaseDetalleID" type="hidden" />
+        <input asp-for="CantidadSolicitada" type="hidden" />
+        <input asp-for="FechaCargaProgramada" type="hidden" />
+        <input asp-for="FechaEntregaProgramada" type="hidden" />
+
+        <section class="log-board">
+            <div asp-validation-summary="All" class="log-validation"></div>
+
+            <div class="log-release-facts">
+                <div><span>Release</span><b>@demanda.FolioRelease</b></div>
+                <div><span>Parte</span><b>@demanda.NumeroParte</b></div>
+                <div><span>OF</span><b>@(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "Sin OF vinculada" : demanda.NumeroOF)</b></div>
+                <div><span>Pendiente</span><b>@demanda.PendienteProgramar.ToString("N0") PZA</b></div>
+            </div>
+
+            <div class="log-section-head log-section-head-tight">
+                <div>
+                    <span class="log-eyebrow">LOTES PT COMPATIBLES</span>
+                    <h2>Selecciona lo que realmente va a salir</h2>
+                </div>
+                <div class="log-selection-counter">
+                    <span>Seleccionado</span>
+                    <strong id="selectedPieces">@piezasSugeridas.ToString("N0")</strong>
+                    <small>/ @demanda.PendienteProgramar.ToString("N0") PZA</small>
+                </div>
+            </div>
+
+            <p class="log-help">
+                Solo aparecen lotes liberados de la misma parte y OF. Se preseleccionan automáticamente cajas completas sin exceder la cantidad pendiente.
+            </p>
+
+            <div class="log-lot-grid" id="lotGrid" data-target="@demanda.PendienteProgramar">
+                @foreach (var c in Model.CajasDisponibles)
+                {
+                    var lote = string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote;
+                    var selected = seleccionadas.Contains(c.CajaID);
+                    <label class="log-lot-card @(selected ? "is-selected" : "")">
+                        <input type="checkbox"
+                               name="CajaIDs"
+                               value="@c.CajaID"
+                               data-pieces="@c.Disponible"
+                               checked="@selected" />
+                        <span class="log-lot-check"><i class="fa-solid fa-check"></i></span>
+                        <div class="log-lot-id">
+                            <span>LOTE</span>
+                            <strong>@lote</strong>
+                            <small>@c.Etiqueta</small>
+                        </div>
+                        <div class="log-lot-meta">
+                            <span><i class="fa-solid fa-cubes"></i> @c.Disponible.ToString("N0") PZA</span>
+                            <span><i class="fa-solid fa-location-dot"></i> @(string.IsNullOrWhiteSpace(c.Ubicacion) ? "Sin ubicación" : c.Ubicacion)</span>
+                            <span><i class="fa-solid fa-file-circle-check"></i> @(string.IsNullOrWhiteSpace(c.NumeroOF) ? "Sin OF" : c.NumeroOF)</span>
+                        </div>
+                    </label>
+                }
+            </div>
+
+            @if (!Model.CajasDisponibles.Any())
+            {
+                <div class="log-empty-inline log-empty-warning">
+                    Todavía no hay lotes PT liberados y disponibles para esta parte/OF. Puedes programar la salida ahora y reservarlos después.
+                </div>
+            }
+        </section>
+
+        <aside class="log-prepare-aside">
+            <section class="log-board log-sticky-card">
+                <span class="log-eyebrow">DATOS AUTOMÁTICOS</span>
+                <h2>Programación</h2>
+
+                <label class="log-field-clean">
+                    <span>Destino</span>
+                    <input asp-for="Destino" />
+                </label>
+
+                <label class="log-field-clean">
+                    <span>Hora de carga <small>opcional</small></span>
+                    <input asp-for="HoraCargaProgramada" type="time" />
+                </label>
+
+                <details class="log-advanced">
+                    <summary>Transporte / observaciones</summary>
+                    <div>
+                        <label class="log-field-clean">
+                            <span>Ruta</span>
+                            <select asp-for="RutaID">
+                                <option value="">Sin asignar</option>
+                                @foreach (var r in Model.Rutas) { <option value="@r.Id">@r.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="log-field-clean">
+                            <span>Unidad</span>
+                            <select asp-for="UnidadID">
+                                <option value="">Sin asignar</option>
+                                @foreach (var u in Model.Unidades) { <option value="@u.Id">@u.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="log-field-clean"><span>Operador</span><input asp-for="OperadorTexto" /></label>
+                        <label class="log-field-clean"><span>Observaciones</span><textarea asp-for="Observaciones" rows="3"></textarea></label>
+                    </div>
+                </details>
+
+                <div class="log-prepare-summary">
+                    <div><span>Parte</span><b>@demanda.NumeroParte</b></div>
+                    <div><span>OF</span><b>@(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "Pendiente" : demanda.NumeroOF)</b></div>
+                    <div><span>Carga</span><b>@Fecha(Model.FechaCargaProgramada)</b></div>
+                    <div><span>Entrega</span><b>@Fecha(Model.FechaEntregaProgramada)</b></div>
+                </div>
+
+                <button class="log-btn log-btn-primary log-btn-wide" type="submit">
+                    <i class="fa-solid fa-truck-fast"></i> Programar salida
+                </button>
+                <small class="log-submit-note">Programar o reservar no descuenta PT. El stock baja únicamente al confirmar el despacho.</small>
+            </section>
+        </aside>
+    </form>
+
+    <script>
+        (() => {
+            const form = document.getElementById('programacionRapidaForm');
+            const grid = document.getElementById('lotGrid');
+            const counter = document.getElementById('selectedPieces');
+            if (!form || !grid || !counter) return;
+
+            const target = Number(grid.dataset.target || 0);
+            const boxes = Array.from(grid.querySelectorAll('input[type="checkbox"][name="CajaIDs"]'));
+
+            const refresh = changed => {
+                let total = 0;
+                boxes.forEach(box => {
+                    if (box.checked) total += Number(box.dataset.pieces || 0);
+                    box.closest('.log-lot-card')?.classList.toggle('is-selected', box.checked);
+                });
+
+                if (total > target && changed?.checked) {
+                    changed.checked = false;
+                    changed.closest('.log-lot-card')?.classList.remove('is-selected');
+                    total -= Number(changed.dataset.pieces || 0);
+                }
+
+                counter.textContent = total.toLocaleString('es-MX');
+                counter.parentElement?.classList.toggle('is-complete', total === target);
+            };
+
+            boxes.forEach(box => box.addEventListener('change', () => refresh(box)));
+            refresh();
+        })();
+    </script>
+}

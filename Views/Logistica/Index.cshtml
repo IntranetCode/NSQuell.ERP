@@ -1,0 +1,154 @@
+﻿@* LOGISTICA_UX_RAPIDA_V1_4 *@
+@using ERP.NSQuell.Models.ViewModels.Logistica
+@model LogisticaIndexVm
+@{
+    Layout = "_LogisticaLayout";
+    ViewData["Title"] = "Programación logística";
+    string Fecha(DateTime? d) => d?.ToString("dd/MM/yyyy") ?? "—";
+    string Hora(TimeSpan? t) => t?.ToString(@"hh\:mm") ?? "";
+
+    var grupos = Model.Demandas
+        .Where(x => x.PendienteProgramar > 0)
+        .GroupBy(x => new
+        {
+            FechaCarga = (x.FechaCarga ?? x.FechaEntrega.AddDays(-1)).Date,
+            FechaEntrega = x.FechaEntrega.Date,
+            ClienteID = x.ClienteID ?? 0,
+            Cliente = x.Cliente
+        })
+        .OrderBy(x => x.Key.FechaCarga)
+        .ThenBy(x => x.Key.Cliente)
+        .ToList();
+}
+
+<section class="log-titlebar">
+    <div>
+        <span class="log-eyebrow">PROGRAMACIÓN DE SALIDAS</span>
+        <h1>Qué tiene que salir, cuándo y con qué lotes</h1>
+        <p>Release define la fecha y la cantidad. PT aporta los lotes físicos. Logística solo coordina y reserva; el stock se descuenta al despachar.</p>
+    </div>
+    <div class="log-title-actions">
+        <a class="log-btn" asp-controller="AlmacenPT" asp-action="Cajas"><i class="fa-solid fa-box"></i> Lotes PT</a>
+        <a class="log-btn log-btn-muted" asp-controller="PlaneacionRelease" asp-action="Index"><i class="fa-solid fa-calendar-days"></i> Releases</a>
+    </div>
+</section>
+
+<form method="get" class="log-toolbar">
+    <div class="log-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input name="q" value="@Model.Busqueda" placeholder="Cliente, parte, OF o Release" />
+    </div>
+    <label>Desde <input type="date" name="fechaDesde" value="@Model.FechaDesde?.ToString("yyyy-MM-dd")" /></label>
+    <label>Hasta <input type="date" name="fechaHasta" value="@Model.FechaHasta?.ToString("yyyy-MM-dd")" /></label>
+    <button class="log-btn log-btn-primary" type="submit">Aplicar</button>
+    <a class="log-btn log-btn-muted" asp-action="Index">Limpiar</a>
+</form>
+
+<div class="log-summary-strip">
+    <span><b>@Model.DemandasPendientes</b> salidas pendientes</span>
+    <span><b>@Model.PiezasPendientes.ToString("N0")</b> PZA por programar</span>
+    <span><b>@Model.EmbarquesActivos</b> embarques activos</span>
+    @if (Model.EntregasAtrasadas > 0)
+    {
+        <span class="is-alert"><b>@Model.EntregasAtrasadas</b> entrega(s) atrasada(s)</span>
+    }
+</div>
+
+<section class="log-board">
+    <div class="log-section-head">
+        <div><span class="log-eyebrow">SALIDAS POR PROGRAMAR</span><h2>Agenda de carga</h2></div>
+        <small>Ordenada por fecha de carga y cliente</small>
+    </div>
+
+    @foreach (var g in grupos)
+    {
+        var pendientes = g.Sum(x => x.PendienteProgramar);
+        var pt = g.Sum(x => x.PiezasPTDisponibles);
+        var listo = pt >= pendientes && pendientes > 0;
+        var primero = g.First();
+
+        <article class="log-dispatch-card @(listo ? "is-ready" : "")">
+            <header>
+                <div class="log-date-block">
+                    <span>CARGA</span>
+                    <strong>@g.Key.FechaCarga.ToString("dd MMM")</strong>
+                    <small>Entrega @g.Key.FechaEntrega.ToString("dd/MM/yyyy")</small>
+                </div>
+                <div class="log-client-block">
+                    <span class="log-client-name">@g.Key.Cliente</span>
+                    <small>@g.Count() partida(s) · @pendientes.ToString("N0") PZA pendientes</small>
+                </div>
+                <div class="log-readiness @(listo ? "is-ok" : "is-warn")">
+                    <span>PT disponible</span>
+                    <strong>@pt.ToString("N0") / @pendientes.ToString("N0")</strong>
+                </div>
+            </header>
+
+            <div class="log-demand-list">
+            @foreach (var d in g.OrderBy(x => x.NumeroParte))
+            {
+                var dListo = d.PiezasPTDisponibles >= d.PendienteProgramar && d.PendienteProgramar > 0;
+                <div class="log-demand-row">
+                    <div class="log-part-main">
+                        <strong>@d.NumeroParte</strong>
+                        <span>@d.Descripcion</span>
+                    </div>
+                    <div>
+                        <span class="log-label">OF</span>
+                        <b>@(string.IsNullOrWhiteSpace(d.NumeroOF) ? "SIN OF" : d.NumeroOF)</b>
+                    </div>
+                    <div>
+                        <span class="log-label">Release</span>
+                        <b>@d.FolioRelease</b>
+                    </div>
+                    <div class="log-num">
+                        <span class="log-label">Pendiente</span>
+                        <b>@d.PendienteProgramar.ToString("N0")</b>
+                    </div>
+                    <div class="log-num @(dListo ? "log-ok" : "log-warning")">
+                        <span class="log-label">PT / lotes</span>
+                        <b>@d.PiezasPTDisponibles.ToString("N0") / @d.CajasPTDisponibles</b>
+                    </div>
+                    <a class="log-btn log-btn-primary log-btn-small"
+                       asp-action="Crear"
+                       asp-route-releaseDetalleId="@d.ReleaseDetalleID">
+                        Preparar
+                    </a>
+                </div>
+            }
+            </div>
+        </article>
+    }
+
+    @if (!grupos.Any())
+    {
+        <div class="log-empty-state">
+            <i class="fa-solid fa-circle-check"></i>
+            <strong>No hay salidas pendientes con estos filtros.</strong>
+        </div>
+    }
+</section>
+
+<section class="log-board log-board-secondary">
+    <div class="log-section-head">
+        <div><span class="log-eyebrow">EN OPERACIÓN</span><h2>Embarques programados</h2></div>
+    </div>
+    <div class="log-active-list">
+    @foreach (var e in Model.Embarques)
+    {
+        <a class="log-active-row" asp-action="Detalle" asp-route-id="@e.EmbarqueID">
+            <span class="log-status-dot"></span>
+            <div><strong>@e.Folio</strong><small>@e.Cliente · @e.Destino</small></div>
+            <div><span class="log-label">Carga</span><b>@Fecha(e.FechaCargaProgramada) @Hora(e.HoraCargaProgramada)</b></div>
+            <div><span class="log-label">Lotes</span><b>@e.TotalCajas</b></div>
+            <div><span class="log-label">Piezas</span><b>@e.TotalPiezasSolicitadas.ToString("N0")</b></div>
+            <span class="log-state-chip">@e.Estatus</span>
+            <i class="fa-solid fa-chevron-right"></i>
+        </a>
+    }
+    @if (!Model.Embarques.Any())
+    {
+        <div class="log-empty-inline">Todavía no hay embarques programados.</div>
+    }
+    </div>
+</section>
