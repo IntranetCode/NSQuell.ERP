@@ -6,10 +6,7 @@ using System.Linq;
 
 namespace ERP.NSQuell.Models
 {
-    // ============================================================
-    // ENTIDADES DE BASE DE DATOS
-    // ============================================================
-
+  
     [Table("GP12_Solicitudes")]
     public class GP12Solicitud
     {
@@ -23,6 +20,9 @@ namespace ERP.NSQuell.Models
         public int? ProgramaProduccionID { get; set; }
         public int? EjecucionProduccionID { get; set; }
         public int? CalidadInspeccionID { get; set; }
+
+        public long? CajaProduccionID { get; set; }
+        public int? CajaLiberadaID { get; set; }
 
         public int? SolicitudProduccionID { get; set; }
         public int? SolicitudProduccionDetalleID { get; set; }
@@ -128,6 +128,8 @@ namespace ERP.NSQuell.Models
         public DateTime? FechaModificacion { get; set; }
 
         public bool Activo { get; set; } = true;
+
+         
     }
 
 
@@ -580,11 +582,6 @@ namespace ERP.NSQuell.Models
                     1);
     }
 
-
-    // ============================================================
-    // VIEWMODEL - DETALLE
-    // ============================================================
-
     public class GP12DetalleViewModel
     {
         public int SolicitudGP12ID { get; set; }
@@ -594,6 +591,9 @@ namespace ERP.NSQuell.Models
         public int? ProgramaProduccionID { get; set; }
         public int? EjecucionProduccionID { get; set; }
         public int? CalidadInspeccionID { get; set; }
+
+        public long? CajaProduccionID { get; set; }
+        public int? CajaLiberadaID { get; set; }
 
         public int? SolicitudProduccionID { get; set; }
         public int? SolicitudProduccionDetalleID { get; set; }
@@ -708,9 +708,6 @@ namespace ERP.NSQuell.Models
     }
 
 
-    // ============================================================
-    // CREAR GP12 DESDE UNA OF EXISTENTE
-    // ============================================================
 
     public class GP12CrearViewModel
     {

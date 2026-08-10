@@ -2204,97 +2204,6 @@ FROM Preguntas;";
             );
         }
 
-        // =========================================================
-        // GP12 Y MATERIAL NO CONFORME
-        // =========================================================
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EnviarGP12(
-            int id,
-            string? comentario)
-        {
-            var inspeccion =
-                await _context.CalidadInspecciones
-                    .FirstOrDefaultAsync(x =>
-                        x.InspeccionID == id);
-
-            if (inspeccion == null)
-                return NotFound();
-
-            if (inspeccion.Estado ==
-                CalidadEstados.Cerrada)
-            {
-                TempData["Error"] =
-                    "Una inspección cerrada no puede enviarse a GP12.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id }
-                );
-            }
-
-            var usuarioId =
-                ObtenerUsuarioIdActual();
-
-            var estadoAnterior =
-                inspeccion.Estado;
-
-            inspeccion.ResultadoCalidad =
-                "NOK";
-
-            inspeccion.Etiqueta =
-                "AMARILLA";
-
-            inspeccion.Liberado =
-                false;
-
-            inspeccion.RequiereGP12 =
-                true;
-
-            inspeccion.EnContencion =
-                false;
-
-            inspeccion.EsScrap =
-                false;
-
-            inspeccion.Estado =
-                CalidadEstados.PendienteGP12;
-
-            inspeccion.Observaciones =
-                string.IsNullOrWhiteSpace(comentario)
-                    ? inspeccion.Observaciones
-                    : comentario.Trim();
-
-            MarcarModificacion(
-                inspeccion,
-                usuarioId
-            );
-
-            AgregarHistorial(
-                inspeccion,
-                CalidadMovimientos
-                    .EnviadoGP12,
-                estadoAnterior,
-                inspeccion.Estado,
-                inspeccion.ResultadoCalidad,
-                inspeccion.Etiqueta,
-                string.IsNullOrWhiteSpace(comentario)
-                    ? "Material enviado a GP12 para inspección reforzada."
-                    : comentario.Trim(),
-                usuarioId
-            );
-
-            await _context.SaveChangesAsync();
-
-            TempData["Mensaje"] =
-                "Material enviado a GP12.";
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id }
-            );
-        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -2402,17 +2311,6 @@ FROM Preguntas;";
             int id)
         {
             return LiberarProduccion(id);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public Task<IActionResult> EnviarGPI2(
-            int id)
-        {
-            return EnviarGP12(
-                id,
-                "Envío realizado desde la acción anterior GPI2."
-            );
         }
 
         [HttpPost]

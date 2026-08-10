@@ -1,0 +1,693 @@
+﻿@model ERP.NSQuell.Models.ProduccionBandejaVm
+
+@{
+    Layout = null;
+
+    static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    static string Fecha(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    static string Num(int? value)
+    {
+        return value.HasValue ? value.Value.ToString("N0") : "-";
+    }
+
+    static string Data(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? ""
+            : value.Replace("\"", "&quot;").Replace("\r", " ").Replace("\n", " ");
+    }
+
+    static int MinutosDiferencia(DateTime fecha)
+    {
+        return (int)Math.Round(
+            (fecha - DateTime.Now).TotalMinutes,
+            MidpointRounding.AwayFromZero);
+    }
+
+    static string ClaseTiempo(DateTime fecha)
+    {
+        var minutos = MinutosDiferencia(fecha);
+
+        if (minutos < -15)
+            return "prox-card-danger";
+
+        if (minutos < 0)
+            return "prox-card-overdue";
+
+        if (minutos <= 5)
+            return "prox-card-now";
+
+        return "prox-card-soon";
+    }
+
+    static string ClaseBadgeTiempo(DateTime fecha)
+    {
+        var minutos = MinutosDiferencia(fecha);
+
+        if (minutos < -15)
+            return "prox-time-danger";
+
+        if (minutos < 0)
+            return "prox-time-overdue";
+
+        if (minutos <= 5)
+            return "prox-time-now";
+
+        return "prox-time-soon";
+    }
+
+    static string TextoTiempo(DateTime fecha)
+    {
+        var minutos = MinutosDiferencia(fecha);
+
+        if (minutos < 0)
+        {
+            var atraso = Math.Abs(minutos);
+
+            if (atraso < 60)
+                return $"ATRASADA {atraso} min";
+
+            var horas = atraso / 60;
+            var resto = atraso % 60;
+
+            return resto == 0
+                ? $"ATRASADA {horas} h"
+                : $"ATRASADA {horas} h {resto} min";
+        }
+
+        if (minutos == 0)
+            return "INICIA AHORA";
+
+        return $"EN {minutos} min";
+    }
+
+    var maquinasOcupadas =
+        ViewBag.MaquinasOcupadas as HashSet<int>
+        ?? new HashSet<int>();
+
+    var proximos = Model.ProximosAIniciar
+        .Where(x => x.FechaInicioProgramada.HasValue)
+        .OrderBy(x => x.FechaInicioProgramada)
+        .ThenBy(x => x.MaquinaCodigo)
+        .ThenBy(x => x.ProgramaProduccionID)
+        .ToList();
+
+    var atrasados = proximos
+        .Where(x => x.FechaInicioProgramada!.Value < DateTime.Now)
+        .ToList();
+
+    var enVentana = proximos
+        .Where(x => x.FechaInicioProgramada!.Value >= DateTime.Now)
+        .ToList();
+
+    var maquinasConProximos = proximos
+        .Where(x => x.MaquinaID.HasValue)
+        .Select(x => x.MaquinaID!.Value)
+        .Distinct()
+        .Count();
+
+    var bloqueadosPorMaquina = proximos
+        .Count(x =>
+            x.MaquinaID.HasValue &&
+            maquinasOcupadas.Contains(x.MaquinaID.Value));
+
+    var disponiblesParaIniciar = proximos
+        .Count(x =>
+            x.PuedeIniciar &&
+            x.MaquinaID.HasValue &&
+            !maquinasOcupadas.Contains(x.MaquinaID.Value));
+}
+
+<style>
+    .prox-panel {
+        --prox-blue: #003b82;
+        --prox-border: #d7e2f1;
+        --prox-muted: #667085;
+        --prox-text: #182437;
+        display: grid;
+        gap: 12px;
+    }
+
+    .prox-header {
+        border: 1px solid var(--prox-border);
+        border-radius: 18px;
+        background: #fff;
+        padding: 15px 16px;
+    }
+
+    .prox-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .prox-title {
+        margin: 0;
+        color: var(--prox-blue);
+        font-size: 1.05rem;
+        font-weight: 950;
+    }
+
+    .prox-sub {
+        margin-top: 3px;
+        color: var(--prox-muted);
+        font-size: .8rem;
+        font-weight: 650;
+    }
+
+    .prox-summary {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+
+    .prox-summary-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 9px;
+        border-radius: 999px;
+        border: 1px solid #cfdceb;
+        background: #f8fbff;
+        color: #475467;
+        font-size: .74rem;
+        font-weight: 900;
+    }
+
+        .prox-summary-pill strong {
+            color: var(--prox-blue);
+        }
+
+        .prox-summary-pill.is-ready {
+            border-color: #abefc6;
+            background: #ecfdf3;
+            color: #067647;
+        }
+
+            .prox-summary-pill.is-ready strong {
+                color: #067647;
+            }
+
+        .prox-summary-pill.is-blocked {
+            border-color: #fecdca;
+            background: #fef3f2;
+            color: #b42318;
+        }
+
+            .prox-summary-pill.is-blocked strong {
+                color: #b42318;
+            }
+
+    .prox-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .prox-card {
+        position: relative;
+        border: 1px solid #dce6f2;
+        border-left: 6px solid #f59e0b;
+        border-radius: 16px;
+        background: #fff;
+        padding: 14px 15px;
+        display: grid;
+        grid-template-columns: minmax(190px, .8fr) minmax(240px, 1.2fr) minmax(155px, .65fr) minmax(170px, .75fr) auto;
+        gap: 14px;
+        align-items: center;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, .04);
+    }
+
+    .prox-card-danger {
+        border-left-color: #b42318;
+        background: #fff8f7;
+    }
+
+    .prox-card-overdue {
+        border-left-color: #dc6803;
+        background: #fffbf5;
+    }
+
+    .prox-card-now {
+        border-left-color: #f79009;
+        background: #fffdf5;
+    }
+
+    .prox-card-soon {
+        border-left-color: #e6b422;
+        background: #fffef8;
+    }
+
+    .prox-card.is-machine-busy {
+        box-shadow: inset 0 0 0 1px #fecdca;
+    }
+
+    .prox-main {
+        min-width: 0;
+    }
+
+    .prox-program {
+        color: var(--prox-blue);
+        font-weight: 950;
+        font-size: .9rem;
+    }
+
+    .prox-of {
+        margin-top: 2px;
+        color: var(--prox-muted);
+        font-size: .74rem;
+        font-weight: 750;
+    }
+
+    .prox-part {
+        color: var(--prox-text);
+        font-weight: 900;
+        line-height: 1.18;
+    }
+
+    .prox-description {
+        margin-top: 3px;
+        color: var(--prox-muted);
+        font-size: .74rem;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+
+    .prox-meta-label {
+        color: #98a2b3;
+        font-size: .64rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .prox-meta-value {
+        margin-top: 2px;
+        color: #344054;
+        font-size: .79rem;
+        font-weight: 850;
+    }
+
+    .prox-machine {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+        padding: 5px 8px;
+        border: 1px solid #bfd3f2;
+        border-radius: 10px;
+        background: #eef4ff;
+        color: #194185;
+        font-size: .72rem;
+        font-weight: 900;
+    }
+
+        .prox-machine.is-busy {
+            border-color: #fecdca;
+            background: #fef3f2;
+            color: #b42318;
+        }
+
+    .prox-operator {
+        margin-top: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 8px;
+        border-radius: 10px;
+        border: 1px solid #d0d5dd;
+        background: #f2f4f7;
+        color: #475467;
+        font-size: .72rem;
+        font-weight: 850;
+    }
+
+        .prox-operator.has-operator {
+            border-color: #c7d7fe;
+            background: #eef4ff;
+            color: #194185;
+        }
+
+    .prox-time {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: .74rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .prox-time-danger {
+        border: 1px solid #fecdca;
+        background: #fef3f2;
+        color: #b42318;
+    }
+
+    .prox-time-overdue {
+        border: 1px solid #fedf89;
+        background: #fffaeb;
+        color: #b54708;
+    }
+
+    .prox-time-now {
+        border: 1px solid #fedf89;
+        background: #fff7ed;
+        color: #c2410c;
+    }
+
+    .prox-time-soon {
+        border: 1px solid #fde68a;
+        background: #fffbeb;
+        color: #92400e;
+    }
+
+    .prox-action {
+        min-width: 175px;
+        text-align: right;
+    }
+
+        .prox-action .btn {
+            border-radius: 11px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+    .prox-blocked-note {
+        margin-top: 5px;
+        color: #b42318;
+        font-size: .68rem;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
+    .prox-empty {
+        border: 1px solid var(--prox-border);
+        border-radius: 18px;
+        background: #fff;
+        padding: 50px 20px;
+        text-align: center;
+        color: var(--prox-muted);
+        font-weight: 700;
+    }
+
+        .prox-empty i {
+            display: block;
+            margin-bottom: 9px;
+            color: #98a2b3;
+            font-size: 2rem;
+        }
+
+        .prox-empty strong {
+            display: block;
+            color: #344054;
+            font-size: .96rem;
+        }
+
+    @@media (max-width: 1150px) {
+        .prox-card {
+            grid-template-columns: minmax(170px, .8fr) minmax(220px, 1.2fr) minmax(160px, .7fr) auto;
+        }
+
+            .prox-card .prox-operator-col {
+                display: none;
+            }
+    }
+
+    @@media (max-width: 820px) {
+        .prox-card {
+            grid-template-columns: 1fr auto;
+            align-items: start;
+        }
+
+            .prox-card > div:nth-child(2),
+            .prox-card > div:nth-child(3),
+            .prox-card > div:nth-child(4) {
+                grid-column: 1 / -1;
+            }
+
+        .prox-action {
+            grid-column: 1 / -1;
+            min-width: 0;
+        }
+
+            .prox-action .btn {
+                width: 100%;
+            }
+    }
+
+    @@media (max-width: 560px) {
+        .prox-card {
+            grid-template-columns: 1fr;
+        }
+
+            .prox-card > div {
+                grid-column: 1 !important;
+            }
+    }
+</style>
+
+<div class="prox-panel">
+
+    <div class="prox-header">
+        <div class="prox-header-top">
+            <div>
+                <h3 class="prox-title">
+                    <i class="bi bi-alarm me-1"></i>
+                    Pendientes y próximos a iniciar
+                </h3>
+
+                <div class="prox-sub">
+                    OF atrasadas que todavía no han iniciado y programas previstos para los próximos 15 minutos.
+                </div>
+            </div>
+
+            <span class="prox-summary-pill">
+                <i class="bi bi-clock-history"></i>
+                <strong>@proximos.Count</strong>
+                visible(s)
+            </span>
+        </div>
+
+        <div class="prox-summary">
+            <span class="prox-summary-pill">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>@atrasados.Count</strong>
+                atrasada(s)
+            </span>
+
+            <span class="prox-summary-pill">
+                <i class="bi bi-alarm"></i>
+                <strong>@enVentana.Count</strong>
+                próximos 15 min
+            </span>
+
+            <span class="prox-summary-pill">
+                <i class="bi bi-hdd-network"></i>
+                <strong>@maquinasConProximos</strong>
+                máquina(s)
+            </span>
+
+            <span class="prox-summary-pill is-ready">
+                <i class="bi bi-play-circle"></i>
+                <strong>@disponiblesParaIniciar</strong>
+                lista(s) para iniciar
+            </span>
+
+            <span class="prox-summary-pill is-blocked">
+                <i class="bi bi-lock"></i>
+                <strong>@bloqueadosPorMaquina</strong>
+                bloqueada(s) por máquina
+            </span>
+        </div>
+    </div>
+
+    @if (!proximos.Any())
+    {
+        <div class="prox-empty">
+            <i class="bi bi-clock"></i>
+            <strong>No hay OF pendientes o próximas a iniciar.</strong>
+            <div class="mt-1">
+                La bandeja mostrará aquí las atrasadas y las que entren en la ventana de 15 minutos.
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="prox-list">
+            @foreach (var item in proximos)
+            {
+                var fechaInicio = item.FechaInicioProgramada!.Value;
+
+                var operador =
+                string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre)
+                ? ""
+                : item.OperadorSugeridoNombre.Trim();
+
+                var turno =
+                string.IsNullOrWhiteSpace(item.TurnoSugeridoNombre)
+                ? ""
+                : item.TurnoSugeridoNombre.Trim();
+
+                var maquinaOcupada =
+                item.MaquinaID.HasValue &&
+                maquinasOcupadas.Contains(item.MaquinaID.Value);
+
+                <article class="prox-card @ClaseTiempo(fechaInicio) @(maquinaOcupada ? "is-machine-busy" : "")">
+
+                    <div class="prox-main">
+                        <div class="prox-program">
+                            Programa @item.ProgramaProduccionID
+                        </div>
+
+                        <div class="prox-of">
+                            @Txt(item.TituloPrograma)
+
+                            @if (item.SolicitudProduccionID.HasValue)
+                            {
+                                <span>
+                                    · OF ID @item.SolicitudProduccionID
+                                </span>
+                            }
+                    </div>
+
+                    <div class="prox-machine @(maquinaOcupada ? "is-busy" : "")">
+                        <i class="bi @(maquinaOcupada ? "bi-lock-fill" : "bi-hdd-network")"></i>
+
+                        @(string.IsNullOrWhiteSpace(item.MaquinaCodigo)
+                                            ? "Sin máquina"
+                                            : item.MaquinaCodigo)
+
+                    @if (!string.IsNullOrWhiteSpace(item.MaquinaNombre))
+                            {
+                                <span>
+                                    · @item.MaquinaNombre
+                                </span>
+                            }
+                    </div>
+                </div>
+
+                <div>
+                    <div class="prox-part">
+                        @Txt(item.TextoParte)
+                    </div>
+
+                    <div class="prox-description">
+                        @Txt(item.DescripcionParte)
+                    </div>
+
+                    <div class="mt-2 d-flex gap-2 flex-wrap">
+                        <span class="prox-summary-pill">
+                            <i class="bi bi-nut"></i>
+                            @(string.IsNullOrWhiteSpace(item.MoldeCodigo)
+                                                    ? "Sin molde"
+                                                    : item.MoldeCodigo)
+                                                                   </span>
+
+                        <span class="prox-summary-pill">
+                            <i class="bi bi-box"></i>
+                            @Num(item.CantidadProgramada)
+                        </span>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="prox-meta-label">
+                        Inicio programado
+                    </div>
+
+                    <div class="prox-meta-value">
+                        @Fecha(item.FechaInicioProgramada)
+                    </div>
+
+                    <div class="mt-2">
+                        <span class="prox-time @ClaseBadgeTiempo(fechaInicio)">
+                            <i class="bi bi-alarm"></i>
+                            @TextoTiempo(fechaInicio)
+                        </span>
+                    </div>
+                </div>
+
+                <div class="prox-operator-col">
+                    <div class="prox-meta-label">
+                        Operador sugerido
+                    </div>
+
+                    <div class="prox-operator @(string.IsNullOrWhiteSpace(operador) ? "" : "has-operator")">
+                        <i class="bi @(string.IsNullOrWhiteSpace(operador) ? "bi-person-dash" : "bi-person-check")"></i>
+
+                        @(string.IsNullOrWhiteSpace(operador)
+                                            ? "Sin operador"
+                                            : operador)
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(turno))
+                        {
+                            <div class="prox-description">
+                                Turno: @turno
+                            </div>
+                        }
+                    </div>
+
+                    <div class="prox-action">
+                        @if (!item.PuedeIniciar)
+                        {
+                            <span class="badge text-bg-warning">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                No disponible
+                            </span>
+                        }
+                        else if (maquinaOcupada)
+                        {
+                            <button type="button"
+                                    class="btn btn-sm btn-secondary"
+                                    disabled
+                                    title="La máquina todavía tiene otra ejecución activa.">
+                                <i class="bi bi-lock-fill me-1"></i>
+                                Máquina ocupada
+                            </button>
+
+                            <div class="prox-blocked-note">
+                                Esperando cierre de la OF anterior.
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="btn btn-sm btn-success btn-iniciar-preparacion"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalIniciarPreparacion"
+                                    data-programa-id="@item.ProgramaProduccionID"
+                                    data-titulo="@Data(item.TituloPrograma)"
+                                    data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
+                                    data-parte="@Data(item.TextoParte)"
+                                    data-descripcion="@Data(item.DescripcionParte)"
+                                    data-molde="@Data(item.MoldeCodigo)"
+                                    data-cantidad="@Num(item.CantidadProgramada)"
+                                    data-inicio="@Fecha(item.FechaInicioProgramada)"
+                                    data-fin="@Fecha(item.FechaFinProgramada)"
+                                    data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
+                                    data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
+                                    data-turno="@Data(item.TurnoSugeridoNombre)">
+                                <i class="bi bi-play-fill me-1"></i>
+                                Iniciar preparación
+                            </button>
+                        }
+                    </div>
+
+                </article>
+            }
+        </div>
+    }
+</div>

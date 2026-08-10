@@ -451,13 +451,13 @@ SELECT TOP (1)
           AND ISNULL(pc.EstadoCajaID,@CajaFormadaProduccion)<@CajaSalidaProduccion
     ) AS CajasSinSalidaProduccion,
     (
-        SELECT COUNT(1)
-        FROM dbo.Calidad_GP12 g
-        WHERE g.InspeccionID=i.InspeccionID
-          AND g.Activo=1
-          AND UPPER(LTRIM(RTRIM(ISNULL(g.Estado,N'')))) NOT IN
-              (@GP12Liberado,@GP12Cerrado,@GP12Cancelado)
-    ) AS GP12Abiertos,
+    SELECT COUNT(1)
+    FROM dbo.GP12_Solicitudes g
+    WHERE g.CalidadInspeccionID=i.InspeccionID
+      AND UPPER(LTRIM(RTRIM(ISNULL(g.Origen,N''))))=N'CALIDAD'
+      AND g.Activo=1
+      AND g.EstatusID NOT IN (@GP12Cerrado,@GP12Cancelado)
+) AS GP12Abiertos,
     (
         SELECT COUNT(1)
         FROM dbo.Calidad_Reliberaciones r
@@ -504,9 +504,8 @@ WHERE i.InspeccionID=@InspeccionID;";
             cmd.Parameters.Add("@EstadoCerrado", SqlDbType.NVarChar, 50).Value = CalidadEstados.Cerrada;
             cmd.Parameters.Add("@MonitoreoPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoMonitoreo.Pendiente;
             cmd.Parameters.Add("@DisposicionPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Pendiente;
-            cmd.Parameters.Add("@GP12Liberado", SqlDbType.NVarChar, 30).Value = CalidadEstadoGP12.Liberado;
-            cmd.Parameters.Add("@GP12Cerrado", SqlDbType.NVarChar, 30).Value = CalidadEstadoGP12.Cerrado;
-            cmd.Parameters.Add("@GP12Cancelado", SqlDbType.NVarChar, 30).Value = CalidadEstadoGP12.Cancelado;
+            cmd.Parameters.Add("@GP12Cerrado", SqlDbType.Int).Value = GP12Estatus.Cerrado;
+            cmd.Parameters.Add("@GP12Cancelado", SqlDbType.Int).Value = GP12Estatus.Cancelado;
             cmd.Parameters.Add("@ReliberacionPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoReliberacion.Pendiente;
             cmd.Parameters.Add("@MomentoFinProduccion", SqlDbType.NVarChar, 30).Value = CalidadMomentoMuestra.FinProduccion;
             cmd.Parameters.Add("@EnPreparacion", SqlDbType.Int).Value = ProduccionEstatus.EnPreparacion;

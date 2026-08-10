@@ -427,16 +427,16 @@
         }
 
         /* ============================================================
-                   COLORES SUAVES POR ESTADO OPERATIVO
+                           COLORES SUAVES POR ESTADO OPERATIVO
 
-                   Amarillo = preparación / esperando Calidad
-                   Azul     = producción activa
-                   Rosa     = paro / pausado
-                   Verde    = terminado
+                           Amarillo = preparación / esperando Calidad
+                           Azul     = producción activa
+                           Rosa     = paro / pausado
+                           Verde    = terminado
 
-                   Se aplica sobre las celdas para que Bootstrap no tape
-                   el color de la fila.
-                   ============================================================ */
+                           Se aplica sobre las celdas para que Bootstrap no tape
+                           el color de la fila.
+                           ============================================================ */
         .production-row.row-preparacion > td {
             background: #fff9e8 !important;
         }
@@ -802,6 +802,104 @@
                 padding: 12px;
             }
         }
+
+
+        /* ============================================================
+                   NAVEGACION OPERATIVA / CONTENIDO AJAX
+                   ============================================================ */
+        .production-nav {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            padding: 8px;
+            border: 1px solid var(--borde);
+            border-radius: 16px;
+            background: #fff;
+        }
+
+        .production-nav-btn {
+            border: 1px solid transparent;
+            border-radius: 12px;
+            background: transparent;
+            color: #475467;
+            padding: 9px 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-weight: 900;
+            text-decoration: none;
+            transition: .15s ease;
+        }
+
+            .production-nav-btn:hover {
+                border-color: #c7d7fe;
+                background: #f8fbff;
+                color: var(--azul);
+            }
+
+            .production-nav-btn.is-active {
+                border-color: #9fc0ef;
+                background: #eef4ff;
+                color: var(--azul);
+                box-shadow: inset 0 -3px 0 #2f6fbd;
+            }
+
+        .production-nav-count {
+            min-width: 25px;
+            height: 25px;
+            padding: 0 7px;
+            border-radius: 999px;
+            display: inline-grid;
+            place-items: center;
+            background: #fff;
+            border: 1px solid #bfd3f2;
+            font-size: .7rem;
+            font-weight: 950;
+        }
+
+        .production-content-shell {
+            min-height: 260px;
+        }
+
+        .panel-loading,
+        .panel-error {
+            border: 1px solid var(--borde);
+            border-radius: 18px;
+            background: #fff;
+            padding: 52px 20px;
+            text-align: center;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+            .panel-loading .spinner-border {
+                width: 2rem;
+                height: 2rem;
+                margin-bottom: 10px;
+                color: var(--azul);
+            }
+
+            .panel-error i {
+                display: block;
+                margin-bottom: 8px;
+                color: var(--danger);
+                font-size: 2rem;
+            }
+
+        @@media (max-width: 700px) {
+            .production-nav
+
+        {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+        }
+
+        .production-nav-btn {
+            flex: 0 0 auto;
+        }
+
+        }
     </style>
 </head>
 
@@ -816,7 +914,7 @@
                         Producción
                     </h1>
                     <div class="topbar-sub">
-                        Bandeja organizada por máquina y cola programada desde Planeación.
+                        Centro operativo de Producción: ejecución, próximos inicios y cola programada.
                     </div>
                 </div>
 
@@ -867,7 +965,7 @@
 
             <div class="summary-item">
                 @Model.TotalProximosAIniciar.ToString("N0")
-                <span>En 15 min</span>
+                <span>Pend. / 15 min</span>
             </div>
 
             <div class="summary-item">
@@ -910,7 +1008,7 @@
             </div>
 
             <div class="filters">
-                <form method="get" action="@Url.Action("Index", "Produccion")" class="row g-3 align-items-end">
+                <form method="get" action="@Url.Action("Index", "Produccion")" id="formFiltrosProduccion" class="row g-3 align-items-end">
                     <div class="col-12 col-xl-3">
                         <label class="form-label">Buscar</label>
                         <input type="text"
@@ -933,7 +1031,7 @@
                     </div>
 
                     <div class="col-12 col-md-6 col-xl-2">
-                        <label class="form-label">Estatus</label>
+                        <label class="form-label">Estatus (ejecuciones)</label>
                         <select name="estatusId" class="form-select">
                             @foreach (var item in Model.Estatus)
                             {
@@ -969,602 +1067,47 @@
             </div>
         </section>
 
-        <section class="section next-start-section">
-            <div class="section-head">
-                <div>
-                    <h2 class="section-title">
-                        <i class="bi bi-alarm me-1"></i>
-                        Próximos a iniciar en 15 minutos
-                    </h2>
-                    <div class="section-sub">
-                        Programas disponibles cuya hora de inicio está dentro de los próximos 15 minutos.
-                    </div>
-                </div>
-
-                <span class="tag tag-warn">
-                    <i class="bi bi-clock"></i>
-                    @Model.TotalProximosAIniciar.ToString("N0") próximo(s)
-                </span>
-            </div>
-
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th style="width:70px;">Orden</th>
-                            <th>Programa / OF</th>
-                            <th>Parte</th>
-                            <th>Molde</th>
-                            <th>Operador sugerido</th>
-                            <th class="text-center">Cantidad</th>
-                            <th>Inicio programado</th>
-                            <th>Tiempo restante</th>
-                            <th class="text-end">Acción</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        @if (!Model.ProximosAIniciar.Any())
-                        {
-                            <tr>
-                                <td colspan="9">
-                                    <div class="empty">
-                                        <i class="bi bi-clock"></i>
-                                        No hay programas programados para iniciar en los próximos 15 minutos.
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            foreach (var grupo in proximosPorMaquina)
-                            {
-                                var primera = grupo.FirstOrDefault();
-                                var maquinaCodigo = Txt(primera?.MaquinaCodigo);
-                                var maquinaNombre = Txt(primera?.MaquinaNombre);
-                                var machineKey = "prox_" + MachineKey(grupo.Key);
-                                var totalMaquina = grupo.Count();
-
-                                <tr class="machine-row">
-                                    <td colspan="9">
-                                        <div class="machine-header">
-                                            <div>
-                                                <div class="machine-title">
-                                                    <i class="bi bi-hdd-network me-1"></i>
-                                                    Máquina @maquinaCodigo
-                                                </div>
-                                                <div class="machine-sub">
-                                                    @maquinaNombre · @totalMaquina programa(s) próximos a iniciar
-                                                </div>
-                                            </div>
-
-                                            <button type="button"
-                                                    class="machine-toggle"
-                                                    data-machine-toggle="@machineKey">
-                                                <i class="bi bi-chevron-up me-1"></i>
-                                                Ocultar / mostrar
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                var orden = 0;
-
-                                foreach (var item in grupo
-                                .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
-                                .ThenBy(x => x.ProgramaProduccionID))
-                                {
-                                    orden++;
-
-                                    var operadorSugerido = string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre)
-                                    ? ""
-                                    : item.OperadorSugeridoNombre;
-
-                                    var turnoSugerido = string.IsNullOrWhiteSpace(item.TurnoSugeridoNombre)
-                                    ? ""
-                                    : item.TurnoSugeridoNombre;
-
-                                    <tr class="production-row next-start-row" data-machine-row="@machineKey">
-                                        <td>
-                                            <span class="queue-badge">@orden</span>
-                                        </td>
-
-                                        <td>
-                                            <div class="id-main">Programa @item.ProgramaProduccionID</div>
-                                            <div class="line-sub">@Txt(item.TituloPrograma)</div>
-
-                                            @if (item.SolicitudProduccionID.HasValue)
-                                            {
-                                                <div class="line-sub">OF ID @item.SolicitudProduccionID</div>
-                                            }
-                                        </td>
-
-                                        <td>
-                                            <div class="line-main">@Txt(item.TextoParte)</div>
-                                            <div class="line-sub">@Txt(item.DescripcionParte)</div>
-                                        </td>
-
-                                        <td>
-                                            <span class="tag">
-                                                <i class="bi bi-nut"></i>
-                                                @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            @if (string.IsNullOrWhiteSpace(operadorSugerido))
-                                            {
-                                                <span class="operator-pill operator-empty">
-                                                    <i class="bi bi-person-dash"></i>
-                                                    Sin operador sugerido
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <div class="operator-pill">
-                                                    <i class="bi bi-person-check"></i>
-                                                    @operadorSugerido
-                                                </div>
-
-                                                @if (!string.IsNullOrWhiteSpace(turnoSugerido))
-                                                {
-                                                    <div class="line-sub mt-1">Turno: @turnoSugerido</div>
-                                                }
-                                            }
-                                        </td>
-
-                                        <td class="text-center fw-bold">
-                                            @Num(item.CantidadProgramada)
-                                        </td>
-
-                                        <td>
-                                            @Fecha(item.FechaInicioProgramada)
-                                        </td>
-
-                                        <td>
-                                            <span class="next-start-time">
-                                                <i class="bi bi-alarm"></i>
-                                                @item.TextoInicioProximo
-                                            </span>
-                                        </td>
-
-                                        <td class="text-end">
-                                            @if (item.PuedeIniciar)
-                                            {
-                                                <button type="button"
-                                                        class="btn btn-sm btn-success btn-action btn-iniciar-preparacion"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#modalIniciarPreparacion"
-                                                        data-programa-id="@item.ProgramaProduccionID"
-                                                        data-titulo="@Data(item.TituloPrograma)"
-                                                        data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
-                                                        data-parte="@Data(item.TextoParte)"
-                                                        data-descripcion="@Data(item.DescripcionParte)"
-                                                        data-molde="@Data(item.MoldeCodigo)"
-                                                        data-cantidad="@Num(item.CantidadProgramada)"
-                                                        data-inicio="@Fecha(item.FechaInicioProgramada)"
-                                                        data-fin="@Fecha(item.FechaFinProgramada)"
-                                                        data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
-                                                        data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
-                                                        data-turno="@Data(item.TurnoSugeridoNombre)">
-                                                    <i class="bi bi-play-fill me-1"></i>
-                                                    Iniciar preparación
-                                                </button>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            }
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="section">
-            <div class="section-head">
-                <div>
-                    <h2 class="section-title">
-                        <i class="bi bi-list-ol me-1"></i>
-                        Cola por máquina para iniciar preparación
-                    </h2>
-                    <div class="section-sub">
-                        Cada máquina muestra sus programas asignados en orden de fecha programada, de más antiguo a más nuevo.
-                    </div>
-                </div>
-
-                <span class="tag tag-blue">
-                    <i class="bi bi-list-check"></i>
-                    @Model.TotalDisponibles.ToString("N0") disponible(s)
-                </span>
-            </div>
-
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th style="width:70px;">Orden</th>
-                            <th>Programa / OF</th>
-                            <th>Parte</th>
-                            <th>Molde</th>
-                            <th>Operador sugerido</th>
-                            <th class="text-center">Cantidad</th>
-                            <th>Inicio programado</th>
-                            <th>Fin programado</th>
-                            <th class="text-end">Acción</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        @if (!Model.ProgramasDisponibles.Any())
-                        {
-                            <tr>
-                                <td colspan="9">
-                                    <div class="empty">
-                                        <i class="bi bi-calendar-check"></i>
-                                        No hay programas pendientes para iniciar preparación.
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            foreach (var grupo in programasPorMaquina)
-                            {
-                                var primera = grupo.FirstOrDefault();
-                                var maquinaCodigo = Txt(primera?.MaquinaCodigo);
-                                var maquinaNombre = Txt(primera?.MaquinaNombre);
-                                var machineKey = "pend_" + MachineKey(grupo.Key);
-                                var totalMaquina = grupo.Count();
-
-                                <tr class="machine-row">
-                                    <td colspan="9">
-                                        <div class="machine-header">
-                                            <div>
-                                                <div class="machine-title">
-                                                    <i class="bi bi-hdd-network me-1"></i>
-                                                    Máquina @maquinaCodigo
-                                                </div>
-                                                <div class="machine-sub">
-                                                    @maquinaNombre · @totalMaquina programa(s) en cola de preparación
-                                                </div>
-                                            </div>
-
-                                            <button type="button"
-                                                    class="machine-toggle"
-                                                    data-machine-toggle="@machineKey">
-                                                <i class="bi bi-chevron-up me-1"></i>
-                                                Ocultar / mostrar
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                var orden = 0;
-
-                                foreach (var item in grupo
-                                .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
-                                .ThenBy(x => x.ProgramaProduccionID))
-                                {
-                                    orden++;
-
-                                    var operadorSugerido = string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre)
-                                    ? ""
-                                    : item.OperadorSugeridoNombre;
-
-                                    var turnoSugerido = string.IsNullOrWhiteSpace(item.TurnoSugeridoNombre)
-                                    ? ""
-                                    : item.TurnoSugeridoNombre;
-
-                                    <tr class="production-row" data-machine-row="@machineKey">
-                                        <td>
-                                            <span class="queue-badge">@orden</span>
-                                        </td>
-
-                                        <td>
-                                            <div class="id-main">Programa @item.ProgramaProduccionID</div>
-                                            <div class="line-sub">@Txt(item.TituloPrograma)</div>
-
-                                            @if (item.SolicitudProduccionID.HasValue)
-                                            {
-                                                <div class="line-sub">OF ID @item.SolicitudProduccionID</div>
-                                            }
-
-                                            @if (item.ReleaseID.HasValue)
-                                            {
-                                                <div class="line-sub">Release @item.ReleaseID</div>
-                                            }
-                                        </td>
-
-                                        <td>
-                                            <div class="line-main">@Txt(item.TextoParte)</div>
-                                            <div class="line-sub">@Txt(item.DescripcionParte)</div>
-                                        </td>
-
-                                        <td>
-                                            <span class="tag">
-                                                <i class="bi bi-nut"></i>
-                                                @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            @if (string.IsNullOrWhiteSpace(operadorSugerido))
-                                            {
-                                                <span class="operator-pill operator-empty">
-                                                    <i class="bi bi-person-dash"></i>
-                                                    Sin operador sugerido
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <div class="operator-pill">
-                                                    <i class="bi bi-person-check"></i>
-                                                    @operadorSugerido
-                                                </div>
-
-                                                @if (!string.IsNullOrWhiteSpace(turnoSugerido))
-                                                {
-                                                    <div class="line-sub mt-1">
-                                                        Turno: @turnoSugerido
-                                                    </div>
-                                                }
-                                            }
-                                        </td>
-
-                                        <td class="text-center fw-bold">
-                                            @Num(item.CantidadProgramada)
-                                        </td>
-
-                                        <td>
-                                            @Fecha(item.FechaInicioProgramada)
-                                        </td>
-
-                                        <td>
-                                            @Fecha(item.FechaFinProgramada)
-                                        </td>
-
-                                        <td class="text-end">
-                                            @if (item.PuedeIniciar)
-                                            {
-                                                <button type="button"
-                                                        class="btn btn-sm btn-success btn-action btn-iniciar-preparacion"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#modalIniciarPreparacion"
-                                                        data-programa-id="@item.ProgramaProduccionID"
-                                                        data-titulo="@Data(item.TituloPrograma)"
-                                                        data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
-                                                        data-parte="@Data(item.TextoParte)"
-                                                        data-descripcion="@Data(item.DescripcionParte)"
-                                                        data-molde="@Data(item.MoldeCodigo)"
-                                                        data-cantidad="@Num(item.CantidadProgramada)"
-                                                        data-inicio="@Fecha(item.FechaInicioProgramada)"
-                                                        data-fin="@Fecha(item.FechaFinProgramada)"
-                                                        data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
-                                                        data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
-                                                        data-turno="@Data(item.TurnoSugeridoNombre)">
-                                                    <i class="bi bi-play-fill me-1"></i>
-                                                    Iniciar preparación
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <span class="tag tag-warn">
-                                                    <i class="bi bi-exclamation-triangle"></i>
-                                                    Falta máquina o cantidad
-                                                </span>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            }
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="section">
-            <div class="section-head">
-                <div>
-                    <h2 class="section-title">
-                        <i class="bi bi-activity me-1"></i>
-                        Ejecuciones por máquina
-                    </h2>
-                    <div class="section-sub">
-                        Programas ya tomados por producción, agrupados por máquina y ordenados por fecha programada.
-                    </div>
-                </div>
-
-                <span class="tag">
-                    <i class="bi bi-clock-history"></i>
-                    @Model.Total.ToString("N0") ejecución(es)
-                </span>
-            </div>
-
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th style="width:70px;">Orden</th>
-                            <th>Programa</th>
-                            <th>Parte</th>
-                            <th>Molde</th>
-                            <th>Operador</th>
-                            <th class="text-center">Planeado</th>
-                            <th class="text-center">OK</th>
-                            <th class="text-center">Sospechoso</th>
-                            <th class="text-center">Scrap</th>
-                            <th style="min-width:190px;">Avance</th>
-                            <th>Estatus</th>
-                            <th class="text-end">Acciones</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        @if (!Model.Ejecuciones.Any())
-                        {
-                            <tr>
-                                <td colspan="12">
-                                    <div class="empty">
-                                        <i class="bi bi-inbox"></i>
-                                        No hay ejecuciones de producción con los filtros actuales.
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            foreach (var grupo in ejecucionesPorMaquina)
-                            {
-                                var primera = grupo.FirstOrDefault();
-                                var maquinaCodigo = Txt(primera?.MaquinaCodigo);
-                                var maquinaNombre = Txt(primera?.MaquinaNombre);
-                                var machineKey = "ejec_" + MachineKey(grupo.Key);
-                                var totalMaquina = grupo.Count();
-
-                                <tr class="machine-row">
-                                    <td colspan="12">
-                                        <div class="machine-header">
-                                            <div>
-                                                <div class="machine-title">
-                                                    <i class="bi bi-hdd-network me-1"></i>
-                                                    Máquina @maquinaCodigo
-                                                </div>
-                                                <div class="machine-sub">
-                                                    @maquinaNombre · @totalMaquina ejecución(es)
-                                                </div>
-                                            </div>
-
-                                            <button type="button"
-                                                    class="machine-toggle"
-                                                    data-machine-toggle="@machineKey">
-                                                <i class="bi bi-chevron-up me-1"></i>
-                                                Ocultar / mostrar
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                var orden = 0;
-
-                                foreach (var item in grupo
-                                .OrderBy(x => x.ProgramaProduccionID)
-                                .ThenBy(x => x.EjecucionProduccionID))
-                                {
-                                    orden++;
-
-                                    var avancePct = item.PorcentajeAvance;
-
-                                    if (avancePct < 0)
-                                    {
-                                        avancePct = 0;
-                                    }
-
-                                    if (avancePct > 100)
-                                    {
-                                        avancePct = 100;
-                                    }
-
-                                    <tr class="production-row @EstatusRowClase(item.EstatusID)" data-machine-row="@machineKey">
-                                        <td>
-                                            <span class="queue-badge">@orden</span>
-                                        </td>
-
-                                        <td>
-                                            <div class="id-main">Programa @item.ProgramaProduccionID</div>
-
-                                            @if (item.SolicitudProduccionID.HasValue)
-                                            {
-                                                <div class="line-sub">OF ID @item.SolicitudProduccionID</div>
-                                            }
-
-                                            @if (item.ReleaseID.HasValue)
-                                            {
-                                                <div class="line-sub">Release @item.ReleaseID</div>
-                                            }
-
-
-                                        </td>
-
-                                        <td>
-                                            <div class="line-main">@Txt(item.TituloPrograma)</div>
-                                            <div class="line-sub">@Txt(item.DescripcionParte)</div>
-                                        </td>
-
-                                        <td>
-                                            <span class="tag">
-                                                <i class="bi bi-nut"></i>
-                                                @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            @if (string.IsNullOrWhiteSpace(item.OperadorNombre))
-                                            {
-                                                <span class="operator-pill operator-empty">
-                                                    <i class="bi bi-person-dash"></i>
-                                                    Sin operador
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="operator-pill">
-                                                    <i class="bi bi-person-check"></i>
-                                                    @item.OperadorNombre
-                                                </span>
-                                            }
-                                        </td>
-
-                                        <td class="text-center fw-bold">
-                                            @Num(item.CantidadPlaneada)
-                                        </td>
-
-                                        <td class="text-center fw-bold text-success">
-                                            @Num0(item.CantidadOKTotal)
-                                        </td>
-
-                                        <td class="text-center fw-bold text-warning">
-                                            @Num0(item.CantidadSospechosaTotal)
-                                        </td>
-
-                                        <td class="text-center fw-bold text-danger">
-                                            @Num0(item.CantidadScrapTotal)
-                                        </td>
-
-                                        <td>
-                                            <div class="d-flex justify-content-between small mb-1">
-                                                <span class="fw-bold">@item.PorcentajeAvance.ToString("0.##")%</span>
-                                                <span class="text-muted">@item.CantidadPendiente.ToString("N0") pend.</span>
-                                            </div>
-
-                                            <div class="progress">
-                                                <div class="progress-bar @PorcentajeClase(item.PorcentajeAvance)"
-                                                     role="progressbar"
-                                                     style="width:@avancePct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">
-                                                </div>
-                                            </div>
-                                        </td>
-
-                                        <td>
-                                            <span class="badge @item.EstatusClase">
-                                                @item.EstatusNombre
-                                            </span>
-                                        </td>
-
-                                        <td class="text-end">
-                                            <a href="@Url.Action("Detalle", "Produccion", new { id = item.EjecucionProduccionID })"
-                                               class="btn btn-sm btn-outline-primary btn-action">
-                                                <i class="bi bi-eye me-1"></i>
-                                                Detalle
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            }
-                        }
-                    </tbody>
-                </table>
+        @{
+            var totalActivas =
+            Model.Pendientes +
+            Model.EnPreparacion +
+            Model.EnProduccion +
+            Model.Pausados;
+        }
+
+        <nav class="production-nav" aria-label="Navegación operativa de Producción">
+            <button type="button"
+                    class="production-nav-btn is-active"
+                    data-production-panel="ejecuciones"
+                    data-url="@Url.Action("PanelEjecuciones", "Produccion")">
+                <i class="bi bi-activity"></i>
+                En ejecución
+                <span class="production-nav-count">@totalActivas</span>
+            </button>
+
+            <button type="button"
+                    class="production-nav-btn"
+                    data-production-panel="proximos"
+                    data-url="@Url.Action("PanelProximos", "Produccion")">
+                <i class="bi bi-alarm"></i>
+                Pendientes / próximos
+                <span class="production-nav-count">@Model.TotalProximosAIniciar</span>
+            </button>
+
+            <button type="button"
+                    class="production-nav-btn"
+                    data-production-panel="cola"
+                    data-url="@Url.Action("PanelCola", "Produccion")">
+                <i class="bi bi-list-ol"></i>
+                Cola
+                <span class="production-nav-count">@Model.TotalDisponibles</span>
+            </button>
+        </nav>
+
+        <section class="production-content-shell" id="contenidoProduccion" aria-live="polite">
+            <div class="panel-loading">
+                <div class="spinner-border" role="status" aria-hidden="true"></div>
+                <div>Cargando operaciones...</div>
             </div>
         </section>
     </div>
@@ -1863,106 +1406,220 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
-        const modalProgramaTexto = document.getElementById('modalProgramaTexto');
-        const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
-        const modalParteTexto = document.getElementById('modalParteTexto');
-        const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
-        const modalMoldeTexto = document.getElementById('modalMoldeTexto');
-        const modalCantidadTexto = document.getElementById('modalCantidadTexto');
-        const modalInicioTexto = document.getElementById('modalInicioTexto');
-        const modalFinTexto = document.getElementById('modalFinTexto');
+        (() => {
+            const contenidoProduccion = document.getElementById('contenidoProduccion');
+            const formFiltros = document.getElementById('formFiltrosProduccion');
+            const navButtons = Array.from(document.querySelectorAll('[data-production-panel]'));
 
-        const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
-        const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
-        const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
+            const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
+            const modalProgramaTexto = document.getElementById('modalProgramaTexto');
+            const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
+            const modalParteTexto = document.getElementById('modalParteTexto');
+            const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
+            const modalMoldeTexto = document.getElementById('modalMoldeTexto');
+            const modalCantidadTexto = document.getElementById('modalCantidadTexto');
+            const modalInicioTexto = document.getElementById('modalInicioTexto');
+            const modalFinTexto = document.getElementById('modalFinTexto');
 
-        const modalOperadorId = document.getElementById('modalOperadorId');
-        const modalOperadorNombre = document.getElementById('modalOperadorNombre');
-        const modalOperadorManual = document.getElementById('modalOperadorManual');
-        const modalObservaciones = document.getElementById('modalObservaciones');
+            const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
+            const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
+            const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
 
-        const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
-        const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
+            const modalOperadorId = document.getElementById('modalOperadorId');
+            const modalOperadorNombre = document.getElementById('modalOperadorNombre');
+            const modalOperadorManual = document.getElementById('modalOperadorManual');
+            const modalObservaciones = document.getElementById('modalObservaciones');
 
-        function texto(value) {
-            if (!value || !value.trim()) return '-';
-            return value.trim();
-        }
+            const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
+            const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
 
-        function seleccionarOperadorSiExiste(operadorId) {
-            if (!modalOperadorId) return false;
+            let panelActivo = 'ejecuciones';
+            let controladorCarga = null;
 
-            const id = operadorId || '';
-
-            for (const option of modalOperadorId.options) {
-                if (option.value === id) {
-                    modalOperadorId.value = id;
-                    return true;
-                }
+            function texto(value) {
+                if (!value || !value.trim()) return '-';
+                return value.trim();
             }
 
-            modalOperadorId.value = '';
-            return false;
-        }
+            function seleccionarOperadorSiExiste(operadorId) {
+                if (!modalOperadorId) return false;
 
-        function obtenerTextoOperadorSeleccionado() {
-            if (!modalOperadorId || !modalOperadorId.value) {
-                return '';
-            }
+                const id = operadorId || '';
 
-            const selected = modalOperadorId.options[modalOperadorId.selectedIndex];
-
-            if (!selected) {
-                return '';
-            }
-
-            return (selected.textContent || '').trim();
-        }
-
-        document.querySelectorAll('[data-machine-toggle]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                const key = btn.getAttribute('data-machine-toggle');
-
-                if (!key) return;
-
-                const rows = document.querySelectorAll('[data-machine-row="' + key + '"]');
-                let ocultar = false;
-
-                rows.forEach(function (row) {
-                    if (!row.classList.contains('is-hidden')) {
-                        ocultar = true;
+                for (const option of modalOperadorId.options) {
+                    if (option.value === id) {
+                        modalOperadorId.value = id;
+                        return true;
                     }
-                });
-
-                rows.forEach(function (row) {
-                    row.classList.toggle('is-hidden', ocultar);
-                });
-
-                const icon = btn.querySelector('i');
-
-                if (icon) {
-                    icon.className = ocultar
-                        ? 'bi bi-chevron-down me-1'
-                        : 'bi bi-chevron-up me-1';
                 }
-            });
-        });
 
-        document.querySelectorAll('.btn-iniciar-preparacion').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                const programaId = btn.dataset.programaId || '';
-                const titulo = btn.dataset.titulo || '';
-                const maquina = btn.dataset.maquina || '';
-                const parte = btn.dataset.parte || '';
-                const descripcion = btn.dataset.descripcion || '';
-                const molde = btn.dataset.molde || '';
-                const cantidad = btn.dataset.cantidad || '';
-                const inicio = btn.dataset.inicio || '';
-                const fin = btn.dataset.fin || '';
-                const operadorId = btn.dataset.operadorId || '';
-                const operadorNombre = btn.dataset.operadorNombre || '';
-                const turno = btn.dataset.turno || '';
+                modalOperadorId.value = '';
+                return false;
+            }
+
+            function obtenerTextoOperadorSeleccionado() {
+                if (!modalOperadorId || !modalOperadorId.value) {
+                    return '';
+                }
+
+                const selected = modalOperadorId.options[modalOperadorId.selectedIndex];
+                return selected ? (selected.textContent || '').trim() : '';
+            }
+
+            function marcarPanelActivo(panel) {
+                panelActivo = panel || 'ejecuciones';
+
+                navButtons.forEach(btn => {
+                    btn.classList.toggle(
+                        'is-active',
+                        btn.dataset.productionPanel === panelActivo);
+                });
+            }
+
+            function parametrosFiltros(panel, maquinaForzada = null) {
+                const params = new URLSearchParams();
+
+                if (!formFiltros) {
+                    if (maquinaForzada) params.set('maquinaId', maquinaForzada);
+                    return params;
+                }
+
+                const data = new FormData(formFiltros);
+
+                const busqueda = (data.get('busqueda') || '').toString().trim();
+                const maquinaId = maquinaForzada ?? (data.get('maquinaId') || '').toString();
+                const estatusId = (data.get('estatusId') || '').toString();
+                const fechaDesde = (data.get('fechaDesde') || '').toString();
+                const fechaHasta = (data.get('fechaHasta') || '').toString();
+
+                if (busqueda) params.set('busqueda', busqueda);
+                if (maquinaId) params.set('maquinaId', maquinaId);
+                if (fechaDesde) params.set('fechaDesde', fechaDesde);
+                if (fechaHasta) params.set('fechaHasta', fechaHasta);
+
+                if (panel === 'ejecuciones' && estatusId) {
+                    params.set('estatusId', estatusId);
+                }
+
+                return params;
+            }
+
+            function urlPanel(panel, maquinaForzada = null) {
+                const btn = navButtons.find(x => x.dataset.productionPanel === panel);
+                const baseUrl = btn?.dataset.url;
+
+                if (!baseUrl) return null;
+
+                const params = parametrosFiltros(panel, maquinaForzada);
+                const query = params.toString();
+
+                return query ? `${baseUrl}?${query}` : baseUrl;
+            }
+
+            async function cargarPanel(panel, url = null, maquinaForzada = null) {
+                if (!contenidoProduccion) return;
+
+                const destino = url || urlPanel(panel, maquinaForzada);
+                if (!destino) return;
+
+                marcarPanelActivo(panel);
+
+                if (controladorCarga) {
+                    controladorCarga.abort();
+                }
+
+                controladorCarga = new AbortController();
+
+                contenidoProduccion.innerHTML = `
+                    <div class="panel-loading">
+                        <div class="spinner-border" role="status" aria-hidden="true"></div>
+                        <div>Cargando ${panel === 'cola' ? 'cola' : panel === 'proximos' ? 'próximos inicios' : 'ejecuciones'}...</div>
+                    </div>`;
+
+                try {
+                    const response = await fetch(destino, {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        signal: controladorCarga.signal
+                    });
+
+                    if (response.status === 401) {
+                        window.location.href = '@Url.Action("Login", "Login")';
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    contenidoProduccion.innerHTML = await response.text();
+                }
+                catch (error) {
+                    if (error?.name === 'AbortError') return;
+
+                    console.error(error);
+
+                    contenidoProduccion.innerHTML = `
+                        <div class="panel-error">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <div>No fue posible cargar el panel de Producción.</div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="btnReintentarPanel">
+                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                Reintentar
+                            </button>
+                        </div>`;
+                }
+            }
+
+            navButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    cargarPanel(btn.dataset.productionPanel || 'ejecuciones');
+                });
+            });
+
+            formFiltros?.addEventListener('submit', event => {
+                event.preventDefault();
+                cargarPanel(panelActivo);
+            });
+
+            document.addEventListener('click', event => {
+                const reintentar = event.target.closest('#btnReintentarPanel');
+                if (reintentar) {
+                    cargarPanel(panelActivo);
+                    return;
+                }
+
+                const linkPanel = event.target.closest('a.js-panel-produccion');
+                if (linkPanel && contenidoProduccion?.contains(linkPanel)) {
+                    event.preventDefault();
+                    cargarPanel('ejecuciones', linkPanel.href);
+                    return;
+                }
+
+                const maquinaCola = event.target.closest('[data-panel-cola-maquina]');
+                if (maquinaCola && contenidoProduccion?.contains(maquinaCola)) {
+                    const maquinaId = maquinaCola.getAttribute('data-panel-cola-maquina');
+                    cargarPanel('cola', null, maquinaId);
+                    return;
+                }
+
+                const btnInicio = event.target.closest('.btn-iniciar-preparacion');
+                if (!btnInicio) return;
+
+                const programaId = btnInicio.dataset.programaId || '';
+                const titulo = btnInicio.dataset.titulo || '';
+                const maquina = btnInicio.dataset.maquina || '';
+                const parte = btnInicio.dataset.parte || '';
+                const descripcion = btnInicio.dataset.descripcion || '';
+                const molde = btnInicio.dataset.molde || '';
+                const cantidad = btnInicio.dataset.cantidad || '';
+                const inicio = btnInicio.dataset.inicio || '';
+                const fin = btnInicio.dataset.fin || '';
+                const operadorId = btnInicio.dataset.operadorId || '';
+                const operadorNombre = btnInicio.dataset.operadorNombre || '';
+                const turno = btnInicio.dataset.turno || '';
 
                 if (modalProgramaProduccionId) modalProgramaProduccionId.value = programaId;
                 if (modalProgramaTexto) modalProgramaTexto.textContent = 'Programa ' + texto(programaId) + ' · ' + texto(titulo);
@@ -1981,7 +1638,8 @@
                 const pudoSeleccionar = seleccionarOperadorSiExiste(operadorId);
 
                 if (operadorNombre) {
-                    if (boxOperadorSugerido) boxOperadorSugerido.classList.remove('warn');
+                    boxOperadorSugerido?.classList.remove('warn');
+
                     if (tituloOperadorSugerido) {
                         tituloOperadorSugerido.textContent = 'Operador sugerido desde RRHH';
                         tituloOperadorSugerido.className = 'operator-title';
@@ -1999,7 +1657,8 @@
                     }
                 }
                 else {
-                    if (boxOperadorSugerido) boxOperadorSugerido.classList.add('warn');
+                    boxOperadorSugerido?.classList.add('warn');
+
                     if (tituloOperadorSugerido) {
                         tituloOperadorSugerido.textContent = 'Sin operador sugerido';
                         tituloOperadorSugerido.className = 'operator-title warn';
@@ -2011,40 +1670,43 @@
                     }
                 }
             });
-        });
 
-        modalOperadorId?.addEventListener('change', function () {
-            if (modalOperadorId.value && modalOperadorManual) {
-                modalOperadorManual.value = '';
-            }
-        });
+            modalOperadorId?.addEventListener('change', () => {
+                if (modalOperadorId.value && modalOperadorManual) {
+                    modalOperadorManual.value = '';
+                }
+            });
 
-        modalOperadorManual?.addEventListener('input', function () {
-            if (modalOperadorManual.value.trim() && modalOperadorId) {
-                modalOperadorId.value = '';
-            }
-        });
+            modalOperadorManual?.addEventListener('input', () => {
+                if (modalOperadorManual.value.trim() && modalOperadorId) {
+                    modalOperadorId.value = '';
+                }
+            });
 
-        formIniciarPreparacion?.addEventListener('submit', function () {
-            let nombreFinal = '';
+            formIniciarPreparacion?.addEventListener('submit', () => {
+                let nombreFinal = '';
 
-            if (modalOperadorId && modalOperadorId.value) {
-                nombreFinal = obtenerTextoOperadorSeleccionado();
-            }
-            else if (modalOperadorManual && modalOperadorManual.value.trim()) {
-                nombreFinal = modalOperadorManual.value.trim();
-            }
+                if (modalOperadorId?.value) {
+                    nombreFinal = obtenerTextoOperadorSeleccionado();
+                }
+                else if (modalOperadorManual?.value.trim()) {
+                    nombreFinal = modalOperadorManual.value.trim();
+                }
 
-            if (modalOperadorNombre) {
-                modalOperadorNombre.value = nombreFinal;
-            }
+                if (modalOperadorNombre) {
+                    modalOperadorNombre.value = nombreFinal;
+                }
 
-            if (btnConfirmarInicio) {
-                btnConfirmarInicio.disabled = true;
-                btnConfirmarInicio.innerHTML =
-                    '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
-            }
-        });
+                if (btnConfirmarInicio) {
+                    btnConfirmarInicio.disabled = true;
+                    btnConfirmarInicio.innerHTML =
+                        '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
+                }
+            });
+
+            // Panel inicial: ejecuciones activas.
+            cargarPanel('ejecuciones');
+        })();
     </script>
 </body>
 </html>

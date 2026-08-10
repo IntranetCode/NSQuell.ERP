@@ -1158,11 +1158,38 @@ OUTER APPLY
     WHERE cins.ProgramaProduccionID=pp.ProgramaProduccionID
     ORDER BY cins.InspeccionID DESC
 ) ci
-WHERE pp.Activo=1
+
+WHERE pp.Activo = 1
+
+  /*
+   * Programas cancelados no deben ocupar espacio
+   * en el calendario de máquinas.
+   */
+  AND ISNULL(pp.EstatusID, 1) <> @EstatusCancelado
+
   AND pp.MaquinaID IS NOT NULL
+
   AND pp.FechaInicioProgramada IS NOT NULL
-  AND pp.FechaInicioProgramada<@Fin
-  AND ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada))>@Inicio
+
+  AND pp.FechaInicioProgramada < @Fin
+
+  AND ISNULL
+  (
+      pp.FechaFinProgramada,
+      DATEADD
+      (
+          MINUTE,
+          CAST
+          (
+              CEILING(
+                  ISNULL(pp.HorasProgramadas, 1) * 60
+              )
+              AS INT
+          ),
+          pp.FechaInicioProgramada
+      )
+  ) > @Inicio
+
 ORDER BY pp.MaquinaID,pp.FechaInicioProgramada,pp.SecuenciaMaquina,pp.ProgramaProduccionID;";
 
             var bloques = new List<PlaneacionCalendarioBloqueVm>();
@@ -1172,6 +1199,8 @@ ORDER BY pp.MaquinaID,pp.FechaInicioProgramada,pp.SecuenciaMaquina,pp.ProgramaPr
             {
                 cmd.Parameters.Add("@Inicio", SqlDbType.DateTime).Value = inicio;
                 cmd.Parameters.Add("@Fin", SqlDbType.DateTime).Value = fin;
+                cmd.Parameters.Add("@EstatusCancelado", SqlDbType.Int).Value =
+                    EstatusPrograma.Cancelado;
 
                 await using var rd = await cmd.ExecuteReaderAsync();
 
