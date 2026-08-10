@@ -7134,71 +7134,83 @@ ORDER BY
             return lista;
         }
         private async Task<ProduccionChecklistResumenVm?> ObtenerResumenChecklistArranqueAsync(
-    int ejecucionProduccionId,
-    SqlConnection cn)
+            int ejecucionProduccionId,
+            SqlConnection cn)
         {
             const string sql = @"
-SELECT TOP (1)
-    c.ChecklistArranqueID,
-    c.EjecucionProduccionID,
-    c.ProgramaProduccionID,
+        SELECT TOP (1)
+            c.ChecklistArranqueID,
+            c.EjecucionProduccionID,
+            c.ProgramaProduccionID,
 
-    c.MaquinaCodigo,
-    c.MaquinaNombre,
+            c.MaquinaCodigo,
+            c.MaquinaNombre,
 
-    c.ReferenciaSAP,
-    c.NumeroParte,
-    c.DescripcionParte,
+            c.ReferenciaSAP,
+            c.NumeroParte,
+            c.DescripcionParte,
 
-    c.CodigoFormato,
-    c.VersionFormato,
-    c.EstatusID,
-    c.FechaChecklist,
+            c.CodigoFormato,
+            c.VersionFormato,
+            c.EstatusID,
+            c.FechaChecklist,
 
-    COUNT(d.ChecklistArranqueDetalleID) AS TotalPreguntas,
+            COUNT(d.ChecklistArranqueDetalleID) AS TotalPreguntas,
 
-    SUM(
-        CASE
-            WHEN d.Resultado IS NOT NULL
-             AND LTRIM(RTRIM(d.Resultado)) <> ''
-                THEN 1
-            ELSE 0
-        END
-    ) AS TotalRespondidas,
+            SUM(
+                CASE
+                    WHEN d.Resultado IS NOT NULL
+                    AND LTRIM(RTRIM(d.Resultado)) <> ''
+                        THEN 1
+                    ELSE 0
+                END
+            ) AS TotalRespondidas,
 
-    SUM(
-        CASE
-            WHEN d.Resultado = 'NOK'
-                THEN 1
-            ELSE 0
-        END
-    ) AS TotalNOK
-FROM dbo.Produccion_ChecklistArranque c
-LEFT JOIN dbo.Produccion_ChecklistArranqueDetalle d
-    ON d.ChecklistArranqueID = c.ChecklistArranqueID
-   AND d.Activo = 1
-WHERE c.EjecucionProduccionID = @EjecucionProduccionID
-  AND c.Activo = 1
-GROUP BY
-    c.ChecklistArranqueID,
-    c.EjecucionProduccionID,
-    c.ProgramaProduccionID,
-    c.MaquinaCodigo,
-    c.MaquinaNombre,
-    c.ReferenciaSAP,
-    c.NumeroParte,
-    c.DescripcionParte,
-    c.CodigoFormato,
-    c.VersionFormato,
-    c.EstatusID,
-    c.FechaChecklist
-ORDER BY
-    c.ChecklistArranqueID DESC;";
+            SUM(
+                CASE
+                    WHEN d.Resultado = 'NOK'
+                        THEN 1
+                    ELSE 0
+                END
+            ) AS TotalNOK
+
+        FROM dbo.Produccion_ChecklistArranque c
+
+        LEFT JOIN dbo.Produccion_ChecklistArranqueDetalle d
+            ON d.ChecklistArranqueID = c.ChecklistArranqueID
+        AND d.Activo = 1
+
+        WHERE c.EjecucionProduccionID = @EjecucionProduccionID
+        AND c.CodigoFormato = N'GQ-F-PR01-06'
+        AND c.TipoChecklist = N'ARRANQUE_LIBERACION'
+        AND c.Activo = 1
+
+        GROUP BY
+            c.ChecklistArranqueID,
+            c.EjecucionProduccionID,
+            c.ProgramaProduccionID,
+
+            c.MaquinaCodigo,
+            c.MaquinaNombre,
+
+            c.ReferenciaSAP,
+            c.NumeroParte,
+            c.DescripcionParte,
+
+            c.CodigoFormato,
+            c.VersionFormato,
+            c.EstatusID,
+            c.FechaChecklist
+
+        ORDER BY
+            c.ChecklistArranqueID DESC;";
 
             await using var cmd = new SqlCommand(sql, cn);
 
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                ejecucionProduccionId;
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int
+            ).Value = ejecucionProduccionId;
 
             await using var rd = await cmd.ExecuteReaderAsync();
 
@@ -7207,26 +7219,51 @@ ORDER BY
 
             return new ProduccionChecklistResumenVm
             {
-                ChecklistArranqueID = Entero(rd, "ChecklistArranqueID"),
-                EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
-                ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
+                ChecklistArranqueID =
+                    Entero(rd, "ChecklistArranqueID"),
 
-                MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
-                MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
+                EjecucionProduccionID =
+                    Entero(rd, "EjecucionProduccionID"),
 
-                ReferenciaSAP = TextoNullable(rd, "ReferenciaSAP"),
-                NumeroParte = TextoNullable(rd, "NumeroParte"),
-                DescripcionParte = TextoNullable(rd, "DescripcionParte"),
+                ProgramaProduccionID =
+                    Entero(rd, "ProgramaProduccionID"),
 
-                CodigoFormato = TextoNullable(rd, "CodigoFormato") ?? "GQ-F-PR01-06",
-                VersionFormato = TextoNullable(rd, "VersionFormato"),
+                MaquinaCodigo =
+                    TextoNullable(rd, "MaquinaCodigo"),
 
-                EstatusID = Entero(rd, "EstatusID"),
-                FechaChecklist = Fecha(rd, "FechaChecklist"),
+                MaquinaNombre =
+                    TextoNullable(rd, "MaquinaNombre"),
 
-                TotalPreguntas = Entero(rd, "TotalPreguntas"),
-                TotalRespondidas = Entero(rd, "TotalRespondidas"),
-                TotalNOK = Entero(rd, "TotalNOK")
+                ReferenciaSAP =
+                    TextoNullable(rd, "ReferenciaSAP"),
+
+                NumeroParte =
+                    TextoNullable(rd, "NumeroParte"),
+
+                DescripcionParte =
+                    TextoNullable(rd, "DescripcionParte"),
+
+                CodigoFormato =
+                    TextoNullable(rd, "CodigoFormato")
+                    ?? "GQ-F-PR01-06",
+
+                VersionFormato =
+                    TextoNullable(rd, "VersionFormato"),
+
+                EstatusID =
+                    Entero(rd, "EstatusID"),
+
+                FechaChecklist =
+                    Fecha(rd, "FechaChecklist"),
+
+                TotalPreguntas =
+                    Entero(rd, "TotalPreguntas"),
+
+                TotalRespondidas =
+                    Entero(rd, "TotalRespondidas"),
+
+                TotalNOK =
+                    Entero(rd, "TotalNOK")
             };
         }
         private async Task RecalcularTotalesEjecucionAsync(

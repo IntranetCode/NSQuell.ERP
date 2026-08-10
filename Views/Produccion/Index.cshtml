@@ -8,8 +8,6 @@
         ViewBag.OperadoresProduccion as List<SelectListItem>
         ?? new List<SelectListItem>();
 
-    var totalGeneral = Model.Total + Model.TotalDisponibles;
-
     var programasPorMaquina = Model.ProgramasDisponibles
         .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
         .ThenBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
@@ -900,6 +898,836 @@
         }
 
         }
+    
+
+        /* =========================================================
+           AJUSTE VISUAL AMIGABLE - PRODUCCION
+           Mantiene la estructura y la logica original.
+           ========================================================= */
+
+        body {
+            background:
+                radial-gradient(circle at 12% 2%, rgba(25, 76, 155, .055), transparent 27%),
+                var(--bg);
+        }
+
+        .page {
+            max-width: 1680px;
+            padding: 24px 28px 34px;
+        }
+
+        .topbar {
+            border: 0;
+            border-radius: 20px;
+            padding: 22px 24px;
+            margin-bottom: 18px;
+            background: linear-gradient(135deg, #123a75 0%, #1d5cac 100%);
+            box-shadow: 0 12px 28px rgba(15, 47, 99, .14);
+        }
+
+        .topbar-title {
+            font-size: 1.7rem;
+            letter-spacing: -.025em;
+        }
+
+        .topbar-sub {
+            margin-top: 6px;
+            font-size: .9rem;
+            max-width: 720px;
+        }
+
+        .topbar .text-end {
+            min-width: 154px;
+            padding: 9px 13px;
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 14px;
+            background: rgba(255,255,255,.09);
+        }
+
+        .summary-strip {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(105px, 1fr));
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .summary-item {
+            min-height: 72px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 2px;
+            padding: 12px 14px;
+            border: 1px solid #d8e2ef;
+            border-radius: 15px;
+            background: rgba(255,255,255,.96);
+            color: #123a75;
+            font-size: 1.25rem;
+            line-height: 1;
+            box-shadow: 0 5px 16px rgba(16, 42, 78, .055);
+            transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+        }
+
+        .summary-item:hover {
+            transform: translateY(-2px);
+            border-color: #b7cce7;
+            box-shadow: 0 9px 22px rgba(16, 42, 78, .085);
+        }
+
+        .summary-item span {
+            margin-top: 5px;
+            font-size: .72rem;
+            line-height: 1.2;
+            color: #667085;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .summary-item:nth-child(3),
+        .summary-item:nth-child(4),
+        .summary-item:nth-child(5) {
+            border-top: 3px solid #f2b84b;
+        }
+
+        .summary-item:nth-child(6) {
+            border-top: 3px solid #3b82f6;
+        }
+
+        .summary-item:nth-child(7) {
+            border-top: 3px solid #ef8f8f;
+        }
+
+        .summary-item:nth-child(8) {
+            border-top: 3px solid #55b987;
+        }
+
+        .section {
+            border-color: #d9e3ef;
+            border-radius: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 7px 22px rgba(16, 42, 78, .045);
+        }
+
+        .section-head {
+            padding: 15px 18px;
+            background: linear-gradient(180deg, #fbfdff, #f6f9fd);
+        }
+
+        .section-title {
+            font-size: 1.04rem;
+        }
+
+        .section-sub {
+            margin-top: 4px;
+            font-size: .84rem;
+        }
+
+        .filters {
+            padding: 18px;
+        }
+
+        .filters .row {
+            --bs-gutter-x: 14px;
+            --bs-gutter-y: 13px;
+        }
+
+        .form-label {
+            margin-bottom: 7px;
+            color: #475467;
+            font-size: .73rem;
+        }
+
+        .form-control,
+        .form-select {
+            min-height: 46px;
+            border-color: #d4deeb;
+            border-radius: 12px;
+            background-color: #fbfdff;
+            font-size: .9rem;
+        }
+
+        .form-control:hover,
+        .form-select:hover {
+            border-color: #adc4e1;
+        }
+
+        .btn-action {
+            min-height: 46px;
+            border-radius: 12px;
+            font-weight: 850;
+            transition: transform .15s ease, box-shadow .15s ease;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
+        }
+
+        #formFiltrosProduccion .btn-primary {
+            box-shadow: 0 6px 14px rgba(0, 74, 173, .18);
+        }
+
+        .production-nav {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            padding: 8px;
+            margin-bottom: 16px;
+            border: 1px solid #d9e3ef;
+            border-radius: 17px;
+            background: rgba(255,255,255,.92);
+            box-shadow: 0 6px 20px rgba(16, 42, 78, .04);
+        }
+
+        .production-nav-btn {
+            min-height: 52px;
+            justify-content: center;
+            border: 1px solid #d8e2ef;
+            border-radius: 12px;
+            background: #fff;
+            color: #526071;
+            font-size: .88rem;
+            font-weight: 850;
+            transition:
+                background .16s ease,
+                border-color .16s ease,
+                color .16s ease,
+                transform .16s ease,
+                box-shadow .16s ease;
+        }
+
+        .production-nav-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(16, 42, 78, .08);
+        }
+
+        /* Pendientes / próximos: ámbar */
+        .production-nav-btn[data-production-panel="proximos"] {
+            border-color: #f2d9aa;
+            background: #fffaf1;
+            color: #8a5705;
+        }
+
+        .production-nav-btn[data-production-panel="proximos"]:hover {
+            border-color: #efbd60;
+            background: #fff4dc;
+            color: #744600;
+        }
+
+        .production-nav-btn[data-production-panel="proximos"].is-active {
+            border-color: #e9ad3d;
+            background: linear-gradient(180deg, #fff4d8 0%, #ffe9b5 100%);
+            color: #744600;
+            box-shadow: 0 6px 14px rgba(191, 126, 18, .12);
+        }
+
+        /* En ejecución: azul */
+        .production-nav-btn[data-production-panel="ejecuciones"] {
+            border-color: #c8d9f2;
+            background: #f7faff;
+            color: #245b9f;
+        }
+
+        .production-nav-btn[data-production-panel="ejecuciones"]:hover {
+            border-color: #8fb7e9;
+            background: #edf5ff;
+            color: #0f4e9a;
+        }
+
+        .production-nav-btn[data-production-panel="ejecuciones"].is-active {
+            border-color: #75a8e3;
+            background: linear-gradient(180deg, #eaf4ff 0%, #dcecff 100%);
+            color: #0f4e9a;
+            box-shadow: 0 6px 14px rgba(25, 76, 155, .12);
+        }
+
+        /* Cola: índigo suave */
+        .production-nav-btn[data-production-panel="cola"] {
+            border-color: #d8d2ee;
+            background: #fbfaff;
+            color: #65558e;
+        }
+
+        .production-nav-btn[data-production-panel="cola"]:hover {
+            border-color: #b8a9df;
+            background: #f3efff;
+            color: #51417f;
+        }
+
+        .production-nav-btn[data-production-panel="cola"].is-active {
+            border-color: #a794d8;
+            background: linear-gradient(180deg, #f2edff 0%, #e8e0ff 100%);
+            color: #51417f;
+            box-shadow: 0 6px 14px rgba(94, 72, 151, .12);
+        }
+
+        .production-nav-count {
+            min-width: 26px;
+            height: 26px;
+            padding: 0 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: rgba(255,255,255,.92);
+            border: 1px solid currentColor;
+            font-size: .75rem;
+            line-height: 1;
+        }
+
+        .production-content-shell {
+            min-height: 180px;
+            border-color: #d9e3ef;
+            border-radius: 18px;
+            box-shadow: 0 8px 24px rgba(16, 42, 78, .045);
+        }
+
+        .panel-loading {
+            min-height: 176px;
+        }
+
+        .alerts-floating-button {
+            width: 58px;
+            height: 58px;
+            box-shadow: 0 10px 24px rgba(15, 47, 99, .2);
+        }
+
+        @@media (max-width: 1280px) {
+            .summary-strip {
+                grid-template-columns: repeat(4, minmax(120px, 1fr));
+            }
+        }
+
+        @@media (max-width: 768px) {
+            .page {
+                padding: 14px;
+            }
+
+            .topbar {
+                padding: 18px;
+                border-radius: 17px;
+            }
+
+            .summary-strip {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .summary-item {
+                min-height: 68px;
+            }
+
+            .production-nav {
+                grid-template-columns: 1fr;
+            }
+
+            .production-nav-btn {
+                justify-content: flex-start;
+                padding-left: 16px;
+            }
+        }
+
+
+        /* =========================================================
+           REFINAMIENTO PROFESIONAL - PRODUCCION
+           Ajustes de jerarquia, espaciado y consistencia visual.
+           ========================================================= */
+
+        .page {
+            max-width: 1660px;
+            padding-top: 22px;
+        }
+
+        .topbar {
+            margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,.08);
+            box-shadow: 0 10px 26px rgba(15, 47, 99, .12);
+        }
+
+        .topbar-title {
+            font-size: 1.58rem;
+        }
+
+        .topbar-sub {
+            color: rgba(255,255,255,.78);
+            font-size: .86rem;
+        }
+
+        .section.production-filters {
+            overflow: visible;
+            margin-bottom: 14px;
+            border-color: #d8e2ef;
+            box-shadow: 0 5px 16px rgba(16, 42, 78, .04);
+        }
+
+        .production-filters .section-head {
+            position: relative;
+            padding: 14px 17px;
+            border-bottom-color: #dde6f0;
+            background: #fbfcfe;
+        }
+
+        .production-filters .section-head::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 13px;
+            bottom: 13px;
+            width: 3px;
+            border-radius: 0 4px 4px 0;
+            background: #2f6fbd;
+        }
+
+        .production-filters .section-title {
+            color: #163b68;
+            font-size: .98rem;
+            font-weight: 800;
+        }
+
+        .production-filters .section-title i {
+            width: 25px;
+            height: 25px;
+            display: inline-grid;
+            place-items: center;
+            margin-right: 6px !important;
+            border: 1px solid #d5e2f1;
+            border-radius: 8px;
+            background: #f1f6fc;
+            color: #2f6fbd;
+            font-size: .76rem;
+        }
+
+        .production-filters .section-sub {
+            margin-left: 34px;
+            color: #728096;
+            font-size: .78rem;
+            font-weight: 600;
+        }
+
+        .production-filters .filters {
+            padding: 15px 17px 17px;
+            border-radius: 0 0 18px 18px;
+            background: #fff;
+        }
+
+        .production-filters .form-label {
+            margin-bottom: 6px;
+            color: #526071;
+            font-size: .71rem;
+            font-weight: 800;
+            text-transform: none;
+            letter-spacing: .015em;
+        }
+
+        .production-filters .form-control,
+        .production-filters .form-select {
+            min-height: 44px;
+            border-color: #d5dfeb;
+            border-radius: 10px;
+            background: #fff;
+            color: #26364a;
+            font-size: .84rem;
+            transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        }
+
+        .production-filters .form-control:hover,
+        .production-filters .form-select:hover {
+            border-color: #b6c9df;
+            background: #fcfdff;
+        }
+
+        .production-filters .form-control:focus,
+        .production-filters .form-select:focus {
+            border-color: #7ea8dd;
+            background: #fff;
+            box-shadow: 0 0 0 .18rem rgba(47,111,189,.10);
+        }
+
+        #formFiltrosProduccion .btn-primary {
+            min-height: 44px;
+            border: 1px solid #1769c2;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #2585dc 0%, #1472c9 100%);
+            box-shadow: 0 4px 10px rgba(20,114,201,.16);
+            font-size: .82rem;
+            font-weight: 800;
+        }
+
+        #formFiltrosProduccion .btn-primary:hover {
+            background: linear-gradient(180deg, #1f7ed5 0%, #0e68bb 100%);
+            box-shadow: 0 6px 14px rgba(20,114,201,.20);
+        }
+
+        .production-nav {
+            gap: 8px;
+            padding: 6px;
+            margin-bottom: 13px;
+            border-radius: 14px;
+            border-color: #d8e2ef;
+            background: #f8fafc;
+            box-shadow: 0 4px 14px rgba(16,42,78,.035);
+        }
+
+        .production-nav-btn {
+            min-height: 47px;
+            border-radius: 9px;
+            font-size: .82rem;
+            font-weight: 800;
+            box-shadow: none;
+        }
+
+        .production-nav-btn:hover {
+            transform: none;
+            box-shadow: 0 2px 7px rgba(16,42,78,.06);
+        }
+
+        .production-nav-btn[data-production-panel="proximos"] {
+            background: #fffdfa;
+        }
+
+        .production-nav-btn[data-production-panel="proximos"].is-active {
+            background: #fff5de;
+            box-shadow: inset 0 -2px 0 #e6a72e;
+        }
+
+        .production-nav-btn[data-production-panel="ejecuciones"] {
+            background: #fbfdff;
+        }
+
+        .production-nav-btn[data-production-panel="ejecuciones"].is-active {
+            background: #edf5ff;
+            box-shadow: inset 0 -2px 0 #2f6fbd;
+        }
+
+        .production-nav-btn[data-production-panel="cola"] {
+            background: #fdfcff;
+        }
+
+        .production-nav-btn[data-production-panel="cola"].is-active {
+            background: #f3effd;
+            box-shadow: inset 0 -2px 0 #7b67b5;
+        }
+
+        .production-nav-count {
+            min-width: 23px;
+            height: 23px;
+            padding: 0 6px;
+            font-size: .68rem;
+            background: rgba(255,255,255,.96);
+        }
+
+        .production-content-shell {
+            min-height: 150px;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .panel-loading,
+        .panel-error {
+            min-height: 150px;
+            padding: 36px 20px;
+            border-radius: 15px;
+            border-color: #d9e3ef;
+            box-shadow: 0 5px 16px rgba(16,42,78,.035);
+        }
+
+        @@media (max-width: 768px) {
+            .production-filters .section-sub {
+                margin-left: 0;
+                margin-top: 6px;
+            }
+        }
+
+
+        /* ==========================================================
+           TEMA OSCURO INTERACTIVO - PRODUCCION
+           Se activa con html[data-produccion-theme="dark"].
+           El script al final sincroniza esta vista con el switch
+           Claro/Oscuro existente en _Layout.
+           ========================================================== */
+        html[data-produccion-theme="dark"] {
+            color-scheme: dark;
+            --azul: #7db7ff;
+            --azul2: #4f9cff;
+            --borde: #304159;
+            --bg: #0b1220;
+            --txt: #e7eef9;
+            --muted: #9aa9bd;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --danger: #fb7185;
+            --purple: #b7a3ff;
+        }
+
+        body,
+        .section,
+        .section-head,
+        .production-nav,
+        .production-nav-btn,
+        .production-content-shell,
+        .form-control,
+        .form-select,
+        .modal-content,
+        .operator-box,
+        .program-alert,
+        .panel-loading,
+        .panel-error {
+            transition: background-color .22s ease, border-color .22s ease, color .22s ease, box-shadow .22s ease;
+        }
+
+        html[data-produccion-theme="dark"] body {
+            background: #0b1220;
+            color: #e7eef9;
+        }
+
+        html[data-produccion-theme="dark"] .topbar {
+            background: linear-gradient(135deg, #0b2343, #123f73);
+            border-color: #34577e;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, .22);
+        }
+
+        html[data-produccion-theme="dark"] .section,
+        html[data-produccion-theme="dark"] .production-content-shell {
+            background: #111b2d;
+            border-color: #2c3d55;
+            box-shadow: 0 8px 22px rgba(0, 0, 0, .12);
+        }
+
+        html[data-produccion-theme="dark"] .section-head {
+            background: #152238;
+            border-bottom-color: #2c3d55;
+        }
+
+        html[data-produccion-theme="dark"] .section-title,
+        html[data-produccion-theme="dark"] .machine-title,
+        html[data-produccion-theme="dark"] .line-main,
+        html[data-produccion-theme="dark"] .info-v,
+        html[data-produccion-theme="dark"] .operator-title,
+        html[data-produccion-theme="dark"] .modal-title {
+            color: #eef5ff;
+        }
+
+        html[data-produccion-theme="dark"] .section-sub,
+        html[data-produccion-theme="dark"] .machine-sub,
+        html[data-produccion-theme="dark"] .line-sub,
+        html[data-produccion-theme="dark"] .info-k,
+        html[data-produccion-theme="dark"] .form-label {
+            color: #9aa9bd;
+        }
+
+        html[data-produccion-theme="dark"] .form-control,
+        html[data-produccion-theme="dark"] .form-select {
+            background-color: #0d1727;
+            border-color: #354961;
+            color: #eaf2ff;
+        }
+
+        html[data-produccion-theme="dark"] .form-control::placeholder {
+            color: #75869d;
+        }
+
+        html[data-produccion-theme="dark"] .form-control:focus,
+        html[data-produccion-theme="dark"] .form-select:focus {
+            background-color: #101c2f;
+            border-color: #5da6ff;
+            color: #fff;
+            box-shadow: 0 0 0 .2rem rgba(93, 166, 255, .14);
+        }
+
+        html[data-produccion-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+        html[data-produccion-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(1.25);
+            opacity: .78;
+        }
+
+        html[data-produccion-theme="dark"] .btn-action {
+            background: linear-gradient(135deg, #1769c2, #2b8ee8);
+            border-color: #4ea3f7;
+            box-shadow: 0 5px 14px rgba(32, 121, 211, .22);
+        }
+
+        html[data-produccion-theme="dark"] .production-nav {
+            background: #101a2b;
+            border-color: #2d4059;
+            box-shadow: 0 5px 16px rgba(0, 0, 0, .14);
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-btn {
+            background: #152136;
+            border-color: #31455f;
+            color: #cbd7e7;
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-btn:hover {
+            background: #1a2941;
+            border-color: #58779e;
+            color: #f3f7ff;
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="proximos"] {
+            background: #201c12;
+            border-color: #5a4b26;
+            color: #e9cf80;
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="proximos"].is-active {
+            background: #322815;
+            border-color: #d39c29;
+            color: #ffd66b;
+            box-shadow: 0 0 0 1px rgba(211, 156, 41, .14), 0 5px 14px rgba(0, 0, 0, .14);
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"] {
+            background: #10243d;
+            border-color: #28517d;
+            color: #9bc7fb;
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"].is-active {
+            background: #15355a;
+            border-color: #5ba6f5;
+            color: #d9ebff;
+            box-shadow: 0 0 0 1px rgba(91, 166, 245, .13), 0 5px 14px rgba(0, 0, 0, .14);
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="cola"] {
+            background: #211b34;
+            border-color: #4d416e;
+            color: #c6b9ee;
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="cola"].is-active {
+            background: #30264a;
+            border-color: #8d74d6;
+            color: #e7deff;
+            box-shadow: 0 0 0 1px rgba(141, 116, 214, .13), 0 5px 14px rgba(0, 0, 0, .14);
+        }
+
+        html[data-produccion-theme="dark"] .production-nav-count {
+            background: rgba(255, 255, 255, .08);
+            border-color: rgba(255, 255, 255, .18);
+            color: inherit;
+        }
+
+        html[data-produccion-theme="dark"] .panel-loading,
+        html[data-produccion-theme="dark"] .panel-error {
+            color: #aebbd0;
+        }
+
+        html[data-produccion-theme="dark"] .machine-row,
+        html[data-produccion-theme="dark"] .production-row,
+        html[data-produccion-theme="dark"] .next-start-row {
+            background: #111b2d;
+            border-color: #2d3e55;
+        }
+
+        html[data-produccion-theme="dark"] .machine-header,
+        html[data-produccion-theme="dark"] .next-start-section {
+            background: #152238;
+            border-color: #2d3e55;
+        }
+
+        html[data-produccion-theme="dark"] .table {
+            --bs-table-bg: transparent;
+            --bs-table-color: #dce7f6;
+            --bs-table-border-color: #2d3e55;
+            --bs-table-hover-bg: #18263c;
+            --bs-table-hover-color: #ffffff;
+        }
+
+        html[data-produccion-theme="dark"] .progress {
+            background: #26364d;
+        }
+
+        html[data-produccion-theme="dark"] .modal-content {
+            background: #111b2d;
+            border-color: #344861;
+            color: #e7eef9;
+            box-shadow: 0 28px 70px rgba(0, 0, 0, .45);
+        }
+
+        html[data-produccion-theme="dark"] .modal-header {
+            border-bottom-color: #2d3e55;
+        }
+
+        html[data-produccion-theme="dark"] .modal-footer {
+            border-top-color: #2d3e55;
+        }
+
+        html[data-produccion-theme="dark"] .btn-close {
+            filter: invert(1) grayscale(1) brightness(1.7);
+        }
+
+        html[data-produccion-theme="dark"] .operator-box {
+            background: #16243a;
+            border-color: #344861;
+            color: #dce7f6;
+        }
+
+        html[data-produccion-theme="dark"] .operator-box.warn {
+            background: #2b2214;
+            border-color: #7c5d23;
+        }
+
+        html[data-produccion-theme="dark"] .program-alert {
+            background: #151f32;
+            border-color: #33455d;
+            color: #dce7f6;
+        }
+
+        html[data-produccion-theme="dark"] .program-alert.has-highlight {
+            background: #2b2313;
+            border-color: #7a5b22;
+        }
+
+        html[data-produccion-theme="dark"] .alerts-modal,
+        html[data-produccion-theme="dark"] .alerts-modal-summary,
+        html[data-produccion-theme="dark"] .alerts-modal-empty {
+            color: #dce7f6;
+        }
+
+        html[data-produccion-theme="dark"] .tag,
+        html[data-produccion-theme="dark"] .queue-badge,
+        html[data-produccion-theme="dark"] .operator-pill {
+            background: #17263c;
+            border-color: #354961;
+            color: #cbd7e7;
+        }
+
+        html[data-produccion-theme="dark"] .tag-blue {
+            background: #102b4c;
+            border-color: #28598b;
+            color: #9dcaff;
+        }
+
+        html[data-produccion-theme="dark"] .tag-ok {
+            background: #102a20;
+            border-color: #286446;
+            color: #79e3a8;
+        }
+
+        html[data-produccion-theme="dark"] .tag-warn {
+            background: #2b2313;
+            border-color: #76571e;
+            color: #f6cc6d;
+        }
+
+        html[data-produccion-theme="dark"] .row-produccion {
+            background: #102843;
+        }
+
+        html[data-produccion-theme="dark"] .row-preparacion {
+            background: #2b2412;
+        }
+
+        html[data-produccion-theme="dark"] .row-pausado {
+            background: #30191d;
+        }
+
+        html[data-produccion-theme="dark"] .row-terminado {
+            background: #10271d;
+        }
+
     </style>
 </head>
 
@@ -952,53 +1780,11 @@
             </div>
         }
 
-        <div class="summary-strip">
-            <div class="summary-item">
-                @totalGeneral.ToString("N0")
-                <span>Total</span>
-            </div>
-
-            <div class="summary-item">
-                @Model.TotalDisponibles.ToString("N0")
-                <span>Por iniciar</span>
-            </div>
-
-            <div class="summary-item">
-                @Model.TotalProximosAIniciar.ToString("N0")
-                <span>Pend. / 15 min</span>
-            </div>
-
-            <div class="summary-item">
-                @Model.TotalAlertasReprogramacion.ToString("N0")
-                <span>Cambios 24 h</span>
-            </div>
-
-            <div class="summary-item">
-                @Model.EnPreparacion.ToString("N0")
-                <span>Preparación</span>
-            </div>
-
-            <div class="summary-item">
-                @Model.EnProduccion.ToString("N0")
-                <span>En producción</span>
-            </div>
-
-            <div class="summary-item">
-                @Model.Pausados.ToString("N0")
-                <span>Pausados</span>
-            </div>
-
-            <div class="summary-item">
-                @Model.Terminados.ToString("N0")
-                <span>Terminados</span>
-            </div>
-        </div>
-
-        <section class="section">
+        <section class="section production-filters">
             <div class="section-head">
                 <div>
                     <h2 class="section-title">
-                        <i class="bi bi-funnel me-1"></i>
+                        <i class="bi bi-funnel"></i>
                         Filtros
                     </h2>
                     <div class="section-sub">
@@ -1060,7 +1846,8 @@
 
                     <div class="col-12 col-xl-1 d-grid">
                         <button type="submit" class="btn btn-primary btn-action">
-                            <i class="bi bi-search"></i>
+                            <i class="bi bi-search me-1"></i>
+                            Buscar
                         </button>
                     </div>
                 </form>
@@ -1078,20 +1865,20 @@
         <nav class="production-nav" aria-label="Navegación operativa de Producción">
             <button type="button"
                     class="production-nav-btn is-active"
-                    data-production-panel="ejecuciones"
-                    data-url="@Url.Action("PanelEjecuciones", "Produccion")">
-                <i class="bi bi-activity"></i>
-                En ejecución
-                <span class="production-nav-count">@totalActivas</span>
-            </button>
-
-            <button type="button"
-                    class="production-nav-btn"
                     data-production-panel="proximos"
                     data-url="@Url.Action("PanelProximos", "Produccion")">
                 <i class="bi bi-alarm"></i>
                 Pendientes / próximos
                 <span class="production-nav-count">@Model.TotalProximosAIniciar</span>
+            </button>
+
+            <button type="button"
+                    class="production-nav-btn"
+                    data-production-panel="ejecuciones"
+                    data-url="@Url.Action("PanelEjecuciones", "Produccion")">
+                <i class="bi bi-activity"></i>
+                En ejecución
+                <span class="production-nav-count">@totalActivas</span>
             </button>
 
             <button type="button"
@@ -1433,7 +2220,7 @@
             const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
             const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
 
-            let panelActivo = 'ejecuciones';
+            let panelActivo = 'proximos';
             let controladorCarga = null;
 
             function texto(value) {
@@ -1467,7 +2254,7 @@
             }
 
             function marcarPanelActivo(panel) {
-                panelActivo = panel || 'ejecuciones';
+                panelActivo = panel || 'proximos';
 
                 navButtons.forEach(btn => {
                     btn.classList.toggle(
@@ -1575,7 +2362,7 @@
 
             navButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
-                    cargarPanel(btn.dataset.productionPanel || 'ejecuciones');
+                    cargarPanel(btn.dataset.productionPanel || 'proximos');
                 });
             });
 
@@ -1704,9 +2491,109 @@
                 }
             });
 
-            // Panel inicial: ejecuciones activas.
-            cargarPanel('ejecuciones');
+            // Panel inicial: pendientes / próximos.
+            cargarPanel('proximos');
         })();
     </script>
+
+    <script>
+        (() => {
+            const root = document.documentElement;
+
+            function textoNormalizado(el) {
+                return (el?.textContent || '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toLowerCase();
+            }
+
+            function detectarTemaERP() {
+                const html = document.documentElement;
+                const body = document.body;
+
+                const pistas = [
+                    html.getAttribute('data-theme'),
+                    html.getAttribute('data-bs-theme'),
+                    html.getAttribute('data-color-mode'),
+                    html.className,
+                    body?.getAttribute('data-theme'),
+                    body?.getAttribute('data-bs-theme'),
+                    body?.getAttribute('data-color-mode'),
+                    body?.className
+                ]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase();
+
+                if (/(^|\s|[-_])(dark|oscuro|night)(\s|$|[-_])/.test(pistas)) {
+                    return 'dark';
+                }
+
+                if (/(^|\s|[-_])(light|claro)(\s|$|[-_])/.test(pistas)) {
+                    return 'light';
+                }
+
+                // En el layout actual el botón muestra el modo al que puedes cambiar:
+                // si dice "Claro", el ERP está actualmente en oscuro;
+                // si dice "Oscuro", el ERP está actualmente en claro.
+                const controles = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+                const switchTema = controles.find(el => {
+                    const txt = textoNormalizado(el);
+                    return txt === 'claro' || txt === 'oscuro' ||
+                           txt.startsWith('claro ') || txt.startsWith('oscuro ');
+                });
+
+                if (switchTema) {
+                    const txt = textoNormalizado(switchTema);
+                    if (txt.startsWith('claro')) return 'dark';
+                    if (txt.startsWith('oscuro')) return 'light';
+                }
+
+                return window.matchMedia?.('(prefers-color-scheme: dark)').matches
+                    ? 'dark'
+                    : 'light';
+            }
+
+            let temaActual = '';
+
+            function sincronizarTemaProduccion() {
+                const tema = detectarTemaERP();
+                if (tema === temaActual) return;
+
+                temaActual = tema;
+                root.setAttribute('data-produccion-theme', tema);
+            }
+
+            sincronizarTemaProduccion();
+
+            const observer = new MutationObserver(() => {
+                window.requestAnimationFrame(sincronizarTemaProduccion);
+            });
+
+            observer.observe(document.documentElement, {
+                attributes: true,
+                attributeFilter: ['class', 'data-theme', 'data-bs-theme', 'data-color-mode']
+            });
+
+            if (document.body) {
+                observer.observe(document.body, {
+                    attributes: true,
+                    childList: true,
+                    subtree: true,
+                    attributeFilter: ['class', 'data-theme', 'data-bs-theme', 'data-color-mode']
+                });
+            }
+
+            document.addEventListener('click', () => {
+                setTimeout(sincronizarTemaProduccion, 0);
+                setTimeout(sincronizarTemaProduccion, 120);
+                setTimeout(sincronizarTemaProduccion, 300);
+            }, true);
+
+            window.matchMedia?.('(prefers-color-scheme: dark)')
+                .addEventListener?.('change', sincronizarTemaProduccion);
+        })();
+    </script>
+
 </body>
 </html>

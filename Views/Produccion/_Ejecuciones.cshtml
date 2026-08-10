@@ -173,81 +173,159 @@
 
     .ejec-tabs {
         display: flex;
-        gap: 6px;
+        gap: 8px;
         flex-wrap: wrap;
-        margin-top: 10px;
+        margin-top: 12px;
     }
 
     .ejec-tab {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        min-height: 32px;
-        padding: 5px 9px;
-        border: 1px solid #cfdceb;
-        border-radius: 10px;
-        background: #fff;
-        color: #475467;
+        justify-content: center;
+        gap: 7px;
+        min-height: 36px;
+        padding: 7px 12px;
+        border: 1px solid #c8d7ea;
+        border-radius: 9px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        color: #344054;
         text-decoration: none;
-        font-size: .72rem;
+        font-size: .74rem;
         font-weight: 900;
+        line-height: 1;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+        transition:
+            transform .16s ease,
+            box-shadow .16s ease,
+            border-color .16s ease,
+            background .16s ease,
+            color .16s ease;
+        cursor: pointer;
+        user-select: none;
     }
 
+        .ejec-tab > i {
+            width: 22px;
+            height: 22px;
+            display: inline-grid;
+            place-items: center;
+            flex: 0 0 22px;
+            border-radius: 7px;
+            background: #eef4fb;
+            color: #496785;
+            font-size: .72rem;
+            transition: background .16s ease, color .16s ease;
+        }
+
         .ejec-tab:hover {
-            background: #f8fbff;
+            transform: translateY(-1px);
+            border-color: #8fb7ee;
+            background: #f7fbff;
             color: var(--ej-blue);
+            box-shadow: 0 5px 12px rgba(0, 59, 130, .10);
+        }
+
+        .ejec-tab:hover > i {
+            background: #dcecff;
+            color: var(--ej-blue);
+        }
+
+        .ejec-tab:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(16, 24, 40, .08);
+        }
+
+        .ejec-tab:focus-visible {
+            outline: 3px solid rgba(37, 99, 235, .16);
+            outline-offset: 2px;
         }
 
         .ejec-tab.is-active {
-            border-color: #8fb7ee;
-            background: #eef4ff;
+            border-color: #6fa7e8;
+            background: #edf5ff;
             color: var(--ej-blue);
+            box-shadow: inset 0 0 0 1px rgba(0, 59, 130, .05), 0 3px 8px rgba(0, 59, 130, .08);
+        }
+
+        .ejec-tab.is-active > i {
+            background: var(--ej-blue);
+            color: #fff;
         }
 
     .ejec-tabs .ejec-tab:nth-child(2).is-active {
-        border-color: #93c5fd;
-        background: #dbeafe;
+        border-color: #8db8f5;
+        background: #edf5ff;
         color: #1d4ed8;
     }
 
+    .ejec-tabs .ejec-tab:nth-child(2).is-active > i {
+        background: #2563eb;
+        color: #fff;
+    }
+
     .ejec-tabs .ejec-tab:nth-child(3).is-active {
-        border-color: #fcd34d;
-        background: #fef3c7;
-        color: #92400e;
+        border-color: #e7bd55;
+        background: #fff8e7;
+        color: #8a5b08;
+    }
+
+    .ejec-tabs .ejec-tab:nth-child(3).is-active > i {
+        background: #d99a13;
+        color: #fff;
     }
 
     .ejec-tabs .ejec-tab:nth-child(4).is-active {
-        border-color: #fca5a5;
-        background: #fee2e2;
-        color: #b91c1c;
+        border-color: #e9a0a0;
+        background: #fff1f1;
+        color: #b42318;
+    }
+
+    .ejec-tabs .ejec-tab:nth-child(4).is-active > i {
+        background: #d92d20;
+        color: #fff;
     }
 
     .ejec-tabs .ejec-tab:nth-child(5).is-active {
-        border-color: #86efac;
-        background: #dcfce7;
+        border-color: #85c997;
+        background: #eefaf1;
         color: #166534;
     }
 
+    .ejec-tabs .ejec-tab:nth-child(5).is-active > i {
+        background: #16a34a;
+        color: #fff;
+    }
+
     .ejec-tab-count {
-        min-width: 20px;
-        height: 20px;
-        padding: 0 5px;
-        border-radius: 999px;
+        min-width: 21px;
+        height: 21px;
+        padding: 0 6px;
+        border-radius: 7px;
         display: inline-grid;
         place-items: center;
         background: #fff;
-        border: 1px solid currentColor;
+        border: 1px solid #d3deeb;
+        color: #344054;
         font-size: .64rem;
         font-weight: 950;
+        line-height: 1;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
     }
+
+        .ejec-tab.is-active .ejec-tab-count {
+            border-color: rgba(255, 255, 255, .85);
+            background: rgba(255, 255, 255, .92);
+            color: currentColor;
+        }
 
     .ejec-visible-count {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        padding: 5px 8px;
+        min-height: 31px;
+        padding: 6px 10px;
         border: 1px solid #bfd3f2;
-        border-radius: 999px;
+        border-radius: 9px;
         background: #f8fbff;
         color: var(--ej-blue);
         font-size: .7rem;
@@ -546,6 +624,203 @@
             min-width: 1180px;
         }
     }
+
+    /* =========================================================
+       REFINAMIENTO PROFESIONAL - PANEL DE EJECUCIONES
+       ========================================================= */
+
+    .ejec-panel {
+        border: 1px solid #d8e2ef;
+        border-radius: 15px;
+        background: #fff;
+        overflow: hidden;
+        box-shadow: 0 5px 16px rgba(16, 42, 78, .04);
+    }
+
+    .ejec-toolbar {
+        margin: 0;
+        padding: 14px 15px 13px;
+        border: 0;
+        border-bottom: 1px solid #dfe7f0;
+        border-radius: 0;
+        background: linear-gradient(180deg, #fbfcfe 0%, #f8fafc 100%);
+    }
+
+    .ejec-toolbar-top {
+        align-items: center;
+    }
+
+    .ejec-title {
+        color: #163b68;
+        font-size: .98rem;
+        font-weight: 850;
+        letter-spacing: -.01em;
+    }
+
+    .ejec-title i {
+        width: 25px;
+        height: 25px;
+        display: inline-grid;
+        place-items: center;
+        margin-right: 6px !important;
+        border: 1px solid #d5e2f1;
+        border-radius: 8px;
+        background: #eef5fd;
+        color: #2f6fbd;
+        font-size: .75rem;
+    }
+
+    .ejec-sub {
+        margin-top: 4px;
+        margin-left: 33px;
+        color: #728096;
+        font-size: .73rem;
+        font-weight: 600;
+    }
+
+    .ejec-visible-count {
+        min-height: 30px;
+        border-color: #d2deeb;
+        background: #fff;
+        color: #49627f;
+        font-size: .67rem;
+        box-shadow: 0 1px 2px rgba(16,24,40,.03);
+    }
+
+    .ejec-tabs {
+        gap: 7px;
+        margin-top: 11px;
+    }
+
+    .ejec-tab {
+        min-height: 35px;
+        padding: 6px 10px;
+        border-color: #d1dce8;
+        border-radius: 8px;
+        background: #fff;
+        color: #42526a;
+        font-size: .71rem;
+        font-weight: 800;
+        box-shadow: none;
+    }
+
+    .ejec-tab > i {
+        width: 21px;
+        height: 21px;
+        flex-basis: 21px;
+        border-radius: 6px;
+        background: #f0f4f8;
+        color: #60758d;
+        font-size: .68rem;
+    }
+
+    .ejec-tab:hover {
+        transform: none;
+        border-color: #a9bfda;
+        background: #f8fbff;
+        box-shadow: 0 2px 7px rgba(16,42,78,.06);
+    }
+
+    .ejec-tab.is-active {
+        border-color: #7ba8dc;
+        background: #eef5fd;
+        box-shadow: inset 0 -2px 0 #2f6fbd;
+    }
+
+    .ejec-tab-count {
+        min-width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        font-size: .61rem;
+        box-shadow: none;
+    }
+
+    .ejec-empty {
+        min-height: 165px;
+        padding: 30px 18px;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+        color: #6d7c90;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ejec-empty-icon {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 10px;
+        border: 1px solid #d8e2ef;
+        border-radius: 12px;
+        background: #f7f9fc;
+        color: #8392a5;
+    }
+
+    .ejec-empty-icon i {
+        margin: 0;
+        font-size: 1.15rem;
+        color: inherit;
+    }
+
+    .ejec-empty-title {
+        color: #344054;
+        font-size: .84rem;
+        font-weight: 850;
+    }
+
+    .ejec-empty-text {
+        max-width: 440px;
+        margin-top: 4px;
+        color: #7a889b;
+        font-size: .72rem;
+        font-weight: 600;
+        line-height: 1.45;
+    }
+
+    .ejec-machine {
+        margin: 10px 11px;
+        border-radius: 11px;
+        box-shadow: none;
+    }
+
+    .ejec-machine-head {
+        min-height: 43px;
+        background: #f8fafc;
+    }
+
+    .ejec-machine-code {
+        color: #163b68;
+    }
+
+    .ejec-machine-count {
+        border-color: #d2deeb;
+        border-radius: 7px;
+        color: #49627f;
+    }
+
+    .ejec-table th {
+        background: #f7f9fc;
+        color: #596a80;
+    }
+
+    .ejec-table tbody tr:hover {
+        box-shadow: inset 3px 0 0 rgba(47,111,189,.16);
+    }
+
+    @@media (max-width: 700px) {
+        .ejec-sub {
+            margin-left: 0;
+        }
+
+        .ejec-toolbar-top {
+            align-items: flex-start;
+        }
+    }
+
 </style>
 
 <div class="ejec-panel">
@@ -615,8 +890,13 @@
     @if (!grupos.Any())
     {
         <div class="ejec-empty">
-            <i class="bi bi-inbox"></i>
-            No hay ejecuciones para el filtro seleccionado.
+            <div class="ejec-empty-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <div class="ejec-empty-title">Sin ejecuciones para mostrar</div>
+            <div class="ejec-empty-text">
+                No hay registros que coincidan con el estado o los filtros seleccionados.
+            </div>
         </div>
     }
     else
