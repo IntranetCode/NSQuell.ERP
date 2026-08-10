@@ -429,27 +429,12 @@
 
                         @if (puedeTomarDisposicion)
                         {
-                            <form asp-controller="Calidad"
-                                  asp-action="EnviarGP12"
-                                  method="post"
-                                  class="quality-action-form"
-                                  data-confirm="¿Confirmas el envío del material a GP12?">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="id" value="@Model.InspeccionID" />
-                                <div class="quality-action-field">
-                                    <label class="quality-action-label">Motivo de GP12</label>
-                                    <input type="text"
-                                           name="comentario"
-                                           class="quality-action-input"
-                                           maxlength="1000"
-                                           placeholder="Motivo del envío a inspección reforzada..." />
+                            <div class="quality-action-form">
+                                <div class="quality-action-help fw-bold">
+                                    <i class="fa-solid fa-microscope me-1"></i>
+                                    El envío a GP12 ahora se realiza por caja desde la pestaña <strong>Cajas y GP12</strong>.
                                 </div>
-                                <button type="submit" class="quality-action-button is-warning">
-                                    <i class="fa-solid fa-magnifying-glass-plus"></i>
-                                    Enviar a GP12
-                                </button>
-                            </form>
-
+                            </div>
                             <form asp-controller="Calidad"
                                   asp-action="EnviarContencion"
                                   method="post"

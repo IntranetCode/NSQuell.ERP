@@ -1548,6 +1548,100 @@ public sealed class ProduccionOperadorCajasVm
     public int SiguienteNumeroCaja { get; set; } = 1;
     public bool PuedeFormarCaja { get; set; }
 
+    public decimal? PiezasPorEmbalaje { get; set; }
+    public decimal? CantidadEmbalajes { get; set; }
+
+    public int PiezasPorCajaSugeridas
+    {
+        get
+        {
+            if (!PiezasPorEmbalaje.HasValue || PiezasPorEmbalaje.Value <= 0)
+                return 0;
+
+            return Convert.ToInt32(Math.Floor(PiezasPorEmbalaje.Value));
+        }
+    }
+
+    public int CajasEsperadas
+    {
+        get
+        {
+            if (!CantidadEmbalajes.HasValue || CantidadEmbalajes.Value <= 0)
+                return 0;
+
+            return Convert.ToInt32(Math.Ceiling(CantidadEmbalajes.Value));
+        }
+    }
+
+    public int CajasOKFormadas
+    {
+        get
+        {
+            return Cajas
+                .Where(x => string.Equals(x.TipoCaja, "OK", StringComparison.OrdinalIgnoreCase))
+                .Count();
+        }
+    }
+
+    public int CajasPendientes
+    {
+        get
+        {
+            return Math.Max(0, CajasEsperadas - CajasOKFormadas);
+        }
+    }
+
+    public int PiezasOKEmpacadas
+    {
+        get
+        {
+            return Cajas
+                .Where(x => string.Equals(x.TipoCaja, "OK", StringComparison.OrdinalIgnoreCase))
+                .Sum(x => x.CantidadPiezas);
+        }
+    }
+
+    public int PiezasPendientesEmpacar
+    {
+        get
+        {
+            return Math.Max(0, CantidadOKTotal - PiezasOKEmpacadas);
+        }
+    }
+
+    public int PiezasPlaneadasPendientesDeCaja
+    {
+        get
+        {
+            return Math.Max(0, CantidadPlaneada - PiezasOKEmpacadas);
+        }
+    }
+
+    public int CantidadSugeridaSiguienteCaja
+    {
+        get
+        {
+            if (PiezasPendientesEmpacar <= 0)
+                return 0;
+
+            if (PiezasPorCajaSugeridas <= 0)
+                return PiezasPendientesEmpacar;
+
+            return Math.Min(PiezasPendientesEmpacar, PiezasPorCajaSugeridas);
+        }
+    }
+
+    public bool TieneConfiguracionEmbalaje
+    {
+        get
+        {
+            return PiezasPorEmbalaje.HasValue &&
+                   PiezasPorEmbalaje.Value > 0 &&
+                   CantidadEmbalajes.HasValue &&
+                   CantidadEmbalajes.Value > 0;
+        }
+    }
+
     public int CantidadOKDisponible =>
         Math.Max(0, CantidadOKTotal - CantidadOKEnCajas);
 

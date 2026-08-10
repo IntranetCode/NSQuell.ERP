@@ -645,109 +645,49 @@
         <section class="quality-card" id="gp12-cajas">
             <div class="quality-card-header">
                 <div>
-                    <h2>
-                        <i class="fa-solid fa-microscope"></i>
-                        Inspección reforzada GP12
-                    </h2>
+                    <h2><i class="fa-solid fa-microscope"></i>Seguimiento GP12</h2>
                     <div class="quality-help">
-                        GP12 revisa el 100 % de la caja. Un resultado NOK mantiene el material bloqueado
-                        y genera una nueva revisión; nunca convierte material en scrap automáticamente.
+                        Calidad solo consulta el avance. La recepción, programación, asignación e inspección se realizan en el módulo GP12.
                     </div>
                 </div>
-
                 @if (Model.GP12Pendientes > 0)
                 {
-                    <span class="badge bg-warning text-dark">
-                        @Model.GP12Pendientes activo(s)
-                    </span>
+                    <span class="badge bg-warning text-dark">@Model.GP12Pendientes activo(s)</span>
                 }
             </div>
-
             <div class="quality-card-body">
                 <div class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="quality-data-label">Registros GP12</div>
-                            <div class="fw-bold fs-5">@Model.TotalRegistrosGP12</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="border border-warning rounded-3 p-3 h-100">
-                            <div class="quality-data-label">Pendientes</div>
-                            <div class="fw-bold fs-5 text-warning">@Model.GP12Pendientes</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="border border-danger rounded-3 p-3 h-100">
-                            <div class="quality-data-label">En reinspección</div>
-                            <div class="fw-bold fs-5 text-danger">@Model.GP12EnReinspeccion</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="border border-success rounded-3 p-3 h-100">
-                            <div class="quality-data-label">Liberados</div>
-                            <div class="fw-bold fs-5 text-success">@Model.GP12Liberados</div>
-                        </div>
-                    </div>
+                    <div class="col-md-3"><div class="border rounded-3 p-3 h-100"><div class="quality-data-label">Solicitudes</div><div class="fw-bold fs-5">@Model.TotalRegistrosGP12</div></div></div>
+                    <div class="col-md-3"><div class="border border-warning rounded-3 p-3 h-100"><div class="quality-data-label">Activas</div><div class="fw-bold fs-5 text-warning">@Model.GP12Pendientes</div></div></div>
+                    <div class="col-md-3"><div class="border border-danger rounded-3 p-3 h-100"><div class="quality-data-label">Con NOK</div><div class="fw-bold fs-5 text-danger">@Model.GP12EnReinspeccion</div></div></div>
+                    <div class="col-md-3"><div class="border border-success rounded-3 p-3 h-100"><div class="quality-data-label">Liberadas</div><div class="fw-bold fs-5 text-success">@Model.GP12Liberados</div></div></div>
                 </div>
-
                 @foreach (var gp12 in Model.RegistrosGP12)
                 {
                     <article class="border @gp12.EstadoBordeClase rounded-4 p-3 mb-3 bg-white">
                         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                             <div>
-                                <h3 class="h5 mb-1 fw-bold">
-                                    <i class="fa-solid fa-box-open me-1"></i>
-                                    @Mostrar(gp12.FolioCaja)
-                                </h3>
-                                <div class="quality-help">
-                                    GP12 #@gp12.GP12ID · Entrada @gp12.FechaEntrada.ToString("dd/MM/yyyy HH:mm") ·
-                                    @gp12.TotalRevisiones revisión(es)
-                                </div>
+                                <h3 class="h5 mb-1 fw-bold"><i class="fa-solid fa-box-open me-1"></i>@Mostrar(gp12.FolioCaja)</h3>
+                                <div class="quality-help">Solicitud GP12 #@gp12.GP12ID · @gp12.FechaEntrada.ToString("dd/MM/yyyy HH:mm") · @gp12.TotalRevisiones inspección(es)</div>
                             </div>
-
-                            <span class="badge @gp12.EstadoBadgeClase">
-                                @gp12.EstadoTexto
-                            </span>
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <span class="badge @gp12.EstadoBadgeClase">@gp12.EstadoTexto</span>
+                                <a asp-controller="GP12" asp-action="Detalle" asp-route-id="@gp12.GP12ID" class="quality-btn quality-btn-primary">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir en GP12
+                                </a>
+                            </div>
                         </div>
-
                         <div class="row g-3 mb-3">
-                            <div class="col-md-2">
-                                <div class="quality-data-label">Cantidad de entrada</div>
-                                <div class="fw-bold">@gp12.CantidadEntrada.ToString("N0")</div>
-                            </div>
-                            <div class="col-md-5">
-                                <div class="quality-data-label">Motivo</div>
-                                <div class="fw-semibold">@Mostrar(gp12.Motivo)</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="quality-data-label">NOK acumulado</div>
-                                <div class="fw-bold text-danger">@gp12.TotalNokAcumulado</div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="quality-data-label">Salida</div>
-                                <div class="fw-semibold">
-                                    @(gp12.FechaSalida?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")
-                                </div>
-                            </div>
+                            <div class="col-md-2"><div class="quality-data-label">Cantidad</div><div class="fw-bold">@gp12.CantidadEntrada.ToString("N0")</div></div>
+                            <div class="col-md-5"><div class="quality-data-label">Motivo</div><div class="fw-semibold">@Mostrar(gp12.Motivo)</div></div>
+                            <div class="col-md-2"><div class="quality-data-label">NOK acumulado</div><div class="fw-bold text-danger">@gp12.TotalNokAcumulado</div></div>
+                            <div class="col-md-3"><div class="quality-data-label">Fin / salida</div><div class="fw-semibold">@(gp12.FechaSalida?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</div></div>
                         </div>
-
                         @if (gp12.Revisiones.Any())
                         {
-                            <div class="table-responsive mb-3">
-                                <table class="table table-sm align-middle">
-                                    <thead>
-                                        <tr>
-                                            <th>Revisión</th>
-                                            <th>Fecha</th>
-                                            <th>Revisadas</th>
-                                            <th>OK</th>
-                                            <th>NOK</th>
-                                            <th>Resultado</th>
-                                            <th>Defectos</th>
-                                            <th>Observaciones</th>
-                                        </tr>
-                                    </thead>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead><tr><th>Inspección</th><th>Fecha</th><th>Revisadas</th><th>OK</th><th>NOK</th><th>Resultado</th><th>Defectos</th><th>Observaciones</th></tr></thead>
                                     <tbody>
                                         @foreach (var revision in gp12.Revisiones)
                                         {
@@ -757,21 +697,8 @@
                                                 <td>@revision.CantidadRevisada</td>
                                                 <td class="text-success fw-bold">@revision.CantidadOK</td>
                                                 <td class="text-danger fw-bold">@revision.CantidadNOK</td>
-                                                <td>
-                                                    <span class="badge @revision.ResultadoBadgeClase">
-                                                        @revision.ResultadoTexto
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    @if (revision.Defectos.Any())
-                                                    {
-                                                        @string.Join(", ", revision.Defectos.Select(x => $"{x.Codigo}: {x.Cantidad}"))
-                                                    }
-                                                    else
-                                                    {
-                                                        <span>—</span>
-                                                    }
-                                                </td>
+                                                <td><span class="badge @revision.ResultadoBadgeClase">@revision.ResultadoTexto</span></td>
+                                                <td>@(revision.Defectos.Any() ? string.Join(", ", revision.Defectos.Select(x => $"{x.Codigo}: {x.Cantidad}")) : "—")</td>
                                                 <td>@Mostrar(revision.Observaciones)</td>
                                             </tr>
                                         }
@@ -779,158 +706,9 @@
                                 </table>
                             </div>
                         }
-
-                        @if (gp12.PuedeRevisar)
+                        else
                         {
-                            <form asp-controller="Calidad"
-                                  asp-action="RegistrarRevisionGP12"
-                                  method="post"
-                                  data-gp12-form
-                                  data-gp12-total="@gp12.CantidadEntrada">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden"
-                                       name="InspeccionID"
-                                       value="@Model.InspeccionID" />
-                                <input type="hidden"
-                                       name="GP12ID"
-                                       value="@gp12.GP12ID" />
-
-                                <div class="alert @(gp12.RequiereReinspeccion ? "alert-danger" : "alert-warning") py-2">
-                                    <strong>
-                                        @(gp12.RequiereReinspeccion
-                                                                    ? "La revisión anterior fue NOK. Corrige y vuelve a inspeccionar el total de la caja."
-                                                                    : "Inspecciona el total de la caja antes de registrar el resultado.")
-                        </strong>
-                    </div>
-
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-semibold">Cantidad revisada</label>
-                                        <input type="number"
-                                               name="CantidadRevisada"
-                                               value="@gp12.CantidadEntrada"
-                                               class="form-control"
-                                               data-gp12-reviewed
-                                               readonly />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-semibold">Cantidad OK</label>
-                                        <input type="number"
-                                               name="CantidadOK"
-                                               min="0"
-                                               max="@gp12.CantidadEntrada"
-                                               value="@gp12.CantidadEntrada"
-                                               class="form-control"
-                                               data-gp12-ok
-                                               required />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-semibold">Cantidad NOK</label>
-                                        <input type="number"
-                                               name="CantidadNOK"
-                                               min="0"
-                                               max="@gp12.CantidadEntrada"
-                                               value="0"
-                                               class="form-control"
-                                               data-gp12-nok
-                                               required />
-                                    </div>
-                                </div>
-
-                                <div class="quality-gp12-balance is-complete mt-3" data-gp12-balance>
-                                    Total completo: @gp12.CantidadEntrada OK + 0 NOK = @gp12.CantidadEntrada.
-                                </div>
-
-                                <div class="quality-gp12-defects mt-3" data-gp12-defects hidden>
-                                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
-                                        <label class="form-label fw-semibold mb-0">
-                                            Defectos detectados
-                                        </label>
-                                        <button type="button"
-                                                class="quality-btn quality-btn-light"
-                                                data-add-defecto
-                                                data-gp12-id="@gp12.GP12ID">
-                                            <i class="fa-solid fa-plus"></i>
-                                            Agregar defecto
-                                        </button>
-                                    </div>
-
-                                    <div data-defectos-container="@gp12.GP12ID"></div>
-
-                                    <template id="defecto-template-@gp12.GP12ID">
-                                        <div class="row g-2 align-items-end border rounded-3 p-2 mb-2" data-defecto-row>
-                                            <div class="col-md-5">
-                                                <label class="form-label fw-semibold">Defecto</label>
-                                                <select name="Defectos[__index__].CatalogoDefectoID"
-                                                        class="form-select"
-                                                        data-defecto-catalogo>
-                                                    <option value="">-- Selecciona defecto --</option>
-                                        @foreach (var defecto in Model.CatalogoDefectos)
-                                                    {
-                                                        <option value="@defecto.CatalogoDefectoID">
-                                                            @defecto.Texto
-                                                        </option>
-                                                    }
-                                                </select>
-                                            </div>
-                                            <div class="col-md-2">
-                                                <label class="form-label fw-semibold">Cantidad</label>
-                                                <input type="number"
-                                                       name="Defectos[__index__].Cantidad"
-                                                       min="1"
-                                                       value="1"
-                                                       class="form-control"
-                                                       data-defecto-cantidad />
-                                            </div>
-                                            <div class="col-md-4">
-                                                <label class="form-label fw-semibold">Observaciones</label>
-                                                <input type="text"
-                                                       name="Defectos[__index__].Observaciones"
-                                                       maxlength="500"
-                                                       class="form-control" />
-                                            </div>
-                                            <div class="col-md-1">
-                                                <button type="button"
-                                                        class="btn btn-outline-danger w-100"
-                                                        data-remove-defecto
-                                                        title="Quitar defecto">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </template>
-
-                                    <div class="quality-help" data-gp12-defect-balance>
-                                        La suma de defectos debe coincidir con la cantidad NOK.
-                                    </div>
-                                </div>
-
-                                <div class="mt-3">
-                                    <label class="form-label fw-semibold">Observaciones de GP12</label>
-                                    <textarea name="Observaciones"
-                                  rows="3"
-                                  maxlength="1000"
-                                  class="form-control"
-                                  data-gp12-observations
-                                  placeholder="Describe la revisión. Es obligatorio cuando existan piezas NOK."></textarea>
-                                </div>
-
-                                <div class="mt-3">
-                                    <button type="submit"
-                                            class="quality-btn quality-btn-primary">
-                                        <i class="fa-solid fa-floppy-disk"></i>
-                                        Guardar revisión GP12
-                                    </button>
-                                </div>
-                            </form>
-                        }
-                        else if (gp12.EsLiberado)
-                        {
-                            <div class="alert alert-success mb-0">
-                                <i class="fa-solid fa-circle-check me-1"></i>
-                                GP12 concluido. La caja fue liberada con etiqueta verde para Almacén.
-                            </div>
+                            <div class="alert alert-light border mb-0"><i class="fa-solid fa-clock me-1"></i>La solicitud ya está en GP12, pero todavía no tiene inspecciones registradas.</div>
                         }
                     </article>
                 }
@@ -1060,170 +838,6 @@
 
             updateDecision();
         });
-
-        document.querySelectorAll('[data-gp12-form]').forEach(function (form) {
-            const total = Number(form.dataset.gp12Total || '0');
-            const okInput = form.querySelector('[data-gp12-ok]');
-            const nokInput = form.querySelector('[data-gp12-nok]');
-            const balance = form.querySelector('[data-gp12-balance]');
-            const defectsSection = form.querySelector('[data-gp12-defects]');
-            const defectsContainer = form.querySelector('[data-defectos-container]');
-            const defectBalance = form.querySelector('[data-gp12-defect-balance]');
-            const observations = form.querySelector('[data-gp12-observations]');
-            const addButton = form.querySelector('[data-add-defecto]');
-
-            function addDefectRow() {
-                if (!addButton) return;
-                const gp12Id = addButton.dataset.gp12Id;
-                const template = document.getElementById('defecto-template-' + gp12Id);
-                if (!template || !defectsContainer) return;
-
-                const index = Number(defectsContainer.dataset.nextIndex || '0');
-                defectsContainer.dataset.nextIndex = (index + 1).toString();
-                const html = template.innerHTML.replaceAll('__index__', index.toString());
-                defectsContainer.insertAdjacentHTML('beforeend', html);
-            }
-
-            function defectTotal() {
-                return Array.from(form.querySelectorAll('[data-defecto-row]'))
-                    .filter(function (row) {
-                        const catalog = row.querySelector('[data-defecto-catalogo]');
-                        return catalog && !catalog.disabled && catalog.value;
-                    })
-                    .reduce(function (sum, row) {
-                        const input = row.querySelector('[data-defecto-cantidad]');
-                        return sum + (Number(input?.value || '0') || 0);
-                    }, 0);
-            }
-
-            function reindexDefects() {
-                form.querySelectorAll('[data-defecto-row]').forEach(function (row, index) {
-                    row.querySelectorAll('[name]').forEach(function (control) {
-                        control.name = control.name.replace(/Defectos\[\d+\]/, 'Defectos[' + index + ']');
-                    });
-                });
-            }
-
-            function updateGp12() {
-                const ok = Number(okInput?.value || '0') || 0;
-                const nok = Number(nokInput?.value || '0') || 0;
-                const complete = ok >= 0 && nok >= 0 && ok + nok === total;
-
-                if (balance) {
-                    balance.classList.toggle('is-complete', complete);
-                    balance.classList.toggle('is-invalid', !complete);
-                    balance.textContent = complete
-                        ? 'Total completo: ' + ok + ' OK + ' + nok + ' NOK = ' + total + '.'
-                        : 'Las cantidades deben sumar exactamente ' + total + ' pieza(s). Capturado: ' + (ok + nok) + '.';
-                }
-
-                if (defectsSection) {
-                    defectsSection.hidden = nok <= 0;
-                }
-
-                form.querySelectorAll('[data-defecto-row] input, [data-defecto-row] select')
-                    .forEach(function (input) {
-                        input.disabled = nok <= 0;
-                    });
-
-                if (nok > 0 && defectsContainer && !defectsContainer.querySelector('[data-defecto-row]')) {
-                    addDefectRow();
-                }
-
-                if (observations) {
-                    observations.required = nok > 0;
-                }
-
-                if (defectBalance) {
-                    const defects = defectTotal();
-                    defectBalance.textContent = nok <= 0
-                        ? 'No se requieren defectos cuando la cantidad NOK es cero.'
-                        : defects === nok
-                            ? 'Defectos completos: ' + defects + ' de ' + nok + ' NOK.'
-                            : 'La suma de defectos es ' + defects + ' y debe ser igual a ' + nok + '.';
-                    defectBalance.classList.toggle('text-success', nok > 0 && defects === nok);
-                    defectBalance.classList.toggle('text-danger', nok > 0 && defects !== nok);
-                }
-            }
-
-            addButton?.addEventListener('click', function () {
-                addDefectRow();
-                updateGp12();
-            });
-
-            okInput?.addEventListener('input', updateGp12);
-            nokInput?.addEventListener('input', updateGp12);
-            form.addEventListener('input', function (event) {
-                if (event.target.matches('[data-defecto-cantidad], [data-defecto-catalogo]')) {
-                    updateGp12();
-                }
-            });
-
-            form.addEventListener('click', function (event) {
-                const button = event.target.closest('[data-remove-defecto]');
-                if (!button) return;
-                button.closest('[data-defecto-row]')?.remove();
-                updateGp12();
-            });
-
-            form.addEventListener('submit', function (event) {
-                reindexDefects();
-
-                const ok = Number(okInput?.value || '0') || 0;
-                const nok = Number(nokInput?.value || '0') || 0;
-                const defects = defectTotal();
-                const incompleteDefects = Array.from(form.querySelectorAll('[data-defecto-row]'))
-                    .filter(function (row) {
-                        const catalog = row.querySelector('[data-defecto-catalogo]');
-                        const quantity = row.querySelector('[data-defecto-cantidad]');
-                        return catalog && !catalog.disabled &&
-                            (!catalog.value || (Number(quantity?.value || '0') || 0) <= 0);
-                    });
-                const duplicateDefects = Array.from(form.querySelectorAll('[data-defecto-catalogo]'))
-                    .filter(function (select) { return !select.disabled && select.value; })
-                    .map(function (select) { return select.value; })
-                    .filter(function (value, index, values) { return values.indexOf(value) !== index; });
-
-                if (ok + nok !== total) {
-                    event.preventDefault();
-                    window.alert('La suma de piezas OK y NOK debe ser igual al total de la caja.');
-                    return;
-                }
-
-                if (nok > 0 && incompleteDefects.length > 0) {
-                    event.preventDefault();
-                    window.alert('Completa el defecto y su cantidad en todos los renglones de GP12.');
-                    return;
-                }
-
-                if (nok > 0 && defects !== nok) {
-                    event.preventDefault();
-                    window.alert('La suma de defectos debe ser igual a la cantidad NOK.');
-                    return;
-                }
-
-                if (duplicateDefects.length > 0) {
-                    event.preventDefault();
-                    window.alert('No repitas el mismo defecto. Agrupa su cantidad en un solo renglón.');
-                    return;
-                }
-
-                if (nok > 0 && !(observations?.value.trim())) {
-                    event.preventDefault();
-                    window.alert('Describe la condición detectada cuando existan piezas NOK.');
-                    return;
-                }
-
-                const message = nok === 0
-                    ? '¿Confirmas que el total de la caja está conforme y puede liberarse con etiqueta verde?'
-                    : '¿Confirmas el resultado NOK? La caja permanecerá bloqueada para una nueva revisión.';
-
-                if (!window.confirm(message)) {
-                    event.preventDefault();
-                }
-            });
-
-            updateGp12();
-        });
     </script>
 </div>
+s

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Text;
-
+using ERP.NSQuell.Models;
 namespace ERP.NSQuell.Controllers;
 
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -2599,4 +2599,489 @@ ORDER BY Almacen,Rack,Nivel,Posicion;";
         }
         return rows;
     }
+
+    //METODO NUEVI OARA TENER UNA BANDEJA DE PROXIMOS POR RECIBIR
+
+    [HttpGet]
+    public async Task<IActionResult> PendientesProduccion(string? q, CancellationToken cancellationToken = default)
+    {
+        var sesion = ValidarSesion();
+        if (sesion != null) return sesion;
+        q = q?.Trim();
+        await using var connection = await AbrirConexionAsync(cancellationToken);
+        if (!await ExisteObjetoAsync(connection, "dbo.Produccion_Cajas", "U", cancellationToken))
+            return Json(new { ok = false, mensaje = "No existe la tabla Produccion_Cajas.", total = 0, piezas = 0, items = Array.Empty<object>() });
+        if (!await ExisteObjetoAsync(connection, "dbo.AlmacenPT_Cajas", "U", cancellationToken))
+            return Json(new { ok = false, mensaje = "No existe la tabla AlmacenPT_Cajas.", total = 0, piezas = 0, items = Array.Empty<object>() });
+        if (!await ExisteColumnaAsync(connection, "dbo.AlmacenPT_Cajas", "CajaProduccionID", cancellationToken))
+            return Json(new { ok = false, mensaje = "Falta agregar CajaProduccionID a dbo.AlmacenPT_Cajas.", total = 0, piezas = 0, items = Array.Empty<object>() });
+        const string sql = @"
+SELECT TOP (500)
+    c.CajaProduccionID,
+    c.EjecucionProduccionID,
+    c.ProgramaProduccionID,
+    c.SolicitudProduccionID,
+    c.SolicitudProduccionDetalleID,
+    c.ReleaseID,
+    c.ReleaseDetalleID,
+    ISNULL(c.NumeroCaja,0) AS NumeroCaja,
+    COALESCE(NULLIF(LTRIM(RTRIM(c.FolioCaja)),N''),NULLIF(LTRIM(RTRIM(c.EtiquetaFolio)),N''),NULLIF(LTRIM(RTRIM(c.Etiqueta)),N''),CONVERT(NVARCHAR(100),c.CajaProduccionID)) AS FolioCaja,
+    COALESCE(NULLIF(LTRIM(RTRIM(c.EtiquetaFolio)),N''),NULLIF(LTRIM(RTRIM(c.Etiqueta)),N''),NULLIF(LTRIM(RTRIM(c.FolioCaja)),N''),CONVERT(NVARCHAR(100),c.CajaProduccionID)) AS Etiqueta,
+    ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) AS CantidadPiezas,
+    ISNULL(c.TipoCaja,N'OK') AS TipoCaja,
+    ISNULL(c.LoteMaterial,N'') AS LoteMaterial,
+    ISNULL(c.EstadoCajaID,1) AS EstadoCajaID,
+    ISNULL(c.EstadoCajaNombre,N'') AS EstadoCajaNombre,
+    ISNULL(c.EtiquetaVerde,0) AS EtiquetaVerde,
+    ISNULL(c.EstatusCalidad,N'') AS EstatusCalidad,
+    ISNULL(c.ResultadoCalidad,N'') AS ResultadoCalidad,
+    c.FechaLiberacionCalidad,
+    c.FechaZonaVerde,
+    c.FechaSalidaProduccion,
+    e.ParteID,
+    COALESCE(NULLIF(LTRIM(RTRIM(e.NumeroParte)),N''),NULLIF(LTRIM(RTRIM(e.ReferenciaSAP)),N''),N'') AS NumeroParte,
+    COALESCE(NULLIF(LTRIM(RTRIM(e.DescripcionParte)),N''),NULLIF(LTRIM(RTRIM(p.Designacion)),N''),NULLIF(LTRIM(RTRIM(p.Descripcion)),N''),N'') AS DescripcionParte,
+    COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),CONCAT(N'OF-ID-',c.SolicitudProduccionID)) AS NumeroOF,
+    ISNULL(pp.ClienteNombre,N'') AS Cliente,
+    DATEDIFF(MINUTE,c.FechaSalidaProduccion,GETDATE()) AS MinutosEsperando,
+    CASE WHEN EXISTS
+    (
+        SELECT 1
+        FROM dbo.AlmacenPT_Cajas ac
+        WHERE ac.CajaProduccionID=c.CajaProduccionID
+          AND ac.Activo=1
+    ) THEN 1 ELSE 0 END AS YaExisteAlmacen
+FROM dbo.Produccion_Cajas c
+INNER JOIN dbo.Produccion_Ejecucion e
+    ON e.EjecucionProduccionID=c.EjecucionProduccionID
+   AND e.Activo=1
+LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.ProgramaProduccionID=c.ProgramaProduccionID
+   AND pp.Activo=1
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=c.SolicitudProduccionID
+   AND s.Activo=1
+LEFT JOIN dbo.ERP_Partes p
+    ON p.ParteID=e.ParteID
+   AND p.Activo=1
+WHERE c.Activo=1
+  AND c.EstadoCajaID=@EstadoSalidaProduccion
+  AND c.FechaSalidaProduccion IS NOT NULL
+  AND c.FechaRecepcionAlmacen IS NULL
+  AND ISNULL(c.EtiquetaVerde,0)=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(c.EstatusCalidad,N'')))) IN (N'LIBERADA',N'LIBERADO')
+  AND UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N'OK')))) NOT IN (N'SCRAP',N'RETENCION')
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.AlmacenPT_Cajas ac
+      WHERE ac.CajaProduccionID=c.CajaProduccionID
+        AND ac.Activo=1
+  )
+  AND
+  (
+      @Q IS NULL
+      OR COALESCE(NULLIF(LTRIM(RTRIM(c.FolioCaja)),N''),NULLIF(LTRIM(RTRIM(c.EtiquetaFolio)),N''),NULLIF(LTRIM(RTRIM(c.Etiqueta)),N''),CONVERT(NVARCHAR(100),c.CajaProduccionID)) LIKE N'%'+@Q+N'%'
+      OR ISNULL(c.EtiquetaFolio,N'') LIKE N'%'+@Q+N'%'
+      OR ISNULL(c.Etiqueta,N'') LIKE N'%'+@Q+N'%'
+      OR ISNULL(e.NumeroParte,N'') LIKE N'%'+@Q+N'%'
+      OR ISNULL(e.ReferenciaSAP,N'') LIKE N'%'+@Q+N'%'
+      OR ISNULL(s.NumeroOFRecibida,N'') LIKE N'%'+@Q+N'%'
+      OR ISNULL(s.FolioSolicitud,N'') LIKE N'%'+@Q+N'%'
+      OR ISNULL(pp.ClienteNombre,N'') LIKE N'%'+@Q+N'%'
+  )
+ORDER BY c.FechaSalidaProduccion ASC,c.CajaProduccionID ASC;";
+        var items = new List<object>();
+        long totalPiezas = 0;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@EstadoSalidaProduccion", SqlDbType.Int).Value = ProduccionCajaEstatus.SalidaProduccion;
+        command.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(q) ? DBNull.Value : q;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var cantidad = Convert.ToInt32(reader["CantidadPiezas"]);
+            totalPiezas += cantidad;
+            var minutos = reader["MinutosEsperando"] == DBNull.Value ? 0 : Convert.ToInt32(reader["MinutosEsperando"]);
+            items.Add(new
+            {
+                CajaProduccionID = Convert.ToInt64(reader["CajaProduccionID"]),
+                EjecucionProduccionID = Convert.ToInt32(reader["EjecucionProduccionID"]),
+                ProgramaProduccionID = reader["ProgramaProduccionID"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["ProgramaProduccionID"]),
+                SolicitudProduccionID = reader["SolicitudProduccionID"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["SolicitudProduccionID"]),
+                SolicitudProduccionDetalleID = reader["SolicitudProduccionDetalleID"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["SolicitudProduccionDetalleID"]),
+                ReleaseID = reader["ReleaseID"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["ReleaseID"]),
+                ReleaseDetalleID = reader["ReleaseDetalleID"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["ReleaseDetalleID"]),
+                NumeroCaja = Convert.ToInt32(reader["NumeroCaja"]),
+                FolioCaja = reader["FolioCaja"]?.ToString()?.Trim() ?? string.Empty,
+                Etiqueta = reader["Etiqueta"]?.ToString()?.Trim() ?? string.Empty,
+                CantidadPiezas = cantidad,
+                TipoCaja = reader["TipoCaja"]?.ToString()?.Trim() ?? "OK",
+                LoteMaterial = reader["LoteMaterial"]?.ToString()?.Trim() ?? string.Empty,
+                EstadoCajaID = Convert.ToInt32(reader["EstadoCajaID"]),
+                EstadoCajaNombre = reader["EstadoCajaNombre"]?.ToString()?.Trim() ?? string.Empty,
+                EtiquetaVerde = Convert.ToBoolean(reader["EtiquetaVerde"]),
+                EstatusCalidad = reader["EstatusCalidad"]?.ToString()?.Trim() ?? string.Empty,
+                ResultadoCalidad = reader["ResultadoCalidad"]?.ToString()?.Trim() ?? string.Empty,
+                FechaLiberacionCalidad = reader["FechaLiberacionCalidad"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(reader["FechaLiberacionCalidad"]),
+                FechaZonaVerde = reader["FechaZonaVerde"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(reader["FechaZonaVerde"]),
+                FechaSalidaProduccion = reader["FechaSalidaProduccion"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(reader["FechaSalidaProduccion"]),
+                ParteID = reader["ParteID"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["ParteID"]),
+                NumeroParte = reader["NumeroParte"]?.ToString()?.Trim() ?? string.Empty,
+                DescripcionParte = reader["DescripcionParte"]?.ToString()?.Trim() ?? string.Empty,
+                NumeroOF = reader["NumeroOF"]?.ToString()?.Trim() ?? string.Empty,
+                Cliente = reader["Cliente"]?.ToString()?.Trim() ?? string.Empty,
+                MinutosEsperando = minutos,
+                HorasEsperando = Math.Round(minutos / 60m, 1),
+                YaExisteAlmacen = Convert.ToBoolean(reader["YaExisteAlmacen"])
+            });
+        }
+        return Json(new
+        {
+            ok = true,
+            total = items.Count,
+            piezas = totalPiezas,
+            fechaConsulta = DateTime.Now,
+            items
+        });
+    }
+
+
+    //METODO NUEVO PARA REVIBIR CAJAS DESDE PRODUCCION
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RecibirCajaProduccion(long cajaProduccionId, int ubicacionId, CancellationToken cancellationToken = default)
+    {
+        var sesion = ValidarSesion();
+        if (sesion != null) return sesion;
+        if (cajaProduccionId <= 0)
+        {
+            Mensaje("warning", "La caja de Producción no es válida.");
+            return RedirectToAction(nameof(Index));
+        }
+        if (ubicacionId <= 0)
+        {
+            Mensaje("warning", "Selecciona una ubicación válida de Almacén PT.");
+            return RedirectToAction(nameof(Index));
+        }
+        if (!UsuarioID.HasValue || UsuarioID.Value <= 0) return Unauthorized();
+        await using var connection = await AbrirConexionAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            const string sqlCaja = @"
+SELECT TOP (1)
+    c.CajaProduccionID,
+    c.EjecucionProduccionID,
+    c.ProgramaProduccionID,
+    c.SolicitudProduccionID,
+    c.SolicitudProduccionDetalleID,
+    c.ReleaseID,
+    c.ReleaseDetalleID,
+    ISNULL(c.NumeroCaja,0) AS NumeroCajaProduccion,
+    COALESCE(NULLIF(LTRIM(RTRIM(c.FolioCaja)),N''),NULLIF(LTRIM(RTRIM(c.EtiquetaFolio)),N''),NULLIF(LTRIM(RTRIM(c.Etiqueta)),N''),CONVERT(NVARCHAR(100),c.CajaProduccionID)) AS FolioCaja,
+    COALESCE(NULLIF(LTRIM(RTRIM(c.EtiquetaFolio)),N''),NULLIF(LTRIM(RTRIM(c.Etiqueta)),N''),NULLIF(LTRIM(RTRIM(c.FolioCaja)),N''),CONVERT(NVARCHAR(100),c.CajaProduccionID)) AS Etiqueta,
+    ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) AS CantidadPiezas,
+    ISNULL(c.TipoCaja,N'OK') AS TipoCaja,
+    ISNULL(c.LoteMaterial,N'') AS LoteMaterial,
+    ISNULL(c.EstadoCajaID,1) AS EstadoCajaID,
+    ISNULL(c.EtiquetaVerde,0) AS EtiquetaVerde,
+    UPPER(LTRIM(RTRIM(ISNULL(c.EstatusCalidad,N'')))) AS EstatusCalidad,
+    c.FechaSalidaProduccion,
+    c.FechaRecepcionAlmacen,
+    e.ParteID,
+    COALESCE(NULLIF(LTRIM(RTRIM(e.NumeroParte)),N''),NULLIF(LTRIM(RTRIM(e.ReferenciaSAP)),N'')) AS NumeroParte,
+    COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),CONCAT(N'OF-ID-',c.SolicitudProduccionID)) AS NumeroOF
+FROM dbo.Produccion_Cajas c WITH (UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=c.EjecucionProduccionID AND e.Activo=1
+LEFT JOIN dbo.SolicitudesProduccion s ON s.SolicitudProduccionID=c.SolicitudProduccionID AND s.Activo=1
+WHERE c.CajaProduccionID=@CajaProduccionID
+  AND c.Activo=1;";
+            int ejecucionProduccionId;
+            int? solicitudProduccionId;
+            int? solicitudProduccionDetalleId;
+            int? releaseId;
+            int? releaseDetalleId;
+            int numeroCajaProduccion;
+            string folioCaja;
+            string etiqueta;
+            int cantidadPiezas;
+            string tipoCaja;
+            string loteMaterial;
+            int estadoCajaId;
+            bool etiquetaVerde;
+            string estatusCalidad;
+            DateTime? fechaSalidaProduccion;
+            DateTime? fechaRecepcionAlmacen;
+            int? parteId;
+            string numeroParte;
+            string numeroOF;
+            await using (var command = new SqlCommand(sqlCaja, connection, transaction))
+            {
+                command.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    Mensaje("warning", "No se encontró la caja activa de Producción.");
+                    return RedirectToAction(nameof(Index));
+                }
+                ejecucionProduccionId = Convert.ToInt32(reader["EjecucionProduccionID"]);
+                solicitudProduccionId = reader["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(reader["SolicitudProduccionID"]);
+                solicitudProduccionDetalleId = reader["SolicitudProduccionDetalleID"] == DBNull.Value ? null : Convert.ToInt32(reader["SolicitudProduccionDetalleID"]);
+                releaseId = reader["ReleaseID"] == DBNull.Value ? null : Convert.ToInt32(reader["ReleaseID"]);
+                releaseDetalleId = reader["ReleaseDetalleID"] == DBNull.Value ? null : Convert.ToInt32(reader["ReleaseDetalleID"]);
+                numeroCajaProduccion = Convert.ToInt32(reader["NumeroCajaProduccion"]);
+                folioCaja = reader["FolioCaja"]?.ToString()?.Trim() ?? cajaProduccionId.ToString();
+                etiqueta = reader["Etiqueta"]?.ToString()?.Trim() ?? folioCaja;
+                cantidadPiezas = Convert.ToInt32(reader["CantidadPiezas"]);
+                tipoCaja = reader["TipoCaja"]?.ToString()?.Trim() ?? "OK";
+                loteMaterial = reader["LoteMaterial"]?.ToString()?.Trim() ?? string.Empty;
+                estadoCajaId = Convert.ToInt32(reader["EstadoCajaID"]);
+                etiquetaVerde = Convert.ToBoolean(reader["EtiquetaVerde"]);
+                estatusCalidad = reader["EstatusCalidad"]?.ToString()?.Trim() ?? string.Empty;
+                fechaSalidaProduccion = reader["FechaSalidaProduccion"] == DBNull.Value ? null : Convert.ToDateTime(reader["FechaSalidaProduccion"]);
+                fechaRecepcionAlmacen = reader["FechaRecepcionAlmacen"] == DBNull.Value ? null : Convert.ToDateTime(reader["FechaRecepcionAlmacen"]);
+                parteId = reader["ParteID"] == DBNull.Value ? null : Convert.ToInt32(reader["ParteID"]);
+                numeroParte = reader["NumeroParte"]?.ToString()?.Trim() ?? string.Empty;
+                numeroOF = reader["NumeroOF"]?.ToString()?.Trim() ?? string.Empty;
+            }
+            if (estadoCajaId == ProduccionCajaEstatus.RecibidaAlmacenPt || fechaRecepcionAlmacen.HasValue)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", $"La caja {folioCaja} ya fue recibida anteriormente por Almacén PT.");
+                return RedirectToAction(nameof(Index));
+            }
+            if (estadoCajaId != ProduccionCajaEstatus.SalidaProduccion)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", $"La caja {folioCaja} todavía no tiene una salida válida de Producción.");
+                return RedirectToAction(nameof(Index));
+            }
+            if (!fechaSalidaProduccion.HasValue)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", $"La caja {folioCaja} no tiene registrada la fecha de salida de Producción.");
+                return RedirectToAction(nameof(Index));
+            }
+            if (!etiquetaVerde || (!string.Equals(estatusCalidad, "LIBERADA", StringComparison.OrdinalIgnoreCase) && !string.Equals(estatusCalidad, "LIBERADO", StringComparison.OrdinalIgnoreCase)))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", $"La caja {folioCaja} no está liberada correctamente por Calidad.");
+                return RedirectToAction(nameof(Index));
+            }
+            if (tipoCaja.Equals("SCRAP", StringComparison.OrdinalIgnoreCase) || tipoCaja.Equals("RETENCION", StringComparison.OrdinalIgnoreCase))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", $"La caja {folioCaja} no corresponde a producto terminado liberado.");
+                return RedirectToAction(nameof(Index));
+            }
+            if (!parteId.HasValue || parteId.Value <= 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", $"La caja {folioCaja} no tiene una parte válida relacionada con Producción.");
+                return RedirectToAction(nameof(Index));
+            }
+            if (cantidadPiezas <= 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", $"La caja {folioCaja} no contiene una cantidad válida de piezas.");
+                return RedirectToAction(nameof(Index));
+            }
+            if (string.IsNullOrWhiteSpace(numeroOF))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                Mensaje("warning", $"La caja {folioCaja} no conserva una OF válida.");
+                return RedirectToAction(nameof(Index));
+            }
+            const string sqlUbicacion = @"
+SELECT TOP (1) UbicacionID
+FROM dbo.ERP_Ubicaciones WITH (UPDLOCK,HOLDLOCK)
+WHERE UbicacionID=@UbicacionID
+  AND Activo=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(Almacen,N''))))=N'PT';";
+            await using (var command = new SqlCommand(sqlUbicacion, connection, transaction))
+            {
+                command.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = ubicacionId;
+                var value = await command.ExecuteScalarAsync(cancellationToken);
+                if (value == null || value == DBNull.Value)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    Mensaje("warning", "La ubicación seleccionada no pertenece a Almacén PT o está inactiva.");
+                    return RedirectToAction(nameof(Index));
+                }
+            }
+            const string sqlDuplicado = @"
+SELECT TOP (1) CajaID
+FROM dbo.AlmacenPT_Cajas WITH (UPDLOCK,HOLDLOCK)
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1;";
+            await using (var command = new SqlCommand(sqlDuplicado, connection, transaction))
+            {
+                command.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                var existente = await command.ExecuteScalarAsync(cancellationToken);
+                if (existente != null && existente != DBNull.Value)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    Mensaje("warning", $"La caja {folioCaja} ya existe en Almacén PT. No se creó un duplicado.");
+                    return RedirectToAction(nameof(Index));
+                }
+            }
+            const string sqlEtiquetaDuplicada = @"
+SELECT TOP (1) CajaID
+FROM dbo.AlmacenPT_Cajas WITH (UPDLOCK,HOLDLOCK)
+WHERE Activo=1
+  AND LTRIM(RTRIM(ISNULL(Etiqueta,N'')))=LTRIM(RTRIM(@Etiqueta));";
+            await using (var command = new SqlCommand(sqlEtiquetaDuplicada, connection, transaction))
+            {
+                command.Parameters.Add("@Etiqueta", SqlDbType.NVarChar, 120).Value = etiqueta;
+                var existente = await command.ExecuteScalarAsync(cancellationToken);
+                if (existente != null && existente != DBNull.Value)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    Mensaje("warning", $"La etiqueta {etiqueta} ya está registrada en Almacén PT.");
+                    return RedirectToAction(nameof(Index));
+                }
+            }
+            const string sqlInsertCaja = @"
+INSERT INTO dbo.AlmacenPT_Cajas
+(
+    CajaProduccionID,
+    ParteID,
+    SolicitudProduccionID,
+    NumeroOF,
+    Etiqueta,
+    NumeroCaja,
+    CantidadInicial,
+    LoteEtiqueta,
+    EstadoCalidad,
+    UbicacionID,
+    FechaEntrada,
+    FechaCreacion,
+    CreadoPor,
+    Activo
+)
+OUTPUT INSERTED.CajaID
+VALUES
+(
+    @CajaProduccionID,
+    @ParteID,
+    @SolicitudProduccionID,
+    @NumeroOF,
+    @Etiqueta,
+    @NumeroCaja,
+    @CantidadInicial,
+    @LoteEtiqueta,
+    N'Liberado',
+    @UbicacionID,
+    SYSDATETIME(),
+    SYSUTCDATETIME(),
+    @Usuario,
+    1
+);";
+            int cajaAlmacenId;
+            await using (var command = new SqlCommand(sqlInsertCaja, connection, transaction))
+            {
+                command.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                command.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId.Value;
+                command.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)solicitudProduccionId ?? DBNull.Value;
+                command.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = numeroOF;
+                command.Parameters.Add("@Etiqueta", SqlDbType.NVarChar, 120).Value = etiqueta;
+                command.Parameters.Add("@NumeroCaja", SqlDbType.Int).Value = numeroCajaProduccion;
+                command.Parameters.Add("@CantidadInicial", SqlDbType.Int).Value = cantidadPiezas;
+                command.Parameters.Add("@LoteEtiqueta", SqlDbType.NVarChar, 120).Value = string.IsNullOrWhiteSpace(loteMaterial) ? DBNull.Value : loteMaterial;
+                command.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = ubicacionId;
+                command.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
+                var result = await command.ExecuteScalarAsync(cancellationToken);
+                if (result == null || result == DBNull.Value) throw new InvalidOperationException("No fue posible crear la caja en Almacén PT.");
+                cajaAlmacenId = Convert.ToInt32(result);
+            }
+            var referenciaOperacion = $"PROD-PT-{cajaProduccionId}";
+            const string sqlMovimiento = @"
+INSERT INTO dbo.AlmacenPT_Movimientos
+(
+    CajaID,
+    ParteID,
+    NumeroOF,
+    TipoMovimiento,
+    Cantidad,
+    UbicacionID,
+    EstadoCalidad,
+    ResponsableUsuarioID,
+    Observaciones,
+    FechaMovimiento,
+    FechaCreacion,
+    CreadoPor,
+    Activo,
+    ReferenciaOperacion
+)
+VALUES
+(
+    @CajaID,
+    @ParteID,
+    @NumeroOF,
+    N'Entrada',
+    @Cantidad,
+    @UbicacionID,
+    N'Liberado',
+    @UsuarioID,
+    @Observaciones,
+    SYSDATETIME(),
+    SYSUTCDATETIME(),
+    @Usuario,
+    1,
+    @ReferenciaOperacion
+);";
+            await using (var command = new SqlCommand(sqlMovimiento, connection, transaction))
+            {
+                command.Parameters.Add("@CajaID", SqlDbType.Int).Value = cajaAlmacenId;
+                command.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId.Value;
+                command.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = numeroOF;
+                command.Parameters.Add("@Cantidad", SqlDbType.Int).Value = cantidadPiezas;
+                command.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = ubicacionId;
+                command.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.Value;
+                command.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value = $"Recepción desde Producción. Caja {folioCaja}. CajaProduccionID {cajaProduccionId}. Ejecución {ejecucionProduccionId}. Parte {numeroParte}.";
+                command.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
+                command.Parameters.Add("@ReferenciaOperacion", SqlDbType.NVarChar, 120).Value = referenciaOperacion;
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+            const string sqlActualizarProduccion = @"
+UPDATE dbo.Produccion_Cajas
+SET EstadoCajaID=@EstadoCajaID,
+    EstadoCajaNombre=@EstadoCajaNombre,
+    FechaRecepcionAlmacen=GETDATE(),
+    UsuarioAlmacenID=@UsuarioID,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1
+  AND EstadoCajaID=@EstadoAnterior
+  AND FechaRecepcionAlmacen IS NULL;
+IF @@ROWCOUNT<>1
+    THROW 51400,'La caja cambió de estado mientras Almacén PT realizaba la recepción.',1;";
+            await using (var command = new SqlCommand(sqlActualizarProduccion, connection, transaction))
+            {
+                command.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                command.Parameters.Add("@EstadoAnterior", SqlDbType.Int).Value = ProduccionCajaEstatus.SalidaProduccion;
+                command.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value = ProduccionCajaEstatus.RecibidaAlmacenPt;
+                command.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value = ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.RecibidaAlmacenPt);
+                command.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.Value;
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+            await transaction.CommitAsync(cancellationToken);
+            Mensaje("success", $"Caja {folioCaja} recibida correctamente en Almacén PT. {cantidadPiezas:N0} pieza(s) agregadas al inventario.");
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            Mensaje("warning", "La caja o su referencia de entrada ya había sido registrada. No se generó una segunda recepción.");
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            Mensaje("danger", "No fue posible recibir la caja de Producción: " + ex.Message);
+        }
+        return RedirectToAction(nameof(Index));
+    }
+
+
 }
