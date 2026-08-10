@@ -2,6 +2,13 @@
 
 @{
     Layout = null;
+
+    string PlantillaVisible(string? valor)
+    {
+        return string.IsNullOrWhiteSpace(valor)
+            ? "-"
+            : valor.Replace("GOLDEN", "GOLDE");
+    }
 }
 
 <!DOCTYPE html>
@@ -186,6 +193,13 @@
 </head>
 
 <body>
+    @* PLANEACION_STANDALONE_NAV_V1_1 *@
+    <div class="pln-standalone-navbar-host" style="padding:1rem 1rem 0;position:relative;z-index:3000;">
+        @await Html.PartialAsync("_TopNavbar")
+    </div>
+
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
 <div class="page">
     <section class="hero">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
@@ -317,7 +331,7 @@
                     <div class="col-md-6 col-xl-6">
                         <label class="label">Archivo / plantilla</label>
                         <input class="form-control"
-                               value="@($"{Model.ArchivoOrigenNombre ?? "-"} · {Model.PlantillaImportacion ?? "-"}")"
+                               value="@($"{Model.ArchivoOrigenNombre ?? "-"} · {PlantillaVisible(Model.PlantillaImportacion)}")"
                                readonly />
                     </div>
 

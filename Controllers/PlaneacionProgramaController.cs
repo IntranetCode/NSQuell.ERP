@@ -21,19 +21,6 @@ namespace ERP.NSQuell.Controllers
             ?? throw new InvalidOperationException("No se encontró la cadena de conexión DefaultConnection.");
 
 
-        // ============================================================
-        // MODO DE LANZAMIENTO SIN ALMACEN
-        // ============================================================
-        // Planeacion se libera completo desde Release hasta OF, pero Almacen
-        // todavia no descontara ni apartara PT automaticamente.
-        // Por eso, en este controlador:
-        // 1) Se calcula stock/PT como dato informativo.
-        // 2) NO se descuenta ni se aparta PT automaticamente.
-        // 3) NO se bloquea la generacion de programa/OF por falta de stock.
-        // 4) Las llamadas y metodos de apartado PT quedan marcados como
-        //    REACTIVAR_ALMACEN para habilitarlos despues.
-
-
         [HttpGet]
         public async Task<IActionResult> Index(
     int? clienteId,

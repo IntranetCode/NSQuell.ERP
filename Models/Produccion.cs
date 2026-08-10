@@ -218,6 +218,12 @@ public sealed class ProduccionEjecucionVm
     public DateTime? FechaModificacion { get; set; }
     public bool Activo { get; set; } = true;
 
+    public int? OperadorAuxiliarID { get; set; }
+    public string? OperadorAuxiliarNombre { get; set; }
+    public bool OperadoresModificadosManual { get; set; }
+    public string? MotivoCambioOperadores { get; set; }
+    public bool EsCambioMolde { get; set; }
+
     public string EstatusNombre => ProduccionEstatus.Nombre(EstatusID);
     public string EstatusClase => ProduccionEstatus.ClaseBadge(EstatusID);
 
@@ -387,30 +393,274 @@ public sealed class ProduccionBandejaVm
     public List<SelectListItem> Maquinas { get; set; } = new();
     public List<SelectListItem> Estatus { get; set; } = new();
 
-    public List<ProduccionProgramaDisponibleVm> ProgramasDisponibles { get; set; } = new();
-    public List<ProduccionEjecucionVm> Ejecuciones { get; set; } = new();
+    public List<ProduccionProgramaDisponibleVm> ProgramasDisponibles { get; set; }
+        = new();
 
-    public int TotalDisponibles => ProgramasDisponibles.Count;
+    public List<ProduccionProgramaDisponibleVm> ProximosAIniciar { get; set; }
+        = new();
 
-    public int Total => Ejecuciones.Count;
+    public List<ProduccionAlertaReprogramacionVm> AlertasReprogramacion { get; set; }
+        = new();
+
+    public List<ProduccionEjecucionVm> Ejecuciones { get; set; }
+        = new();
+
+    public int TotalDisponibles =>
+        ProgramasDisponibles.Count;
+
+    public int TotalProximosAIniciar =>
+        ProximosAIniciar.Count;
+
+    public int TotalAlertasReprogramacion =>
+        AlertasReprogramacion.Count;
+
+    public int TotalAlertasMuyRecientes =>
+        AlertasReprogramacion.Count(
+            x => x.EsMuyReciente);
+
+    public int TotalAlertasRecientes =>
+        AlertasReprogramacion.Count(
+            x => !x.EsMuyReciente);
+
+    public bool TieneProximosAIniciar =>
+        ProximosAIniciar.Count > 0;
+
+    public bool TieneAlertasReprogramacion =>
+        AlertasReprogramacion.Count > 0;
+
+    public int Total =>
+        Ejecuciones.Count;
 
     public int Pendientes =>
-        Ejecuciones.Count(x => x.EstatusID == ProduccionEstatus.Pendiente);
+        Ejecuciones.Count(
+            x => x.EstatusID == ProduccionEstatus.Pendiente);
 
     public int EnPreparacion =>
-        Ejecuciones.Count(x => x.EstatusID == ProduccionEstatus.EnPreparacion);
+        Ejecuciones.Count(
+            x => x.EstatusID == ProduccionEstatus.EnPreparacion);
 
     public int EnProduccion =>
-        Ejecuciones.Count(x => x.EstatusID == ProduccionEstatus.EnProduccion);
+        Ejecuciones.Count(
+            x => x.EstatusID == ProduccionEstatus.EnProduccion);
 
     public int Pausados =>
-        Ejecuciones.Count(x => x.EstatusID == ProduccionEstatus.Pausado);
+        Ejecuciones.Count(
+            x => x.EstatusID == ProduccionEstatus.Pausado);
 
     public int Terminados =>
-        Ejecuciones.Count(x =>
-            x.EstatusID == ProduccionEstatus.Terminado ||
-            x.EstatusID == ProduccionEstatus.TerminadoParcial);
+        Ejecuciones.Count(
+            x =>
+                x.EstatusID == ProduccionEstatus.Terminado ||
+                x.EstatusID == ProduccionEstatus.TerminadoParcial);
 }
+public sealed class ProduccionAlertaReprogramacionVm
+{
+    public int ReprogramacionHistorialID { get; set; }
+
+    public int ProgramaProduccionID { get; set; }
+
+    public int? ProgramaOrigenMovimientoID { get; set; }
+
+    public int? MaquinaAnteriorID { get; set; }
+    public string? MaquinaAnteriorCodigo { get; set; }
+    public string? MaquinaAnteriorNombre { get; set; }
+
+    public int? MaquinaNuevaID { get; set; }
+    public string? MaquinaNuevaCodigo { get; set; }
+    public string? MaquinaNuevaNombre { get; set; }
+
+    public DateTime? InicioAnterior { get; set; }
+    public DateTime? InicioNuevo { get; set; }
+
+    public DateTime? FinAnterior { get; set; }
+    public DateTime? FinNuevo { get; set; }
+
+    public TimeSpan? CambioAnterior { get; set; }
+    public TimeSpan? CambioNuevo { get; set; }
+
+    public TimeSpan? ArranqueAnterior { get; set; }
+    public TimeSpan? ArranqueNuevo { get; set; }
+
+    public string? NumeroParte { get; set; }
+    public string? ReferenciaSAP { get; set; }
+    public string? DescripcionParte { get; set; }
+    public string? MoldeCodigo { get; set; }
+
+    public string? TipoMovimiento { get; set; }
+
+    public bool EsMovimientoAutomatico { get; set; }
+
+    public string? Motivo { get; set; }
+
+    public int? UsuarioID { get; set; }
+
+    public string? UsuarioNombre { get; set; }
+
+    public DateTime FechaCambio { get; set; }
+
+    public bool EsMuyReciente =>
+        FechaCambio >= DateTime.Now.AddHours(-2);
+
+    public bool EsReciente =>
+        FechaCambio >= DateTime.Now.AddHours(-24);
+
+    public string NivelAlerta =>
+        EsMuyReciente
+            ? "MUY_RECIENTE"
+            : "RECIENTE";
+
+    public string FechaCambioTexto =>
+        FechaCambio.ToString("dd/MM/yyyy HH:mm");
+
+    public string TextoParte
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ReferenciaSAP))
+                return ReferenciaSAP;
+
+            if (!string.IsNullOrWhiteSpace(NumeroParte))
+                return NumeroParte;
+
+            return $"Programa {ProgramaProduccionID}";
+        }
+    }
+
+    public string TextoMaquinaAnterior
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(MaquinaAnteriorCodigo))
+                return "Sin máquina";
+
+            if (string.IsNullOrWhiteSpace(MaquinaAnteriorNombre))
+                return MaquinaAnteriorCodigo;
+
+            return $"{MaquinaAnteriorCodigo} - {MaquinaAnteriorNombre}";
+        }
+    }
+
+    public string TextoMaquinaNueva
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(MaquinaNuevaCodigo))
+                return "Sin máquina";
+
+            if (string.IsNullOrWhiteSpace(MaquinaNuevaNombre))
+                return MaquinaNuevaCodigo;
+
+            return $"{MaquinaNuevaCodigo} - {MaquinaNuevaNombre}";
+        }
+    }
+
+    public bool CambioMaquina =>
+        MaquinaAnteriorID != MaquinaNuevaID;
+
+    public bool CambioInicio =>
+        InicioAnterior != InicioNuevo;
+
+    public bool CambioFin =>
+        FinAnterior != FinNuevo;
+
+    public bool CambioHorario =>
+        CambioInicio || CambioFin;
+
+    public string Titulo
+    {
+        get
+        {
+            if (EsMovimientoAutomatico)
+                return "Programa recorrido automáticamente";
+
+            if (CambioMaquina)
+                return "Programa cambiado de máquina";
+
+            if (CambioHorario)
+                return "Programa reprogramado";
+
+            return "Programación actualizada";
+        }
+    }
+
+    public string Mensaje
+    {
+        get
+        {
+            var cambios = new List<string>();
+
+            if (CambioMaquina)
+            {
+                cambios.Add(
+                    $"Máquina: {TextoMaquinaAnterior} → " +
+                    $"{TextoMaquinaNueva}");
+            }
+
+            if (CambioInicio)
+            {
+                cambios.Add(
+                    $"Inicio: {FormatearFecha(InicioAnterior)} → " +
+                    $"{FormatearFecha(InicioNuevo)}");
+            }
+
+            if (CambioFin)
+            {
+                cambios.Add(
+                    $"Fin: {FormatearFecha(FinAnterior)} → " +
+                    $"{FormatearFecha(FinNuevo)}");
+            }
+
+            if (CambiosCambioMolde())
+            {
+                cambios.Add(
+                    $"Cambio de molde: " +
+                    $"{FormatearHora(CambioAnterior)} → " +
+                    $"{FormatearHora(CambioNuevo)}");
+            }
+
+            if (CambiosArranque())
+            {
+                cambios.Add(
+                    $"Arranque: " +
+                    $"{FormatearHora(ArranqueAnterior)} → " +
+                    $"{FormatearHora(ArranqueNuevo)}");
+            }
+
+            if (cambios.Count == 0)
+            {
+                cambios.Add(
+                    "Se actualizó la programación.");
+            }
+
+            return string.Join(" · ", cambios);
+        }
+    }
+
+    private bool CambiosCambioMolde()
+    {
+        return CambioAnterior != CambioNuevo;
+    }
+
+    private bool CambiosArranque()
+    {
+        return ArranqueAnterior != ArranqueNuevo;
+    }
+
+    private static string FormatearFecha(DateTime? fecha)
+    {
+        return fecha.HasValue
+            ? fecha.Value.ToString("dd/MM/yyyy HH:mm")
+            : "Sin fecha";
+    }
+
+    private static string FormatearHora(TimeSpan? hora)
+    {
+        return hora.HasValue
+            ? hora.Value.ToString(@"hh\:mm")
+            : "Sin hora";
+    }
+}
+
 
 public sealed class ProduccionDetalleVm
 {
@@ -445,6 +695,12 @@ public sealed class ProduccionDetalleVm
     public ProduccionCalidadResumenVm? CalidadResumen { get; set; }
 
     public List<ProduccionRecepcionOFVm> RecepcionesOF { get; set; } = new();
+
+    public ProduccionMonitoreoTurnoAvisoVm? MonitoreoTurnoActual { get; set; }
+
+    public bool MostrarAvisoMonitoreoTurno =>
+        MonitoreoTurnoActual?.ChecklistPendiente == true;
+
 }
 
 public sealed class ProduccionIniciarRequestVm
@@ -522,6 +778,7 @@ public sealed class ProduccionOperadorTabletVm
     public int EstatusID { get; set; }
     public string EstatusNombre => ProduccionEstatus.Nombre(EstatusID);
     public string EstatusClase => ProduccionEstatus.ClaseBadge(EstatusID);
+    public List<ProduccionCapturaHoraFilaVm> HorasCaptura { get; set; } = new();
 
     public DateTime FechaProduccion { get; set; } = DateTime.Today;
     public TimeSpan HoraInicioSugerida { get; set; }
@@ -547,6 +804,57 @@ public sealed class ProduccionOperadorTabletVm
     }
 }
 
+public sealed class ProduccionCapturaHoraFilaVm
+{
+    public int NumeroHora { get; set; }
+
+    public DateTime FechaProduccion { get; set; }
+
+    public TimeSpan HoraInicio { get; set; }
+
+    public TimeSpan HoraFin { get; set; }
+
+    public int CantidadOK { get; set; }
+
+    public int CantidadSospechosa { get; set; }
+
+    public int CantidadScrap { get; set; }
+
+    public string? Observaciones { get; set; }
+
+    public bool Capturada { get; set; }
+
+    public bool Disponible { get; set; }
+
+    public bool Vencida { get; set; }
+
+    public int? RegistroHoraID { get; set; }
+
+    public string RangoHora =>
+        $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
+
+    public string EstadoTexto
+    {
+        get
+        {
+            if (Capturada) return "Capturada";
+            if (Vencida) return "Pendiente vencida";
+            if (Disponible) return "Disponible";
+            return "Próxima";
+        }
+    }
+
+    public string EstadoClase
+    {
+        get
+        {
+            if (Capturada) return "bg-success";
+            if (Vencida) return "bg-danger";
+            if (Disponible) return "bg-warning text-dark";
+            return "bg-secondary";
+        }
+    }
+}
 public sealed class ProduccionRecepcionOFVm
 {
     public int RecepcionOFID { get; set; }
@@ -673,7 +981,6 @@ public static class ProduccionChecklistEstatus
 public sealed class ProduccionChecklistArranqueVm
 {
     public int ChecklistArranqueID { get; set; }
-
     public int EjecucionProduccionID { get; set; }
     public int ProgramaProduccionID { get; set; }
     public int? SolicitudProduccionID { get; set; }
@@ -682,6 +989,7 @@ public sealed class ProduccionChecklistArranqueVm
     public int? ReleaseDetalleID { get; set; }
 
     public DateTime FechaChecklist { get; set; } = DateTime.Now;
+    public DateTime? FechaOperacion { get; set; }
 
     public int? MaquinaID { get; set; }
     public string? MaquinaCodigo { get; set; }
@@ -695,14 +1003,21 @@ public sealed class ProduccionChecklistArranqueVm
     public string? ReferenciaSAP { get; set; }
     public string? DescripcionParte { get; set; }
 
-    public string CodigoFormato { get; set; } = "GQ-F-PR01-06";
-    public string? VersionFormato { get; set; } = "Ver.10";
+    public string CodigoFormato { get; set; } = string.Empty;
+    public string? VersionFormato { get; set; }
+    public string TipoChecklist { get; set; } = string.Empty;
+    public string MomentoProceso { get; set; } = string.Empty;
+
+    public int? TurnoID { get; set; }
+    public string? TurnoNombre { get; set; }
+    public int NumeroAplicacion { get; set; } = 1;
+    public bool EsRecurrente { get; set; }
+    public bool RequiereCambioMolde { get; set; }
 
     public int EstatusID { get; set; } = ProduccionChecklistEstatus.PendienteProduccion;
 
     public int? UsuarioProduccionID { get; set; }
     public DateTime? FechaCapturaProduccion { get; set; }
-
     public int? UsuarioCalidadID { get; set; }
     public DateTime? FechaValidacionCalidad { get; set; }
 
@@ -715,169 +1030,168 @@ public sealed class ProduccionChecklistArranqueVm
     public DateTime? FechaModificacion { get; set; }
     public bool Activo { get; set; } = true;
 
-    // Estado del proceso relacionado en Calidad.
     public int? CalidadInspeccionID { get; set; }
     public string? CalidadEstado { get; set; }
     public string? CalidadMotivoDevolucion { get; set; }
     public DateTime? FechaNotificacionCalidad { get; set; }
     public DateTime? FechaLiberacionCalidad { get; set; }
 
-    public bool TieneProcesoCalidad => CalidadInspeccionID.HasValue;
-    public bool ProduccionLiberadaPorCalidad =>
-        string.Equals(CalidadEstado, CalidadEstados.ProduccionLiberada, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(CalidadEstado, CalidadEstados.MonitoreoActivo, StringComparison.OrdinalIgnoreCase);
+    public int? TecnicoEntregaPersonaID { get; set; }
+    public string? TecnicoEntregaNombre { get; set; }
+    public DateTime? FechaEntregaTurno { get; set; }
+
+    public int? TecnicoRecibePersonaID { get; set; }
+    public string? TecnicoRecibeNombre { get; set; }
+    public DateTime? FechaRecepcionTurno { get; set; }
+
+    public List<ProduccionMonitoreoPerifericoProblemaVm> ProblemasPerifericos { get; set; } = new();
 
     public List<ProduccionChecklistSeccionVm> Secciones { get; set; } = new();
 
+    public bool TieneProcesoCalidad => CalidadInspeccionID.HasValue;
+    public bool ProduccionLiberadaPorCalidad => string.Equals(CalidadEstado, CalidadEstados.ProduccionLiberada, StringComparison.OrdinalIgnoreCase) || string.Equals(CalidadEstado, CalidadEstados.MonitoreoActivo, StringComparison.OrdinalIgnoreCase);
+
     public string EstatusNombre => ProduccionChecklistEstatus.Nombre(EstatusID);
     public string EstatusClase => ProduccionChecklistEstatus.ClaseBadge(EstatusID);
+    public bool PuedeEditarProduccion => ProduccionChecklistEstatus.PuedeEditarProduccion(EstatusID);
+    public bool PuedeValidarCalidad => ProduccionChecklistEstatus.PuedeValidarCalidad(EstatusID);
+    public bool EstaLiberadoParaSerie => ProduccionChecklistEstatus.EstaLiberadoParaSerie(EstatusID);
 
-    public bool PuedeEditarProduccion =>
-        ProduccionChecklistEstatus.PuedeEditarProduccion(EstatusID);
+    public int TotalPreguntas => Secciones.Sum(x => x.Preguntas.Count(p => p.Activo));
+    public int TotalRespondidas => Secciones.Sum(x => x.Preguntas.Count(p => p.Activo && p.Confirmado));
+    public int TotalPendientes => Math.Max(0, TotalPreguntas - TotalRespondidas);
+    public int TotalOK => Secciones.Sum(x => x.Preguntas.Count(p => p.Activo && p.Confirmado && p.Resultado == "OK"));
+    public int TotalNOK => Secciones.Sum(x => x.Preguntas.Count(p => p.Activo && p.Confirmado && p.Resultado == "NOK"));
+    public int TotalNA => Secciones.Sum(x => x.Preguntas.Count(p => p.Activo && p.Confirmado && p.Resultado == "NA"));
+    public bool TieneNOK => TotalNOK > 0;
+    public bool EstaCompletoProduccion => TotalPreguntas > 0 && TotalPendientes == 0;
 
-    public bool PuedeValidarCalidad =>
-        ProduccionChecklistEstatus.PuedeValidarCalidad(EstatusID);
-
-    public bool EstaLiberadoParaSerie =>
-        ProduccionChecklistEstatus.EstaLiberadoParaSerie(EstatusID);
-
-    public int TotalPreguntas =>
-        Secciones.Sum(x => x.Preguntas.Count);
-
-    public int TotalRespondidas =>
-        Secciones.Sum(x => x.Preguntas.Count(p => !string.IsNullOrWhiteSpace(p.Resultado)));
-
-    public int TotalOK =>
-        Secciones.Sum(x => x.Preguntas.Count(p => p.Resultado == "OK"));
-
-    public int TotalNOK =>
-        Secciones.Sum(x => x.Preguntas.Count(p => p.Resultado == "NOK"));
-
-    public int TotalNA =>
-        Secciones.Sum(x => x.Preguntas.Count(p => p.Resultado == "NA"));
-
-    public bool TieneNOK =>
-        TotalNOK > 0;
-
-    public bool EstaCompletoProduccion
-    {
-        get
-        {
-            var preguntasProduccion = Secciones
-                .Where(x =>
-                    !x.EsSeccionCalidad)
-                .SelectMany(x => x.Preguntas)
-                .Where(x => x.Activo)
-                .ToList();
-
-            if (!preguntasProduccion.Any())
-                return false;
-
-            return preguntasProduccion.All(x =>
-                !string.IsNullOrWhiteSpace(x.Resultado));
-        }
-    }
-
-    public string TextoMaquina =>
-        string.IsNullOrWhiteSpace(MaquinaCodigo)
-            ? "Sin máquina"
-            : $"{MaquinaCodigo} - {MaquinaNombre}";
+    public string TextoMaquina => string.IsNullOrWhiteSpace(MaquinaCodigo) ? "Sin máquina" : $"{MaquinaCodigo} - {MaquinaNombre}";
+    public string TextoFormato => string.IsNullOrWhiteSpace(VersionFormato) ? CodigoFormato : $"{CodigoFormato} {VersionFormato}";
+    public string TextoTurno => TurnoID.HasValue ? $"{TurnoID} - {TurnoNombre}" : "No aplica";
 
     public string TextoParte
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(ReferenciaSAP))
-                return ReferenciaSAP;
-
-            if (!string.IsNullOrWhiteSpace(NumeroParte))
-                return NumeroParte;
-
+            if (!string.IsNullOrWhiteSpace(ReferenciaSAP)) return ReferenciaSAP;
+            if (!string.IsNullOrWhiteSpace(NumeroParte)) return NumeroParte;
             return "Sin parte";
         }
     }
 
-    public string TextoFormato =>
-        string.IsNullOrWhiteSpace(VersionFormato)
-            ? CodigoFormato
-            : $"{CodigoFormato} {VersionFormato}";
+    public string TituloChecklist
+    {
+        get
+        {
+            return TipoChecklist switch
+            {
+                "CAMBIO_MOLDE" => "Desmontaje y montaje de molde",
+                "MONITOREO_PARAMETROS" => "Monitoreo de parámetros",
+                "MONITOREO_PERIFERICOS" => "Monitoreo de periféricos",
+                _ => "Checklist de arranque y liberación de máquina"
+            };
+        }
+    }
+}
+
+public class ProduccionMonitoreoTurnoAvisoVm
+{
+    public int ChecklistArranqueID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int TurnoID { get; set; }
+    public string TurnoNombre { get; set; } = string.Empty;
+    public DateTime FechaOperacion { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? MaquinaNombre { get; set; }
+    public int EstatusID { get; set; }
+    public int TotalPreguntas { get; set; }
+    public int TotalConfirmadas { get; set; }
+    public bool EntregaTurnoRegistrada { get; set; }
+
+    public bool ChecklistPendiente =>
+        TotalPreguntas == 0 ||
+        TotalConfirmadas < TotalPreguntas ||
+        !EntregaTurnoRegistrada;
+
+    public decimal PorcentajeAvance =>
+        TotalPreguntas > 0
+            ? Math.Round((decimal)TotalConfirmadas * 100m / TotalPreguntas, 2)
+            : 0m;
 }
 
 public sealed class ProduccionChecklistSeccionVm
 {
     public string Seccion { get; set; } = string.Empty;
     public int OrdenSeccion { get; set; }
-
     public string? ResponsableSugerido { get; set; }
-
     public List<ProduccionChecklistPreguntaVm> Preguntas { get; set; } = new();
 
-    public bool EsSeccionCalidad =>
-        Seccion.Contains("CALIDAD", StringComparison.OrdinalIgnoreCase) ||
-        (ResponsableSugerido?.Contains("CALIDAD", StringComparison.OrdinalIgnoreCase) ?? false);
+    public bool EsSeccionCalidad => Preguntas.Any(x => x.EsPreguntaCalidad) || Seccion.Contains("CALIDAD", StringComparison.OrdinalIgnoreCase) || (ResponsableSugerido?.Contains("CALIDAD", StringComparison.OrdinalIgnoreCase) ?? false);
 
-    public int TotalPreguntas =>
-        Preguntas.Count;
-
-    public int TotalRespondidas =>
-        Preguntas.Count(x => !string.IsNullOrWhiteSpace(x.Resultado));
-
-    public int TotalNOK =>
-        Preguntas.Count(x => x.Resultado == "NOK");
-
-    public bool EstaCompleta =>
-        Preguntas.All(x => !string.IsNullOrWhiteSpace(x.Resultado));
+    public int TotalPreguntas => Preguntas.Count(x => x.Activo);
+    public int TotalRespondidas => Preguntas.Count(x => x.Activo && x.Confirmado);
+    public int TotalPendientes => Math.Max(0, TotalPreguntas - TotalRespondidas);
+    public int TotalNOK => Preguntas.Count(x => x.Activo && x.Confirmado && x.Resultado == "NOK");
+    public int TotalNA => Preguntas.Count(x => x.Activo && x.Confirmado && x.Resultado == "NA");
+    public bool EstaCompleta => TotalPreguntas > 0 && TotalPendientes == 0;
 }
 
 public sealed class ProduccionChecklistPreguntaVm
 {
     public int ChecklistArranqueDetalleID { get; set; }
     public int ChecklistArranqueID { get; set; }
-
     public int PreguntaID { get; set; }
 
-    public string CodigoFormato { get; set; } = "GQ-F-PR01-06";
-    public string? VersionFormato { get; set; } = "Ver.10";
+    public string CodigoFormato { get; set; } = string.Empty;
+    public string? VersionFormato { get; set; }
+    public string TipoChecklist { get; set; } = string.Empty;
+    public string MomentoProceso { get; set; } = string.Empty;
+    public string TipoRespuesta { get; set; } = "ESTADO";
+    public string EstadoPredeterminado { get; set; } = "OK";
 
     public string Seccion { get; set; } = string.Empty;
     public int OrdenSeccion { get; set; }
     public int OrdenPregunta { get; set; }
-
     public string TextoPregunta { get; set; } = string.Empty;
 
     public string? ResponsableSugerido { get; set; }
+    public string? GrupoResponsable { get; set; }
 
     public bool RequiereObservacionSiNOK { get; set; } = true;
+    public bool RequiereObservacionSiNA { get; set; } = true;
+    public bool EsPreguntaCalidad { get; set; }
+    public bool EsRecurrente { get; set; }
 
     public string? Resultado { get; set; }
-
     public string? Observaciones { get; set; }
+    public bool Confirmado { get; set; }
+
+    public string? ValorCapturado { get; set; }
+    public string? Unidad { get; set; }
+    public string? Especificacion { get; set; }
+    public string? Tolerancia { get; set; }
 
     public int? UsuarioRespuestaID { get; set; }
     public DateTime? FechaRespuesta { get; set; }
-
     public bool Activo { get; set; } = true;
 
-    public bool EsOK => Resultado == "OK";
-    public bool EsNOK => Resultado == "NOK";
-    public bool EsNA => Resultado == "NA";
-
-    public bool RequiereObservacion =>
-        Resultado == "NOK" && RequiereObservacionSiNOK;
-
-    public bool TieneErrorCaptura =>
-        RequiereObservacion &&
-        string.IsNullOrWhiteSpace(Observaciones);
+    public bool EsOK => Confirmado && Resultado == "OK";
+    public bool EsNOK => Confirmado && Resultado == "NOK";
+    public bool EsNA => Confirmado && Resultado == "NA";
+    public bool RequiereCapturarValor => TipoRespuesta == "NUMERICO" || TipoRespuesta == "ESTADO_Y_VALOR";
+    public bool RequiereObservacion => Confirmado && ((Resultado == "NOK" && RequiereObservacionSiNOK) || (Resultado == "NA" && RequiereObservacionSiNA));
+    public bool TieneErrorCaptura => !Confirmado || (RequiereObservacion && string.IsNullOrWhiteSpace(Observaciones)) || (RequiereCapturarValor && string.IsNullOrWhiteSpace(ValorCapturado));
 
     public string ResultadoTexto
     {
         get
         {
+            if (!Confirmado) return "Pendiente";
             if (Resultado == "OK") return "OK";
             if (Resultado == "NOK") return "NOK";
             if (Resultado == "NA") return "N/A";
-
-            return "Sin respuesta";
+            return "Pendiente";
         }
     }
 
@@ -885,10 +1199,10 @@ public sealed class ProduccionChecklistPreguntaVm
     {
         get
         {
+            if (!Confirmado) return "bg-warning text-dark";
             if (Resultado == "OK") return "bg-success";
             if (Resultado == "NOK") return "bg-danger";
             if (Resultado == "NA") return "bg-secondary";
-
             return "bg-light text-dark border";
         }
     }
@@ -913,10 +1227,10 @@ public sealed class ProduccionChecklistRespuestaPostVm
 {
     public int ChecklistArranqueDetalleID { get; set; }
     public int PreguntaID { get; set; }
-
     public string? Resultado { get; set; }
-
     public string? Observaciones { get; set; }
+    public bool Confirmado { get; set; }
+    public string? ValorCapturado { get; set; }
 }
 
 public sealed class ProduccionChecklistValidacionCalidadVm
@@ -1116,7 +1430,80 @@ public sealed class ProduccionProgramaDisponibleVm
         MaquinaID.HasValue &&
         CantidadProgramada.HasValue &&
         CantidadProgramada.Value > 0;
+
+    public int MinutosParaIniciar
+    {
+        get
+        {
+            if (!FechaInicioProgramada.HasValue)
+                return 0;
+
+            return (int)Math.Ceiling(
+                (FechaInicioProgramada.Value - DateTime.Now)
+                .TotalMinutes);
+        }
+    }
+
+    public string TextoInicioProximo
+    {
+        get
+        {
+            if (!FechaInicioProgramada.HasValue)
+                return "Sin horario programado";
+
+            var minutos = MinutosParaIniciar;
+
+            if (minutos < 0)
+                return $"Inicio vencido hace {Math.Abs(minutos)} min";
+
+            if (minutos == 0)
+                return "Debe iniciar ahora";
+
+            if (minutos == 1)
+                return "Inicia en 1 minuto";
+
+            return $"Inicia en {minutos} minutos";
+        }
+    }
 }
+
+public class ProduccionMonitoreoPerifericoProblemaVm
+{
+    public int MonitoreoPerifericoProblemaID { get; set; }
+    public int ChecklistArranqueID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public DateTime FechaOperacion { get; set; }
+    public int TurnoID { get; set; }
+    public string? TurnoNombre { get; set; }
+    public int? MaquinaID { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? MaquinaNombre { get; set; }
+    public string DescripcionFalla { get; set; } = string.Empty;
+    public string? CausaRaiz { get; set; }
+    public string? Acciones { get; set; }
+    public bool Solucionado { get; set; }
+    public DateTime? FechaSolucion { get; set; }
+    public int? UsuarioSolucionID { get; set; }
+    public string? UsuarioSolucionNombre { get; set; }
+}
+
+public class ProduccionMonitoreoPerifericoProblemaPostVm
+{
+    public int MonitoreoPerifericoProblemaID { get; set; }
+    public int ChecklistArranqueID { get; set; }
+    public string DescripcionFalla { get; set; } = string.Empty;
+    public string? CausaRaiz { get; set; }
+    public string? Acciones { get; set; }
+    public bool Solucionado { get; set; }
+}
+
+public class ProduccionEntregaTurnoPerifericosPostVm
+{
+    public int ChecklistArranqueID { get; set; }
+    public int? TecnicoRecibePersonaID { get; set; }
+    public string? TecnicoRecibeNombre { get; set; }
+}
+
 
 public sealed class ProduccionOperadorCajasVm
 {

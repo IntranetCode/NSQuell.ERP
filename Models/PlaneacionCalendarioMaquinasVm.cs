@@ -192,16 +192,9 @@ namespace ERP.NSQuell.Models
         public int EstatusID { get; set; }
         public int Carril { get; set; }
 
-        /// <summary>
-        /// Indica que Producción está realmente en estado En producción.
-        /// Ya no se activa solamente por estar dentro del horario teórico.
-        /// </summary>
         public bool EstaEnLinea { get; set; }
 
-        /// <summary>
-        /// Solo sirve como referencia visual del calendario.
-        /// No bloquea por sí sola el movimiento del programa.
-        /// </summary>
+
         public bool DentroHorarioProgramado { get; set; }
 
         public int? MaquinaPrincipalID { get; set; }
@@ -233,6 +226,11 @@ namespace ERP.NSQuell.Models
         public string EstadoCalidad { get; set; }
         public bool ConfiguracionCalidadInvalidada { get; set; }
         public bool RequiereReliberacion { get; set; }
+
+        public bool MostrarAlertaNoInicio { get; set; }
+        public bool AlertaNoInicioCritica { get; set; }
+        public int MinutosAtrasoInicio { get; set; }
+        public string TextoAlertaNoInicio { get; set; } = string.Empty;
 
         public bool TieneOperadorProgramado =>
             OperadorProgramadoID.HasValue &&

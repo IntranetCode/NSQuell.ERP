@@ -473,8 +473,8 @@ ORDER BY r.FechaCreacion DESC;";
 
                         switch (excelTemplate)
                         {
-                            case ReleaseExcelTemplate.GoldenWeeklyMatrix:
-                                await ImportarDocumentoGoldenSeguroAsync(bytes, item, usuarioId);
+                            case ReleaseExcelTemplate.GoldeWeeklyMatrix:
+                                await ImportarDocumentoGoldeSeguroAsync(bytes, item, usuarioId);
                                 break;
 
                             case ReleaseExcelTemplate.NormaWeeklyMatrix:
@@ -487,7 +487,7 @@ ORDER BY r.FechaCreacion DESC;";
 
                             default:
                                 item.Estado = "NO_SOPORTADO";
-                                item.Mensaje = "El Excel original fue conservado, pero no se reconocio su estructura. Actualmente se detectan las matrices GOLDEN, NORMA y AIR THERMAL.";
+                                item.Mensaje = "El Excel original fue conservado, pero no se reconocio su estructura. Actualmente se detectan las matrices GOLDE, NORMA y AIR THERMAL.";
                                 break;
                         }
 
@@ -495,7 +495,7 @@ ORDER BY r.FechaCreacion DESC;";
                     }
 
                     item.Estado = "NO_SOPORTADO";
-                    item.Mensaje = "El archivo original fue conservado. Actualmente se admiten PDF HUF/VERITAS y Excel GOLDEN/NORMA/AIR THERMAL; CSV y otras plantillas quedan pendientes.";
+                    item.Mensaje = "El archivo original fue conservado. Actualmente se admiten PDF HUF/VERITAS y Excel GOLDE/NORMA/AIR THERMAL; CSV y otras plantillas quedan pendientes.";
                 }
                 catch (Exception ex)
                 {
@@ -843,7 +843,7 @@ ORDER BY r.FechaCreacion DESC;";
             }
         }
 
-        // RELEASE_EXCEL_GOLDEN_NORMA_V1_4
+        // RELEASE_EXCEL_GOLDE_NORMA_V1_4
         // RELEASE_EXCEL_AIR_THERMAL_V1_8
         private async Task ImportarDocumentoAirThermalSeguroAsync(
             byte[] bytes,
@@ -859,12 +859,12 @@ ORDER BY r.FechaCreacion DESC;";
                 item,
                 usuarioId);
         }
-        private async Task ImportarDocumentoGoldenSeguroAsync(
+        private async Task ImportarDocumentoGoldeSeguroAsync(
             byte[] bytes,
             PlaneacionReleaseImportacionArchivoVm item,
             int usuarioId)
         {
-            var document = ReleaseExcelDocumentDetector.ParseGolden(bytes);
+            var document = ReleaseExcelDocumentDetector.ParseGolde(bytes, item.Archivo);
             await ImportarDocumentoExcelMatrizSeguroAsync(document, item, usuarioId);
         }
 
@@ -888,7 +888,7 @@ ORDER BY r.FechaCreacion DESC;";
                 : $"{document.Rows.Count} partes";
             item.Descripcion = document.TemplateCode switch
             {
-                "GOLDEN_WEEKLY_RELEASE" => "Matriz semanal GOLDEN",
+                "GOLDEN_WEEKLY_RELEASE" => "Matriz semanal GOLDE",
                 "NORMA_WEEKLY_RELEASE" => "Matriz semanal NORMA",
                 "AIR_THERMAL_MATERIAL_RELEASE" => "Material Release AIR THERMAL",
                 _ => "Release Excel"
@@ -933,11 +933,17 @@ ORDER BY r.FechaCreacion DESC;";
                             clienteId.Value,
                             cn,
                             tx)
-                        : await BuscarParteImportacionIncluyendoInactivasAsync(
-                            row.PartNumber,
-                            clienteId.Value,
-                            cn,
-                            tx);
+                        : EsPlantillaGolde(document.TemplateCode)
+                            ? await BuscarParteGoldeIncluyendoRevisionesAsync(
+                                row.PartNumber,
+                                clienteId.Value,
+                                cn,
+                                tx)
+                            : await BuscarParteImportacionIncluyendoInactivasAsync(
+                                row.PartNumber,
+                                clienteId.Value,
+                                cn,
+                                tx);
 
                     if (match == null)
                     {
@@ -1014,7 +1020,7 @@ ORDER BY r.FechaCreacion DESC;";
                         UnidadMedidaCliente = sourceRow.Uom,
                         ContratoCliente = sourceRow.SourceReference,
                         Observaciones = parteId.HasValue
-                            ? $"Importado automaticamente desde {document.TemplateCode}."
+                            ? $"Importado automaticamente desde {NombrePlantillaExcel(document.TemplateCode)}."
                             : $"Referencia original {sourceRow.PartNumber}; pendiente de vincular parte activa.",
                         Entregas = sourceRow.Deliveries
                             .OrderBy(x => x.RequiredDate)
@@ -1047,8 +1053,8 @@ ORDER BY r.FechaCreacion DESC;";
                 item.RequiereVinculacion = tienePendientes;
                 item.Estado = tienePendientes ? "PENDIENTE" : "CREADO";
                 item.Mensaje = tienePendientes
-                    ? $"Release {document.TemplateCode} conservado en estado Capturado. Vincula las partes faltantes antes de incorporarlo a Planeacion."
-                    : $"Release {document.TemplateCode} creado, vinculado al cliente y calculado correctamente.";
+                    ? $"Release {NombrePlantillaExcel(document.TemplateCode)} conservado en estado Capturado. Vincula las partes faltantes antes de incorporarlo a Planeacion."
+                    : $"Release {NombrePlantillaExcel(document.TemplateCode)} creado, vinculado al cliente y calculado correctamente.";
             }
             catch
             {
@@ -1057,6 +1063,16 @@ ORDER BY r.FechaCreacion DESC;";
             }
         }
 
+        private static string NombrePlantillaExcel(string templateCode)
+        {
+            return templateCode switch
+            {
+                "GOLDEN_WEEKLY_RELEASE" => "GOLDE",
+                "NORMA_WEEKLY_RELEASE" => "NORMA",
+                "AIR_THERMAL_MATERIAL_RELEASE" => "AIR THERMAL",
+                _ => templateCode
+            };
+        }
         private static async Task<int?> ObtenerClienteExcelParaImportacionAsync(
             string templateCode,
             SqlConnection cn,
@@ -5416,7 +5432,7 @@ WHERE ClienteID = @ClienteID
 
                     ReleaseExcelDocument? parsed = template switch
                     {
-                        ReleaseExcelTemplate.GoldenWeeklyMatrix => ReleaseExcelDocumentDetector.ParseGolden(bytes),
+                        ReleaseExcelTemplate.GoldeWeeklyMatrix => ReleaseExcelDocumentDetector.ParseGolde(bytes, documento.Archivo),
                         ReleaseExcelTemplate.NormaWeeklyMatrix => ReleaseExcelDocumentDetector.ParseNorma(bytes),
                         ReleaseExcelTemplate.AirThermalMaterialRelease => ReleaseExcelDocumentDetector.ParseAirThermal(bytes, documento.Archivo),
                         _ => null
@@ -5425,7 +5441,7 @@ WHERE ClienteID = @ClienteID
                     if (parsed == null)
                     {
                         documento.Estado = ReleaseValidacionEstados.NoSoportado;
-                        documento.Mensaje = "Excel no soportado. Se reconocen GOLDEN, NORMA y AIR THERMAL.";
+                        documento.Mensaje = "Excel no soportado. Se reconocen GOLDE, NORMA y AIR THERMAL.";
                     }
                     else
                     {
@@ -5665,8 +5681,11 @@ WHERE ClienteID = @ClienteID
                 var match = parsed.TemplateCode == "AIR_THERMAL_MATERIAL_RELEASE"
                     ? await BuscarParteAirThermalIncluyendoRevisionesAsync(
                         sourceRow.PartNumber, clienteId.Value, cn, tx)
-                    : await BuscarParteImportacionIncluyendoInactivasAsync(
-                        sourceRow.PartNumber, clienteId.Value, cn, tx);
+                    : EsPlantillaGolde(parsed.TemplateCode)
+                        ? await BuscarParteGoldeIncluyendoRevisionesAsync(
+                            sourceRow.PartNumber, clienteId.Value, cn, tx)
+                        : await BuscarParteImportacionIncluyendoInactivasAsync(
+                            sourceRow.PartNumber, clienteId.Value, cn, tx);
 
                 vm.Renglones.Add(new PlaneacionReleaseRenglonCrearVm
                 {

@@ -1511,10 +1511,132 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                 nameof(Detalle),
                 new { id = model.SolicitudGP12ID });
         }
-
-        // =========================================================
-        // ASIGNACIÓN DE PERSONAL
-        // =========================================================
+        private static async Task LiberarCajaOrigenCalidadAsync(int solicitudGP12Id, decimal cantidadOK, string? observaciones, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sqlOrigen = @"
+SELECT TOP (1)
+    s.CajaProduccionID,
+    s.CajaLiberadaID,
+    s.CalidadInspeccionID,
+    s.CantidadSolicitada,
+    s.Origen,
+    c.FolioCaja
+FROM dbo.GP12_Solicitudes s WITH (UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.Calidad_CajasLiberadas c
+    ON c.CajaLiberadaID=s.CajaLiberadaID
+   AND c.Activo=1
+WHERE s.SolicitudGP12ID=@SolicitudGP12ID
+  AND s.Activo=1;";
+            long? cajaProduccionId;
+            int? cajaLiberadaId;
+            int? inspeccionId;
+            decimal cantidadSolicitada;
+            string origen;
+            string folioCaja;
+            await using (var cmd = new SqlCommand(sqlOrigen, cn, tx))
+            {
+                cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12Id;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (!await rd.ReadAsync()) throw new InvalidOperationException("No se encontró la solicitud GP12.");
+                cajaProduccionId = rd["CajaProduccionID"] == DBNull.Value ? null : Convert.ToInt64(rd["CajaProduccionID"]);
+                cajaLiberadaId = rd["CajaLiberadaID"] == DBNull.Value ? null : Convert.ToInt32(rd["CajaLiberadaID"]);
+                inspeccionId = rd["CalidadInspeccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["CalidadInspeccionID"]);
+                cantidadSolicitada = Convert.ToDecimal(rd["CantidadSolicitada"]);
+                origen = rd["Origen"]?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty;
+                folioCaja = rd["FolioCaja"] == DBNull.Value ? string.Empty : rd["FolioCaja"].ToString()?.Trim() ?? string.Empty;
+            }
+            if (origen != GP12Origen.Calidad) return;
+            if (!cajaProduccionId.HasValue || cajaProduccionId.Value <= 0) throw new InvalidOperationException("La solicitud GP12 proveniente de Calidad no tiene CajaProduccionID.");
+            if (!cajaLiberadaId.HasValue || cajaLiberadaId.Value <= 0) throw new InvalidOperationException("La solicitud GP12 proveniente de Calidad no tiene CajaLiberadaID.");
+            if (!inspeccionId.HasValue || inspeccionId.Value <= 0) throw new InvalidOperationException("La solicitud GP12 proveniente de Calidad no tiene CalidadInspeccionID.");
+            if (cantidadOK <= 0) throw new InvalidOperationException("La cantidad liberada por GP12 debe ser mayor que cero.");
+            if (cantidadOK != cantidadSolicitada) throw new InvalidOperationException($"Para liberar la caja completa desde GP12 deben quedar conformes las {cantidadSolicitada:N0} pieza(s).");
+            const string sql = @"
+DECLARE @EstadoCajaActual INT;
+SELECT @EstadoCajaActual=EstadoCajaID
+FROM dbo.Produccion_Cajas WITH (UPDLOCK,HOLDLOCK)
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1;
+IF @EstadoCajaActual IS NULL
+    THROW 51200,'No se encontró la caja activa de Producción.',1;
+IF @EstadoCajaActual IN (@SalidaProduccion,@RecibidaAlmacen)
+    THROW 51201,'La caja ya salió de Producción o fue recibida en Almacén.',1;
+UPDATE dbo.Calidad_CajasLiberadas
+SET EtiquetaLiberacion=N'VERDE',
+    Destino=N'ALMACEN',
+    Estado=N'LIBERADA',
+    FechaValidacionCalidad=@Ahora,
+    UsuarioValidacionCalidadID=@UsuarioID,
+    Observaciones=CASE
+        WHEN @Observaciones IS NULL THEN
+            CASE WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N''
+                THEN N'Caja liberada por GP12. Pendiente escaneo de salida en Producción hacia Almacén PT.'
+                ELSE Observaciones+CHAR(13)+CHAR(10)+N'Caja liberada por GP12. Pendiente escaneo de salida en Producción hacia Almacén PT.'
+            END
+        WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observaciones
+        ELSE Observaciones+CHAR(13)+CHAR(10)+@Observaciones
+    END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE CajaLiberadaID=@CajaLiberadaID
+  AND Activo=1;
+IF @@ROWCOUNT<>1
+    THROW 51202,'No fue posible actualizar la caja registrada en Calidad.',1;
+UPDATE dbo.Produccion_Cajas
+SET EstadoCajaID=@ZonaVerde,
+    EstadoCajaNombre=@NombreZonaVerde,
+    EstatusCalidad=N'LIBERADA',
+    ResultadoCalidad=N'LIBERADA_GP12',
+    MotivoCalidad=NULL,
+    EtiquetaVerde=1,
+    FechaLiberacionCalidad=@Ahora,
+    UsuarioLiberacionCalidadID=@UsuarioID,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1;
+IF @@ROWCOUNT<>1
+    THROW 51203,'No fue posible regresar la caja liberada a Producción.',1;
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    N'GP12_LIBERADO',
+    NULL,
+    NULL,
+    N'LIBERADA_GP12',
+    N'VERDE',
+    @Comentario,
+    @UsuarioID,
+    @Ahora
+);";
+            var ahora = DateTime.Now;
+            var comentario = $"GP12 liberó la caja {folioCaja}. {cantidadOK:N0} pieza(s) conformes. La caja regresó a Producción para escaneo de salida hacia Almacén PT." + (string.IsNullOrWhiteSpace(observaciones) ? string.Empty : $" Observaciones: {observaciones.Trim()}");
+            await using var cmdUpdate = new SqlCommand(sql, cn, tx);
+            cmdUpdate.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId.Value;
+            cmdUpdate.Parameters.Add("@CajaLiberadaID", SqlDbType.Int).Value = cajaLiberadaId.Value;
+            cmdUpdate.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId.Value;
+            cmdUpdate.Parameters.Add("@ZonaVerde", SqlDbType.Int).Value = ProduccionCajaEstatus.ZonaVerde;
+            cmdUpdate.Parameters.Add("@NombreZonaVerde", SqlDbType.NVarChar, 100).Value = ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.ZonaVerde);
+            cmdUpdate.Parameters.Add("@SalidaProduccion", SqlDbType.Int).Value = ProduccionCajaEstatus.SalidaProduccion;
+            cmdUpdate.Parameters.Add("@RecibidaAlmacen", SqlDbType.Int).Value = ProduccionCajaEstatus.RecibidaAlmacenPt;
+            cmdUpdate.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmdUpdate.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+            cmdUpdate.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones.Trim();
+            cmdUpdate.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = comentario;
+            await cmdUpdate.ExecuteNonQueryAsync();
+        }
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> GuardarAsignacion(
@@ -2068,31 +2190,23 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
             public decimal CantidadProcesada { get; set; }
         }
 
-        // =========================================================
-        // CONSTRUCCIÓN DEL DETALLE
-        // =========================================================
-        private async Task<GP12DetalleViewModel?> ConstruirDetalleAsync(
-            int solicitudGP12ID)
+
+        private async Task<GP12DetalleViewModel?> ConstruirDetalleAsync(int solicitudGP12ID)
         {
-            var model =
-                await CargarEncabezadoAsync(solicitudGP12ID);
-
-            if (model == null)
-                return null;
-
+            var model = await CargarEncabezadoAsync(solicitudGP12ID);
+            if (model == null) return null;
             await CargarEtiquetasAsync(model);
             await CargarInventarioAsync(model);
             await CargarProgramacionesAsync(model);
             await CargarAsignacionesAsync(model);
+            await CargarInspeccionesAsync(model);
             await CargarHistorialAsync(model);
             await CargarPersonalDisponibleAsync(model);
             await CargarCatalogoDefectosAsync(model);
-
             return model;
         }
 
-        private async Task<GP12DetalleViewModel?> CargarEncabezadoAsync(
-            int solicitudGP12ID)
+        private async Task<GP12DetalleViewModel?> CargarEncabezadoAsync(int solicitudGP12ID)
         {
             const string sql = @"
 SELECT
@@ -2101,6 +2215,8 @@ SELECT
     s.ProgramaProduccionID,
     s.EjecucionProduccionID,
     s.CalidadInspeccionID,
+    s.CajaProduccionID,
+    s.CajaLiberadaID,
     s.SolicitudProduccionID,
     s.SolicitudProduccionDetalleID,
     s.OrdenFabricacion,
@@ -2112,149 +2228,625 @@ SELECT
     s.MaterialID,
     s.MaterialCodigo,
     s.MaterialDescripcion,
-    ISNULL(s.CantidadSolicitada, 0) AS CantidadSolicitada,
-    ISNULL(s.CantidadRecibida, 0) AS CantidadRecibida,
-    ISNULL(s.CantidadProcesada, 0) AS CantidadProcesada,
-    ISNULL(s.CantidadPendiente, 0) AS CantidadPendiente,
+    ISNULL(s.CantidadSolicitada,0) AS CantidadSolicitada,
+    ISNULL(s.CantidadRecibida,0) AS CantidadRecibida,
+    ISNULL(s.CantidadProcesada,0) AS CantidadProcesada,
+    ISNULL(s.CantidadPendiente,0) AS CantidadPendiente,
     s.Motivo,
     s.InstruccionTrabajo,
     s.CodigoHIP,
     s.CodigoHOE,
     s.Observaciones,
     s.EstatusID,
-    ISNULL(e.Codigo, N'') AS EstatusCodigo,
-    ISNULL(e.Nombre, N'') AS EstatusNombre,
+    ISNULL(e.Codigo,N'') AS EstatusCodigo,
+    ISNULL(e.Nombre,N'') AS EstatusNombre,
     s.FechaSolicitud,
     s.FechaRecepcion,
     s.FechaInicio,
     s.FechaFin,
     s.FechaCierre
 FROM dbo.GP12_Solicitudes s
-INNER JOIN dbo.GP12_Estatus e
-    ON e.EstatusID = s.EstatusID
-WHERE s.SolicitudGP12ID = @SolicitudGP12ID
-  AND s.Activo = 1;";
-
-            await using var cn =
-                new SqlConnection(ConnectionString);
-
+INNER JOIN dbo.GP12_Estatus e ON e.EstatusID=s.EstatusID
+WHERE s.SolicitudGP12ID=@SolicitudGP12ID
+  AND s.Activo=1;";
+            await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
-            await using var cmd =
-                new SqlCommand(sql, cn);
-
-            cmd.Parameters.Add(
-                "@SolicitudGP12ID",
-                SqlDbType.Int).Value =
-                solicitudGP12ID;
-
-            await using var rd =
-                await cmd.ExecuteReaderAsync();
-
-            if (!await rd.ReadAsync())
-                return null;
-
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync()) return null;
             return new GP12DetalleViewModel
             {
-                SolicitudGP12ID =
-                    Convert.ToInt32(rd["SolicitudGP12ID"]),
-
-                Origen =
-                    rd["Origen"] as string ?? string.Empty,
-
-                ProgramaProduccionID =
-                    LeerIntNullable(rd["ProgramaProduccionID"]),
-
-                EjecucionProduccionID =
-                    LeerIntNullable(rd["EjecucionProduccionID"]),
-
-                CalidadInspeccionID =
-                    LeerIntNullable(rd["CalidadInspeccionID"]),
-
-                SolicitudProduccionID =
-                    LeerIntNullable(rd["SolicitudProduccionID"]),
-
-                SolicitudProduccionDetalleID =
-                    LeerIntNullable(rd["SolicitudProduccionDetalleID"]),
-
-                OrdenFabricacion =
-                    rd["OrdenFabricacion"] as string,
-
-                ClienteID =
-                    LeerIntNullable(rd["ClienteID"]),
-
-                ClienteNombre =
-                    rd["ClienteNombre"] as string,
-
-                ParteID =
-                    LeerIntNullable(rd["ParteID"]),
-
-                NumeroParte =
-                    rd["NumeroParte"] as string,
-
-                DescripcionParte =
-                    rd["DescripcionParte"] as string,
-
-                MaterialID =
-                    LeerIntNullable(rd["MaterialID"]),
-
-                MaterialCodigo =
-                    rd["MaterialCodigo"] as string,
-
-                MaterialDescripcion =
-                    rd["MaterialDescripcion"] as string,
-
-                CantidadSolicitada =
-                    Convert.ToDecimal(rd["CantidadSolicitada"]),
-
-                CantidadRecibida =
-                    Convert.ToDecimal(rd["CantidadRecibida"]),
-
-                CantidadProcesada =
-                    Convert.ToDecimal(rd["CantidadProcesada"]),
-
-                CantidadPendiente =
-                    Convert.ToDecimal(rd["CantidadPendiente"]),
-
-                Motivo =
-                    rd["Motivo"] as string,
-
-                InstruccionTrabajo =
-                    rd["InstruccionTrabajo"] as string,
-
-                CodigoHIP =
-                    rd["CodigoHIP"] as string,
-
-                CodigoHOE =
-                    rd["CodigoHOE"] as string,
-
-                Observaciones =
-                    rd["Observaciones"] as string,
-
-                EstatusID =
-                    Convert.ToInt32(rd["EstatusID"]),
-
-                EstatusCodigo =
-                    rd["EstatusCodigo"] as string ?? string.Empty,
-
-                EstatusNombre =
-                    rd["EstatusNombre"] as string ?? string.Empty,
-
-                FechaSolicitud =
-                    Convert.ToDateTime(rd["FechaSolicitud"]),
-
-                FechaRecepcion =
-                    LeerFechaNullable(rd["FechaRecepcion"]),
-
-                FechaInicio =
-                    LeerFechaNullable(rd["FechaInicio"]),
-
-                FechaFin =
-                    LeerFechaNullable(rd["FechaFin"]),
-
-                FechaCierre =
-                    LeerFechaNullable(rd["FechaCierre"])
+                SolicitudGP12ID = Convert.ToInt32(rd["SolicitudGP12ID"]),
+                Origen = rd["Origen"] as string ?? string.Empty,
+                ProgramaProduccionID = LeerIntNullable(rd["ProgramaProduccionID"]),
+                EjecucionProduccionID = LeerIntNullable(rd["EjecucionProduccionID"]),
+                CalidadInspeccionID = LeerIntNullable(rd["CalidadInspeccionID"]),
+                CajaProduccionID = rd["CajaProduccionID"] == DBNull.Value ? null : Convert.ToInt64(rd["CajaProduccionID"]),
+                CajaLiberadaID = LeerIntNullable(rd["CajaLiberadaID"]),
+                SolicitudProduccionID = LeerIntNullable(rd["SolicitudProduccionID"]),
+                SolicitudProduccionDetalleID = LeerIntNullable(rd["SolicitudProduccionDetalleID"]),
+                OrdenFabricacion = rd["OrdenFabricacion"] as string,
+                ClienteID = LeerIntNullable(rd["ClienteID"]),
+                ClienteNombre = rd["ClienteNombre"] as string,
+                ParteID = LeerIntNullable(rd["ParteID"]),
+                NumeroParte = rd["NumeroParte"] as string,
+                DescripcionParte = rd["DescripcionParte"] as string,
+                MaterialID = LeerIntNullable(rd["MaterialID"]),
+                MaterialCodigo = rd["MaterialCodigo"] as string,
+                MaterialDescripcion = rd["MaterialDescripcion"] as string,
+                CantidadSolicitada = Convert.ToDecimal(rd["CantidadSolicitada"]),
+                CantidadRecibida = Convert.ToDecimal(rd["CantidadRecibida"]),
+                CantidadProcesada = Convert.ToDecimal(rd["CantidadProcesada"]),
+                CantidadPendiente = Convert.ToDecimal(rd["CantidadPendiente"]),
+                Motivo = rd["Motivo"] as string,
+                InstruccionTrabajo = rd["InstruccionTrabajo"] as string,
+                CodigoHIP = rd["CodigoHIP"] as string,
+                CodigoHOE = rd["CodigoHOE"] as string,
+                Observaciones = rd["Observaciones"] as string,
+                EstatusID = Convert.ToInt32(rd["EstatusID"]),
+                EstatusCodigo = rd["EstatusCodigo"] as string ?? string.Empty,
+                EstatusNombre = rd["EstatusNombre"] as string ?? string.Empty,
+                FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
+                FechaRecepcion = LeerFechaNullable(rd["FechaRecepcion"]),
+                FechaInicio = LeerFechaNullable(rd["FechaInicio"]),
+                FechaFin = LeerFechaNullable(rd["FechaFin"]),
+                FechaCierre = LeerFechaNullable(rd["FechaCierre"])
             };
+        }
+
+        private async Task CargarInspeccionesAsync(GP12DetalleViewModel model)
+        {
+            const string sql = @"
+SELECT
+    i.InspeccionGP12ID,
+    i.SolicitudGP12ID,
+    i.AsignacionGP12ID,
+    i.PersonaInspectorID,
+    LTRIM(RTRIM(
+        ISNULL(p.Nombre,N'')+
+        CASE WHEN NULLIF(p.ApellidoPaterno,N'') IS NULL THEN N'' ELSE N' '+p.ApellidoPaterno END+
+        CASE WHEN NULLIF(p.ApellidoMaterno,N'') IS NULL THEN N'' ELSE N' '+p.ApellidoMaterno END
+    )) AS InspectorNombre,
+    i.FechaInicio,
+    i.FechaFin,
+    ISNULL(i.CantidadRevisada,0) AS CantidadRevisada,
+    ISNULL(i.CantidadOK,0) AS CantidadOK,
+    ISNULL(i.CantidadNOK,0) AS CantidadNOK,
+    ISNULL(i.CantidadRetrabajada,0) AS CantidadRetrabajada,
+    ISNULL(i.CantidadScrap,0) AS CantidadScrap,
+    ISNULL(i.ValidacionEtiqueta,0) AS ValidacionEtiqueta,
+    ISNULL(i.DocumentacionColocada,0) AS DocumentacionColocada,
+    ISNULL(i.RutaInspeccionValidada,0) AS RutaInspeccionValidada,
+    ISNULL(i.CantidadBasculaValidada,0) AS CantidadBasculaValidada,
+    ISNULL(i.EtiquetaInspeccionColocada,0) AS EtiquetaInspeccionColocada,
+    ISNULL(i.Activo,0) AS Activo
+FROM dbo.GP12_Inspecciones i
+LEFT JOIN dbo.Persona p ON p.PersonaID=i.PersonaInspectorID
+WHERE i.SolicitudGP12ID=@SolicitudGP12ID
+ORDER BY
+    CASE WHEN i.FechaFin IS NULL THEN 0 ELSE 1 END,
+    i.FechaInicio DESC,
+    i.InspeccionGP12ID DESC;";
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = model.SolicitudGP12ID;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                model.Inspecciones.Add(new GP12InspeccionItemViewModel
+                {
+                    InspeccionGP12ID = Convert.ToInt32(rd["InspeccionGP12ID"]),
+                    SolicitudGP12ID = Convert.ToInt32(rd["SolicitudGP12ID"]),
+                    AsignacionGP12ID = Convert.ToInt32(rd["AsignacionGP12ID"]),
+                    PersonaInspectorID = Convert.ToInt32(rd["PersonaInspectorID"]),
+                    InspectorNombre = rd["InspectorNombre"] as string ?? string.Empty,
+                    FechaInicio = LeerFechaNullable(rd["FechaInicio"]),
+                    FechaFin = LeerFechaNullable(rd["FechaFin"]),
+                    CantidadRevisada = Convert.ToDecimal(rd["CantidadRevisada"]),
+                    CantidadOK = Convert.ToDecimal(rd["CantidadOK"]),
+                    CantidadNOK = Convert.ToDecimal(rd["CantidadNOK"]),
+                    CantidadRetrabajada = Convert.ToDecimal(rd["CantidadRetrabajada"]),
+                    CantidadScrap = Convert.ToDecimal(rd["CantidadScrap"]),
+                    ValidacionEtiqueta = Convert.ToBoolean(rd["ValidacionEtiqueta"]),
+                    DocumentacionColocada = Convert.ToBoolean(rd["DocumentacionColocada"]),
+                    RutaInspeccionValidada = Convert.ToBoolean(rd["RutaInspeccionValidada"]),
+                    CantidadBasculaValidada = Convert.ToBoolean(rd["CantidadBasculaValidada"]),
+                    EtiquetaInspeccionColocada = Convert.ToBoolean(rd["EtiquetaInspeccionColocada"]),
+                    Activo = Convert.ToBoolean(rd["Activo"])
+                });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> IniciarInspeccion(int solicitudGP12ID, int asignacionGP12ID)
+        {
+            if (solicitudGP12ID <= 0 || asignacionGP12ID <= 0)
+            {
+                TempData["Error"] = "La solicitud o asignación GP12 no es válida.";
+                return RedirectToAction(nameof(Index));
+            }
+            var usuarioID = ObtenerUsuarioIdActual();
+            if (!usuarioID.HasValue || usuarioID.Value <= 0) return Unauthorized();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                const string sqlOrigen = @"
+SELECT TOP (1)
+    a.PersonaID,
+    a.CantidadAsignada,
+    a.FechaInicio,
+    a.FechaFin,
+    a.Cumplida,
+    s.EstatusID
+FROM dbo.GP12_Asignaciones a WITH (UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.GP12_Solicitudes s WITH (UPDLOCK,HOLDLOCK)
+    ON s.SolicitudGP12ID=a.SolicitudGP12ID
+WHERE a.AsignacionGP12ID=@AsignacionGP12ID
+  AND a.SolicitudGP12ID=@SolicitudGP12ID
+  AND a.Activo=1
+  AND s.Activo=1;";
+                int personaID;
+                bool cumplida;
+                int estatusAnterior;
+                await using (var cmd = new SqlCommand(sqlOrigen, cn, tx))
+                {
+                    cmd.Parameters.Add("@AsignacionGP12ID", SqlDbType.Int).Value = asignacionGP12ID;
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "No se encontró la asignación GP12.";
+                        return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+                    }
+                    personaID = Convert.ToInt32(rd["PersonaID"]);
+                    cumplida = Convert.ToBoolean(rd["Cumplida"]);
+                    estatusAnterior = Convert.ToInt32(rd["EstatusID"]);
+                }
+                if (GP12Estatus.EsFinal(estatusAnterior)) throw new InvalidOperationException("La solicitud GP12 ya está cerrada o cancelada.");
+                if (cumplida) throw new InvalidOperationException("La asignación ya fue concluida.");
+                const string sqlExistente = @"
+SELECT TOP (1) InspeccionGP12ID
+FROM dbo.GP12_Inspecciones WITH (UPDLOCK,HOLDLOCK)
+WHERE SolicitudGP12ID=@SolicitudGP12ID
+  AND AsignacionGP12ID=@AsignacionGP12ID
+  AND FechaFin IS NULL
+  AND Activo=1
+ORDER BY InspeccionGP12ID DESC;";
+                int? inspeccionExistente = null;
+                await using (var cmd = new SqlCommand(sqlExistente, cn, tx))
+                {
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    cmd.Parameters.Add("@AsignacionGP12ID", SqlDbType.Int).Value = asignacionGP12ID;
+                    var value = await cmd.ExecuteScalarAsync();
+                    if (value != null && value != DBNull.Value) inspeccionExistente = Convert.ToInt32(value);
+                }
+                if (inspeccionExistente.HasValue)
+                {
+                    await tx.CommitAsync();
+                    TempData["Mensaje"] = "La asignación ya tiene una inspección GP12 en proceso.";
+                    return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+                }
+                const string sqlInsert = @"
+INSERT INTO dbo.GP12_Inspecciones
+(
+    SolicitudGP12ID,
+    AsignacionGP12ID,
+    PersonaInspectorID,
+    FechaInicio,
+    CantidadRevisada,
+    CantidadOK,
+    CantidadNOK,
+    CantidadRetrabajada,
+    CantidadScrap,
+    ValidacionEtiqueta,
+    DocumentacionColocada,
+    RutaInspeccionValidada,
+    CantidadBasculaValidada,
+    EtiquetaInspeccionColocada,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+VALUES
+(
+    @SolicitudGP12ID,
+    @AsignacionGP12ID,
+    @PersonaID,
+    SYSDATETIME(),
+    0,0,0,0,0,
+    0,0,0,0,0,
+    @UsuarioID,
+    SYSDATETIME(),
+    1
+);
+SELECT CAST(SCOPE_IDENTITY() AS INT);";
+                int inspeccionGP12ID;
+                await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
+                {
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    cmd.Parameters.Add("@AsignacionGP12ID", SqlDbType.Int).Value = asignacionGP12ID;
+                    cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaID;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
+                    inspeccionGP12ID = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                }
+                const string sqlUpdate = @"
+UPDATE dbo.GP12_Asignaciones
+SET FechaInicio=COALESCE(FechaInicio,SYSDATETIME()),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE AsignacionGP12ID=@AsignacionGP12ID
+  AND SolicitudGP12ID=@SolicitudGP12ID
+  AND Activo=1;
+UPDATE dbo.GP12_Solicitudes
+SET EstatusID=@EstatusID,
+    FechaInicio=COALESCE(FechaInicio,SYSDATETIME()),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE SolicitudGP12ID=@SolicitudGP12ID
+  AND Activo=1;";
+                await using (var cmd = new SqlCommand(sqlUpdate, cn, tx))
+                {
+                    cmd.Parameters.Add("@AsignacionGP12ID", SqlDbType.Int).Value = asignacionGP12ID;
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = GP12Estatus.EnInspeccion;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                await AgregarHistorialAsync(cn, tx, solicitudGP12ID, GP12Movimientos.InspeccionIniciada, estatusAnterior, GP12Estatus.EnInspeccion, GP12EntidadHistorial.Inspeccion, inspeccionGP12ID, $"Se inició la inspección GP12 de la asignación {asignacionGP12ID}.", usuarioID.Value);
+                await tx.CommitAsync();
+                TempData["Mensaje"] = "Inspección GP12 iniciada correctamente.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible iniciar la inspección GP12: " + ex.Message;
+            }
+            return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> FinalizarInspeccion(int solicitudGP12ID, int inspeccionGP12ID, decimal cantidadRevisada, decimal cantidadOK, decimal cantidadNOK, decimal cantidadRetrabajada, decimal cantidadScrap, bool validacionEtiqueta, bool documentacionColocada, bool rutaInspeccionValidada, bool cantidadBasculaValidada, bool etiquetaInspeccionColocada, string? observaciones)
+        {
+            observaciones = Limpiar(observaciones);
+            if (solicitudGP12ID <= 0 || inspeccionGP12ID <= 0)
+            {
+                TempData["Error"] = "La solicitud o inspección GP12 no es válida.";
+                return RedirectToAction(nameof(Index));
+            }
+            if (cantidadRevisada <= 0)
+            {
+                TempData["Error"] = "La cantidad revisada debe ser mayor que cero.";
+                return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+            }
+            if (cantidadOK < 0 || cantidadNOK < 0 || cantidadRetrabajada < 0 || cantidadScrap < 0)
+            {
+                TempData["Error"] = "Las cantidades GP12 no pueden ser negativas.";
+                return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+            }
+            if (cantidadOK + cantidadNOK != cantidadRevisada)
+            {
+                TempData["Error"] = "La suma de cantidad OK y NOK debe ser igual a la cantidad revisada.";
+                return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+            }
+            if (cantidadRetrabajada > cantidadRevisada || cantidadScrap > cantidadRevisada)
+            {
+                TempData["Error"] = "Retrabajo o scrap no pueden superar la cantidad revisada.";
+                return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+            }
+            var usuarioID = ObtenerUsuarioIdActual();
+            if (!usuarioID.HasValue || usuarioID.Value <= 0) return Unauthorized();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                const string sqlInspeccion = @"
+SELECT TOP (1)
+    i.AsignacionGP12ID,
+    i.FechaFin,
+    a.CantidadAsignada,
+    p.SolicitudEtiquetaID,
+    s.EstatusID,
+    s.Origen,
+    ISNULL(s.CantidadSolicitada,0) AS CantidadSolicitada,
+    ISNULL(s.CantidadRecibida,0) AS CantidadRecibida
+FROM dbo.GP12_Inspecciones i WITH (UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.GP12_Asignaciones a WITH (UPDLOCK,HOLDLOCK)
+    ON a.AsignacionGP12ID=i.AsignacionGP12ID
+INNER JOIN dbo.GP12_Programacion p
+    ON p.ProgramacionGP12ID=a.ProgramacionGP12ID
+INNER JOIN dbo.GP12_Solicitudes s WITH (UPDLOCK,HOLDLOCK)
+    ON s.SolicitudGP12ID=i.SolicitudGP12ID
+WHERE i.InspeccionGP12ID=@InspeccionGP12ID
+  AND i.SolicitudGP12ID=@SolicitudGP12ID
+  AND i.Activo=1
+  AND a.Activo=1
+  AND s.Activo=1;";
+                int asignacionGP12ID;
+                int? solicitudEtiquetaID;
+                int estatusAnterior;
+                string origen;
+                decimal cantidadSolicitada;
+                decimal cantidadRecibida;
+                DateTime? fechaFin;
+                await using (var cmd = new SqlCommand(sqlInspeccion, cn, tx))
+                {
+                    cmd.Parameters.Add("@InspeccionGP12ID", SqlDbType.Int).Value = inspeccionGP12ID;
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "No se encontró la inspección GP12.";
+                        return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+                    }
+                    asignacionGP12ID = Convert.ToInt32(rd["AsignacionGP12ID"]);
+                    solicitudEtiquetaID = LeerIntNullable(rd["SolicitudEtiquetaID"]);
+                    estatusAnterior = Convert.ToInt32(rd["EstatusID"]);
+                    origen = rd["Origen"] as string ?? string.Empty;
+                    cantidadSolicitada = Convert.ToDecimal(rd["CantidadSolicitada"]);
+                    cantidadRecibida = Convert.ToDecimal(rd["CantidadRecibida"]);
+                    fechaFin = LeerFechaNullable(rd["FechaFin"]);
+                }
+                if (fechaFin.HasValue) throw new InvalidOperationException("La inspección GP12 ya fue finalizada.");
+                if (GP12Estatus.EsFinal(estatusAnterior)) throw new InvalidOperationException("La solicitud GP12 ya está cerrada o cancelada.");
+                const string sqlUpdateInspeccion = @"
+UPDATE dbo.GP12_Inspecciones
+SET FechaFin=SYSDATETIME(),
+    CantidadRevisada=@CantidadRevisada,
+    CantidadOK=@CantidadOK,
+    CantidadNOK=@CantidadNOK,
+    CantidadRetrabajada=@CantidadRetrabajada,
+    CantidadScrap=@CantidadScrap,
+    ValidacionEtiqueta=@ValidacionEtiqueta,
+    DocumentacionColocada=@DocumentacionColocada,
+    RutaInspeccionValidada=@RutaInspeccionValidada,
+    CantidadBasculaValidada=@CantidadBasculaValidada,
+    EtiquetaInspeccionColocada=@EtiquetaInspeccionColocada,
+    Observaciones=@Observaciones,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE InspeccionGP12ID=@InspeccionGP12ID
+  AND SolicitudGP12ID=@SolicitudGP12ID
+  AND FechaFin IS NULL
+  AND Activo=1;
+IF @@ROWCOUNT<>1
+    THROW 51300,'No fue posible finalizar la inspección GP12.',1;";
+                await using (var cmd = new SqlCommand(sqlUpdateInspeccion, cn, tx))
+                {
+                    cmd.Parameters.Add("@InspeccionGP12ID", SqlDbType.Int).Value = inspeccionGP12ID;
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    AgregarDecimal(cmd, "@CantidadRevisada", cantidadRevisada);
+                    AgregarDecimal(cmd, "@CantidadOK", cantidadOK);
+                    AgregarDecimal(cmd, "@CantidadNOK", cantidadNOK);
+                    AgregarDecimal(cmd, "@CantidadRetrabajada", cantidadRetrabajada);
+                    AgregarDecimal(cmd, "@CantidadScrap", cantidadScrap);
+                    cmd.Parameters.Add("@ValidacionEtiqueta", SqlDbType.Bit).Value = validacionEtiqueta;
+                    cmd.Parameters.Add("@DocumentacionColocada", SqlDbType.Bit).Value = documentacionColocada;
+                    cmd.Parameters.Add("@RutaInspeccionValidada", SqlDbType.Bit).Value = rutaInspeccionValidada;
+                    cmd.Parameters.Add("@CantidadBasculaValidada", SqlDbType.Bit).Value = cantidadBasculaValidada;
+                    cmd.Parameters.Add("@EtiquetaInspeccionColocada", SqlDbType.Bit).Value = etiquetaInspeccionColocada;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 2000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                if (solicitudEtiquetaID.HasValue)
+                {
+                    const string sqlEtiqueta = @"
+UPDATE dbo.GP12_SolicitudEtiquetas
+SET CantidadProcesada=
+    (
+        SELECT ISNULL(SUM(i.CantidadRevisada),0)
+        FROM dbo.GP12_Inspecciones i
+        INNER JOIN dbo.GP12_Asignaciones a ON a.AsignacionGP12ID=i.AsignacionGP12ID
+        INNER JOIN dbo.GP12_Programacion p ON p.ProgramacionGP12ID=a.ProgramacionGP12ID
+        WHERE i.SolicitudGP12ID=@SolicitudGP12ID
+          AND p.SolicitudEtiquetaID=@SolicitudEtiquetaID
+          AND i.FechaFin IS NOT NULL
+          AND i.Activo=1
+          AND a.Activo=1
+          AND p.Activo=1
+    ),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE SolicitudEtiquetaID=@SolicitudEtiquetaID
+  AND SolicitudGP12ID=@SolicitudGP12ID
+  AND Activo=1;";
+                    await using var cmd = new SqlCommand(sqlEtiqueta, cn, tx);
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    cmd.Parameters.Add("@SolicitudEtiquetaID", SqlDbType.Int).Value = solicitudEtiquetaID.Value;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                const string sqlAsignacion = @"
+DECLARE @ProcesadoAsignacion DECIMAL(18,4);
+DECLARE @Asignado DECIMAL(18,4);
+SELECT @Asignado=ISNULL(CantidadAsignada,0)
+FROM dbo.GP12_Asignaciones WITH (UPDLOCK,HOLDLOCK)
+WHERE AsignacionGP12ID=@AsignacionGP12ID
+  AND Activo=1;
+SELECT @ProcesadoAsignacion=ISNULL(SUM(CantidadRevisada),0)
+FROM dbo.GP12_Inspecciones
+WHERE AsignacionGP12ID=@AsignacionGP12ID
+  AND FechaFin IS NOT NULL
+  AND Activo=1;
+UPDATE dbo.GP12_Asignaciones
+SET Cumplida=CASE WHEN @ProcesadoAsignacion>=@Asignado AND @Asignado>0 THEN 1 ELSE 0 END,
+    FechaFin=CASE WHEN @ProcesadoAsignacion>=@Asignado AND @Asignado>0 THEN COALESCE(FechaFin,SYSDATETIME()) ELSE FechaFin END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE AsignacionGP12ID=@AsignacionGP12ID
+  AND Activo=1;";
+                await using (var cmd = new SqlCommand(sqlAsignacion, cn, tx))
+                {
+                    cmd.Parameters.Add("@AsignacionGP12ID", SqlDbType.Int).Value = asignacionGP12ID;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                const string sqlTotales = @"
+SELECT
+    ISNULL(SUM(CASE WHEN FechaFin IS NOT NULL THEN CantidadRevisada ELSE 0 END),0) AS CantidadProcesada,
+    ISNULL(SUM(CASE WHEN FechaFin IS NOT NULL THEN CantidadOK ELSE 0 END),0) AS CantidadOK,
+    ISNULL(SUM(CASE WHEN FechaFin IS NOT NULL THEN CantidadNOK ELSE 0 END),0) AS CantidadNOK,
+    ISNULL(SUM(CASE WHEN FechaFin IS NOT NULL THEN CantidadRetrabajada ELSE 0 END),0) AS CantidadRetrabajada,
+    ISNULL(SUM(CASE WHEN FechaFin IS NOT NULL THEN CantidadScrap ELSE 0 END),0) AS CantidadScrap
+FROM dbo.GP12_Inspecciones
+WHERE SolicitudGP12ID=@SolicitudGP12ID
+  AND Activo=1;";
+                decimal totalProcesado;
+                decimal totalOK;
+                decimal totalNOK;
+                decimal totalRetrabajado;
+                decimal totalScrap;
+                await using (var cmd = new SqlCommand(sqlTotales, cn, tx))
+                {
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    await rd.ReadAsync();
+                    totalProcesado = Convert.ToDecimal(rd["CantidadProcesada"]);
+                    totalOK = Convert.ToDecimal(rd["CantidadOK"]);
+                    totalNOK = Convert.ToDecimal(rd["CantidadNOK"]);
+                    totalRetrabajado = Convert.ToDecimal(rd["CantidadRetrabajada"]);
+                    totalScrap = Convert.ToDecimal(rd["CantidadScrap"]);
+                }
+                var pendiente = Math.Max(0, cantidadRecibida - totalProcesado);
+                var procesoCompleto = cantidadSolicitada > 0 && cantidadRecibida >= cantidadSolicitada && totalProcesado >= cantidadSolicitada;
+                var nuevoEstatus = procesoCompleto ? GP12Estatus.InspeccionTerminada : GP12Estatus.EnInspeccion;
+                const string sqlSolicitud = @"
+UPDATE dbo.GP12_Solicitudes
+SET CantidadProcesada=@CantidadProcesada,
+    CantidadPendiente=@CantidadPendiente,
+    EstatusID=@EstatusID,
+    FechaFin=CASE WHEN @ProcesoCompleto=1 THEN COALESCE(FechaFin,SYSDATETIME()) ELSE FechaFin END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE SolicitudGP12ID=@SolicitudGP12ID
+  AND Activo=1;";
+                await using (var cmd = new SqlCommand(sqlSolicitud, cn, tx))
+                {
+                    AgregarDecimal(cmd, "@CantidadProcesada", totalProcesado);
+                    AgregarDecimal(cmd, "@CantidadPendiente", pendiente);
+                    cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = nuevoEstatus;
+                    cmd.Parameters.Add("@ProcesoCompleto", SqlDbType.Bit).Value = procesoCompleto;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                if (procesoCompleto && string.Equals(origen, GP12Origen.Calidad, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (totalNOK == 0 && totalScrap == 0 && totalOK >= cantidadSolicitada)
+                    {
+                        await LiberarCajaOrigenCalidadAsync(solicitudGP12ID, totalOK, observaciones, usuarioID.Value, cn, tx);
+                    }
+                    else
+                    {
+                        await MantenerCajaOrigenCalidadEnGP12Async(solicitudGP12ID, totalNOK, totalScrap, observaciones, usuarioID.Value, cn, tx);
+                    }
+                }
+                await AgregarHistorialAsync(cn, tx, solicitudGP12ID, GP12Movimientos.InspeccionTerminada, estatusAnterior, nuevoEstatus, GP12EntidadHistorial.Inspeccion, inspeccionGP12ID, $"Inspección GP12 terminada. Revisadas: {cantidadRevisada:N4}; OK: {cantidadOK:N4}; NOK: {cantidadNOK:N4}; retrabajadas: {cantidadRetrabajada:N4}; scrap: {cantidadScrap:N4}.", usuarioID.Value);
+                await tx.CommitAsync();
+                TempData["Mensaje"] = procesoCompleto
+                    ? totalNOK == 0 && totalScrap == 0
+                        ? "Inspección GP12 terminada. El material conforme fue liberado."
+                        : "Inspección GP12 terminada con material NOK. La caja permanece en GP12."
+                    : "Inspección GP12 registrada. Aún existe material pendiente por procesar.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible finalizar la inspección GP12: " + ex.Message;
+            }
+            return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+        }
+
+        private static async Task MantenerCajaOrigenCalidadEnGP12Async(int solicitudGP12Id, decimal cantidadNOK, decimal cantidadScrap, string? observaciones, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+DECLARE @CajaProduccionID BIGINT;
+DECLARE @CajaLiberadaID INT;
+DECLARE @InspeccionID INT;
+DECLARE @Origen NVARCHAR(20);
+SELECT
+    @CajaProduccionID=CajaProduccionID,
+    @CajaLiberadaID=CajaLiberadaID,
+    @InspeccionID=CalidadInspeccionID,
+    @Origen=Origen
+FROM dbo.GP12_Solicitudes WITH (UPDLOCK,HOLDLOCK)
+WHERE SolicitudGP12ID=@SolicitudGP12ID
+  AND Activo=1;
+IF UPPER(LTRIM(RTRIM(ISNULL(@Origen,N''))))<>N'CALIDAD'
+    RETURN;
+IF @CajaProduccionID IS NULL OR @CajaLiberadaID IS NULL OR @InspeccionID IS NULL
+    THROW 51310,'La solicitud GP12 no conserva la trazabilidad completa con Calidad y Producción.',1;
+UPDATE dbo.Calidad_CajasLiberadas
+SET EtiquetaLiberacion=N'AMARILLA',
+    Destino=N'GP12',
+    Estado=N'EN_GP12',
+    Observaciones=
+        CASE
+            WHEN @Observaciones IS NULL THEN Observaciones
+            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observaciones
+            ELSE Observaciones+CHAR(13)+CHAR(10)+@Observaciones
+        END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE CajaLiberadaID=@CajaLiberadaID
+  AND Activo=1;
+IF @@ROWCOUNT<>1
+    THROW 51311,'No fue posible mantener la caja en GP12 desde Calidad.',1;
+UPDATE dbo.Produccion_Cajas
+SET EstadoCajaID=4,
+    EstadoCajaNombre=N'GP12 - pendiente de disposición',
+    EstatusCalidad=N'GP12',
+    ResultadoCalidad=N'GP12_NOK',
+    EtiquetaVerde=0,
+    MotivoCalidad=@Observaciones,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1;
+IF @@ROWCOUNT<>1
+    THROW 51312,'No fue posible actualizar la caja de Producción en GP12.',1;
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    N'GP12_REVISION_NOK',
+    NULL,
+    NULL,
+    N'GP12_NOK',
+    N'AMARILLA',
+    @Comentario,
+    @UsuarioID,
+    @Ahora
+);";
+            var ahora = DateTime.Now;
+            var comentario = $"GP12 terminó revisión con material pendiente de disposición. NOK: {cantidadNOK:N0}; scrap detectado: {cantidadScrap:N0}." + (string.IsNullOrWhiteSpace(observaciones) ? string.Empty : $" Observaciones: {observaciones.Trim()}");
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12Id;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones.Trim();
+            cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = comentario;
+            await cmd.ExecuteNonQueryAsync();
         }
 
         private async Task CargarEtiquetasAsync(

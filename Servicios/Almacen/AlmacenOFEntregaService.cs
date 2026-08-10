@@ -402,28 +402,40 @@ SELECT
                 FROM dbo.AlmacenEmbalajes_Movimientos movimiento
                     WITH (UPDLOCK, HOLDLOCK)
                 WHERE movimiento.Activo = 1
-                  AND movimiento.EmbalajeID =
-                      catalogo.EmbalajeID
+                  AND COALESCE
+                      (
+                          movimiento.EmbalajeSolicitadoID,
+                          movimiento.EmbalajeID
+                      ) = catalogo.EmbalajeID
                   AND
                   (
-                      (
-                          NULLIF
-                          (
-                              LTRIM(RTRIM(s.FolioSolicitud)),
-                              ''
-                          ) IS NOT NULL
-                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                              LTRIM(RTRIM(s.FolioSolicitud))
-                      )
+                      movimiento.SolicitudProduccionID =
+                          s.SolicitudProduccionID
                       OR
                       (
-                          NULLIF
+                          movimiento.SolicitudProduccionID IS NULL
+                          AND
                           (
-                              LTRIM(RTRIM(s.NumeroOFRecibida)),
-                              ''
-                          ) IS NOT NULL
-                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                              LTRIM(RTRIM(s.NumeroOFRecibida))
+                              (
+                                  NULLIF
+                                  (
+                                      LTRIM(RTRIM(s.FolioSolicitud)),
+                                      ''
+                                  ) IS NOT NULL
+                                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                                      LTRIM(RTRIM(s.FolioSolicitud))
+                              )
+                              OR
+                              (
+                                  NULLIF
+                                  (
+                                      LTRIM(RTRIM(s.NumeroOFRecibida)),
+                                      ''
+                                  ) IS NOT NULL
+                                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                                      LTRIM(RTRIM(s.NumeroOFRecibida))
+                              )
+                          )
                       )
                   )
             ),

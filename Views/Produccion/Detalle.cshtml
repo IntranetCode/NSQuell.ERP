@@ -3,6 +3,8 @@
 @{
     Layout = null;
     var e = Model.Ejecucion;
+    var monitoreoTurno = Model.MonitoreoTurnoActual;
+    var esReinicioSerie = ViewBag.EsReinicioSerie is bool reinicio && reinicio;
 
     var horaInicio = new TimeSpan(DateTime.Now.Hour, 0, 0);
     var horaFin = horaInicio.Add(TimeSpan.FromHours(1));
@@ -22,6 +24,42 @@
     if (avancePct > 100)
     {
         avancePct = 100;
+    }
+
+    var esPreparacion =
+        e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion;
+
+    var calidadRequiereAtencion =
+        Model.CalidadResumen == null ||
+        !string.IsNullOrWhiteSpace(Model.CalidadResumen.MotivoDevolucion) ||
+        Model.CalidadResumen.ConfiguracionInvalidada ||
+        (esPreparacion && Model.CalidadResumen.PuedeIniciarSerie != true);
+
+    var accionActual = "SEGUIMIENTO";
+
+    if (Model.TieneParoAbierto)
+    {
+        accionActual = "CERRAR_PARO";
+    }
+    else if (Model.MostrarAvisoMonitoreoTurno && monitoreoTurno != null)
+    {
+        accionActual = "MONITOREO_TURNO";
+    }
+    else if (Model.ChecklistResumen == null)
+    {
+        accionActual = "GENERAR_CHECKLIST";
+    }
+    else if (esPreparacion && Model.CalidadResumen?.PuedeIniciarSerie != true)
+    {
+        accionActual = "ESPERAR_CALIDAD";
+    }
+    else if (esPreparacion)
+    {
+        accionActual = esReinicioSerie ? "REINICIAR_SERIE" : "INICIAR_SERIE";
+    }
+    else if (e.PuedeTerminar && !Model.TieneParoAbierto)
+    {
+        accionActual = "TERMINAR";
     }
 }
 
@@ -274,6 +312,185 @@
             box-shadow: 0 24px 70px rgba(15, 23, 42, .25);
         }
 
+        .turno-monitor-card {
+            border: 1px solid #f5c2c7;
+            background: linear-gradient(180deg,#fff8f8,#ffffff);
+        }
+
+        .turno-monitor-icon {
+            width: 58px;
+            height: 58px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 18px;
+            background: #fff3cd;
+            color: #997404;
+            font-size: 1.65rem;
+            flex: 0 0 auto;
+        }
+
+        .turno-monitor-progress {
+            height: 12px;
+        }
+
+        .modal-monitor-header {
+            background: linear-gradient(135deg,#7f1d1d,#b42318);
+            color: #fff;
+            border-radius: 20px 20px 0 0;
+            border-bottom: 0;
+        }
+
+        .modal-monitor-icon {
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 14px;
+            border-radius: 50%;
+            background: #fff3cd;
+            color: #997404;
+            font-size: 1.9rem;
+        }
+
+        .next-action {
+            border: 1px solid #bfd6ff;
+            border-left: 6px solid #0d6efd;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #eff6ff, #ffffff 72%);
+            box-shadow: 0 12px 28px rgba(15, 47, 99, .08);
+            padding: 18px 20px;
+        }
+
+            .next-action.is-danger {
+                border-color: #f5c2c7;
+                border-left-color: #dc3545;
+                background: linear-gradient(135deg, #fff5f5, #ffffff 72%);
+            }
+
+            .next-action.is-warning {
+                border-color: #ffe69c;
+                border-left-color: #ffc107;
+                background: linear-gradient(135deg, #fff9e8, #ffffff 72%);
+            }
+
+            .next-action.is-success {
+                border-color: #badbcc;
+                border-left-color: #198754;
+                background: linear-gradient(135deg, #f1fff7, #ffffff 72%);
+            }
+
+        .next-action-icon {
+            width: 48px;
+            height: 48px;
+            flex: 0 0 48px;
+            display: grid;
+            place-items: center;
+            border-radius: 14px;
+            background: #ffffff;
+            color: #0d6efd;
+            font-size: 1.35rem;
+            box-shadow: 0 6px 16px rgba(15, 47, 99, .10);
+        }
+
+        .next-action.is-danger .next-action-icon {
+            color: #dc3545;
+        }
+
+        .next-action.is-warning .next-action-icon {
+            color: #b58100;
+        }
+
+        .next-action.is-success .next-action-icon {
+            color: #198754;
+        }
+
+        .next-action-title {
+            margin: 0;
+            color: #102a56;
+            font-size: 1.05rem;
+            font-weight: 900;
+        }
+
+        .next-action-text {
+            margin: 4px 0 0;
+            color: #667085;
+            font-size: .88rem;
+        }
+
+        .primary-series-action {
+            border: 1px solid #badbcc;
+            border-left: 6px solid #198754;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #f1fff7, #ffffff 72%);
+            box-shadow: 0 12px 28px rgba(25, 135, 84, .08);
+            padding: 16px 18px;
+        }
+
+            .primary-series-action.is-blocked {
+                border-color: #ffe69c;
+                border-left-color: #ffc107;
+                background: linear-gradient(135deg, #fff9e8, #ffffff 72%);
+            }
+
+            .primary-series-action .series-title {
+                color: #102a56;
+                font-weight: 900;
+                margin: 0;
+                font-size: 1.05rem;
+            }
+
+            .primary-series-action .series-text {
+                color: #667085;
+                font-size: .86rem;
+                margin: 4px 0 0;
+            }
+
+            .primary-series-action .series-status {
+                min-width: 220px;
+            }
+
+        @@media (max-width: 768px) {
+            .primary-series-action .series-status {
+                min-width: 100%;
+                width: 100%;
+            }
+        }
+
+        .panel[data-collapsible] > .panel-header {
+            position: relative;
+            padding-right: 48px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+            .panel[data-collapsible] > .panel-header::after {
+                content: "\F282";
+                position: absolute;
+                top: 50%;
+                right: 18px;
+                transform: translateY(-50%) rotate(0deg);
+                font-family: "bootstrap-icons";
+                transition: transform .18s ease;
+            }
+
+        .panel[data-collapsible].is-collapsed > .panel-header::after {
+            transform: translateY(-50%) rotate(-90deg);
+        }
+
+        .panel[data-collapsible].is-collapsed > .panel-body,
+        .panel[data-collapsible].is-collapsed > .table-responsive {
+            display: none;
+        }
+
+        .operator-line {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
         @@media (max-width: 992px) {
             .page-shell {
                 padding: 14px;
@@ -395,6 +612,138 @@
             </div>
         </div>
 
+        <section class="next-action mb-4 @(accionActual == "CERRAR_PARO" ? "is-danger" : accionActual == "MONITOREO_TURNO" || accionActual == "ESPERAR_CALIDAD" ? "is-warning" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" || accionActual == "TERMINAR" ? "is-success" : "")">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="next-action-icon">
+                        <i class="bi @(accionActual == "CERRAR_PARO" ? "bi-pause-circle" : accionActual == "MONITOREO_TURNO" ? "bi-arrow-repeat" : accionActual == "GENERAR_CHECKLIST" ? "bi-clipboard-check" : accionActual == "ESPERAR_CALIDAD" ? "bi-hourglass-split" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "bi-play-fill" : accionActual == "TERMINAR" ? "bi-flag" : "bi-activity")"></i>
+                    </div>
+                    <div>
+                        <div class="data-label">Acción requerida ahora</div>
+
+                        @if (accionActual == "CERRAR_PARO")
+                        {
+                            <h2 class="next-action-title">Cerrar el paro antes de continuar</h2>
+                            <p class="next-action-text">La ejecución permanece detenida mientras exista un paro abierto.</p>
+                        }
+                        else if (accionActual == "MONITOREO_TURNO")
+                        {
+                            <h2 class="next-action-title">Completar el monitoreo del turno</h2>
+                            <p class="next-action-text">Registra las verificaciones de periféricos y la entrega-recepción del turno actual.</p>
+                        }
+                        else if (accionActual == "GENERAR_CHECKLIST")
+                        {
+                            <h2 class="next-action-title">Generar el checklist de arranque</h2>
+                            <p class="next-action-text">La preparación debe documentarse antes de enviar la corrida a Calidad.</p>
+                        }
+                        else if (accionActual == "ESPERAR_CALIDAD")
+                        {
+                            <h2 class="next-action-title">Atender o esperar la liberación de Calidad</h2>
+                            <p class="next-action-text">La producción en serie permanece bloqueada hasta recibir etiqueta verde.</p>
+                        }
+                        else if (accionActual == "REINICIAR_SERIE")
+                        {
+                            <h2 class="next-action-title">Reiniciar producción en serie</h2>
+                            <p class="next-action-text">Calidad autorizó la reliberación. Confirma el reinicio real para reanudar las capturas horarias desde este momento.</p>
+                        }
+                        else if (accionActual == "INICIAR_SERIE")
+                        {
+                            <h2 class="next-action-title">Iniciar producción en serie</h2>
+                            <p class="next-action-text">La preparación está lista y Calidad ya permite continuar.</p>
+                        }
+                        else if (accionActual == "TERMINAR")
+                        {
+                            <h2 class="next-action-title">Revisar y terminar la producción</h2>
+                            <p class="next-action-text">La ejecución está en condiciones de pasar al cierre de producción.</p>
+                        }
+                        else
+                        {
+                            <h2 class="next-action-title">Continuar seguimiento de la ejecución</h2>
+                            <p class="next-action-text">Revisa capturas, materiales y paros conforme avance el turno.</p>
+                        }
+                    </div>
+                </div>
+
+                <a class="btn btn-primary btn-strong"
+                   href="#@(accionActual == "CERRAR_PARO" ? "panelParo" : accionActual == "MONITOREO_TURNO" ? "panelMonitoreoTurno" : accionActual == "GENERAR_CHECKLIST" ? "panelChecklist" : accionActual == "ESPERAR_CALIDAD" ? "panelCalidad" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "panelIniciarSerie" : accionActual == "TERMINAR" ? "panelTerminar" : "panelCapturas")"
+                   data-open-target>
+                    <i class="bi @(accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "bi-play-circle" : "bi-arrow-down-circle") me-1"></i>
+                    @(accionActual == "REINICIAR_SERIE" ? "Reiniciar ahora" : accionActual == "INICIAR_SERIE" ? "Iniciar ahora" : "Ir a la acción")
+                </a>
+            </div>
+        </section>
+
+        @if (e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion && !Model.TieneParoAbierto)
+        {
+            <section class="primary-series-action mb-4 @(Model.CalidadResumen?.PuedeIniciarSerie == true ? "" : "is-blocked")" id="panelIniciarSerie">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div class="d-flex align-items-start gap-3 flex-grow-1">
+                        <div class="next-action-icon">
+                            <i class="bi bi-play-fill"></i>
+                        </div>
+
+                        <div>
+                            <div class="data-label">
+                                @(esReinicioSerie ? "Acción principal" : "Inicio de serie")
+                            </div>
+
+                            <h2 class="series-title">
+                                @(esReinicioSerie ? "Reiniciar producción en serie" : "Iniciar producción en serie")
+                            </h2>
+
+                            <p class="series-text">
+                                @if (esReinicioSerie)
+                                {
+                                    <text>
+                                        Calidad ya autorizó la reliberación. Al confirmar se tomará la hora actual como reinicio real y las capturas horarias posteriores se reconstruirán desde este momento.
+                                    </text>
+                                }
+                                else
+                                {
+                                    <text>
+                                        Confirma el inicio de producción en serie cuando Calidad haya liberado las primeras piezas.
+                                    </text>
+                                }
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="series-status">
+                        <form method="post" action="@Url.Action("IniciarSerie", "Produccion")">
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden"
+                                   name="ejecucionProduccionId"
+                                   value="@e.EjecucionProduccionID" />
+
+                            <button type="submit"
+                                    class="btn btn-success w-100 btn-strong"
+                                    disabled="@(Model.CalidadResumen?.PuedeIniciarSerie != true)"
+                                    onclick="return confirm('@(esReinicioSerie ? "¿Confirmas reiniciar la producción en serie? La hora actual se tomará como reinicio real." : "¿Confirmas iniciar producción en serie?")');">
+                                <i class="bi bi-play-fill me-1"></i>
+                                @(esReinicioSerie ? "Reiniciar serie ahora" : "Iniciar serie")
+                            </button>
+
+                            @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
+                            {
+                                <div class="text-warning-emphasis fw-bold small mt-2 text-center">
+                                    <i class="bi bi-hourglass-split me-1"></i>
+                                    Pendiente de liberación verde por Calidad.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-success fw-bold small mt-2 text-center">
+                                    <i class="bi bi-check-circle me-1"></i>
+                                    Calidad autorizó continuar.
+                                </div>
+                            }
+                        </form>
+                    </div>
+                </div>
+            </section>
+        }
+
         <div class="row g-4">
             <div class="col-12 col-xl-4">
 
@@ -423,9 +772,41 @@
                                 <div class="muted-small">@e.DescripcionParte</div>
                             </div>
 
-                            <div class="col-6">
-                                <div class="data-label">Operador</div>
-                                <div class="data-value">@e.TextoOperador</div>
+                            <div class="col-12">
+                                <div class="operator-line">
+                                    <div>
+                                        <div class="data-label">Operador principal</div>
+                                        <div class="data-value">@e.TextoOperador</div>
+                                        <div class="muted-small mt-1">
+                                            <strong>Auxiliar:</strong>
+                                            @(string.IsNullOrWhiteSpace(e.OperadorAuxiliarNombre)
+                                                                                        ? "Sin auxiliar"
+                                                                                        : e.OperadorAuxiliarNombre)
+                                        </div>
+                                    </div>
+
+                                    @if (e.PuedePausar || Model.TieneParoAbierto)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary fw-bold"
+                                                title="La acción de cambio de operadores se implementará en el siguiente paso."
+                                                disabled>
+                                            <i class="bi bi-people me-1"></i>
+                                            Cambiar
+                                        </button>
+                                    }
+                                </div>
+
+                                @if (e.OperadoresModificadosManual)
+                                {
+                                    <div class="alert alert-info py-2 px-3 mt-2 mb-0">
+                                        <strong>Asignación modificada durante el turno.</strong>
+                                        @if (!string.IsNullOrWhiteSpace(e.MotivoCambioOperadores))
+                                        {
+                                            <div class="small mt-1">@e.MotivoCambioOperadores</div>
+                                        }
+                                    </div>
+                                }
                             </div>
 
                             <div class="col-6">
@@ -455,7 +836,7 @@
                     </div>
                 </div>
 
-                <div class="panel mb-4">
+                <div class="panel mb-4" id="panelChecklist" data-collapsible data-default-open="@(esPreparacion || Model.ChecklistResumen == null ? "true" : "false")">
                     <div class="panel-header">
                         <i class="bi bi-clipboard2-check me-1"></i>
                         Checklist de arranque
@@ -544,7 +925,33 @@
                     </div>
                 </div>
 
-                <div class="panel mb-4">
+                @if (monitoreoTurno != null)
+                {
+                    var porcentajeMonitoreo = monitoreoTurno.PorcentajeAvance;
+                    <div class="panel mb-4 @(Model.MostrarAvisoMonitoreoTurno ? "turno-monitor-card" : "")" id="panelMonitoreoTurno" data-collapsible data-default-open="@(Model.MostrarAvisoMonitoreoTurno ? "true" : "false")">
+                        <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+                            <span><i class="bi bi-cpu me-1"></i>Monitoreo de periféricos</span>
+                            <span class="badge @(Model.MostrarAvisoMonitoreoTurno ? "bg-warning text-dark" : "bg-success")">@(Model.MostrarAvisoMonitoreoTurno ? "Pendiente" : "Completo")</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="d-flex align-items-start gap-3 mb-3">
+                                <div class="turno-monitor-icon"><i class="bi bi-arrow-repeat"></i></div>
+                                <div class="flex-grow-1">
+                                    <div class="data-label">Turno actual</div>
+                                    <div class="data-value fs-5">@Txt(monitoreoTurno.TurnoNombre)</div>
+                                    <div class="muted-small">Fecha operativa: @monitoreoTurno.FechaOperacion.ToString("dd/MM/yyyy")</div>
+                                    <div class="muted-small">Máquina: @Txt(monitoreoTurno.MaquinaCodigo) · @Txt(monitoreoTurno.MaquinaNombre)</div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between small mb-1"><span class="fw-bold text-primary">Verificaciones</span><span>@monitoreoTurno.TotalConfirmadas / @monitoreoTurno.TotalPreguntas</span></div>
+                            <div class="progress turno-monitor-progress mb-3"><div class="progress-bar" style="width:@porcentajeMonitoreo.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div></div>
+                            <div class="soft-box mb-3"><div class="d-flex justify-content-between align-items-center gap-2"><span class="fw-bold"><i class="bi bi-people me-1"></i>Entrega y recepción</span><span class="badge @(monitoreoTurno.EntregaTurnoRegistrada ? "bg-success" : "bg-warning text-dark")">@(monitoreoTurno.EntregaTurnoRegistrada ? "Registrada" : "Pendiente")</span></div></div>
+                            <a href="@Url.Action("ChecklistFormato", "Produccion", new { id = monitoreoTurno.ChecklistArranqueID })" class="btn @(Model.MostrarAvisoMonitoreoTurno ? "btn-warning" : "btn-outline-primary") w-100 btn-strong"><i class="bi bi-clipboard-check me-1"></i>@(Model.MostrarAvisoMonitoreoTurno ? "Realizar monitoreo del turno" : "Consultar monitoreo del turno")</a>
+                        </div>
+                    </div>
+                }
+
+                <div class="panel mb-4" id="panelCalidad" data-collapsible data-default-open="@((calidadRequiereAtencion && Model.CalidadResumen?.PuedeIniciarSerie != true) ? "true" : "false")">
                     <div class="panel-header">
                         <i class="bi bi-patch-check me-1"></i>
                         Liberación de Calidad
@@ -599,62 +1006,15 @@
                                 </div>
                             }
 
-                            <a href="@Url.Action("Detalle", "Calidad", new { id = calidad.InspeccionID })"
-                               class="btn btn-outline-primary w-100 btn-strong">
-                                <i class="bi bi-box-arrow-up-right me-1"></i>
-                                Abrir seguimiento de Calidad
-                            </a>
                         }
                     </div>
                 </div>
-
-                @if (e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion && !Model.TieneParoAbierto)
-                {
-                    <div class="panel mb-4">
-                        <div class="panel-header">
-                            <i class="bi bi-play-circle me-1"></i>
-                            Iniciar producción en serie
-                        </div>
-
-                        <div class="panel-body">
-                            <div class="flow-note mb-3">
-                                Este paso cambia la ejecución de preparación a producción en serie.
-                                Solo se permite después de que Calidad libere las primeras piezas con etiqueta verde.
-                            </div>
-
-                            <form method="post" action="@Url.Action("IniciarSerie", "Produccion")">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden"
-                                       name="ejecucionProduccionId"
-                                       value="@e.EjecucionProduccionID" />
-
-                                <button type="submit"
-                                        class="btn btn-success w-100 btn-strong"
-                                        disabled="@(Model.CalidadResumen?.PuedeIniciarSerie != true)"
-                                        onclick="return confirm('¿Confirmas iniciar producción en serie?');">
-                                    <i class="bi bi-play-fill me-1"></i>
-                                    Iniciar serie
-                                </button>
-
-                                @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
-                                {
-                                    <div class="text-danger fw-bold small mt-2">
-                                        Pendiente de liberación verde por Calidad.
-                                    </div>
-                                }
-                            </form>
-                        </div>
-                    </div>
-                }
-
-               
 
                 @if (Model.TieneParoAbierto)
                 {
                     var paroAbierto = Model.ParoAbierto;
 
-                    <div class="panel mb-4 border-danger">
+                    <div class="panel mb-4 border-danger" id="panelParo">
                         <div class="panel-header text-danger">
                             <i class="bi bi-pause-circle me-1"></i>
                             Paro abierto
@@ -689,7 +1049,7 @@
                 }
                 else if (e.PuedePausar)
                 {
-                    <div class="panel mb-4">
+                    <div class="panel mb-4" id="panelParo" data-collapsible data-default-open="false">
                         <div class="panel-header">
                             <i class="bi bi-pause-circle me-1"></i>
                             Registrar paro
@@ -727,7 +1087,7 @@
 
                 @if (e.PuedeTerminar && !Model.TieneParoAbierto)
                 {
-                    <div class="panel">
+                    <div class="panel" id="panelTerminar">
                         <div class="panel-header">
                             <i class="bi bi-flag me-1"></i>
                             Terminar producción
@@ -767,7 +1127,7 @@
 
             <div class="col-12 col-xl-8">
 
-                <div class="panel mb-4">
+                <div class="panel mb-4" id="panelMateriales" data-collapsible data-default-open="false">
                     <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <span>
                             <i class="bi bi-box-seam me-1"></i>
@@ -889,7 +1249,7 @@
                     </div>
                 </div>
 
-                <div class="panel mb-4">
+                <div class="panel mb-4" id="panelCapturas" data-collapsible data-default-open="true">
                     <div class="panel-header">
                         <i class="bi bi-clock-history me-1"></i>
                         Capturas por hora
@@ -935,7 +1295,7 @@
                     </div>
                 </div>
 
-                <div class="panel">
+                <div class="panel" id="panelHistorialParos" data-collapsible data-default-open="false">
                     <div class="panel-header">
                         <i class="bi bi-pause-circle me-1"></i>
                         Historial de paros
@@ -995,7 +1355,98 @@
 
     </div>
 
+    @if (Model.MostrarAvisoMonitoreoTurno && monitoreoTurno != null)
+    {
+        <div class="modal fade" id="modalMonitoreoTurno" tabindex="-1" aria-labelledby="modalMonitoreoTurnoLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header modal-monitor-header">
+                        <h5 class="modal-title fw-bold" id="modalMonitoreoTurnoLabel"><i class="bi bi-exclamation-triangle me-2"></i>Cambio de turno detectado</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="modal-monitor-icon"><i class="bi bi-cpu"></i></div>
+                        <h4 class="text-center fw-bold text-danger mb-2">Monitoreo de periféricos pendiente</h4>
+                        <p class="text-center text-muted mb-4">Completa el formato <strong>GQ-F-PR01-14 Ver.01</strong> correspondiente al turno actual.</p>
+                        <div class="soft-box mb-3">
+                            <div class="row g-3">
+                                <div class="col-6"><div class="data-label">Turno</div><div class="data-value">@Txt(monitoreoTurno.TurnoNombre)</div></div>
+                                <div class="col-6"><div class="data-label">Fecha operativa</div><div class="data-value">@monitoreoTurno.FechaOperacion.ToString("dd/MM/yyyy")</div></div>
+                                <div class="col-12"><div class="data-label">Máquina</div><div class="data-value">@Txt(monitoreoTurno.MaquinaCodigo) · @Txt(monitoreoTurno.MaquinaNombre)</div></div>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6"><div class="mini-stat"><div class="mini-stat-label">Verificaciones</div><div class="mini-stat-value">@monitoreoTurno.TotalConfirmadas / @monitoreoTurno.TotalPreguntas</div></div></div>
+                            <div class="col-6"><div class="mini-stat"><div class="mini-stat-label">Entrega de turno</div><div class="mini-stat-value fs-6 @(monitoreoTurno.EntregaTurnoRegistrada ? "text-success" : "text-warning")">@(monitoreoTurno.EntregaTurnoRegistrada ? "Registrada" : "Pendiente")</div></div></div>
+                        </div>
+                        <div class="alert alert-warning mb-0"><i class="bi bi-info-circle me-1"></i>Si cierras esta advertencia, volverá a mostrarse al recargar mientras el monitoreo siga pendiente.</div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0 px-4 pb-4">
+                        <button type="button" class="btn btn-light btn-strong" data-bs-dismiss="modal">Continuar después</button>
+                        <a href="@Url.Action("ChecklistFormato", "Produccion", new { id = monitoreoTurno.ChecklistArranqueID })" class="btn btn-warning btn-strong"><i class="bi bi-clipboard-check me-1"></i>Realizar monitoreo</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.panel[data-collapsible]').forEach(function (panel) {
+                const header = panel.querySelector(':scope > .panel-header');
+                const abierto = panel.dataset.defaultOpen === 'true';
+
+                panel.classList.toggle('is-collapsed', !abierto);
+
+                if (!header) return;
+
+                header.setAttribute('role', 'button');
+                header.setAttribute('tabindex', '0');
+                header.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+
+                function alternar() {
+                    const colapsado = panel.classList.toggle('is-collapsed');
+                    header.setAttribute('aria-expanded', colapsado ? 'false' : 'true');
+                }
+
+                header.addEventListener('click', function (event) {
+                    if (event.target.closest('a, button, input, select, textarea, label')) return;
+                    alternar();
+                });
+
+                header.addEventListener('keydown', function (event) {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    alternar();
+                });
+            });
+
+            document.querySelectorAll('[data-open-target]').forEach(function (link) {
+                link.addEventListener('click', function () {
+                    const selector = link.getAttribute('href');
+                    if (!selector || !selector.startsWith('#')) return;
+
+                    const panel = document.querySelector(selector);
+                    if (!panel) return;
+
+                    panel.classList.remove('is-collapsed');
+
+                    const header = panel.querySelector(':scope > .panel-header');
+                    if (header) header.setAttribute('aria-expanded', 'true');
+                });
+            });
+        });
+    </script>
+    @if (Model.MostrarAvisoMonitoreoTurno && monitoreoTurno != null)
+    {
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const elemento = document.getElementById('modalMonitoreoTurno');
+                if (elemento) bootstrap.Modal.getOrCreateInstance(elemento).show();
+            });
+        </script>
+    }
 
 
 </body>

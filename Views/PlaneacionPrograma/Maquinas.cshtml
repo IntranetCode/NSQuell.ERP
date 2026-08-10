@@ -2,7 +2,8 @@
 @using System.Collections.Generic
 
 @{
-    Layout = null;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Máquinas / Cambio de Molde | ERP QUELL";
 
     string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
     string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
@@ -1314,6 +1315,8 @@
 </head>
 
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="page">
         <section class="hero">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">

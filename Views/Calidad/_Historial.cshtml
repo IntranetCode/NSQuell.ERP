@@ -1,0 +1,327 @@
+﻿@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
+@{
+    string Mostrar(string? valor) => string.IsNullOrWhiteSpace(valor) ? "—" : valor.Trim();
+}
+<style>
+    .quality-history {
+        --qh-border: #dfe5ec;
+        --qh-text: #1e293b;
+        --qh-muted: #64748b;
+        --qh-navy: #14213d;
+        --qh-orange: #f97316;
+        color: var(--qh-text)
+    }
+
+    .quality-history-section {
+        margin-bottom: 20px;
+        overflow: hidden;
+        border: 1px solid var(--qh-border);
+        border-radius: 14px;
+        background: #fff
+    }
+
+    .quality-history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 17px 20px;
+        border-bottom: 1px solid var(--qh-border);
+        background: #fbfcfd
+    }
+
+        .quality-history-header h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            color: var(--qh-navy);
+            font-size: 1rem;
+            font-weight: 800
+        }
+
+            .quality-history-header h2 i {
+                color: var(--qh-orange)
+            }
+
+    .quality-history-body {
+        padding: 20px
+    }
+
+    .quality-history-wrap {
+        overflow-x: auto
+    }
+
+    .quality-history-table {
+        width: 100%;
+        min-width: 920px;
+        border-collapse: collapse
+    }
+
+        .quality-history-table th, .quality-history-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #e8edf2;
+            text-align: left;
+            vertical-align: top;
+            font-size: .82rem
+        }
+
+        .quality-history-table th {
+            position: sticky;
+            top: 0;
+            background: #f7f9fb;
+            color: #475569;
+            font-size: .72rem;
+            font-weight: 850;
+            letter-spacing: .03em;
+            text-transform: uppercase
+        }
+
+        .quality-history-table tbody tr:last-child td {
+            border-bottom: 0
+        }
+
+        .quality-history-table tbody tr:hover {
+            background: #fafcff
+        }
+
+    .quality-history-movement {
+        color: var(--qh-navy);
+        font-weight: 800
+    }
+
+    .quality-history-comment {
+        min-width: 260px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere
+    }
+
+    .quality-history-empty {
+        padding: 34px 20px;
+        color: var(--qh-muted);
+        text-align: center
+    }
+
+    .quality-history-summary {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 14px
+    }
+
+    .quality-history-field {
+        min-width: 0;
+        padding: 14px;
+        border: 1px solid #e9edf2;
+        border-radius: 10px;
+        background: #fbfcfe
+    }
+
+    .quality-history-label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--qh-muted);
+        font-size: .7rem;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase
+    }
+
+    .quality-history-value {
+        display: block;
+        overflow-wrap: anywhere;
+        color: var(--qh-text);
+        font-size: .9rem;
+        font-weight: 700
+    }
+
+    .quality-history-notes {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        line-height: 1.55
+    }
+
+    .quality-history-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #fff7ed;
+        color: #9a3412;
+        font-size: .75rem;
+        font-weight: 850
+    }
+
+    html[data-nsq-theme="dark"] .quality-history {
+        --qh-border: rgba(255,255,255,.10);
+        --qh-text: #e5e7eb;
+        --qh-muted: #94a3b8;
+        --qh-navy: #f8fafc
+    }
+
+    html[data-nsq-theme="dark"] .quality-history-section {
+        background: #111c2d
+    }
+
+    html[data-nsq-theme="dark"] .quality-history-header, html[data-nsq-theme="dark"] .quality-history-field, html[data-nsq-theme="dark"] .quality-history-table th {
+        background: #0e1828
+    }
+
+    html[data-nsq-theme="dark"] .quality-history-table td {
+        border-bottom-color: rgba(255,255,255,.08)
+    }
+
+    html[data-nsq-theme="dark"] .quality-history-table tbody tr:hover {
+        background: #101a2b
+    }
+
+    @@media(max-width:900px) {
+        .quality-history-summary {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+    }
+
+    @@media(max-width:680px) {
+        .quality-history-header {
+            align-items: flex-start;
+            flex-direction: column
+        }
+
+        .quality-history-body {
+            padding: 15px
+        }
+
+        .quality-history-summary {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+<div class="quality-history">
+    <section class="quality-history-section" id="historial-proceso">
+        <div class="quality-history-header">
+            <h2>
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                Historial del proceso
+            </h2>
+            <span class="quality-history-count">@(Model.Historial?.Count ?? 0)</span>
+        </div>
+        @if (Model.Historial != null && Model.Historial.Any())
+        {
+            <div class="quality-history-wrap">
+                <table class="quality-history-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Movimiento</th>
+                            <th>Estado anterior</th>
+                            <th>Estado nuevo</th>
+                            <th>Resultado</th>
+                            <th>Comentario</th>
+                            <th>Usuario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Historial)
+                        {
+                            <tr>
+                                <td>@item.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="quality-history-movement">@Mostrar(item.Movimiento)</td>
+                                <td>@Mostrar(item.EstadoAnterior)</td>
+                                <td>@Mostrar(item.EstadoNuevo)</td>
+                                <td>@Mostrar(item.ResultadoCalidad)</td>
+                                <td class="quality-history-comment">@Mostrar(item.Comentario)</td>
+                                <td>@(item.UsuarioID?.ToString() ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="quality-history-empty">
+                <i class="fa-regular fa-clock fa-2x mb-3"></i>
+                <div>No existen movimientos registrados.</div>
+            </div>
+        }
+    </section>
+    <section class="quality-history-section">
+        <div class="quality-history-header">
+            <h2>
+                <i class="fa-solid fa-flag"></i>
+                Resultado y trazabilidad
+            </h2>
+        </div>
+        <div class="quality-history-body">
+            <div class="quality-history-summary">
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Resultado actual</span>
+                    <span class="quality-history-value">@Mostrar(Model.ResultadoCalidad)</span>
+                </div>
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Etiqueta</span>
+                    <span class="quality-history-value">@Mostrar(Model.Etiqueta)</span>
+                </div>
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Requiere GP12</span>
+                    <span class="quality-history-value">@(Model.RequiereGP12 ? "Sí" : "No")</span>
+                </div>
+                <div class="quality-history-field">
+                    <span class="quality-history-label">En contención</span>
+                    <span class="quality-history-value">@(Model.EnContencion ? "Sí" : "No")</span>
+                </div>
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Fecha de liberación</span>
+                    <span class="quality-history-value">@(Model.FechaLiberacionProduccion?.ToString("dd/MM/yyyy HH:mm") ?? "—")</span>
+                </div>
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Fecha de cierre</span>
+                    <span class="quality-history-value">@(Model.FechaCierre?.ToString("dd/MM/yyyy HH:mm") ?? "—")</span>
+                </div>
+            </div>
+        </div>
+    </section>
+    @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
+    {
+        <section class="quality-history-section">
+            <div class="quality-history-header">
+                <h2>
+                    <i class="fa-solid fa-note-sticky"></i>
+                    Observaciones generales
+                </h2>
+            </div>
+            <div class="quality-history-body">
+                <div class="quality-history-notes">@Model.Observaciones</div>
+            </div>
+        </section>
+    }
+    <section class="quality-history-section">
+        <div class="quality-history-header">
+            <h2>
+                <i class="fa-solid fa-circle-info"></i>
+                Auditoría del registro
+            </h2>
+        </div>
+        <div class="quality-history-body">
+            <div class="quality-history-summary">
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Creación</span>
+                    <span class="quality-history-value">@Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</span>
+                </div>
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Usuario creador</span>
+                    <span class="quality-history-value">@(Model.UsuarioCreacionID?.ToString() ?? "—")</span>
+                </div>
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Última modificación</span>
+                    <span class="quality-history-value">@(Model.FechaModificacion?.ToString("dd/MM/yyyy HH:mm") ?? "—")</span>
+                </div>
+                <div class="quality-history-field">
+                    <span class="quality-history-label">Usuario modificación</span>
+                    <span class="quality-history-value">@(Model.UsuarioModificacionID?.ToString() ?? "—")</span>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>

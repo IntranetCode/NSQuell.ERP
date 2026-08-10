@@ -366,302 +366,59 @@ namespace ERP.NSQuell.Controllers
             return View(model);
         }
 
-        // =========================================================
-        // ENTRADA REAL DESDE PRODUCCIÓN
-        // =========================================================
-
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RecibirDesdeProduccion(
-            int programaProduccionId)
+        public async Task<IActionResult> RecibirDesdeProduccion(int programaProduccionId)
         {
-            var usuarioId =
-                ObtenerUsuarioIdActual();
+            var usuarioId = ObtenerUsuarioIdActual();
 
-            if (!usuarioId.HasValue ||
-                usuarioId.Value <= 0)
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
             {
-                TempData["Error"] =
-                    "No se pudo identificar el usuario de la sesión.";
-
+                TempData["Error"] = "No se pudo identificar el usuario de la sesión.";
                 return RedirectToAction(nameof(Index));
             }
 
             if (programaProduccionId <= 0)
             {
+                TempData["Error"] = "No se recibió un programa de producción válido.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var inspeccion = await _context.CalidadInspecciones
+                .AsNoTracking()
+                .Where(x =>
+                    x.ProgramaProduccionID == programaProduccionId &&
+                    x.EjecucionProduccionID.HasValue &&
+                    x.EjecucionProduccionID.Value > 0 &&
+                    x.ChecklistArranqueID.HasValue &&
+                    x.ChecklistArranqueID.Value > 0 &&
+                    !x.ConfiguracionInvalidada &&
+                    x.Estado != CalidadEstados.Cerrada)
+                .OrderByDescending(x => x.InspeccionID)
+                .Select(x => new
+                {
+                    x.InspeccionID,
+                    x.EjecucionProduccionID,
+                    x.ChecklistArranqueID
+                })
+                .FirstOrDefaultAsync();
+
+            if (inspeccion == null)
+            {
                 TempData["Error"] =
-                    "No se recibió un programa de producción válido.";
+                    "Producción todavía no ha enviado el checklist a Calidad. " +
+                    "La inspección debe generarse desde el checklist de arranque.";
 
                 return RedirectToAction(nameof(Index));
             }
 
-            var corrida =
-                await ObtenerCorridaOrigenAsync(
-                    programaProduccionId
-                );
-
-            if (corrida == null)
-            {
-                TempData["Error"] =
-                    "No se encontró el programa de producción.";
-
-                return RedirectToAction(nameof(Index));
-            }
-
-            if (corrida.EstatusProgramaID == 5 ||
-                corrida.EstatusProgramaID == 9 ||
-                corrida.EstatusProgramaID == 99)
-            {
-                TempData["Error"] =
-                    "La corrida está terminada, cerrada o cancelada y no puede enviarse a Calidad.";
-
-                return RedirectToAction(nameof(Index));
-            }
-
-            var faltantes =
-                ObtenerFaltantesCorrida(corrida);
-
-            if (faltantes.Count > 0)
-            {
-                TempData["Error"] =
-                    "La corrida no puede enviarse a Calidad. Faltan: " +
-                    string.Join(", ", faltantes) +
-                    ".";
-
-                return RedirectToAction(nameof(Index));
-            }
-
-            var inspeccionExistente =
-                await _context.CalidadInspecciones
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.ProgramaProduccionID ==
-                            programaProduccionId &&
-                        !x.ConfiguracionInvalidada &&
-                        x.Estado !=
-                            CalidadEstados.Cerrada)
-                    .OrderByDescending(x =>
-                        x.FechaCreacion)
-                    .FirstOrDefaultAsync();
-
-            if (inspeccionExistente != null)
-            {
-                TempData["Mensaje"] =
-                    "La corrida ya cuenta con un proceso de Calidad.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new
-                    {
-                        id = inspeccionExistente
-                            .InspeccionID
-                    }
-                );
-            }
-
-            await using var tx =
-                await _context.Database
-                    .BeginTransactionAsync();
-
-            try
-            {
-                var fechaAhora =
-                    DateTime.Now;
-
-                var inspeccion =
-                    new CalidadInspeccion
-                    {
-                        ProgramaProduccionID =
-                            corrida.ProgramaProduccionID,
-
-                        SolicitudProduccionID =
-                            corrida.SolicitudProduccionID,
-
-                        SolicitudProduccionDetalleID =
-                            corrida.SolicitudProduccionDetalleID,
-
-                        ReleaseID =
-                            corrida.ReleaseID,
-
-                        ReleaseDetalleID =
-                            corrida.ReleaseDetalleID,
-
-                        ClienteID =
-                            corrida.ClienteID,
-
-                        ClienteNombre =
-                            corrida.ClienteNombre,
-
-                        ParteID =
-                            corrida.ParteID,
-
-                        MaquinaID =
-                            corrida.MaquinaID,
-
-                        MoldeID =
-                            corrida.MoldeID,
-
-                        MaterialID =
-                            corrida.MaterialID,
-
-                        OrdenTrabajo =
-                            corrida.NumeroOF,
-
-                        NumeroParte =
-                            PrimerTextoDisponible(
-                                corrida.ReferenciaSAP,
-                                corrida.NumeroParte
-                            ),
-
-                        Material =
-                            UnirCodigoDescripcion(
-                                corrida.MaterialCodigo,
-                                corrida.MaterialDescripcion
-                            ),
-
-                        Proceso =
-                            "LIBERACIÓN DE CORRIDA",
-
-                        Maquina =
-                            UnirCodigoDescripcion(
-                                corrida.MaquinaCodigo,
-                                corrida.MaquinaNombre
-                            ),
-
-                        Molde =
-                            corrida.MoldeCodigo,
-
-                        FechaInicioProgramada =
-                            corrida.FechaInicioProgramada,
-
-                        FechaFinProgramada =
-                            corrida.FechaFinProgramada,
-
-                        OperadorPrincipalPersonaID =
-                            corrida.OperadorPrincipalPersonaID,
-
-                        OperadorPrincipalNombre =
-                            corrida.OperadorPrincipalNombre,
-
-                        OperadorAuxiliarPersonaID =
-                            corrida.OperadorAuxiliarPersonaID,
-
-                        OperadorAuxiliarNombre =
-                            corrida.OperadorAuxiliarNombre,
-
-                        CantidadTotal =
-                            corrida.CantidadProgramada,
-
-                        CantidadRevisada =
-                            0,
-
-                        CantidadPendiente =
-                            corrida.CantidadProgramada,
-
-                        /*
-                         * Esta acción debe invocarse únicamente
-                         * después de que Producción termine su
-                         * checklist.
-                         */
-                        ChecklistValidado =
-                            true,
-
-                        HojaInspeccionProducto =
-                            false,
-
-                        HojaValidacionCalidad =
-                            false,
-
-                        FechaNotificacionCalidad =
-                            fechaAhora,
-
-                        UsuarioNotificoID =
-                            usuarioId,
-
-                        CincoDisparosSegregados =
-                            false,
-
-                        CantidadDisparosConformes =
-                            0,
-
-                        ResultadoCalidad =
-                            null,
-
-                        Etiqueta =
-                            null,
-
-                        Liberado =
-                            false,
-
-                        RequiereGP12 =
-                            false,
-
-                        EnContencion =
-                            false,
-
-                        EsScrap =
-                            false,
-
-                        ConfiguracionInvalidada =
-                            false,
-
-                        Observaciones =
-                            "Solicitud recibida desde Producción para revisión de prearranque.",
-
-                        Estado =
-                            CalidadEstados
-                                .PendientePrearranque,
-
-                        UsuarioCreacionID =
-                            usuarioId,
-
-                        FechaCreacion =
-                            fechaAhora
-                    };
-
-                _context.CalidadInspecciones
-                    .Add(inspeccion);
-
-                await _context.SaveChangesAsync();
-
-                AgregarHistorial(
-                    inspeccion,
-                    CalidadMovimientos
-                        .RecibidoDesdeProduccion,
-                    null,
-                    inspeccion.Estado,
-                    null,
-                    null,
-                    "Producción envió la corrida a Calidad para revisión de prearranque.",
-                    usuarioId
-                );
-
-                await _context.SaveChangesAsync();
-                await tx.CommitAsync();
-
-                TempData["Mensaje"] =
-                    "La corrida fue enviada correctamente a Calidad.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new
-                    {
-                        id = inspeccion.InspeccionID
-                    }
-                );
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "No fue posible recibir la corrida en Calidad: " +
-                    ex.Message;
-
-                return RedirectToAction(nameof(Index));
-            }
+            TempData["Mensaje"] =
+                "La solicitud de Calidad ya fue recibida desde Producción.";
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = inspeccion.InspeccionID });
         }
-
         // =========================================================
         // DETALLE
         // =========================================================
@@ -1594,101 +1351,108 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> LiberarProduccionAuditor(int id)
         {
-            var inspeccion = await _context.CalidadInspecciones
-                .FirstOrDefaultAsync(x => x.InspeccionID == id);
-
-            if (inspeccion == null)
-                return NotFound();
-
-            if (inspeccion.ConfiguracionInvalidada)
-            {
-                TempData["Error"] =
-                    "La configuración fue invalidada y no puede liberarse.";
-
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
-
-            if (inspeccion.Estado != CalidadEstados.PendientePrimerasPiezas &&
-                inspeccion.Estado != CalidadEstados.AjustesSolicitados &&
-                inspeccion.Estado != CalidadEstados.LegacyAbierta)
-            {
-                TempData["Error"] =
-                    "La inspección no se encuentra lista para liberar Producción.";
-
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
-
-            var validacionConfiguracion =
-                await ValidarConfiguracionActualAsync(inspeccion);
-
-            if (!validacionConfiguracion.Valida)
-            {
-                await InvalidarConfiguracionAsync(
-                    inspeccion,
-                    validacionConfiguracion.Motivo);
-
-                TempData["Error"] = validacionConfiguracion.Motivo;
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
-
-            var intento = await _context.CalidadPrimerasPiezasIntentos
-                .Where(x => x.InspeccionID == id && x.Activo)
-                .OrderByDescending(x => x.NumeroIntento)
-                .FirstOrDefaultAsync();
-
-            if (intento == null)
-            {
-                TempData["Error"] =
-                    "Primero registra la validación de las primeras piezas.";
-
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
-
-            if (!intento.CincoDisparosSegregados ||
-                intento.CantidadDisparosPresentados < 3 ||
-                intento.ValidacionDimensional != true ||
-                intento.ValidacionApariencia != true ||
-                intento.ValidacionGauge == false ||
-                intento.ValidacionConductividad == false)
-            {
-                TempData["Error"] =
-                    "El último intento no cumple los requisitos para liberar la producción.";
-
-                return RedirectToAction(nameof(Detalle), new { id });
-            }
+            if (id <= 0) return NotFound();
 
             var usuarioId = ObtenerUsuarioIdActual();
-
-            if (!usuarioId.HasValue || usuarioId.Value <= 0)
-                return Unauthorized();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0) return Unauthorized();
 
             await using var tx = await _context.Database.BeginTransactionAsync();
-
             try
             {
+                var inspeccion = await _context.CalidadInspecciones.FirstOrDefaultAsync(x => x.InspeccionID == id);
+                if (inspeccion == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+
+                if (inspeccion.ConfiguracionInvalidada)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La configuración fue invalidada y no puede liberarse.";
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                if (inspeccion.Estado != CalidadEstados.PendientePrimerasPiezas &&
+                    inspeccion.Estado != CalidadEstados.AjustesSolicitados &&
+                    inspeccion.Estado != CalidadEstados.LegacyAbierta &&
+                    inspeccion.Estado != CalidadEstados.PendienteReliberacion)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La inspección no se encuentra lista para liberar Producción.";
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                var validacionConfiguracion = await ValidarConfiguracionActualAsync(inspeccion);
+                if (!validacionConfiguracion.Valida)
+                {
+                    await InvalidarConfiguracionAsync(inspeccion, validacionConfiguracion.Motivo);
+                    await tx.CommitAsync();
+                    TempData["Error"] = validacionConfiguracion.Motivo;
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                var intento = await _context.CalidadPrimerasPiezasIntentos
+                    .Where(x => x.InspeccionID == id && x.Activo)
+                    .OrderByDescending(x => x.NumeroIntento)
+                    .FirstOrDefaultAsync();
+
+                if (intento == null)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Primero registra la validación de las primeras piezas.";
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                if (!intento.CincoDisparosSegregados ||
+                    intento.CantidadDisparosPresentados < 3 ||
+                    intento.ValidacionDimensional != true ||
+                    intento.ValidacionApariencia != true ||
+                    intento.ValidacionGauge == false ||
+                    intento.ValidacionConductividad == false)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El último intento no cumple los requisitos para liberar la producción.";
+                    return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                var eraReliberacion = inspeccion.RequiereReliberacion ||
+                                      inspeccion.Estado == CalidadEstados.PendienteReliberacion ||
+                                      CalidadTipoProceso.EsReliberacion(inspeccion.Proceso);
+
+                CalidadReliberacion? reliberacionPendiente = null;
+                if (eraReliberacion)
+                {
+                    reliberacionPendiente = await _context.CalidadReliberaciones
+                        .Where(x => x.InspeccionID == id &&
+                                    x.Activo &&
+                                    x.Resultado == CalidadResultadoReliberacion.Pendiente)
+                        .OrderByDescending(x => x.NumeroReliberacion)
+                        .FirstOrDefaultAsync();
+
+                    if (reliberacionPendiente == null)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "No existe una reliberación pendiente relacionada con esta inspección.";
+                        return RedirectToAction(nameof(Detalle), new { id });
+                    }
+                }
+
                 var ahora = DateTime.Now;
                 var estadoAnterior = inspeccion.Estado;
-                var eraReliberacion =
-                    inspeccion.RequiereReliberacion ||
-                    CalidadTipoProceso.EsReliberacion(inspeccion.Proceso);
 
                 intento.Resultado = CalidadResultadoIntento.Ok;
                 intento.AjusteSolicitado = false;
                 intento.FechaFin = ahora;
-                intento.UsuarioModificacionID = usuarioId;
+                intento.UsuarioModificacionID = usuarioId.Value;
                 intento.FechaModificacion = ahora;
 
-                inspeccion.CincoDisparosSegregados =
-                    intento.CincoDisparosSegregados;
-                inspeccion.CantidadDisparosConformes =
-                    intento.CantidadDisparosPresentados;
-                inspeccion.ValidacionDimensional =
-                    intento.ValidacionDimensional;
-                inspeccion.ValidacionApariencia =
-                    intento.ValidacionApariencia;
+                inspeccion.CincoDisparosSegregados = intento.CincoDisparosSegregados;
+                inspeccion.CantidadDisparosConformes = intento.CantidadDisparosPresentados;
+                inspeccion.ValidacionDimensional = intento.ValidacionDimensional;
+                inspeccion.ValidacionApariencia = intento.ValidacionApariencia;
                 inspeccion.ValidacionGauge = intento.ValidacionGauge;
-                inspeccion.ValidacionConductividad =
-                    intento.ValidacionConductividad;
+                inspeccion.ValidacionConductividad = intento.ValidacionConductividad;
                 inspeccion.ResultadoCalidad = "VERDE";
                 inspeccion.Etiqueta = "VERDE";
                 inspeccion.Liberado = true;
@@ -1698,90 +1462,60 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                 inspeccion.RequiereReliberacion = false;
                 inspeccion.Estado = CalidadEstados.ProduccionLiberada;
                 inspeccion.FechaLiberacionProduccion = ahora;
-                inspeccion.UsuarioLiberacionProduccionID = usuarioId;
+                inspeccion.UsuarioLiberacionProduccionID = usuarioId.Value;
                 inspeccion.FechaValidacionPrimerasPiezas = ahora;
-                inspeccion.UsuarioValidacionPrimerasPiezasID = usuarioId;
+                inspeccion.UsuarioValidacionPrimerasPiezasID = usuarioId.Value;
+                inspeccion.MotivoDevolucion = null;
 
                 if (inspeccion.FechaNotificacionCalidad.HasValue)
                 {
-                    var minutos = (int)Math.Max(
-                        0,
-                        Math.Round(
-                            (ahora - inspeccion.FechaNotificacionCalidad.Value)
-                                .TotalMinutes));
-
+                    var minutos = (int)Math.Max(0, Math.Round((ahora - inspeccion.FechaNotificacionCalidad.Value).TotalMinutes));
                     inspeccion.MinutosLiberacionInicial = minutos;
-                    inspeccion.CumplioTiempoObjetivoInicial =
-                        minutos >= 10 && minutos <= 20;
+                    inspeccion.CumplioTiempoObjetivoInicial = minutos >= 10 && minutos <= 20;
                 }
 
-                if (eraReliberacion)
+                if (reliberacionPendiente != null)
                 {
-                    var pendientes = await _context.CalidadReliberaciones
-                        .Where(x =>
-                            x.InspeccionID == id &&
-                            x.Activo &&
-                            x.Resultado == CalidadResultadoReliberacion.Pendiente)
-                        .ToListAsync();
-
-                    foreach (var reliberacion in pendientes)
-                    {
-                        reliberacion.Resultado =
-                            CalidadResultadoReliberacion.Autorizada;
-                        reliberacion.FechaValidacion = ahora;
-                        reliberacion.UsuarioCalidadID = usuarioId;
-                        reliberacion.Observaciones =
-                            "Reliberación autorizada después de validar primeras piezas conformes.";
-                        reliberacion.UsuarioModificacionID = usuarioId;
-                        reliberacion.FechaModificacion = ahora;
-                    }
+                    reliberacionPendiente.Resultado = CalidadResultadoReliberacion.Autorizada;
+                    reliberacionPendiente.FechaValidacion = ahora;
+                    reliberacionPendiente.UsuarioCalidadID = usuarioId.Value;
+                    reliberacionPendiente.Observaciones = UnirObservaciones(
+                        reliberacionPendiente.Observaciones,
+                        $"Reliberación {reliberacionPendiente.NumeroReliberacion} autorizada después de validar primeras piezas conformes.");
+                    reliberacionPendiente.UsuarioModificacionID = usuarioId.Value;
+                    reliberacionPendiente.FechaModificacion = ahora;
                 }
 
-                MarcarModificacion(inspeccion, usuarioId);
+                MarcarModificacion(inspeccion, usuarioId.Value);
 
                 AgregarHistorial(
                     inspeccion,
-                    eraReliberacion
-                        ? CalidadMovimientos.ReliberacionAutorizada
-                        : CalidadMovimientos.ProduccionLiberada,
+                    eraReliberacion ? CalidadMovimientos.ReliberacionAutorizada : CalidadMovimientos.ProduccionLiberada,
                     estadoAnterior,
                     inspeccion.Estado,
                     inspeccion.ResultadoCalidad,
                     inspeccion.Etiqueta,
                     eraReliberacion
-                        ? "Reliberación autorizada con etiqueta verde. Producción puede reiniciar la serie."
-                        : "Calidad liberó la producción y asignó etiqueta verde.",
-                    usuarioId);
-
-                /*
-                 * Deja preparados los periodos de revisión que después
-                 * se enlazan con las capturas por hora de Producción.
-                 * El helper es idempotente y no duplica monitoreos.
-                 */
-                if (inspeccion.EjecucionProduccionID.HasValue)
-                {
-                    await GenerarMonitoreosHorariosAsync(
-                        inspeccion,
-                        ahora,
-                        usuarioId.Value);
-                }
+                        ? $"Reliberación {reliberacionPendiente?.NumeroReliberacion} autorizada con etiqueta verde. Producción debe confirmar el reinicio de la serie."
+                        : "Calidad liberó la producción con etiqueta verde. Producción debe confirmar el inicio de la serie.",
+                    usuarioId.Value);
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
 
                 TempData["Mensaje"] = eraReliberacion
-                    ? "Reliberación autorizada con etiqueta verde. Ya puede reiniciarse la serie."
-                    : "Producción liberada con etiqueta verde. Ya puede iniciarse la serie.";
+                    ? "Reliberación autorizada con etiqueta verde. Producción ya puede reiniciar la serie."
+                    : "Producción liberada con etiqueta verde. Producción ya puede iniciar la serie.";
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                TempData["Error"] =
-                    "No fue posible liberar la producción: " + ex.Message;
+                TempData["Error"] = "No fue posible liberar la producción: " + ex.Message;
             }
 
             return RedirectToAction(nameof(Detalle), new { id });
         }
+
 
         private async Task<(bool Valido, string Mensaje)>
             ValidarChecklistCompletoParaAutorizarAsync(
@@ -2470,97 +2204,6 @@ FROM Preguntas;";
             );
         }
 
-        // =========================================================
-        // GP12 Y MATERIAL NO CONFORME
-        // =========================================================
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EnviarGP12(
-            int id,
-            string? comentario)
-        {
-            var inspeccion =
-                await _context.CalidadInspecciones
-                    .FirstOrDefaultAsync(x =>
-                        x.InspeccionID == id);
-
-            if (inspeccion == null)
-                return NotFound();
-
-            if (inspeccion.Estado ==
-                CalidadEstados.Cerrada)
-            {
-                TempData["Error"] =
-                    "Una inspección cerrada no puede enviarse a GP12.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id }
-                );
-            }
-
-            var usuarioId =
-                ObtenerUsuarioIdActual();
-
-            var estadoAnterior =
-                inspeccion.Estado;
-
-            inspeccion.ResultadoCalidad =
-                "NOK";
-
-            inspeccion.Etiqueta =
-                "AMARILLA";
-
-            inspeccion.Liberado =
-                false;
-
-            inspeccion.RequiereGP12 =
-                true;
-
-            inspeccion.EnContencion =
-                false;
-
-            inspeccion.EsScrap =
-                false;
-
-            inspeccion.Estado =
-                CalidadEstados.PendienteGP12;
-
-            inspeccion.Observaciones =
-                string.IsNullOrWhiteSpace(comentario)
-                    ? inspeccion.Observaciones
-                    : comentario.Trim();
-
-            MarcarModificacion(
-                inspeccion,
-                usuarioId
-            );
-
-            AgregarHistorial(
-                inspeccion,
-                CalidadMovimientos
-                    .EnviadoGP12,
-                estadoAnterior,
-                inspeccion.Estado,
-                inspeccion.ResultadoCalidad,
-                inspeccion.Etiqueta,
-                string.IsNullOrWhiteSpace(comentario)
-                    ? "Material enviado a GP12 para inspección reforzada."
-                    : comentario.Trim(),
-                usuarioId
-            );
-
-            await _context.SaveChangesAsync();
-
-            TempData["Mensaje"] =
-                "Material enviado a GP12.";
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id }
-            );
-        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -2668,17 +2311,6 @@ FROM Preguntas;";
             int id)
         {
             return LiberarProduccion(id);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public Task<IActionResult> EnviarGPI2(
-            int id)
-        {
-            return EnviarGP12(
-                id,
-                "Envío realizado desde la acción anterior GPI2."
-            );
         }
 
         [HttpPost]
@@ -3215,35 +2847,35 @@ ORDER BY
             return corrida;
         }
 
-        // =========================================================
-        // VALIDACIÓN CONTRA CAMBIOS DE PLANEACIÓN
-        // =========================================================
-
-        private async Task<(
-            bool Valida,
-            string Motivo)>
-            ValidarConfiguracionActualAsync(
-                CalidadInspeccion inspeccion)
+        private async Task<(bool Valida, string Motivo)>
+    ValidarConfiguracionActualAsync(
+        CalidadInspeccion inspeccion)
         {
-            if (!inspeccion
-                .ProgramaProduccionID
-                .HasValue)
+            /*
+             * ============================================================
+             * REGISTROS MANUALES ANTERIORES
+             * ============================================================
+             *
+             * Una inspección manual puede no tener programa de Planeación.
+             * En ese caso no existe una corrida contra la cual comparar.
+             */
+            if (!inspeccion.ProgramaProduccionID.HasValue ||
+                inspeccion.ProgramaProduccionID.Value <= 0)
             {
-                /*
-                 * Registro manual anterior.
-                 * No tiene una corrida para comparar.
-                 */
                 return (
                     true,
                     string.Empty
                 );
             }
 
+            /*
+             * ============================================================
+             * CONSULTAR CONFIGURACIÓN ACTUAL DE PLANEACIÓN
+             * ============================================================
+             */
             var actual =
                 await ObtenerCorridaOrigenAsync(
-                    inspeccion
-                        .ProgramaProduccionID
-                        .Value
+                    inspeccion.ProgramaProduccionID.Value
                 );
 
             if (actual == null)
@@ -3254,23 +2886,27 @@ ORDER BY
                 );
             }
 
-            var cambios =
+            var cambiosCriticos =
                 new List<string>();
+
+            /*
+             * ============================================================
+             * DATOS QUE SÍ INVALIDAN LA CONFIGURACIÓN DE CALIDAD
+             * ============================================================
+             */
 
             if (actual.SolicitudProduccionID !=
                 inspeccion.SolicitudProduccionID)
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "la Orden de Fabricación"
                 );
             }
 
-            if (actual
-                    .SolicitudProduccionDetalleID !=
-                inspeccion
-                    .SolicitudProduccionDetalleID)
+            if (actual.SolicitudProduccionDetalleID !=
+                inspeccion.SolicitudProduccionDetalleID)
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "el renglón de la OF"
                 );
             }
@@ -3278,7 +2914,7 @@ ORDER BY
             if (actual.ParteID !=
                 inspeccion.ParteID)
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "la parte"
                 );
             }
@@ -3286,7 +2922,7 @@ ORDER BY
             if (actual.MaquinaID !=
                 inspeccion.MaquinaID)
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "la máquina"
                 );
             }
@@ -3294,7 +2930,7 @@ ORDER BY
             if (actual.MoldeID !=
                 inspeccion.MoldeID)
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "el molde"
                 );
             }
@@ -3302,49 +2938,39 @@ ORDER BY
             if (actual.MaterialID !=
                 inspeccion.MaterialID)
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "el material"
                 );
             }
 
-            if (actual
-                    .OperadorPrincipalPersonaID !=
-                inspeccion
-                    .OperadorPrincipalPersonaID)
-            {
-                cambios.Add(
-                    "el operador principal"
-                );
-            }
-
             if (FechasDiferentes(
-                    actual.FechaInicioProgramada,
-                    inspeccion
-                        .FechaInicioProgramada))
+                actual.FechaInicioProgramada,
+                inspeccion.FechaInicioProgramada))
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "la fecha u hora de inicio"
                 );
             }
 
             if (FechasDiferentes(
-                    actual.FechaFinProgramada,
-                    inspeccion
-                        .FechaFinProgramada))
+                actual.FechaFinProgramada,
+                inspeccion.FechaFinProgramada))
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "la fecha u hora de término"
                 );
             }
 
             if (actual.EstatusProgramaID == 99)
             {
-                cambios.Add(
+                cambiosCriticos.Add(
                     "el programa fue cancelado"
                 );
             }
 
-            if (cambios.Count == 0)
+           
+
+            if (cambiosCriticos.Count == 0)
             {
                 return (
                     true,
@@ -3354,8 +2980,9 @@ ORDER BY
 
             return (
                 false,
-                "La configuración autorizada ya no coincide con Planeación. Cambió: " +
-                string.Join(", ", cambios) +
+                "La configuración autorizada ya no coincide con Planeación. " +
+                "Cambió: " +
+                string.Join(", ", cambiosCriticos) +
                 ". Debe generarse una nueva revisión de Calidad."
             );
         }

@@ -1,0 +1,802 @@
+﻿@model ERP.NSQuell.Models.ProduccionBandejaVm
+
+@{
+    Layout = null;
+
+    static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    static string Num(int? value)
+    {
+        return value.HasValue ? value.Value.ToString("N0") : "-";
+    }
+
+    static string Fecha(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    static string ClaseEstado(int estatusId)
+    {
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+            return "ejec-row-produccion";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion)
+            return "ejec-row-preparacion";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Pausado)
+            return "ejec-row-pausado";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
+            estatusId == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial)
+            return "ejec-row-terminado";
+
+        return "ejec-row-default";
+    }
+
+    static string ClaseBadgeEstado(int estatusId)
+    {
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+            return "estado-produccion";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion)
+            return "estado-preparacion";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Pausado)
+            return "estado-pausado";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
+            estatusId == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial)
+            return "estado-terminado";
+
+        return "estado-default";
+    }
+
+    static string IconoEstado(int estatusId)
+    {
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+            return "bi-play-circle-fill";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion)
+            return "bi-tools";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Pausado)
+            return "bi-pause-circle-fill";
+
+        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
+            estatusId == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial)
+            return "bi-check-circle-fill";
+
+        return "bi-circle-fill";
+    }
+
+    var todas = Model.Ejecuciones
+        .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
+        .ThenBy(x => x.ProgramaProduccionID)
+        .ThenBy(x => x.EjecucionProduccionID)
+        .ToList();
+
+    var activas = todas
+        .Where(x =>
+            x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Pendiente ||
+            x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion ||
+            x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion ||
+            x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Pausado)
+        .ToList();
+
+    var mostrarTerminadas =
+        Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
+        Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial;
+
+    List<ERP.NSQuell.Models.ProduccionEjecucionVm> visibles;
+
+    if (Model.EstatusID.HasValue && Model.EstatusID.Value > 0)
+    {
+        if (mostrarTerminadas)
+        {
+            visibles = todas
+                .Where(x =>
+                    x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
+                    x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial)
+                .ToList();
+        }
+        else
+        {
+            visibles = todas
+                .Where(x => x.EstatusID == Model.EstatusID.Value)
+                .ToList();
+        }
+    }
+    else
+    {
+        visibles = activas;
+    }
+
+    var totalTerminadas = todas.Count(x =>
+        x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
+        x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial);
+
+    var grupos = visibles
+        .GroupBy(x => new
+        {
+            MaquinaID = x.MaquinaID ?? 0,
+            Codigo = string.IsNullOrWhiteSpace(x.MaquinaCodigo)
+                ? "SIN MÁQUINA"
+                : x.MaquinaCodigo!.Trim(),
+            Nombre = string.IsNullOrWhiteSpace(x.MaquinaNombre)
+                ? ""
+                : x.MaquinaNombre!.Trim()
+        })
+        .OrderBy(x => x.Key.Codigo)
+        .ToList();
+}
+
+<style>
+    .ejec-panel {
+        --ej-blue: #003b82;
+        --ej-border: #d7e2f1;
+        --ej-muted: #667085;
+        --ej-text: #182437;
+    }
+
+    .ejec-toolbar {
+        border: 1px solid var(--ej-border);
+        border-radius: 16px;
+        background: #fff;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+    }
+
+    .ejec-toolbar-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .ejec-title {
+        margin: 0;
+        color: var(--ej-blue);
+        font-size: 1rem;
+        font-weight: 950;
+    }
+
+    .ejec-sub {
+        margin-top: 2px;
+        color: var(--ej-muted);
+        font-size: .75rem;
+        font-weight: 650;
+    }
+
+    .ejec-tabs {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+
+    .ejec-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 32px;
+        padding: 5px 9px;
+        border: 1px solid #cfdceb;
+        border-radius: 10px;
+        background: #fff;
+        color: #475467;
+        text-decoration: none;
+        font-size: .72rem;
+        font-weight: 900;
+    }
+
+        .ejec-tab:hover {
+            background: #f8fbff;
+            color: var(--ej-blue);
+        }
+
+        .ejec-tab.is-active {
+            border-color: #8fb7ee;
+            background: #eef4ff;
+            color: var(--ej-blue);
+        }
+
+    .ejec-tabs .ejec-tab:nth-child(2).is-active {
+        border-color: #93c5fd;
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .ejec-tabs .ejec-tab:nth-child(3).is-active {
+        border-color: #fcd34d;
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .ejec-tabs .ejec-tab:nth-child(4).is-active {
+        border-color: #fca5a5;
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .ejec-tabs .ejec-tab:nth-child(5).is-active {
+        border-color: #86efac;
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .ejec-tab-count {
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        border-radius: 999px;
+        display: inline-grid;
+        place-items: center;
+        background: #fff;
+        border: 1px solid currentColor;
+        font-size: .64rem;
+        font-weight: 950;
+    }
+
+    .ejec-visible-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 8px;
+        border: 1px solid #bfd3f2;
+        border-radius: 999px;
+        background: #f8fbff;
+        color: var(--ej-blue);
+        font-size: .7rem;
+        font-weight: 900;
+    }
+
+    .ejec-machine {
+        border: 1px solid var(--ej-border);
+        border-radius: 14px;
+        background: #fff;
+        overflow: hidden;
+        margin-bottom: 9px;
+    }
+
+    .ejec-machine-head {
+        min-height: 42px;
+        padding: 7px 11px;
+        border-bottom: 1px solid var(--ej-border);
+        background: #f8fbff;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .ejec-machine-code {
+        color: var(--ej-blue);
+        font-size: .82rem;
+        font-weight: 950;
+    }
+
+    .ejec-machine-name {
+        margin-left: 5px;
+        color: var(--ej-muted);
+        font-size: .68rem;
+        font-weight: 650;
+    }
+
+    .ejec-machine-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 7px;
+        border: 1px solid #bfd3f2;
+        border-radius: 999px;
+        background: #fff;
+        color: var(--ej-blue);
+        font-size: .66rem;
+        font-weight: 900;
+    }
+
+    .ejec-table-wrap {
+        overflow-x: auto;
+    }
+
+    .ejec-table {
+        width: 100%;
+        min-width: 1320px;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: .72rem;
+    }
+
+        .ejec-table th {
+            padding: 7px 8px;
+            border-bottom: 1px solid #d8e2ef;
+            background: #fbfcfe;
+            color: #667085;
+            font-size: .61rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .025em;
+            white-space: nowrap;
+            text-align: left;
+        }
+
+        .ejec-table td {
+            padding: 7px 8px;
+            border-bottom: 1px solid #edf1f6;
+            color: #344054;
+            vertical-align: middle;
+        }
+
+        .ejec-table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .ejec-table tbody tr {
+            border-left: 4px solid #98a2b3;
+        }
+
+            .ejec-table tbody tr:hover {
+                background: #f8fbff;
+            }
+
+    .ejec-row-produccion {
+        border-left-color: #2563eb !important;
+        background: #eff6ff;
+    }
+
+    .ejec-row-preparacion {
+        border-left-color: #f59e0b !important;
+        background: #fffbeb;
+    }
+
+    .ejec-row-pausado {
+        border-left-color: #dc2626 !important;
+        background: #fef2f2;
+    }
+
+    .ejec-row-terminado {
+        border-left-color: #16a34a !important;
+        background: #f0fdf4;
+    }
+
+    .ejec-row-produccion:hover {
+        background: #dbeafe !important;
+    }
+
+    .ejec-row-preparacion:hover {
+        background: #fef3c7 !important;
+    }
+
+    .ejec-row-pausado:hover {
+        background: #fee2e2 !important;
+    }
+
+    .ejec-row-terminado:hover {
+        background: #dcfce7 !important;
+    }
+
+    .ejec-programa {
+        color: var(--ej-blue);
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .ejec-small {
+        display: block;
+        margin-top: 1px;
+        color: #667085;
+        font-size: .65rem;
+        font-weight: 650;
+        line-height: 1.15;
+    }
+
+    .ejec-parte {
+        color: #182437;
+        font-weight: 850;
+        line-height: 1.15;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ejec-desc {
+        display: block;
+        margin-top: 2px;
+        color: #667085;
+        font-size: .64rem;
+        line-height: 1.15;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ejec-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 7px;
+        border: 1px solid #d0d5dd;
+        border-radius: 999px;
+        background: #fff;
+        color: #344054;
+        font-size: .65rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .estado-produccion {
+        border-color: #93c5fd;
+        background: #dbeafe;
+        color: #1d4ed8;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, .05);
+    }
+
+    .estado-preparacion {
+        border-color: #fcd34d;
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .estado-pausado {
+        border-color: #fca5a5;
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .estado-terminado {
+        border-color: #86efac;
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .ejec-num {
+        font-weight: 900;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+        .ejec-num.ok {
+            color: #067647;
+        }
+
+        .ejec-num.sos {
+            color: #b54708;
+        }
+
+        .ejec-num.scrap {
+            color: #b42318;
+        }
+
+    .ejec-avance {
+        min-width: 115px;
+    }
+
+    .ejec-avance-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 4px;
+        color: #475467;
+        font-size: .65rem;
+        font-weight: 850;
+    }
+
+    .ejec-progress {
+        height: 6px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #e9eef7;
+    }
+
+        .ejec-progress > span {
+            display: block;
+            height: 100%;
+            border-radius: 999px;
+            background: #4b8fd8;
+        }
+
+    .ejec-row-preparacion .ejec-progress > span {
+        background: #e6b422;
+    }
+
+    .ejec-row-pausado .ejec-progress > span {
+        background: #d46a78;
+    }
+
+    .ejec-row-terminado .ejec-progress > span {
+        background: #4f9f72;
+    }
+
+    .ejec-action {
+        text-align: center;
+        white-space: nowrap;
+    }
+
+        .ejec-action .btn {
+            border-radius: 8px;
+            padding: 4px 7px;
+            font-size: .67rem;
+            font-weight: 900;
+        }
+
+    .ejec-empty {
+        border: 1px solid var(--ej-border);
+        border-radius: 16px;
+        background: #fff;
+        padding: 34px 18px;
+        text-align: center;
+        color: var(--ej-muted);
+        font-weight: 700;
+    }
+
+        .ejec-empty i {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 1.65rem;
+            color: #98a2b3;
+        }
+
+    @@media (max-width: 900px) {
+        .ejec-table {
+            min-width: 1180px;
+        }
+    }
+</style>
+
+<div class="ejec-panel">
+
+    <div class="ejec-toolbar">
+        <div class="ejec-toolbar-top">
+            <div>
+                <h3 class="ejec-title">
+                    <i class="bi bi-activity me-1"></i>
+                    Ejecuciones de producción
+                </h3>
+
+                <div class="ejec-sub">
+                    OF tomadas por Producción, mostradas en filas compactas por máquina.
+                </div>
+            </div>
+
+            <div class="ejec-visible-count">
+                <i class="bi bi-list-ul"></i>
+                @visibles.Count visible(s)
+            </div>
+        </div>
+
+        <div class="ejec-tabs">
+            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
+               class="ejec-tab js-panel-produccion @(Model.EstatusID.HasValue ? "" : "is-active")"
+               data-panel="ejecuciones">
+                <i class="bi bi-lightning-charge"></i>
+                Activas
+                <span class="ejec-tab-count">@activas.Count</span>
+            </a>
+
+            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { estatusId = ERP.NSQuell.Models.ProduccionEstatus.EnProduccion, maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
+               class="ejec-tab js-panel-produccion @(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion ? "is-active" : "")"
+               data-panel="ejecuciones">
+                <i class="bi bi-play-circle"></i>
+                Produciendo
+                <span class="ejec-tab-count">@Model.EnProduccion</span>
+            </a>
+
+            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { estatusId = ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion, maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
+               class="ejec-tab js-panel-produccion @(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion ? "is-active" : "")"
+               data-panel="ejecuciones">
+                <i class="bi bi-tools"></i>
+                Preparación
+                <span class="ejec-tab-count">@Model.EnPreparacion</span>
+            </a>
+
+            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { estatusId = ERP.NSQuell.Models.ProduccionEstatus.Pausado, maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
+               class="ejec-tab js-panel-produccion @(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Pausado ? "is-active" : "")"
+               data-panel="ejecuciones">
+                <i class="bi bi-pause-circle"></i>
+                Pausadas
+                <span class="ejec-tab-count">@Model.Pausados</span>
+            </a>
+
+            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { estatusId = ERP.NSQuell.Models.ProduccionEstatus.Terminado, maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
+               class="ejec-tab js-panel-produccion @(mostrarTerminadas ? "is-active" : "")"
+               data-panel="ejecuciones">
+                <i class="bi bi-check-circle"></i>
+                Terminadas
+                <span class="ejec-tab-count">@totalTerminadas</span>
+            </a>
+        </div>
+    </div>
+
+    @if (!grupos.Any())
+    {
+        <div class="ejec-empty">
+            <i class="bi bi-inbox"></i>
+            No hay ejecuciones para el filtro seleccionado.
+        </div>
+    }
+    else
+    {
+        foreach (var grupo in grupos)
+        {
+            <section class="ejec-machine">
+                <div class="ejec-machine-head">
+                    <div>
+                        <span class="ejec-machine-code">
+                            <i class="bi bi-hdd-network me-1"></i>
+                            @grupo.Key.Codigo
+                        </span>
+
+                        @if (!string.IsNullOrWhiteSpace(grupo.Key.Nombre))
+                        {
+                            <span class="ejec-machine-name">
+                                @grupo.Key.Nombre
+                            </span>
+                        }
+                    </div>
+
+                    <div class="ejec-machine-count">
+                        <i class="bi bi-gear"></i>
+                        @grupo.Count() ejecución(es)
+                    </div>
+                </div>
+
+                <div class="ejec-table-wrap">
+                    <table class="ejec-table">
+                        <colgroup>
+                            <col style="width:95px;" />
+                            <col style="width:210px;" />
+                            <col style="width:105px;" />
+                            <col style="width:145px;" />
+                            <col style="width:125px;" />
+                            <col style="width:105px;" />
+                            <col style="width:82px;" />
+                            <col style="width:72px;" />
+                            <col style="width:82px;" />
+                            <col style="width:72px;" />
+                            <col style="width:135px;" />
+                            <col style="width:120px;" />
+                            <col style="width:86px;" />
+                        </colgroup>
+
+                        <thead>
+                            <tr>
+                                <th>Programa / OF</th>
+                                <th>Parte</th>
+                                <th>Molde</th>
+                                <th>Operador</th>
+                                <th>Inicio real</th>
+                                <th>Planeado</th>
+                                <th>OK</th>
+                                <th>Sosp.</th>
+                                <th>Scrap</th>
+                                <th>Pend.</th>
+                                <th>Avance</th>
+                                <th>Estatus</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var item in grupo)
+                            {
+                                var avance = item.PorcentajeAvance;
+
+                                if (avance < 0)
+                                    avance = 0;
+
+                                if (avance > 100)
+                                    avance = 100;
+
+                                var avanceCss =
+                                avance.ToString(
+                                "0.##",
+                                System.Globalization.CultureInfo.InvariantCulture);
+
+                                <tr class="@ClaseEstado(item.EstatusID)">
+                                    <td>
+                                        <span class="ejec-programa">
+                                            Programa @item.ProgramaProduccionID
+                                        </span>
+
+                                        @if (item.SolicitudProduccionID.HasValue)
+                                        {
+                                            <span class="ejec-small">
+                                                OF @item.SolicitudProduccionID
+                                            </span>
+                                        }
+
+                                        @if (item.ReleaseID.HasValue)
+                                        {
+                                            <span class="ejec-small">
+                                                Rel. @item.ReleaseID
+                                            </span>
+                                        }
+                                </td>
+
+                                <td title="@Txt(item.DescripcionParte)">
+                                    <div class="ejec-parte">
+                                        @Txt(item.TituloPrograma)
+                                    </div>
+                                    <span class="ejec-desc">
+                                        @Txt(item.DescripcionParte)
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(item.MoldeCodigo)
+                                                                ? "-"
+                                                                : item.MoldeCodigo)
+                        </td>
+
+                                    <td title="@item.TextoOperador">
+                                        <div class="ejec-parte">
+                                            @item.TextoOperador
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        @Fecha(item.FechaInicioReal)
+                                    </td>
+
+                                    <td class="ejec-num">
+                                        @Num(item.CantidadPlaneada)
+                                    </td>
+
+                                    <td class="ejec-num ok">
+                                        @item.CantidadOKTotal.ToString("N0")
+                                    </td>
+
+                                    <td class="ejec-num sos">
+                                        @item.CantidadSospechosaTotal.ToString("N0")
+                                    </td>
+
+                                    <td class="ejec-num scrap">
+                                        @item.CantidadScrapTotal.ToString("N0")
+                                    </td>
+
+                                    <td class="ejec-num">
+                                        @item.CantidadPendiente.ToString("N0")
+                                    </td>
+
+                                    <td>
+                                        <div class="ejec-avance">
+                                            <div class="ejec-avance-top">
+                                                <span>@item.PorcentajeAvance.ToString("0.##")%</span>
+                                                <span>@item.CantidadOKTotal.ToString("N0")/@Num(item.CantidadPlaneada)</span>
+                                            </div>
+
+                                            <div class="ejec-progress">
+                                                <span style="width:@avanceCss%"></span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="ejec-status @ClaseBadgeEstado(item.EstatusID)">
+                                            <i class="bi @IconoEstado(item.EstatusID)"></i>
+                                            @item.EstatusNombre
+                                        </span>
+                                    </td>
+
+                                    <td class="ejec-action">
+                                        <a href="@Url.Action("Detalle", "Produccion", new { id = item.EjecucionProduccionID })"
+                                           class="btn btn-sm btn-outline-primary"
+                                           title="Abrir ejecución">
+                                            <i class="bi bi-eye"></i>
+                                            Abrir
+                                        </a>
+                                    </td>
+                                </tr>
+                                        }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+    }
+</div>

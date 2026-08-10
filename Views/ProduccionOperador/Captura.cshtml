@@ -1,1220 +1,939 @@
 ﻿@model ERP.NSQuell.Models.ProduccionOperadorTabletVm
-
 @{
     Layout = null;
-
-    var planeada = Model.CantidadPlaneada.HasValue ? Model.CantidadPlaneada.Value : 0;
-    var totalOK = Model.CantidadOKTotal;
-    var totalSospechoso = Model.CantidadSospechosaTotal;
-    var totalScrap = Model.CantidadScrapTotal;
-    var totalCapturado = totalOK + totalSospechoso + totalScrap;
-
-    var pendiente = planeada - totalOK;
-    if (pendiente < 0)
-    {
-        pendiente = 0;
-    }
-
-    var avance = planeada > 0
-        ? Math.Round(((decimal)totalOK * 100m) / planeada, 2)
-        : 0m;
-
-    if (avance < 0)
-    {
-        avance = 0;
-    }
-
-    if (avance > 100)
-    {
-        avance = 100;
-    }
-
-    var horaInicio = Model.HoraInicioSugerida;
-    if (horaInicio == TimeSpan.Zero)
-    {
-        horaInicio = new TimeSpan(DateTime.Now.Hour, 0, 0);
-    }
-
-    var horaFin = Model.HoraFinSugerida;
-    if (horaFin == TimeSpan.Zero)
-    {
-        horaFin = horaInicio.Add(TimeSpan.FromHours(1));
-    }
-
-    if (horaFin <= horaInicio)
-    {
-        horaFin = horaInicio.Add(TimeSpan.FromHours(1));
-    }
-
-    if (horaFin.TotalHours >= 24)
-    {
-        horaFin = new TimeSpan(23, 59, 0);
-    }
-
-    var fechaProduccion = Model.FechaProduccion == DateTime.MinValue
-        ? DateTime.Today
-        : Model.FechaProduccion;
-
-    var capturaHabilitada =
-        Model.EstatusID == 3 &&
-        !Model.TieneParoAbierto;
-
-    var ahora = DateTime.Now;
-    var fechaHoraFinBloque = fechaProduccion.Date.Add(horaFin);
-    var bloqueYaVencio = capturaHabilitada && ahora >= fechaHoraFinBloque;
-    var minutosParaCierre = capturaHabilitada
-        ? (int)Math.Ceiling((fechaHoraFinBloque - ahora).TotalMinutes)
-        : 0;
-
-    var porcentajeTexto = avance.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    var planeada = Model.CantidadPlaneada ?? 0;
+    var totalCapturado = Model.CantidadOKTotal + Model.CantidadSospechosaTotal + Model.CantidadScrapTotal;
+    var pendiente = Math.Max(0, planeada - Model.CantidadOKTotal);
+    var avance = planeada > 0 ? Math.Min(100m, Math.Round(Model.CantidadOKTotal * 100m / planeada, 2)) : 0m;
+    var horas = Model.HorasCaptura?.OrderBy(x => x.NumeroHora).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>();
+    var horasPendientes = horas.Where(x => !x.Capturada).OrderBy(x => x.NumeroHora).ToList();
+    var horasPendientesVisibles = horasPendientes.Take(5).ToList();
+    var horasPendientesAdicionales = horasPendientes.Skip(5).ToList();
+    var horasCapturadas = horas.Where(x => x.Capturada).OrderByDescending(x => x.NumeroHora).ToList();
+    var horaObligatoria = horasPendientes.FirstOrDefault(x => x.Vencida) ?? horasPendientes.FirstOrDefault(x => x.Disponible);
+    var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
 }
-
 @functions {
-    public static string Txt(string value)
+    public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    public static string Numero(int value) => value.ToString("N0");
+    public static string Hora(TimeSpan value) => value.ToString(@"hh\:mm");
+    public static string EstadoTexto(ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm fila)
     {
-        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+        if (fila.Capturada) return "Capturada";
+        if (fila.Vencida) return "Obligatoria";
+        if (fila.Disponible) return "Disponible";
+        return "Próxima";
     }
-
-    public static string TxtNullable(string value)
+    public static string EstadoClase(ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm fila)
     {
-        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
-    }
-
-    public static string Numero(int value)
-    {
-        return value.ToString("N0");
-    }
-
-    public static string NumeroNullable(int? value)
-    {
-        return value.HasValue ? value.Value.ToString("N0") : "0";
-    }
-
-    public static string ParteTexto(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
-    {
-        if (!string.IsNullOrWhiteSpace(item.ReferenciaSAP))
-            return item.ReferenciaSAP;
-
-        if (!string.IsNullOrWhiteSpace(item.NumeroParte))
-            return item.NumeroParte;
-
-        return "-";
-    }
-
-    public static string OFTexto(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
-    {
-        if (!string.IsNullOrWhiteSpace(item.NumeroOFRecibida))
-            return item.NumeroOFRecibida;
-
-        if (!string.IsNullOrWhiteSpace(item.FolioSolicitud))
-            return item.FolioSolicitud;
-
-        return "Programa " + item.ProgramaProduccionID.ToString();
-    }
-
-    public static string EstadoTexto(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
-    {
-        if (item.TieneParoAbierto)
-            return "Paro abierto";
-
-        if (item.EstatusID == 4)
-            return "Pausado";
-
-        if (item.EstatusID == 3)
-            return "En producción";
-
-        return "No disponible";
-    }
-
-    public static string EstadoClase(ERP.NSQuell.Models.ProduccionOperadorTabletVm item)
-    {
-        if (item.TieneParoAbierto)
-            return "state-danger";
-
-        if (item.EstatusID == 4)
-            return "state-warning";
-
-        if (item.EstatusID == 3)
-            return "state-success";
-
-        return "state-muted";
-    }
-
-    public static string FormatoHora(TimeSpan value)
-    {
-        return value.ToString(@"hh\:mm");
+        if (fila.Capturada) return "status-complete";
+        if (fila.Vencida) return "status-overdue";
+        if (fila.Disponible) return "status-ready";
+        return "status-future";
     }
 }
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>Captura Operador | Producción</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-
+    <title>Captura por hora | Producción</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
     <style>
         :root {
-            --blue: #004AAD;
+            --blue: #004aad;
             --blue-dark: #00347a;
             --green: #107c41;
-            --green-bg: #ecfdf3;
-            --orange: #b54708;
-            --orange-bg: #fff7ed;
+            --yellow: #f59e0b;
             --red: #b42318;
-            --red-bg: #fef3f2;
-            --gray: #667085;
-            --border: #d9e3f1;
-            --bg: #f4f7fb;
+            --border: #dbe4f0;
+            --bg: #f3f6fa;
             --text: #172033;
-            --shadow: 0 14px 34px rgba(15, 23, 42, .08);
+            --muted: #667085
+        }
+
+        * {
+            box-sizing: border-box
         }
 
         body {
             margin: 0;
-            min-height: 100vh;
-            background: linear-gradient(180deg, #f8fbff 0%, #eef3f9 100%);
+            background: var(--bg);
             color: var(--text);
-            font-family: "Segoe UI", Arial, sans-serif;
+            font-family: "Segoe UI",Arial,sans-serif
         }
 
         .page {
             max-width: 1600px;
-            margin: 0 auto;
-            padding: 22px;
+            margin: auto;
+            padding: 18px
         }
 
         .hero {
-            border-radius: 26px;
-            padding: 24px 26px;
-            margin-bottom: 16px;
+            background: linear-gradient(135deg,var(--blue-dark),var(--blue));
             color: #fff;
-            background: linear-gradient(135deg, #00347a, #004AAD);
-            box-shadow: 0 24px 58px rgba(0, 74, 173, .22);
+            border-radius: 22px;
+            padding: 20px 22px;
+            box-shadow: 0 18px 42px rgba(0,74,173,.2);
+            margin-bottom: 14px
         }
 
-        .hero-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 18px;
-            flex-wrap: wrap;
-        }
+            .hero h1 {
+                font-size: 1.65rem;
+                font-weight: 950;
+                margin: 0
+            }
 
-        .hero h1 {
-            margin: 0;
-            font-size: 1.9rem;
-            font-weight: 950;
-        }
-
-        .hero p {
-            margin: 8px 0 0;
-            color: rgba(255,255,255,.86);
-            font-weight: 650;
-        }
-
-        .hero-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
+            .hero p {
+                margin: 5px 0 0;
+                color: rgba(255,255,255,.85);
+                font-weight: 650
+            }
 
         .btn-hero {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            border: 1px solid rgba(255,255,255,.36);
-            border-radius: 14px;
-            padding: 10px 14px;
+            gap: 7px;
+            border: 1px solid rgba(255,255,255,.35);
+            border-radius: 12px;
+            padding: 9px 13px;
             color: #fff;
             text-decoration: none;
             font-weight: 900;
-            background: rgba(255,255,255,.14);
+            background: rgba(255,255,255,.12)
         }
 
             .btn-hero:hover {
-                color: var(--blue);
                 background: #fff;
+                color: var(--blue)
             }
 
-        .status-line {
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(5,minmax(0,1fr));
+            gap: 10px;
+            margin-bottom: 14px
+        }
+
+        .summary {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 13px;
+            box-shadow: 0 8px 20px rgba(15,23,42,.05)
+        }
+
+            .summary .k {
+                font-size: .7rem;
+                color: var(--muted);
+                text-transform: uppercase;
+                font-weight: 900
+            }
+
+            .summary .v {
+                font-size: 1.4rem;
+                font-weight: 950;
+                color: var(--blue-dark);
+                margin-top: 3px
+            }
+
+        .panel {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 28px rgba(15,23,42,.06)
+        }
+
+        .panel-head {
+            padding: 15px 17px;
+            background: #f8fbff;
+            border-bottom: 1px solid var(--border);
+            font-size: 1.05rem;
+            font-weight: 950;
+            color: var(--blue-dark)
+        }
+
+        .panel-body {
+            padding: 16px
+        }
+
+        .notice {
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border-radius: 14px;
+            padding: 11px 13px;
+            font-weight: 750;
+            margin-bottom: 14px
+        }
+
+        .hour-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 9px
+        }
+
+            .hour-table thead th {
+                padding: 8px 10px;
+                color: var(--muted);
+                font-size: .72rem;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                text-align: center;
+                white-space: nowrap
+            }
+
+            .hour-table tbody tr {
+                background: #fff
+            }
+
+            .hour-table tbody td {
+                padding: 10px;
+                border-top: 1px solid var(--border);
+                border-bottom: 1px solid var(--border);
+                vertical-align: middle
+            }
+
+                .hour-table tbody td:first-child {
+                    border-left: 1px solid var(--border);
+                    border-radius: 14px 0 0 14px
+                }
+
+                .hour-table tbody td:last-child {
+                    border-right: 1px solid var(--border);
+                    border-radius: 0 14px 14px 0
+                }
+
+            .hour-table tr.row-overdue td {
+                background: #fff8f6;
+                border-color: #fda29b
+            }
+
+            .hour-table tr.row-ready td {
+                background: #fffcf5;
+                border-color: #fedf89
+            }
+
+            .hour-table tr.row-complete td {
+                background: #f6fef9;
+                border-color: #abefc6
+            }
+
+        .hour-label {
+            font-size: 1rem;
+            font-weight: 950;
+            color: var(--blue-dark)
+        }
+
+        .hour-range {
+            font-size: .8rem;
+            color: var(--muted);
+            font-weight: 700
+        }
+
+        .hour-input {
+            width: 100%;
+            min-width: 86px;
+            height: 54px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            text-align: center;
+            font-size: 1.45rem;
+            font-weight: 950;
+            background: #fff
+        }
+
+            .hour-input:focus {
+                outline: none;
+                border-color: var(--blue);
+                box-shadow: 0 0 0 .2rem rgba(0,74,173,.12)
+            }
+
+            .hour-input.ok {
+                color: var(--green);
+                background: #f6fef9
+            }
+
+            .hour-input.yellow {
+                color: #b54708;
+                background: #fffcf5
+            }
+
+            .hour-input.scrap {
+                color: var(--red);
+                background: #fffbfa
+            }
+
+            .hour-input:disabled {
+                background: #f2f4f7;
+                color: #98a2b3
+            }
+
+        .obs-input {
+            min-width: 180px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            padding: 9px 10px
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 6px 9px;
+            font-size: .73rem;
+            font-weight: 900;
+            white-space: nowrap
+        }
+
+        .status-complete {
+            background: #ecfdf3;
+            color: #067647
+        }
+
+        .status-overdue {
+            background: #fef3f2;
+            color: var(--red)
+        }
+
+        .status-ready {
+            background: #fff7ed;
+            color: #b54708
+        }
+
+        .status-future {
+            background: #f2f4f7;
+            color: #667085
+        }
+
+        .btn-save-row {
+            border: 0;
+            border-radius: 11px;
+            padding: 10px 12px;
+            background: var(--blue);
+            color: #fff;
+            font-weight: 900;
+            white-space: nowrap
+        }
+
+            .btn-save-row:hover {
+                background: var(--blue-dark)
+            }
+
+            .btn-save-row:disabled {
+                background: #d0d5dd;
+                color: #667085
+            }
+
+        .captured-values {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 6px;
+            text-align: center
+        }
+
+            .captured-values span {
+                border-radius: 9px;
+                padding: 6px;
+                font-size: .78rem;
+                font-weight: 900
+            }
+
+            .captured-values .ok {
+                background: #ecfdf3;
+                color: #067647
+            }
+
+            .captured-values .yellow {
+                background: #fff7ed;
+                color: #b54708
+            }
+
+            .captured-values .scrap {
+                background: #fef3f2;
+                color: var(--red)
+            }
+
+        .history-toggle {
+            width: 100%;
+            border: 1px solid var(--border);
+            background: #f8fbff;
+            color: var(--blue-dark);
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-weight: 950;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 14px;
-            flex-wrap: wrap;
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            background: #fff;
-            padding: 14px 16px;
-            margin-bottom: 16px;
-            box-shadow: var(--shadow);
+            gap: 10px;
+            margin-top: 14px;
         }
 
-        .state {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border-radius: 999px;
-            padding: 8px 12px;
-            font-size: .86rem;
+            .history-toggle .fa-chevron-down {
+                transition: transform .2s ease;
+            }
+
+            .history-toggle[aria-expanded="true"] .fa-chevron-down {
+                transform: rotate(180deg);
+            }
+
+        .history-box {
+            margin-top: 10px;
+            border-top: 1px dashed var(--border);
+            padding-top: 8px;
+        }
+
+        .empty-number::placeholder {
+            color: #98a2b3;
+            opacity: 1;
+        }
+
+        .modal-content {
+            border: 0;
+            border-radius: 22px;
+            box-shadow: 0 28px 80px rgba(15,23,42,.3)
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg,#7f1d1d,#b42318);
+            color: #fff;
+            border: 0;
+            border-radius: 22px 22px 0 0
+        }
+
+        .modal-title {
+            font-weight: 950
+        }
+
+        .modal-hour {
+            font-size: 1.35rem;
             font-weight: 950;
+            color: var(--blue-dark)
         }
 
-        .state-success {
-            color: var(--green);
-            background: var(--green-bg);
-            border: 1px solid #abefc6;
-        }
-
-        .state-warning {
-            color: var(--orange);
-            background: var(--orange-bg);
-            border: 1px solid #fed7aa;
-        }
-
-        .state-danger {
-            color: var(--red);
-            background: var(--red-bg);
-            border: 1px solid #fecdca;
-        }
-
-        .state-muted {
-            color: #475467;
-            background: #f2f4f7;
-            border: 1px solid #d0d5dd;
-        }
-
-        .info-grid {
+        .modal-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 16px;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px
         }
 
-        .info {
+        .modal-qty {
+            height: 76px;
             border: 1px solid var(--border);
-            border-radius: 18px;
-            background: #fff;
+            border-radius: 16px;
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 950;
+            width: 100%
+        }
+
+            .modal-qty.ok {
+                color: var(--green);
+                background: #f6fef9
+            }
+
+            .modal-qty.yellow {
+                color: #b54708;
+                background: #fffcf5
+            }
+
+            .modal-qty.scrap {
+                color: var(--red);
+                background: #fffbfa
+            }
+
+        .modal-label {
+            text-align: center;
+            font-weight: 900;
+            margin-bottom: 6px
+        }
+
+        .modal-footer .btn-primary {
+            font-weight: 950;
+            border-radius: 12px;
+            padding: 11px 16px
+        }
+
+        .blocked {
+            opacity: .55;
+            pointer-events: none
+        }
+
+
+
+        .paro-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
             padding: 14px;
-            box-shadow: var(--shadow);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: #fff;
         }
 
-        .k {
-            color: var(--gray);
-            font-size: .72rem;
+            .paro-toolbar.open {
+                border-color: #fda29b;
+                background: #fff8f6;
+            }
+
+        .paro-title {
             font-weight: 950;
-            letter-spacing: .04em;
-            text-transform: uppercase;
-        }
-
-        .v {
-            margin-top: 4px;
             color: var(--blue-dark);
-            font-size: 1.05rem;
-            font-weight: 950;
-            line-height: 1.15;
-            word-break: break-word;
         }
 
-        .sub {
-            margin-top: 3px;
-            color: var(--gray);
+        .paro-subtitle {
+            color: var(--muted);
             font-size: .84rem;
             font-weight: 650;
         }
 
-        .metrics {
-            display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .metric {
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            background: #fff;
-            padding: 15px;
-            box-shadow: var(--shadow);
-        }
-
-            .metric .num {
-                margin-top: 4px;
-                font-size: 1.8rem;
-                font-weight: 950;
-                line-height: 1;
-            }
-
-        .progress-wrap {
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            background: #fff;
-            padding: 15px;
-            margin-bottom: 16px;
-            box-shadow: var(--shadow);
-        }
-
-        .progress {
-            height: 14px;
-            border-radius: 999px;
-            background: #e9eef7;
-        }
-
-        .progress-bar {
-            border-radius: 999px;
-            background: var(--blue);
-        }
-
-        .layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr);
-            gap: 16px;
-            align-items: start;
-        }
-
-        .panel {
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            background: #fff;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            margin-bottom: 16px;
-        }
-
-        .panel-head {
-            padding: 16px 18px;
-            border-bottom: 1px solid var(--border);
-            background: linear-gradient(180deg, #ffffff, #f8fbff);
-            color: var(--blue-dark);
-            font-size: 1.05rem;
+        .btn-paro-start,
+        .btn-paro-close {
+            border: 0;
+            border-radius: 13px;
+            padding: 11px 15px;
             font-weight: 950;
-        }
-
-        .panel-body {
-            padding: 18px;
-        }
-
-        .capture-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
-        }
-
-        .qty-box {
-            border: 2px solid #e5eaf3;
-            border-radius: 22px;
-            padding: 14px;
-            background: #fbfdff;
-        }
-
-        .qty-label {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            font-size: 1rem;
-            font-weight: 950;
-        }
-
-        .qty-input {
-            width: 100%;
-            height: 82px;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            text-align: center;
-            font-size: 2.2rem;
-            font-weight: 950;
-            outline: none;
-        }
-
-            .qty-input:focus {
-                border-color: var(--blue);
-                box-shadow: 0 0 0 .22rem rgba(0, 74, 173, .12);
-            }
-
-        .qty-ok {
-            border-color: #abefc6;
-            background: #f6fef9;
-        }
-
-        .qty-sos {
-            border-color: #fed7aa;
-            background: #fffaf5;
-        }
-
-        .qty-scrap {
-            border-color: #fecdca;
-            background: #fffbfa;
-        }
-
-        .time-grid {
-            display: grid;
-            grid-template-columns: 1.2fr 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 14px;
-        }
-
-        .time-locked {
-            border: 1px solid #bfdbfe;
-            border-radius: 18px;
-            background: #eff6ff;
-            padding: 14px;
-            margin-bottom: 14px;
-        }
-
-        .time-locked-title {
-            color: #1d4ed8;
-            font-size: 1rem;
-            font-weight: 950;
-        }
-
-        .time-locked-range {
-            margin-top: 6px;
-            color: var(--blue-dark);
-            font-size: 1.45rem;
-            font-weight: 950;
-        }
-
-        .time-locked-sub {
-            margin-top: 4px;
-            color: #475467;
-            font-weight: 700;
-        }
-
-        .form-label {
-            color: #344054;
-            font-size: .76rem;
-            font-weight: 950;
-            letter-spacing: .04em;
-            text-transform: uppercase;
-        }
-
-        .form-control,
-        .form-select {
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 11px 12px;
-            box-shadow: none;
-        }
-
-            .form-control:focus,
-            .form-select:focus {
-                border-color: var(--blue);
-                box-shadow: 0 0 0 .22rem rgba(0, 74, 173, .12);
-            }
-
-            .form-control[readonly] {
-                background: #f8fbff;
-                color: #182437;
-                font-weight: 850;
-            }
-
-        .btn-main {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            gap: 9px;
-            width: 100%;
-            border: 1px solid var(--blue);
-            border-radius: 18px;
-            padding: 16px 18px;
-            background: var(--blue);
-            color: #fff;
-            font-size: 1.05rem;
-            font-weight: 950;
+            gap: 8px;
+            white-space: nowrap;
         }
 
-            .btn-main:hover {
-                background: var(--blue-dark);
-                border-color: var(--blue-dark);
+        .btn-paro-start {
+            background: #b42318;
+            color: #fff;
+        }
+
+            .btn-paro-start:hover {
+                background: #7f1d1d;
                 color: #fff;
             }
 
-        .btn-warningx,
-        .btn-dangerx,
-        .btn-successx {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 9px;
-            width: 100%;
-            border-radius: 18px;
-            padding: 15px 18px;
-            font-size: 1rem;
-            font-weight: 950;
-            border: 1px solid transparent;
-        }
-
-        .btn-warningx {
-            background: #f79009;
-            border-color: #f79009;
+        .btn-paro-close {
+            background: #107c41;
             color: #fff;
         }
 
-        .btn-dangerx {
-            background: var(--red);
-            border-color: var(--red);
-            color: #fff;
+            .btn-paro-close:hover {
+                background: #0b5d31;
+                color: #fff;
+            }
+
+        .modal-paro .modal-header {
+            background: linear-gradient(135deg,#7f1d1d,#b42318);
         }
 
-        .btn-successx {
-            background: var(--green);
-            border-color: var(--green);
-            color: #fff;
+        .modal-reanudar .modal-header {
+            background: linear-gradient(135deg,#065f46,#107c41);
         }
 
-        .note {
-            border: 1px solid #bfdbfe;
-            border-radius: 16px;
-            background: #eff6ff;
-            color: #1d4ed8;
-            padding: 12px 14px;
+        .paro-warning {
+            border: 1px solid #fedf89;
+            background: #fffcf5;
+            color: #93370d;
+            border-radius: 14px;
+            padding: 12px;
             font-weight: 750;
         }
 
-        .warn-note {
-            border: 1px solid #fed7aa;
-            border-radius: 16px;
-            background: #fff7ed;
-            color: #9a3412;
-            padding: 12px 14px;
-            font-weight: 750;
-        }
-
-        .danger-note {
-            border: 1px solid #fecdca;
-            border-radius: 16px;
-            background: #fef3f2;
-            color: var(--red);
-            padding: 12px 14px;
-            font-weight: 750;
-        }
-
-        .success-note {
-            border: 1px solid #abefc6;
-            border-radius: 16px;
-            background: #ecfdf3;
-            color: #067647;
-            padding: 12px 14px;
-            font-weight: 750;
-        }
-
-        .disabled-area {
-            opacity: .58;
-            pointer-events: none;
-        }
-
-        .blink-alert {
-            animation: pulseBorder 1.2s ease-in-out infinite;
-        }
-
-        @@keyframes pulseBorder {
-            0% {
-                box-shadow: 0 0 0 0 rgba(180, 35, 24, .25);
+        @@media(max-width:1000px) {
+            .summary-grid {
+                grid-template-columns: repeat(2,1fr)
             }
 
-            70% {
-                box-shadow: 0 0 0 12px rgba(180, 35, 24, 0);
+            .hour-table {
+                min-width: 950px
             }
 
-            100% {
-                box-shadow: 0 0 0 0 rgba(180, 35, 24, 0);
+            .table-wrap {
+                overflow-x: auto
             }
         }
 
-        @@media (max-width: 1180px) {
-            .layout {
-                grid-template-columns: 1fr;
-            }
-
-            .info-grid,
-            .metrics {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
-
-        @@media (max-width: 760px) {
+        @@media(max-width:650px) {
             .page {
-                padding: 14px;
+                padding: 10px
             }
 
             .hero {
-                border-radius: 22px;
-                padding: 20px;
+                border-radius: 18px
             }
 
-                .hero h1 {
-                    font-size: 1.5rem;
-                }
-
-            .info-grid,
-            .metrics,
-            .capture-grid,
-            .time-grid {
-                grid-template-columns: 1fr;
+            .modal-grid {
+                grid-template-columns: 1fr
             }
 
-            .qty-input {
-                height: 72px;
-                font-size: 2rem;
+            .modal-qty {
+                height: 62px
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr 1fr
             }
         }
     </style>
 </head>
-
 <body>
     <div class="page">
-
         <section class="hero">
-            <div class="hero-top">
-                <div>
-                    <h1>
-                        <i class="fa-solid fa-keyboard me-2"></i>
-                        Captura de Producción
-                    </h1>
-                    <p>
-                        El sistema muestra automáticamente el bloque de hora pendiente. El operador solo captura OK, sospechoso, scrap o reporta paro.
-                    </p>
-                </div>
-
-                <div class="hero-actions">
-                    <a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero">
-                        <i class="fa-solid fa-arrow-left"></i>
-                        Kiosko
-                    </a>
-
-                    <a href="@Url.Action("Captura", "ProduccionOperador", new { id = Model.EjecucionProduccionID })" class="btn-hero">
-                        <i class="fa-solid fa-rotate-right"></i>
-                        Actualizar
-                    </a>
-                    <a href="@Url.Action("Cajas", "ProduccionOperador", new { id = Model.EjecucionProduccionID })" class="btn-hero">
-    <i class="fa-solid fa-boxes-stacked"></i>
-    Cajas
-</a>
-
-                </div>
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div><h1><i class="fa-solid fa-table-list me-2"></i>Captura de producción por hora</h1><p>Captura cada fila como en AppSheet. La Hora 1 comienza cuando inicia producción en serie.</p></div>
+                <div class="d-flex gap-2 flex-wrap"><a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero"><i class="fa-solid fa-arrow-left"></i>Kiosco</a><a href="@Url.Action("Captura", "ProduccionOperador", new { id = Model.EjecucionProduccionID })" class="btn-hero"><i class="fa-solid fa-rotate-right"></i>Actualizar</a></div>
             </div>
         </section>
 
         @if (TempData["Success"] != null)
         {
-            <div class="alert alert-success rounded-4 fw-bold">
-                <i class="fa-solid fa-circle-check me-1"></i>
-                @TempData["Success"]
-            </div>
+            <div class="alert alert-success rounded-4 fw-bold"><i class="fa-solid fa-circle-check me-1"></i>@TempData["Success"]</div>
         }
-
         @if (TempData["Error"] != null)
         {
-            <div class="alert alert-danger rounded-4 fw-bold">
-                <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                @TempData["Error"]
-            </div>
+            <div class="alert alert-danger rounded-4 fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["Error"]</div>
         }
 
-        <section class="status-line">
+        <section class="summary-grid">
+            <div class="summary"><div class="k">Máquina</div><div class="v">@Txt(Model.MaquinaCodigo)</div><div class="text-muted small">@Txt(Model.MaquinaNombre)</div></div>
+            <div class="summary"><div class="k">Parte</div><div class="v">@Txt(Model.ReferenciaSAP ?? Model.NumeroParte)</div><div class="text-muted small">@Txt(Model.DescripcionParte)</div></div>
+            <div class="summary"><div class="k">OK</div><div class="v text-success">@Numero(Model.CantidadOKTotal)</div></div>
+            <div class="summary"><div class="k">Amarillos</div><div class="v text-warning">@Numero(Model.CantidadSospechosaTotal)</div></div>
+            <div class="summary"><div class="k">Scrap</div><div class="v text-danger">@Numero(Model.CantidadScrapTotal)</div></div>
+        </section>
+
+        <section class="paro-toolbar @(Model.TieneParoAbierto ? "open" : "")">
             <div>
-                <span class="state @EstadoClase(Model)">
-                    @if (Model.TieneParoAbierto)
-                    {
-                        <i class="fa-solid fa-circle-pause"></i>
-                    }
-                    else if (Model.EstatusID == 4)
-                    {
-                        <i class="fa-solid fa-pause"></i>
-                    }
-                    else
-                    {
-                        <i class="fa-solid fa-play"></i>
-                    }
-
-                    @EstadoTexto(Model)
-                </span>
+                <div class="paro-title">
+                    <i class="fa-solid @(Model.TieneParoAbierto ? "fa-circle-pause text-danger" : "fa-triangle-exclamation text-warning") me-2"></i>
+                    @(Model.TieneParoAbierto ? "Paro de máquina activo" : "Control de paro de máquina")
+                </div>
+                <div class="paro-subtitle">
+                    @(Model.TieneParoAbierto
+                                        ? "La producción está pausada. Finaliza el paro cuando la máquina esté lista para continuar."
+                                        : "El operador puede reportar un paro cuando la máquina o el proceso deban detenerse.")
+                </div>
             </div>
 
-            <div class="fw-bold text-muted">
-                Ejecución @Model.EjecucionProduccionID · Programa @Model.ProgramaProduccionID
-            </div>
+            @if (Model.TieneParoAbierto && Model.ParoAbiertoID.HasValue)
+            {
+                <button type="button"
+                        class="btn-paro-close"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalCerrarParo">
+                    <i class="fa-solid fa-play"></i>
+                    Finalizar paro
+                </button>
+            }
+            else if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+            {
+                <button type="button"
+                        class="btn-paro-start"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalIniciarParo">
+                    <i class="fa-solid fa-stop"></i>
+                    Reportar paro
+                </button>
+            }
         </section>
 
-        <section class="info-grid">
-            <div class="info">
-                <div class="k">OF / Solicitud</div>
-                <div class="v">@OFTexto(Model)</div>
-                <div class="sub">
-                    @if (Model.SolicitudProduccionID.HasValue)
-                    {
-                        <span>Solicitud @Model.SolicitudProduccionID.Value</span>
-                    }
-                    else
-                    {
-                        <span>Sin solicitud vinculada</span>
-                    }
-                </div>
-            </div>
-
-            <div class="info">
-                <div class="k">Máquina</div>
-                <div class="v">@TxtNullable(Model.MaquinaCodigo)</div>
-                <div class="sub">@TxtNullable(Model.MaquinaNombre)</div>
-            </div>
-
-            <div class="info">
-                <div class="k">Parte</div>
-                <div class="v">@ParteTexto(Model)</div>
-                <div class="sub">@TxtNullable(Model.DescripcionParte)</div>
-            </div>
-
-            <div class="info">
-                <div class="k">Operador asignado</div>
-                <div class="v">@TxtNullable(Model.OperadorNombre)</div>
-                <div class="sub">
-                    @if (Model.OperadorID.HasValue)
-                    {
-                        <span>ID @Model.OperadorID.Value</span>
-                    }
-                    else
-                    {
-                        <span>Sin operador asignado</span>
-                    }
-                </div>
-            </div>
-
-            <div class="info">
-                <div class="k">Cantidad planeada</div>
-                <div class="v">@NumeroNullable(Model.CantidadPlaneada)</div>
-                <div class="sub">piezas</div>
-            </div>
-        </section>
-
-        <section class="metrics">
-            <div class="metric">
-                <div class="k">OK</div>
-                <div class="num text-success">@Numero(totalOK)</div>
-            </div>
-
-            <div class="metric">
-                <div class="k">Sospechoso</div>
-                <div class="num text-warning">@Numero(totalSospechoso)</div>
-            </div>
-
-            <div class="metric">
-                <div class="k">Scrap</div>
-                <div class="num text-danger">@Numero(totalScrap)</div>
-            </div>
-
-            <div class="metric">
-                <div class="k">Capturado total</div>
-                <div class="num text-primary">@Numero(totalCapturado)</div>
-            </div>
-
-            <div class="metric">
-                <div class="k">Pendiente OK</div>
-                <div class="num">@Numero(pendiente)</div>
-            </div>
-        </section>
-
-        <section class="progress-wrap">
-            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                <div class="fw-bold text-primary">
-                    Avance con piezas OK
-                </div>
-
-                <div class="fw-bold">
-                    @avance.ToString("0.##")%
-                </div>
-            </div>
-
-            <div class="progress">
-                <div class="progress-bar"
-                     role="progressbar"
-                     style="width:@porcentajeTexto%">
-                </div>
-            </div>
-        </section>
-
-        <div class="layout">
-            <main>
-                <section class="panel @(capturaHabilitada ? "" : "disabled-area")">
-                    <div class="panel-head">
-                        <i class="fa-solid fa-stopwatch me-2"></i>
-                        Captura automática del bloque pendiente
-                    </div>
-
-                    <div class="panel-body">
-                        @if (Model.TieneParoAbierto)
-                        {
-                            <div class="danger-note mb-3">
-                                <i class="fa-solid fa-circle-pause me-1"></i>
-                                Hay un paro abierto. Cierra el paro antes de capturar producción.
-                            </div>
-                        }
-                        else if (Model.EstatusID != 3)
-                        {
-                            <div class="warn-note mb-3">
-                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                                Solo se puede capturar cuando la producción está en serie.
-                            </div>
-                        }
-                        else if (bloqueYaVencio)
-                        {
-                            <div class="danger-note mb-3 blink-alert">
-                                <i class="fa-solid fa-bell me-1"></i>
-                                Captura pendiente: el bloque @FormatoHora(horaInicio) - @FormatoHora(horaFin) ya debe registrarse.
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="success-note mb-3">
-                                <i class="fa-solid fa-clock me-1"></i>
-                                Próxima captura automática del bloque @FormatoHora(horaInicio) - @FormatoHora(horaFin).
-                                Faltan aproximadamente @minutosParaCierre minuto(s).
-                            </div>
-                        }
-
-                        <div class="time-locked">
-                            <div class="time-locked-title">
-                                <i class="fa-solid fa-lock me-1"></i>
-                                Bloque de producción asignado por el sistema
-                            </div>
-
-                            <div class="time-locked-range">
-                                @fechaProduccion.ToString("dd/MM/yyyy")
-                                · @FormatoHora(horaInicio) - @FormatoHora(horaFin)
-                            </div>
-
-                            <div class="time-locked-sub">
-                                Este rango se calcula desde el controlador.
-                            </div>
-                        </div>
-
-                        <form method="post"
-                              action="@Url.Action("RegistrarHora", "ProduccionOperador")"
-                              id="formCapturaHora">
-                            @Html.AntiForgeryToken()
-
-                            <input type="hidden"
-                                   name="EjecucionProduccionID"
-                                   value="@Model.EjecucionProduccionID" />
-
-                            <div class="time-grid">
-                                <div>
-                                    <label class="form-label">Fecha producción</label>
-                                    <input type="date"
-                                           name="FechaProduccion"
-                                           value="@fechaProduccion.ToString("yyyy-MM-dd")"
-                                           class="form-control"
-                                           readonly
-                                           required />
-                                </div>
-
-                                <div>
-                                    <label class="form-label">Hora inicio</label>
-                                    <input type="time"
-                                           name="HoraInicio"
-                                           value="@horaInicio.ToString(@"hh\:mm")"
-                                           class="form-control"
-                                           readonly
-                                           required />
-                                </div>
-
-                                <div>
-                                    <label class="form-label">Hora fin</label>
-                                    <input type="time"
-                                           name="HoraFin"
-                                           value="@horaFin.ToString(@"hh\:mm")"
-                                           class="form-control"
-                                           readonly
-                                           required />
-                                </div>
-                            </div>
-
-                            <div class="capture-grid mb-3">
-                                <div class="qty-box qty-ok">
-                                    <label class="qty-label text-success">
-                                        <i class="fa-solid fa-circle-check"></i>
-                                        OK
-                                    </label>
-
-                                    <input type="number"
-                                           name="CantidadOK"
-                                           min="0"
-                                           value="0"
-                                           class="qty-input"
-                                           inputmode="numeric" />
-                                </div>
-
-                                <div class="qty-box qty-sos">
-                                    <label class="qty-label text-warning">
-                                        <i class="fa-solid fa-triangle-exclamation"></i>
-                                        Sospechoso
-                                    </label>
-
-                                    <input type="number"
-                                           name="CantidadSospechosa"
-                                           min="0"
-                                           value="0"
-                                           class="qty-input"
-                                           inputmode="numeric" />
-                                </div>
-
-                                <div class="qty-box qty-scrap">
-                                    <label class="qty-label text-danger">
-                                        <i class="fa-solid fa-trash-can"></i>
-                                        Scrap
-                                    </label>
-
-                                    <input type="number"
-                                           name="CantidadScrap"
-                                           min="0"
-                                           value="0"
-                                           class="qty-input"
-                                           inputmode="numeric" />
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Observaciones</label>
-                                <textarea name="Observaciones"
-                                          rows="3"
-                                          maxlength="500"
-                                          class="form-control"
-                                          placeholder="Comentarios de turno, ajuste, material, separación, incidencia, etc."></textarea>
-                            </div>
-
-                            <button type="submit" class="btn-main">
-                                <i class="fa-solid fa-floppy-disk"></i>
-                                Guardar producción del bloque
-                            </button>
-                        </form>
-                    </div>
-                </section>
-            </main>
-
-            <aside>
+        <section class="panel">
+            <div class="panel-head d-flex justify-content-between align-items-center flex-wrap gap-2"><span><i class="fa-solid fa-clock me-2"></i>Registro por horas</span><span class="badge bg-primary">Avance @avance.ToString("0.##")% · Pendiente @Numero(pendiente)</span></div>
+            <div class="panel-body">
                 @if (Model.TieneParoAbierto)
                 {
-                    <section class="panel">
-                        <div class="panel-head text-danger">
-                            <i class="fa-solid fa-circle-pause me-2"></i>
-                            Cerrar paro abierto
-                        </div>
+                    <div class="alert alert-danger fw-bold"><i class="fa-solid fa-circle-pause me-1"></i>Existe un paro abierto. Cierra el paro antes de capturar horas.</div>
+                }
+                else if (Model.EstatusID != ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+                {
 
-                        <div class="panel-body">
-                            <div class="danger-note mb-3">
-                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                                Si el paro duró más de 15 minutos, al cerrarlo la producción regresará a preparación para ejecutar 5 disparos y solicitar reliberación de Calidad.
-                            </div>
-
-                            <form method="post"
-                                  action="@Url.Action("CerrarParo", "ProduccionOperador")"
-                                  id="formCerrarParo">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden"
-                                       name="ParoID"
-                                       value="@Model.ParoAbiertoID" />
-
-                                <div class="mb-3">
-                                    <label class="form-label">Observaciones de cierre</label>
-                                    <textarea name="ObservacionesCierre"
-                                          rows="4"
-                                          maxlength="500"
-                                          class="form-control"
-                                          placeholder="Describe qué se hizo para resolver el paro..."></textarea>
-                                </div>
-
-                                <button type="submit" class="btn-successx">
-                                    <i class="fa-solid fa-check"></i>
-                                    Cerrar paro
-                                </button>
-                            </form>
-                        </div>
-                    </section>
+                    <div class="alert alert-warning fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>La captura se habilita cuando inicia producción en serie.</div>
                 }
                 else
                 {
-                    <section class="panel @(Model.EstatusID != 3 ? "disabled-area" : "")">
-                        <div class="panel-head text-warning">
-                            <i class="fa-solid fa-pause me-2"></i>
-                            Reportar paro
-                        </div>
 
-                        <div class="panel-body">
-                            @if (Model.EstatusID != 3)
-                            {
-                                <div class="warn-note mb-3">
-                                    Solo puedes reportar paro cuando la producción está en serie.
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="warn-note mb-3">
-                                    Si el paro dura más de 15 minutos, se solicitará reliberación de Calidad y la producción regresará al punto 7 del flujo.
-                                </div>
-                            }
-
-                            <form method="post"
-                                  action="@Url.Action("IniciarParo", "ProduccionOperador")"
-                                  id="formIniciarParo">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden"
-                                       name="EjecucionProduccionID"
-                                       value="@Model.EjecucionProduccionID" />
-
-                                <div class="mb-3">
-                                    <label class="form-label">Motivo</label>
-                                    <select name="MotivoParoID" class="form-select">
-                                        @if (Model.MotivosParo != null)
-                                        {
-                                            foreach (var motivo in Model.MotivosParo)
-                                            {
-                                                <option value="@motivo.Value">@motivo.Text</option>
-                                            }
-                                        }
-                                    </select>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label">Motivo manual / complemento</label>
-                                    <input type="text"
-                                           name="MotivoParoTexto"
-                                           maxlength="200"
-                                           class="form-control"
-                                           placeholder="Opcional si no aplica catálogo" />
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label">Descripción</label>
-                                    <textarea name="Descripcion"
-                                          rows="4"
-                                          maxlength="500"
-                                          class="form-control"
-                                          placeholder="Describe el problema: máquina, molde, material, operador, ajuste, etc."></textarea>
-                                </div>
-
-                                <button type="submit" class="btn-warningx">
-                                    <i class="fa-solid fa-pause"></i>
-                                    Iniciar paro
-                                </button>
-                            </form>
-                        </div>
-                    </section>
+                    <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Escribe los números directamente en la fila. “Amarillos” corresponde a piezas sospechosas. Las horas futuras permanecen bloqueadas.</div>
                 }
 
-                <section class="panel">
-                    <div class="panel-head">
-                        <i class="fa-solid fa-route me-2"></i>
-                        Flujo desde este punto
+                @if (horas.Count == 0)
+                {
+                    <div class="alert alert-secondary mb-0">No se generaron las filas horarias. El controlador debe cargar <strong>Model.HorasCaptura</strong> desde la hora real de inicio de producción.</div>
+                }
+                else
+                {
+                    <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
+                        <table class="hour-table">
+                            <thead><tr><th>Hora</th><th>Rango</th><th>OK</th><th>Amarillos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
+                            <tbody>
+                                @foreach (var fila in horasPendientesVisibles)
+                                {
+                                    var editable = capturaHabilitada && !fila.Capturada && fila.Disponible;
+                                    var claseFila = fila.Vencida ? "row-overdue" : fila.Disponible ? "row-ready" : "";
+                                    var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora;
+                                    <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-obligatoria="@(esObligatoria ? "true" : "false")">
+                                        <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
+                                        <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                        <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
+                                        <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
+                                        <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
+                                        <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
+                                        <td><span class="status-pill @EstadoClase(fila)">@EstadoTexto(fila)</span></td>
+                                        <td><button type="button" class="btn-save-row btn-open-hour" @(editable ? "" : "disabled")><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
                     </div>
+                    @if (horasPendientesAdicionales.Count > 0)
+                    {
+                        <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#pendientesAdicionales" aria-expanded="false" aria-controls="pendientesAdicionales"><span><i class="fa-solid fa-list me-2"></i>Ver más horas pendientes (@horasPendientesAdicionales.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
+                        <div class="collapse history-box" id="pendientesAdicionales">
+                            <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
+                                <table class="hour-table">
+                                    <thead><tr><th>Hora</th><th>Rango</th><th>OK</th><th>Amarillos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var fila in horasPendientesAdicionales)
+                                        {
+                                            var editable = capturaHabilitada && !fila.Capturada && fila.Disponible;
+                                            var claseFila = fila.Vencida ? "row-overdue" : fila.Disponible ? "row-ready" : "";
+                                            var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora;
+                                            <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-obligatoria="@(esObligatoria ? "true" : "false")">
+                                                <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
+                                                <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                                <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
+                                                <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
+                                                <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
+                                                <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
+                                                <td><span class="status-pill @EstadoClase(fila)">@EstadoTexto(fila)</span></td>
+                                                <td><button type="button" class="btn-save-row btn-open-hour" @(editable ? "" : "disabled")><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    @if (horasCapturadas.Count > 0)
+                    {
+                        <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialCapturas" aria-expanded="false" aria-controls="historialCapturas"><span><i class="fa-solid fa-box-archive me-2"></i>Ver horas ya capturadas (@horasCapturadas.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
+                        <div class="collapse history-box" id="historialCapturas">
+                            <div class="table-wrap">
+                                <table class="hour-table">
+                                    <thead><tr><th>Hora</th><th>Rango</th><th>OK</th><th>Amarillos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var fila in horasCapturadas)
+                                        {
+                                            <tr class="row-complete">
+                                                <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
+                                                <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                                <td><span class="status-pill status-complete">@fila.CantidadOK</span></td>
+                                                <td><span class="status-pill status-ready">@fila.CantidadSospechosa</span></td>
+                                                <td><span class="status-pill status-overdue">@fila.CantidadScrap</span></td>
+                                                <td>@Txt(fila.Observaciones)</td>
+                                                <td><span class="status-pill status-complete"><i class="fa-solid fa-check"></i> Capturada</span></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </section>
+    </div>
 
-                    <div class="panel-body">
-                        <div class="note mb-2">
-                            <strong>10.</strong> Registrar producción por hora.
+    <div class="modal fade modal-paro" id="modalIniciarParo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa-solid fa-triangle-exclamation me-2"></i>Reportar paro de máquina</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form method="post" action="@Url.Action("IniciarParo", "ProduccionOperador")" id="formIniciarParo">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+
+                        <div class="paro-warning mb-3">
+                            <i class="fa-solid fa-circle-info me-1"></i>
+                            Al confirmar, la ejecución quedará pausada y se bloqueará la captura por hora hasta cerrar el paro.
                         </div>
 
-                        <div class="note mb-2">
-                            <strong>11.</strong> Separar OK, sospechoso y scrap.
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Motivo del paro</label>
+                            <select name="MotivoParoID" id="motivoParoId" class="form-select form-select-lg">
+                                @foreach (var motivo in Model.MotivosParo ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>())
+                                {
+                                    <option value="@motivo.Value">@motivo.Text</option>
+                                }
+                            </select>
                         </div>
 
-                        <div class="warn-note mb-2">
-                            <strong>Paro menor o igual a 15 min:</strong> se cierra y continúa la producción.
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Otro motivo</label>
+                            <input type="text"
+                                   name="MotivoParoTexto"
+                                   id="motivoParoTexto"
+                                   maxlength="200"
+                                   class="form-control"
+                                   placeholder="Úsalo cuando el motivo no esté en el catálogo" />
                         </div>
 
-                        <div class="danger-note">
-                            <strong>Paro mayor a 15 min:</strong> se cierra, se solicita reliberación y vuelve a 5 disparos de prueba.
+                        <div>
+                            <label class="form-label fw-bold">Descripción</label>
+                            <textarea name="Descripcion"
+                                      id="descripcionParo"
+                                      rows="4"
+                                      maxlength="500"
+                                      class="form-control"
+                                      placeholder="Describe brevemente qué ocurrió"></textarea>
                         </div>
                     </div>
-                </section>
-
-                <section class="panel">
-                    <div class="panel-head">
-                        <i class="fa-solid fa-list-check me-2"></i>
-                        Reglas de captura
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-danger fw-bold" id="btnConfirmarParo">
+                            <i class="fa-solid fa-stop me-1"></i>Iniciar paro
+                        </button>
                     </div>
-
-                    <div class="panel-body">
-                        <div class="success-note mb-2">
-                            <strong>OK</strong>: piezas conformes para avance de producción.
-                        </div>
-
-                        <div class="warn-note mb-2">
-                            <strong>Sospechoso</strong>: piezas separadas para revisión.
-                        </div>
-
-                        <div class="danger-note">
-                            <strong>Scrap</strong>: piezas rechazadas o no recuperables.
-                        </div>
-                    </div>
-                </section>
-            </aside>
+                </form>
+            </div>
         </div>
     </div>
 
+    <div class="modal fade modal-reanudar" id="modalCerrarParo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa-solid fa-play me-2"></i>Finalizar paro de máquina</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form method="post" action="@Url.Action("CerrarParo", "ProduccionOperador")" id="formCerrarParo">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="ParoID" value="@Model.ParoAbiertoID" />
+
+                        <div class="alert alert-success fw-bold rounded-4">
+                            <i class="fa-solid fa-circle-check me-1"></i>
+                            Confirma que la máquina está lista para continuar.
+                        </div>
+
+                        <div class="paro-warning mb-3">
+                            <i class="fa-solid fa-clock me-1"></i>
+                            Si el paro duró más de 15 minutos, el sistema regresará la producción a preparación y solicitará reliberación de Calidad.
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-bold">Observaciones de cierre</label>
+                            <textarea name="ObservacionesCierre"
+                                      rows="4"
+                                      maxlength="500"
+                                      class="form-control"
+                                      placeholder="Describe la corrección o condición para reanudar"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success fw-bold" id="btnConfirmarCierreParo">
+                            <i class="fa-solid fa-play me-1"></i>Finalizar y continuar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalCapturaHora" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title"><i class="fa-solid fa-bell me-2"></i>Captura horaria pendiente</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+                <form method="post" action="@Url.Action("RegistrarHora","ProduccionOperador")" id="formModalHora">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                        <input type="hidden" name="FechaProduccion" id="modalFecha" />
+                        <input type="hidden" name="HoraInicio" id="modalInicio" />
+                        <input type="hidden" name="HoraFin" id="modalFin" />
+                        <div class="text-center mb-3"><div class="text-muted fw-bold">Debes completar</div><div class="modal-hour" id="modalTituloHora">Hora pendiente</div><div class="text-muted" id="modalRangoHora"></div></div>
+                        <div class="modal-grid mb-3">
+                            <div><div class="modal-label text-success">OK</div><input type="number" min="0" value="" placeholder="0" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" /></div>
+                            <div><div class="modal-label text-warning">Amarillos</div><input type="number" min="0" value="" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" /></div>
+                            <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" /></div>
+                        </div>
+                        <label class="form-label fw-bold">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Necesaria cuando no hubo producción o para explicar incidencias"></textarea>
+                        <div class="alert alert-warning mt-3 mb-0"><i class="fa-solid fa-circle-info me-1"></i>Puedes cerrar este aviso durante las pruebas, pero la siguiente hora seguirá bloqueada hasta capturar la anterior.</div>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4"><button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar Hora</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const formCapturaHora = document.getElementById('formCapturaHora');
-        const formIniciarParo = document.getElementById('formIniciarParo');
-        const formCerrarParo = document.getElementById('formCerrarParo');
+        document.addEventListener('DOMContentLoaded',function(){
+            const modalElement=document.getElementById('modalCapturaHora');
+            const modal=modalElement?bootstrap.Modal.getOrCreateInstance(modalElement):null;
+            const form=document.getElementById('formModalHora');
+            function cargarFila(row){
+                if(!row||!form)return;
+                document.getElementById('modalFecha').value=row.dataset.fecha||'';
+                document.getElementById('modalInicio').value=row.dataset.inicio||'';
+                document.getElementById('modalFin').value=row.dataset.fin||'';
+                document.getElementById('modalTituloHora').textContent='Hora '+(row.dataset.numero||'');
+                document.getElementById('modalRangoHora').textContent=(row.dataset.inicio||'')+' - '+(row.dataset.fin||'');
+                document.getElementById('modalOK').value=row.querySelector('[data-field="ok"]')?.value||'';
+                document.getElementById('modalYellow').value=row.querySelector('[data-field="yellow"]')?.value||'';
+                document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'';
+                document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
+            }
+            const capturaHabilitada = @capturaHabilitada.ToString().ToLowerInvariant();
+            const tieneParoAbierto = @Model.TieneParoAbierto.ToString().ToLowerInvariant();
 
-        function bloquearSubmit(form, texto) {
-            if (!form) return;
-
-            form.addEventListener('submit', function () {
-                const btn = form.querySelector('button[type="submit"]');
-
-                if (!btn) return;
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + texto;
+            document.querySelectorAll('.btn-open-hour').forEach(btn=>btn.addEventListener('click',function(){
+                if (!capturaHabilitada || tieneParoAbierto) return;
+                const row=this.closest('[data-hour-row]');
+                cargarFila(row);
+                modal?.show();
+            }));
+            form?.addEventListener('submit',function(e){
+                const ok=Number(document.getElementById('modalOK').value||0),yellow=Number(document.getElementById('modalYellow').value||0),scrap=Number(document.getElementById('modalScrap').value||0),obs=(document.getElementById('modalObs').value||'').trim();
+                if(ok<0||yellow<0||scrap<0){e.preventDefault();alert('Las cantidades no pueden ser negativas.');return;}
+                if(ok===0&&yellow===0&&scrap===0&&!obs){e.preventDefault();alert('Captura una cantidad o explica en observaciones por qué no hubo producción.');return;}
+                const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';}
             });
-        }
-
-        formCapturaHora?.addEventListener('submit', function (event) {
-            const ok = Number(formCapturaHora.querySelector('[name="CantidadOK"]')?.value || 0);
-            const sospechosa = Number(formCapturaHora.querySelector('[name="CantidadSospechosa"]')?.value || 0);
-            const scrap = Number(formCapturaHora.querySelector('[name="CantidadScrap"]')?.value || 0);
-            const obs = (formCapturaHora.querySelector('[name="Observaciones"]')?.value || '').trim();
-
-            const horaInicio = formCapturaHora.querySelector('[name="HoraInicio"]')?.value || '';
-            const horaFin = formCapturaHora.querySelector('[name="HoraFin"]')?.value || '';
-
-            if (horaInicio && horaFin && horaFin <= horaInicio) {
-                event.preventDefault();
-                alert('La hora fin debe ser mayor que la hora inicio.');
-                return;
+            const obligatoria=document.querySelector('[data-hour-row][data-obligatoria="true"]');
+            if(capturaHabilitada && !tieneParoAbierto && obligatoria){
+                cargarFila(obligatoria);
+                modal?.show();
+            } else {
+                modal?.hide();
             }
 
-            if (ok < 0 || sospechosa < 0 || scrap < 0) {
-                event.preventDefault();
-                alert('Las cantidades no pueden ser negativas.');
-                return;
-            }
+            const formIniciarParo=document.getElementById('formIniciarParo');
+            formIniciarParo?.addEventListener('submit',function(e){
+                const motivoId=(document.getElementById('motivoParoId')?.value||'').trim();
+                const motivoTexto=(document.getElementById('motivoParoTexto')?.value||'').trim();
+                if(!motivoId&&!motivoTexto){
+                    e.preventDefault();
+                    alert('Selecciona un motivo o captura otro motivo para el paro.');
+                    return;
+                }
+                const button=document.getElementById('btnConfirmarParo');
+                if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Iniciando paro...';}
+            });
 
-            if (ok === 0 && sospechosa === 0 && scrap === 0 && !obs) {
-                event.preventDefault();
-                alert('Captura al menos una cantidad u observación.');
-                return;
-            }
+            const formCerrarParo=document.getElementById('formCerrarParo');
+            formCerrarParo?.addEventListener('submit',function(){
+                const button=document.getElementById('btnConfirmarCierreParo');
+                if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Finalizando...';}
+            });
 
-            const btn = formCapturaHora.querySelector('button[type="submit"]');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
-            }
+            setTimeout(()=>window.location.reload(),60000);
         });
-
-        bloquearSubmit(formIniciarParo, 'Iniciando paro...');
-        bloquearSubmit(formCerrarParo, 'Cerrando paro...');
-
-        setTimeout(function () {
-            window.location.reload();
-        }, 60000);
     </script>
 </body>
 </html>

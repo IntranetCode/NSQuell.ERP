@@ -1,10 +1,12 @@
-﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTEntradaLoteVm
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTEntradaLoteVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = Model.EsEntregaOF
         ? "Recepción PT por escáner"
         : "Entrada PT por escáner";
 }
+
+<link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
 
 <section class="alm-hero">
     <div>
@@ -14,6 +16,12 @@
             Escanea una etiqueta por caja. El lector puede enviar Enter o Tab:
             el código se agrega a la lista y el cursor queda listo para la siguiente caja.
         </p>
+    </div>
+    <div class="alm-actions">
+        <a class="alm-btn secondary" asp-action="Index">
+            <i class="fa-solid fa-arrow-left"></i>
+            Volver al inventario
+        </a>
     </div>
 </section>
 
@@ -27,25 +35,22 @@
            type="hidden"
            value="convertir" />
 
-    <div asp-validation-summary="All"
-         class="alm-alert warning"></div>
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div asp-validation-summary="All"
+             class="alm-alert warning pt-validation-summary"></div>
+    }
 
     <textarea asp-for="CodigosEscaneados"
               id="CodigosEscaneados"
               hidden></textarea>
 
-    <input asp-for="EsEntregaOF"
-           type="hidden" />
-    <input asp-for="SolicitudProduccionID"
-           type="hidden" />
-    <input asp-for="ParteIDEsperada"
-           type="hidden" />
-    <input asp-for="NumeroOFEsperada"
-           type="hidden" />
-    <input asp-for="CantidadPendienteOF"
-           type="hidden" />
-    <input asp-for="OperacionToken"
-           type="hidden" />
+    <input asp-for="EsEntregaOF" type="hidden" />
+    <input asp-for="SolicitudProduccionID" type="hidden" />
+    <input asp-for="ParteIDEsperada" type="hidden" />
+    <input asp-for="NumeroOFEsperada" type="hidden" />
+    <input asp-for="CantidadPendienteOF" type="hidden" />
+    <input asp-for="OperacionToken" type="hidden" />
 
     @if (Model.EsEntregaOF)
     {
@@ -88,16 +93,16 @@
 
     <section class="alm-card">
         <header>
-            <span>Datos de recepción</span>
+            <span><i class="fa-solid fa-location-dot"></i> Datos de recepción</span>
         </header>
 
         <div class="alm-form">
-
             <div class="alm-field">
-                <label asp-for="UbicacionID"></label>
+                <label for="UbicacionID">Ubicación</label>
                 <select asp-for="UbicacionID"
-                        class="alm-select">
-                    <option value="">Selecciona</option>
+                        class="alm-select"
+                        id="UbicacionID">
+                    <option value="">Selecciona una ubicación</option>
                     @foreach (var ubicacion in Model.Ubicaciones)
                     {
                         <option value="@ubicacion.Id">
@@ -109,9 +114,12 @@
             </div>
 
             <div class="alm-field full">
-                <label asp-for="Observaciones"></label>
+                <label for="Observaciones">Observaciones</label>
                 <textarea asp-for="Observaciones"
-                          class="alm-textarea"></textarea>
+                          class="alm-textarea"
+                          id="Observaciones"
+                          rows="3"
+                          placeholder="Agrega información útil sobre la recepción, lote o condición de las cajas"></textarea>
                 <span asp-validation-for="Observaciones"></span>
             </div>
         </div>
@@ -119,7 +127,7 @@
 
     <section class="alm-card">
         <header>
-            <span>Escaneo de cajas</span>
+            <span><i class="fa-solid fa-barcode"></i> Escaneo de cajas</span>
             <span id="scanHeaderCount">0 código(s)</span>
         </header>
 
@@ -230,7 +238,8 @@
                                 </td>
                                 <td>@item.NumeroOF</td>
                                 <td>
-                                    @item.NumeroParte                                    @if (item.ExisteEnCatalogo)
+                                    @item.NumeroParte
+                                    @if (item.ExisteEnCatalogo)
                                     {
                                         @if (!string.Equals(
                                             item.NumeroParte,
@@ -412,6 +421,7 @@
                 setMessage("Lista limpia. Cursor listo para escanear.");
                 input.focus();
             });
+
             const submitAction = action => {
                 sync();
 
@@ -462,10 +472,3 @@
         })();
     </script>
 }
-
-
-
-
-
-
-

@@ -2,7 +2,8 @@
 @using Microsoft.AspNetCore.Mvc.Rendering
 
 @{
-    Layout = null;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Programar Molde | ERP QUELL";
 }
 
 @functions {
@@ -489,6 +490,8 @@
 </head>
 
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="page">
 
         <section class="hero">

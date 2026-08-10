@@ -17,6 +17,19 @@
         .GroupBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN_MAQUINA" : x.MaquinaCodigo)
         .ToList();
 
+    var proximosPorMaquina = Model.ProximosAIniciar
+        .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
+        .ThenBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+        .ThenBy(x => x.ProgramaProduccionID)
+        .GroupBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN_MAQUINA" : x.MaquinaCodigo)
+        .ToList();
+
+    var alertasOrdenadas = Model.AlertasReprogramacion
+        .OrderByDescending(x => x.EsMuyReciente)
+        .ThenByDescending(x => x.FechaCambio)
+        .ThenByDescending(x => x.ReprogramacionHistorialID)
+        .ToList();
+
     var ejecucionesPorMaquina = Model.Ejecuciones
      .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
      .ThenBy(x => x.ProgramaProduccionID)
@@ -413,20 +426,63 @@
             border-radius: 999px;
         }
 
-        .row-preparacion {
-            background: #fffaf0;
+        /* ============================================================
+                           COLORES SUAVES POR ESTADO OPERATIVO
+
+                           Amarillo = preparación / esperando Calidad
+                           Azul     = producción activa
+                           Rosa     = paro / pausado
+                           Verde    = terminado
+
+                           Se aplica sobre las celdas para que Bootstrap no tape
+                           el color de la fila.
+                           ============================================================ */
+        .production-row.row-preparacion > td {
+            background: #fff9e8 !important;
         }
 
-        .row-produccion {
-            background: #eff8ff;
+        .production-row.row-produccion > td {
+            background: #eef7ff !important;
         }
 
-        .row-pausado {
-            background: #fff1f3;
+        .production-row.row-pausado > td {
+            background: #fff0f2 !important;
         }
 
-        .row-terminado {
-            background: #f0fdf4;
+        .production-row.row-terminado > td {
+            background: #eefbf3 !important;
+        }
+
+        .production-row.row-preparacion > td:first-child {
+            box-shadow: inset 4px 0 0 #e6b422;
+        }
+
+        .production-row.row-produccion > td:first-child {
+            box-shadow: inset 4px 0 0 #4b8fd8;
+        }
+
+        .production-row.row-pausado > td:first-child {
+            box-shadow: inset 4px 0 0 #d46a78;
+        }
+
+        .production-row.row-terminado > td:first-child {
+            box-shadow: inset 4px 0 0 #4f9f72;
+        }
+
+        .table-hover tbody tr.production-row.row-preparacion:hover > td {
+            background: #fff5d6 !important;
+        }
+
+        .table-hover tbody tr.production-row.row-produccion:hover > td {
+            background: #e5f2ff !important;
+        }
+
+        .table-hover tbody tr.production-row.row-pausado:hover > td {
+            background: #ffe6ea !important;
+        }
+
+        .table-hover tbody tr.production-row.row-terminado:hover > td {
+            background: #e4f8ec !important;
         }
 
         .modal-content {
@@ -498,6 +554,212 @@
                 color: var(--warning);
             }
 
+        .next-start-section {
+            border-color: #f6c75c;
+            box-shadow: 0 10px 28px rgba(181, 71, 8, .08);
+        }
+
+            .next-start-section .section-head {
+                background: linear-gradient(90deg, #fff8e7, #fffdf7);
+                border-bottom-color: #f6d98f;
+            }
+
+            .next-start-section .section-title {
+                color: #92400e;
+            }
+
+        .next-start-row {
+            background: #fffdf6;
+        }
+
+        .next-start-time {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 9px;
+            border: 1px solid #fed7aa;
+            border-radius: 999px;
+            background: #fff7ed;
+            color: #b54708;
+            font-size: .76rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .alerts-section {
+            border-color: #bcd2f0;
+        }
+
+        .alerts-list {
+            display: grid;
+            gap: 10px;
+            padding: 14px 16px;
+        }
+
+        .program-alert {
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: start;
+            padding: 13px 14px;
+            border: 1px solid #d7e2f1;
+            border-left: 5px solid #7ca8e8;
+            border-radius: 14px;
+            background: #f8fbff;
+        }
+
+            .program-alert.is-highlighted {
+                border-color: #f6c75c;
+                border-left-color: #f59e0b;
+                background: linear-gradient(90deg, #fff8e7, #fffdf8);
+                box-shadow: 0 8px 20px rgba(181, 71, 8, .08);
+            }
+
+        .program-alert-icon {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 12px;
+            background: #eaf2ff;
+            color: var(--azul);
+            font-size: 1.05rem;
+        }
+
+        .program-alert.is-highlighted .program-alert-icon {
+            background: #ffedd5;
+            color: #b54708;
+        }
+
+        .program-alert-title {
+            color: #182437;
+            font-weight: 950;
+        }
+
+        .program-alert-message {
+            margin-top: 3px;
+            color: #475467;
+            font-size: .84rem;
+            font-weight: 700;
+        }
+
+        .program-alert-meta {
+            margin-top: 6px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 650;
+        }
+
+        .program-alert-date {
+            color: var(--muted);
+            font-size: .74rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .alerts-floating-button {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            z-index: 1040;
+            width: 58px;
+            height: 58px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+            color: #fff;
+            box-shadow: 0 16px 36px rgba(15, 47, 99, .32);
+            font-size: 1.35rem;
+            transition: transform .18s ease, box-shadow .18s ease;
+        }
+
+            .alerts-floating-button:hover {
+                transform: translateY(-2px) scale(1.03);
+                color: #fff;
+                box-shadow: 0 20px 42px rgba(15, 47, 99, .4);
+            }
+
+            .alerts-floating-button:focus {
+                outline: 0;
+                box-shadow: 0 0 0 .25rem rgba(25, 76, 155, .2), 0 16px 36px rgba(15, 47, 99, .32);
+            }
+
+        .alerts-floating-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            min-width: 24px;
+            height: 24px;
+            padding: 0 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid #fff;
+            border-radius: 999px;
+            background: #dc3545;
+            color: #fff;
+            font-size: .68rem;
+            font-weight: 950;
+            line-height: 1;
+        }
+
+        .alerts-floating-button.has-highlight {
+            animation: alertBellPulse 2.2s infinite;
+        }
+
+        @@keyframes alertBellPulse {
+            0%, 100% {
+                box-shadow: 0 16px 36px rgba(15, 47, 99, .32);
+            }
+
+            50% {
+                box-shadow: 0 16px 36px rgba(15, 47, 99, .32), 0 0 0 10px rgba(245, 158, 11, .12);
+            }
+        }
+
+        .alerts-modal .modal-dialog {
+            max-width: min(1040px, calc(100vw - 24px));
+        }
+
+        .alerts-modal .modal-header {
+            background: linear-gradient(135deg, #0f2f63, #194c9b);
+        }
+
+        .alerts-modal-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--borde);
+            background: #f8fbff;
+        }
+
+        .alerts-modal .alerts-list {
+            max-height: min(68vh, 680px);
+            overflow-y: auto;
+            padding: 16px 18px 20px;
+        }
+
+        .alerts-modal-empty {
+            padding: 48px 20px;
+            text-align: center;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+            .alerts-modal-empty i {
+                display: block;
+                margin-bottom: 10px;
+                color: #98a2b3;
+                font-size: 2.3rem;
+            }
+
         .is-hidden {
             display: none !important;
         }
@@ -519,6 +781,124 @@
                 grid-template-columns: 1fr;
                 gap: 2px;
             }
+
+            .program-alert {
+                grid-template-columns: 38px minmax(0, 1fr);
+            }
+
+            .program-alert-date {
+                grid-column: 2;
+            }
+
+            .alerts-floating-button {
+                right: 14px;
+                bottom: 14px;
+                width: 54px;
+                height: 54px;
+            }
+
+            .alerts-modal .alerts-list {
+                max-height: 65vh;
+                padding: 12px;
+            }
+        }
+
+
+        /* ============================================================
+                   NAVEGACION OPERATIVA / CONTENIDO AJAX
+                   ============================================================ */
+        .production-nav {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            padding: 8px;
+            border: 1px solid var(--borde);
+            border-radius: 16px;
+            background: #fff;
+        }
+
+        .production-nav-btn {
+            border: 1px solid transparent;
+            border-radius: 12px;
+            background: transparent;
+            color: #475467;
+            padding: 9px 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-weight: 900;
+            text-decoration: none;
+            transition: .15s ease;
+        }
+
+            .production-nav-btn:hover {
+                border-color: #c7d7fe;
+                background: #f8fbff;
+                color: var(--azul);
+            }
+
+            .production-nav-btn.is-active {
+                border-color: #9fc0ef;
+                background: #eef4ff;
+                color: var(--azul);
+                box-shadow: inset 0 -3px 0 #2f6fbd;
+            }
+
+        .production-nav-count {
+            min-width: 25px;
+            height: 25px;
+            padding: 0 7px;
+            border-radius: 999px;
+            display: inline-grid;
+            place-items: center;
+            background: #fff;
+            border: 1px solid #bfd3f2;
+            font-size: .7rem;
+            font-weight: 950;
+        }
+
+        .production-content-shell {
+            min-height: 260px;
+        }
+
+        .panel-loading,
+        .panel-error {
+            border: 1px solid var(--borde);
+            border-radius: 18px;
+            background: #fff;
+            padding: 52px 20px;
+            text-align: center;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+            .panel-loading .spinner-border {
+                width: 2rem;
+                height: 2rem;
+                margin-bottom: 10px;
+                color: var(--azul);
+            }
+
+            .panel-error i {
+                display: block;
+                margin-bottom: 8px;
+                color: var(--danger);
+                font-size: 2rem;
+            }
+
+        @@media (max-width: 700px) {
+            .production-nav
+
+        {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+        }
+
+        .production-nav-btn {
+            flex: 0 0 auto;
+        }
+
         }
     </style>
 </head>
@@ -534,7 +914,7 @@
                         Producción
                     </h1>
                     <div class="topbar-sub">
-                        Bandeja organizada por máquina y cola programada desde Planeación.
+                        Centro operativo de Producción: ejecución, próximos inicios y cola programada.
                     </div>
                 </div>
 
@@ -584,6 +964,16 @@
             </div>
 
             <div class="summary-item">
+                @Model.TotalProximosAIniciar.ToString("N0")
+                <span>Pend. / 15 min</span>
+            </div>
+
+            <div class="summary-item">
+                @Model.TotalAlertasReprogramacion.ToString("N0")
+                <span>Cambios 24 h</span>
+            </div>
+
+            <div class="summary-item">
                 @Model.EnPreparacion.ToString("N0")
                 <span>Preparación</span>
             </div>
@@ -618,7 +1008,7 @@
             </div>
 
             <div class="filters">
-                <form method="get" action="@Url.Action("Index", "Produccion")" class="row g-3 align-items-end">
+                <form method="get" action="@Url.Action("Index", "Produccion")" id="formFiltrosProduccion" class="row g-3 align-items-end">
                     <div class="col-12 col-xl-3">
                         <label class="form-label">Buscar</label>
                         <input type="text"
@@ -641,7 +1031,7 @@
                     </div>
 
                     <div class="col-12 col-md-6 col-xl-2">
-                        <label class="form-label">Estatus</label>
+                        <label class="form-label">Estatus (ejecuciones)</label>
                         <select name="estatusId" class="form-select">
                             @foreach (var item in Model.Estatus)
                             {
@@ -677,412 +1067,196 @@
             </div>
         </section>
 
-        <section class="section">
-            <div class="section-head">
-                <div>
-                    <h2 class="section-title">
-                        <i class="bi bi-list-ol me-1"></i>
-                        Cola por máquina para iniciar preparación
-                    </h2>
-                    <div class="section-sub">
-                        Cada máquina muestra sus programas asignados en orden de fecha programada, de más antiguo a más nuevo.
-                    </div>
-                </div>
+        @{
+            var totalActivas =
+            Model.Pendientes +
+            Model.EnPreparacion +
+            Model.EnProduccion +
+            Model.Pausados;
+        }
 
-                <span class="tag tag-blue">
-                    <i class="bi bi-list-check"></i>
-                    @Model.TotalDisponibles.ToString("N0") disponible(s)
-                </span>
-            </div>
+        <nav class="production-nav" aria-label="Navegación operativa de Producción">
+            <button type="button"
+                    class="production-nav-btn is-active"
+                    data-production-panel="ejecuciones"
+                    data-url="@Url.Action("PanelEjecuciones", "Produccion")">
+                <i class="bi bi-activity"></i>
+                En ejecución
+                <span class="production-nav-count">@totalActivas</span>
+            </button>
 
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th style="width:70px;">Orden</th>
-                            <th>Programa / OF</th>
-                            <th>Parte</th>
-                            <th>Molde</th>
-                            <th>Operador sugerido</th>
-                            <th class="text-center">Cantidad</th>
-                            <th>Inicio programado</th>
-                            <th>Fin programado</th>
-                            <th class="text-end">Acción</th>
-                        </tr>
-                    </thead>
+            <button type="button"
+                    class="production-nav-btn"
+                    data-production-panel="proximos"
+                    data-url="@Url.Action("PanelProximos", "Produccion")">
+                <i class="bi bi-alarm"></i>
+                Pendientes / próximos
+                <span class="production-nav-count">@Model.TotalProximosAIniciar</span>
+            </button>
 
-                    <tbody>
-                        @if (!Model.ProgramasDisponibles.Any())
-                        {
-                            <tr>
-                                <td colspan="9">
-                                    <div class="empty">
-                                        <i class="bi bi-calendar-check"></i>
-                                        No hay programas pendientes para iniciar preparación.
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            foreach (var grupo in programasPorMaquina)
-                            {
-                                var primera = grupo.FirstOrDefault();
-                                var maquinaCodigo = Txt(primera?.MaquinaCodigo);
-                                var maquinaNombre = Txt(primera?.MaquinaNombre);
-                                var machineKey = "pend_" + MachineKey(grupo.Key);
-                                var totalMaquina = grupo.Count();
+            <button type="button"
+                    class="production-nav-btn"
+                    data-production-panel="cola"
+                    data-url="@Url.Action("PanelCola", "Produccion")">
+                <i class="bi bi-list-ol"></i>
+                Cola
+                <span class="production-nav-count">@Model.TotalDisponibles</span>
+            </button>
+        </nav>
 
-                                <tr class="machine-row">
-                                    <td colspan="9">
-                                        <div class="machine-header">
-                                            <div>
-                                                <div class="machine-title">
-                                                    <i class="bi bi-hdd-network me-1"></i>
-                                                    Máquina @maquinaCodigo
-                                                </div>
-                                                <div class="machine-sub">
-                                                    @maquinaNombre · @totalMaquina programa(s) en cola de preparación
-                                                </div>
-                                            </div>
-
-                                            <button type="button"
-                                                    class="machine-toggle"
-                                                    data-machine-toggle="@machineKey">
-                                                <i class="bi bi-chevron-up me-1"></i>
-                                                Ocultar / mostrar
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                var orden = 0;
-
-                                foreach (var item in grupo
-                                .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
-                                .ThenBy(x => x.ProgramaProduccionID))
-                                {
-                                    orden++;
-
-                                    var operadorSugerido = string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre)
-                                    ? ""
-                                    : item.OperadorSugeridoNombre;
-
-                                    var turnoSugerido = string.IsNullOrWhiteSpace(item.TurnoSugeridoNombre)
-                                    ? ""
-                                    : item.TurnoSugeridoNombre;
-
-                                    <tr class="production-row" data-machine-row="@machineKey">
-                                        <td>
-                                            <span class="queue-badge">@orden</span>
-                                        </td>
-
-                                        <td>
-                                            <div class="id-main">Programa @item.ProgramaProduccionID</div>
-                                            <div class="line-sub">@Txt(item.TituloPrograma)</div>
-
-                                            @if (item.SolicitudProduccionID.HasValue)
-                                            {
-                                                <div class="line-sub">OF ID @item.SolicitudProduccionID</div>
-                                            }
-
-                                            @if (item.ReleaseID.HasValue)
-                                            {
-                                                <div class="line-sub">Release @item.ReleaseID</div>
-                                            }
-                                        </td>
-
-                                        <td>
-                                            <div class="line-main">@Txt(item.TextoParte)</div>
-                                            <div class="line-sub">@Txt(item.DescripcionParte)</div>
-                                        </td>
-
-                                        <td>
-                                            <span class="tag">
-                                                <i class="bi bi-nut"></i>
-                                                @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            @if (string.IsNullOrWhiteSpace(operadorSugerido))
-                                            {
-                                                <span class="operator-pill operator-empty">
-                                                    <i class="bi bi-person-dash"></i>
-                                                    Sin operador sugerido
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <div class="operator-pill">
-                                                    <i class="bi bi-person-check"></i>
-                                                    @operadorSugerido
-                                                </div>
-
-                                                @if (!string.IsNullOrWhiteSpace(turnoSugerido))
-                                                {
-                                                    <div class="line-sub mt-1">
-                                                        Turno: @turnoSugerido
-                                                    </div>
-                                                }
-                                            }
-                                        </td>
-
-                                        <td class="text-center fw-bold">
-                                            @Num(item.CantidadProgramada)
-                                        </td>
-
-                                        <td>
-                                            @Fecha(item.FechaInicioProgramada)
-                                        </td>
-
-                                        <td>
-                                            @Fecha(item.FechaFinProgramada)
-                                        </td>
-
-                                        <td class="text-end">
-                                            @if (item.PuedeIniciar)
-                                            {
-                                                <button type="button"
-                                                        class="btn btn-sm btn-success btn-action btn-iniciar-preparacion"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#modalIniciarPreparacion"
-                                                        data-programa-id="@item.ProgramaProduccionID"
-                                                        data-titulo="@Data(item.TituloPrograma)"
-                                                        data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
-                                                        data-parte="@Data(item.TextoParte)"
-                                                        data-descripcion="@Data(item.DescripcionParte)"
-                                                        data-molde="@Data(item.MoldeCodigo)"
-                                                        data-cantidad="@Num(item.CantidadProgramada)"
-                                                        data-inicio="@Fecha(item.FechaInicioProgramada)"
-                                                        data-fin="@Fecha(item.FechaFinProgramada)"
-                                                        data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
-                                                        data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
-                                                        data-turno="@Data(item.TurnoSugeridoNombre)">
-                                                    <i class="bi bi-play-fill me-1"></i>
-                                                    Iniciar preparación
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <span class="tag tag-warn">
-                                                    <i class="bi bi-exclamation-triangle"></i>
-                                                    Falta máquina o cantidad
-                                                </span>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            }
-                        }
-                    </tbody>
-                </table>
+        <section class="production-content-shell" id="contenidoProduccion" aria-live="polite">
+            <div class="panel-loading">
+                <div class="spinner-border" role="status" aria-hidden="true"></div>
+                <div>Cargando operaciones...</div>
             </div>
         </section>
+    </div>
 
-        <section class="section">
-            <div class="section-head">
-                <div>
-                    <h2 class="section-title">
-                        <i class="bi bi-activity me-1"></i>
-                        Ejecuciones por máquina
-                    </h2>
-                    <div class="section-sub">
-                        Programas ya tomados por producción, agrupados por máquina y ordenados por fecha programada.
+    <button type="button"
+            class="alerts-floating-button @(Model.TotalAlertasMuyRecientes > 0 ? "has-highlight" : "")"
+            data-bs-toggle="modal"
+            data-bs-target="#modalMovimientosProgramacion"
+            title="Ver movimientos de programación"
+            aria-label="Ver movimientos de programación">
+        <i class="bi bi-bell-fill"></i>
+
+        @if (Model.TotalAlertasReprogramacion > 0)
+        {
+            <span class="alerts-floating-badge">
+                @(Model.TotalAlertasReprogramacion > 99
+                            ? "99+"
+                            : Model.TotalAlertasReprogramacion.ToString())
+        </span>
+                }
+    </button>
+
+    <div class="modal fade alerts-modal"
+         id="modalMovimientosProgramacion"
+         tabindex="-1"
+         aria-labelledby="modalMovimientosProgramacionLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="modalMovimientosProgramacionLabel">
+                            <i class="bi bi-bell-fill me-2"></i>
+                            Movimientos de programación
+                        </h5>
+                        <div class="small opacity-75 mt-1">
+                            Destacadas: últimas 2 horas. Visibles: últimas 24 horas.
+                        </div>
                     </div>
+
+                    <button type="button"
+                            class="btn-close btn-close-white"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar">
+                    </button>
                 </div>
 
-                <span class="tag">
-                    <i class="bi bi-clock-history"></i>
-                    @Model.Total.ToString("N0") ejecución(es)
-                </span>
-            </div>
+                <div class="alerts-modal-summary">
+                    @if (Model.TotalAlertasMuyRecientes > 0)
+                    {
+                        <span class="tag tag-warn">
+                            <i class="bi bi-lightning-charge"></i>
+                            @Model.TotalAlertasMuyRecientes destacada(s)
+                        </span>
+                    }
 
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th style="width:70px;">Orden</th>
-                            <th>Programa</th>
-                            <th>Parte</th>
-                            <th>Molde</th>
-                            <th>Operador</th>
-                            <th class="text-center">Planeado</th>
-                            <th class="text-center">OK</th>
-                            <th class="text-center">Sospechoso</th>
-                            <th class="text-center">Scrap</th>
-                            <th style="min-width:190px;">Avance</th>
-                            <th>Estatus</th>
-                            <th class="text-end">Acciones</th>
-                        </tr>
-                    </thead>
+                    <span class="tag tag-blue">
+                        <i class="bi bi-bell"></i>
+                        @Model.TotalAlertasReprogramacion cambio(s)
+                    </span>
+                </div>
 
-                    <tbody>
-                        @if (!Model.Ejecuciones.Any())
+                @if (ViewBag.ErrorAlertasReprogramacion != null)
+                {
+                    <div class="alert alert-warning mx-3 mt-3 mb-0">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        @ViewBag.ErrorAlertasReprogramacion
+                    </div>
+                }
+
+                <div class="alerts-list">
+                    @if (!alertasOrdenadas.Any())
+                    {
+                        <div class="alerts-modal-empty">
+                            <i class="bi bi-bell-slash"></i>
+                            No hay movimientos de programación en las últimas 24 horas.
+                        </div>
+                    }
+                    else
+                    {
+                        foreach (var alerta in alertasOrdenadas)
                         {
-                            <tr>
-                                <td colspan="12">
-                                    <div class="empty">
-                                        <i class="bi bi-inbox"></i>
-                                        No hay ejecuciones de producción con los filtros actuales.
+                            <article class="program-alert @(alerta.EsMuyReciente ? "is-highlighted" : "")">
+                                <div class="program-alert-icon">
+                                    <i class="bi @(alerta.EsMovimientoAutomatico ? "bi-shuffle" : alerta.CambioMaquina ? "bi-arrow-left-right" : "bi-calendar2-week")"></i>
+                                </div>
+
+                                <div>
+                                    <div class="program-alert-title">
+                                        @alerta.Titulo · Programa @alerta.ProgramaProduccionID · @alerta.TextoParte
                                     </div>
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            foreach (var grupo in ejecucionesPorMaquina)
-                            {
-                                var primera = grupo.FirstOrDefault();
-                                var maquinaCodigo = Txt(primera?.MaquinaCodigo);
-                                var maquinaNombre = Txt(primera?.MaquinaNombre);
-                                var machineKey = "ejec_" + MachineKey(grupo.Key);
-                                var totalMaquina = grupo.Count();
 
-                                <tr class="machine-row">
-                                    <td colspan="12">
-                                        <div class="machine-header">
-                                            <div>
-                                                <div class="machine-title">
-                                                    <i class="bi bi-hdd-network me-1"></i>
-                                                    Máquina @maquinaCodigo
-                                                </div>
-                                                <div class="machine-sub">
-                                                    @maquinaNombre · @totalMaquina ejecución(es)
-                                                </div>
-                                            </div>
+                                    <div class="program-alert-message">
+                                        @alerta.Mensaje
+                                    </div>
 
-                                            <button type="button"
-                                                    class="machine-toggle"
-                                                    data-machine-toggle="@machineKey">
-                                                <i class="bi bi-chevron-up me-1"></i>
-                                                Ocultar / mostrar
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
+                                    <div class="program-alert-meta">
+                                        @if (!string.IsNullOrWhiteSpace(alerta.Motivo))
+                                        {
+                                            <span>
+                                                <i class="bi bi-chat-left-text me-1"></i>
+                                                Motivo: @alerta.Motivo
+                                            </span>
+                                        }
 
-                                var orden = 0;
+                                        @if (alerta.EsMovimientoAutomatico && alerta.ProgramaOrigenMovimientoID.HasValue)
+                                        {
+                                            <span>
+                                                <i class="bi bi-diagram-3 me-1"></i>
+                                                Originado por programa @alerta.ProgramaOrigenMovimientoID
+                                            </span>
+                                        }
 
-                                foreach (var item in grupo
-                                .OrderBy(x => x.ProgramaProduccionID)
-                                .ThenBy(x => x.EjecucionProduccionID))
-                                {
-                                    orden++;
+                                        @if (!string.IsNullOrWhiteSpace(alerta.UsuarioNombre))
+                                        {
+                                            <span>
+                                                <i class="bi bi-person me-1"></i>
+                                                @alerta.UsuarioNombre
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
 
-                                    var avancePct = item.PorcentajeAvance;
-
-                                    if (avancePct < 0)
+                                <div class="program-alert-date">
+                                    @if (alerta.EsMuyReciente)
                                     {
-                                        avancePct = 0;
+                                        <span class="badge bg-warning text-dark mb-1">
+                                            Destacada
+                                        </span>
+                                        <br />
                                     }
 
-                                    if (avancePct > 100)
-                                    {
-                                        avancePct = 100;
-                                    }
-
-                                    <tr class="production-row @EstatusRowClase(item.EstatusID)" data-machine-row="@machineKey">
-                                        <td>
-                                            <span class="queue-badge">@orden</span>
-                                        </td>
-
-                                        <td>
-                                            <div class="id-main">Programa @item.ProgramaProduccionID</div>
-
-                                            @if (item.SolicitudProduccionID.HasValue)
-                                            {
-                                                <div class="line-sub">OF ID @item.SolicitudProduccionID</div>
-                                            }
-
-                                            @if (item.ReleaseID.HasValue)
-                                            {
-                                                <div class="line-sub">Release @item.ReleaseID</div>
-                                            }
-
-                                            
-                                        </td>
-
-                                        <td>
-                                            <div class="line-main">@Txt(item.TituloPrograma)</div>
-                                            <div class="line-sub">@Txt(item.DescripcionParte)</div>
-                                        </td>
-
-                                        <td>
-                                            <span class="tag">
-                                                <i class="bi bi-nut"></i>
-                                                @(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            @if (string.IsNullOrWhiteSpace(item.OperadorNombre))
-                                            {
-                                                <span class="operator-pill operator-empty">
-                                                    <i class="bi bi-person-dash"></i>
-                                                    Sin operador
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="operator-pill">
-                                                    <i class="bi bi-person-check"></i>
-                                                    @item.OperadorNombre
-                                                </span>
-                                            }
-                                        </td>
-
-                                        <td class="text-center fw-bold">
-                                            @Num(item.CantidadPlaneada)
-                                        </td>
-
-                                        <td class="text-center fw-bold text-success">
-                                            @Num0(item.CantidadOKTotal)
-                                        </td>
-
-                                        <td class="text-center fw-bold text-warning">
-                                            @Num0(item.CantidadSospechosaTotal)
-                                        </td>
-
-                                        <td class="text-center fw-bold text-danger">
-                                            @Num0(item.CantidadScrapTotal)
-                                        </td>
-
-                                        <td>
-                                            <div class="d-flex justify-content-between small mb-1">
-                                                <span class="fw-bold">@item.PorcentajeAvance.ToString("0.##")%</span>
-                                                <span class="text-muted">@item.CantidadPendiente.ToString("N0") pend.</span>
-                                            </div>
-
-                                            <div class="progress">
-                                                <div class="progress-bar @PorcentajeClase(item.PorcentajeAvance)"
-                                                     role="progressbar"
-                                                     style="width:@avancePct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">
-                                                </div>
-                                            </div>
-                                        </td>
-
-                                        <td>
-                                            <span class="badge @item.EstatusClase">
-                                                @item.EstatusNombre
-                                            </span>
-                                        </td>
-
-                                        <td class="text-end">
-                                            <a href="@Url.Action("Detalle", "Produccion", new { id = item.EjecucionProduccionID })"
-                                               class="btn btn-sm btn-outline-primary btn-action">
-                                                <i class="bi bi-eye me-1"></i>
-                                                Detalle
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            }
+                                    @alerta.FechaCambioTexto
+                                </div>
+                            </article>
                         }
-                    </tbody>
-                </table>
+                    }
+                </div>
+
+                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                    <button type="button"
+                            class="btn btn-primary btn-action"
+                            data-bs-dismiss="modal">
+                        <i class="bi bi-check2 me-1"></i>
+                        Cerrar
+                    </button>
+                </div>
             </div>
-        </section>
+        </div>
     </div>
 
     <div class="modal fade" id="modalIniciarPreparacion" tabindex="-1" aria-hidden="true">
@@ -1232,106 +1406,220 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
-        const modalProgramaTexto = document.getElementById('modalProgramaTexto');
-        const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
-        const modalParteTexto = document.getElementById('modalParteTexto');
-        const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
-        const modalMoldeTexto = document.getElementById('modalMoldeTexto');
-        const modalCantidadTexto = document.getElementById('modalCantidadTexto');
-        const modalInicioTexto = document.getElementById('modalInicioTexto');
-        const modalFinTexto = document.getElementById('modalFinTexto');
+        (() => {
+            const contenidoProduccion = document.getElementById('contenidoProduccion');
+            const formFiltros = document.getElementById('formFiltrosProduccion');
+            const navButtons = Array.from(document.querySelectorAll('[data-production-panel]'));
 
-        const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
-        const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
-        const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
+            const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
+            const modalProgramaTexto = document.getElementById('modalProgramaTexto');
+            const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
+            const modalParteTexto = document.getElementById('modalParteTexto');
+            const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
+            const modalMoldeTexto = document.getElementById('modalMoldeTexto');
+            const modalCantidadTexto = document.getElementById('modalCantidadTexto');
+            const modalInicioTexto = document.getElementById('modalInicioTexto');
+            const modalFinTexto = document.getElementById('modalFinTexto');
 
-        const modalOperadorId = document.getElementById('modalOperadorId');
-        const modalOperadorNombre = document.getElementById('modalOperadorNombre');
-        const modalOperadorManual = document.getElementById('modalOperadorManual');
-        const modalObservaciones = document.getElementById('modalObservaciones');
+            const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
+            const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
+            const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
 
-        const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
-        const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
+            const modalOperadorId = document.getElementById('modalOperadorId');
+            const modalOperadorNombre = document.getElementById('modalOperadorNombre');
+            const modalOperadorManual = document.getElementById('modalOperadorManual');
+            const modalObservaciones = document.getElementById('modalObservaciones');
 
-        function texto(value) {
-            if (!value || !value.trim()) return '-';
-            return value.trim();
-        }
+            const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
+            const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
 
-        function seleccionarOperadorSiExiste(operadorId) {
-            if (!modalOperadorId) return false;
+            let panelActivo = 'ejecuciones';
+            let controladorCarga = null;
 
-            const id = operadorId || '';
-
-            for (const option of modalOperadorId.options) {
-                if (option.value === id) {
-                    modalOperadorId.value = id;
-                    return true;
-                }
+            function texto(value) {
+                if (!value || !value.trim()) return '-';
+                return value.trim();
             }
 
-            modalOperadorId.value = '';
-            return false;
-        }
+            function seleccionarOperadorSiExiste(operadorId) {
+                if (!modalOperadorId) return false;
 
-        function obtenerTextoOperadorSeleccionado() {
-            if (!modalOperadorId || !modalOperadorId.value) {
-                return '';
-            }
+                const id = operadorId || '';
 
-            const selected = modalOperadorId.options[modalOperadorId.selectedIndex];
-
-            if (!selected) {
-                return '';
-            }
-
-            return (selected.textContent || '').trim();
-        }
-
-        document.querySelectorAll('[data-machine-toggle]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                const key = btn.getAttribute('data-machine-toggle');
-
-                if (!key) return;
-
-                const rows = document.querySelectorAll('[data-machine-row="' + key + '"]');
-                let ocultar = false;
-
-                rows.forEach(function (row) {
-                    if (!row.classList.contains('is-hidden')) {
-                        ocultar = true;
+                for (const option of modalOperadorId.options) {
+                    if (option.value === id) {
+                        modalOperadorId.value = id;
+                        return true;
                     }
-                });
-
-                rows.forEach(function (row) {
-                    row.classList.toggle('is-hidden', ocultar);
-                });
-
-                const icon = btn.querySelector('i');
-
-                if (icon) {
-                    icon.className = ocultar
-                        ? 'bi bi-chevron-down me-1'
-                        : 'bi bi-chevron-up me-1';
                 }
-            });
-        });
 
-        document.querySelectorAll('.btn-iniciar-preparacion').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                const programaId = btn.dataset.programaId || '';
-                const titulo = btn.dataset.titulo || '';
-                const maquina = btn.dataset.maquina || '';
-                const parte = btn.dataset.parte || '';
-                const descripcion = btn.dataset.descripcion || '';
-                const molde = btn.dataset.molde || '';
-                const cantidad = btn.dataset.cantidad || '';
-                const inicio = btn.dataset.inicio || '';
-                const fin = btn.dataset.fin || '';
-                const operadorId = btn.dataset.operadorId || '';
-                const operadorNombre = btn.dataset.operadorNombre || '';
-                const turno = btn.dataset.turno || '';
+                modalOperadorId.value = '';
+                return false;
+            }
+
+            function obtenerTextoOperadorSeleccionado() {
+                if (!modalOperadorId || !modalOperadorId.value) {
+                    return '';
+                }
+
+                const selected = modalOperadorId.options[modalOperadorId.selectedIndex];
+                return selected ? (selected.textContent || '').trim() : '';
+            }
+
+            function marcarPanelActivo(panel) {
+                panelActivo = panel || 'ejecuciones';
+
+                navButtons.forEach(btn => {
+                    btn.classList.toggle(
+                        'is-active',
+                        btn.dataset.productionPanel === panelActivo);
+                });
+            }
+
+            function parametrosFiltros(panel, maquinaForzada = null) {
+                const params = new URLSearchParams();
+
+                if (!formFiltros) {
+                    if (maquinaForzada) params.set('maquinaId', maquinaForzada);
+                    return params;
+                }
+
+                const data = new FormData(formFiltros);
+
+                const busqueda = (data.get('busqueda') || '').toString().trim();
+                const maquinaId = maquinaForzada ?? (data.get('maquinaId') || '').toString();
+                const estatusId = (data.get('estatusId') || '').toString();
+                const fechaDesde = (data.get('fechaDesde') || '').toString();
+                const fechaHasta = (data.get('fechaHasta') || '').toString();
+
+                if (busqueda) params.set('busqueda', busqueda);
+                if (maquinaId) params.set('maquinaId', maquinaId);
+                if (fechaDesde) params.set('fechaDesde', fechaDesde);
+                if (fechaHasta) params.set('fechaHasta', fechaHasta);
+
+                if (panel === 'ejecuciones' && estatusId) {
+                    params.set('estatusId', estatusId);
+                }
+
+                return params;
+            }
+
+            function urlPanel(panel, maquinaForzada = null) {
+                const btn = navButtons.find(x => x.dataset.productionPanel === panel);
+                const baseUrl = btn?.dataset.url;
+
+                if (!baseUrl) return null;
+
+                const params = parametrosFiltros(panel, maquinaForzada);
+                const query = params.toString();
+
+                return query ? `${baseUrl}?${query}` : baseUrl;
+            }
+
+            async function cargarPanel(panel, url = null, maquinaForzada = null) {
+                if (!contenidoProduccion) return;
+
+                const destino = url || urlPanel(panel, maquinaForzada);
+                if (!destino) return;
+
+                marcarPanelActivo(panel);
+
+                if (controladorCarga) {
+                    controladorCarga.abort();
+                }
+
+                controladorCarga = new AbortController();
+
+                contenidoProduccion.innerHTML = `
+                    <div class="panel-loading">
+                        <div class="spinner-border" role="status" aria-hidden="true"></div>
+                        <div>Cargando ${panel === 'cola' ? 'cola' : panel === 'proximos' ? 'próximos inicios' : 'ejecuciones'}...</div>
+                    </div>`;
+
+                try {
+                    const response = await fetch(destino, {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        signal: controladorCarga.signal
+                    });
+
+                    if (response.status === 401) {
+                        window.location.href = '@Url.Action("Login", "Login")';
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    contenidoProduccion.innerHTML = await response.text();
+                }
+                catch (error) {
+                    if (error?.name === 'AbortError') return;
+
+                    console.error(error);
+
+                    contenidoProduccion.innerHTML = `
+                        <div class="panel-error">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <div>No fue posible cargar el panel de Producción.</div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="btnReintentarPanel">
+                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                Reintentar
+                            </button>
+                        </div>`;
+                }
+            }
+
+            navButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    cargarPanel(btn.dataset.productionPanel || 'ejecuciones');
+                });
+            });
+
+            formFiltros?.addEventListener('submit', event => {
+                event.preventDefault();
+                cargarPanel(panelActivo);
+            });
+
+            document.addEventListener('click', event => {
+                const reintentar = event.target.closest('#btnReintentarPanel');
+                if (reintentar) {
+                    cargarPanel(panelActivo);
+                    return;
+                }
+
+                const linkPanel = event.target.closest('a.js-panel-produccion');
+                if (linkPanel && contenidoProduccion?.contains(linkPanel)) {
+                    event.preventDefault();
+                    cargarPanel('ejecuciones', linkPanel.href);
+                    return;
+                }
+
+                const maquinaCola = event.target.closest('[data-panel-cola-maquina]');
+                if (maquinaCola && contenidoProduccion?.contains(maquinaCola)) {
+                    const maquinaId = maquinaCola.getAttribute('data-panel-cola-maquina');
+                    cargarPanel('cola', null, maquinaId);
+                    return;
+                }
+
+                const btnInicio = event.target.closest('.btn-iniciar-preparacion');
+                if (!btnInicio) return;
+
+                const programaId = btnInicio.dataset.programaId || '';
+                const titulo = btnInicio.dataset.titulo || '';
+                const maquina = btnInicio.dataset.maquina || '';
+                const parte = btnInicio.dataset.parte || '';
+                const descripcion = btnInicio.dataset.descripcion || '';
+                const molde = btnInicio.dataset.molde || '';
+                const cantidad = btnInicio.dataset.cantidad || '';
+                const inicio = btnInicio.dataset.inicio || '';
+                const fin = btnInicio.dataset.fin || '';
+                const operadorId = btnInicio.dataset.operadorId || '';
+                const operadorNombre = btnInicio.dataset.operadorNombre || '';
+                const turno = btnInicio.dataset.turno || '';
 
                 if (modalProgramaProduccionId) modalProgramaProduccionId.value = programaId;
                 if (modalProgramaTexto) modalProgramaTexto.textContent = 'Programa ' + texto(programaId) + ' · ' + texto(titulo);
@@ -1350,7 +1638,8 @@
                 const pudoSeleccionar = seleccionarOperadorSiExiste(operadorId);
 
                 if (operadorNombre) {
-                    if (boxOperadorSugerido) boxOperadorSugerido.classList.remove('warn');
+                    boxOperadorSugerido?.classList.remove('warn');
+
                     if (tituloOperadorSugerido) {
                         tituloOperadorSugerido.textContent = 'Operador sugerido desde RRHH';
                         tituloOperadorSugerido.className = 'operator-title';
@@ -1368,7 +1657,8 @@
                     }
                 }
                 else {
-                    if (boxOperadorSugerido) boxOperadorSugerido.classList.add('warn');
+                    boxOperadorSugerido?.classList.add('warn');
+
                     if (tituloOperadorSugerido) {
                         tituloOperadorSugerido.textContent = 'Sin operador sugerido';
                         tituloOperadorSugerido.className = 'operator-title warn';
@@ -1380,40 +1670,43 @@
                     }
                 }
             });
-        });
 
-        modalOperadorId?.addEventListener('change', function () {
-            if (modalOperadorId.value && modalOperadorManual) {
-                modalOperadorManual.value = '';
-            }
-        });
+            modalOperadorId?.addEventListener('change', () => {
+                if (modalOperadorId.value && modalOperadorManual) {
+                    modalOperadorManual.value = '';
+                }
+            });
 
-        modalOperadorManual?.addEventListener('input', function () {
-            if (modalOperadorManual.value.trim() && modalOperadorId) {
-                modalOperadorId.value = '';
-            }
-        });
+            modalOperadorManual?.addEventListener('input', () => {
+                if (modalOperadorManual.value.trim() && modalOperadorId) {
+                    modalOperadorId.value = '';
+                }
+            });
 
-        formIniciarPreparacion?.addEventListener('submit', function () {
-            let nombreFinal = '';
+            formIniciarPreparacion?.addEventListener('submit', () => {
+                let nombreFinal = '';
 
-            if (modalOperadorId && modalOperadorId.value) {
-                nombreFinal = obtenerTextoOperadorSeleccionado();
-            }
-            else if (modalOperadorManual && modalOperadorManual.value.trim()) {
-                nombreFinal = modalOperadorManual.value.trim();
-            }
+                if (modalOperadorId?.value) {
+                    nombreFinal = obtenerTextoOperadorSeleccionado();
+                }
+                else if (modalOperadorManual?.value.trim()) {
+                    nombreFinal = modalOperadorManual.value.trim();
+                }
 
-            if (modalOperadorNombre) {
-                modalOperadorNombre.value = nombreFinal;
-            }
+                if (modalOperadorNombre) {
+                    modalOperadorNombre.value = nombreFinal;
+                }
 
-            if (btnConfirmarInicio) {
-                btnConfirmarInicio.disabled = true;
-                btnConfirmarInicio.innerHTML =
-                    '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
-            }
-        });
+                if (btnConfirmarInicio) {
+                    btnConfirmarInicio.disabled = true;
+                    btnConfirmarInicio.innerHTML =
+                        '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
+                }
+            });
+
+            // Panel inicial: ejecuciones activas.
+            cargarPanel('ejecuciones');
+        })();
     </script>
 </body>
 </html>

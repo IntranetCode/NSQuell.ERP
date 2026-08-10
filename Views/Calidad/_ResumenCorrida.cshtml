@@ -1,0 +1,593 @@
+﻿@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
+@using ERP.NSQuell.Models
+@{
+    string Mostrar(string? valor) => string.IsNullOrWhiteSpace(valor) ? "—" : valor.Trim();
+    var estado = (Model.Estado ?? string.Empty).Trim().ToUpperInvariant();
+    var esReliberacion = Model.EsReliberacion;
+    var ultimaReliberacion = Model.UltimaReliberacion;
+    var estadoTexto = estado switch
+    {
+        CalidadEstados.PendientePrearranque => "Pendiente de prearranque",
+        CalidadEstados.DevueltoPrearranque => "Devuelto a Producción",
+        CalidadEstados.ArranqueAutorizado => "Arranque autorizado",
+        CalidadEstados.PendientePrimerasPiezas => "Primeras piezas en revisión",
+        CalidadEstados.AjustesSolicitados => "Ajustes solicitados",
+        CalidadEstados.ProduccionLiberada => "Producción liberada",
+        CalidadEstados.MonitoreoActivo => "Monitoreo horario activo",
+        CalidadEstados.PendienteLiberacionCaja => "Pendiente de liberación de caja",
+        CalidadEstados.CajaLiberada => "Caja liberada",
+        CalidadEstados.PendienteReliberacion => "Pendiente de reliberación",
+        CalidadEstados.PendienteGP12 => "Pendiente de GP12",
+        CalidadEstados.EnGP12 => "En GP12",
+        CalidadEstados.MaterialLiberado => "Material liberado",
+        CalidadEstados.MaterialNoConforme => "Material no conforme",
+        CalidadEstados.Cerrada => "Inspección cerrada",
+        CalidadEstados.LegacyAbierta => "Inspección abierta",
+        CalidadEstados.LegacyLiberada => "Liberada",
+        CalidadEstados.LegacyGPI2 => "GPI2 / registro anterior",
+        CalidadEstados.LegacyContencion => "Contención",
+        CalidadEstados.LegacyScrap => "Scrap / registro anterior",
+        CalidadEstados.LegacyDetenida => "Detenida",
+        _ => string.IsNullOrWhiteSpace(estado) ? "Sin estado" : estado.Replace("_", " ")
+    };
+    var estadoClase = estado switch
+    {
+        CalidadEstados.PendientePrearranque => "is-warning",
+        CalidadEstados.DevueltoPrearranque => "is-danger",
+        CalidadEstados.ArranqueAutorizado => "is-info",
+        CalidadEstados.PendientePrimerasPiezas => "is-info",
+        CalidadEstados.AjustesSolicitados => "is-danger",
+        CalidadEstados.ProduccionLiberada => "is-success",
+        CalidadEstados.MonitoreoActivo => "is-success",
+        CalidadEstados.PendienteLiberacionCaja => "is-warning",
+        CalidadEstados.CajaLiberada => "is-success",
+        CalidadEstados.PendienteReliberacion => "is-danger",
+        CalidadEstados.PendienteGP12 => "is-warning",
+        CalidadEstados.EnGP12 => "is-warning",
+        CalidadEstados.MaterialLiberado => "is-success",
+        CalidadEstados.MaterialNoConforme => "is-danger",
+        CalidadEstados.Cerrada => "is-dark",
+        _ => "is-neutral"
+    };
+    var pasoActual = 1;
+    if (estado == CalidadEstados.DevueltoPrearranque || estado == CalidadEstados.ArranqueAutorizado) pasoActual = 2;
+    if (estado == CalidadEstados.PendientePrimerasPiezas || estado == CalidadEstados.AjustesSolicitados) pasoActual = 3;
+    if (estado == CalidadEstados.ProduccionLiberada || estado == CalidadEstados.MonitoreoActivo || estado == CalidadEstados.PendienteLiberacionCaja || estado == CalidadEstados.CajaLiberada || estado == CalidadEstados.PendienteReliberacion || estado == CalidadEstados.PendienteGP12 || estado == CalidadEstados.EnGP12 || estado == CalidadEstados.MaterialLiberado || estado == CalidadEstados.MaterialNoConforme || estado == CalidadEstados.Cerrada || estado == CalidadEstados.LegacyLiberada) pasoActual = 4;
+    var pasos = esReliberacion
+        ? new[] { "Paro mayor a 15 min", "Prearranque", "Primeras piezas", "Reliberación" }
+        : new[] { "Notificación", "Prearranque", "Primeras piezas", "Liberación" };
+    var siguienteAccion = estado switch
+    {
+        CalidadEstados.PendientePrearranque => "Revisar checklist y decidir el prearranque.",
+        CalidadEstados.DevueltoPrearranque => "Esperar la corrección y el reenvío de Producción.",
+        CalidadEstados.ArranqueAutorizado => "Esperar las primeras piezas de Producción.",
+        CalidadEstados.PendientePrimerasPiezas => esReliberacion ? "Validar las nuevas primeras piezas para autorizar el reinicio." : "Validar primeras piezas y decidir la liberación.",
+        CalidadEstados.AjustesSolicitados => "Esperar que Producción realice ajustes y presente otro intento.",
+        CalidadEstados.ProduccionLiberada => "Esperar que Producción confirme el inicio de la serie.",
+        CalidadEstados.MonitoreoActivo => Model.MonitoreosDisponiblesCaptura > 0 ? $"Revisar {Model.MonitoreosDisponiblesCaptura} monitoreo(s) disponible(s)." : "Esperar la siguiente captura horaria de Producción.",
+        CalidadEstados.PendienteReliberacion => "Revisar nuevas primeras piezas y autorizar o rechazar la reliberación.",
+        CalidadEstados.PendienteLiberacionCaja => "Revisar las cajas pendientes de liberación.",
+        CalidadEstados.PendienteGP12 => "Iniciar la revisión GP12 de la caja.",
+        CalidadEstados.EnGP12 => "Completar GP12 y registrar su resultado.",
+        CalidadEstados.MaterialNoConforme => "Resolver el material no conforme y sus disposiciones.",
+        CalidadEstados.MaterialLiberado => "Verificar requisitos pendientes para el cierre.",
+        CalidadEstados.Cerrada => "La inspección no tiene acciones pendientes.",
+        _ => "Consultar las secciones disponibles para continuar el flujo."
+    };
+}
+<style>
+    .quality-summary {
+        margin-bottom: 20px;
+        border: 1px solid #dfe5ec;
+        border-radius: 14px;
+        background: #fff;
+        overflow: hidden
+    }
+
+    .quality-summary-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 20px;
+        padding: 20px 22px;
+        border-bottom: 1px solid #e5eaf0
+    }
+
+    .quality-summary-title {
+        margin: 0;
+        color: #14213d;
+        font-size: 1.45rem;
+        font-weight: 850
+    }
+
+    .quality-summary-subtitle {
+        margin-top: 6px;
+        color: #64748b;
+        font-size: .9rem
+    }
+
+    .quality-summary-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 10px
+    }
+
+    .quality-summary-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 13px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 850;
+        text-transform: uppercase
+    }
+
+        .quality-summary-state.is-warning {
+            background: #fff7dc;
+            color: #92400e;
+            border-color: #fde68a
+        }
+
+        .quality-summary-state.is-danger {
+            background: #fff0f0;
+            color: #b91c1c;
+            border-color: #fecaca
+        }
+
+        .quality-summary-state.is-info {
+            background: #eaf5ff;
+            color: #075985;
+            border-color: #bae6fd
+        }
+
+        .quality-summary-state.is-success {
+            background: #eafbf1;
+            color: #166534;
+            border-color: #bbf7d0
+        }
+
+        .quality-summary-state.is-dark {
+            background: #e5e7eb;
+            color: #1f2937;
+            border-color: #cbd5e1
+        }
+
+        .quality-summary-state.is-neutral {
+            background: #f1f5f9;
+            color: #475569;
+            border-color: #dbe3ec
+        }
+
+    .quality-summary-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 13px;
+        border: 1px solid #dfe5ec;
+        border-radius: 9px;
+        background: #fff;
+        color: #334155;
+        font-size: .85rem;
+        font-weight: 750;
+        text-decoration: none
+    }
+
+    .quality-summary-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        padding: 14px 22px;
+        border-bottom: 1px solid
+    }
+
+        .quality-summary-alert.is-danger {
+            background: #fff1f1;
+            color: #991b1b;
+            border-color: #fecaca
+        }
+
+        .quality-summary-alert.is-warning {
+            background: #fff8e6;
+            color: #92400e;
+            border-color: #fde68a
+        }
+
+        .quality-summary-alert.is-success {
+            background: #effcf4;
+            color: #166534;
+            border-color: #bbf7d0
+        }
+
+    .quality-summary-next {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 12px;
+        padding: 15px 22px;
+        border-bottom: 1px solid #e5eaf0;
+        background: #f8fafc
+    }
+
+        .quality-summary-next i {
+            margin-top: 3px;
+            color: #f97316
+        }
+
+        .quality-summary-next strong {
+            display: block;
+            margin-bottom: 2px;
+            color: #14213d
+        }
+
+    .quality-summary-progress {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        padding: 18px 22px;
+        border-bottom: 1px solid #e5eaf0
+    }
+
+    .quality-summary-step {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 7px;
+        color: #94a3b8;
+        font-size: .75rem;
+        font-weight: 750;
+        text-align: center
+    }
+
+        .quality-summary-step:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            top: 15px;
+            left: calc(50% + 20px);
+            width: calc(100% - 40px);
+            height: 3px;
+            background: #e2e8f0
+        }
+
+    .quality-summary-step-circle {
+        position: relative;
+        z-index: 2;
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #e2e8f0;
+        color: #64748b;
+        font-weight: 850
+    }
+
+    .quality-summary-step.is-done, .quality-summary-step.is-active {
+        color: #14213d
+    }
+
+        .quality-summary-step.is-done .quality-summary-step-circle {
+            background: #15803d;
+            color: #fff
+        }
+
+        .quality-summary-step.is-done:not(:last-child)::after {
+            background: #86efac
+        }
+
+        .quality-summary-step.is-active .quality-summary-step-circle {
+            background: #f97316;
+            color: #fff;
+            box-shadow: 0 0 0 4px rgba(249,115,22,.14)
+        }
+
+    .quality-summary-data {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        padding: 0 22px
+    }
+
+    .quality-summary-field {
+        min-width: 0;
+        padding: 14px 14px 14px 0;
+        border-bottom: 1px solid #eef1f5
+    }
+
+        .quality-summary-field:not(:nth-child(4n)) {
+            padding-right: 14px
+        }
+
+    .quality-summary-label {
+        display: block;
+        margin-bottom: 4px;
+        color: #64748b;
+        font-size: .69rem;
+        font-weight: 850;
+        letter-spacing: .035em;
+        text-transform: uppercase
+    }
+
+    .quality-summary-value {
+        display: block;
+        overflow-wrap: anywhere;
+        color: #1e293b;
+        font-size: .88rem;
+        font-weight: 700
+    }
+
+    .quality-summary-reliberation {
+        padding: 16px 22px;
+        border-bottom: 1px solid #fed7aa;
+        background: #fff7ed
+    }
+
+    .quality-summary-reliberation-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px
+    }
+
+    .quality-summary-reliberation h2 {
+        margin: 0 0 5px;
+        color: #9a3412;
+        font-size: 1rem;
+        font-weight: 850
+    }
+
+    .quality-summary-reliberation p {
+        margin: 0;
+        color: #9a3412;
+        font-size: .82rem;
+        line-height: 1.45
+    }
+
+    .quality-summary-reliberation-data {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 12px;
+        margin-top: 14px
+    }
+
+    .quality-summary-reliberation-item {
+        padding: 10px 12px;
+        border: 1px solid #fed7aa;
+        border-radius: 9px;
+        background: #fff
+    }
+
+    .quality-summary-badge {
+        display: inline-flex;
+        padding: 5px 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 850
+    }
+
+        .quality-summary-badge.is-warning {
+            background: #fef3c7;
+            color: #92400e
+        }
+
+        .quality-summary-badge.is-danger {
+            background: #fee2e2;
+            color: #991b1b
+        }
+
+        .quality-summary-badge.is-success {
+            background: #dcfce7;
+            color: #166534
+        }
+    @@media(max - width:980px)
+
+    {
+        .quality-summary-data,.quality-summary-reliberation-data
+
+    {
+        grid-template-columns: repeat(2,minmax(0,1fr))
+    }
+
+    } @@media(max - width:680px)
+
+    {
+        .quality-summary-top
+
+    {
+        flex-direction: column
+    }
+
+    .quality-summary-actions {
+        justify-content: flex-start
+    }
+
+    .quality-summary-data, .quality-summary-reliberation-data {
+        grid-template-columns: 1fr
+    }
+
+    .quality-summary-progress {
+        padding-left: 8px;
+        padding-right: 8px
+    }
+
+    .quality-summary-step {
+        font-size: .64rem
+    }
+
+    }
+</style>
+<section class="quality-summary">
+    @if (TempData["Mensaje"] != null)
+    {
+        <div class="quality-summary-alert is-success" role="alert">
+            <i class="fa-solid fa-circle-check"></i>
+            <div>@TempData["Mensaje"]</div>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="quality-summary-alert is-danger" role="alert">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div>@TempData["Error"]</div>
+        </div>
+    }
+    @if (Model.ConfiguracionInvalidada)
+    {
+        <div class="quality-summary-alert is-danger">
+            <i class="fa-solid fa-ban"></i>
+            <div>
+                <strong>Configuración invalidada.</strong>
+                <div>@Mostrar(Model.MotivoInvalidacion)</div>
+                @if (Model.FechaInvalidacion.HasValue)
+                {
+                    <small>Fecha: @Model.FechaInvalidacion.Value.ToString("dd/MM/yyyy HH:mm")</small>
+                }
+            </div>
+        </div>
+    }
+    <div class="quality-summary-top">
+        <div>
+            <h1 class="quality-summary-title">@(esReliberacion ? "Reliberación de corrida" : "Liberación de corrida")</h1>
+            <div class="quality-summary-subtitle">
+                Inspección #@Model.InspeccionID · OF @Mostrar(Model.OrdenTrabajo) · @(Model.ProgramaProduccionID.HasValue ? $"Programa {Model.ProgramaProduccionID.Value}" : "Sin vínculo con Planeación")
+            </div>
+        </div>
+        <div class="quality-summary-actions">
+            <span class="quality-summary-state @estadoClase">
+                <i class="fa-solid fa-circle"></i>
+                @estadoTexto
+            </span>
+            <a asp-controller="Calidad" asp-action="Index" class="quality-summary-back">
+                <i class="fa-solid fa-arrow-left"></i>
+                Volver
+            </a>
+        </div>
+    </div>
+    <div class="quality-summary-next">
+        <i class="fa-solid fa-arrow-right-long"></i>
+        <div>
+            <strong>Siguiente acción</strong>
+            <span>@siguienteAccion</span>
+        </div>
+    </div>
+    <div class="quality-summary-progress" aria-label="Avance de la liberación">
+        @for (var i = 0; i < pasos.Length; i++)
+        {
+            var numeroPaso = i + 1;
+            var clasePaso = numeroPaso < pasoActual ? "is-done" : numeroPaso == pasoActual ? "is-active" : "";
+            <div class="quality-summary-step @clasePaso">
+                <div class="quality-summary-step-circle">
+                    @if (numeroPaso < pasoActual)
+                    {
+                        <i class="fa-solid fa-check"></i>
+                    }
+                    else
+                    {
+                        @numeroPaso
+                    }
+                </div>
+                <span>@pasos[i]</span>
+            </div>
+        }
+    </div>
+    @if (esReliberacion)
+    {
+        <div class="quality-summary-reliberation">
+            <div class="quality-summary-reliberation-head">
+                <div>
+                    <h2><i class="fa-solid fa-rotate me-1"></i> Reliberación obligatoria por paro mayor a 15 minutos</h2>
+                    <p>La autorización anterior dejó de ser válida. Producción no debe reiniciar hasta que Calidad autorice las nuevas primeras piezas.</p>
+                </div>
+                @if (ultimaReliberacion != null)
+                {
+                    var claseResultado = ultimaReliberacion.EsAutorizada ? "is-success" : ultimaReliberacion.EsRechazada ? "is-danger" : "is-warning";
+                    <span class="quality-summary-badge @claseResultado">@ultimaReliberacion.ResultadoTexto</span>
+                }
+                else
+                {
+                    <span class="quality-summary-badge is-danger">Sin solicitud vinculada</span>
+                }
+            </div>
+            @if (ultimaReliberacion != null)
+            {
+                <div class="quality-summary-reliberation-data">
+                    <div class="quality-summary-reliberation-item">
+                        <span class="quality-summary-label">Reliberación</span>
+                        <span class="quality-summary-value">#@ultimaReliberacion.NumeroReliberacion</span>
+                    </div>
+                    <div class="quality-summary-reliberation-item">
+                        <span class="quality-summary-label">Paro</span>
+                        <span class="quality-summary-value">#@ultimaReliberacion.ParoID</span>
+                    </div>
+                    <div class="quality-summary-reliberation-item">
+                        <span class="quality-summary-label">Duración</span>
+                        <span class="quality-summary-value">@ultimaReliberacion.DuracionTexto</span>
+                    </div>
+                    <div class="quality-summary-reliberation-item">
+                        <span class="quality-summary-label">Solicitud</span>
+                        <span class="quality-summary-value">@ultimaReliberacion.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</span>
+                    </div>
+                    <div class="quality-summary-reliberation-item">
+                        <span class="quality-summary-label">Horario del paro</span>
+                        <span class="quality-summary-value">@ultimaReliberacion.RangoParo</span>
+                    </div>
+                    <div class="quality-summary-reliberation-item">
+                        <span class="quality-summary-label">Motivo</span>
+                        <span class="quality-summary-value">@Mostrar(ultimaReliberacion.MotivoParoTexto ?? ultimaReliberacion.Motivo)</span>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    <div class="quality-summary-data">
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Cliente</span>
+            <span class="quality-summary-value">@Mostrar(Model.ClienteNombre)</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Número de parte</span>
+            <span class="quality-summary-value">@Mostrar(Model.NumeroParte)</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Máquina</span>
+            <span class="quality-summary-value">@Mostrar(Model.Maquina)</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Molde</span>
+            <span class="quality-summary-value">@Mostrar(Model.Molde)</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Material</span>
+            <span class="quality-summary-value">@Mostrar(Model.Material)</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Cantidad programada</span>
+            <span class="quality-summary-value">@Model.CantidadTotal.ToString("N0")</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Operador principal</span>
+            <span class="quality-summary-value">@Mostrar(Model.OperadorPrincipalNombre)</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Operador auxiliar</span>
+            <span class="quality-summary-value">@Mostrar(Model.OperadorAuxiliarNombre)</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Inicio programado</span>
+            <span class="quality-summary-value">@(Model.FechaInicioProgramada?.ToString("dd/MM/yyyy HH:mm") ?? "—")</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Fin programado</span>
+            <span class="quality-summary-value">@(Model.FechaFinProgramada?.ToString("dd/MM/yyyy HH:mm") ?? "—")</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Proceso</span>
+            <span class="quality-summary-value">@Mostrar(Model.Proceso)</span>
+        </div>
+        <div class="quality-summary-field">
+            <span class="quality-summary-label">Checklist de Producción</span>
+            <span class="quality-summary-value">@(Model.ChecklistValidado ? "Validado" : "Pendiente")</span>
+        </div>
+    </div>
+</section>

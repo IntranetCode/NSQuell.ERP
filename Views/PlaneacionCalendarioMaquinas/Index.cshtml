@@ -75,8 +75,8 @@
 }
 
 @{
-    Layout = null;
-
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Calendario de mÃ¡quinas | PlaneaciÃ³n";
     var cultura = new CultureInfo("es-MX");
 
     var inicioPeriodo = Model.InicioPeriodo;
@@ -149,7 +149,7 @@
             --border: #d7e1ee;
             --text: #1f2937;
             --muted: #667085;
-            --machine-width: 300px;
+            --machine-width: clamp(150px, 18vw, 260px);
             --dias-periodo: @totalDias;
             --horas-periodo: @(Math.Max(1, totalDias * 24));
         }
@@ -164,6 +164,7 @@
             font-family: "Segoe UI", Arial, sans-serif;
             color: var(--text);
             font-size: 14px;
+            overflow-x: hidden;
         }
 
         .page {
@@ -224,10 +225,113 @@
         }
 
         .calendar-card {
-            overflow: visible;
-            display: block;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
             height: auto;
             min-height: 0;
+        }
+
+        .calendar-card-header {
+            flex: 0 0 auto;
+            background: #fff;
+        }
+
+        .calendar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-calendar-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            min-height: 38px;
+            padding: 7px 12px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            background: #fff;
+            color: var(--blue-dark);
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+            .btn-calendar-action:hover {
+                background: #eff6ff;
+                border-color: #84adff;
+            }
+
+            .btn-calendar-action.is-active {
+                background: var(--blue);
+                border-color: var(--blue);
+                color: #fff;
+            }
+
+        .fullscreen-help {
+            display: none;
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 750;
+        }
+
+        .calendar-card:fullscreen,
+        .calendar-card.fullscreen-fallback {
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            border: 0;
+            border-radius: 0;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+            .calendar-card:fullscreen .fullscreen-help,
+            .calendar-card.fullscreen-fallback .fullscreen-help {
+                display: inline;
+            }
+
+        body.fullscreen-fallback-active {
+            overflow: hidden;
+        }
+
+        .calendar-card.fullscreen-fallback {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+        }
+
+            .calendar-card:fullscreen .calendar-card-header,
+            .calendar-card.fullscreen-fallback .calendar-card-header {
+                flex: 0 0 auto;
+            }
+
+            .calendar-card:fullscreen .timeline-scroll,
+            .calendar-card.fullscreen-fallback .timeline-scroll {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow: hidden;
+            }
+
+        .calendar-card.fit-screen .timeline {
+            transform-origin: top left;
+            will-change: transform;
+        }
+
+        .fit-scale-label {
+            display: none;
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 800;
+        }
+
+        .calendar-card:fullscreen .fit-scale-label,
+        .calendar-card.fullscreen-fallback .fit-scale-label {
+            display: inline;
         }
 
         .metrics {
@@ -286,8 +390,26 @@
             }
 
         .timeline-scroll {
-            overflow: visible;
+            position: relative;
+            width: 100%;
+            overflow: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #98a2b3 #eef2f6;
         }
+
+            .timeline-scroll::-webkit-scrollbar {
+                width: 9px;
+                height: 9px;
+            }
+
+            .timeline-scroll::-webkit-scrollbar-thumb {
+                background: #98a2b3;
+                border-radius: 999px;
+            }
+
+            .timeline-scroll::-webkit-scrollbar-track {
+                background: #eef2f6;
+            }
 
         .timeline {
             width: 100%;
@@ -321,7 +443,7 @@
 
         .days {
             display: grid;
-            grid-template-columns: repeat( @totalDias, 1fr);
+            grid-template-columns: repeat( @totalDias, minmax(0, 1fr));
             border-bottom: 1px solid var(--border);
         }
 
@@ -344,7 +466,7 @@
             }
 
         .machine-row {
-            border-bottom: 1px solid #edf1f6;
+            border-bottom: 1px solid #dfe7f1;
         }
 
         .machine-info {
@@ -400,8 +522,10 @@
         .track {
             position: relative;
             min-height: 56px;
-            background-color: #fff;
-            background-image: linear-gradient(to right,rgba(148,163,184,.18) 1px,transparent 1px), linear-gradient(to right,rgba(71,84,103,.28) 1px,transparent 1px);
+     
+            background-color: #fbfdff;
+
+            background-image: linear-gradient( to right, rgba(100, 116, 139, .24) 1px, transparent 1px ), linear-gradient( to right, rgba(51, 65, 85, .40) 1px, transparent 1px );
             background-size: calc(100% / var(--horas-periodo)) 100%, calc(100% / var(--dias-periodo)) 100%;
         }
 
@@ -461,7 +585,7 @@
             border-radius: 10px;
             color: #fff;
             text-align: left;
-            overflow: hidden;
+            overflow: visible;
             box-shadow: 0 5px 12px rgba(16,24,40,.18);
             cursor: grab;
             user-select: none;
@@ -507,25 +631,106 @@
         }
 
         .bloque-produciendo {
-            background: #fdb022;
-            color: #111827;
-            border: 1px solid rgba(181, 71, 8, .35);
+            background: #fde68a;
+            color: #713f12;
+            border: 1px solid #f59e0b;
         }
 
-        .bloque-producido {
-            background: #12b76a;
+        .bloque-paro {
+            background: #fecdd3;
+            color: #881337;
+            border: 1px solid #fb7185;
+            box-shadow: 0 5px 12px rgba(190, 24, 93, .16);
         }
 
         .bloque-calidad {
-            background: #7f56d9;
+            background: #fef3c7;
+            color: #78350f;
+            border: 1px solid #fbbf24;
+            box-shadow: 0 5px 12px rgba(217, 119, 6, .14);
+        }
+
+        .bloque-reliberacion {
+            background: #ede9fe;
+            color: #5b21b6;
+            border: 1px solid #a78bfa;
+            box-shadow: 0 5px 12px rgba(109, 40, 217, .14);
+        }
+
+        .bloque-producido {
+            background: #bbf7d0;
+            color: #14532d;
+            border: 1px solid #4ade80;
         }
 
         .bloque-cerrado {
-            background: #667085;
+            background: #e5e7eb;
+            color: #374151;
+            border: 1px solid #9ca3af;
         }
 
         .bloque-error {
-            background: #b42318;
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #f87171;
+        }
+
+        .start-delay-alert {
+            position: absolute;
+            top: -13px;
+            right: -10px;
+            width: 27px;
+            height: 27px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: grid !important;
+            place-items: center;
+            background: #dc2626;
+            color: #fff;
+            font-size: .72rem !important;
+            line-height: 1 !important;
+            opacity: 1 !important;
+            overflow: visible !important;
+            z-index: 30;
+            box-shadow: 0 5px 12px rgba(180,35,24,.35);
+            animation: start-alert-bounce 1.15s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+            .start-delay-alert::before {
+                content: "";
+                position: absolute;
+                inset: -5px;
+                border-radius: 50%;
+                background: rgba(220,38,38,.24);
+                animation: start-alert-pulse 1.35s ease-out infinite;
+                z-index: -1;
+            }
+
+        .block.has-start-delay {
+            box-shadow: 0 0 0 2px rgba(220,38,38,.38), 0 5px 12px rgba(16,24,40,.18);
+        }
+
+        @@keyframes start-alert-bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-4px);
+            }
+        }
+
+        @@keyframes start-alert-pulse {
+            0% {
+                transform: scale(.75);
+                opacity: .9;
+            }
+
+            75%, 100% {
+                transform: scale(1.55);
+                opacity: 0;
+            }
         }
 
         .empty-row {
@@ -605,6 +810,64 @@
                 color: #102a56;
             }
 
+        .calendar-card.kiosk-compact {
+            --machine-width: clamp(105px, 13vw, 170px);
+        }
+
+            .calendar-card.kiosk-compact .machine-info {
+                padding: 4px 6px;
+            }
+
+            .calendar-card.kiosk-compact .machine-name {
+                display: none;
+            }
+
+            .calendar-card.kiosk-compact .machine-code {
+                font-size: .75rem;
+            }
+
+            .calendar-card.kiosk-compact .machine-count {
+                padding: 1px 5px;
+            }
+
+            .calendar-card.kiosk-compact .day {
+                padding: 4px 2px;
+            }
+
+            .calendar-card.kiosk-compact .track {
+                min-height: 46px;
+            }
+
+            .calendar-card.kiosk-compact .block {
+                height: 36px;
+                padding: 4px 6px;
+                border-radius: 8px;
+            }
+
+                .calendar-card.kiosk-compact .block strong {
+                    font-size: .58rem;
+                }
+
+                .calendar-card.kiosk-compact .block span,
+                .calendar-card.kiosk-compact .block .operator-line {
+                    font-size: .50rem;
+                }
+
+        @@media(max-width:1100px) {
+            :root {
+                --machine-width: clamp(125px, 17vw, 190px);
+            }
+
+            .machine-name {
+                display: none;
+            }
+
+            .legend {
+                gap: 7px;
+                font-size: .68rem;
+            }
+        }
+
         @@media(max-width:800px) {
             .page {
                 padding: 13px;
@@ -615,7 +878,26 @@
             }
 
             :root {
-                --machine-width: 230px;
+                --machine-width: 105px;
+            }
+
+            .calendar-card-header {
+                padding: 7px !important;
+            }
+
+            .calendar-actions {
+                width: 100%;
+            }
+
+            .btn-calendar-action {
+                flex: 1 1 0;
+                min-width: 0;
+                padding: 7px 8px;
+                font-size: .74rem;
+            }
+
+            .legend {
+                display: none;
             }
 
             .block {
@@ -635,6 +917,8 @@
     </style>
 </head>
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="page">
         <section class="hero">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
@@ -817,23 +1101,47 @@
             @Html.AntiForgeryToken()
         </div>
 
-        <section class="calendar-card">
-            <div class="p-2 border-bottom d-flex justify-content-between gap-3 flex-wrap">
+        <section class="calendar-card" id="calendarKiosk">
+            <div class="calendar-card-header p-2 border-bottom d-flex justify-content-between align-items-center gap-3 flex-wrap">
                 <div>
                     <strong class="text-primary">
                         @Model.TituloPeriodo
                     </strong>
 
                     <div class="small text-muted">
-                        Vista: @Model.TextoVista. Azul = programado y movible. Morado = proceso de Calidad. Amarillo = Producción activa. Verde = producido. Gris = cerrado/cancelado. Operador planeado y operador real se muestran por separado.
+                        Vista: @Model.TextoVista. Azul = programado y movible. Amarillo suave = Calidad. Rosa = paro. Morado suave = reliberación. Ámbar = Producción activa. Verde = producido. Gris = cerrado/cancelado. Operador planeado y operador real se muestran por separado.
                     </div>
                 </div>
 
+                <div class="calendar-actions">
+                    <button type="button"
+                            id="btnCompactarCalendario"
+                            class="btn-calendar-action"
+                            title="Reduce textos y espacios para mostrar más máquinas">
+                        <i class="fa-solid fa-compress"></i>
+                        <span>Compactar</span>
+                    </button>
+
+                    <button type="button"
+                            id="btnPantallaCompletaCalendario"
+                            class="btn-calendar-action"
+                            title="Abrir calendario en modo kiosco a pantalla completa">
+                        <i class="fa-solid fa-expand"></i>
+                        <span class="fullscreen-label">Pantalla completa</span>
+                    </button>
+
+                    <span class="fullscreen-help">Esc para salir</span>
+                    <span id="fitScaleLabel" class="fit-scale-label"></span>
+                </div>
+
                 <div class="legend">
-                    <span><i style="background:#175cd3"></i>Timeline</span>
-                    <span><i style="background:#fdb022"></i>Produciendo / en línea</span>
-                    <span><i style="background:#12b76a"></i>Ya producido</span>
-                    <span><i style="background:#667085"></i>Cerrado / cancelado</span>
+                    <span><i style="background:#175cd3"></i>Programado / movible</span>
+                    <span><i style="background:#fde68a;border:1px solid #f59e0b"></i>Produciendo / en línea</span>
+                    <span><i style="background:#fecdd3;border:1px solid #fb7185"></i>Paro</span>
+                    <span><i style="background:#fef3c7;border:1px solid #fbbf24"></i>Calidad</span>
+                    <span><i style="background:#ede9fe;border:1px solid #a78bfa"></i>Reliberación</span>
+                    <span><i style="background:#bbf7d0;border:1px solid #4ade80"></i>Ya producido</span>
+                    <span><i style="background:#e5e7eb;border:1px solid #9ca3af"></i>Cerrado / cancelado</span>
                 </div>
             </div>
 
@@ -923,8 +1231,67 @@
                                     var textoTurno = bloque.TextoTurnoProgramado;
                                     var textoCalidad = bloque.EstadoCalidadTexto;
 
+                                    var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
+                                    ? Math.Max(0, (int)Math.Floor((Model.Ahora - bloque.Inicio).TotalMinutes))
+                                    : 0;
+
+                                    var mostrarAlertaNoInicio =
+                                    bloque.EstatusID == 1 &&
+                                    minutosAtrasoInicio >= 10 &&
+                                    bloque.EstatusProduccionID != 3;
+
+                                    var textoAlertaNoInicio = mostrarAlertaNoInicio
+                                    ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
+                                    : string.Empty;
+
+                                    /*
+                                    * PRIORIDAD VISUAL DEL CALENDARIO
+                                    * 1. Paro real de Producción.
+                                    * 2. Reliberación / configuración invalidada por Calidad.
+                                    * 3. Proceso activo de Calidad.
+                                    * 4. Producción activa.
+                                    * 5. Semáforo normal que ya calcula el modelo.
+                                    *
+                                    * No modifica lógica ni estados; únicamente decide el color.
+                                    */
+                                    var claseColorBloque = bloque.ClaseSemaforoCalendario;
+
+                                    var estaEnParo =
+                                    bloque.EstatusProduccionID == 4;
+
+                                    var estaEnReliberacion =
+                                    bloque.RequiereReliberacion ||
+                                    bloque.ConfiguracionCalidadInvalidada;
+
+                                    var estadoCalidadNormalizado =
+                                    (bloque.EstadoCalidad ?? string.Empty)
+                                    .Trim()
+                                    .ToUpperInvariant();
+
+                                    var estaEnCalidad =
+                                    bloque.InspeccionCalidadID.HasValue &&
+                                    !string.IsNullOrWhiteSpace(estadoCalidadNormalizado) &&
+                                    estadoCalidadNormalizado != "CERRADA";
+
+                                    if (estaEnParo)
+                                    {
+                                        claseColorBloque = "bloque-paro";
+                                    }
+                                    else if (estaEnReliberacion)
+                                    {
+                                        claseColorBloque = "bloque-reliberacion";
+                                    }
+                                    else if (estaEnCalidad)
+                                    {
+                                        claseColorBloque = "bloque-calidad";
+                                    }
+                                    else if (bloque.EstatusProduccionID == 3)
+                                    {
+                                        claseColorBloque = "bloque-produciendo";
+                                    }
+
                                     <button type="button"
-                                            class="block @bloque.ClaseSemaforoCalendario @(puedeMover ? "" : "no-drag")"
+                                            class="block @claseColorBloque @(puedeMover ? "" : "no-drag") @(mostrarAlertaNoInicio ? "has-start-delay" : "")"
                                             draggable="@(puedeMover ? "true" : "false")"
                                             style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
                                             data-programa-id="@bloque.ProgramaProduccionID"
@@ -935,7 +1302,13 @@
                                             data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
                                             data-bs-toggle="modal"
                                             data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
-                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @tituloBloqueo">
+                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
+                                        @if (mostrarAlertaNoInicio)
+                                        {
+                                            <span class="start-delay-alert" title="@textoAlertaNoInicio">
+                                                <i class="fa-solid fa-bell"></i>
+                                            </span>
+                                        }
                                         <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
                                         <span>@(bloque.ClienteNombre ?? "Sin cliente") · @bloque.EstadoSemaforoTexto</span>
                                         <span class="operator-line">
@@ -1349,6 +1722,12 @@
         const statusBox = document.getElementById('calendarStatus');
         const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
         const trabajarDomingoCalendario = document.getElementById('trabajarDomingoCalendario');
+        const calendarKiosk = document.getElementById('calendarKiosk');
+        const btnPantallaCompletaCalendario = document.getElementById('btnPantallaCompletaCalendario');
+        const btnCompactarCalendario = document.getElementById('btnCompactarCalendario');
+        const timelineScroll = calendarKiosk?.querySelector('.timeline-scroll');
+        const timelineElement = calendarKiosk?.querySelector('.timeline');
+        const fitScaleLabel = document.getElementById('fitScaleLabel');
 
         const inicioPeriodo = new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
         const finPeriodo = new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
@@ -1361,6 +1740,169 @@
 
         let maquinasCompatiblesActuales = new Set();
         let cargandoCompatibles = false;
+
+
+        function calendarioEnPantallaCompleta() {
+            return document.fullscreenElement === calendarKiosk ||
+                   calendarKiosk?.classList.contains('fullscreen-fallback');
+        }
+
+
+                function ajustarCalendarioAlViewport() {
+            if (!calendarKiosk ||
+                !timelineScroll ||
+                !timelineElement) {
+                return;
+            }
+
+           
+            timelineElement.style.transform = '';
+            timelineElement.style.width = '100%';
+            timelineElement.style.height = 'auto';
+
+            calendarKiosk.classList.remove('fit-screen');
+
+            if (!calendarioEnPantallaCompleta()) {
+                timelineScroll.style.overflowX = 'auto';
+                timelineScroll.style.overflowY = 'auto';
+
+                if (fitScaleLabel) {
+                    fitScaleLabel.textContent = '';
+                }
+
+                return;
+            }
+
+            /*
+             * En pantalla completa mantenemos renderizado nativo.
+             * Si el contenido no cabe verticalmente,
+             * el scroll queda disponible en vez de reducir
+             * la imagen mediante transform.
+             */
+            timelineScroll.style.overflowX = 'auto';
+            timelineScroll.style.overflowY = 'auto';
+
+            /*
+             * Automáticamente aprovechamos el modo compacto
+             * solamente para reducir espacios, alturas y textos,
+             * pero SIN escalar los píxeles.
+             */
+            calendarKiosk.classList.add('kiosk-compact');
+
+            if (btnCompactarCalendario) {
+                btnCompactarCalendario.classList.add('is-active');
+
+                const icono =
+                    btnCompactarCalendario.querySelector('i');
+
+                const texto =
+                    btnCompactarCalendario.querySelector('span');
+
+                if (icono) {
+                    icono.className =
+                        'fa-solid fa-up-right-and-down-left-from-center';
+                }
+
+                if (texto) {
+                    texto.textContent = 'Vista normal';
+                }
+            }
+
+            if (fitScaleLabel) {
+                fitScaleLabel.textContent =
+                    'Vista nítida 100%';
+            }
+        }
+       
+
+        function actualizarBotonPantallaCompleta() {
+            if (!btnPantallaCompletaCalendario || !calendarKiosk) return;
+
+            const activo = calendarioEnPantallaCompleta();
+            const icono = btnPantallaCompletaCalendario.querySelector('i');
+            const etiqueta = btnPantallaCompletaCalendario.querySelector('.fullscreen-label');
+
+            btnPantallaCompletaCalendario.classList.toggle('is-active', activo);
+
+            if (icono) {
+                icono.className = activo
+                    ? 'fa-solid fa-compress'
+                    : 'fa-solid fa-expand';
+            }
+
+            if (etiqueta) {
+                etiqueta.textContent = activo
+                    ? 'Salir de pantalla completa'
+                    : 'Pantalla completa';
+            }
+        }
+
+        async function alternarPantallaCompletaCalendario() {
+            if (!calendarKiosk) return;
+
+            try {
+                if (document.fullscreenEnabled) {
+                    if (document.fullscreenElement) {
+                        await document.exitFullscreen();
+                    } else {
+                        await calendarKiosk.requestFullscreen({ navigationUI: 'hide' });
+                    }
+                } else {
+                    const activo = calendarKiosk.classList.toggle('fullscreen-fallback');
+                    document.body.classList.toggle('fullscreen-fallback-active', activo);
+                    actualizarBotonPantallaCompleta();
+                }
+            } catch (error) {
+                const activo = calendarKiosk.classList.toggle('fullscreen-fallback');
+                document.body.classList.toggle('fullscreen-fallback-active', activo);
+                actualizarBotonPantallaCompleta();
+            }
+        }
+
+        function alternarModoCompacto() {
+            if (!calendarKiosk || !btnCompactarCalendario) return;
+
+            const activo = calendarKiosk.classList.toggle('kiosk-compact');
+            btnCompactarCalendario.classList.toggle('is-active', activo);
+
+            const icono = btnCompactarCalendario.querySelector('i');
+            const texto = btnCompactarCalendario.querySelector('span');
+
+            if (icono) {
+                icono.className = activo
+                    ? 'fa-solid fa-up-right-and-down-left-from-center'
+                    : 'fa-solid fa-compress';
+            }
+
+            if (texto) {
+                texto.textContent = activo ? 'Vista normal' : 'Compactar';
+            }
+
+            try {
+                localStorage.setItem('planeacionCalendarioCompacto', activo ? '1' : '0');
+            } catch { }
+
+            setTimeout(ajustarCalendarioAlViewport, 30);
+        }
+
+        function restaurarPreferenciasCalendario() {
+            if (!calendarKiosk || !btnCompactarCalendario) return;
+
+            try {
+                const compacto = localStorage.getItem('planeacionCalendarioCompacto') === '1';
+
+                if (compacto) {
+                    calendarKiosk.classList.add('kiosk-compact');
+                    btnCompactarCalendario.classList.add('is-active');
+
+                    const icono = btnCompactarCalendario.querySelector('i');
+                    const texto = btnCompactarCalendario.querySelector('span');
+
+                    if (icono) icono.className = 'fa-solid fa-up-right-and-down-left-from-center';
+                    if (texto) texto.textContent = 'Vista normal';
+                }
+            } catch { }
+        }
 
         function setStatus(message, type) {
             if (!statusBox) return;
@@ -1601,6 +2143,38 @@
                 btn.textContent = 'Sí, aplicar movimiento';
             }
         }
+
+        btnPantallaCompletaCalendario
+            ?.addEventListener('click', alternarPantallaCompletaCalendario);
+
+        btnCompactarCalendario
+            ?.addEventListener('click', alternarModoCompacto);
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && calendarKiosk?.classList.contains('fullscreen-fallback')) {
+                calendarKiosk.classList.remove('fullscreen-fallback');
+                document.body.classList.remove('fullscreen-fallback-active');
+            }
+
+            actualizarBotonPantallaCompleta();
+            setTimeout(ajustarCalendarioAlViewport, 60);
+        });
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && calendarKiosk?.classList.contains('fullscreen-fallback')) {
+                calendarKiosk.classList.remove('fullscreen-fallback');
+                document.body.classList.remove('fullscreen-fallback-active');
+                actualizarBotonPantallaCompleta();
+                ajustarCalendarioAlViewport();
+            }
+        });
+
+        restaurarPreferenciasCalendario();
+        actualizarBotonPantallaCompleta();
+        window.addEventListener('resize', () => {
+            clearTimeout(window.__calendarFitTimer);
+            window.__calendarFitTimer = setTimeout(ajustarCalendarioAlViewport, 100);
+        });
 
         document.getElementById('btnConfirmarMovimientoCalendario')
             ?.addEventListener('click', aplicarMovimientoConfirmado);

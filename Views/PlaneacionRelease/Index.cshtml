@@ -2,7 +2,7 @@
 
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Bandeja de OF | ERP QUELL";
+    ViewData["Title"] = "Releases de Cliente | ERP QUELL";
 
     // RELEASE_INDEX_HISTORICO_V1_0_1
     var todosReleases = Model ?? new List<ERP.NSQuell.Models.PlaneacionReleaseIndexVm>();
@@ -27,6 +27,13 @@
         .ToList();
 
     string Valor(string? v) => string.IsNullOrWhiteSpace(v) ? "-" : v;
+
+    string PlantillaVisible(string? valor)
+    {
+        return string.IsNullOrWhiteSpace(valor)
+            ? "-"
+            : valor.Replace("GOLDEN", "GOLDE");
+    }
     string Fecha(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy") : "-";
     string FechaHora(DateTime? f) => f.HasValue ? f.Value.ToString("dd/MM/yyyy HH:mm") : "-";
 
@@ -708,6 +715,8 @@
 </head>
 
 <body>
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
     <div class="page">
 
         <section class="hero">
@@ -957,8 +966,8 @@
 
                                                     <div class="release-cell release-cell-plantilla">
                                                         <span class="release-template"
-                                                              title="@Valor(item.PlantillaImportacion)">
-                                                            @Valor(item.PlantillaImportacion)
+                                                              title="@PlantillaVisible(item.PlantillaImportacion)">
+                                                            @PlantillaVisible(item.PlantillaImportacion)
                                                         </span>
 
                                                         @if (!string.IsNullOrWhiteSpace(item.ArchivoOrigenNombre))

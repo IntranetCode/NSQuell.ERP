@@ -1,4 +1,4 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTIndexVm
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTIndexVm
 @{
     Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
     ViewData["Title"] = "Inventario PT";
@@ -29,21 +29,51 @@
     }
 
     string IdCliente(int index) => $"pt_cliente_{index}";
+    var busquedaActiva = !string.IsNullOrWhiteSpace(Model.Busqueda);
 }
+
+<style>
+    .pt-search-result-card {
+        border: 2px solid #0d6efd;
+        box-shadow: 0 0 0 4px rgba(13, 110, 253, .10), 0 14px 30px rgba(15, 35, 65, .10);
+    }
+
+    .pt-search-result-card .pt-client-head {
+        background: linear-gradient(90deg, rgba(13, 110, 253, .10), rgba(255, 255, 255, .98));
+    }
+
+    .pt-search-result-row > td {
+        background: #fff8dc;
+    }
+
+    .pt-search-result-row .pt-part-link strong,
+    .pt-search-result-row .pt-truncate-link {
+        font-weight: 800;
+    }
+</style>
 
 <section class="alm-hero">
     <div>
         <small>PRODUCTO TERMINADO</small>
         <h1>Inventario PT</h1>
-        <p>Inventario organizado por cliente, mostrando unicamente el stock utilizable.</p>
+        <p>Inventario organizado por cliente, mostrando únicamente el stock utilizable.</p>
     </div>
     <div class="alm-actions">
-        <a class="alm-btn" asp-action="Entrada"><i class="fa-solid fa-box"></i> Entrada PT</a>
-        <a class="alm-btn secondary" asp-action="Movimiento">Movimiento</a>
-        <a class="alm-btn secondary" asp-action="NivelesStock"><i class="fa-solid fa-sliders"></i> Niveles de stock</a>
-        <a class="alm-btn secondary" asp-action="Historial"><i class="fa-solid fa-clock-rotate-left"></i> Historial</a>
-        <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="AjustePositivo">Ajuste +</a>
-        <a class="alm-btn secondary" asp-action="Movimiento" asp-route-tipo="AjusteNegativo">Ajuste -</a>
+        <a class="alm-btn" asp-action="Entrada">
+            <i class="fa-solid fa-barcode"></i>
+            Recibir cajas
+        </a>        <a class="alm-btn secondary" asp-action="Cajas">
+            <i class="fa-solid fa-box"></i>
+            Cajas
+        </a>
+        <a class="alm-btn secondary" asp-action="NivelesStock">
+            <i class="fa-solid fa-sliders"></i>
+            Niveles de stock
+        </a>
+        <a class="alm-btn secondary" asp-action="Historial">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            Historial
+        </a>
     </div>
 </section>
 
@@ -54,7 +84,7 @@
 
 <section class="alm-card pt-client-catalog stock-only-catalog">
     <header>
-        <span><i class="fa-solid fa-users-rectangle"></i> Catalogo PT por cliente</span>
+        <span><i class="fa-solid fa-users-rectangle"></i> Catálogo PT por cliente</span>
         <span id="ptClientSummary">
             @Model.Existencias.Count.ToString("N0") parte@(Model.Existencias.Count == 1 ? "" : "s")
             · @gruposClientes.Count.ToString("N0") cliente@(gruposClientes.Count == 1 ? "" : "s")
@@ -63,27 +93,36 @@
 
     <form method="get" class="alm-filter pt-client-filter">
         <div class="alm-field">
-            <label for="q">Numero de parte, descripcion o cliente</label>
-            <input id="q"
-                   class="alm-input"
-                   type="search"
-                   name="q"
-                   value="@Model.Busqueda"
-                   list="inventario-pt-opciones"
-                   placeholder="Escribe una parte, descripcion o cliente"
-                   autocomplete="off" />
-            <datalist id="inventario-pt-opciones">
-                @foreach (var item in Model.Existencias)
-                {
-                    <option value="@item.NumeroParte">@item.NumeroParte · @item.Descripcion · @item.Cliente</option>
-                }
-            </datalist>
+            <label for="q">Número de parte, descripción o cliente</label>
+            <div class="alm-smart-search" data-alm-smart-search data-alm-smart-submit="true">
+                <input id="q"
+                       class="alm-input"
+                       type="search"
+                       name="q"
+                       value="@Model.Busqueda"
+                       placeholder="Escribe una parte, descripción o cliente"
+                       autocomplete="off"
+                       data-alm-smart-input />
+                <div class="alm-smart-search__menu" data-alm-smart-menu hidden>
+                    @foreach (var item in Model.Existencias)
+                    {
+                        var textoBusqueda = $"{item.NumeroParte} {item.Descripcion} {item.Cliente}";
+                        <button type="button" class="alm-smart-search__option"
+                                data-alm-smart-option data-alm-smart-value="@item.NumeroParte" data-alm-smart-text="@textoBusqueda">
+                            <strong>@item.NumeroParte</strong>
+                            <span>@item.Descripcion</span>
+                            <small>@item.Cliente</small>
+                        </button>
+                    }
+                    <div class="alm-smart-search__empty" data-alm-smart-empty hidden>Sin coincidencias.</div>
+                </div>
+            </div>
         </div>
         <div class="alm-field">
             <label for="estado">Nivel de stock</label>
             <select id="estado" class="alm-select" name="estado">
                 <option value="" selected="@(string.IsNullOrWhiteSpace(Model.Estado))">Todos los niveles</option>
-                <option value="ROJO" selected="@(Model.Estado == "ROJO")">Critico</option>
+                <option value="ROJO" selected="@(Model.Estado == "ROJO")">Crítico</option>
                 <option value="AMARILLO" selected="@(Model.Estado == "AMARILLO")">Aviso</option>
                 <option value="VERDE" selected="@(Model.Estado == "VERDE")">Disponible</option>
                 <option value="SIN_CONFIGURAR" selected="@(Model.Estado == "SIN_CONFIGURAR")">Sin configurar</option>
@@ -114,7 +153,7 @@
                 var partesCliente = grupo.OrderBy(x => x.NumeroParte).ThenBy(x => x.Descripcion).ToList();
                 var stockCliente = partesCliente.Sum(x => (long)Math.Max(0, x.Disponible));
 
-                <article class="pt-client-card"
+                <article class="pt-client-card@(busquedaActiva ? " pt-search-result-card" : "")"
                          data-pt-client-card
                          data-client="@grupo.Key"
                          data-part-count="@partesCliente.Count">
@@ -122,13 +161,13 @@
                             class="pt-client-head"
                             data-bs-toggle="collapse"
                             data-bs-target="#@collapseId"
-                            aria-expanded="false"
+                            aria-expanded="@(busquedaActiva ? "true" : "false")"
                             aria-controls="@collapseId">
                         <span class="pt-client-head-main">
                             <span class="pt-client-avatar" aria-hidden="true">@InicialCliente(grupo.Key)</span>
                             <span class="pt-client-copy">
                                 <strong>@grupo.Key</strong>
-                                <small>@partesCliente.Count.ToString("N0") numero@(partesCliente.Count == 1 ? "" : "s") de parte</small>
+                                <small>@partesCliente.Count.ToString("N0") número@(partesCliente.Count == 1 ? "" : "s") de parte</small>
                             </span>
                         </span>
                         <span class="pt-client-metrics">
@@ -138,7 +177,7 @@
                         </span>
                     </button>
 
-                    <div id="@collapseId" class="collapse">
+                    <div id="@collapseId" class="collapse@(busquedaActiva ? " show" : "")">
                         <div class="pt-client-body">
                             <div class="alm-table-wrap pt-client-table-wrap">
                                 <table class="alm-table alm-table-fit pt-client-table stock-only-table">
@@ -151,17 +190,17 @@
                                     </colgroup>
                                     <thead>
                                         <tr>
-                                            <th>Numero de parte</th>
-                                            <th>Descripcion</th>
+                                            <th>Número de parte</th>
+                                            <th>Descripción</th>
                                             <th>Stock</th>
-                                            <th>Ultimo movimiento</th>
+                                            <th>Último movimiento</th>
                                             <th aria-label="Acciones"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @foreach (var x in partesCliente)
                                         {
-                                            <tr>
+                                            <tr class="@(busquedaActiva ? "pt-search-result-row" : "")">
                                                 <td>
                                                     <a class="pt-part-link" asp-action="Historial" asp-route-parte="@x.NumeroParte" title="Ver trazabilidad de @x.NumeroParte">
                                                         <strong>@x.NumeroParte</strong>
@@ -189,9 +228,12 @@
                                                 </td>
                                                 <td>
                                                     <div class="pt-actions">
-                                                        <a class="pt-action" asp-action="Movimiento" asp-route-parteId="@x.ParteID" title="Registrar movimiento" aria-label="Registrar movimiento"><i class="fa-solid fa-arrow-right-arrow-left"></i></a>
-                                                        <a class="pt-action" asp-action="Configurar" asp-route-id="@x.ParteID" title="Configurar niveles de stock" aria-label="Configurar niveles de stock"><i class="fa-solid fa-sliders"></i></a>
-                                                        <a class="pt-action pt-action-history" asp-action="Historial" asp-route-parte="@x.NumeroParte" title="Ver historial de movimientos" aria-label="Ver historial de movimientos"><i class="fa-solid fa-clock-rotate-left"></i></a>
+                                                        <a class="pt-action" asp-action="Configurar" asp-route-id="@x.ParteID" title="Configurar niveles de stock" aria-label="Configurar niveles de stock">
+                                                            <i class="fa-solid fa-sliders"></i>
+                                                        </a>
+                                                        <a class="pt-action pt-action-history" asp-action="Historial" asp-route-parte="@x.NumeroParte" title="Ver historial de movimientos" aria-label="Ver historial de movimientos">
+                                                            <i class="fa-solid fa-clock-rotate-left"></i>
+                                                        </a>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -217,7 +259,7 @@
 
 <section class="alm-card">
     <header>
-        <span>Movimientos recientes PT</span>
+        <span>@(busquedaActiva ? $"Movimientos recientes PT · {Model.Busqueda}" : "Movimientos recientes PT")</span>
         <a class="alm-header-link" asp-action="Historial">Ver historial completo <i class="fa-solid fa-arrow-right"></i></a>
     </header>
     <div class="alm-table-wrap">
@@ -229,7 +271,7 @@
                     <th>Etiqueta</th>
                     <th>Tipo</th>
                     <th>Cantidad</th>
-                    <th>Ubicacion</th>
+                    <th>Ubicación</th>
                     <th>OF</th>
                 </tr>
             </thead>

@@ -2473,18 +2473,25 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID
 
                 if (programaProduccionId.HasValue)
                 {
+                    // CANCELAR_OF_RETIRAR_CALENDARIO_V1_0
+                    // Se conserva el programa para auditoria, pero queda cancelado y
+                    // ya no puede ocupar una posicion en el calendario de maquinas.
                     const string sqlLiberarPrograma = @"
 UPDATE dbo.Planeacion_ProgramaProduccion
 SET
+    EstatusID = @EstatusProgramaCancelado,
     SolicitudProduccionID = NULL,
     SolicitudProduccionDetalleID = NULL,
     FechaGeneracionOF = NULL,
     UsuarioGeneroOFID = NULL,
     UsuarioModificacionID = @UsuarioID,
     FechaModificacion = GETDATE()
-WHERE ProgramaProduccionID = @ProgramaProduccionID;";
+WHERE ProgramaProduccionID = @ProgramaProduccionID
+  AND Activo = 1;";
 
                     await using var cmd = new SqlCommand(sqlLiberarPrograma, cn, tx);
+                    cmd.Parameters.Add("@EstatusProgramaCancelado", SqlDbType.Int).Value =
+                        PlaneacionProgramaEstatus.Cancelado;
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
                     cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId.Value;
 
@@ -2493,18 +2500,39 @@ WHERE ProgramaProduccionID = @ProgramaProduccionID;";
 
                 if (releaseDetalleId.HasValue)
                 {
+                    // La entrega vuelve a Calculado para que pueda programarse de nuevo.
+                    // El programa cancelado se conserva en historial, pero ya no bloquea
+                    // el Release ni vuelve a mostrarse en el calendario.
                     const string sqlLiberarReleaseDetalle = @"
 UPDATE dbo.Planeacion_ReleaseDetalle
 SET
+    ProgramaProduccionID = NULL,
     SolicitudProduccionID = NULL,
+    EstatusID = @EstatusReleaseCalculado,
+    FechaProgramado = NULL,
+    UsuarioProgramoID = NULL,
     FechaModificacion = GETDATE()
-WHERE ReleaseDetalleID = @ReleaseDetalleID;";
+WHERE ReleaseDetalleID = @ReleaseDetalleID
+  AND Activo = 1;";
 
                     await using var cmd = new SqlCommand(sqlLiberarReleaseDetalle, cn, tx);
+                    cmd.Parameters.Add("@EstatusReleaseCalculado", SqlDbType.Int).Value =
+                        PlaneacionReleaseEstatus.Calculado;
                     cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId.Value;
 
                     await cmd.ExecuteNonQueryAsync();
                 }
+
+                await InsertarHistorialAsync(
+                    id,
+                    estatusActual,
+                    PlaneacionOFEstatus.Cancelada,
+                    "Cancelacion de OF y retiro de calendario",
+                    motivoCancelacion,
+                    usuarioId,
+                    cn,
+                    tx
+                );
 
                 await tx.CommitAsync();
 

@@ -1,0 +1,194 @@
+﻿@* PLANEACION_ROUTE_ONLY_V1_2 *@
+@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+
+    var tituloActual = controller switch
+    {
+        "PlaneacionRelease" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "Releases de cliente",
+        "PlaneacionRelease" when action.Equals("Crear", StringComparison.OrdinalIgnoreCase) => "Nuevo release",
+        "PlaneacionRelease" when action.Equals("Detalle", StringComparison.OrdinalIgnoreCase) => "Detalle de release",
+        "PlaneacionRelease" when action.Equals("Editar", StringComparison.OrdinalIgnoreCase) => "Editar release",
+        "PlaneacionRelease" when action.Equals("Historico", StringComparison.OrdinalIgnoreCase) => "Histórico de releases",
+        "PlaneacionRelease" when action.Equals("ValidarDocumentosPreparados", StringComparison.OrdinalIgnoreCase) => "Validación de documentos",
+        "PlaneacionRelease" when action.Equals("PendientesValidar", StringComparison.OrdinalIgnoreCase) => "Documentos pendientes de validar",
+        "PlaneacionRelease" when action.Equals("Importacion", StringComparison.OrdinalIgnoreCase) => "Importación de releases",
+        "PlaneacionRelease" when action.Equals("VincularPartes", StringComparison.OrdinalIgnoreCase) => "Vincular partes",
+        "PlaneacionRelease" when action.Equals("Calculadora", StringComparison.OrdinalIgnoreCase) => "Calculadora de releases",
+        "PlaneacionPrograma" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "Programa de Planeación",
+        "PlaneacionPrograma" when action.Equals("Maquinas", StringComparison.OrdinalIgnoreCase) => "Máquinas / Cambio de molde",
+        "PlaneacionPrograma" when action.Equals("Crear", StringComparison.OrdinalIgnoreCase) => "Programar molde",
+        "PlaneacionPrograma" when action.Equals("CalendarioMaquinas", StringComparison.OrdinalIgnoreCase) => "Calendario de máquinas",
+        "PlaneacionCalendarioMaquinas" => "Calendario de máquinas",
+        "PlaneacionPanorama" => "Panorama de Planeación",
+        "Planeacion" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "Órdenes de fabricación",
+        "Planeacion" when action.Equals("Detalle", StringComparison.OrdinalIgnoreCase) => "Detalle de orden de fabricación",
+        "Planeacion" when action.Equals("Crear", StringComparison.OrdinalIgnoreCase) => "Nueva orden de fabricación",
+        "Planeacion" when action.Equals("Editar", StringComparison.OrdinalIgnoreCase) => "Editar orden de fabricación",
+        _ => ViewData["Title"]?.ToString() ?? "Planeación"
+    };
+
+    var regresoPredeterminado = controller switch
+    {
+        "PlaneacionRelease" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/3",
+        "PlaneacionRelease" => "/PlaneacionRelease/Index",
+        "PlaneacionPrograma" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/3",
+        "PlaneacionPrograma" => "/PlaneacionPrograma/Index",
+        "PlaneacionCalendarioMaquinas" => "/Menu/Grupo/3",
+        "PlaneacionPanorama" => "/Menu/Grupo/3",
+        "Planeacion" when action.Equals("Index", StringComparison.OrdinalIgnoreCase) => "/Menu/Grupo/3",
+        "Planeacion" => "/Planeacion/Index",
+        _ => "/Menu/Grupo/3"
+    };
+}
+
+<style>
+    .pln-routebar,
+    .pln-routebar * {
+        box-sizing: border-box;
+    }
+
+    .pln-routebar {
+        width: min(calc(100% - 28px), 1760px);
+        min-height: 48px;
+        margin: 0 auto 14px;
+        padding: 7px 11px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid #d9e3ef;
+        border-radius: 14px;
+        background: rgba(255,255,255,.96);
+        box-shadow: 0 7px 18px rgba(16,24,40,.06);
+        font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    .pln-routebar__back {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border: 1px solid #cdd9e8;
+        border-radius: 10px;
+        background: #fff;
+        color: #063875;
+        font-size: .76rem;
+        font-weight: 850;
+    }
+
+    .pln-routebar__back:hover {
+        border-color: #8fb5e8;
+        background: #eef5ff;
+    }
+
+    .pln-routebar__trail {
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        overflow: hidden;
+        list-style: none;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 750;
+    }
+
+    .pln-routebar__item {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pln-routebar__item a {
+        color: #385778;
+        text-decoration: none;
+    }
+
+    .pln-routebar__item--current {
+        color: #004aad;
+        font-weight: 900;
+    }
+
+    .pln-routebar__separator {
+        flex: 0 0 auto;
+        color: #98a2b3;
+    }
+
+    html[data-nsq-theme="dark"] .pln-routebar {
+        border-color: rgba(148,163,184,.22);
+        background: rgba(15,23,42,.88);
+        box-shadow: 0 10px 28px rgba(0,0,0,.22);
+    }
+
+    html[data-nsq-theme="dark"] .pln-routebar__back {
+        border-color: rgba(148,163,184,.24);
+        background: rgba(255,255,255,.06);
+        color: #dbeafe;
+    }
+
+    html[data-nsq-theme="dark"] .pln-routebar__item a,
+    html[data-nsq-theme="dark"] .pln-routebar__trail {
+        color: #cbd5e1;
+    }
+
+    html[data-nsq-theme="dark"] .pln-routebar__item--current {
+        color: #93c5fd;
+    }
+
+    @@media (max-width: 680px) {
+        .pln-routebar {
+            width: calc(100% - 18px);
+        }
+
+        .pln-routebar__back span {
+            display: none;
+        }
+    }
+</style>
+
+<nav class="pln-routebar" aria-label="Ruta de navegación de Planeación">
+    <button type="button"
+            class="pln-routebar__back"
+            id="planeacionBackButton"
+            data-fallback-url="@regresoPredeterminado">
+        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+        <span>Regresar</span>
+    </button>
+
+    <ol class="pln-routebar__trail">
+        <li class="pln-routebar__item">
+            <a href="/Menu/Index">Inicio</a>
+        </li>
+        <li class="pln-routebar__separator" aria-hidden="true">&rsaquo;</li>
+        <li class="pln-routebar__item">
+            <a href="/Menu/Grupo/3">Planeación</a>
+        </li>
+        <li class="pln-routebar__separator" aria-hidden="true">&rsaquo;</li>
+        <li class="pln-routebar__item pln-routebar__item--current" aria-current="page">
+            @tituloActual
+        </li>
+    </ol>
+</nav>
+
+<script>
+    (() => {
+        const button = document.getElementById('planeacionBackButton');
+        if (!button || button.dataset.ready === '1') return;
+
+        button.dataset.ready = '1';
+        button.addEventListener('click', () => {
+            const fallback = button.dataset.fallbackUrl || '/Menu/Grupo/3';
+
+            if (window.history.length > 1) {
+                window.history.back();
+                return;
+            }
+
+            window.location.href = fallback;
+        });
+    })();
+</script>

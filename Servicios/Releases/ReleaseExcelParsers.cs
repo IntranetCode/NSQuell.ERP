@@ -10,7 +10,7 @@ namespace ERP.NSQuell.Servicios.Releases;
 public enum ReleaseExcelTemplate
 {
     Unknown = 0,
-    GoldenWeeklyMatrix = 1,
+    GoldeWeeklyMatrix = 1,
     NormaWeeklyMatrix = 2,
     AirThermalMaterialRelease = 3
 }
@@ -45,7 +45,7 @@ public sealed class ReleaseExcelDelivery
     public bool IsBacklog { get; init; }
 }
 
-// RELEASE_EXCEL_PARSERS_GOLDEN_NORMA_V1_4
+// RELEASE_EXCEL_PARSERS_GOLDE_NORMA_V1_4
 public static class ReleaseExcelDocumentDetector
 {
     public static ReleaseExcelTemplate Detect(byte[] bytes)
@@ -57,8 +57,8 @@ public static class ReleaseExcelDocumentDetector
             if (LooksLikeAirThermal(table))
                 return ReleaseExcelTemplate.AirThermalMaterialRelease;
 
-            if (LooksLikeGolden(table))
-                return ReleaseExcelTemplate.GoldenWeeklyMatrix;
+            if (LooksLikeGolde(table))
+                return ReleaseExcelTemplate.GoldeWeeklyMatrix;
 
             if (LooksLikeNorma(table))
                 return ReleaseExcelTemplate.NormaWeeklyMatrix;
@@ -67,96 +67,11 @@ public static class ReleaseExcelDocumentDetector
         return ReleaseExcelTemplate.Unknown;
     }
 
-    public static ReleaseExcelDocument ParseGolden(byte[] bytes)
+    public static ReleaseExcelDocument ParseGolde(
+        byte[] bytes,
+        string? fileName = null)
     {
-        var workbook = ReadWorkbook(bytes);
-        var table = workbook.Tables.Cast<DataTable>().FirstOrDefault(LooksLikeGolden)
-            ?? throw new InvalidOperationException("No se encontro la matriz semanal GOLDEN dentro del Excel.");
-
-        var orderNumber = string.Empty;
-        for (var column = 3; column < table.Columns.Count; column++)
-        {
-            orderNumber = CellText(Get(table, 0, column));
-            if (!string.IsNullOrWhiteSpace(orderNumber))
-                break;
-        }
-
-        var rows = new List<ReleaseExcelRow>();
-        var warnings = new List<string>();
-
-        for (var column = 3; column < table.Columns.Count; column++)
-        {
-            var partNumber = CellText(Get(table, 1, column));
-            if (string.IsNullOrWhiteSpace(partNumber))
-                continue;
-
-            var description = CellText(Get(table, 2, column));
-            var deliveries = new List<ReleaseExcelDelivery>();
-            var sequence = 1;
-
-            for (var row = 3; row < table.Rows.Count; row++)
-            {
-                if (!TryPositiveInteger(Get(table, row, column), out var quantity))
-                    continue;
-
-                if (!TryReadDate(Get(table, row, 2), out var requiredDate))
-                    continue;
-
-                var period = CellText(Get(table, row, 0));
-                var isBacklog = period.Equals("BACKLOG", StringComparison.OrdinalIgnoreCase);
-
-                deliveries.Add(new ReleaseExcelDelivery
-                {
-                    Sequence = sequence++,
-                    PeriodLabel = period,
-                    RequiredDate = requiredDate,
-                    RequiredQuantity = quantity,
-                    IsBacklog = isBacklog
-                });
-            }
-
-            if (deliveries.Count == 0)
-                continue;
-
-            rows.Add(new ReleaseExcelRow
-            {
-                PartNumber = partNumber,
-                PartDescription = description,
-                SourceReference = orderNumber,
-                Uom = "PZA",
-                Deliveries = deliveries
-            });
-        }
-
-        if (rows.Count == 0)
-            throw new InvalidOperationException("El Excel GOLDEN no contiene cantidades positivas para importar.");
-
-        var allDeliveries = rows.SelectMany(x => x.Deliveries).ToList();
-        var firstOperational = allDeliveries
-            .Where(x => !x.IsBacklog)
-            .OrderBy(x => x.RequiredDate)
-            .FirstOrDefault()
-            ?? allDeliveries.OrderBy(x => x.RequiredDate).First();
-
-        var firstPeriod = firstOperational.PeriodLabel;
-        var version = string.IsNullOrWhiteSpace(firstPeriod)
-            ? firstOperational.RequiredDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)
-            : $"{firstPeriod} / {firstOperational.RequiredDate:dd.MM.yyyy}";
-
-        if (allDeliveries.Any(x => x.IsBacklog))
-            warnings.Add("El documento GOLDEN contiene demanda BACKLOG; se conservo con la fecha indicada en el archivo.");
-
-        return new ReleaseExcelDocument
-        {
-            TemplateCode = "GOLDEN_WEEKLY_RELEASE",
-            ClienteNombre = "GOLDE AUBURN HILLS, LLC",
-            FolioCliente = string.IsNullOrWhiteSpace(orderNumber) ? null : orderNumber,
-            DocumentDate = firstOperational.RequiredDate,
-            VersionText = version,
-            Sha256 = Convert.ToHexString(SHA256.HashData(bytes)),
-            Rows = rows,
-            Warnings = warnings
-        };
+        return GoldeReleaseExcelParser.Parse(bytes, fileName);
     }
 
     public static ReleaseExcelDocument ParseNorma(byte[] bytes)
@@ -515,19 +430,9 @@ public static class ReleaseExcelDocumentDetector
                firstPlanLabel.Equals("Plan PO", StringComparison.OrdinalIgnoreCase) &&
                !string.IsNullOrWhiteSpace(firstPart);
     }
-    private static bool LooksLikeGolden(DataTable table)
+    private static bool LooksLikeGolde(DataTable table)
     {
-        if (table.Rows.Count < 5 || table.Columns.Count < 5)
-            return false;
-
-        var backlog = CellText(Get(table, 3, 0));
-        var firstPart = CellText(Get(table, 1, 3));
-        var firstDescription = CellText(Get(table, 2, 3));
-
-        return backlog.Equals("BACKLOG", StringComparison.OrdinalIgnoreCase) &&
-               !string.IsNullOrWhiteSpace(firstPart) &&
-               !string.IsNullOrWhiteSpace(firstDescription) &&
-               TryReadDate(Get(table, 3, 2), out _);
+        return GoldeReleaseExcelParser.LooksLike(table);
     }
 
     private static bool LooksLikeNorma(DataTable table)

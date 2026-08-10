@@ -640,6 +640,11 @@ namespace ERP.NSQuell.Models.ViewModels
         public int ReliberacionesPendientes { get; set; }
         public bool MuestraFinProduccionCompleta { get; set; }
 
+        public bool EjecucionProduccionExiste { get; set; }
+        public bool EjecucionProduccionTerminada { get; set; }
+        public bool FechaFinProduccionRegistrada { get; set; }
+        public int ParosAbiertos { get; set; }
+        public int CajasSinSalidaProduccion { get; set; }
         public bool PuedeCerrar =>
             !YaCerrada &&
             !ConfiguracionInvalidada &&
@@ -649,7 +654,13 @@ namespace ERP.NSQuell.Models.ViewModels
             CajasDevueltasSinResolver == 0 &&
             GP12Abiertos == 0 &&
             ReliberacionesPendientes == 0 &&
-            MuestraFinProduccionCompleta;
+
+            MuestraFinProduccionCompleta
+            && EjecucionProduccionExiste
+&& EjecucionProduccionTerminada
+&& FechaFinProduccionRegistrada
+&& ParosAbiertos == 0
+&& CajasSinSalidaProduccion == 0;
 
         public List<string> Bloqueos
         {
@@ -684,6 +695,12 @@ namespace ERP.NSQuell.Models.ViewModels
                 if (!MuestraFinProduccionCompleta)
                     bloqueos.Add("La muestra de resguardo de fin de producción no está completa.");
 
+
+                if (!EjecucionProduccionExiste) bloqueos.Add("No existe una ejecución de Producción relacionada.");
+                if (EjecucionProduccionExiste && !EjecucionProduccionTerminada) bloqueos.Add("Producción todavía no ha terminado la ejecución.");
+                if (EjecucionProduccionExiste && !FechaFinProduccionRegistrada) bloqueos.Add("Producción todavía no registra la fecha real de finalización.");
+                if (ParosAbiertos > 0) bloqueos.Add($"Existen {ParosAbiertos} paro(s) abierto(s).");
+                if (CajasSinSalidaProduccion > 0) bloqueos.Add($"Existen {CajasSinSalidaProduccion} caja(s) que todavía no registran salida de Producción.");
                 return bloqueos;
             }
         }
