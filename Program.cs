@@ -1,5 +1,5 @@
-// Usings para nuestro módulo
-//Configuración y conexión a base de datos derarrollo y productivo
+﻿// Usings para nuestro mÃ³dulo
+//ConfiguraciÃ³n y conexiÃ³n a base de datos derarrollo y productivo
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -23,7 +23,7 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ? AGREGAR ESTAS LÍNEAS PARA ARCHIVOS GRANDES
+// ? AGREGAR ESTAS LÃNEAS PARA ARCHIVOS GRANDES
 builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = 268435456; // 256 MB
@@ -33,17 +33,17 @@ builder.Services.Configure<FormOptions>(options =>
 });
 
 
-// ? AGREGAR CONFIGURACIÓN DEL SERVIDOR
+// ? AGREGAR CONFIGURACIÃ“N DEL SERVIDOR
 builder.WebHost.ConfigureKestrel(options =>
 {
     // Escuchar en puerto 500 para todas las IPs
     //options.ListenAnyIP(5001);
 
-    // ? AGREGAR LÍMITES PARA KESTREL TAMBIÉN
+    // ? AGREGAR LÃMITES PARA KESTREL TAMBIÃ‰N
     options.Limits.MaxRequestBodySize = 268435456; // 256 MB
 });
 
-// ? AGREGAR CONFIGURACIÓN DEL SERVIDOR
+// ? AGREGAR CONFIGURACIÃ“N DEL SERVIDOR
 //builder.WebHost.ConfigureKestrel(options =>
 //{
 // Escuchar en puerto 500 para todas las IPs
@@ -51,7 +51,7 @@ builder.WebHost.ConfigureKestrel(options =>
 //});
 
 
-// Obtener la cadena de conexión desde appsettings.json
+// Obtener la cadena de conexiÃ³n desde appsettings.json
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 // Registrar el contexto de la base de datos
@@ -62,11 +62,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation();
 
 // Agregar servicios
-builder.Services.AddRazorPages();
 
 
 
-// 2. AÑADIDO: Habilita la validación del lado del cliente en toda la aplicación
+// 2. AÃ‘ADIDO: Habilita la validaciÃ³n del lado del cliente en toda la aplicaciÃ³n
 builder.Services.AddRazorPages().AddViewOptions(options =>
 {
     options.HtmlHelperOptions.ClientValidationEnabled = true;
@@ -83,7 +82,7 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
-// Agregar la autenticación antes de construir la app
+// Agregar la autenticaciÃ³n antes de construir la app
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -147,7 +146,7 @@ builder.Services.AddScoped<IServicioAcceso, ServicioAcceso>();
 
 
 var app = builder.Build();
-// Activa el motor de creación de PDFs de Rotativa
+// Activa el motor de creaciÃ³n de PDFs de Rotativa
 if (app.Environment.IsDevelopment())
 {
     // /dev/test-smtp-connect: prueba combos puerto/seguridad
@@ -210,13 +209,13 @@ if (app.Environment.IsDevelopment())
         var pass = cfg["CorreoNotificaciones:Contrasena"];
 
         if (string.IsNullOrWhiteSpace(host))
-            return Results.Text("❌ ERROR: CorreoNotificaciones:SmtpHost vacío");
+            return Results.Text("âŒ ERROR: CorreoNotificaciones:SmtpHost vacÃ­o");
 
         if (string.IsNullOrWhiteSpace(portStr) || !int.TryParse(portStr, out int port))
-            return Results.Text("❌ ERROR: CorreoNotificaciones:SmtpPort inválido");
+            return Results.Text("âŒ ERROR: CorreoNotificaciones:SmtpPort invÃ¡lido");
 
         if (string.IsNullOrWhiteSpace(user))
-            return Results.Text("❌ ERROR: CorreoNotificaciones:Usuario vacío (revisa user-secrets)");
+            return Results.Text("âŒ ERROR: CorreoNotificaciones:Usuario vacÃ­o (revisa user-secrets)");
 
         var security = secStr?.ToLower() switch
         {
@@ -227,12 +226,12 @@ if (app.Environment.IsDevelopment())
         };
 
         var resultado = new System.Text.StringBuilder();
-        resultado.AppendLine("📋 Configuración:");
+        resultado.AppendLine("ðŸ“‹ ConfiguraciÃ³n:");
         resultado.AppendLine($"  Host: {host}");
         resultado.AppendLine($"  Port: {port}");
-        resultado.AppendLine($"  Security: {secStr} → {security}");
+        resultado.AppendLine($"  Security: {secStr} â†’ {security}");
         resultado.AppendLine($"  Usuario: {user}");
-        resultado.AppendLine($"  Password: {(string.IsNullOrEmpty(pass) ? "❌ VACÍO" : "✅ OK")}");
+        resultado.AppendLine($"  Password: {(string.IsNullOrEmpty(pass) ? "âŒ VACÃO" : "âœ… OK")}");
         resultado.AppendLine();
 
         using var client = new SmtpClient
@@ -243,62 +242,62 @@ if (app.Environment.IsDevelopment())
 
         try
         {
-            resultado.AppendLine($"🔌 Conectando a {host}:{port}...");
+            resultado.AppendLine($"ðŸ”Œ Conectando a {host}:{port}...");
             var sw = Stopwatch.StartNew();
 
             await client.ConnectAsync(host, port, security);
             sw.Stop();
 
-            resultado.AppendLine($"✅ Conectado en {sw.ElapsedMilliseconds}ms");
+            resultado.AppendLine($"âœ… Conectado en {sw.ElapsedMilliseconds}ms");
             resultado.AppendLine($"   Capacidades: {client.Capabilities}");
             resultado.AppendLine($"   Mechs: {string.Join(", ", client.AuthenticationMechanisms)}");
 
             client.AuthenticationMechanisms.Remove("XOAUTH2");
 
             resultado.AppendLine();
-            resultado.AppendLine($"🔐 Autenticando como {user}...");
+            resultado.AppendLine($"ðŸ” Autenticando como {user}...");
             sw.Restart();
 
             await client.AuthenticateAsync(user, pass);
             sw.Stop();
 
-            resultado.AppendLine($"✅ Autenticado en {sw.ElapsedMilliseconds}ms");
+            resultado.AppendLine($"âœ… Autenticado en {sw.ElapsedMilliseconds}ms");
 
             await client.DisconnectAsync(true);
-            resultado.AppendLine("🎉 TODO OK");
+            resultado.AppendLine("ðŸŽ‰ TODO OK");
         }
         catch (SocketException ex)
         {
-            resultado.AppendLine($"❌ ERROR DE RED: {ex.Message}");
-            resultado.AppendLine($"   Código: {ex.SocketErrorCode}");
+            resultado.AppendLine($"âŒ ERROR DE RED: {ex.Message}");
+            resultado.AppendLine($"   CÃ³digo: {ex.SocketErrorCode}");
             resultado.AppendLine();
-            resultado.AppendLine("💡 Posibles causas:");
+            resultado.AppendLine("ðŸ’¡ Posibles causas:");
             resultado.AppendLine("   - Firewall bloqueando puerto saliente");
             resultado.AppendLine("   - ISP bloqueando SMTP");
-            resultado.AppendLine($"   - Host incorrecto (¿debería ser gatorXXXX.hostgator.com?)");
+            resultado.AppendLine($"   - Host incorrecto (Â¿deberÃ­a ser gatorXXXX.hostgator.com?)");
         }
         catch (MailKit.Security.AuthenticationException ex)
         {
-            resultado.AppendLine($"❌ ERROR DE AUTENTICACIÓN: {ex.Message}");
+            resultado.AppendLine($"âŒ ERROR DE AUTENTICACIÃ“N: {ex.Message}");
             resultado.AppendLine();
-            resultado.AppendLine("💡 Revisa user-secrets y contraseña");
+            resultado.AppendLine("ðŸ’¡ Revisa user-secrets y contraseÃ±a");
         }
         catch (TimeoutException ex)
         {
-            resultado.AppendLine($"❌ TIMEOUT: {ex.Message}");
+            resultado.AppendLine($"âŒ TIMEOUT: {ex.Message}");
             resultado.AppendLine();
-            resultado.AppendLine($"💡 Prueba: Test-NetConnection {host} -Port {port}");
+            resultado.AppendLine($"ðŸ’¡ Prueba: Test-NetConnection {host} -Port {port}");
         }
         catch (Exception ex)
         {
-            resultado.AppendLine($"❌ ERROR: {ex.GetType().Name}");
+            resultado.AppendLine($"âŒ ERROR: {ex.GetType().Name}");
             resultado.AppendLine($"   {ex.Message}");
         }
 
         return Results.Text(resultado.ToString());
     });
 
-    // /dev/smtp-probar: prueba genérica con parámetros
+    // /dev/smtp-probar: prueba genÃ©rica con parÃ¡metros
     app.MapGet("/dev/smtp-probar", async (string host, int port = 587, string security = "StartTls", string? user = null, string? pass = null) =>
     {
         SecureSocketOptions sec = security.Equals("StartTls", StringComparison.OrdinalIgnoreCase)
@@ -345,7 +344,7 @@ if (app.Environment.IsDevelopment())
         });
     });
 
-    // /dev/probar-correo: envía correo de prueba
+    // /dev/probar-correo: envÃ­a correo de prueba
     app.MapGet("/dev/probar-correo", async (IConfiguration cfg, ServicioNotificaciones notif, string? para) =>
     {
         try
@@ -364,26 +363,26 @@ if (app.Environment.IsDevelopment())
 
             var to = pickTo();
             if (string.IsNullOrWhiteSpace(to))
-                return Results.Text("❌ ERROR: No hay destinatario");
+                return Results.Text("âŒ ERROR: No hay destinatario");
 
             await notif.EnviarCorreoAsync(to);
 
-            var html = $"<meta charset='utf-8'><h3>✅ OK</h3><p>Enviado a <b>{WebUtility.HtmlEncode(to)}</b></p>";
+            var html = $"<meta charset='utf-8'><h3>âœ… OK</h3><p>Enviado a <b>{WebUtility.HtmlEncode(to)}</b></p>";
             return Results.Content(html, "text/html; charset=utf-8");
         }
         catch (Exception ex)
         {
-            var html = $"<meta charset='utf-8'><h3>❌ ERROR</h3><pre>{WebUtility.HtmlEncode(ex.ToString())}</pre>";
+            var html = $"<meta charset='utf-8'><h3>âŒ ERROR</h3><pre>{WebUtility.HtmlEncode(ex.ToString())}</pre>";
             return Results.Content(html, "text/html; charset=utf-8");
         }
     });
 
-    // /dev/probar-correo-persona: envía a una persona desde tabla Persona
+    // /dev/probar-correo-persona: envÃ­a a una persona desde tabla Persona
     app.MapGet("/dev/probar-correo-persona", async (int personaId, ServicioNotificaciones notif) =>
     {
         try
         {
-            var asunto = $"🔧 Prueba SMTP a persona #{personaId}";
+            var asunto = $"ðŸ”§ Prueba SMTP a persona #{personaId}";
             var html = $"<h3>Prueba a personaId={personaId}</h3>";
             await notif.EnviarAPersonaAsync(personaId, asunto, html);
             return Results.Text($"OK: enviado a personaId={personaId}");
@@ -394,7 +393,7 @@ if (app.Environment.IsDevelopment())
         }
     });
 
-    // /dev/probar-correo-bcc: envía BCC a múltiples personas
+    // /dev/probar-correo-bcc: envÃ­a BCC a mÃºltiples personas
     app.MapGet("/dev/probar-correo-bcc", async (string ids, ServicioNotificaciones notif) =>
     {
         try
@@ -406,18 +405,18 @@ if (app.Environment.IsDevelopment())
                 .ToList();
 
             if (lista.Count == 0)
-                return Results.Text("❌ ERROR: Proporciona ?ids=1,2,3");
+                return Results.Text("âŒ ERROR: Proporciona ?ids=1,2,3");
 
             await notif.EnviarABccPersonasAsync(
                 lista,
-                "🧪 Prueba BCC",
-                "<h2>Prueba BCC OK</h2><p>Esto salió desde el sistema.</p>");
+                "ðŸ§ª Prueba BCC",
+                "<h2>Prueba BCC OK</h2><p>Esto saliÃ³ desde el sistema.</p>");
 
-            return Results.Text($"✅ OK: enviado BCC a {lista.Count} personas (ids={string.Join(",", lista)})");
+            return Results.Text($"âœ… OK: enviado BCC a {lista.Count} personas (ids={string.Join(",", lista)})");
         }
         catch (Exception ex)
         {
-            return Results.Text($"❌ ERROR: {ex.Message}");
+            return Results.Text($"âŒ ERROR: {ex.Message}");
         }
     });
 }
@@ -429,7 +428,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// ? COMENTAR O QUITAR ESTA LÍNEA para HTTP
+// ? COMENTAR O QUITAR ESTA LÃNEA para HTTP
 // app.UseHttpsRedirection();
 
 
@@ -460,15 +459,7 @@ app.MapControllers();
 
 
 // ? MAPEAR Controllers ANTES de RazorPages
-app.MapControllerRoute(
-    name: "universidad",
-    pattern: "Universidad/{action=Index}/{id?}",
-    defaults: new { controller = "Universidad" });
 
-app.MapControllerRoute(
-    name: "streaming-admin",
-    pattern: "Streaming/Admin/{action=Index}/{id?}",
-    defaults: new { controller = "StreamingAdmin" });
 
 app.MapControllerRoute(
     name: "default",
