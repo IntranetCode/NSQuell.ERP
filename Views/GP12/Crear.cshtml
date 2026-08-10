@@ -1,0 +1,1216 @@
+@model ERP.NSQuell.Models.GP12CrearViewModel
+@using System.Globalization
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Nueva solicitud GP12";
+
+    var cantidadAmarillaInicial = Model.CantidadAmarilla
+        .ToString(CultureInfo.InvariantCulture);
+
+    var cantidadRojaInicial = Model.CantidadRoja
+        .ToString(CultureInfo.InvariantCulture);
+
+    var detalleInicial = Model.SolicitudProduccionDetalleID ?? 0;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nueva solicitud GP12</title>
+
+    <style>
+        :root {
+            --bg: #eef2f7;
+            --panel: #ffffff;
+            --navy-950: #07111f;
+            --navy-900: #0a1628;
+            --navy-800: #11243d;
+            --blue: #2563eb;
+            --blue-light: #60a5fa;
+            --cyan: #22d3ee;
+            --amber: #f59e0b;
+            --amber-light: #fbbf24;
+            --red: #dc2626;
+            --text: #172033;
+            --muted: #667085;
+            --border: #d9e2ec;
+            --line: #edf1f5;
+            --shadow: 0 18px 45px rgba(15,23,42,.08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 4% 0%, rgba(37,99,235,.09), transparent 24%),
+                radial-gradient(circle at 96% 10%, rgba(245,158,11,.08), transparent 24%),
+                var(--bg);
+        }
+
+        .page {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .hero {
+            position: relative;
+            overflow: hidden;
+            border-radius: 24px;
+            padding: 29px 32px;
+            color: white;
+            background: linear-gradient(125deg, var(--navy-950), #102344 70%, #183c68);
+            box-shadow: 0 24px 55px rgba(7,17,31,.20);
+            animation: enter .45s ease both;
+        }
+
+        .hero::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            opacity: .14;
+            background-image:
+                linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            width: 330px;
+            height: 330px;
+            right: -90px;
+            top: -120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(37,99,235,.35), transparent 67%);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .hero-inner {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 11px;
+            border: 1px solid rgba(255,255,255,.12);
+            background: rgba(255,255,255,.06);
+            border-radius: 999px;
+            color: #dbeafe;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--amber-light);
+            box-shadow: 0 0 16px rgba(251,191,36,.75);
+            animation: pulse 1.7s ease-in-out infinite;
+        }
+
+        h1 {
+            margin: 14px 0 7px;
+            font-size: 31px;
+            letter-spacing: -.025em;
+        }
+
+        .hero p {
+            margin: 0;
+            max-width: 800px;
+            color: rgba(255,255,255,.72);
+            line-height: 1.55;
+            font-size: 13px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 0;
+            border-radius: 12px;
+            padding: 11px 16px;
+            text-decoration: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 850;
+            transition: .18s ease;
+        }
+
+        .btn:hover { transform: translateY(-2px); }
+
+        .btn-back {
+            color: white;
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.13);
+        }
+
+        .btn-submit {
+            color: white;
+            background: linear-gradient(135deg, #f59e0b, #f97316);
+            box-shadow: 0 12px 24px rgba(245,158,11,.19);
+        }
+
+        .steps {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .step {
+            position: relative;
+            padding: 15px 16px 15px 50px;
+            border: 1px solid var(--border);
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 22px rgba(15,23,42,.04);
+            animation: enter .5s ease both;
+        }
+
+        .step:nth-child(2) { animation-delay: .06s; }
+        .step:nth-child(3) { animation-delay: .12s; }
+
+        .step-number {
+            position: absolute;
+            left: 13px;
+            top: 13px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9px;
+            color: white;
+            background: var(--navy-900);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .step:nth-child(2) .step-number { background: var(--blue); }
+        .step:nth-child(3) .step-number { background: var(--amber); }
+
+        .step strong {
+            display: block;
+            font-size: 12px;
+        }
+
+        .step span {
+            display: block;
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .panel {
+            margin-top: 18px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: white;
+            box-shadow: var(--shadow);
+            animation: enter .5s .08s ease both;
+        }
+
+        .panel-head {
+            padding: 18px 21px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            background: linear-gradient(180deg, #fff, #fbfcfe);
+        }
+
+        .panel-title {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 900;
+        }
+
+        .panel-subtitle {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .panel-body { padding: 20px 21px 22px; }
+
+        .of-note {
+            margin-bottom: 17px;
+            padding: 13px 15px;
+            border-left: 4px solid var(--blue);
+            border-radius: 10px;
+            background: #eff6ff;
+            color: #334155;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .of-note strong { color: #1d4ed8; }
+
+        .validation {
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            border-radius: 11px;
+            border: 1px solid #fecaca;
+            background: #fef2f2;
+            color: #b91c1c;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .validation:empty { display: none; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 15px;
+        }
+
+        .full { grid-column: 1 / -1; }
+
+        .field label {
+            display: block;
+            margin-bottom: 6px;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .required { color: var(--red); }
+
+        .control {
+            width: 100%;
+            border: 1px solid #ced9e5;
+            border-radius: 11px;
+            padding: 11px 12px;
+            background: white;
+            color: #172033;
+            font: inherit;
+            transition: .17s ease;
+        }
+
+        .control:hover { border-color: #aebed0; }
+
+        .control:focus {
+            outline: none;
+            border-color: var(--blue);
+            box-shadow: 0 0 0 4px rgba(37,99,235,.09);
+        }
+
+        textarea.control {
+            min-height: 86px;
+            resize: vertical;
+        }
+
+        .field-validation-error {
+            display: block;
+            margin-top: 5px;
+            color: var(--red);
+            font-size: 11px;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 10px;
+            color: var(--blue);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .loading.show { display: block; }
+
+        .snapshot {
+            margin-top: 17px;
+            padding: 18px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: #f8fafc;
+            opacity: .62;
+            transform: translateY(3px);
+            transition: .22s ease;
+        }
+
+        .snapshot.ready {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .snapshot-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .snapshot-head strong {
+            font-size: 13px;
+        }
+
+        .source-chip {
+            padding: 6px 9px;
+            border-radius: 999px;
+            background: #e0e7ff;
+            color: #4338ca;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: .04em;
+        }
+
+        .snapshot-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0,1fr));
+            gap: 10px;
+        }
+
+        .data {
+            min-height: 70px;
+            padding: 11px 12px;
+            border: 1px solid #e4eaf1;
+            border-radius: 12px;
+            background: white;
+        }
+
+        .data small {
+            display: block;
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .data strong {
+            display: block;
+            margin-top: 5px;
+            font-size: 12px;
+            overflow-wrap: anywhere;
+        }
+
+        .data-wide { grid-column: span 2; }
+
+        .quantity-box {
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .quantity-note {
+            padding: 12px 13px;
+            border-radius: 11px;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            color: #9a3412;
+            font-size: 11px;
+            line-height: 1.45;
+        }
+
+        .actions {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-cancel {
+            background: #eef2f6;
+            color: #334155;
+        }
+
+        .empty-of {
+            padding: 18px;
+            border: 1px dashed #f59e0b;
+            border-radius: 13px;
+            background: #fffbeb;
+            color: #92400e;
+            font-size: 12px;
+        }
+
+        @@keyframes enter {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @@keyframes float {
+            0%,100% { transform: translate(0,0) scale(1); }
+            50% { transform: translate(-15px,12px) scale(1.05); }
+        }
+
+        @@keyframes pulse {
+            0%,100% { opacity: .6; transform: scale(.85); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        .classification-box {
+            margin-top: 16px;
+            padding: 18px;
+            border: 1px solid var(--border);
+            border-radius: 17px;
+            background: linear-gradient(180deg, #fbfcff, #f8fafc);
+        }
+
+        .classification-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        .classification-head strong {
+            display: block;
+            font-size: 14px;
+        }
+
+        .classification-head span {
+            display: block;
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .classification-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .classification-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 15px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            background: white;
+        }
+
+        .classification-card::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+        }
+
+        .classification-card.yellow::before { background: #f4c430; }
+        .classification-card.red::before { background: #dc2626; }
+
+        .classification-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .label-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 0 4px rgba(15,23,42,.04);
+        }
+
+        .label-dot.yellow { background: #f4c430; }
+        .label-dot.red { background: #dc2626; }
+
+        .classification-summary {
+            margin-top: 13px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .classification-summary > div {
+            padding: 11px 12px;
+            border-radius: 12px;
+            background: #fff;
+            border: 1px solid var(--line);
+        }
+
+        .classification-summary small {
+            display: block;
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .classification-summary strong {
+            display: block;
+            margin-top: 5px;
+            font-size: 18px;
+        }
+
+        .classification-error {
+            display: none;
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            color: #b42318;
+            background: #fef3f2;
+            border: 1px solid #fecdca;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .classification-error.show { display: block; }
+
+        @@media (max-width: 900px) {
+            .hero-inner { align-items: flex-start; flex-direction: column; }
+            .steps { grid-template-columns: 1fr; }
+            .snapshot-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @@media (max-width: 650px) {
+            .page { padding: 13px; }
+            .hero { padding: 24px 20px; }
+            h1 { font-size: 26px; }
+            .grid, .quantity-box, .snapshot-grid { grid-template-columns: 1fr; }
+            .full, .data-wide { grid-column: auto; }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <header class="hero">
+        <div class="hero-inner">
+            <div>
+                <div class="eyebrow">
+                    <span class="dot"></span>
+                    Registro de ingreso GP12
+                </div>
+
+                <h1>Nueva solicitud GP12</h1>
+
+                <p>
+                    Relaciona el trabajo con una Orden de Fabricación existente y captura únicamente
+                    la información propia del proceso GP12. La OF se consulta como origen y no se modifica.
+                </p>
+            </div>
+
+            <a asp-controller="GP12"
+               asp-action="Index"
+               class="btn btn-back">
+                ← Volver a GP12
+            </a>
+        </div>
+    </header>
+
+    <section class="steps">
+        <div class="step">
+            <div class="step-number">1</div>
+            <strong>Selecciona la OF</strong>
+            <span>Se consulta directamente desde Planeación.</span>
+        </div>
+
+        <div class="step">
+            <div class="step-number">2</div>
+            <strong>Selecciona el renglón</strong>
+            <span>Parte, material y cantidad se autocompletan.</span>
+        </div>
+
+        <div class="step">
+            <div class="step-number">3</div>
+            <strong>Captura GP12</strong>
+            <span>Define piezas amarillas, rojas y datos propios de GP12.</span>
+        </div>
+    </section>
+
+    <form asp-controller="GP12"
+          asp-action="Crear"
+          method="post">
+
+        @Html.AntiForgeryToken()
+
+        <section class="panel">
+            <div class="panel-head">
+                <div>
+                    <h2 class="panel-title">Origen del trabajo</h2>
+                    <p class="panel-subtitle">
+                        Selecciona una OF real; GP12 no genera órdenes de fabricación.
+                    </p>
+                </div>
+            </div>
+
+            <div class="panel-body">
+
+                <div class="of-note">
+                    <strong>Importante:</strong>
+                    los datos de cliente, parte, material y cantidad se leen desde
+                    <code>SolicitudesProduccion</code> y <code>SolicitudesProduccionDetalle</code>.
+                    Aunque se muestran en pantalla, el servidor vuelve a validarlos al guardar.
+                </div>
+
+                <div asp-validation-summary="ModelOnly"
+                     class="validation"></div>
+
+                @if (Model.OrdenesFabricacion.Count == 0)
+                {
+                    <div class="empty-of">
+                        No hay Órdenes de Fabricación activas con renglones disponibles para relacionar con GP12.
+                    </div>
+                }
+                else
+                {
+                    <div class="grid">
+                        <div class="field full">
+                            <label asp-for="SolicitudProduccionID">
+                                Orden de Fabricación <span class="required">*</span>
+                            </label>
+
+                            <select asp-for="SolicitudProduccionID"
+                                    id="ofSelect"
+                                    class="control">
+                                <option value="">Selecciona una OF...</option>
+
+                                @foreach (var of in Model.OrdenesFabricacion)
+                                {
+                                    <option value="@of.SolicitudProduccionID">
+                                        @of.Texto
+                                    </option>
+                                }
+                            </select>
+
+                            <span asp-validation-for="SolicitudProduccionID"></span>
+
+                            <div id="ofLoading" class="loading">
+                                Consultando información de la OF...
+                            </div>
+                        </div>
+
+                        <div class="field full">
+                            <label asp-for="SolicitudProduccionDetalleID">
+                                Renglón / producto <span class="required">*</span>
+                            </label>
+
+                            <select asp-for="SolicitudProduccionDetalleID"
+                                    id="detalleSelect"
+                                    class="control"
+                                    disabled>
+                                <option value="">Primero selecciona una OF...</option>
+                            </select>
+
+                            <span asp-validation-for="SolicitudProduccionDetalleID"></span>
+                        </div>
+                    </div>
+
+                    <div id="snapshot" class="snapshot">
+                        <div class="snapshot-head">
+                            <strong>Datos provenientes de la OF</strong>
+                            <span class="source-chip">SOLO LECTURA</span>
+                        </div>
+
+                        <div class="snapshot-grid">
+                            <div class="data">
+                                <small>OF</small>
+                                <strong id="datoOF">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Folio</small>
+                                <strong id="datoFolio">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Cliente</small>
+                                <strong id="datoCliente">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Fecha requerida</small>
+                                <strong id="datoFechaRequerida">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Número de parte</small>
+                                <strong id="datoParte">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Referencia SAP</small>
+                                <strong id="datoReferencia">-</strong>
+                            </div>
+
+                            <div class="data data-wide">
+                                <small>Descripción</small>
+                                <strong id="datoDescripcion">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Material</small>
+                                <strong id="datoMaterial">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Color</small>
+                                <strong id="datoColor">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Piezas por caja</small>
+                                <strong id="datoPiezasCaja">-</strong>
+                            </div>
+
+                            <div class="data">
+                                <small>Cantidad del renglón OF</small>
+                                <strong id="datoCantidadOF">-</strong>
+                            </div>
+                        </div>
+
+                        <div class="classification-box">
+                            <div class="classification-head">
+                                <div>
+                                    <strong>Clasificación del material que ingresará a GP12</strong>
+                                    <span>
+                                        La misma solicitud puede contener piezas amarillas y rojas.
+                                        La suma nunca puede superar la cantidad del renglón de la OF.
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="classification-grid">
+                                <div class="classification-card yellow">
+                                    <div class="classification-name">
+                                        <span class="label-dot yellow"></span>
+                                        Etiqueta amarilla
+                                    </div>
+
+                                    <div class="field">
+                                        <label asp-for="CantidadAmarilla">
+                                            Cantidad amarilla
+                                        </label>
+
+                                        <input asp-for="CantidadAmarilla"
+                                               id="cantidadAmarilla"
+                                               class="control"
+                                               type="number"
+                                               min="0"
+                                               step="0.0001"
+                                               disabled />
+
+                                        <span asp-validation-for="CantidadAmarilla"></span>
+                                    </div>
+                                </div>
+
+                                <div class="classification-card red">
+                                    <div class="classification-name">
+                                        <span class="label-dot red"></span>
+                                        Etiqueta roja
+                                    </div>
+
+                                    <div class="field">
+                                        <label asp-for="CantidadRoja">
+                                            Cantidad roja
+                                        </label>
+
+                                        <input asp-for="CantidadRoja"
+                                               id="cantidadRoja"
+                                               class="control"
+                                               type="number"
+                                               min="0"
+                                               step="0.0001"
+                                               disabled />
+
+                                        <span asp-validation-for="CantidadRoja"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="classification-summary">
+                                <div>
+                                    <small>Total GP12</small>
+                                    <strong id="totalGP12">0</strong>
+                                </div>
+
+                                <div>
+                                    <small>Cantidad OF</small>
+                                    <strong id="cantidadOFResumen">0</strong>
+                                </div>
+
+                                <div>
+                                    <small>Disponible OF</small>
+                                    <strong id="disponibleOF">0</strong>
+                                </div>
+                            </div>
+
+                            <div id="clasificacionError"
+                                 class="classification-error"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head">
+                <div>
+                    <h2 class="panel-title">Información propia de GP12</h2>
+                    <p class="panel-subtitle">
+                        Estos datos sí pertenecen al proceso de contención y retrabajo.
+                    </p>
+                </div>
+            </div>
+
+            <div class="panel-body">
+                <div class="grid">
+                    <div class="field full">
+                        <label asp-for="Motivo">
+                            Motivo de ingreso a GP12 <span class="required">*</span>
+                        </label>
+
+                        <textarea asp-for="Motivo"
+                                  class="control"
+                                  maxlength="2000"
+                                  placeholder="Describe el motivo de contención, inspección o retrabajo..."></textarea>
+
+                        <span asp-validation-for="Motivo"></span>
+                    </div>
+
+                    <div class="field full">
+                        <label asp-for="InstruccionTrabajo">Instrucción de trabajo</label>
+                        <input asp-for="InstruccionTrabajo"
+                               class="control"
+                               maxlength="500" />
+                    </div>
+
+                    <div class="field">
+                        <label asp-for="CodigoHIP">HIP</label>
+                        <input asp-for="CodigoHIP"
+                               class="control"
+                               maxlength="200" />
+                    </div>
+
+                    <div class="field">
+                        <label asp-for="CodigoHOE">HOE</label>
+                        <input asp-for="CodigoHOE"
+                               class="control"
+                               maxlength="200" />
+                    </div>
+
+                    <div class="field full">
+                        <label asp-for="Observaciones">Observaciones</label>
+                        <textarea asp-for="Observaciones"
+                                  class="control"
+                                  maxlength="4000"></textarea>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <a asp-controller="GP12"
+                       asp-action="Index"
+                       class="btn btn-cancel">
+                        Cancelar
+                    </a>
+
+                    <button type="submit"
+                            id="guardarBtn"
+                            class="btn btn-submit"
+                            @(Model.OrdenesFabricacion.Count == 0 ? "disabled" : null)>
+                        Crear solicitud GP12
+                    </button>
+                </div>
+            </div>
+        </section>
+    </form>
+</div>
+
+<script>
+    (() => {
+        const ofSelect = document.getElementById('ofSelect');
+        const detalleSelect = document.getElementById('detalleSelect');
+        const loading = document.getElementById('ofLoading');
+        const snapshot = document.getElementById('snapshot');
+        const cantidadAmarillaInput = document.getElementById('cantidadAmarilla');
+        const cantidadRojaInput = document.getElementById('cantidadRoja');
+        const totalGP12 = document.getElementById('totalGP12');
+        const cantidadOFResumen = document.getElementById('cantidadOFResumen');
+        const disponibleOF = document.getElementById('disponibleOF');
+        const clasificacionError = document.getElementById('clasificacionError');
+        const form = document.querySelector('form[method="post"]');
+
+        if (!ofSelect || !detalleSelect || !cantidadAmarillaInput || !cantidadRojaInput) {
+            return;
+        }
+
+        const obtenerOFUrl = '@Url.Action("ObtenerOF", "GP12")';
+        const detalleInicial = @detalleInicial;
+        const cantidadAmarillaInicial = Number('@cantidadAmarillaInicial') || 0;
+        const cantidadRojaInicial = Number('@cantidadRojaInicial') || 0;
+
+        let cantidadMaximaOF = 0;
+
+        let detallesActuales = [];
+        let encabezadoActual = null;
+        let primeraCarga = true;
+
+        function texto(valor, fallback = '-') {
+            if (valor === null || valor === undefined || String(valor).trim() === '') {
+                return fallback;
+            }
+
+            return String(valor);
+        }
+
+        function numero(valor) {
+            const n = Number(valor || 0);
+            return n.toLocaleString('es-MX', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 4
+            });
+        }
+
+        function recalcularClasificacion() {
+            const amarillas = Math.max(0, Number(cantidadAmarillaInput.value || 0));
+            const rojas = Math.max(0, Number(cantidadRojaInput.value || 0));
+            const total = amarillas + rojas;
+            const disponible = Math.max(0, cantidadMaximaOF - total);
+
+            if (totalGP12) totalGP12.textContent = numero(total);
+            if (cantidadOFResumen) cantidadOFResumen.textContent = numero(cantidadMaximaOF);
+            if (disponibleOF) disponibleOF.textContent = numero(disponible);
+
+            let mensaje = '';
+
+            if (cantidadMaximaOF > 0 && total <= 0) {
+                mensaje = 'Captura al menos una pieza amarilla o roja.';
+            } else if (total > cantidadMaximaOF) {
+                mensaje = `La suma (${numero(total)}) excede la cantidad de la OF (${numero(cantidadMaximaOF)}).`;
+            }
+
+            const valido = mensaje === '';
+
+            cantidadAmarillaInput.setCustomValidity(valido ? '' : mensaje);
+            cantidadRojaInput.setCustomValidity(valido ? '' : mensaje);
+
+            if (clasificacionError) {
+                clasificacionError.textContent = mensaje;
+                clasificacionError.classList.toggle('show', !valido && cantidadMaximaOF > 0);
+            }
+
+            return valido;
+        }
+
+        function limpiarDetalle() {
+            detallesActuales = [];
+            encabezadoActual = null;
+
+            detalleSelect.innerHTML = '<option value="">Primero selecciona una OF...</option>';
+            detalleSelect.disabled = true;
+
+            cantidadMaximaOF = 0;
+
+            cantidadAmarillaInput.value = '0';
+            cantidadAmarillaInput.disabled = true;
+            cantidadAmarillaInput.removeAttribute('max');
+
+            cantidadRojaInput.value = '0';
+            cantidadRojaInput.disabled = true;
+            cantidadRojaInput.removeAttribute('max');
+
+            recalcularClasificacion();
+
+            document.getElementById('datoOF').textContent = '-';
+            document.getElementById('datoFolio').textContent = '-';
+            document.getElementById('datoCliente').textContent = '-';
+            document.getElementById('datoFechaRequerida').textContent = '-';
+            document.getElementById('datoParte').textContent = '-';
+            document.getElementById('datoReferencia').textContent = '-';
+            document.getElementById('datoDescripcion').textContent = '-';
+            document.getElementById('datoMaterial').textContent = '-';
+            document.getElementById('datoColor').textContent = '-';
+            document.getElementById('datoPiezasCaja').textContent = '-';
+            document.getElementById('datoCantidadOF').textContent = '-';
+
+            snapshot.classList.remove('ready');
+        }
+
+        function pintarEncabezado(encabezado) {
+            document.getElementById('datoOF').textContent = texto(encabezado.numeroOF);
+            document.getElementById('datoFolio').textContent = texto(encabezado.folioSolicitud);
+            document.getElementById('datoCliente').textContent = texto(encabezado.clienteNombre);
+            document.getElementById('datoFechaRequerida').textContent = texto(encabezado.fechaRequerida);
+        }
+
+        function aplicarDetalle(detalle, conservarCantidad) {
+            if (!detalle) {
+                cantidadMaximaOF = 0;
+                cantidadAmarillaInput.value = '0';
+                cantidadRojaInput.value = '0';
+                cantidadAmarillaInput.disabled = true;
+                cantidadRojaInput.disabled = true;
+                recalcularClasificacion();
+                snapshot.classList.remove('ready');
+                return;
+            }
+
+            document.getElementById('datoParte').textContent = texto(detalle.numeroParte);
+            document.getElementById('datoReferencia').textContent = texto(detalle.referenciaSAP);
+            document.getElementById('datoDescripcion').textContent = texto(detalle.descripcionParte);
+
+            const material = [detalle.materialCodigo, detalle.materialDescripcion]
+                .filter(x => x !== null && x !== undefined && String(x).trim() !== '')
+                .join(' · ');
+
+            document.getElementById('datoMaterial').textContent = texto(material);
+            document.getElementById('datoColor').textContent = texto(detalle.color);
+            document.getElementById('datoPiezasCaja').textContent =
+                detalle.piezasPorCaja == null ? '-' : numero(detalle.piezasPorCaja);
+
+            document.getElementById('datoCantidadOF').textContent = numero(detalle.cantidadPiezas);
+
+            cantidadMaximaOF = Number(detalle.cantidadPiezas || 0);
+
+            cantidadAmarillaInput.disabled = false;
+            cantidadRojaInput.disabled = false;
+
+            cantidadAmarillaInput.max = cantidadMaximaOF;
+            cantidadRojaInput.max = cantidadMaximaOF;
+
+            if (conservarCantidad) {
+                cantidadAmarillaInput.value = cantidadAmarillaInicial;
+                cantidadRojaInput.value = cantidadRojaInicial;
+            } else {
+                cantidadAmarillaInput.value = '0';
+                cantidadRojaInput.value = '0';
+            }
+
+            recalcularClasificacion();
+            snapshot.classList.add('ready');
+        }
+
+        async function cargarOF(id) {
+            limpiarDetalle();
+
+            if (!id) {
+                return;
+            }
+
+            loading.classList.add('show');
+
+            try {
+                const response = await fetch(
+                    `${obtenerOFUrl}?solicitudProduccionId=${encodeURIComponent(id)}`,
+                    {
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    }
+                );
+
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.mensaje || 'No fue posible consultar la OF.');
+                }
+
+                encabezadoActual = data.encabezado;
+                detallesActuales = data.detalles || [];
+
+                pintarEncabezado(encabezadoActual);
+
+                detalleSelect.innerHTML = '<option value="">Selecciona un renglón / producto...</option>';
+
+                detallesActuales.forEach(detalle => {
+                    const option = document.createElement('option');
+                    option.value = detalle.solicitudProduccionDetalleID;
+                    option.textContent =
+                        `Renglón ${detalle.renglon} · ${texto(detalle.numeroParte, 'Sin parte')} · ${numero(detalle.cantidadPiezas)} pzas`;
+
+                    detalleSelect.appendChild(option);
+                });
+
+                detalleSelect.disabled = detallesActuales.length === 0;
+
+                let detalleSeleccionado = null;
+
+                if (primeraCarga && detalleInicial > 0) {
+                    detalleSeleccionado = detallesActuales.find(
+                        x => Number(x.solicitudProduccionDetalleID) === Number(detalleInicial)
+                    );
+                }
+
+                if (!detalleSeleccionado && detallesActuales.length === 1) {
+                    detalleSeleccionado = detallesActuales[0];
+                }
+
+                if (detalleSeleccionado) {
+                    detalleSelect.value = detalleSeleccionado.solicitudProduccionDetalleID;
+                    aplicarDetalle(detalleSeleccionado, primeraCarga);
+                } else {
+                    snapshot.classList.add('ready');
+                }
+
+                primeraCarga = false;
+            }
+            catch (error) {
+                console.error(error);
+                alert(error.message || 'No fue posible cargar la información de la OF.');
+                limpiarDetalle();
+            }
+            finally {
+                loading.classList.remove('show');
+            }
+        }
+
+        cantidadAmarillaInput.addEventListener('input', recalcularClasificacion);
+        cantidadRojaInput.addEventListener('input', recalcularClasificacion);
+
+        if (form) {
+            form.addEventListener('submit', event => {
+                if (!recalcularClasificacion()) {
+                    event.preventDefault();
+                    clasificacionError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        }
+
+        ofSelect.addEventListener('change', () => {
+            primeraCarga = false;
+            cargarOF(ofSelect.value);
+        });
+
+        detalleSelect.addEventListener('change', () => {
+            primeraCarga = false;
+
+            const id = Number(detalleSelect.value || 0);
+            const detalle = detallesActuales.find(
+                x => Number(x.solicitudProduccionDetalleID) === id
+            );
+
+            aplicarDetalle(detalle, false);
+        });
+
+        if (ofSelect.value) {
+            cargarOF(ofSelect.value);
+        }
+    })();
+</script>
+</body>
+</html>

@@ -35,6 +35,9 @@
     }
 
     var avanceTexto = avanceCajas.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    var avanceEmbalajes = Model.CajasEsperadas > 0 ? Math.Min(100m, Math.Round((decimal)Model.CajasOKFormadas * 100m / Model.CajasEsperadas, 2)) : 0m;
+    var avanceEmbalajesTexto = avanceEmbalajes.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    var piezasPlaneadasPendientes = Math.Max(0, Model.CantidadPlaneada - Model.PiezasOKEmpacadas);
 }
 
 @functions {
@@ -786,6 +789,26 @@
         </section>
 
         <section class="metrics">
+            <div class="metric"><div class="k">Piezas por embalaje</div><div class="num text-primary">@Numero(Model.PiezasPorCajaSugeridas)</div><div class="sub">Capacidad estándar</div></div>
+            <div class="metric"><div class="k">Cajas esperadas</div><div class="num text-primary">@Numero(Model.CajasEsperadas)</div><div class="sub">Según Planeación</div></div>
+            <div class="metric"><div class="k">Cajas OK formadas</div><div class="num text-success">@Numero(Model.CajasOKFormadas)</div><div class="sub">Pendientes: @Numero(Model.CajasPendientes)</div></div>
+            <div class="metric"><div class="k">OK empacado</div><div class="num text-success">@Numero(Model.PiezasOKEmpacadas)</div><div class="sub">Pendiente planeado: @Numero(piezasPlaneadasPendientes)</div></div>
+            <div class="metric"><div class="k">Siguiente sugerida</div><div class="num text-warning">@Numero(Model.CantidadSugeridaSiguienteCaja)</div><div class="sub">Última puede ser parcial</div></div>
+            <div class="metric"><div class="k">Embalaje</div><div class="num" style="font-size:1rem">@TxtNullable(Model.EmbalajeCodigo)</div><div class="sub">@TxtNullable(Model.EmbalajeDescripcion)</div></div>
+        </section>
+
+        @if (!Model.TieneConfiguracionEmbalaje)
+        {
+            <div class="warn-note mb-3"><i class="fa-solid fa-triangle-exclamation me-1"></i>Esta ejecución no tiene configuración completa de embalaje. Podrás formar cajas con piezas capturadas, pero no se podrá validar automáticamente la cantidad esperada de cajas ni su capacidad estándar.</div>
+        }
+
+        <section class="progress-wrap">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2"><div class="fw-bold text-primary">Avance de embalajes OK</div><div class="fw-bold">@avanceEmbalajes.ToString("0.##")%</div></div>
+            <div class="progress"><div class="progress-bar" role="progressbar" style="width:@avanceEmbalajesTexto%"></div></div>
+            <div class="sub mt-2">@Numero(Model.CajasOKFormadas) de @Numero(Model.CajasEsperadas) caja(s) esperadas.</div>
+        </section>
+
+        <section class="metrics">
             <div class="metric">
                 <div class="k">OK capturado</div>
                 <div class="num text-success">@Numero(Model.CantidadOKTotal)</div>
@@ -928,35 +951,21 @@
                                 pieza(s)
                             </div>
 
+                            <div class="success-note mb-3" id="sugerenciaCaja">
+                                <div class="k">Siguiente caja sugerida</div>
+                                <div style="font-size:1.45rem;font-weight:950"><span id="cantidadSugerida">@Numero(Model.CantidadSugeridaSiguienteCaja)</span> pieza(s)</div>
+                                <div class="sub">Para producto OK se respeta la capacidad del embalaje. La última caja puede ser parcial.</div>
+                            </div>
+
                             <div class="mb-3">
                                 <label class="form-label">Cantidad de piezas</label>
-                                <input type="number"
-                                       name="cantidadPiezas"
-                                       id="cantidadPiezas"
-                                       min="1"
-                                       max="@Model.CantidadOKDisponible"
-                                       step="1"
-                                       inputmode="numeric"
-                                       class="form-control"
-                                       required />
+                                <input type="number" name="cantidadPiezas" id="cantidadPiezas" min="1" step="1" inputmode="numeric" class="form-control" value="@(Model.CantidadSugeridaSiguienteCaja > 0 ? Model.CantidadSugeridaSiguienteCaja : null)" required />
+                                <div class="sub mt-1" id="ayudaCantidad">Máximo por embalaje OK: @(Model.PiezasPorCajaSugeridas > 0 ? Numero(Model.PiezasPorCajaSugeridas) : "Sin configuración").</div>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label">Lote material</label>
-                                <input type="text"
-                                       name="loteMaterial"
-                                       maxlength="100"
-                                       class="form-control"
-                                       placeholder="Lote utilizado en la caja" />
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Etiqueta / folio caja</label>
-                                <input type="text"
-                                       name="etiquetaFolio"
-                                       maxlength="100"
-                                       class="form-control"
-                                       placeholder="Opcional. Si se deja vacío se genera folio automático." />
+                            <div class="note mb-3">
+                                <i class="fa-solid fa-circle-info me-1"></i>
+                                El lote y la etiqueta física no se capturan en Producción. Almacén PT enlazará posteriormente la etiqueta de Label Matrix usando OF, número de parte y cantidad.
                             </div>
 
                             <div class="mb-3">
@@ -965,7 +974,7 @@
                                           rows="3"
                                           maxlength="500"
                                           class="form-control"
-                                          placeholder="Comentarios de empaque, etiqueta, lote o condición..."></textarea>
+                                          placeholder="Comentarios de empaque o condición de la caja..."></textarea>
                             </div>
 
                             <button type="submit" class="btn-main" id="btnFormarCaja">
@@ -976,34 +985,7 @@
                     </div>
                 </section>
 
-                <section class="panel">
-                    <div class="panel-head">
-                        <i class="fa-solid fa-route me-2"></i>
-                        Flujo de la caja
-                    </div>
 
-                    <div class="panel-body">
-                        <div class="note mb-2">
-                            <strong>12.</strong> Operador forma e identifica caja.
-                        </div>
-
-                        <div class="warn-note mb-2">
-                            <strong>13.</strong> Calidad libera o retiene la caja.
-                        </div>
-
-                        <div class="success-note mb-2">
-                            <strong>14.</strong> Si tiene etiqueta verde, Producción mueve a zona verde.
-                        </div>
-
-                        <div class="note mb-2">
-                            <strong>15.</strong> Producción escanea salida.
-                        </div>
-
-                        <div class="danger-note">
-                            <strong>16.</strong> Almacén PT confirma recepción desde su propio módulo.
-                        </div>
-                    </div>
-                </section>
             </aside>
 
             <main>
@@ -1028,7 +1010,7 @@
                                     <thead>
                                         <tr>
                                             <th>Caja</th>
-                                            <th>Folio / etiqueta</th>
+                                            <th>Folio ERP</th>
                                             <th>Tipo</th>
                                             <th>Cantidad</th>
                                             <th>Estado</th>
@@ -1051,7 +1033,7 @@
 
                                                 <td>
                                                     <div class="fw-bold">@TxtNullable(caja.FolioCaja)</div>
-                                                    <div class="sub">@TxtNullable(caja.EtiquetaFolio)</div>
+                                                    <div class="sub">Folio interno ERP</div>
                                                 </td>
 
                                                 <td>
@@ -1251,83 +1233,22 @@
 
     <script>
         (() => {
-            const formFormarCaja = document.getElementById('formFormarCaja');
-            const tipoCaja = document.getElementById('tipoCaja');
-            const cantidadPiezas = document.getElementById('cantidadPiezas');
-            const cantidadDisponible = document.getElementById('cantidadDisponible');
-            const btnFormarCaja = document.getElementById('btnFormarCaja');
-            const accionForms = document.querySelectorAll('.accion-form');
-
-            const disponibles = {
-                OK: @Model.CantidadOKDisponible,
-                SOSPECHOSO: @Model.CantidadSospechosaDisponible,
-                SCRAP: @Model.CantidadScrapDisponible,
-                RETENCION: @Model.CantidadSospechosaDisponible
-            };
-
-            function obtenerDisponible() {
-                const tipo = tipoCaja?.value || '';
-                return Number(disponibles[tipo] ?? 0);
-            }
-
-            function actualizarDisponible() {
-                if (!tipoCaja || !cantidadPiezas || !cantidadDisponible || !btnFormarCaja) return;
-
-                const disponible = obtenerDisponible();
-                cantidadDisponible.textContent = disponible.toLocaleString('es-MX');
-                cantidadPiezas.max = String(disponible);
-
-                if (Number(cantidadPiezas.value || 0) > disponible) {
-                    cantidadPiezas.value = disponible > 0 ? String(disponible) : '';
-                }
-
-                const puedeFormar = disponible > 0 && !tipoCaja.disabled;
-                cantidadPiezas.disabled = !puedeFormar;
-                btnFormarCaja.disabled = !puedeFormar;
-            }
-
-            tipoCaja?.addEventListener('change', actualizarDisponible);
-            actualizarDisponible();
-
-            formFormarCaja?.addEventListener('submit', function (event) {
-                const cantidad = Number(cantidadPiezas?.value || 0);
-                const disponible = obtenerDisponible();
-                const tipo = tipoCaja?.value || '';
-
-                if (cantidad <= 0) {
-                    event.preventDefault();
-                    alert('La cantidad de piezas debe ser mayor a cero.');
-                    return;
-                }
-
-                if (cantidad > disponible) {
-                    event.preventDefault();
-                    alert('La cantidad excede lo disponible para ' + tipo + '. Disponible: ' + disponible + ' pieza(s).');
-                    return;
-                }
-
-                if (btnFormarCaja) {
-                    btnFormarCaja.disabled = true;
-                    btnFormarCaja.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';
-                }
-            });
-
-            accionForms.forEach(function (form) {
-                form.addEventListener('submit', function (event) {
-                    const mensaje = form.dataset.confirm;
-
-                    if (mensaje && !window.confirm(mensaje)) {
-                        event.preventDefault();
-                        return;
-                    }
-
-                    const btn = form.querySelector('button[type="submit"]');
-                    if (btn) {
-                        btn.disabled = true;
-                        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
-                    }
-                });
-            });
+            const formFormarCaja=document.getElementById('formFormarCaja');
+            const tipoCaja=document.getElementById('tipoCaja');
+            const cantidadPiezas=document.getElementById('cantidadPiezas');
+            const cantidadDisponible=document.getElementById('cantidadDisponible');
+            const cantidadSugerida=document.getElementById('cantidadSugerida');
+            const sugerenciaCaja=document.getElementById('sugerenciaCaja');
+            const ayudaCantidad=document.getElementById('ayudaCantidad');
+            const btnFormarCaja=document.getElementById('btnFormarCaja');
+            const disponibles={OK:@Model.CantidadOKDisponible,SOSPECHOSO:@Model.CantidadSospechosaDisponible,SCRAP:@Model.CantidadScrapDisponible,RETENCION:@Model.CantidadSospechosaDisponible};
+            const piezasPorEmbalaje=@Model.PiezasPorCajaSugeridas;
+            const sugeridaOk=@Model.CantidadSugeridaSiguienteCaja;
+            function datos(){const tipo=tipoCaja?.value||'OK';const disponible=Number(disponibles[tipo]||0);let maximo=disponible;let sugerida=disponible;if(tipo==='OK'&&piezasPorEmbalaje>0){maximo=Math.min(disponible,piezasPorEmbalaje);sugerida=Math.min(sugeridaOk>0?sugeridaOk:disponible,maximo);}return{tipo,disponible,maximo,sugerida};}
+            function actualizar(){if(!tipoCaja||!cantidadPiezas||!cantidadDisponible||!btnFormarCaja)return;const d=datos();cantidadDisponible.textContent=d.disponible.toLocaleString('es-MX');cantidadPiezas.max=String(Math.max(0,d.maximo));if(cantidadSugerida)cantidadSugerida.textContent=d.sugerida.toLocaleString('es-MX');if(sugerenciaCaja)sugerenciaCaja.style.display=d.tipo==='OK'?'':'none';if(ayudaCantidad)ayudaCantidad.textContent=d.tipo==='OK'&&piezasPorEmbalaje>0?'Máximo por embalaje OK: '+piezasPorEmbalaje.toLocaleString('es-MX')+' pieza(s).':'Máximo disponible para '+d.tipo+': '+d.disponible.toLocaleString('es-MX')+' pieza(s).';if(d.disponible<=0){cantidadPiezas.value='';cantidadPiezas.disabled=true;btnFormarCaja.disabled=true;return;}cantidadPiezas.disabled=false;btnFormarCaja.disabled=false;const actual=Number(cantidadPiezas.value||0);if(actual<=0||actual>d.maximo)cantidadPiezas.value=d.sugerida>0?String(d.sugerida):String(d.maximo);}
+            tipoCaja?.addEventListener('change',actualizar);actualizar();
+            formFormarCaja?.addEventListener('submit',e=>{const d=datos();const cantidad=Number(cantidadPiezas?.value||0);if(cantidad<=0){e.preventDefault();alert('La cantidad de piezas debe ser mayor a cero.');return;}if(cantidad>d.disponible){e.preventDefault();alert('La cantidad excede lo disponible para '+d.tipo+'. Disponible: '+d.disponible.toLocaleString('es-MX')+'.');return;}if(d.tipo==='OK'&&piezasPorEmbalaje>0&&cantidad>piezasPorEmbalaje){e.preventDefault();alert('La caja excede la capacidad del embalaje. Máximo: '+piezasPorEmbalaje.toLocaleString('es-MX')+' pieza(s).');return;}btnFormarCaja.disabled=true;btnFormarCaja.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';});
+            document.querySelectorAll('.accion-form').forEach(form=>{form.addEventListener('submit',e=>{const mensaje=form.dataset.confirm;if(mensaje&&!window.confirm(mensaje)){e.preventDefault();return;}const btn=form.querySelector('button[type="submit"]');if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';}});});
         })();
     </script>
 </body>

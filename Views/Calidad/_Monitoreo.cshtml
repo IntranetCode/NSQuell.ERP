@@ -1,0 +1,1063 @@
+﻿@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
+@using ERP.NSQuell.Models
+@{
+    string Mostrar(string? valor) => string.IsNullOrWhiteSpace(valor) ? "—" : valor.Trim();
+
+    var estado = (Model.Estado ?? string.Empty)
+        .Trim()
+        .ToUpperInvariant();
+
+    var porcentajeMonitoreoCss =
+        Model.PorcentajeMonitoreosAtendidos.ToString(
+            "0.#",
+            System.Globalization.CultureInfo.InvariantCulture);
+
+    var ahora = DateTime.Now;
+
+    var monitoreosOrdenados = Model.Monitoreos
+        .OrderBy(x => x.FechaHoraProgramada)
+        .ToList();
+
+    var monitoreosAtendidos = monitoreosOrdenados
+        .Where(x => !x.EsPendiente)
+        .OrderByDescending(x => x.FechaHoraProgramada)
+        .ToList();
+
+    var monitoreosPendientes = monitoreosOrdenados
+        .Where(x => x.EsPendiente)
+        .ToList();
+
+    var monitoreoVigente = monitoreosPendientes
+        .Where(x =>
+            x.PuedeCapturar ||
+            x.TieneRegistroProduccion ||
+            x.FechaHoraProgramada <= ahora)
+        .OrderBy(x => x.FechaHoraProgramada)
+        .FirstOrDefault();
+
+    monitoreoVigente ??= monitoreosPendientes
+        .OrderBy(x => x.FechaHoraProgramada)
+        .FirstOrDefault();
+
+    var monitoreoSiguiente = monitoreosPendientes
+        .Where(x =>
+            monitoreoVigente == null ||
+            x.MonitoreoID != monitoreoVigente.MonitoreoID)
+        .OrderBy(x => x.FechaHoraProgramada)
+        .FirstOrDefault();
+
+    var monitoreosVisibles = monitoreosPendientes
+        .Where(x =>
+            (monitoreoVigente != null &&
+             x.MonitoreoID == monitoreoVigente.MonitoreoID) ||
+            (monitoreoSiguiente != null &&
+             x.MonitoreoID == monitoreoSiguiente.MonitoreoID))
+        .OrderBy(x => x.FechaHoraProgramada)
+        .ToList();
+
+    var monitoreosFuturos = monitoreosPendientes
+        .Where(x =>
+            (monitoreoVigente == null ||
+             x.MonitoreoID != monitoreoVigente.MonitoreoID) &&
+            (monitoreoSiguiente == null ||
+             x.MonitoreoID != monitoreoSiguiente.MonitoreoID))
+        .OrderBy(x => x.FechaHoraProgramada)
+        .ToList();
+}
+<style>
+    .quality-monitoring {
+        --qm-orange: #f97316;
+        --qm-navy: #14213d;
+        --qm-text: #1e293b;
+        --qm-muted: #64748b;
+        --qm-border: #dfe5ec;
+        color: var(--qm-text)
+    }
+
+        .quality-monitoring .quality-card {
+            margin-bottom: 20px;
+            border: 1px solid var(--qm-border);
+            border-radius: 14px;
+            background: #fff;
+            overflow: hidden
+        }
+
+        .quality-monitoring .quality-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 17px 20px;
+            border-bottom: 1px solid var(--qm-border);
+            background: #f8fafc
+        }
+
+            .quality-monitoring .quality-card-header h2 {
+                display: flex;
+                align-items: center;
+                gap: 9px;
+                margin: 0;
+                color: var(--qm-navy);
+                font-size: 1.02rem;
+                font-weight: 850
+            }
+
+                .quality-monitoring .quality-card-header h2 i {
+                    color: var(--qm-orange)
+                }
+
+        .quality-monitoring .quality-card-body {
+            padding: 20px
+        }
+
+        .quality-monitoring .quality-help {
+            margin-top: 6px;
+            color: var(--qm-muted);
+            font-size: .78rem;
+            line-height: 1.45
+        }
+
+        .quality-monitoring .quality-data-label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--qm-muted);
+            font-size: .69rem;
+            font-weight: 850;
+            letter-spacing: .035em;
+            text-transform: uppercase
+        }
+
+        .quality-monitoring .quality-btn {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 9px 15px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            font-size: .86rem;
+            font-weight: 800;
+            text-decoration: none
+        }
+
+        .quality-monitoring .quality-btn-light {
+            background: #fff;
+            color: #334155;
+            border-color: var(--qm-border)
+        }
+
+        .quality-monitoring .quality-btn-primary {
+            background: var(--qm-orange);
+            color: #fff;
+            border-color: var(--qm-orange)
+        }
+
+        .quality-monitoring .quality-monitor-empty {
+            padding: 28px;
+            border: 1px dashed #94a3b8;
+            border-radius: 12px;
+            background: #f8fafc;
+            color: var(--qm-muted);
+            text-align: center
+        }
+
+        .quality-monitoring .quality-monitor-progress {
+            height: 8px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #e2e8f0
+        }
+
+            .quality-monitoring .quality-monitor-progress > span {
+                display: block;
+                height: 100%;
+                border-radius: inherit;
+                background: var(--qm-orange)
+            }
+
+        .quality-monitoring .quality-monitor-result-grid {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px
+        }
+
+        .quality-monitoring .quality-monitor-result-choice {
+            position: relative;
+            margin: 0;
+            cursor: pointer
+        }
+
+            .quality-monitoring .quality-monitor-result-choice > input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none
+            }
+
+        .quality-monitoring .quality-monitor-result-card {
+            min-height: 82px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 4px;
+            padding: 12px;
+            border: 1px solid var(--qm-border);
+            border-radius: 11px;
+            background: #fff
+        }
+
+            .quality-monitoring .quality-monitor-result-card small {
+                color: var(--qm-muted);
+                line-height: 1.3
+            }
+
+        .quality-monitoring .quality-monitor-result-choice.is-conforme > input:checked + .quality-monitor-result-card {
+            border-color: #16a34a;
+            background: #f0fdf4;
+            box-shadow: 0 0 0 3px rgba(22,163,74,.12)
+        }
+
+        .quality-monitoring .quality-monitor-result-choice.is-sospechoso > input:checked + .quality-monitor-result-card {
+            border-color: #d97706;
+            background: #fffbeb;
+            box-shadow: 0 0 0 3px rgba(217,119,6,.12)
+        }
+
+        .quality-monitoring .quality-monitor-result-choice.is-noconforme > input:checked + .quality-monitor-result-card {
+            border-color: #dc2626;
+            background: #fef2f2;
+            box-shadow: 0 0 0 3px rgba(220,38,38,.12)
+        }
+
+        .quality-monitoring .quality-monitor-treatment-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 10px
+        }
+
+        .quality-monitoring .quality-monitor-treatment-option {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 10px 12px;
+            border: 1px solid var(--qm-border);
+            border-radius: 10px;
+            background: #fff;
+            cursor: pointer
+        }
+
+            .quality-monitoring .quality-monitor-treatment-option:has(input:checked) {
+                border-color: var(--qm-orange);
+                background: #fff7ed;
+                box-shadow: 0 0 0 3px rgba(249,115,22,.1)
+            }
+
+        .quality-monitoring .quality-monitor-featured {
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .06)
+        }
+
+        .quality-monitoring .quality-period-kind {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            font-size: .69rem;
+            font-weight: 850;
+            letter-spacing: .025em;
+            text-transform: uppercase
+        }
+
+        .quality-monitoring .quality-period-kind-current {
+            color: #9a3412;
+            background: #ffedd5;
+            border: 1px solid #fdba74
+        }
+
+        .quality-monitoring .quality-period-kind-next {
+            color: #1e3a8a;
+            background: #dbeafe;
+            border: 1px solid #93c5fd
+        }
+
+        .quality-monitoring .quality-disclosure {
+            border: 1px solid var(--qm-border);
+            border-radius: 12px;
+            background: #f8fafc;
+            overflow: hidden
+        }
+
+            .quality-monitoring .quality-disclosure + .quality-disclosure {
+                margin-top: 12px
+            }
+
+            .quality-monitoring .quality-disclosure > summary {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 14px 16px;
+                color: var(--qm-navy);
+                font-weight: 850;
+                cursor: pointer;
+                list-style: none
+            }
+
+                .quality-monitoring .quality-disclosure > summary::-webkit-details-marker {
+                    display: none
+                }
+
+                .quality-monitoring .quality-disclosure > summary::after {
+                    content: '\f078';
+                    font-family: 'Font Awesome 6 Free';
+                    font-weight: 900;
+                    font-size: .75rem;
+                    transition: transform .18s ease
+                }
+
+            .quality-monitoring .quality-disclosure[open] > summary::after {
+                transform: rotate(180deg)
+            }
+
+        .quality-monitoring .quality-disclosure-body {
+            padding: 14px;
+            border-top: 1px solid var(--qm-border);
+            background: #fff
+        }
+
+        .quality-monitoring .quality-period-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px 14px;
+            border: 1px solid var(--qm-border);
+            border-radius: 10px;
+            background: #fff
+        }
+
+            .quality-monitoring .quality-period-row + .quality-period-row {
+                margin-top: 9px
+            }
+
+    @@media (max-width: 767.98px) {
+        .quality-monitoring .quality-card-header {
+            flex-direction: column
+        }
+
+        .quality-monitoring .quality-monitor-result-grid, .quality-monitoring .quality-monitor-treatment-grid {
+            grid-template-columns: 1fr
+        }
+
+        .quality-monitoring .quality-card-body {
+            padding: 15px
+        }
+    }</style>
+<div class="quality-monitoring">
+    @if (estado == CalidadEstados.MonitoreoActivo || Model.Monitoreos.Any())
+    {
+        <section class="quality-card" id="monitoreos-calidad">
+            <div class="quality-card-header">
+                <div>
+                    <h2>
+                        <i class="fa-solid fa-clock"></i>
+                        Monitoreos de proceso cada hora
+                    </h2>
+                    <div class="quality-help">
+                        Calidad revisa cada periodo disponible y registra el resultado sin modificar la captura original.
+                    </div>
+                </div>
+
+                @if (estado == CalidadEstados.MonitoreoActivo)
+                {
+                    <form asp-controller="Calidad"
+                          asp-action="SincronizarMonitoreosCalidad"
+                          method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.InspeccionID" />
+                        <button type="submit"
+                                class="quality-btn quality-btn-light"
+                                data-submit-confirm="¿Actualizar los periodos y vincular las capturas horarias disponibles?">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                            Actualizar periodos
+                        </button>
+                    </form>
+                }
+            </div>
+
+            <div class="quality-card-body">
+                @if (!Model.Monitoreos.Any())
+                {
+                    <div class="quality-monitor-empty">
+                        <i class="fa-solid fa-clock-rotate-left fa-2x mb-2"></i>
+                        <div class="fw-bold mb-1">Todavía no hay periodos programados.</div>
+                        <div>
+                            Usa <strong>Actualizar periodos</strong> para reconstruir el seguimiento horario de Calidad.
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-3 mb-3">
+                        <div class="col-6 col-lg-2">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Programados</div>
+                                <div class="fs-4 fw-bold">@Model.TotalMonitoreos</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Disponibles</div>
+                                <div class="fs-4 fw-bold text-primary">@Model.MonitoreosDisponiblesCaptura</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Esperando captura</div>
+                                <div class="fs-4 fw-bold text-secondary">@Model.MonitoreosEsperandoProduccion</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Conformes</div>
+                                <div class="fs-4 fw-bold text-success">@Model.MonitoreosConformes</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Hallazgos</div>
+                                <div class="fs-4 fw-bold text-danger">@Model.MonitoreosConHallazgo</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Disposiciones pendientes</div>
+                                <div class="fs-4 fw-bold text-warning">@Model.DisposicionesPendientes</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Avance de revisiones</div>
+                                <div class="d-flex justify-content-between gap-3 mb-2">
+                                    <strong>@Model.MonitoreosAtendidos de @Model.TotalMonitoreos</strong>
+                                    <strong>@Model.PorcentajeMonitoreosAtendidos.ToString("0.#")%</strong>
+                                </div>
+                                <div class="quality-monitor-progress">
+                                    <span style="width:@porcentajeMonitoreoCss%"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Muestra revisada acumulada</div>
+                                <div class="fs-4 fw-bold">@Model.TotalMuestraRevisada</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Material afectado acumulado</div>
+                                <div class="fs-4 fw-bold text-danger">@Model.TotalMaterialAfectado</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="quality-data-label">Próximo</div>
+                                <div class="fw-bold">
+                                    @(Model.ProximoMonitoreo?.ToString("dd/MM HH:mm") ?? "Sin pendiente")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-3">
+                        @foreach (var monitor in monitoreosVisibles)
+                        {
+                            var monitorClase = monitor.Resultado switch
+                            {
+                                CalidadResultadoMonitoreo.Conforme => "border-success",
+                                CalidadResultadoMonitoreo.Sospechoso => "border-warning",
+                                CalidadResultadoMonitoreo.NoConforme => "border-danger",
+                                CalidadResultadoMonitoreo.Reinspeccion => "border-info",
+                                _ when monitor.EstaVencido => "border-danger",
+                                _ => "border-secondary"
+                            };
+
+                            <article class="quality-monitor-featured border @monitorClase rounded-3 p-3">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                                    <div>
+                                        <h3 class="h6 fw-bold mb-1">
+                                            Revisión hora @monitor.NumeroHora
+                                        </h3>
+                                        <div class="quality-help">
+                                            Programada: @monitor.FechaHoraProgramada.ToString("dd/MM/yyyy HH:mm")
+                                            @if (monitor.EstaVencido)
+                                            {
+                                                <span class="text-danger fw-bold"> · Vencida</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap justify-content-end align-items-center gap-2">
+                                        @if (monitoreoVigente != null &&
+                                                                    monitor.MonitoreoID == monitoreoVigente.MonitoreoID)
+                                        {
+                                            <span class="quality-period-kind quality-period-kind-current">
+                                                <i class="fa-solid fa-location-dot"></i>
+                                                Vigente
+                                            </span>
+                                        }
+                                        else if (monitoreoSiguiente != null &&
+                                        monitor.MonitoreoID == monitoreoSiguiente.MonitoreoID)
+                                        {
+                                            <span class="quality-period-kind quality-period-kind-next">
+                                                <i class="fa-solid fa-forward-step"></i>
+                                                Siguiente
+                                            </span>
+                                        }
+
+                                        <span class="badge @monitor.ResultadoBadgeClase">
+                                            @monitor.ResultadoTexto
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-3">
+                                        <div class="quality-data-label">Captura vinculada</div>
+                                        <div class="fw-semibold">@monitor.RangoProduccion</div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="quality-data-label">OK reportado</div>
+                                        <div class="fw-bold text-success">@monitor.CantidadOKProduccion</div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="quality-data-label">Sospechoso reportado</div>
+                                        <div class="fw-bold text-warning">@monitor.CantidadSospechosaProduccion</div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="quality-data-label">Scrap reportado</div>
+                                        <div class="fw-bold text-danger">@monitor.CantidadScrapProduccion</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="quality-data-label">Total del periodo</div>
+                                        <div class="fw-bold">@monitor.CantidadProducidaPeriodo</div>
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(monitor.ObservacionesProduccion))
+                                {
+                                    <div class="alert alert-info py-2 mb-3">
+                                        <strong>Observación de Producción:</strong>
+                                        <span style="white-space: pre-wrap;">@monitor.ObservacionesProduccion</span>
+                                    </div>
+                                }
+
+                                @if (monitor.PuedeCapturar && estado == CalidadEstados.MonitoreoActivo)
+                                {
+                                    <form asp-controller="Calidad"
+                                          asp-action="RegistrarMonitoreo"
+                                          method="post"
+                                          class="monitor-form"
+                                          data-monitor-form
+                                          data-max-produccion="@monitor.CantidadProducidaPeriodo">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="MonitoreoID" value="@monitor.MonitoreoID" />
+                                        <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+                                        <input type="hidden" name="Resultado" value="" data-monitor-result-value />
+
+                                        <div class="row g-3">
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-semibold">Muestra revisada</label>
+                                                <input type="number"
+                                                       name="CantidadRevisadaMuestra"
+                                                       min="1"
+                                                       max="@monitor.CantidadProducidaPeriodo"
+                                                       class="form-control"
+                                                       data-monitor-muestra
+                                                       required />
+                                                <div class="quality-help">
+                                                    Máximo disponible: @monitor.CantidadProducidaPeriodo.
+                                                </div>
+                                            </div>
+
+                                            <div class="col-md-9">
+                                                <label class="form-label fw-semibold">Resultado de la revisión</label>
+                                                <div class="quality-monitor-result-grid">
+                                                    <label class="quality-monitor-result-choice is-conforme">
+                                                        <input type="radio"
+                                                               name="ResultadoVisual_@monitor.MonitoreoID"
+                                                               value="@CalidadResultadoMonitoreo.Conforme"
+                                                               data-monitor-result-option />
+                                                        <span class="quality-monitor-result-card">
+                                                            <strong><i class="fa-solid fa-circle-check"></i> Conforme</strong>
+                                                            <small>La muestra no presenta hallazgos.</small>
+                                                        </span>
+                                                    </label>
+
+                                                    <label class="quality-monitor-result-choice is-sospechoso">
+                                                        <input type="radio"
+                                                               name="ResultadoVisual_@monitor.MonitoreoID"
+                                                               value="@CalidadResultadoMonitoreo.Sospechoso"
+                                                               data-monitor-result-option />
+                                                        <span class="quality-monitor-result-card">
+                                                            <strong><i class="fa-solid fa-triangle-exclamation"></i> Sospechoso</strong>
+                                                            <small>Se separa material para selección o retrabajo.</small>
+                                                        </span>
+                                                    </label>
+
+                                                    <label class="quality-monitor-result-choice is-noconforme">
+                                                        <input type="radio"
+                                                               name="ResultadoVisual_@monitor.MonitoreoID"
+                                                               value="@CalidadResultadoMonitoreo.NoConforme"
+                                                               data-monitor-result-option />
+                                                        <span class="quality-monitor-result-card">
+                                                            <strong><i class="fa-solid fa-circle-xmark"></i> No conforme</strong>
+                                                            <small>El hallazgo requiere bloqueo y disposición.</small>
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row g-3 mt-1"
+                                             data-monitor-hallazgo
+                                             hidden>
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-semibold">Defecto del catálogo</label>
+                                                <select name="DefectoCodigo"
+                                                        class="form-select"
+                                                        data-monitor-defecto-codigo>
+                                                    <option value="">Selecciona...</option>
+                                                    @foreach (var defecto in Model.CatalogoDefectos)
+                                                    {
+                                                        <option value="@defecto.Codigo">@defecto.Texto</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-semibold">Descripción adicional</label>
+                                                <input type="text"
+                                                       name="DefectoDescripcion"
+                                                       maxlength="500"
+                                                       class="form-control"
+                                                       data-monitor-defecto-descripcion
+                                                       placeholder="Detalle adicional del hallazgo..." />
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label fw-semibold">Cantidad sospechosa</label>
+                                                <input type="number"
+                                                       name="CantidadSospechosa"
+                                                       min="0"
+                                                       max="@monitor.CantidadProducidaPeriodo"
+                                                       value="0"
+                                                       class="form-control"
+                                                       data-monitor-sospechosa />
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label fw-semibold">No recuperable</label>
+                                                <input type="number"
+                                                       name="CantidadNoRecuperable"
+                                                       min="0"
+                                                       max="@monitor.CantidadProducidaPeriodo"
+                                                       value="0"
+                                                       class="form-control"
+                                                       data-monitor-norecuperable />
+                                            </div>
+
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-semibold">Tratamiento principal</label>
+                                                <input type="hidden"
+                                                       name="RequiereSeleccion"
+                                                       value="false"
+                                                       data-monitor-seleccion-value />
+                                                <input type="hidden"
+                                                       name="RequiereRetrabajo"
+                                                       value="false"
+                                                       data-monitor-retrabajo-value />
+
+                                                <div class="quality-monitor-treatment-grid">
+                                                    <label class="quality-monitor-treatment-option">
+                                                        <input type="radio"
+                                                               name="TratamientoVisual_@monitor.MonitoreoID"
+                                                               value="SELECCION"
+                                                               data-monitor-treatment />
+                                                        <span>
+                                                            <strong>Selección</strong><br />
+                                                            <small class="text-muted">Calidad separa y revisa el material.</small>
+                                                        </span>
+                                                    </label>
+
+                                                    <label class="quality-monitor-treatment-option">
+                                                        <input type="radio"
+                                                               name="TratamientoVisual_@monitor.MonitoreoID"
+                                                               value="RETRABAJO"
+                                                               data-monitor-treatment />
+                                                        <span>
+                                                            <strong>Retrabajo</strong><br />
+                                                            <small class="text-muted">Se corrige el material antes de reinspección.</small>
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <div class="col-md-6"
+                                                 data-monitor-responsable
+                                                 hidden>
+                                                <label class="form-label fw-semibold">Responsable del retrabajo</label>
+                                                <select name="ResponsableRetrabajo"
+                                                        class="form-select"
+                                                        data-monitor-responsable-select>
+                                                    <option value="">Selecciona...</option>
+                                                    <option value="@CalidadResponsable.Produccion">Producción</option>
+                                                    <option value="@CalidadResponsable.Calidad">Calidad</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-3">
+                                            <label class="form-label fw-semibold">Observaciones de Calidad</label>
+                                            <textarea name="Observaciones"
+                                      rows="3"
+                                      maxlength="1000"
+                                      class="form-control"
+                                      data-monitor-observaciones
+                                      placeholder="Describe mediciones, hallazgos o evidencia de la revisión..."></textarea>
+                                            <div class="quality-help">
+                                                Obligatorio para resultados no conformes.
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-3 text-end">
+                                            <button type="submit"
+                                                    class="quality-btn quality-btn-primary"
+                                                    data-submit-confirm="¿Confirmas el resultado de esta revisión horaria?">
+                                                <i class="fa-solid fa-floppy-disk"></i>
+                                                Guardar revisión
+                                            </button>
+                                        </div>
+                                    </form>
+                                }
+                                else if (monitor.EsPendiente && !monitor.TieneRegistroProduccion)
+                                {
+                                    <div class="alert alert-secondary mb-0">
+                                        <i class="fa-solid fa-hourglass-half"></i>
+                                        Este periodo está esperando una captura horaria para habilitar la revisión de Calidad.
+                                    </div>
+                                }
+                                else if (monitor.EsPendiente && monitor.TieneRegistroProduccion && monitor.CantidadProducidaPeriodo <= 0)
+                                {
+                                    <div class="alert alert-warning mb-0">
+                                        La captura vinculada no contiene piezas producidas. No hay muestra disponible para revisar.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="row g-3">
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Muestra</div>
+                                            <div class="fw-bold">@monitor.CantidadRevisadaMuestra</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Defecto</div>
+                                            <div class="fw-semibold">@Mostrar(monitor.DefectoCodigo)</div>
+                                            <div class="quality-help">@Mostrar(monitor.DefectoDescripcion)</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Afectado</div>
+                                            <div class="fw-bold">@monitor.CantidadAfectadaCalidad</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Tratamiento</div>
+                                            <div class="fw-semibold">
+                                                @(monitor.RequiereRetrabajo ? "Retrabajo" : monitor.RequiereSeleccion ? "Selección" : "No aplica")
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(monitor.ResponsableRetrabajo))
+                                            {
+                                                <div class="quality-help">Responsable: @monitor.ResponsableRetrabajo</div>
+                                            }
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="quality-data-label">Revisado</div>
+                                            <div class="fw-semibold">
+                                                @(monitor.FechaHoraRevision?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")
+                                            </div>
+                                        </div>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(monitor.Observaciones))
+                                    {
+                                        <div class="quality-help mt-3" style="white-space: pre-wrap;">@monitor.Observaciones</div>
+                                    }
+                                }
+                            </article>
+                        }
+
+                        @if (!monitoreosVisibles.Any())
+                        {
+                            <div class="quality-monitor-empty">
+                                <i class="fa-solid fa-hourglass-start fa-2x mb-2"></i>
+                                <div class="fw-bold mb-1">No hay una revisión vigente.</div>
+                                <div>Los periodos aparecerán aquí conforme avance la producción.</div>
+                            </div>
+                        }
+
+                        @if (monitoreosFuturos.Any())
+                        {
+                            <details class="quality-disclosure">
+                                <summary>
+                                    <span>
+                                        <i class="fa-solid fa-calendar-days me-2"></i>
+                                        Periodos futuros
+                                    </span>
+                                    <span class="badge bg-secondary">
+                                        @monitoreosFuturos.Count
+                                    </span>
+                                </summary>
+
+                                <div class="quality-disclosure-body">
+                                    @foreach (var monitor in monitoreosFuturos)
+                                    {
+                                        <div class="quality-period-row">
+                                            <div>
+                                                <div class="fw-bold">
+                                                    Revisión hora @monitor.NumeroHora
+                                                </div>
+                                                <div class="quality-help">
+                                                    Programada:
+                                                    @monitor.FechaHoraProgramada.ToString("dd/MM/yyyy HH:mm")
+                                                </div>
+                                            </div>
+
+                                            <span class="badge bg-secondary">
+                                                Futura
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            </details>
+                        }
+
+                        @if (monitoreosAtendidos.Any())
+                        {
+                            <details class="quality-disclosure">
+                                <summary>
+                                    <span>
+                                        <i class="fa-solid fa-clock-rotate-left me-2"></i>
+                                        Historial de revisiones
+                                    </span>
+                                    <span class="badge bg-dark">
+                                        @monitoreosAtendidos.Count
+                                    </span>
+                                </summary>
+
+                                <div class="quality-disclosure-body">
+                                    @foreach (var monitor in monitoreosAtendidos)
+                                    {
+                                        <div class="quality-period-row">
+                                            <div>
+                                                <div class="fw-bold">
+                                                    Revisión hora @monitor.NumeroHora
+                                                </div>
+                                                <div class="quality-help">
+                                                    Programada:
+                                                    @monitor.FechaHoraProgramada.ToString("dd/MM/yyyy HH:mm")
+                                                    · Revisada:
+                                                    @(monitor.FechaHoraRevision?.ToString("dd/MM/yyyy HH:mm") ?? "Sin fecha")
+                                                </div>
+                                                <div class="quality-help">
+                                                    Muestra: @monitor.CantidadRevisadaMuestra
+                                                    · Afectado: @monitor.CantidadAfectadaCalidad
+                                                    · Tratamiento:
+                                                    @(monitor.RequiereRetrabajo
+                                                                                        ? "Retrabajo"
+                                                                                        : monitor.RequiereSeleccion
+                                                                                        ? "Selección"
+                                                                                        : "No aplica")
+                                </div>
+                            </div>
+
+                                            <span class="badge @monitor.ResultadoBadgeClase">
+                                                @monitor.ResultadoTexto
+                                            </span>
+                                        </div>
+                                                }
+                                </div>
+                            </details>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>
+<script>
+    document.querySelectorAll('[data-monitor-form]').forEach(function (form) {
+        const resultadoValor = form.querySelector('[data-monitor-result-value]');
+        const opcionesResultado = form.querySelectorAll('[data-monitor-result-option]');
+        const bloqueHallazgo = form.querySelector('[data-monitor-hallazgo]');
+        const defectoCodigo = form.querySelector('[data-monitor-defecto-codigo]');
+        const defectoDescripcion = form.querySelector('[data-monitor-defecto-descripcion]');
+        const cantidadSospechosa = form.querySelector('[data-monitor-sospechosa]');
+        const cantidadNoRecuperable = form.querySelector('[data-monitor-norecuperable]');
+        const opcionesTratamiento = form.querySelectorAll('[data-monitor-treatment]');
+        const seleccionValor = form.querySelector('[data-monitor-seleccion-value]');
+        const retrabajoValor = form.querySelector('[data-monitor-retrabajo-value]');
+        const bloqueResponsable = form.querySelector('[data-monitor-responsable]');
+        const responsable = form.querySelector('[data-monitor-responsable-select]');
+        const muestra = form.querySelector('[data-monitor-muestra]');
+        const observaciones = form.querySelector('[data-monitor-observaciones]');
+        const maxProduccion = Number(form.dataset.maxProduccion || '0');
+
+        function controlesHallazgo() {
+            return bloqueHallazgo
+                ? bloqueHallazgo.querySelectorAll('input, select, textarea')
+                : [];
+        }
+
+        function limpiarHallazgo() {
+            if (defectoCodigo) defectoCodigo.value = '';
+            if (defectoDescripcion) defectoDescripcion.value = '';
+            if (cantidadSospechosa) cantidadSospechosa.value = '0';
+            if (cantidadNoRecuperable) cantidadNoRecuperable.value = '0';
+
+            opcionesTratamiento.forEach(function (opcion) {
+                opcion.checked = false;
+            });
+
+            if (seleccionValor) seleccionValor.value = 'false';
+            if (retrabajoValor) retrabajoValor.value = 'false';
+            if (responsable) responsable.value = '';
+            if (bloqueResponsable) bloqueResponsable.hidden = true;
+        }
+
+        function actualizarTratamiento() {
+            const tratamiento = Array.from(opcionesTratamiento)
+                .find(function (opcion) { return opcion.checked; })?.value || '';
+
+            if (seleccionValor) {
+                seleccionValor.value = tratamiento === 'SELECCION' ? 'true' : 'false';
+            }
+
+            if (retrabajoValor) {
+                retrabajoValor.value = tratamiento === 'RETRABAJO' ? 'true' : 'false';
+            }
+
+            if (bloqueResponsable) {
+                bloqueResponsable.hidden = tratamiento !== 'RETRABAJO';
+            }
+
+            if (responsable) {
+                responsable.disabled = tratamiento !== 'RETRABAJO';
+                if (tratamiento !== 'RETRABAJO') {
+                    responsable.value = '';
+                }
+            }
+        }
+
+        function actualizarResultado() {
+            const resultado = Array.from(opcionesResultado)
+                .find(function (opcion) { return opcion.checked; })?.value || '';
+
+            if (resultadoValor) {
+                resultadoValor.value = resultado;
+            }
+
+            const mostrarHallazgo =
+                resultado === 'SOSPECHOSO' || resultado === 'NO_CONFORME';
+
+            if (bloqueHallazgo) {
+                bloqueHallazgo.hidden = !mostrarHallazgo;
+            }
+
+            controlesHallazgo().forEach(function (control) {
+                control.disabled = !mostrarHallazgo;
+            });
+
+            if (!mostrarHallazgo) {
+                limpiarHallazgo();
+            } else {
+                actualizarTratamiento();
+            }
+
+            if (observaciones) {
+                observaciones.placeholder = resultado === 'NO_CONFORME'
+                    ? 'Describe obligatoriamente el hallazgo, mediciones y evidencia...'
+                    : resultado === 'SOSPECHOSO'
+                        ? 'Describe el motivo de la separación y la evidencia disponible...'
+                        : 'Describe mediciones o evidencia de la revisión...';
+            }
+        }
+
+        opcionesResultado.forEach(function (opcion) {
+            opcion.addEventListener('change', actualizarResultado);
+        });
+
+        opcionesTratamiento.forEach(function (opcion) {
+            opcion.addEventListener('change', actualizarTratamiento);
+        });
+
+        form.addEventListener('submit', function (event) {
+            const resultado = resultadoValor?.value || '';
+            const muestraValor = Number(muestra?.value || '0');
+
+            if (!resultado) {
+                event.preventDefault();
+                window.alert('Selecciona el resultado de la revisión horaria.');
+                return;
+            }
+
+            if (muestraValor <= 0 || muestraValor > maxProduccion) {
+                event.preventDefault();
+                muestra?.focus();
+                window.alert('La muestra debe ser mayor a cero y no puede superar lo producido en el periodo.');
+                return;
+            }
+
+            if (resultado === 'SOSPECHOSO' || resultado === 'NO_CONFORME') {
+                const codigo = defectoCodigo?.value.trim() || '';
+                const descripcion = defectoDescripcion?.value.trim() || '';
+                const sospechosa = Number(cantidadSospechosa?.value || '0');
+                const noRecuperable = Number(cantidadNoRecuperable?.value || '0');
+                const afectada = sospechosa + noRecuperable;
+                const tratamiento = Array.from(opcionesTratamiento)
+                    .find(function (opcion) { return opcion.checked; })?.value || '';
+
+                if (!codigo && !descripcion) {
+                    event.preventDefault();
+                    defectoCodigo?.focus();
+                    window.alert('Selecciona o describe el defecto detectado.');
+                    return;
+                }
+
+                if (afectada <= 0 || afectada > maxProduccion) {
+                    event.preventDefault();
+                    cantidadSospechosa?.focus();
+                    window.alert('La cantidad afectada debe ser mayor a cero y no puede superar lo producido.');
+                    return;
+                }
+
+                if (!tratamiento) {
+                    event.preventDefault();
+                    window.alert('Selecciona el tratamiento principal: selección o retrabajo.');
+                    return;
+                }
+
+                if (tratamiento === 'RETRABAJO' && !responsable?.value) {
+                    event.preventDefault();
+                    responsable?.focus();
+                    window.alert('Selecciona al responsable del retrabajo.');
+                    return;
+                }
+
+                if (resultado === 'NO_CONFORME' && !observaciones?.value.trim()) {
+                    event.preventDefault();
+                    observaciones?.focus();
+                    window.alert('Describe el hallazgo antes de guardar un resultado no conforme.');
+                }
+            }
+        });
+
+        actualizarResultado();
+    });
+</script>

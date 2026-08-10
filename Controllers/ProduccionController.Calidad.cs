@@ -38,7 +38,7 @@ namespace ERP.NSQuell.Controllers
             public string? OperadorAuxiliarNombre { get; set; }
         }
 
-       
+
         private async Task<OrigenSolicitudCalidad?> ObtenerOrigenSolicitudCalidadAsync(
             int checklistArranqueId,
             int ejecucionProduccionId,
@@ -328,86 +328,185 @@ ORDER BY ci.InspeccionID DESC;";
         }
 
         private async Task MarcarCalidadEnMonitoreoAsync(
-            int ejecucionProduccionId,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+     int ejecucionProduccionId,
+     int usuarioId,
+     SqlConnection cn,
+     SqlTransaction tx)
         {
             const string sql = @"
 DECLARE @InspeccionID INT;
-DECLARE @Estado VARCHAR(50);
+DECLARE @Estado NVARCHAR(50);
+DECLARE @Liberado BIT;
+DECLARE @RequiereReliberacion BIT;
+DECLARE @ConfiguracionInvalidada BIT;
 DECLARE @FechaInicioProgramada DATETIME2(0);
 DECLARE @FechaFinProgramada DATETIME2(0);
-DECLARE @Ahora DATETIME2(0) = SYSDATETIME();
-DECLARE @Horas INT;
+DECLARE @Ahora DATETIME2(0)=SYSDATETIME();
+DECLARE @NumeroHoraInicial INT;
+DECLARE @CantidadHoras INT;
+DECLARE @EsReinicio BIT=0;
 
 SELECT TOP (1)
-    @InspeccionID = ci.InspeccionID,
-    @Estado = ci.Estado,
-    @FechaInicioProgramada = ci.FechaInicioProgramada,
-    @FechaFinProgramada = ci.FechaFinProgramada
-FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK, HOLDLOCK)
-WHERE ci.EjecucionProduccionID = @EjecucionProduccionID
+    @InspeccionID=ci.InspeccionID,
+    @Estado=UPPER(LTRIM(RTRIM(ISNULL(ci.Estado,N'')))),
+    @Liberado=ISNULL(ci.Liberado,0),
+    @RequiereReliberacion=ISNULL(ci.RequiereReliberacion,0),
+    @ConfiguracionInvalidada=ISNULL(ci.ConfiguracionInvalidada,0),
+    @FechaInicioProgramada=ci.FechaInicioProgramada,
+    @FechaFinProgramada=ci.FechaFinProgramada
+FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK,HOLDLOCK)
+WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
+  AND ci.Estado<>N'CERRADA'
 ORDER BY ci.InspeccionID DESC;
 
 IF @InspeccionID IS NULL
-    THROW 51040, 'No existe una inspeccion de Calidad relacionada con la ejecucion.', 1;
+BEGIN
+    THROW 51040,
+        'No existe una inspeccion activa de Calidad relacionada con la ejecucion.',
+        1;
+END;
 
-IF @Estado NOT IN ('PRODUCCION_LIBERADA', 'MONITOREO_ACTIVO')
-    THROW 51041, 'Calidad aun no ha liberado la produccion para iniciar el monitoreo horario.', 1;
+IF @ConfiguracionInvalidada=1
+BEGIN
+    THROW 51041,
+        'La configuracion de Calidad fue invalidada y no permite iniciar monitoreo.',
+        1;
+END;
 
-SET @Horas =
+IF @RequiereReliberacion=1
+BEGIN
+    THROW 51042,
+        'La reliberacion de Calidad continua pendiente.',
+        1;
+END;
+
+IF ISNULL(@Liberado,0)=0
+BEGIN
+    THROW 51043,
+        'Calidad aun no ha liberado la produccion.',
+        1;
+END;
+
+IF @Estado NOT IN
+(
+    N'PRODUCCION_LIBERADA',
+    N'MONITOREO_ACTIVO'
+)
+BEGIN
+    THROW 51044,
+        'El estado de Calidad no permite iniciar el monitoreo horario.',
+        1;
+END;
+
+-- Si ya está en monitoreo, la acción fue ejecutada previamente.
+-- No se deben crear nuevamente los mismos periodos.
+IF @Estado=N'MONITOREO_ACTIVO'
+BEGIN
+    RETURN;
+END;
+
+SELECT
+    @NumeroHoraInicial=
+        ISNULL(MAX(m.NumeroHora),0)+1
+FROM dbo.Calidad_MonitoreosProceso m WITH (UPDLOCK,HOLDLOCK)
+WHERE m.InspeccionID=@InspeccionID
+  AND m.Activo=1;
+
+IF @NumeroHoraInicial>1
+    SET @EsReinicio=1;
+
+-- Generar las horas restantes conforme a la programación.
+-- Cuando la fecha programada ya venció, se generan nueve periodos
+-- para continuar el seguimiento de una producción atrasada.
+SET @CantidadHoras=
     CASE
-        WHEN @FechaInicioProgramada IS NOT NULL
-         AND @FechaFinProgramada IS NOT NULL
-         AND @FechaFinProgramada > @FechaInicioProgramada
-            THEN CONVERT(INT, CEILING(DATEDIFF(MINUTE, @FechaInicioProgramada, @FechaFinProgramada) / 60.0))
+        WHEN @FechaFinProgramada IS NOT NULL
+         AND @FechaFinProgramada>@Ahora
+            THEN CONVERT
+            (
+                INT,
+                CEILING
+                (
+                    DATEDIFF
+                    (
+                        MINUTE,
+                        @Ahora,
+                        @FechaFinProgramada
+                    )/60.0
+                )
+            )
         ELSE 9
     END;
 
-IF @Horas < 1 SET @Horas = 1;
-IF @Horas > 9 SET @Horas = 9;
+IF @CantidadHoras<1
+    SET @CantidadHoras=1;
 
-IF @Estado = 'PRODUCCION_LIBERADA'
+-- Límite de seguridad para evitar una generación accidental excesiva.
+IF @CantidadHoras>500
+    SET @CantidadHoras=500;
+
+UPDATE dbo.Calidad_Inspecciones
+SET
+    Estado=N'MONITOREO_ACTIVO',
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE InspeccionID=@InspeccionID
+  AND Estado=N'PRODUCCION_LIBERADA'
+  AND ISNULL(Liberado,0)=1
+  AND ISNULL(RequiereReliberacion,0)=0
+  AND ISNULL(ConfiguracionInvalidada,0)=0;
+
+IF @@ROWCOUNT<>1
 BEGIN
-    UPDATE dbo.Calidad_Inspecciones
-    SET
-        Estado = 'MONITOREO_ACTIVO',
-        UsuarioModificacionID = @UsuarioID,
-        FechaModificacion = @Ahora
-    WHERE InspeccionID = @InspeccionID;
-
-    INSERT INTO dbo.Calidad_InspeccionHistorial
-    (
-        InspeccionID,
-        Movimiento,
-        EstadoAnterior,
-        EstadoNuevo,
-        ResultadoCalidad,
-        Etiqueta,
-        Comentario,
-        UsuarioID,
-        FechaMovimiento
-    )
-    VALUES
-    (
-        @InspeccionID,
-        'INICIO_PRODUCCION_SERIE',
-        'PRODUCCION_LIBERADA',
-        'MONITOREO_ACTIVO',
-        'VERDE',
-        'VERDE',
-        N'Produccion inicio la serie. Se programaron revisiones de Calidad cada hora.',
-        @UsuarioID,
-        @Ahora
-    );
+    THROW 51045,
+        'La inspeccion de Calidad cambio de estado antes de iniciar el monitoreo.',
+        1;
 END;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    CASE
+        WHEN @EsReinicio=1
+            THEN N'REINICIO_PRODUCCION_SERIE'
+        ELSE N'INICIO_PRODUCCION_SERIE'
+    END,
+    N'PRODUCCION_LIBERADA',
+    N'MONITOREO_ACTIVO',
+    N'VERDE',
+    N'VERDE',
+    CASE
+        WHEN @EsReinicio=1
+            THEN
+                N'Produccion reinicio la serie despues de una reliberacion autorizada. Se genero un nuevo ciclo de monitoreos horarios.'
+        ELSE
+            N'Produccion inicio la serie. Se generaron los monitoreos horarios de Calidad.'
+    END,
+    @UsuarioID,
+    @Ahora
+);
 
 ;WITH Numeros AS
 (
-    SELECT NumeroHora
-    FROM (VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9)) n(NumeroHora)
-    WHERE NumeroHora <= @Horas
+    SELECT 0 AS Consecutivo
+
+    UNION ALL
+
+    SELECT Consecutivo+1
+    FROM Numeros
+    WHERE Consecutivo+1<@CantidadHoras
 )
 INSERT INTO dbo.Calidad_MonitoreosProceso
 (
@@ -429,11 +528,16 @@ INSERT INTO dbo.Calidad_MonitoreosProceso
 SELECT
     @InspeccionID,
     @EjecucionProduccionID,
-    n.NumeroHora,
-    DATEADD(HOUR, n.NumeroHora, @Ahora),
+    @NumeroHoraInicial+n.Consecutivo,
+    DATEADD
+    (
+        HOUR,
+        n.Consecutivo+1,
+        @Ahora
+    ),
     0,
     0,
-    'PENDIENTE',
+    N'PENDIENTE',
     0,
     0,
     0,
@@ -445,62 +549,379 @@ FROM Numeros n
 WHERE NOT EXISTS
 (
     SELECT 1
-    FROM dbo.Calidad_MonitoreosProceso m
-    WHERE m.InspeccionID = @InspeccionID
-      AND m.NumeroHora = n.NumeroHora
-      AND m.Activo = 1
+    FROM dbo.Calidad_MonitoreosProceso existente
+    WHERE existente.InspeccionID=@InspeccionID
+      AND existente.NumeroHora=
+          @NumeroHoraInicial+n.Consecutivo
+      AND existente.Activo=1
+)
+OPTION (MAXRECURSION 500);";
+
+            await using var cmd =
+                new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
+                usuarioId;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+        private static async Task RegistrarHistorialEnvioCalidadAsync(
+    int inspeccionId,
+    string? estadoAnterior,
+    string estadoNuevo,
+    string comentario,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            const string sql = @"
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    N'RECIBIDO_DESDE_PRODUCCION',
+    @EstadoAnterior,
+    @EstadoNuevo,
+    NULL,
+    NULL,
+    @Comentario,
+    @UsuarioID,
+    GETDATE()
 );";
 
-            await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await using var cmd =
+                new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add(
+                "@InspeccionID",
+                SqlDbType.Int).Value =
+                inspeccionId;
+
+            cmd.Parameters.Add(
+                "@EstadoAnterior",
+                SqlDbType.NVarChar,
+                50).Value =
+                string.IsNullOrWhiteSpace(estadoAnterior)
+                    ? DBNull.Value
+                    : estadoAnterior.Trim();
+
+            cmd.Parameters.Add(
+                "@EstadoNuevo",
+                SqlDbType.NVarChar,
+                50).Value =
+                estadoNuevo;
+
+            cmd.Parameters.Add(
+                "@Comentario",
+                SqlDbType.NVarChar,
+                1000).Value =
+                comentario;
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
+                usuarioId;
+
             await cmd.ExecuteNonQueryAsync();
         }
 
-        private async Task VincularRegistroHoraConMonitoreoAsync(
-            ProduccionEjecucionVm ejecucion,
-            ProduccionRegistroHoraPostVm vm,
-            TimeSpan horaInicio,
-            TimeSpan horaFin,
-            int registroHoraId,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task VincularRegistroHoraConMonitoreoAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int registroHoraId, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
+            if (ejecucion == null) throw new ArgumentNullException(nameof(ejecucion), "No se recibió la ejecución de producción.");
+            if (vm == null) throw new ArgumentNullException(nameof(vm), "No se recibió la captura horaria.");
+            if (ejecucion.EjecucionProduccionID <= 0) throw new InvalidOperationException("La ejecución de producción no es válida.");
+            if (registroHoraId <= 0) throw new InvalidOperationException("El registro horario no es válido.");
+            if (usuarioId <= 0) throw new InvalidOperationException("No se pudo identificar al usuario que registró la producción.");
+
+            var fechaHoraInicio = vm.FechaProduccion.Date.Add(horaInicio);
             var fechaHoraFin = vm.FechaProduccion.Date.Add(horaFin);
+            if (fechaHoraFin <= fechaHoraInicio) fechaHoraFin = fechaHoraFin.AddDays(1);
+
             var cantidadPeriodo = vm.CantidadOK + vm.CantidadSospechosa + vm.CantidadScrap;
+            var cantidadPendienteRevision = vm.CantidadSospechosa + vm.CantidadScrap;
+            var observacionesProduccion = $"RegistroHoraID: {registroHoraId}. OK: {vm.CantidadOK}; sospechoso: {vm.CantidadSospechosa}; scrap reportado: {vm.CantidadScrap}.";
+            if (!string.IsNullOrWhiteSpace(vm.Observaciones)) observacionesProduccion += " Observaciones: " + vm.Observaciones.Trim();
+            if (observacionesProduccion.Length > 1000) observacionesProduccion = observacionesProduccion[..1000];
 
             const string sql = @"
-;WITH Candidato AS
-(
+DECLARE @InspeccionID INT;
+DECLARE @EstadoInspeccion NVARCHAR(50);
+DECLARE @MonitoreoID INT;
+DECLARE @RegistroHoraVinculado INT;
+DECLARE @DisposicionID INT;
+DECLARE @Comentario NVARCHAR(1000);
+
+SELECT TOP (1)
+    @InspeccionID=ci.InspeccionID,
+    @EstadoInspeccion=UPPER(LTRIM(RTRIM(ISNULL(ci.Estado,N''))))
+FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK,HOLDLOCK)
+WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
+  AND ISNULL(ci.Estado,N'')<>N'CERRADA'
+ORDER BY ci.InspeccionID DESC;
+
+IF @InspeccionID IS NULL
+    THROW 51050,'No existe una inspección activa de Calidad para la ejecución.',1;
+
+IF @EstadoInspeccion<>N'MONITOREO_ACTIVO'
+    THROW 51051,'La inspección de Calidad no se encuentra en monitoreo activo.',1;
+
+SELECT TOP (1)
+    @MonitoreoID=m.MonitoreoID,
+    @RegistroHoraVinculado=m.RegistroHoraID
+FROM dbo.Calidad_MonitoreosProceso m WITH (UPDLOCK,HOLDLOCK)
+WHERE m.InspeccionID=@InspeccionID
+  AND m.EjecucionProduccionID=@EjecucionProduccionID
+  AND m.RegistroHoraID=@RegistroHoraID
+  AND m.Activo=1
+ORDER BY m.MonitoreoID DESC;
+
+IF @MonitoreoID IS NULL
+BEGIN
     SELECT TOP (1)
-        m.MonitoreoID
-    FROM dbo.Calidad_MonitoreosProceso m WITH (UPDLOCK, READPAST)
-    WHERE m.EjecucionProduccionID = @EjecucionProduccionID
-      AND m.Activo = 1
+        @MonitoreoID=m.MonitoreoID,
+        @RegistroHoraVinculado=m.RegistroHoraID
+    FROM dbo.Calidad_MonitoreosProceso m WITH (UPDLOCK,HOLDLOCK)
+    WHERE m.InspeccionID=@InspeccionID
+      AND m.EjecucionProduccionID=@EjecucionProduccionID
+      AND m.Activo=1
       AND m.RegistroHoraID IS NULL
-    ORDER BY
-        CASE WHEN m.Resultado = 'PENDIENTE' THEN 0 ELSE 1 END,
-        ABS(DATEDIFF(MINUTE, m.FechaHoraProgramada, @FechaHoraFin)),
-        m.NumeroHora
+      AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N''))))=N'PENDIENTE'
+    ORDER BY m.NumeroHora,m.FechaHoraProgramada,m.MonitoreoID;
+END;
+
+IF @MonitoreoID IS NULL
+    THROW 51052,'No existe un monitoreo horario pendiente para vincular la captura de Producción.',1;
+
+IF @RegistroHoraVinculado IS NOT NULL AND @RegistroHoraVinculado<>@RegistroHoraID
+    THROW 51053,'El monitoreo seleccionado ya está vinculado con otra captura horaria.',1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.Calidad_MonitoreosProceso m WITH (UPDLOCK,HOLDLOCK)
+    WHERE m.RegistroHoraID=@RegistroHoraID
+      AND m.MonitoreoID<>@MonitoreoID
+      AND m.Activo=1
 )
-UPDATE m
-SET
-    m.RegistroHoraID = @RegistroHoraID,
-    m.CantidadProducidaPeriodo = @CantidadProducidaPeriodo,
-    m.UsuarioModificacionID = @UsuarioID,
-    m.FechaModificacion = SYSDATETIME()
-FROM dbo.Calidad_MonitoreosProceso m
-INNER JOIN Candidato c
-    ON c.MonitoreoID = m.MonitoreoID;";
+    THROW 51054,'La captura horaria ya está vinculada con otro monitoreo de Calidad.',1;
+
+UPDATE dbo.Calidad_MonitoreosProceso
+SET RegistroHoraID=@RegistroHoraID,
+    CantidadProducidaPeriodo=@CantidadProducidaPeriodo,
+    CantidadSospechosa=@CantidadSospechosa,
+    CantidadNoRecuperable=@CantidadScrap,
+    Observaciones=CASE
+        WHEN @ObservacionesProduccion IS NULL THEN Observaciones
+        WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @ObservacionesProduccion
+        WHEN Observaciones LIKE N'%RegistroHoraID: '+CONVERT(NVARCHAR(20),@RegistroHoraID)+N'%' THEN Observaciones
+        ELSE Observaciones+CHAR(13)+CHAR(10)+@ObservacionesProduccion
+    END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE MonitoreoID=@MonitoreoID
+  AND InspeccionID=@InspeccionID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND (RegistroHoraID IS NULL OR RegistroHoraID=@RegistroHoraID);
+
+IF @@ROWCOUNT<>1
+    THROW 51055,'El monitoreo cambió de estado mientras se vinculaba la captura horaria.',1;
+
+IF @CantidadPendienteRevision>0
+BEGIN
+    SELECT TOP (1) @DisposicionID=d.DisposicionID
+    FROM dbo.Calidad_DisposicionesMaterial d WITH (UPDLOCK,HOLDLOCK)
+    WHERE d.InspeccionID=@InspeccionID
+      AND d.MonitoreoID=@MonitoreoID
+      AND d.Activo=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(d.ResultadoFinal,N''))))=N'PENDIENTE'
+    ORDER BY d.DisposicionID DESC;
+
+    SET @Comentario=CONCAT(
+        N'Seguimiento automático generado desde Producción. RegistroHoraID: ',
+        @RegistroHoraID,
+        N'. Periodo: ',
+        CONVERT(NVARCHAR(19),@FechaHoraInicio,120),
+        N' a ',
+        CONVERT(NVARCHAR(19),@FechaHoraFin,120),
+        N'. Producción reportó ',
+        @CantidadSospechosa,
+        N' pieza(s) sospechosa(s) y ',
+        @CantidadScrap,
+        N' pieza(s) como scrap operativo. Calidad debe confirmar la disposición final.'
+    );
+
+    IF @DisposicionID IS NULL
+    BEGIN
+        INSERT INTO dbo.Calidad_DisposicionesMaterial
+        (
+            InspeccionID,
+            MonitoreoID,
+            TipoMaterial,
+            CantidadAfectada,
+            Etiqueta,
+            Disposicion,
+            Responsable,
+            FechaInicio,
+            ResultadoFinal,
+            Observaciones,
+            UsuarioCreacionID,
+            FechaCreacion,
+            Activo
+        )
+        VALUES
+        (
+            @InspeccionID,
+            @MonitoreoID,
+            CASE
+                WHEN @CantidadSospechosa>0 AND @CantidadScrap>0 THEN N'SOSPECHOSO_Y_SCRAP'
+                WHEN @CantidadScrap>0 THEN N'SCRAP_REPORTADO'
+                ELSE N'SOSPECHOSO'
+            END,
+            @CantidadPendienteRevision,
+            N'AMARILLA',
+            N'PENDIENTE_REVISION',
+            N'CALIDAD',
+            SYSDATETIME(),
+            N'PENDIENTE',
+            @Comentario,
+            @UsuarioID,
+            SYSDATETIME(),
+            1
+        );
+
+        INSERT INTO dbo.Calidad_InspeccionHistorial
+        (
+            InspeccionID,
+            Movimiento,
+            EstadoAnterior,
+            EstadoNuevo,
+            ResultadoCalidad,
+            Etiqueta,
+            Comentario,
+            UsuarioID,
+            FechaMovimiento
+        )
+        SELECT
+            @InspeccionID,
+            N'MATERIAL_REPORTADO_POR_PRODUCCION',
+            N'MONITOREO_ACTIVO',
+            N'MONITOREO_ACTIVO',
+            N'PENDIENTE_REVISION',
+            N'AMARILLA',
+            @Comentario,
+            @UsuarioID,
+            SYSDATETIME()
+        WHERE NOT EXISTS
+        (
+            SELECT 1
+            FROM dbo.Calidad_InspeccionHistorial h
+            WHERE h.InspeccionID=@InspeccionID
+              AND h.Movimiento=N'MATERIAL_REPORTADO_POR_PRODUCCION'
+              AND h.Comentario LIKE N'%RegistroHoraID: '+CONVERT(NVARCHAR(20),@RegistroHoraID)+N'%'
+        );
+    END
+    ELSE
+    BEGIN
+        UPDATE dbo.Calidad_DisposicionesMaterial
+        SET TipoMaterial=CASE
+                WHEN @CantidadSospechosa>0 AND @CantidadScrap>0 THEN N'SOSPECHOSO_Y_SCRAP'
+                WHEN @CantidadScrap>0 THEN N'SCRAP_REPORTADO'
+                ELSE N'SOSPECHOSO'
+            END,
+            CantidadAfectada=@CantidadPendienteRevision,
+            Etiqueta=N'AMARILLA',
+            Disposicion=N'PENDIENTE_REVISION',
+            Responsable=N'CALIDAD',
+            ResultadoFinal=N'PENDIENTE',
+            Observaciones=CASE
+                WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Comentario
+                WHEN Observaciones LIKE N'%RegistroHoraID: '+CONVERT(NVARCHAR(20),@RegistroHoraID)+N'%' THEN Observaciones
+                ELSE Observaciones+CHAR(13)+CHAR(10)+@Comentario
+            END,
+            UsuarioModificacionID=@UsuarioID,
+            FechaModificacion=SYSDATETIME()
+        WHERE DisposicionID=@DisposicionID
+          AND Activo=1;
+    END;
+END;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+SELECT
+    @InspeccionID,
+    N'CAPTURA_HORARIA_RECIBIDA',
+    N'MONITOREO_ACTIVO',
+    N'MONITOREO_ACTIVO',
+    CASE WHEN @CantidadPendienteRevision>0 THEN N'PENDIENTE_REVISION' ELSE NULL END,
+    CASE WHEN @CantidadPendienteRevision>0 THEN N'AMARILLA' ELSE NULL END,
+    CONCAT(
+        N'Calidad recibió la captura horaria de Producción. RegistroHoraID: ',
+        @RegistroHoraID,
+        N'. Periodo: ',
+        CONVERT(NVARCHAR(19),@FechaHoraInicio,120),
+        N' a ',
+        CONVERT(NVARCHAR(19),@FechaHoraFin,120),
+        N'. OK: ',
+        @CantidadOK,
+        N'. Sospechoso: ',
+        @CantidadSospechosa,
+        N'. Scrap reportado: ',
+        @CantidadScrap,
+        N'.'
+    ),
+    @UsuarioID,
+    SYSDATETIME()
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.Calidad_InspeccionHistorial h
+    WHERE h.InspeccionID=@InspeccionID
+      AND h.Movimiento=N'CAPTURA_HORARIA_RECIBIDA'
+      AND h.Comentario LIKE N'%RegistroHoraID: '+CONVERT(NVARCHAR(20),@RegistroHoraID)+N'%'
+);";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
             cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
-            cmd.Parameters.Add("@CantidadProducidaPeriodo", SqlDbType.Int).Value = cantidadPeriodo;
+            cmd.Parameters.Add("@FechaHoraInicio", SqlDbType.DateTime2).Value = fechaHoraInicio;
             cmd.Parameters.Add("@FechaHoraFin", SqlDbType.DateTime2).Value = fechaHoraFin;
+            cmd.Parameters.Add("@CantidadProducidaPeriodo", SqlDbType.Int).Value = cantidadPeriodo;
+            cmd.Parameters.Add("@CantidadOK", SqlDbType.Int).Value = vm.CantidadOK;
+            cmd.Parameters.Add("@CantidadSospechosa", SqlDbType.Int).Value = vm.CantidadSospechosa;
+            cmd.Parameters.Add("@CantidadScrap", SqlDbType.Int).Value = vm.CantidadScrap;
+            cmd.Parameters.Add("@CantidadPendienteRevision", SqlDbType.Int).Value = cantidadPendienteRevision;
+            cmd.Parameters.Add("@ObservacionesProduccion", SqlDbType.NVarChar, 1000).Value = observacionesProduccion;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
         }
     }
-}
+    }

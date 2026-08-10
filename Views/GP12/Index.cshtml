@@ -1,0 +1,2303 @@
+@model ERP.NSQuell.Models.GP12IndexViewModel
+@using ERP.NSQuell.Models
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "GP12";
+
+    var totalEnProceso =
+        Model.TotalRecibidos +
+        Model.TotalPendientesProgramar +
+        Model.TotalProgramados +
+        Model.TotalAsignados +
+        Model.TotalEnInspeccion +
+        Model.TotalInspeccionPausada +
+        Model.TotalInspeccionTerminada +
+        Model.TotalEnTarima +
+        Model.TotalSalidaRegistrada;
+
+    string EstatusClase(int estatusID)
+    {
+        return estatusID switch
+        {
+            1 => "st-recibido",
+            2 => "st-pendiente",
+            3 => "st-programado",
+            4 => "st-asignado",
+            5 => "st-inspeccion",
+            6 => "st-pausada",
+            7 => "st-terminada",
+            8 => "st-tarima",
+            9 => "st-salida",
+            10 => "st-cerrado",
+            90 => "st-cancelado",
+            _ => "st-default"
+        };
+    }
+
+    string OrigenClase(string? origen)
+    {
+        origen = (origen ?? "").Trim().ToUpperInvariant();
+
+        return origen switch
+        {
+            "PLANEACION" => "origen-planeacion",
+            "PRODUCCION" => "origen-produccion",
+            "CALIDAD" => "origen-calidad",
+            "MANUAL" => "origen-manual",
+            _ => "origen-default"
+        };
+    }
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1" />
+
+    <title>GP12 | ERPQuell</title>
+
+    <style>
+        :root {
+            --bg: #eef2f7;
+            --panel: #ffffff;
+
+            --navy-950: #07111f;
+            --navy-900: #0a1628;
+            --navy-850: #0e1d32;
+            --navy-800: #11243d;
+
+            --blue: #2563eb;
+            --blue-light: #60a5fa;
+            --cyan: #22d3ee;
+
+            --amber: #f59e0b;
+            --amber-light: #fbbf24;
+
+            --violet: #8b5cf6;
+            --red: #ef4444;
+
+            --text: #162033;
+            --muted: #667085;
+
+            --border: #dbe3ec;
+            --line: #edf1f5;
+
+            --shadow:
+                0 18px 45px rgba(15, 23, 42, .08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+
+            font-family:
+                "Segoe UI",
+                Inter,
+                Arial,
+                sans-serif;
+
+            color: var(--text);
+
+            background:
+                radial-gradient(
+                    circle at 8% 0%,
+                    rgba(37, 99, 235, .09),
+                    transparent 25%
+                ),
+                radial-gradient(
+                    circle at 92% 8%,
+                    rgba(245, 158, 11, .08),
+                    transparent 22%
+                ),
+                #eef2f7;
+        }
+
+        .page {
+            max-width: 1540px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* ======================================================
+           HERO GP12
+           ====================================================== */
+
+        .gp12-hero {
+            position: relative;
+            overflow: hidden;
+
+            min-height: 275px;
+
+            border-radius: 26px;
+
+            background:
+                linear-gradient(
+                    125deg,
+                    var(--navy-950) 0%,
+                    var(--navy-900) 42%,
+                    #10284b 74%,
+                    #16355e 100%
+                );
+
+            color: white;
+
+            box-shadow:
+                0 26px 60px rgba(7, 17, 31, .22);
+
+            animation:
+                heroEnter .65s ease both;
+        }
+
+        .industrial-grid {
+            position: absolute;
+            inset: 0;
+
+            opacity: .16;
+
+            background-image:
+                linear-gradient(
+                    rgba(255,255,255,.08) 1px,
+                    transparent 1px
+                ),
+                linear-gradient(
+                    90deg,
+                    rgba(255,255,255,.08) 1px,
+                    transparent 1px
+                );
+
+            background-size: 34px 34px;
+
+            mask-image:
+                linear-gradient(
+                    to right,
+                    transparent,
+                    black 20%,
+                    black 90%,
+                    transparent
+                );
+        }
+
+        .hero-orb {
+            position: absolute;
+
+            width: 430px;
+            height: 430px;
+
+            right: -120px;
+            top: -120px;
+
+            border-radius: 50%;
+
+            background:
+                radial-gradient(
+                    circle,
+                    rgba(37,99,235,.33),
+                    rgba(34,211,238,.06) 50%,
+                    transparent 72%
+                );
+
+            animation:
+                orbFloat 7s ease-in-out infinite;
+        }
+
+        .hero-ring {
+            position: absolute;
+
+            right: 70px;
+            top: 25px;
+
+            width: 245px;
+            height: 245px;
+
+            border-radius: 50%;
+
+            border:
+                1px solid rgba(96,165,250,.22);
+
+            animation:
+                rotateRing 16s linear infinite;
+        }
+
+        .hero-ring::before,
+        .hero-ring::after {
+            content: "";
+
+            position: absolute;
+            border-radius: 50%;
+        }
+
+        .hero-ring::before {
+            inset: 24px;
+
+            border:
+                1px dashed rgba(251,191,36,.28);
+        }
+
+        .hero-ring::after {
+            inset: 67px;
+
+            border:
+                2px solid rgba(34,211,238,.18);
+        }
+
+        .scanner {
+            position: absolute;
+
+            top: 0;
+            bottom: 0;
+
+            width: 130px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    rgba(96,165,250,.04),
+                    rgba(96,165,250,.15),
+                    rgba(34,211,238,.08),
+                    transparent
+                );
+
+            filter: blur(1px);
+
+            animation:
+                scan 6s linear infinite;
+
+            pointer-events: none;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 5;
+
+            min-height: 275px;
+
+            padding: 34px 38px;
+
+            display: grid;
+
+            grid-template-columns:
+                minmax(0, 1.5fr)
+                minmax(390px, .72fr);
+
+            gap: 34px;
+
+            align-items: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+
+            width: fit-content;
+
+            padding: 8px 13px;
+
+            border-radius: 999px;
+
+            border:
+                1px solid rgba(255,255,255,.12);
+
+            background:
+                rgba(255,255,255,.06);
+
+            color: #cfe2ff;
+
+            font-size: 11px;
+            font-weight: 900;
+
+            letter-spacing: .08em;
+
+            text-transform: uppercase;
+        }
+
+        .hero-badge-dot {
+            width: 7px;
+            height: 7px;
+
+            border-radius: 50%;
+
+            background: var(--amber-light);
+
+            box-shadow:
+                0 0 0 5px rgba(251,191,36,.10),
+                0 0 20px rgba(251,191,36,.60);
+
+            animation:
+                pulseDot 2s ease-in-out infinite;
+        }
+
+        .hero-title {
+            margin:
+                16px 0 0;
+
+            font-size: 38px;
+            line-height: 1;
+
+            font-weight: 950;
+
+            letter-spacing: -.04em;
+        }
+
+        .hero-title span {
+            color: var(--amber-light);
+        }
+
+        .hero-description {
+            max-width: 760px;
+
+            margin:
+                15px 0 0;
+
+            color:
+                rgba(255,255,255,.74);
+
+            line-height: 1.65;
+
+            font-size: 14px;
+        }
+
+        .hero-actions {
+            margin-top: 23px;
+
+            display: flex;
+            gap: 11px;
+
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            border: 0;
+
+            border-radius: 12px;
+
+            padding:
+                11px 17px;
+
+            cursor: pointer;
+
+            text-decoration: none;
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+
+            font-family: inherit;
+
+            font-size: 13px;
+            font-weight: 850;
+
+            transition:
+                transform .18s ease,
+                box-shadow .18s ease,
+                background .18s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-new {
+            position: relative;
+            overflow: hidden;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #f59e0b,
+                    #f97316
+                );
+
+            color: white;
+
+            box-shadow:
+                0 12px 28px
+                rgba(245,158,11,.22);
+        }
+
+        .btn-new::before {
+            content: "";
+
+            position: absolute;
+
+            width: 70px;
+            height: 160%;
+
+            top: -30%;
+
+            left: -100px;
+
+            transform:
+                rotate(20deg);
+
+            background:
+                linear-gradient(
+                    90deg,
+                    transparent,
+                    rgba(255,255,255,.35),
+                    transparent
+                );
+
+            animation:
+                buttonShine 4s ease infinite;
+        }
+
+        .btn-refresh {
+            border:
+                1px solid rgba(255,255,255,.13);
+
+            background:
+                rgba(255,255,255,.07);
+
+            color: white;
+        }
+
+        .btn-refresh:hover {
+            background:
+                rgba(255,255,255,.12);
+        }
+
+        /* ======================================================
+           HERO STATUS
+           ====================================================== */
+
+        .hero-monitor {
+            position: relative;
+
+            border-radius: 20px;
+
+            border:
+                1px solid rgba(255,255,255,.11);
+
+            background:
+                rgba(5, 13, 25, .48);
+
+            backdrop-filter: blur(8px);
+
+            padding: 20px;
+
+            box-shadow:
+                inset 0 1px 0
+                rgba(255,255,255,.06);
+        }
+
+        .monitor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            margin-bottom: 18px;
+        }
+
+        .monitor-label {
+            color:
+                rgba(255,255,255,.55);
+
+            font-size: 11px;
+            font-weight: 800;
+
+            letter-spacing: .08em;
+
+            text-transform: uppercase;
+        }
+
+        .monitor-live {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+
+            color: #bfdbfe;
+
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .monitor-live-dot {
+            width: 7px;
+            height: 7px;
+
+            border-radius: 50%;
+
+            background: var(--blue-light);
+
+            box-shadow:
+                0 0 13px
+                rgba(96,165,250,.8);
+
+            animation:
+                pulseDot 1.5s ease infinite;
+        }
+
+        .monitor-stats {
+            display: grid;
+
+            grid-template-columns:
+                repeat(3, 1fr);
+
+            gap: 10px;
+        }
+
+        .monitor-stat {
+            min-height: 90px;
+
+            border-radius: 14px;
+
+            border:
+                1px solid rgba(255,255,255,.08);
+
+            background:
+                rgba(255,255,255,.045);
+
+            padding: 14px;
+
+            transition:
+                transform .2s ease,
+                border-color .2s ease,
+                background .2s ease;
+        }
+
+        .monitor-stat:hover {
+            transform:
+                translateY(-4px);
+
+            border-color:
+                rgba(96,165,250,.30);
+
+            background:
+                rgba(255,255,255,.075);
+        }
+
+        .monitor-stat small {
+            display: block;
+
+            color:
+                rgba(255,255,255,.52);
+
+            font-size: 10px;
+
+            font-weight: 800;
+
+            text-transform: uppercase;
+
+            letter-spacing: .05em;
+        }
+
+        .monitor-stat strong {
+            display: block;
+
+            margin-top: 7px;
+
+            color: white;
+
+            font-size: 29px;
+
+            line-height: 1;
+
+            font-weight: 950;
+        }
+
+        .monitor-stat:nth-child(1) strong {
+            color: var(--amber-light);
+        }
+
+        .monitor-stat:nth-child(2) strong {
+            color: #7dd3fc;
+        }
+
+        .monitor-stat:nth-child(3) strong {
+            color: #c4b5fd;
+        }
+
+        /* ======================================================
+           FLUJO GP12
+           ====================================================== */
+
+        .flow-shell {
+            position: relative;
+
+            margin-top: 20px;
+
+            background: white;
+
+            border:
+                1px solid var(--border);
+
+            border-radius: 22px;
+
+            box-shadow: var(--shadow);
+
+            overflow: hidden;
+
+            animation:
+                contentEnter .55s
+                .08s ease both;
+        }
+
+        .flow-header {
+            padding:
+                18px 22px 12px;
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 20px;
+        }
+
+        .section-eyebrow {
+            color: var(--blue);
+
+            font-size: 10px;
+            font-weight: 900;
+
+            letter-spacing: .10em;
+
+            text-transform: uppercase;
+        }
+
+        .section-title {
+            margin: 4px 0 0;
+
+            font-size: 17px;
+            font-weight: 900;
+        }
+
+        .flow-note {
+            color: var(--muted);
+
+            font-size: 12px;
+        }
+
+        .flow-track {
+            position: relative;
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(6, 1fr);
+
+            padding:
+                16px 24px 23px;
+
+            gap: 7px;
+        }
+
+        .flow-track::before {
+            content: "";
+
+            position: absolute;
+
+            top: 37px;
+            left: 7%;
+            right: 7%;
+
+            height: 2px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #60a5fa,
+                    #2563eb,
+                    #8b5cf6,
+                    #f59e0b
+                );
+
+            opacity: .35;
+        }
+
+        .flow-step {
+            position: relative;
+            z-index: 2;
+
+            text-align: center;
+
+            transition:
+                transform .2s ease;
+        }
+
+        .flow-step:hover {
+            transform:
+                translateY(-4px);
+        }
+
+        .flow-node {
+            width: 42px;
+            height: 42px;
+
+            margin:
+                0 auto 9px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 50%;
+
+            background:
+                var(--navy-900);
+
+            color: white;
+
+            border:
+                4px solid white;
+
+            box-shadow:
+                0 0 0 1px var(--border),
+                0 8px 18px rgba(15,23,42,.12);
+
+            font-size: 13px;
+            font-weight: 950;
+        }
+
+        .flow-step:nth-child(1)
+        .flow-node {
+            background: #2563eb;
+        }
+
+        .flow-step:nth-child(2)
+        .flow-node {
+            background: #3b82f6;
+        }
+
+        .flow-step:nth-child(3)
+        .flow-node {
+            background: #7c3aed;
+        }
+
+        .flow-step:nth-child(4)
+        .flow-node {
+            background: #0891b2;
+        }
+
+        .flow-step:nth-child(5)
+        .flow-node {
+            background: #d97706;
+        }
+
+        .flow-step:nth-child(6)
+        .flow-node {
+            background: #334155;
+        }
+
+        .flow-step strong {
+            display: block;
+
+            font-size: 12px;
+            font-weight: 850;
+        }
+
+        .flow-step span {
+            display: block;
+
+            margin-top: 3px;
+
+            color: var(--muted);
+
+            font-size: 11px;
+        }
+
+        /* ======================================================
+           PRINCIPAL
+           ====================================================== */
+
+        .workspace {
+            margin-top: 20px;
+
+            display: grid;
+
+            grid-template-columns:
+                minmax(0, 1fr)
+                285px;
+
+            gap: 18px;
+
+            align-items: start;
+
+            animation:
+                contentEnter .55s
+                .15s ease both;
+        }
+
+        .panel {
+            background: white;
+
+            border:
+                1px solid var(--border);
+
+            border-radius: 22px;
+
+            box-shadow: var(--shadow);
+
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 19px 21px;
+
+            border-bottom:
+                1px solid var(--line);
+
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 14px;
+        }
+
+        .panel-title {
+            margin: 0;
+
+            font-size: 18px;
+            font-weight: 950;
+        }
+
+        .panel-description {
+            margin:
+                4px 0 0;
+
+            color: var(--muted);
+
+            font-size: 12px;
+        }
+
+        .results-count {
+            padding:
+                7px 10px;
+
+            border-radius: 999px;
+
+            background: #eff6ff;
+
+            color: #1d4ed8;
+
+            font-size: 11px;
+            font-weight: 850;
+        }
+
+        .panel-body {
+            padding: 19px 21px 21px;
+        }
+
+        /* ======================================================
+           FILTROS
+           ====================================================== */
+
+        .filters {
+            display: grid;
+
+            grid-template-columns:
+                minmax(250px, 1.6fr)
+                1fr
+                1fr
+                auto;
+
+            gap: 10px;
+
+            margin-bottom: 17px;
+        }
+
+        .control {
+            width: 100%;
+
+            border:
+                1px solid #d4dde8;
+
+            border-radius: 12px;
+
+            padding:
+                11px 13px;
+
+            background: #fff;
+
+            color: #1e293b;
+
+            font: inherit;
+
+            font-size: 13px;
+
+            transition:
+                border-color .17s ease,
+                box-shadow .17s ease,
+                transform .17s ease;
+        }
+
+        .control:hover {
+            border-color: #aebed0;
+        }
+
+        .control:focus {
+            outline: none;
+
+            border-color: #3b82f6;
+
+            box-shadow:
+                0 0 0 4px
+                rgba(59,130,246,.10);
+        }
+
+        .btn-search {
+            border: 0;
+
+            border-radius: 12px;
+
+            padding:
+                0 18px;
+
+            background:
+                var(--navy-900);
+
+            color: white;
+
+            font-family: inherit;
+
+            font-weight: 850;
+
+            cursor: pointer;
+
+            transition:
+                background .2s ease,
+                transform .2s ease,
+                box-shadow .2s ease;
+        }
+
+        .btn-search:hover {
+            background: #172d4d;
+
+            transform:
+                translateY(-2px);
+
+            box-shadow:
+                0 10px 20px
+                rgba(15,23,42,.15);
+        }
+
+        /* ======================================================
+           TABLA
+           ====================================================== */
+
+        .table-wrap {
+            overflow-x: auto;
+
+            border:
+                1px solid var(--line);
+
+            border-radius: 16px;
+        }
+
+        table {
+            width: 100%;
+
+            min-width: 1120px;
+
+            border-collapse: collapse;
+        }
+
+        th {
+            padding:
+                13px 14px;
+
+            background: #f8fafc;
+
+            color: #64748b;
+
+            border-bottom:
+                1px solid var(--line);
+
+            text-align: left;
+
+            font-size: 10px;
+
+            font-weight: 900;
+
+            text-transform: uppercase;
+
+            letter-spacing: .065em;
+        }
+
+        td {
+            padding:
+                13px 14px;
+
+            border-bottom:
+                1px solid #f0f3f6;
+
+            vertical-align: middle;
+
+            font-size: 13px;
+        }
+
+        tbody tr {
+            position: relative;
+
+            transition:
+                background .16s ease,
+                transform .16s ease;
+        }
+
+        tbody tr:hover {
+            background: #f9fbff;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .request-id {
+            color: var(--blue);
+
+            font-weight: 950;
+        }
+
+        .part {
+            font-weight: 900;
+        }
+
+        .description {
+            margin-top: 3px;
+
+            color: var(--muted);
+
+            font-size: 11px;
+        }
+
+        .number {
+            font-weight: 850;
+
+            font-variant-numeric:
+                tabular-nums;
+        }
+
+        .pill {
+            display: inline-flex;
+
+            align-items: center;
+
+            border-radius: 999px;
+
+            padding:
+                6px 10px;
+
+            font-size: 10px;
+
+            font-weight: 850;
+
+            white-space: nowrap;
+        }
+
+        .origen-planeacion {
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .origen-produccion {
+            background: #fff7ed;
+            color: #c2410c;
+        }
+
+        .origen-calidad {
+            background: #f5f3ff;
+            color: #6d28d9;
+        }
+
+        .origen-manual {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .origen-default {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .st-recibido {
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .st-pendiente {
+            background: #fffbeb;
+            color: #b45309;
+        }
+
+        .st-programado {
+            background: #eef2ff;
+            color: #4338ca;
+        }
+
+        .st-asignado {
+            background: #f5f3ff;
+            color: #6d28d9;
+        }
+
+        .st-inspeccion {
+            background: #ecfeff;
+            color: #0e7490;
+        }
+
+        .st-pausada {
+            background: #fef2f2;
+            color: #b91c1c;
+        }
+
+        .st-terminada {
+            background: #eff6ff;
+            color: #1e40af;
+        }
+
+        .st-tarima {
+            background: #fff7ed;
+            color: #c2410c;
+        }
+
+        .st-salida {
+            background: #f0f9ff;
+            color: #0369a1;
+        }
+
+        .st-cerrado {
+            background: #f1f5f9;
+            color: #334155;
+        }
+
+        .st-cancelado {
+            background: #fef2f2;
+            color: #b91c1c;
+        }
+
+        .st-default {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .btn-open {
+            display: inline-flex;
+
+            align-items: center;
+            justify-content: center;
+
+            min-width: 70px;
+
+            border-radius: 10px;
+
+            padding:
+                8px 12px;
+
+            background:
+                var(--navy-900);
+
+            color: white;
+
+            text-decoration: none;
+
+            font-size: 11px;
+
+            font-weight: 850;
+
+            transition:
+                background .17s ease,
+                transform .17s ease,
+                box-shadow .17s ease;
+        }
+
+        .btn-open:hover {
+            background: var(--blue);
+
+            transform:
+                translateX(2px);
+
+            box-shadow:
+                0 8px 17px
+                rgba(37,99,235,.18);
+        }
+
+        .empty {
+            padding:
+                70px 25px;
+
+            text-align: center;
+
+            color: var(--muted);
+        }
+
+        .empty-icon {
+            width: 58px;
+            height: 58px;
+
+            margin:
+                0 auto 13px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 18px;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    #eff6ff,
+                    #eef2ff
+                );
+
+            color: #2563eb;
+
+            font-size: 23px;
+
+            animation:
+                idleFloat 3s ease-in-out infinite;
+        }
+
+        .empty strong {
+            display: block;
+
+            color: #334155;
+
+            font-size: 15px;
+
+            margin-bottom: 5px;
+        }
+
+        /* ======================================================
+           LATERAL
+           ====================================================== */
+
+        .side-panel {
+            position: sticky;
+            top: 18px;
+        }
+
+        .side-section {
+            padding:
+                19px;
+
+            border-bottom:
+                1px solid var(--line);
+        }
+
+        .side-section:last-child {
+            border-bottom: 0;
+        }
+
+        .side-eyebrow {
+            color: var(--amber);
+
+            font-size: 10px;
+            font-weight: 900;
+
+            letter-spacing: .08em;
+
+            text-transform: uppercase;
+        }
+
+        .side-title {
+            margin:
+                4px 0 14px;
+
+            font-size: 15px;
+            font-weight: 900;
+        }
+
+        .focus-item {
+            position: relative;
+
+            padding:
+                11px 11px 11px 17px;
+
+            margin-top: 9px;
+
+            border-radius: 12px;
+
+            background: #f8fafc;
+
+            transition:
+                transform .17s ease,
+                background .17s ease;
+        }
+
+        .focus-item:hover {
+            transform:
+                translateX(4px);
+
+            background: #f1f5f9;
+        }
+
+        .focus-item::before {
+            content: "";
+
+            position: absolute;
+
+            left: 0;
+            top: 11px;
+            bottom: 11px;
+
+            width: 3px;
+
+            border-radius: 3px;
+
+            background:
+                var(--focus-color);
+        }
+
+        .focus-item strong {
+            display: block;
+
+            font-size: 12px;
+        }
+
+        .focus-item span {
+            display: block;
+
+            margin-top: 3px;
+
+            color: var(--muted);
+
+            font-size: 11px;
+            line-height: 1.45;
+        }
+
+        .formula-box {
+            border-radius: 14px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #0a1628,
+                    #112a4a
+                );
+
+            color: white;
+
+            padding: 15px;
+
+            overflow: hidden;
+
+            position: relative;
+        }
+
+        .formula-box::after {
+            content: "";
+
+            position: absolute;
+
+            width: 80px;
+            height: 80px;
+
+            right: -25px;
+            bottom: -30px;
+
+            border-radius: 50%;
+
+            background:
+                rgba(245,158,11,.16);
+        }
+
+        .formula-box small {
+            color:
+                rgba(255,255,255,.55);
+
+            font-size: 10px;
+
+            text-transform: uppercase;
+
+            letter-spacing: .07em;
+
+            font-weight: 850;
+        }
+
+        .formula-box strong {
+            display: block;
+
+            margin-top: 6px;
+
+            color: var(--amber-light);
+
+            font-size: 14px;
+        }
+
+        /* ======================================================
+           ALERTS
+           ====================================================== */
+
+        .alert {
+            margin-bottom: 15px;
+
+            padding:
+                13px 15px;
+
+            border-radius: 13px;
+
+            font-size: 13px;
+
+            font-weight: 700;
+
+            animation:
+                alertEnter .35s ease both;
+        }
+
+        .alert-success {
+            color: #1e40af;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+        }
+
+        .alert-error {
+            color: #b91c1c;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+
+        /* ======================================================
+           ANIMACIONES
+           ====================================================== */
+
+        @@keyframes heroEnter {
+            from {
+                opacity: 0;
+                transform:
+                    translateY(-12px)
+                    scale(.99);
+            }
+
+            to {
+                opacity: 1;
+                transform:
+                    translateY(0)
+                    scale(1);
+            }
+        }
+
+        @@keyframes contentEnter {
+            from {
+                opacity: 0;
+                transform:
+                    translateY(14px);
+            }
+
+            to {
+                opacity: 1;
+                transform:
+                    translateY(0);
+            }
+        }
+
+        @@keyframes scan {
+            0% {
+                left: -180px;
+            }
+
+            100% {
+                left: calc(100% + 180px);
+            }
+        }
+
+        @@keyframes orbFloat {
+            0%, 100% {
+                transform:
+                    translate(0,0)
+                    scale(1);
+            }
+
+            50% {
+                transform:
+                    translate(-18px,15px)
+                    scale(1.06);
+            }
+        }
+
+        @@keyframes rotateRing {
+            from {
+                transform:
+                    rotate(0deg);
+            }
+
+            to {
+                transform:
+                    rotate(360deg);
+            }
+        }
+
+        @@keyframes pulseDot {
+            0%, 100% {
+                opacity: .65;
+                transform:
+                    scale(.85);
+            }
+
+            50% {
+                opacity: 1;
+                transform:
+                    scale(1.15);
+            }
+        }
+
+        @@keyframes buttonShine {
+            0% {
+                left: -100px;
+            }
+
+            35%,
+            100% {
+                left: 150%;
+            }
+        }
+
+        @@keyframes idleFloat {
+            0%,100% {
+                transform:
+                    translateY(0);
+            }
+
+            50% {
+                transform:
+                    translateY(-6px);
+            }
+        }
+
+        @@keyframes alertEnter {
+            from {
+                opacity: 0;
+                transform:
+                    translateY(-5px);
+            }
+
+            to {
+                opacity: 1;
+                transform:
+                    translateY(0);
+            }
+        }
+
+        /* ======================================================
+           RESPONSIVE
+           ====================================================== */
+
+        @@media (max-width: 1200px) {
+            .hero-content {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-monitor {
+                max-width: 650px;
+            }
+
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+
+            .side-panel {
+                position: static;
+            }
+        }
+
+        @@media (max-width: 950px) {
+            .flow-track {
+                grid-template-columns:
+                    repeat(3, 1fr);
+
+                row-gap: 22px;
+            }
+
+            .flow-track::before {
+                display: none;
+            }
+
+            .filters {
+                grid-template-columns:
+                    1fr 1fr;
+            }
+
+            .btn-search {
+                min-height: 42px;
+            }
+        }
+
+        @@media (max-width: 650px) {
+            .page {
+                padding: 13px;
+            }
+
+            .hero-content {
+                padding:
+                    26px 20px;
+            }
+
+            .hero-title {
+                font-size: 30px;
+            }
+
+            .monitor-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .flow-track {
+                grid-template-columns:
+                    repeat(2, 1fr);
+            }
+
+            .filters {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="page">
+
+    @if (TempData["Mensaje"] != null)
+    {
+        <div class="alert alert-success">
+            @TempData["Mensaje"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-error">
+            @TempData["Error"]
+        </div>
+    }
+
+    <!-- ======================================================
+         HERO
+         ====================================================== -->
+
+    <section class="gp12-hero">
+
+        <div class="industrial-grid"></div>
+
+        <div class="hero-orb"></div>
+
+        <div class="hero-ring"></div>
+
+        <div class="scanner"></div>
+
+        <div class="hero-content">
+
+            <div>
+
+                <div class="hero-badge">
+                    <span class="hero-badge-dot"></span>
+                    Departamento GP12
+                </div>
+
+                <h1 class="hero-title">
+                    Centro de
+                    <span>Contención</span>
+                    y Retrabajo
+                </h1>
+
+                <p class="hero-description">
+                    Control integral del material recibido por GP12:
+                    programación de carga, asignación de personal,
+                    inspección, retrabajo, consolidación y trazabilidad
+                    hasta su salida.
+                </p>
+
+                <div class="hero-actions">
+
+                    <a asp-controller="GP12"
+                       asp-action="Crear"
+                       class="btn btn-new">
+                        + Nueva solicitud
+                    </a>
+
+                    <a asp-controller="GP12"
+                       asp-action="Index"
+                       class="btn btn-refresh">
+                        ↻ Actualizar operación
+                    </a>
+
+                </div>
+
+            </div>
+
+            <div class="hero-monitor">
+
+                <div class="monitor-header">
+
+                    <span class="monitor-label">
+                        Pulso operativo
+                    </span>
+
+                    <span class="monitor-live">
+                        <span class="monitor-live-dot"></span>
+                        Sistema activo
+                    </span>
+
+                </div>
+
+                <div class="monitor-stats">
+
+                    <div class="monitor-stat">
+                        <small>
+                            Pendientes
+                        </small>
+
+                        <strong>
+                            @(Model.TotalRecibidos
+                            + Model.TotalPendientesProgramar
+                            + Model.TotalProgramados
+                            + Model.TotalAsignados)
+                        </strong>
+                    </div>
+
+                    <div class="monitor-stat">
+                        <small>
+                            En ejecución
+                        </small>
+
+                        <strong>
+                            @(Model.TotalEnInspeccion
+                            + Model.TotalInspeccionPausada
+                            + Model.TotalInspeccionTerminada
+                            + Model.TotalEnTarima
+                            + Model.TotalSalidaRegistrada)
+                        </strong>
+                    </div>
+
+                    <div class="monitor-stat">
+                        <small>
+                            Cerrados
+                        </small>
+
+                        <strong>
+                            @Model.TotalCerrados
+                        </strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- ======================================================
+         FLUJO VISUAL
+         ====================================================== -->
+
+    <section class="flow-shell">
+
+        <div class="flow-header">
+
+            <div>
+                <div class="section-eyebrow">
+                    Flujo GP12
+                </div>
+
+                <h2 class="section-title">
+                    Recorrido operativo
+                </h2>
+            </div>
+
+            <div class="flow-note">
+                @totalEnProceso solicitud(es) actualmente en proceso
+            </div>
+
+        </div>
+
+        <div class="flow-track">
+
+            <div class="flow-step">
+                <div class="flow-node">
+                    @Model.TotalRecibidos
+                </div>
+
+                <strong>
+                    Recepción
+                </strong>
+
+                <span>
+                    Entrada de material
+                </span>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-node">
+                    @(Model.TotalPendientesProgramar
+                    + Model.TotalProgramados)
+                </div>
+
+                <strong>
+                    Programación
+                </strong>
+
+                <span>
+                    Carga y prioridad
+                </span>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-node">
+                    @Model.TotalAsignados
+                </div>
+
+                <strong>
+                    Asignación
+                </strong>
+
+                <span>
+                    Personal GP12
+                </span>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-node">
+                    @(Model.TotalEnInspeccion
+                    + Model.TotalInspeccionPausada
+                    + Model.TotalInspeccionTerminada)
+                </div>
+
+                <strong>
+                    Inspección
+                </strong>
+
+                <span>
+                    Revisión / retrabajo
+                </span>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-node">
+                    @Model.TotalEnTarima
+                </div>
+
+                <strong>
+                    Consolidación
+                </strong>
+
+                <span>
+                    Cajas y tarimas
+                </span>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-node">
+                    @Model.TotalSalidaRegistrada
+                </div>
+
+                <strong>
+                    Salida
+                </strong>
+
+                <span>
+                    Cierre operativo
+                </span>
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- ======================================================
+         WORKSPACE
+         ====================================================== -->
+
+    <section class="workspace">
+
+        <!-- BANDEJA -->
+
+        <main class="panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <h2 class="panel-title">
+                        Bandeja de trabajo GP12
+                    </h2>
+
+                    <p class="panel-description">
+                        Consulta, priorización y seguimiento de material en contención.
+                    </p>
+
+                </div>
+
+                <span class="results-count">
+                    @Model.TotalMostrados resultado(s)
+                </span>
+
+            </div>
+
+            <div class="panel-body">
+
+                <form asp-controller="GP12"
+                      asp-action="Index"
+                      method="get"
+                      class="filters">
+
+                    <input type="text"
+                           class="control"
+                           name="busqueda"
+                           value="@Model.Busqueda"
+                           placeholder="OF, parte, cliente, material o motivo..." />
+
+                    <select asp-for="EstatusID"
+                            name="estatusID"
+                            class="control">
+
+                        <option value="">
+                            Todos los estados
+                        </option>
+
+                        <option value="1">
+                            Recibido
+                        </option>
+
+                        <option value="2">
+                            Pendiente de programar
+                        </option>
+
+                        <option value="3">
+                            Programado
+                        </option>
+
+                        <option value="4">
+                            Asignado
+                        </option>
+
+                        <option value="5">
+                            En inspección
+                        </option>
+
+                        <option value="6">
+                            Inspección pausada
+                        </option>
+
+                        <option value="7">
+                            Inspección terminada
+                        </option>
+
+                        <option value="8">
+                            En tarima
+                        </option>
+
+                        <option value="9">
+                            Salida registrada
+                        </option>
+
+                        <option value="10">
+                            Cerrado
+                        </option>
+
+                        <option value="90">
+                            Cancelado
+                        </option>
+
+                    </select>
+
+                    <select asp-for="Origen"
+                            name="origen"
+                            class="control">
+
+                        <option value="">
+                            Todos los orígenes
+                        </option>
+
+                        <option value="PLANEACION">
+                            Planeación
+                        </option>
+
+                        <option value="PRODUCCION">
+                            Producción
+                        </option>
+
+                        <option value="CALIDAD">
+                            Calidad
+                        </option>
+
+                        <option value="MANUAL">
+                            Manual
+                        </option>
+
+                    </select>
+
+                    <button type="submit"
+                            class="btn-search">
+                        Buscar
+                    </button>
+
+                </form>
+
+                @if (
+                    Model.Solicitudes == null ||
+                    Model.Solicitudes.Count == 0
+                )
+                {
+                    <div class="empty">
+
+                        <div class="empty-icon">
+                            ◈
+                        </div>
+
+                        <strong>
+                            Bandeja sin solicitudes
+                        </strong>
+
+                        No existen registros GP12
+                        que coincidan con los filtros actuales.
+
+                    </div>
+                }
+                else
+                {
+                    <div class="table-wrap">
+
+                        <table>
+
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Origen</th>
+                                    <th>OF</th>
+                                    <th>Parte</th>
+                                    <th>Cliente</th>
+                                    <th>Solicitado</th>
+                                    <th>Recibido</th>
+                                    <th>Procesado</th>
+                                    <th>Estado</th>
+                                    <th>Fecha</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                            @foreach (
+                                var item
+                                in Model.Solicitudes
+                            )
+                            {
+                                <tr>
+
+                                    <td>
+                                        <span class="request-id">
+                                            #@item.SolicitudGP12ID
+                                        </span>
+                                    </td>
+
+                                    <td>
+
+                                        <span class="
+                                            pill
+                                            @OrigenClase(item.Origen)">
+
+                                            @GP12Origen.Nombre(
+                                                item.Origen)
+
+                                        </span>
+
+                                    </td>
+
+                                    <td>
+
+                                        @(string.IsNullOrWhiteSpace(
+                                            item.OrdenFabricacion)
+
+                                            ? "-"
+
+                                            : item.OrdenFabricacion)
+
+                                    </td>
+
+                                    <td>
+
+                                        <div class="part">
+
+                                            @(string.IsNullOrWhiteSpace(
+                                                item.NumeroParte)
+
+                                                ? "-"
+
+                                                : item.NumeroParte)
+
+                                        </div>
+
+                                        @if (
+                                            !string.IsNullOrWhiteSpace(
+                                                item.DescripcionParte)
+                                        )
+                                        {
+                                            <div class="description">
+                                                @item.DescripcionParte
+                                            </div>
+                                        }
+
+                                    </td>
+
+                                    <td>
+
+                                        @(string.IsNullOrWhiteSpace(
+                                            item.ClienteNombre)
+
+                                            ? "-"
+
+                                            : item.ClienteNombre)
+
+                                    </td>
+
+                                    <td class="number">
+                                        @item.CantidadSolicitada
+                                            .ToString("N4")
+                                    </td>
+
+                                    <td class="number">
+                                        @item.CantidadRecibida
+                                            .ToString("N4")
+                                    </td>
+
+                                    <td class="number">
+                                        @item.CantidadProcesada
+                                            .ToString("N4")
+                                    </td>
+
+                                    <td>
+
+                                        <span class="
+                                            pill
+                                            @EstatusClase(
+                                                item.EstatusID)">
+
+                                            @item.EstatusNombre
+
+                                        </span>
+
+                                    </td>
+
+                                    <td>
+
+                                        @item.FechaSolicitud
+                                            .ToString(
+                                                "dd/MM/yyyy HH:mm")
+
+                                    </td>
+
+                                    <td>
+
+                                        <a asp-controller="GP12"
+                                           asp-action="Detalle"
+                                           asp-route-id="
+                                               @item.SolicitudGP12ID"
+                                           class="btn-open">
+
+                                            Abrir →
+
+                                        </a>
+
+                                    </td>
+
+                                </tr>
+                            }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                }
+
+            </div>
+
+        </main>
+
+        <!-- LATERAL -->
+
+        <aside class="panel side-panel">
+
+            <div class="side-section">
+
+                <div class="side-eyebrow">
+                    Control operativo
+                </div>
+
+                <h3 class="side-title">
+                    Puntos de atención
+                </h3>
+
+                <div class="focus-item"
+                     style="--focus-color:#2563eb;">
+
+                    <strong>
+                        Recepción física
+                    </strong>
+
+                    <span>
+                        Confirmar que el material
+                        recibido coincida contra
+                        etiqueta y solicitud.
+                    </span>
+
+                </div>
+
+                <div class="focus-item"
+                     style="--focus-color:#8b5cf6;">
+
+                    <strong>
+                        Carga de trabajo
+                    </strong>
+
+                    <span>
+                        Programar y asignar solamente
+                        cantidades disponibles.
+                    </span>
+
+                </div>
+
+                <div class="focus-item"
+                     style="--focus-color:#f59e0b;">
+
+                    <strong>
+                        Contención
+                    </strong>
+
+                    <span>
+                        Próxima etapa:
+                        inspección, D1-D15
+                        y retrabajo.
+                    </span>
+
+                </div>
+
+            </div>
+
+            <div class="side-section">
+
+                <div class="formula-box">
+
+                    <small>
+                        Fase actual
+                    </small>
+
+                    <strong>
+                        Recepción → Programación →
+                        Asignación
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </aside>
+
+    </section>
+
+</div>
+
+</body>
+</html>

@@ -170,6 +170,8 @@ namespace ERP.NSQuell.Models
 
         public string? Observaciones { get; set; }
 
+
+
         public bool EstaFormada
         {
             get

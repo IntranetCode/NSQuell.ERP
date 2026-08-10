@@ -1,0 +1,575 @@
+﻿@model ERP.NSQuell.Models.ProduccionBandejaVm
+
+@{
+    Layout = null;
+
+    static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    }
+
+    static string Fecha(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    static string Num(int? value)
+    {
+        return value.HasValue ? value.Value.ToString("N0") : "-";
+    }
+
+    static string Data(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? ""
+            : value.Replace("\"", "&quot;").Replace("\r", " ").Replace("\n", " ");
+    }
+
+    var gruposMaquina = Model.ProgramasDisponibles
+        .Where(x => x.MaquinaID.HasValue)
+        .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
+        .ThenBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+        .ThenBy(x => x.ProgramaProduccionID)
+        .GroupBy(x => new
+        {
+            MaquinaID = x.MaquinaID!.Value,
+            Codigo = string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN CÓDIGO" : x.MaquinaCodigo!.Trim(),
+            Nombre = string.IsNullOrWhiteSpace(x.MaquinaNombre) ? "Sin nombre" : x.MaquinaNombre!.Trim()
+        })
+        .ToList();
+
+    var maquinaSeleccionadaId =
+        Model.MaquinaID.HasValue && Model.MaquinaID.Value > 0
+            ? Model.MaquinaID.Value
+            : gruposMaquina.FirstOrDefault()?.Key.MaquinaID;
+
+    var grupoSeleccionado = gruposMaquina.FirstOrDefault(x =>
+        maquinaSeleccionadaId.HasValue &&
+        x.Key.MaquinaID == maquinaSeleccionadaId.Value);
+
+    var programasSeleccionados =
+        grupoSeleccionado?
+            .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+            .ThenBy(x => x.ProgramaProduccionID)
+            .ToList()
+        ?? new List<ERP.NSQuell.Models.ProduccionProgramaDisponibleVm>();
+
+    var programasSinMaquina = Model.ProgramasDisponibles
+        .Where(x => !x.MaquinaID.HasValue)
+        .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+        .ThenBy(x => x.ProgramaProduccionID)
+        .ToList();
+}
+
+<style>
+    .cola-panel {
+        --cola-blue: #003b82;
+        --cola-blue-2: #0b5ed7;
+        --cola-border: #d7e2f1;
+        --cola-muted: #667085;
+        --cola-soft: #eef4ff;
+        display: grid;
+        grid-template-columns: 280px minmax(0,1fr);
+        gap: 14px;
+        align-items: start
+    }
+
+    .cola-sidebar, .cola-content {
+        border: 1px solid var(--cola-border);
+        border-radius: 18px;
+        background: #fff;
+        overflow: hidden
+    }
+
+    .cola-sidebar-head, .cola-content-head {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--cola-border);
+        background: #f8fbff
+    }
+
+    .cola-title {
+        margin: 0;
+        color: var(--cola-blue);
+        font-size: 1rem;
+        font-weight: 950
+    }
+
+    .cola-sub {
+        margin-top: 3px;
+        color: var(--cola-muted);
+        font-size: .78rem;
+        font-weight: 650
+    }
+
+    .cola-machine-list {
+        display: grid;
+        gap: 6px;
+        padding: 10px;
+        max-height: 66vh;
+        overflow-y: auto
+    }
+
+    .cola-machine-btn {
+        width: 100%;
+        border: 1px solid transparent;
+        border-radius: 13px;
+        background: #fff;
+        padding: 10px 11px;
+        display: grid;
+        grid-template-columns: minmax(0,1fr) auto;
+        gap: 8px;
+        align-items: center;
+        text-align: left;
+        color: #344054;
+        transition: .15s ease
+    }
+
+        .cola-machine-btn:hover {
+            border-color: #bfd3f2;
+            background: #f8fbff
+        }
+
+        .cola-machine-btn.is-active {
+            border-color: #9fc0ef;
+            background: var(--cola-soft);
+            color: var(--cola-blue);
+            box-shadow: inset 4px 0 0 var(--cola-blue-2)
+        }
+
+    .cola-machine-code {
+        display: block;
+        font-weight: 950;
+        line-height: 1.1
+    }
+
+    .cola-machine-name {
+        display: block;
+        margin-top: 3px;
+        color: var(--cola-muted);
+        font-size: .72rem;
+        font-weight: 650;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .cola-count {
+        min-width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        display: inline-grid;
+        place-items: center;
+        padding: 0 8px;
+        border: 1px solid #bfd3f2;
+        background: #fff;
+        color: var(--cola-blue);
+        font-size: .76rem;
+        font-weight: 950
+    }
+
+    .cola-content-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap
+    }
+
+    .cola-selected-machine {
+        color: #182437;
+        font-size: 1.05rem;
+        font-weight: 950
+    }
+
+    .cola-head-badges {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap
+    }
+
+    .cola-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 9px;
+        border: 1px solid #bfd3f2;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: var(--cola-blue);
+        font-size: .74rem;
+        font-weight: 900
+    }
+
+    .cola-list {
+        display: grid;
+        gap: 10px;
+        padding: 12px
+    }
+
+    .cola-card {
+        border: 1px solid #dce6f2;
+        border-radius: 15px;
+        background: #fff;
+        padding: 12px 14px;
+        display: grid;
+        grid-template-columns: 54px minmax(190px,.9fr) minmax(220px,1.25fr) minmax(135px,.65fr) minmax(180px,.9fr) auto;
+        gap: 12px;
+        align-items: center;
+        transition: .15s ease
+    }
+
+        .cola-card:hover {
+            border-color: #b9cfec;
+            box-shadow: 0 8px 20px rgba(15,47,99,.07)
+        }
+
+    .cola-order {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: #eff6ff;
+        border: 1px solid #bfd3f2;
+        color: var(--cola-blue);
+        font-weight: 950
+    }
+
+    .cola-program {
+        color: var(--cola-blue);
+        font-weight: 950
+    }
+
+    .cola-of {
+        margin-top: 2px;
+        color: #475467;
+        font-size: .76rem;
+        font-weight: 750
+    }
+
+    .cola-part {
+        color: #182437;
+        font-weight: 900;
+        line-height: 1.15
+    }
+
+    .cola-description {
+        margin-top: 4px;
+        color: var(--cola-muted);
+        font-size: .75rem;
+        font-weight: 600;
+        line-height: 1.2
+    }
+
+    .cola-meta-label {
+        color: #98a2b3;
+        font-size: .66rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .04em
+    }
+
+    .cola-meta-value {
+        margin-top: 2px;
+        color: #344054;
+        font-size: .8rem;
+        font-weight: 800
+    }
+
+    .cola-operator {
+        margin-top: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 7px;
+        border-radius: 10px;
+        background: #f2f4f7;
+        color: #475467;
+        font-size: .72rem;
+        font-weight: 800
+    }
+
+        .cola-operator.has-operator {
+            background: #eef4ff;
+            color: #194185
+        }
+
+    .cola-action {
+        text-align: right;
+        min-width: 150px
+    }
+
+        .cola-action .btn {
+            border-radius: 11px;
+            font-weight: 900;
+            white-space: nowrap
+        }
+
+    .cola-empty {
+        padding: 46px 22px;
+        text-align: center;
+        color: var(--cola-muted)
+    }
+
+        .cola-empty i {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 2rem;
+            color: #98a2b3
+        }
+
+        .cola-empty strong {
+            display: block;
+            color: #344054;
+            font-size: .95rem
+        }
+
+    .cola-no-machine {
+        margin: 10px 12px 12px;
+        padding: 10px 12px;
+        border: 1px solid #fed7aa;
+        border-radius: 12px;
+        background: #fff7ed;
+        color: #9a3412;
+        font-size: .78rem;
+        font-weight: 750
+    }
+
+    @@media(max-width:1200px) {
+        .cola-panel {
+            grid-template-columns: 220px minmax(0,1fr)
+        }
+
+        .cola-card {
+            grid-template-columns: 48px minmax(170px,1fr) minmax(190px,1.3fr) minmax(150px,.8fr) auto
+        }
+
+            .cola-card .cola-schedule {
+                display: none
+            }
+    }
+
+    @@media(max-width:900px) {
+        .cola-panel {
+            grid-template-columns: 1fr
+        }
+
+        .cola-machine-list {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            max-height: none;
+            padding-bottom: 12px
+        }
+
+        .cola-machine-btn {
+            min-width: 190px
+        }
+
+        .cola-card {
+            grid-template-columns: 42px minmax(0,1fr) auto;
+            align-items: start
+        }
+
+            .cola-card .cola-detail, .cola-card .cola-schedule {
+                grid-column: 2/-1
+            }
+
+        .cola-action {
+            grid-column: 2/-1;
+            width: 100%;
+            min-width: 0
+        }
+
+            .cola-action .btn {
+                width: 100%
+            }
+    }
+
+    @@media(max-width:560px) {
+        .cola-card {
+            grid-template-columns: 36px minmax(0,1fr)
+        }
+
+        .cola-order {
+            width: 32px;
+            height: 32px
+        }
+
+        .cola-action {
+            grid-column: 1/-1
+        }
+    }
+</style>
+
+<div class="cola-panel" data-panel-cola>
+    <aside class="cola-sidebar">
+        <div class="cola-sidebar-head">
+            <h3 class="cola-title"><i class="bi bi-hdd-network me-1"></i>Máquinas</h3>
+            <div class="cola-sub">Selecciona una máquina para ver únicamente su cola.</div>
+        </div>
+
+        <div class="cola-machine-list">
+            @if (!gruposMaquina.Any())
+            {
+                <div class="cola-empty py-4">
+                    <i class="bi bi-inbox"></i>
+                    <strong>Sin máquinas con cola</strong>
+                </div>
+            }
+            else
+            {
+                foreach (var grupo in gruposMaquina)
+                {
+                    var activa = maquinaSeleccionadaId.HasValue && grupo.Key.MaquinaID == maquinaSeleccionadaId.Value;
+
+                    <button type="button"
+                            class="cola-machine-btn @(activa ? "is-active" : "")"
+                            data-panel-cola-maquina="@grupo.Key.MaquinaID">
+                        <span>
+                            <span class="cola-machine-code">@grupo.Key.Codigo</span>
+                            <span class="cola-machine-name">@grupo.Key.Nombre</span>
+                        </span>
+                        <span class="cola-count">@grupo.Count()</span>
+                    </button>
+                }
+            }
+        </div>
+
+        @if (programasSinMaquina.Any())
+        {
+            <div class="cola-no-machine">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                @programasSinMaquina.Count programa(s) todavía no tienen máquina asignada.
+            </div>
+        }
+    </aside>
+
+    <section class="cola-content">
+        <div class="cola-content-head">
+            <div>
+                <div class="cola-title">Cola de producción</div>
+                @if (grupoSeleccionado != null)
+                {
+                    <div class="cola-selected-machine">
+                        @grupoSeleccionado.Key.Codigo
+                        <span class="text-muted fw-normal">· @grupoSeleccionado.Key.Nombre</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="cola-selected-machine">Sin máquina seleccionada</div>
+                }
+            </div>
+
+            <div class="cola-head-badges">
+                <span class="cola-badge"><i class="bi bi-list-ol"></i>@programasSeleccionados.Count en cola</span>
+                <span class="cola-badge"><i class="bi bi-box-seam"></i>@Model.TotalDisponibles total</span>
+            </div>
+        </div>
+
+        @if (!programasSeleccionados.Any())
+        {
+            <div class="cola-empty">
+                <i class="bi bi-calendar-check"></i>
+                <strong>No hay programas pendientes para esta máquina.</strong>
+                <div class="mt-1">Selecciona otra máquina del panel izquierdo.</div>
+            </div>
+        }
+        else
+        {
+            <div class="cola-list">
+                @{
+                    var orden = 0;
+                }
+
+                @foreach (var item in programasSeleccionados)
+                {
+                    orden++;
+                    var operadorSugerido = string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre) ? "" : item.OperadorSugeridoNombre.Trim();
+                    var turnoSugerido = string.IsNullOrWhiteSpace(item.TurnoSugeridoNombre) ? "" : item.TurnoSugeridoNombre.Trim();
+
+                    <article class="cola-card">
+                        <div><div class="cola-order">@orden</div></div>
+
+                        <div class="cola-main">
+                            <div class="cola-program">Programa @item.ProgramaProduccionID</div>
+                            <div class="cola-of">
+                                @Txt(item.TituloPrograma)
+                                @if (item.SolicitudProduccionID.HasValue)
+                                {
+                                    <span>· OF ID @item.SolicitudProduccionID</span>
+                                }
+                            </div>
+                            @if (item.ReleaseID.HasValue)
+                            {
+                                <div class="cola-of">Release @item.ReleaseID</div>
+                            }
+                        </div>
+
+                        <div class="cola-detail">
+                            <div class="cola-part">@Txt(item.TextoParte)</div>
+                            <div class="cola-description">@Txt(item.DescripcionParte)</div>
+                            <div class="mt-2 d-flex gap-2 flex-wrap">
+                                <span class="cola-badge"><i class="bi bi-nut"></i>@(string.IsNullOrWhiteSpace(item.MoldeCodigo) ? "Sin molde" : item.MoldeCodigo)</span>
+                                <span class="cola-badge"><i class="bi bi-box"></i>@Num(item.CantidadProgramada)</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="cola-meta-label">Operador sugerido</div>
+                            <div class="cola-operator @(string.IsNullOrWhiteSpace(operadorSugerido) ? "" : "has-operator")">
+                                <i class="bi @(string.IsNullOrWhiteSpace(operadorSugerido) ? "bi-person-dash" : "bi-person-check")"></i>
+                                @(string.IsNullOrWhiteSpace(operadorSugerido) ? "Sin operador" : operadorSugerido)
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(turnoSugerido))
+                            {
+                                <div class="cola-description">Turno: @turnoSugerido</div>
+                            }
+                        </div>
+
+                        <div class="cola-schedule">
+                            <div class="cola-meta-label">Inicio programado</div>
+                            <div class="cola-meta-value">@Fecha(item.FechaInicioProgramada)</div>
+                            <div class="cola-meta-label mt-2">Fin programado</div>
+                            <div class="cola-meta-value">@Fecha(item.FechaFinProgramada)</div>
+                        </div>
+
+                        <div class="cola-action">
+                            @if (item.PuedeIniciar)
+                            {
+                                <button type="button"
+                                        class="btn btn-sm btn-success btn-iniciar-preparacion"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalIniciarPreparacion"
+                                        data-programa-id="@item.ProgramaProduccionID"
+                                        data-titulo="@Data(item.TituloPrograma)"
+                                        data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
+                                        data-parte="@Data(item.TextoParte)"
+                                        data-descripcion="@Data(item.DescripcionParte)"
+                                        data-molde="@Data(item.MoldeCodigo)"
+                                        data-cantidad="@Num(item.CantidadProgramada)"
+                                        data-inicio="@Fecha(item.FechaInicioProgramada)"
+                                        data-fin="@Fecha(item.FechaFinProgramada)"
+                                        data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
+                                        data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
+                                        data-turno="@Data(item.TurnoSugeridoNombre)">
+                                    <i class="bi bi-play-fill me-1"></i>
+                                    Iniciar preparación
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-warning">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    No disponible
+                                </span>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+</div>
