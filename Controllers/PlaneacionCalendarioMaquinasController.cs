@@ -1160,15 +1160,10 @@ OUTER APPLY
 ) ci
 
 WHERE pp.Activo = 1
-
-  /*
-   * Programas cancelados no deben ocupar espacio
-   * en el calendario de máquinas.
-   */
-  AND ISNULL(pp.EstatusID, 1) <> @EstatusCancelado
-
+  AND pp.SolicitudProduccionID IS NOT NULL
+  AND pp.SolicitudProduccionDetalleID IS NOT NULL
+  AND ISNULL(pp.EstatusID,1) <> @EstatusCancelado
   AND pp.MaquinaID IS NOT NULL
-
   AND pp.FechaInicioProgramada IS NOT NULL
 
   AND pp.FechaInicioProgramada < @Fin

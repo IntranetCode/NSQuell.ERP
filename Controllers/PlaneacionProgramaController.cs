@@ -3589,15 +3589,14 @@ WHERE NumeroOFRecibida LIKE 'OF-[0-9][0-9][0-9][0-9]/' + @YY;";
             return $"OF-{consecutivo:0000}/{yy}";
         }
 
-
-        private async Task<int> InsertarOFDedeProgramaAsync(
-    ProgramaParaOFVm p,
-    string folioOF,
-    int usuarioId,
-    SqlConnection cn,
-    SqlTransaction tx)
+        private async Task<int> InsertarOFDedeProgramaAsync(ProgramaParaOFVm p, string folioOF, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
+DECLARE @Ids TABLE
+(
+    SolicitudProduccionID INT NOT NULL
+);
+
 INSERT INTO dbo.SolicitudesProduccion
 (
     FolioSolicitud,
@@ -3631,6 +3630,7 @@ INSERT INTO dbo.SolicitudesProduccion
     OrigenOF
 )
 OUTPUT INSERTED.SolicitudProduccionID
+INTO @Ids(SolicitudProduccionID)
 VALUES
 (
     @FolioSolicitud,
@@ -3662,71 +3662,46 @@ VALUES
     @ReleaseDetalleID,
     @ProgramaProduccionID,
     @OrigenOF
-);";
+);
 
+SELECT TOP (1) SolicitudProduccionID
+FROM @Ids;";
             await using var cmd = new SqlCommand(sql, cn, tx);
-
             cmd.Parameters.Add("@FolioSolicitud", SqlDbType.NVarChar, 40).Value = folioOF;
             cmd.Parameters.Add("@NumeroOFRecibida", SqlDbType.NVarChar, 80).Value = folioOF;
-
-            cmd.Parameters.Add("@FechaRequerida", SqlDbType.Date).Value =
-                (object?)p.FechaFinProgramada?.Date ?? DBNull.Value;
-
-            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
-                (object?)p.ClienteID ?? DBNull.Value;
-
-            cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value =
-                (object?)p.ClienteNombre ?? DBNull.Value;
-
+            cmd.Parameters.Add("@FechaRequerida", SqlDbType.Date).Value = (object?)p.FechaFinProgramada?.Date ?? DBNull.Value;
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = (object?)p.ClienteID ?? DBNull.Value;
+            cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value = (object?)p.ClienteNombre ?? DBNull.Value;
             cmd.Parameters.Add("@OrigenSolicitud", SqlDbType.NVarChar, 50).Value = "Planeación Programa";
             cmd.Parameters.Add("@Prioridad", SqlDbType.NVarChar, 30).Value = "Normal";
-
             cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value = "RELEASE";
-
             cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value = DBNull.Value;
-
             cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = PlaneacionOFEstatus.PendienteValidacionMP;
-
-            cmd.Parameters.Add("@NotasGenerales", SqlDbType.NVarChar, 500).Value =
-                (object?)$"OF generada desde Programa de Producción ID {p.ProgramaProduccionID}. {p.Observaciones}" ?? DBNull.Value;
-
+            cmd.Parameters.Add("@NotasGenerales", SqlDbType.NVarChar, 500).Value = (object?)$"OF generada desde Programa de Producción ID {p.ProgramaProduccionID}. {p.Observaciones}" ?? DBNull.Value;
             cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
-
-            cmd.Parameters.Add("@FechaInicioPlaneada", SqlDbType.DateTime).Value =
-                (object?)p.FechaInicioProgramada ?? DBNull.Value;
-
-            cmd.Parameters.Add("@FechaFinPlaneada", SqlDbType.DateTime).Value =
-                (object?)p.FechaFinProgramada ?? DBNull.Value;
-
+            cmd.Parameters.Add("@FechaInicioPlaneada", SqlDbType.DateTime).Value = (object?)p.FechaInicioProgramada ?? DBNull.Value;
+            cmd.Parameters.Add("@FechaFinPlaneada", SqlDbType.DateTime).Value = (object?)p.FechaFinProgramada ?? DBNull.Value;
             cmd.Parameters.Add("@ResponsablePlaneacionUsuarioID", SqlDbType.Int).Value = usuarioId;
-
-            cmd.Parameters.Add("@ResponsablePlaneacionNombre", SqlDbType.NVarChar, 200).Value =
-                User?.Identity?.Name ?? "Sistema";
-
+            cmd.Parameters.Add("@ResponsablePlaneacionNombre", SqlDbType.NVarChar, 200).Value = User?.Identity?.Name ?? "Sistema";
             cmd.Parameters.Add("@MonedaCosto", SqlDbType.NVarChar, 10).Value = "MXN";
-
-            cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value =
-                (object?)p.ReleaseID ?? DBNull.Value;
-
-            cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value =
-                (object?)p.ReleaseDetalleID ?? DBNull.Value;
-
+            cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = (object?)p.ReleaseID ?? DBNull.Value;
+            cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = (object?)p.ReleaseDetalleID ?? DBNull.Value;
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = p.ProgramaProduccionID;
-
             cmd.Parameters.Add("@OrigenOF", SqlDbType.NVarChar, 30).Value = "PROGRAMA";
-
-            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+            var resultado = await cmd.ExecuteScalarAsync();
+            if (resultado == null || resultado == DBNull.Value) throw new InvalidOperationException("La OF fue insertada, pero no fue posible recuperar su identificador.");
+            return Convert.ToInt32(resultado);
         }
 
 
-        private async Task<int> InsertarDetalleOFDedeProgramaAsync(
-    int solicitudProduccionId,
-    ProgramaParaOFVm p,
-    int usuarioId,
-    SqlConnection cn,
-    SqlTransaction tx)
+        private async Task<int> InsertarDetalleOFDedeProgramaAsync(int solicitudProduccionId, ProgramaParaOFVm p, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
+DECLARE @Ids TABLE
+(
+    SolicitudProduccionDetalleID INT NOT NULL
+);
+
 INSERT INTO dbo.SolicitudesProduccionDetalle
 (
     SolicitudProduccionID,
@@ -3780,6 +3755,7 @@ INSERT INTO dbo.SolicitudesProduccionDetalle
     UtilidadEstimadaRenglon
 )
 OUTPUT INSERTED.SolicitudProduccionDetalleID
+INTO @Ids(SolicitudProduccionDetalleID)
 VALUES
 (
     @SolicitudProduccionID,
@@ -3793,10 +3769,10 @@ VALUES
     @HorasPlaneadas,
     @NumeroMoldeTexto,
     @MaquinaSugeridaTexto,
-   @Color,
-@Cavidades,
-@ObjetivoHora,
-@PiezasPorCaja,
+    @Color,
+    @Cavidades,
+    @ObjetivoHora,
+    @PiezasPorCaja,
     @Notas,
     @EstatusID,
     1,
@@ -3807,9 +3783,9 @@ VALUES
     0,
     @MensajeAlmacen,
     @Ciclo,
-@TipoSecado,
-@HorasSecado,
-@PesoBrutoPieza,
+    @TipoSecado,
+    @HorasSecado,
+    @PesoBrutoPieza,
     @MaterialCodigo,
     @MaterialDescripcion,
     @EmbalajeCodigo,
@@ -3818,7 +3794,7 @@ VALUES
     @CantidadEmbalajes,
     @CantidadMpKg,
     @Cambio,
-@Arranque,
+    @Arranque,
     0,
     0,
     'MXN',
@@ -3831,105 +3807,48 @@ VALUES
     0,
     0,
     0
-);";
+);
 
+SELECT TOP (1) SolicitudProduccionDetalleID
+FROM @Ids;";
             await using var cmd = new SqlCommand(sql, cn, tx);
-
             cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudProduccionId;
-
-            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value =
-                (object?)p.ParteID ?? DBNull.Value;
-
-            cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value =
-                (object?)p.MoldeID ?? DBNull.Value;
-
-            cmd.Parameters.Add("@MaquinaSugeridaID", SqlDbType.Int).Value =
-                (object?)p.MaquinaID ?? DBNull.Value;
-
-            cmd.Parameters.Add("@DesignacionDescripcionSAP", SqlDbType.NVarChar, 300).Value =
-                (object?)p.DesignacionDescripcionSAP ?? DBNull.Value;
-
-            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value =
-    !string.IsNullOrWhiteSpace(p.ReferenciaSAP)
-        ? (object)p.ReferenciaSAP
-        : !string.IsNullOrWhiteSpace(p.NumeroParte)
-            ? (object)p.NumeroParte
-            : DBNull.Value;
-
+            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = (object?)p.ParteID ?? DBNull.Value;
+            cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value = (object?)p.MoldeID ?? DBNull.Value;
+            cmd.Parameters.Add("@MaquinaSugeridaID", SqlDbType.Int).Value = (object?)p.MaquinaID ?? DBNull.Value;
+            cmd.Parameters.Add("@DesignacionDescripcionSAP", SqlDbType.NVarChar, 300).Value = (object?)p.DesignacionDescripcionSAP ?? DBNull.Value;
+            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value = !string.IsNullOrWhiteSpace(p.ReferenciaSAP) ? (object)p.ReferenciaSAP : !string.IsNullOrWhiteSpace(p.NumeroParte) ? (object)p.NumeroParte : DBNull.Value;
             cmd.Parameters.Add("@CantidadPiezas", SqlDbType.Int).Value = p.CantidadProgramada;
-
             AddDecimal(cmd, "@HorasPlaneadas", p.HorasProgramadas, 18, 2);
-
-            cmd.Parameters.Add("@NumeroMoldeTexto", SqlDbType.NVarChar, 100).Value =
-                (object?)p.MoldeCodigo ?? DBNull.Value;
-
-            cmd.Parameters.Add("@MaquinaSugeridaTexto", SqlDbType.NVarChar, 200).Value =
-                (object?)($"{p.MaquinaCodigo} {p.MaquinaNombre}".Trim()) ?? DBNull.Value;
-
-            cmd.Parameters.Add("@Cavidades", SqlDbType.Int).Value =
-                (object?)p.Cavidades ?? DBNull.Value;
-
-            cmd.Parameters.Add("@ObjetivoHora", SqlDbType.Int).Value =
-                (object?)p.ObjetivoHora ?? DBNull.Value;
-
-            cmd.Parameters.Add("@Notas", SqlDbType.NVarChar, 500).Value =
-                (object?)$"Generado desde programa ID {p.ProgramaProduccionID}. Condición: {p.CondicionProduccion}. {p.Observaciones}" ?? DBNull.Value;
-
+            cmd.Parameters.Add("@NumeroMoldeTexto", SqlDbType.NVarChar, 100).Value = (object?)p.MoldeCodigo ?? DBNull.Value;
+            cmd.Parameters.Add("@MaquinaSugeridaTexto", SqlDbType.NVarChar, 200).Value = (object?)($"{p.MaquinaCodigo} {p.MaquinaNombre}".Trim()) ?? DBNull.Value;
+            cmd.Parameters.Add("@Cavidades", SqlDbType.Int).Value = (object?)p.Cavidades ?? DBNull.Value;
+            cmd.Parameters.Add("@ObjetivoHora", SqlDbType.Int).Value = (object?)p.ObjetivoHora ?? DBNull.Value;
+            cmd.Parameters.Add("@Notas", SqlDbType.NVarChar, 500).Value = (object?)$"Generado desde programa ID {p.ProgramaProduccionID}. Condición: {p.CondicionProduccion}. {p.Observaciones}" ?? DBNull.Value;
             cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = PlaneacionOFEstatus.PendienteValidacionMP;
-
-            cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value =
-                (object?)p.MaterialID ?? DBNull.Value;
-
-            cmd.Parameters.Add("@OrigenSurtido", SqlDbType.NVarChar, 30).Value =
-                p.PiezasDesdePT > 0 ? "MIXTO" : "MP";
-
+            cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value = (object?)p.MaterialID ?? DBNull.Value;
+            cmd.Parameters.Add("@OrigenSurtido", SqlDbType.NVarChar, 30).Value = p.PiezasDesdePT > 0 ? "MIXTO" : "MP";
             cmd.Parameters.Add("@PTDisponibleAlCrear", SqlDbType.Int).Value = p.PiezasDesdePT;
-
             AddDecimal(cmd, "@MPDisponibleKgAlCrear", null, 18, 4);
-
-            cmd.Parameters.Add("@MensajeAlmacen", SqlDbType.NVarChar, 500).Value =
-                "OF generada desde programa. Validar surtido de MP/PT en almacén.";
-
-            cmd.Parameters.Add("@Ciclo", SqlDbType.NVarChar, 50).Value =
-                (object?)p.Ciclo ?? DBNull.Value;
-
+            cmd.Parameters.Add("@MensajeAlmacen", SqlDbType.NVarChar, 500).Value = "OF generada desde programa. Validar surtido de MP/PT en almacén.";
+            cmd.Parameters.Add("@Ciclo", SqlDbType.NVarChar, 50).Value = (object?)p.Ciclo ?? DBNull.Value;
             AddDecimal(cmd, "@PesoBrutoPieza", p.PesoBrutoPieza, 18, 6);
-
-            cmd.Parameters.Add("@MaterialCodigo", SqlDbType.NVarChar, 100).Value =
-                (object?)p.MaterialCodigo ?? DBNull.Value;
-
-            cmd.Parameters.Add("@MaterialDescripcion", SqlDbType.NVarChar, 250).Value =
-                (object?)p.MaterialDescripcion ?? DBNull.Value;
-
-            cmd.Parameters.Add("@EmbalajeCodigo", SqlDbType.NVarChar, 100).Value =
-                (object?)p.EmbalajeCodigo ?? DBNull.Value;
-
-            cmd.Parameters.Add("@EmbalajeDescripcion", SqlDbType.NVarChar, 250).Value =
-                (object?)p.EmbalajeDescripcion ?? DBNull.Value;
-
-            cmd.Parameters.Add("@Color", SqlDbType.NVarChar, 100).Value =
-    (object?)p.Color ?? DBNull.Value;
-
-            cmd.Parameters.Add("@PiezasPorCaja", SqlDbType.Int).Value =
-                (object?)p.PiezasPorCaja ?? DBNull.Value;
-
-            cmd.Parameters.Add("@TipoSecado", SqlDbType.NVarChar, 100).Value =
-                (object?)p.TipoSecado ?? DBNull.Value;
-
+            cmd.Parameters.Add("@MaterialCodigo", SqlDbType.NVarChar, 100).Value = (object?)p.MaterialCodigo ?? DBNull.Value;
+            cmd.Parameters.Add("@MaterialDescripcion", SqlDbType.NVarChar, 250).Value = (object?)p.MaterialDescripcion ?? DBNull.Value;
+            cmd.Parameters.Add("@EmbalajeCodigo", SqlDbType.NVarChar, 100).Value = (object?)p.EmbalajeCodigo ?? DBNull.Value;
+            cmd.Parameters.Add("@EmbalajeDescripcion", SqlDbType.NVarChar, 250).Value = (object?)p.EmbalajeDescripcion ?? DBNull.Value;
+            cmd.Parameters.Add("@Color", SqlDbType.NVarChar, 100).Value = (object?)p.Color ?? DBNull.Value;
+            cmd.Parameters.Add("@PiezasPorCaja", SqlDbType.Int).Value = (object?)p.PiezasPorCaja ?? DBNull.Value;
+            cmd.Parameters.Add("@TipoSecado", SqlDbType.NVarChar, 100).Value = (object?)p.TipoSecado ?? DBNull.Value;
             AddDecimal(cmd, "@HorasSecado", p.HorasSecado, 18, 2);
-
             AddDecimal(cmd, "@PiezasPorEmbalaje", p.PiezasPorEmbalaje, 18, 4);
             AddDecimal(cmd, "@CantidadEmbalajes", p.CantidadEmbalajes, 18, 4);
             AddDecimal(cmd, "@CantidadMpKg", p.CantidadMpKg, 18, 4);
-
-            cmd.Parameters.Add("@Cambio", SqlDbType.Time).Value =
-    (object?)p.Cambio ?? DBNull.Value;
-
-            cmd.Parameters.Add("@Arranque", SqlDbType.Time).Value =
-                (object?)p.Arranque ?? DBNull.Value;
-
-
-            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+            cmd.Parameters.Add("@Cambio", SqlDbType.Time).Value = (object?)p.Cambio ?? DBNull.Value;
+            cmd.Parameters.Add("@Arranque", SqlDbType.Time).Value = (object?)p.Arranque ?? DBNull.Value;
+            var resultado = await cmd.ExecuteScalarAsync();
+            if (resultado == null || resultado == DBNull.Value) throw new InvalidOperationException("El detalle de la OF fue insertado, pero no fue posible recuperar SolicitudProduccionDetalleID.");
+            return Convert.ToInt32(resultado);
         }
 
 

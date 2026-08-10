@@ -1078,6 +1078,15 @@
         <nav class="production-nav" aria-label="Navegación operativa de Producción">
             <button type="button"
                     class="production-nav-btn is-active"
+                    data-production-panel="proximos"
+                    data-url="@Url.Action("PanelProximos", "Produccion")">
+                <i class="bi bi-alarm"></i>
+                Pendientes / próximos
+                <span class="production-nav-count">@Model.TotalProximosAIniciar</span>
+            </button>
+
+            <button type="button"
+                    class="production-nav-btn "
                     data-production-panel="ejecuciones"
                     data-url="@Url.Action("PanelEjecuciones", "Produccion")">
                 <i class="bi bi-activity"></i>
@@ -1085,14 +1094,7 @@
                 <span class="production-nav-count">@totalActivas</span>
             </button>
 
-            <button type="button"
-                    class="production-nav-btn"
-                    data-production-panel="proximos"
-                    data-url="@Url.Action("PanelProximos", "Produccion")">
-                <i class="bi bi-alarm"></i>
-                Pendientes / próximos
-                <span class="production-nav-count">@Model.TotalProximosAIniciar</span>
-            </button>
+           
 
             <button type="button"
                     class="production-nav-btn"
