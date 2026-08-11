@@ -1,0 +1,173 @@
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenScrapHistorialIndexVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Historial de Scrap";
+}
+
+<link rel="stylesheet" href="~/css/Almacen/almacen-scrap.css" asp-append-version="true" />
+
+<section class="alm-hero scrap-hero">
+    <div>
+        <small>SCRAP · HISTORIAL</small>
+        <h1>Historial de Scrap</h1>
+        <p>
+            Consulta los eventos registrados desde la recepción hasta la generación de MP Molido,
+            conservando usuario, estatus, OF, parte y lote.
+        </p>
+    </div>
+    <div class="alm-actions scrap-hero-actions">
+        <a class="alm-btn" asp-action="Entrada">
+            <i class="fa-solid fa-barcode"></i>
+            Entrada de Scrap
+        </a>
+        <a class="alm-btn secondary" asp-action="Recepciones">
+            <i class="fa-solid fa-inbox"></i>
+            Recepciones
+        </a>
+        <a class="alm-btn secondary" asp-action="Index">
+            <i class="fa-solid fa-list"></i>
+            Registros
+        </a>
+    </div>
+</section>
+
+@if (!Model.Configurado)
+{
+    <div class="alm-alert warning">
+        <strong>Módulo Scrap no disponible.</strong>
+        <div>@Model.MensajeConfiguracion</div>
+    </div>
+}
+else
+{
+    <section class="alm-card scrap-history-index-card">
+        <header>
+            <span class="scrap-header-title">
+                <span class="scrap-header-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                Eventos de trazabilidad
+            </span>
+            <span>@Model.TotalEventos.ToString("N0") evento(s) mostrados · máximo 1000</span>
+        </header>
+
+        <form method="get" class="alm-filter scrap-filter scrap-history-filter">
+            <div class="alm-field scrap-filter__search">
+                <label for="q">Buscar</label>
+                <input id="q"
+                       name="q"
+                       class="alm-input"
+                       type="search"
+                       value="@Model.Busqueda"
+                       placeholder="Registro, código, OF, parte, lote, usuario..."
+                       autocomplete="off" />
+            </div>
+
+            <div class="alm-field">
+                <label for="origen">Origen</label>
+                <select id="origen" name="origen" class="alm-select">
+                    <option value="">Todos</option>
+                    <option value="ENTRADA_SCRAP" selected="@(Model.Origen == "ENTRADA_SCRAP")">Entrada Scrap</option>
+                    <option value="CALIDAD" selected="@(Model.Origen == "CALIDAD")">Calidad</option>
+                    <option value="GP12" selected="@(Model.Origen == "GP12")">GP12</option>
+                </select>
+            </div>
+
+            <div class="alm-field">
+                <label for="evento">Evento</label>
+                <select id="evento" name="evento" class="alm-select">
+                    <option value="">Todos</option>
+                    <option value="RECEPCION_ESCANER" selected="@(Model.Evento == "RECEPCION_ESCANER")">Recepción por escáner</option>
+                    <option value="ENVIADO_A_ALMACEN" selected="@(Model.Evento == "ENVIADO_A_ALMACEN")">Enviado a Almacén</option>
+                    <option value="RECEPCION_CONFIRMADA" selected="@(Model.Evento == "RECEPCION_CONFIRMADA")">Recepción confirmada</option>
+                    <option value="MP_MOLIDO_GENERADO" selected="@(Model.Evento == "MP_MOLIDO_GENERADO")">MP Molido generado</option>
+                </select>
+            </div>
+
+            <button type="submit" class="alm-btn">
+                <i class="fa-solid fa-filter"></i>
+                Filtrar
+            </button>
+            <a asp-action="Historial" class="alm-btn secondary">
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+                Limpiar
+            </a>
+        </form>
+
+        @if (Model.Eventos.Any())
+        {
+            <div class="alm-table-wrap scrap-history-table-wrap">
+                <table class="alm-table scrap-history-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Registro</th>
+                            <th>Evento</th>
+                            <th>Origen</th>
+                            <th>OF / parte</th>
+                            <th>Lote</th>
+                            <th>Cambio de estatus</th>
+                            <th>Usuario</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var item in Model.Eventos)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@item.FechaEvento.ToString("dd/MM/yyyy")</strong>
+                                <small class="scrap-subtext">@item.FechaEvento.ToString("HH:mm:ss")</small>
+                            </td>
+                            <td>
+                                <a class="scrap-record-link"
+                                   asp-action="Detalle"
+                                   asp-route-id="@item.ScrapRegistroID">
+                                    <strong>#@item.ScrapRegistroID</strong>
+                                    <small>Ver detalle</small>
+                                </a>
+                            </td>
+                            <td>
+                                <span class="scrap-event-badge">
+                                    <i class="fa-solid fa-circle-dot"></i>
+                                    @item.EventoTexto
+                                </span>
+                            </td>
+                            <td>
+                                <span class="scrap-origin">@item.OrigenTexto</span>
+                            </td>
+                            <td>
+                                <strong>@item.NumeroOF</strong>
+                                <small class="scrap-subtext">@item.NumeroParte</small>
+                            </td>
+                            <td><strong>@item.Lote</strong></td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(item.EstatusAnterior) || !string.IsNullOrWhiteSpace(item.EstatusNuevo))
+                                {
+                                    <span class="scrap-status-change">
+                                        <span>@(string.IsNullOrWhiteSpace(item.EstatusAnterior) ? "Inicio" : item.EstatusAnterior)</span>
+                                        <i class="fa-solid fa-arrow-right"></i>
+                                        <strong>@item.EstatusNuevo</strong>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="scrap-empty">Sin cambio</span>
+                                }
+                            </td>
+                            <td>
+                                <strong>@(string.IsNullOrWhiteSpace(item.UsuarioNombre) ? "Sistema" : item.UsuarioNombre)</strong>
+                            </td>
+                            <td>
+                                <span class="scrap-history-detail" title="@item.Detalle">@item.Detalle</span>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="alm-empty">No hay eventos de Scrap para los filtros seleccionados.</div>
+        }
+    </section>
+}

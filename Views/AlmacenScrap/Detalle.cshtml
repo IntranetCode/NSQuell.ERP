@@ -1,0 +1,140 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenScrapDetalleVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = $"Scrap #{Model.Registro.ScrapRegistroID}";
+    var r = Model.Registro;
+}
+
+<link rel="stylesheet" href="~/css/Almacen/almacen-scrap.css" asp-append-version="true" />
+
+<section class="alm-hero scrap-hero">
+    <div>
+        <small>SCRAP · TRAZABILIDAD</small>
+        <h1>Registro #@r.ScrapRegistroID</h1>
+        <p>
+            Historial completo desde la recepción hasta la eventual generación de MP Molido.
+        </p>
+    </div>
+    <div class="alm-actions">
+        @if (r.PuedeRealizarMolido)
+        {
+            <a class="alm-btn" asp-action="Molido" asp-route-id="@r.ScrapRegistroID">
+                <i class="fa-solid fa-gears"></i>
+                Realizar MP Molido
+            </a>
+        }
+        <a class="alm-btn secondary" asp-action="Index">
+            <i class="fa-solid fa-list"></i>
+            Volver al listado
+        </a>
+    </div>
+</section>
+
+<section class="scrap-detail-grid">
+    <article class="alm-card">
+        <header>
+            <span><i class="fa-solid fa-barcode"></i> Datos del Scrap</span>
+            <span>@r.EstatusTexto</span>
+        </header>
+
+        <div class="scrap-readonly-grid">
+            <div><small>Origen</small><strong>@r.OrigenTexto</strong></div>
+            <div><small>Referencia origen</small><strong>@(string.IsNullOrWhiteSpace(r.OrigenReferencia) ? "—" : r.OrigenReferencia)</strong></div>
+            <div><small>OF</small><strong>@r.NumeroOF</strong></div>
+            <div><small>Número de parte</small><strong>@r.NumeroParte</strong></div>
+            <div><small>Designación</small><strong>@r.Designacion</strong></div>
+            <div><small>Piezas</small><strong>@r.CantidadPiezas.ToString("N0") PZA</strong></div>
+            <div><small>Lote</small><strong>@r.Lote</strong></div>
+            <div><small>Fecha alta</small><strong>@r.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</strong></div>
+            <div><small>Recepción</small><strong>@(r.FechaRecepcion?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</strong></div>
+            <div><small>Recibido por</small><strong>@(string.IsNullOrWhiteSpace(r.RecibidoPorNombre) ? "—" : r.RecibidoPorNombre)</strong></div>
+        </div>
+
+        <div class="scrap-barcode-display">
+            <small>Código original</small>
+            <code>@r.CodigoBarras</code>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(r.Observaciones))
+        {
+            <div class="scrap-note">
+                <small>Observaciones</small>
+                <p>@r.Observaciones</p>
+            </div>
+        }
+    </article>
+
+    <article class="alm-card">
+        <header>
+            <span><i class="fa-solid fa-boxes-stacked"></i> Resultado MP</span>
+            <span>@(r.MPMovimientoID.HasValue ? "Generado" : "Pendiente")</span>
+        </header>
+
+        @if (r.MPMovimientoID.HasValue)
+        {
+            <div class="scrap-mp-result">
+                <span class="scrap-mp-result__icon"><i class="fa-solid fa-circle-check"></i></span>
+                <div>
+                    <small>Movimiento MP</small>
+                    <strong>#@r.MPMovimientoID</strong>
+                </div>
+                <div>
+                    <small>Peso molido</small>
+                    <strong>@(r.PesoMolidoKg?.ToString("N3") ?? "0.000") KG</strong>
+                </div>
+                <div>
+                    <small>Material</small>
+                    <strong>@r.MaterialMolido</strong>
+                </div>
+                <div>
+                    <small>Fecha</small>
+                    <strong>@(r.FechaMolido?.ToString("dd/MM/yyyy HH:mm") ?? "—")</strong>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alm-empty">
+                Este Scrap todavía no ha generado una Entrada de MP Molido.
+            </div>
+        }
+    </article>
+</section>
+
+<section class="alm-card scrap-history-card">
+    <header>
+        <span><i class="fa-solid fa-timeline"></i> Historial inmutable</span>
+        <span>@Model.Historial.Count evento(s)</span>
+    </header>
+
+    @if (Model.Historial.Any())
+    {
+        <div class="scrap-timeline">
+            @foreach (var item in Model.Historial)
+            {
+                <article class="scrap-timeline__item">
+                    <span class="scrap-timeline__dot"></span>
+                    <div class="scrap-timeline__head">
+                        <strong>@item.Evento</strong>
+                        <time>@item.FechaEvento.ToString("dd/MM/yyyy HH:mm:ss")</time>
+                    </div>
+                    <div class="scrap-timeline__meta">
+                        @if (!string.IsNullOrWhiteSpace(item.EstatusAnterior) || !string.IsNullOrWhiteSpace(item.EstatusNuevo))
+                        {
+                            <span>@item.EstatusAnterior → @item.EstatusNuevo</span>
+                        }
+                        <span>@(string.IsNullOrWhiteSpace(item.UsuarioNombre) ? "Sistema" : item.UsuarioNombre)</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(item.Detalle))
+                    {
+                        <p>@item.Detalle</p>
+                    }
+                </article>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="alm-empty">No hay eventos de historial.</div>
+    }
+</section>

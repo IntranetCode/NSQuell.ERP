@@ -1,0 +1,318 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenScrapEntradaVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Entrada de Scrap";
+}
+
+<link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/Almacen/almacen-scrap.css" asp-append-version="true" />
+
+<section class="alm-hero scrap-hero">
+    <div>
+        <small>SCRAP · ENTRADA POR ESCÁNER</small>
+        <h1>Captura múltiple de Scrap</h1>
+        <p>
+            Escanea todas las cajas consecutivamente. Cada Tab o Enter cierra una lectura,
+            guarda el código en la cola y devuelve el foco al escáner. Al terminar, transforma todo el lote.
+        </p>
+    </div>
+    <div class="alm-actions scrap-hero-actions">
+        <a class="alm-btn secondary" asp-action="PorMoler">
+            <i class="fa-solid fa-gears"></i> Por moler
+        </a>
+        <a class="alm-btn secondary" asp-action="Index">
+            <i class="fa-solid fa-list"></i> Volver a Scrap
+        </a>
+    </div>
+</section>
+
+<section class="scrap-scan-layout scrap-scan-layout--wide">
+    <article class="alm-card scrap-scan-card">
+        <header>
+            <span class="scrap-header-title">
+                <span class="scrap-header-icon"><i class="fa-solid fa-barcode"></i></span>
+                Escáner continuo
+            </span>
+            <span id="scrapScanHeaderCount">0 cajas capturadas</span>
+        </header>
+
+        <form method="post" id="scrapEntryForm" class="alm-form">
+            <div asp-validation-summary="ModelOnly" class="alm-alert danger full"></div>
+
+            <div class="alm-field full">
+                <label for="scrapScannerInput">Escáner de caja</label>
+                <div class="scrap-scanner-input scrap-scanner-input--continuous">
+                    <span class="scrap-scanner-icon"><i class="fa-solid fa-barcode"></i></span>
+                    <input id="scrapScannerInput"
+                           class="alm-input scrap-scanner-main"
+                           type="text"
+                           inputmode="none"
+                           autocomplete="off"
+                           placeholder="Escanea caja 1..."
+                           autofocus />
+                    <span class="scrap-scanner-ready" id="scrapScannerState">
+                        <i class="fa-solid fa-circle"></i> LISTO
+                    </span>
+                </div>
+                <div class="scrap-scanner-help">
+                    <span><i class="fa-solid fa-keyboard"></i> El lector puede terminar con <strong>Tab</strong> o <strong>Enter</strong>.</span>
+                    <span><i class="fa-solid fa-rotate"></i> Después de cada lectura el foco vuelve automáticamente.</span>
+                    <span><i class="fa-solid fa-code-branch"></i> OF: <strong>0812'26 → 0812/26</strong>.</span>
+                </div>
+            </div>
+
+            <textarea asp-for="CodigosEscaneados"
+                      id="CodigosEscaneados"
+                      class="scrap-code-buffer-hidden"
+                      aria-hidden="true"></textarea>
+            <span asp-validation-for="CodigosEscaneados" class="full"></span>
+
+            <div class="alm-field full">
+                <div class="scrap-queue-head">
+                    <div>
+                        <label>Cajas capturadas</label>
+                        <small>Se guardan en el orden exacto en que fueron escaneadas.</small>
+                    </div>
+                    <button type="button" class="scrap-queue-clear" id="scrapClearQueue">
+                        <i class="fa-solid fa-trash-can"></i> Limpiar captura
+                    </button>
+                </div>
+                <div class="scrap-scan-queue" id="scrapScanQueue">
+                    <div class="scrap-scan-empty" id="scrapScanEmpty">
+                        <span class="scrap-info-icon"><i class="fa-solid fa-barcode"></i></span>
+                        <div><strong>Esperando la primera caja</strong><small>Puedes escanear varias sin tocar la pantalla.</small></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alm-field full">
+                <label asp-for="Observaciones">Observaciones generales</label>
+                <textarea asp-for="Observaciones" class="alm-textarea" rows="3" maxlength="800"
+                          placeholder="Opcional: motivo, condición física, notas de recepción..."></textarea>
+                <span asp-validation-for="Observaciones"></span>
+            </div>
+
+            <div class="scrap-form-actions full scrap-form-actions--batch">
+                <div class="scrap-batch-summary">
+                    <span class="scrap-batch-count" id="scrapBatchCount">0</span>
+                    <div><strong>cajas en la captura</strong><small>Primero escanea todo; después transforma.</small></div>
+                </div>
+                <button type="submit" name="accion" value="convertir" class="alm-btn" id="scrapTransformButton">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    Transformar lote
+                </button>
+            </div>
+        </form>
+    </article>
+
+    <aside class="scrap-scan-guide">
+        <article class="scrap-info-card vertical">
+            <span class="scrap-info-icon"><i class="fa-solid fa-layer-group"></i></span>
+            <div><strong>1. Escanea todas</strong><p>Tab/Enter agrega cada caja a la cola. No es necesario mirar la pantalla.</p></div>
+        </article>
+        <article class="scrap-info-card vertical">
+            <span class="scrap-info-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+            <div><strong>2. Transforma el lote</strong><p>Se separan OF, parte, designación, piezas y lote para todas las cajas.</p></div>
+        </article>
+        <article class="scrap-info-card vertical">
+            <span class="scrap-info-icon"><i class="fa-solid fa-gears"></i></span>
+            <div><strong>3. Queda Por moler</strong><p>Después de registrar, el sistema te lleva a la cola donde aparece Realizar MP Molido.</p></div>
+        </article>
+    </aside>
+</section>
+
+@if (Model.Codigos.Any())
+{
+    <section class="alm-card scrap-preview-card" id="scrapPreview">
+        <header>
+            <span class="scrap-header-title">
+                <span class="scrap-header-icon"><i class="fa-solid fa-table-list"></i></span>
+                Resultado de transformación
+            </span>
+            <span>@Model.TotalValidos de @Model.TotalCodigos listos · @Model.TotalConAdvertencia con advertencia</span>
+        </header>
+
+        <div class="alm-table-wrap">
+            <table class="alm-table scrap-preview-table">
+                <thead>
+                    <tr><th>#</th><th>Estado</th><th>OF</th><th>Número de parte</th><th>Designación</th><th>Piezas</th><th>Lote</th><th>Material MP</th><th>Validación</th></tr>
+                </thead>
+                <tbody>
+                @{ var numero = 0; }
+                @foreach (var item in Model.Codigos)
+                {
+                    numero++;
+                    <tr class="@(item.PuedeRegistrar ? string.Empty : "scrap-row-error")">
+                        <td><span class="scrap-row-number">@numero</span></td>
+                        <td>
+                            @if (!item.PuedeRegistrar) { <span class="scrap-status is-error">Error</span> }
+                            else if (!string.IsNullOrWhiteSpace(item.Advertencia)) { <span class="scrap-status is-warning">Advertencia</span> }
+                            else { <span class="scrap-status is-received">Listo</span> }
+                        </td>
+                        <td><strong>@item.NumeroOF</strong></td>
+                        <td><strong>@item.NumeroParte</strong>@if (!string.IsNullOrWhiteSpace(item.ParteDescripcion)){<small class="scrap-subtext">@item.ParteDescripcion</small>}</td>
+                        <td>@item.Designacion</td>
+                        <td>@item.CantidadPiezas.ToString("N0")</td>
+                        <td><strong>@item.Lote</strong></td>
+                        <td>@item.MaterialTexto</td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(item.Error)) { <span class="scrap-validation-error">@item.Error</span> }
+                            else if (!string.IsNullOrWhiteSpace(item.Advertencia)) { <span class="scrap-validation-warning">@item.Advertencia</span> }
+                            else { <span class="scrap-validation-ok">Código y catálogo vinculados</span> }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <form method="post" class="scrap-preview-confirm">
+            <input type="hidden" asp-for="CodigosEscaneados" />
+            <input type="hidden" asp-for="Observaciones" />
+            <div>
+                <strong>@Model.TotalCodigos caja(s) listas para registrar</strong>
+                <small>Al registrar se crea trazabilidad Scrap; todavía no se genera inventario MP.</small>
+            </div>
+            <button type="submit" name="accion" value="registrar" class="alm-btn"
+                    disabled="@(Model.TotalValidos != Model.TotalCodigos ? "disabled" : null)">
+                <i class="fa-solid fa-box-open"></i>
+                Registrar y enviar a Por moler
+            </button>
+        </form>
+    </section>
+}
+
+<script>
+(() => {
+    const scanner = document.getElementById('scrapScannerInput');
+    const buffer = document.getElementById('CodigosEscaneados');
+    const queue = document.getElementById('scrapScanQueue');
+    const empty = document.getElementById('scrapScanEmpty');
+    const clearButton = document.getElementById('scrapClearQueue');
+    const headerCount = document.getElementById('scrapScanHeaderCount');
+    const batchCount = document.getElementById('scrapBatchCount');
+    const state = document.getElementById('scrapScannerState');
+    const form = document.getElementById('scrapEntryForm');
+    const transform = document.getElementById('scrapTransformButton');
+
+    if (!scanner || !buffer || !queue || !form) return;
+
+    const parse = value => (value || '')
+        .split(/\r?\n|;|,/)
+        .map(x => x.trim())
+        .filter(Boolean);
+
+    let items = parse(buffer.value);
+
+    const setState = (text, mode) => {
+        if (!state) return;
+        state.classList.remove('is-ok', 'is-duplicate');
+        if (mode) state.classList.add(mode);
+        state.innerHTML = `<i class="fa-solid fa-circle"></i> ${text}`;
+    };
+
+    const sync = () => {
+        buffer.value = items.join('\n');
+        if (headerCount) headerCount.textContent = `${items.length} ${items.length === 1 ? 'caja capturada' : 'cajas capturadas'}`;
+        if (batchCount) batchCount.textContent = items.length.toString();
+        if (transform) transform.disabled = items.length === 0;
+        render();
+    };
+
+    const render = () => {
+        queue.querySelectorAll('[data-scrap-queue-row]').forEach(x => x.remove());
+        if (empty) empty.hidden = items.length > 0;
+
+        items.forEach((code, index) => {
+            const row = document.createElement('div');
+            row.className = 'scrap-queue-row';
+            row.dataset.scrapQueueRow = '1';
+
+            const number = document.createElement('span');
+            number.className = 'scrap-queue-number';
+            number.textContent = (index + 1).toString();
+
+            const value = document.createElement('code');
+            value.textContent = code;
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'scrap-queue-remove';
+            remove.title = 'Quitar esta caja';
+            remove.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            remove.addEventListener('click', () => {
+                items.splice(index, 1);
+                sync();
+                scanner.focus();
+            });
+
+            row.append(number, value, remove);
+            queue.appendChild(row);
+        });
+    };
+
+    const addCode = raw => {
+        const code = (raw || '').trim();
+        if (!code) return false;
+
+        const duplicate = items.some(x => x.toLocaleUpperCase('es-MX') === code.toLocaleUpperCase('es-MX'));
+        if (duplicate) {
+            setState('DUPLICADA', 'is-duplicate');
+            window.setTimeout(() => setState('LISTO', ''), 700);
+            return false;
+        }
+
+        items.push(code);
+        sync();
+        setState(`CAJA ${items.length} OK`, 'is-ok');
+        window.setTimeout(() => setState('LISTO', ''), 450);
+        return true;
+    };
+
+    const commitScanner = () => {
+        addCode(scanner.value);
+        scanner.value = '';
+        scanner.focus({ preventScroll: true });
+    };
+
+    scanner.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault();
+            commitScanner();
+        }
+    });
+
+    scanner.addEventListener('paste', event => {
+        const pasted = event.clipboardData?.getData('text') || '';
+        const multiple = parse(pasted);
+        if (multiple.length > 1) {
+            event.preventDefault();
+            multiple.forEach(addCode);
+            scanner.value = '';
+            scanner.focus({ preventScroll: true });
+        }
+    });
+
+    if (clearButton) {
+        clearButton.addEventListener('click', () => {
+            if (items.length && !window.confirm('¿Limpiar todos los códigos capturados?')) return;
+            items = [];
+            sync();
+            setState('LISTO', '');
+            scanner.focus({ preventScroll: true });
+        });
+    }
+
+    form.addEventListener('submit', event => {
+        if (scanner.value.trim()) commitScanner();
+        if (items.length === 0) {
+            event.preventDefault();
+            setState('SIN CÓDIGOS', 'is-duplicate');
+            scanner.focus();
+        }
+    });
+
+    sync();
+    window.addEventListener('load', () => scanner.focus({ preventScroll: true }));
+})();
+</script>

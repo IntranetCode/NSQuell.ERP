@@ -1,0 +1,102 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenScrapRecepcionesVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Recepciones Scrap";
+}
+
+<link rel="stylesheet" href="~/css/Almacen/almacen-scrap.css" asp-append-version="true" />
+
+<section class="alm-hero scrap-hero scrap-hero--reception">
+    <div>
+        <small>SCRAP · RECEPCIONES</small>
+        <h1>Recepciones de Calidad y GP12</h1>
+        <p>
+            Esta es la bandeja donde aparecerá lo que Calidad o GP12 envíen a Almacén.
+            Hasta que Almacén confirme, el registro permanece pendiente y no puede pasar a molido.
+        </p>
+    </div>
+    <div class="alm-actions scrap-hero-actions">
+        <a class="alm-btn secondary" asp-action="Entrada"><i class="fa-solid fa-barcode"></i> Entrada directa</a>
+        <a class="alm-btn secondary" asp-action="PorMoler"><i class="fa-solid fa-gears"></i> Por moler</a>
+        <a class="alm-btn secondary" asp-action="Index"><i class="fa-solid fa-clock-rotate-left"></i> Historial</a>
+    </div>
+</section>
+
+@if (!Model.Configurado)
+{
+    <div class="alm-alert warning">@Model.MensajeConfiguracion</div>
+}
+else
+{
+    <section class="scrap-kpi-grid scrap-kpi-grid--3">
+        <article class="scrap-kpi is-pending"><span class="scrap-kpi__icon"><i class="fa-solid fa-inbox"></i></span><div><small>Total pendientes</small><strong>@Model.TotalPendientes</strong></div></article>
+        <article class="scrap-kpi"><span class="scrap-kpi__icon"><i class="fa-solid fa-shield-halved"></i></span><div><small>Calidad</small><strong>@Model.PendientesCalidad</strong></div></article>
+        <article class="scrap-kpi"><span class="scrap-kpi__icon"><i class="fa-solid fa-magnifying-glass"></i></span><div><small>GP12</small><strong>@Model.PendientesGP12</strong></div></article>
+    </section>
+
+    <section class="alm-card">
+        <header>
+            <span class="scrap-header-title"><span class="scrap-header-icon"><i class="fa-solid fa-box-open"></i></span> Pendientes de recepción física</span>
+            <span>Después de recibir pasan a Por moler</span>
+        </header>
+
+        <form method="get" class="alm-filter scrap-filter">
+            <div class="alm-field scrap-filter__search">
+                <label for="q">Buscar</label>
+                <input id="q" name="q" class="alm-input" type="search" value="@Model.Busqueda" placeholder="Referencia, OF, parte, lote..." />
+            </div>
+            <div class="alm-field">
+                <label for="origen">Origen</label>
+                <select id="origen" name="origen" class="alm-select">
+                    <option value="">Calidad + GP12</option>
+                    <option value="CALIDAD" selected="@(Model.Origen == "CALIDAD")">Calidad</option>
+                    <option value="GP12" selected="@(Model.Origen == "GP12")">GP12</option>
+                </select>
+            </div>
+            <button class="alm-btn" type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
+            <a class="alm-btn secondary" asp-action="Recepciones"><i class="fa-solid fa-filter-circle-xmark"></i> Limpiar</a>
+        </form>
+
+        @if (Model.Registros.Any())
+        {
+            <div class="alm-table-wrap scrap-table-wrap">
+                <table class="alm-table scrap-reception-table">
+                    <thead><tr><th>Origen</th><th>Referencia</th><th>OF / Parte</th><th>Designación</th><th>Piezas</th><th>Lote</th><th>Enviado</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var item in Model.Registros)
+                    {
+                        <tr>
+                            <td><span class="scrap-origin @(item.Origen == "CALIDAD" ? "from-quality" : "from-gp12")">@item.OrigenTexto</span></td>
+                            <td><strong>@(string.IsNullOrWhiteSpace(item.OrigenReferencia) ? $"Scrap #{item.ScrapRegistroID}" : item.OrigenReferencia)</strong></td>
+                            <td><strong>@item.NumeroOF</strong><small class="scrap-subtext">@item.NumeroParte</small></td>
+                            <td>@item.Designacion</td>
+                            <td><strong>@item.CantidadPiezas.ToString("N0") PZA</strong></td>
+                            <td><strong>@item.Lote</strong></td>
+                            <td>@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                <div class="scrap-actions">
+                                    <form asp-action="ConfirmarRecepcion" method="post" onsubmit="return confirm('¿Confirmar que Almacén recibió físicamente este Scrap?');">
+                                        <input type="hidden" name="id" value="@item.ScrapRegistroID" />
+                                        <input type="hidden" name="returnTo" value="recepciones" />
+                                        <button type="submit" class="scrap-action is-confirm scrap-action--primary">
+                                            <i class="fa-solid fa-box-open"></i><span>Confirmar recepción</span>
+                                        </button>
+                                    </form>
+                                    <a class="scrap-action" asp-action="Detalle" asp-route-id="@item.ScrapRegistroID"><i class="fa-solid fa-eye"></i><span>Detalle</span></a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="scrap-empty-state">
+                <span class="scrap-info-icon"><i class="fa-solid fa-inbox"></i></span>
+                <div><strong>No hay recepciones pendientes.</strong><p>Cuando Calidad o GP12 envíen Scrap mediante la integración, aparecerá aquí automáticamente.</p></div>
+            </div>
+        }
+    </section>
+}
