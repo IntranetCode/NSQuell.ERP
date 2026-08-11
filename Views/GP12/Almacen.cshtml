@@ -1,0 +1,680 @@
+@model ERP.NSQuell.Models.GP12AlmacenViewModel
+@using ERP.NSQuell.Models
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Almacén GP12";
+
+    string EstadoClase(string estado) => estado switch
+    {
+        GP12FiltroAlmacen.PendienteRecepcion => "state-pending",
+        GP12FiltroAlmacen.EnGP12 => "state-stock",
+        GP12FiltroAlmacen.ListoAlmacen => "state-ready",
+        GP12FiltroAlmacen.SalidaRegistrada => "state-out",
+        _ => "state-neutral"
+    };
+}
+
+<style>
+    .gp12-store-page {
+        width: min(1280px, calc(100% - 32px));
+        margin: 30px auto 56px;
+        color: #10213d;
+    }
+
+    .gp12-store-hero {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        padding: 24px 28px;
+        border-radius: 24px;
+        color: #fff;
+        background:
+            radial-gradient(circle at 88% 20%, rgba(37, 99, 235, .32), transparent 34%),
+            linear-gradient(120deg, #07172c 0%, #0b2444 58%, #123b70 100%);
+        box-shadow: 0 20px 42px rgba(15, 23, 42, .18);
+    }
+
+    .gp12-store-hero::after {
+        content: "";
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        right: -72px;
+        bottom: -122px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 50%;
+        box-shadow: 0 0 0 28px rgba(255,255,255,.025), 0 0 0 58px rgba(255,255,255,.02);
+    }
+
+    .hero-copy,
+    .hero-actions {
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 7px;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: #fbbf24;
+    }
+
+    .hero-title {
+        margin: 0;
+        font-size: clamp(24px, 3vw, 36px);
+        font-weight: 950;
+        letter-spacing: -.035em;
+    }
+
+    .hero-subtitle {
+        max-width: 760px;
+        margin: 7px 0 0;
+        color: rgba(255,255,255,.76);
+        font-size: 13px;
+        line-height: 1.55;
+    }
+
+    .hero-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .store-btn {
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: 12px;
+        padding: 0 16px;
+        text-decoration: none;
+        font-weight: 850;
+        font-size: 13px;
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+
+    .store-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .store-btn-light {
+        color: #0b2444;
+        background: #fff;
+        border: 1px solid rgba(255,255,255,.9);
+        box-shadow: 0 8px 20px rgba(0,0,0,.12);
+    }
+
+    .store-btn-ghost {
+        color: #fff;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.18);
+    }
+
+    .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: 14px 0;
+    }
+
+    .metric {
+        min-width: 0;
+        padding: 13px 15px;
+        border: 1px solid #dbe5f1;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, .045);
+    }
+
+    .metric-label {
+        display: block;
+        margin-bottom: 4px;
+        color: #66758c;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .metric strong {
+        display: block;
+        color: #0b1f3a;
+        font-size: 23px;
+        line-height: 1;
+        font-weight: 950;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .metric small {
+        display: block;
+        margin-top: 5px;
+        color: #7c8a9f;
+        font-size: 11px;
+    }
+
+    .store-panel {
+        overflow: hidden;
+        border: 1px solid #d9e4f0;
+        border-radius: 20px;
+        background: #fff;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, .06);
+    }
+
+    .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 17px 18px 14px;
+        border-bottom: 1px solid #e7edf5;
+    }
+
+    .panel-head h2 {
+        margin: 0;
+        color: #0b1f3a;
+        font-size: 18px;
+        font-weight: 950;
+    }
+
+    .panel-head p {
+        margin: 3px 0 0;
+        color: #75849a;
+        font-size: 12px;
+    }
+
+    .result-chip {
+        flex: 0 0 auto;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #edf4ff;
+        color: #1456b8;
+        font-size: 11px;
+        font-weight: 900;
+    }
+
+    .filters {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.6fr) minmax(190px, .8fr) auto;
+        gap: 9px;
+        padding: 14px 18px;
+        background: #fbfdff;
+        border-bottom: 1px solid #e9eef5;
+    }
+
+    .control {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid #ced9e7;
+        border-radius: 11px;
+        padding: 0 12px;
+        background: #fff;
+        color: #14233c;
+        outline: none;
+        font-size: 13px;
+        transition: border-color .16s ease, box-shadow .16s ease;
+    }
+
+    .control:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .11);
+    }
+
+    .search-btn {
+        min-height: 42px;
+        border: 0;
+        border-radius: 11px;
+        padding: 0 18px;
+        color: #fff;
+        background: linear-gradient(135deg, #1456b8, #0d74d8);
+        font-size: 13px;
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(20, 86, 184, .2);
+    }
+
+    .store-table-wrap {
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .store-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .store-table th {
+        padding: 10px 9px;
+        border-bottom: 1px solid #dfe7f1;
+        background: #f5f8fc;
+        color: #64748b;
+        font-size: 9px;
+        font-weight: 950;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        text-align: left;
+    }
+
+    .store-table td {
+        padding: 11px 9px;
+        border-bottom: 1px solid #edf1f6;
+        color: #20314b;
+        font-size: 12px;
+        vertical-align: middle;
+    }
+
+    .store-table tbody tr {
+        transition: background .16s ease;
+    }
+
+    .store-table tbody tr:hover {
+        background: #f8fbff;
+    }
+
+    .store-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .store-table th:nth-child(1), .store-table td:nth-child(1) { width: 10%; }
+    .store-table th:nth-child(2), .store-table td:nth-child(2) { width: 13%; }
+    .store-table th:nth-child(3), .store-table td:nth-child(3) { width: 13%; }
+    .store-table th:nth-child(4), .store-table td:nth-child(4) { width: 12%; text-align: center; }
+    .store-table th:nth-child(5), .store-table td:nth-child(5) { width: 12%; text-align: center; }
+    .store-table th:nth-child(6), .store-table td:nth-child(6) { width: 12%; text-align: center; }
+    .store-table th:nth-child(7), .store-table td:nth-child(7) { width: 18%; text-align: center; }
+    .store-table th:nth-child(8), .store-table td:nth-child(8) { width: 10%; text-align: right; }
+
+    .primary-line {
+        display: block;
+        overflow: hidden;
+        color: #0b1f3a;
+        font-weight: 900;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .secondary-line {
+        display: block;
+        overflow: hidden;
+        margin-top: 2px;
+        color: #7a8799;
+        font-size: 10px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .origin-chip {
+        display: inline-flex;
+        max-width: 100%;
+        margin-top: 4px;
+        padding: 3px 6px;
+        border: 1px solid #d5e2f0;
+        border-radius: 999px;
+        color: #245d9d;
+        background: #eef6ff;
+        font-size: 8px;
+        font-weight: 900;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .qty {
+        color: #0b1f3a;
+        font-weight: 900;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .state {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        max-width: 100%;
+        padding: 6px 9px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .state::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .state-pending { color: #a35c00; background: #fff5dd; border: 1px solid #f6d591; }
+    .state-stock { color: #0f62b5; background: #ebf5ff; border: 1px solid #bcdcff; }
+    .state-ready { color: #08783f; background: #eafaf1; border: 1px solid #b6e7cb; }
+    .state-out { color: #6552a5; background: #f2efff; border: 1px solid #d9d0ff; }
+    .state-neutral { color: #536176; background: #f1f4f8; border: 1px solid #dce3ec; }
+
+    .open-btn {
+        display: inline-flex;
+        min-height: 34px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 11px;
+        border: 1px solid #cbd9e9;
+        border-radius: 10px;
+        color: #0d4f9d;
+        background: #fff;
+        text-decoration: none;
+        font-size: 11px;
+        font-weight: 900;
+        transition: .16s ease;
+    }
+
+    .open-btn:hover {
+        color: #fff;
+        border-color: #1456b8;
+        background: #1456b8;
+    }
+
+    .empty-state {
+        padding: 54px 20px;
+        color: #7b889a;
+        text-align: center;
+        font-size: 13px;
+    }
+
+    .integration-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 11px 14px;
+        border: 1px solid #dbe4ee;
+        border-radius: 13px;
+        background: #f8fafc;
+        color: #5e6b7e;
+        font-size: 11px;
+        line-height: 1.5;
+    }
+
+    .integration-note strong {
+        color: #263750;
+    }
+
+    @@media (max-width: 980px) {
+        .metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .gp12-store-hero {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .store-table th:nth-child(3),
+        .store-table td:nth-child(3) {
+            display: none;
+        }
+
+        .store-table th:nth-child(1), .store-table td:nth-child(1) { width: 10%; }
+        .store-table th:nth-child(2), .store-table td:nth-child(2) { width: 18%; }
+        .store-table th:nth-child(4), .store-table td:nth-child(4) { width: 15%; }
+        .store-table th:nth-child(5), .store-table td:nth-child(5) { width: 15%; }
+        .store-table th:nth-child(6), .store-table td:nth-child(6) { width: 15%; }
+        .store-table th:nth-child(7), .store-table td:nth-child(7) { width: 17%; }
+        .store-table th:nth-child(8), .store-table td:nth-child(8) { width: 10%; }
+    }
+
+    @@media (max-width: 720px) {
+        .gp12-store-page {
+            width: min(100% - 18px, 1280px);
+            margin-top: 16px;
+        }
+
+        .metrics,
+        .filters {
+            grid-template-columns: 1fr;
+        }
+
+        .store-table thead {
+            display: none;
+        }
+
+        .store-table,
+        .store-table tbody,
+        .store-table tr,
+        .store-table td {
+            display: block;
+            width: 100% !important;
+        }
+
+        .store-table tr {
+            padding: 12px;
+            border-bottom: 1px solid #e8eef5;
+        }
+
+        .store-table td {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 5px 0;
+            border: 0;
+            text-align: right !important;
+        }
+
+        .store-table td::before {
+            content: attr(data-label);
+            color: #77859a;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            text-align: left;
+        }
+    }
+</style>
+
+<div class="gp12-store-page">
+    <section class="gp12-store-hero">
+        <div class="hero-copy">
+            <div class="hero-eyebrow">
+                <i class="fa-solid fa-warehouse"></i>
+                Inventario propio GP12
+            </div>
+
+            <h1 class="hero-title">Almacén GP12</h1>
+
+            <p class="hero-subtitle">
+                Inventario físico de GP12 sin importar el origen de la solicitud. La salida hacia Almacén
+                queda preparada como contrato de integración y no modifica existencias externas.
+            </p>
+        </div>
+
+        <div class="hero-actions">
+            <a asp-controller="GP12"
+               asp-action="Index"
+               class="store-btn store-btn-ghost">
+                <i class="fa-solid fa-arrow-left"></i>
+                Volver a GP12
+            </a>
+
+            <a asp-controller="GP12"
+               asp-action="Almacen"
+               class="store-btn store-btn-light">
+                <i class="fa-solid fa-rotate"></i>
+                Actualizar
+            </a>
+        </div>
+    </section>
+
+    <section class="metrics">
+        <article class="metric">
+            <span class="metric-label">Pendiente de recibir</span>
+            <strong>@Model.TotalPendienteRecibir</strong>
+            <small>@Model.PiezasPendientesRecibir.ToString("N0") pieza(s)</small>
+        </article>
+
+        <article class="metric">
+            <span class="metric-label">En inventario GP12</span>
+            <strong>@Model.TotalEnInventario</strong>
+            <small>@Model.PiezasEnInventario.ToString("N0") pieza(s) físicas</small>
+        </article>
+
+        <article class="metric">
+            <span class="metric-label">Listo para Almacén</span>
+            <strong>@Model.TotalListoAlmacen</strong>
+            <small>@Model.PiezasListasAlmacen.ToString("N0") pieza(s)</small>
+        </article>
+
+        <article class="metric">
+            <span class="metric-label">Salida completada</span>
+            <strong>@Model.TotalSalidaRegistrada</strong>
+            <small>Solo movimientos registrados en GP12</small>
+        </article>
+    </section>
+
+    <section class="store-panel">
+        <div class="panel-head">
+            <div>
+                <h2>Inventario y material GP12</h2>
+                <p>Recepción, existencia y disponibilidad física de todas las solicitudes activas.</p>
+            </div>
+
+            <span class="result-chip">
+                @Model.Materiales.Count resultado(s)
+            </span>
+        </div>
+
+        <form asp-controller="GP12"
+              asp-action="Almacen"
+              method="get"
+              class="filters">
+
+            <input type="text"
+                   name="busqueda"
+                   value="@Model.Busqueda"
+                   class="control"
+                   placeholder="Buscar OF, parte, cliente o material..." />
+
+            <select name="filtro" class="control">
+                <option value="TODOS" selected="@(Model.Filtro == GP12FiltroAlmacen.Todos ? "selected" : null)">Todos los estados</option>
+                <option value="PENDIENTE_RECEPCION" selected="@(Model.Filtro == GP12FiltroAlmacen.PendienteRecepcion ? "selected" : null)">Pendiente de recibir</option>
+                <option value="EN_GP12" selected="@(Model.Filtro == GP12FiltroAlmacen.EnGP12 ? "selected" : null)">En almacén GP12</option>
+                <option value="LISTO_ALMACEN" selected="@(Model.Filtro == GP12FiltroAlmacen.ListoAlmacen ? "selected" : null)">Listo para Almacén</option>
+                <option value="SALIDA_REGISTRADA" selected="@(Model.Filtro == GP12FiltroAlmacen.SalidaRegistrada ? "selected" : null)">Salida registrada</option>
+            </select>
+
+            <button type="submit" class="search-btn">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                Buscar
+            </button>
+        </form>
+
+        @if (!Model.Materiales.Any())
+        {
+            <div class="empty-state">
+                <i class="fa-solid fa-box-open fa-2x mb-2"></i>
+                <div>No hay material GP12 que coincida con el filtro seleccionado.</div>
+            </div>
+        }
+        else
+        {
+            <div class="store-table-wrap">
+                <table class="store-table">
+                    <thead>
+                        <tr>
+                            <th>GP12 / OF</th>
+                            <th>Parte</th>
+                            <th>Cliente / material</th>
+                            <th>Solicitado</th>
+                            <th>Recibido</th>
+                            <th>Existencia</th>
+                            <th>Estado físico</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var item in Model.Materiales)
+                    {
+                        <tr>
+                            <td data-label="GP12 / OF">
+                                <span class="primary-line">GP12 #@item.SolicitudGP12ID</span>
+                                <span class="secondary-line">@(item.OrdenFabricacion ?? "Sin OF")</span>
+                                <span class="origin-chip">@(string.IsNullOrWhiteSpace(item.Origen) ? "SIN ORIGEN" : item.Origen)</span>
+                            </td>
+
+                            <td data-label="Parte">
+                                <span class="primary-line">@(item.NumeroParte ?? "Sin parte")</span>
+                                <span class="secondary-line">@(item.DescripcionParte ?? "Sin descripción")</span>
+                            </td>
+
+                            <td data-label="Cliente / material">
+                                <span class="primary-line">@(item.ClienteNombre ?? "Sin cliente")</span>
+                                <span class="secondary-line">
+                                    @(string.IsNullOrWhiteSpace(item.MaterialCodigo)
+                                        ? item.MaterialDescripcion ?? "Sin material"
+                                        : item.MaterialCodigo)
+                                </span>
+                            </td>
+
+                            <td data-label="Solicitado">
+                                <span class="qty">@item.CantidadSolicitada.ToString("N0")</span>
+                            </td>
+
+                            <td data-label="Recibido">
+                                <span class="qty">@item.CantidadRecibida.ToString("N0")</span>
+                                @if (item.PendienteRecibir > 0)
+                                {
+                                    <span class="secondary-line">Faltan @item.PendienteRecibir.ToString("N0")</span>
+                                }
+                            </td>
+
+                            <td data-label="Existencia">
+                                <span class="qty">@Math.Max(0, item.SaldoInventario).ToString("N0")</span>
+                                @if (item.FechaUltimaEntrada.HasValue)
+                                {
+                                    <span class="secondary-line">Entrada @item.FechaUltimaEntrada.Value.ToString("dd/MM HH:mm")</span>
+                                }
+                            </td>
+
+                            <td data-label="Estado físico">
+                                <span class="state @EstadoClase(item.EstadoAlmacen)">
+                                    @GP12FiltroAlmacen.Nombre(item.EstadoAlmacen)
+                                </span>
+                            </td>
+
+                            <td data-label="Acción">
+                                <a asp-controller="GP12"
+                                   asp-action="Detalle"
+                                   asp-route-id="@item.SolicitudGP12ID"
+                                   class="open-btn">
+                                    Abrir
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <div class="integration-note">
+        <i class="fa-solid fa-code-branch mt-1"></i>
+        <div>
+            <strong>Integración futura con Almacén:</strong>
+            el controlador deja disponible <code>POST /GP12/RegistrarSalidaParaAlmacen</code>.
+            Ese contrato descuenta únicamente el inventario GP12 y devuelve la referencia del movimiento;
+            el módulo Almacén deberá registrar por separado su propia entrada.
+        </div>
+    </div>
+</div>

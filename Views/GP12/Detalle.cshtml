@@ -41,6 +41,16 @@
                         a.ProgramacionGP12ID == p.ProgramacionGP12ID)
                     .Sum(a => a.CantidadAsignada))
             .ToList();
+
+    // Abrir por defecto la etapa más avanzada que ya tenga actividad.
+    var tabInicial =
+        Model.Inspecciones.Any(x => x.Activo)
+            ? "inspeccion"
+            : Model.Asignaciones.Any(x => x.Activo)
+                ? "asignacion"
+                : Model.Programaciones.Any(x => x.Activo)
+                    ? "programacion"
+                    : "recepcion";
 }
 
 <!DOCTYPE html>
@@ -480,6 +490,533 @@
                 width: 18px;
                 height: 18px;
             }
+
+        /* ============================================================
+           GP12 DETALLE COMPACTO
+           Reorganización visual: datos fijos + operación por pestañas
+           ============================================================ */
+
+        .page {
+            max-width: 1500px;
+            padding: 14px 18px 22px;
+        }
+
+        .hero {
+            min-height: 72px;
+            padding: 14px 18px;
+            border-radius: 14px;
+        }
+
+        .hero h1 {
+            font-size: 24px;
+            line-height: 1.1;
+            margin-bottom: 3px;
+        }
+
+        .hero p {
+            font-size: 12px;
+        }
+
+        .status {
+            padding: 7px 11px;
+            font-size: 12px;
+        }
+
+        .btn {
+            min-height: 34px;
+            padding: 7px 12px;
+            font-size: 12px;
+        }
+
+        .alert {
+            margin-top: 9px;
+            padding: 9px 12px;
+            font-size: 12px;
+        }
+
+        .summary {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            margin: 10px 0 8px;
+        }
+
+        .summary-card {
+            padding: 9px 12px;
+            border-radius: 10px;
+        }
+
+        .summary-card label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .summary-card strong {
+            margin-top: 2px;
+            font-size: 16px;
+        }
+
+        .classification-strip {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin: 0 0 10px;
+        }
+
+        .classification-card {
+            padding: 9px 11px 9px 14px;
+            border-radius: 10px;
+        }
+
+        .classification-card h3 {
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
+
+        .classification-values {
+            gap: 6px;
+        }
+
+        .classification-values small {
+            font-size: 8.5px;
+        }
+
+        .classification-values strong {
+            margin-top: 1px;
+            font-size: 12px;
+        }
+
+        .detail-layout {
+            display: grid;
+            grid-template-columns: 290px minmax(0, 1fr);
+            gap: 10px;
+            align-items: start;
+        }
+
+        .request-panel,
+        .operations-area .panel {
+            margin-top: 0;
+        }
+
+        .request-panel {
+            position: sticky;
+            top: 10px;
+        }
+
+        .panel {
+            border-radius: 12px;
+        }
+
+        .panel-title {
+            padding: 10px 13px;
+            font-size: 14px;
+        }
+
+        .panel-body {
+            padding: 12px;
+        }
+
+        .request-panel .data-grid {
+            display: block;
+        }
+
+        .request-panel .data {
+            display: grid;
+            grid-template-columns: 92px minmax(0, 1fr);
+            gap: 8px;
+            align-items: start;
+            padding: 7px 0;
+            border-bottom: 1px solid #eef2f6;
+        }
+
+        .request-panel .data:last-child {
+            border-bottom: 0;
+        }
+
+        .request-panel .data[style] {
+            grid-column: auto !important;
+        }
+
+        .request-panel .data label {
+            margin: 0;
+            font-size: 9px;
+            line-height: 1.25;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .request-panel .data div {
+            min-width: 0;
+            font-size: 11px;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+        }
+
+        .operations-area {
+            min-width: 0;
+        }
+
+        .operation-tabs {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 6px;
+            padding: 6px;
+            margin-bottom: 8px;
+            border: 1px solid #dce3ea;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 5px 18px rgba(16, 24, 40, .05);
+        }
+
+        .operation-tab {
+            position: relative;
+            min-width: 0;
+            min-height: 42px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            padding: 6px 8px;
+            background: #f8fafc;
+            color: #475467;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 800;
+            transition: .16s ease;
+        }
+
+        .operation-tab:hover {
+            border-color: #b9d5f3;
+            background: #f2f7fd;
+            transform: translateY(-1px);
+        }
+
+        .operation-tab.active {
+            border-color: #0d5cab;
+            background: #eaf3ff;
+            color: #0d5cab;
+            box-shadow: inset 0 0 0 1px rgba(13,92,171,.05);
+        }
+
+        .operation-tab .tab-step {
+            display: inline-grid;
+            place-items: center;
+            width: 20px;
+            height: 20px;
+            margin-right: 4px;
+            border-radius: 6px;
+            background: #fff;
+            border: 1px solid #dce3ea;
+            font-size: 9px;
+        }
+
+        .operation-tab .tab-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 18px;
+            margin-left: 4px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: rgba(13,92,171,.08);
+            font-size: 9px;
+        }
+
+        .tab-panel {
+            display: none;
+            margin-top: 0;
+            animation: gp12TabIn .18s ease-out;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        @@keyframes gp12TabIn {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .field label {
+            margin-bottom: 3px;
+            font-size: 10px;
+        }
+
+        input, select, textarea {
+            min-height: 34px;
+            padding: 7px 9px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        textarea {
+            min-height: 48px;
+            max-height: 100px;
+        }
+
+        .receipt-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 9px;
+        }
+
+        .receipt-card {
+            padding: 9px;
+            border-radius: 9px;
+        }
+
+        .receipt-stats {
+            gap: 7px;
+            margin: 5px 0 7px;
+            font-size: 9px;
+        }
+
+        .tag-chip,
+        .badge {
+            padding: 4px 7px;
+            font-size: 9px;
+        }
+
+        .actions {
+            margin-top: 9px;
+        }
+
+        .notice {
+            padding: 9px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+        }
+
+        .table-wrap {
+            width: 100%;
+            overflow: hidden;
+            border: 1px solid #e4e9ef;
+            border-radius: 9px;
+        }
+
+        table {
+            width: 100%;
+            min-width: 0;
+            table-layout: fixed;
+        }
+
+        th {
+            padding: 7px 6px;
+            font-size: 9px;
+            line-height: 1.15;
+            white-space: normal;
+        }
+
+        td {
+            padding: 7px 6px;
+            font-size: 10px;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
+        }
+
+        .empty {
+            padding: 15px 8px;
+            font-size: 11px;
+        }
+
+        .check-card {
+            min-height: 36px;
+            padding: 7px 8px;
+            font-size: 10px;
+        }
+
+        .check-card input {
+            width: 15px;
+            height: 15px;
+        }
+
+        .inspection-card {
+            border: 1px solid #dce3ea;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #fff;
+        }
+
+        .inspection-card-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .inspection-card-head strong {
+            font-size: 12px;
+        }
+
+        .inspection-meta {
+            color: #667085;
+            font-size: 9.5px;
+            margin-top: 2px;
+        }
+
+        .inspection-result-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 6px;
+        }
+
+        .inspection-metric {
+            padding: 7px 8px;
+            border: 1px solid #e4e9ef;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        .inspection-metric span {
+            display: block;
+            color: #667085;
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .inspection-metric strong {
+            display: block;
+            margin-top: 2px;
+            color: #0b3558;
+            font-size: 11px;
+        }
+
+        .inspection-checks {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .inspection-check {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 5px;
+            padding: 6px 7px;
+            border-radius: 7px;
+            background: #f8fafc;
+            font-size: 8.5px;
+            color: #475467;
+        }
+
+        .inspection-check b {
+            color: #0b3558;
+        }
+
+        .inspection-finish {
+            margin-top: 6px;
+            text-align: right;
+            color: #667085;
+            font-size: 9px;
+        }
+
+        .gp12-finalizar-form .form-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+
+        .tab-panel .table-wrap[style] {
+            margin-top: 10px !important;
+        }
+
+        .tab-panel .notice[style] {
+            margin-bottom: 8px !important;
+        }
+
+        .operations-area > .tab-panel {
+            min-height: 0;
+        }
+
+        .history-panel .panel-body {
+            padding: 8px;
+        }
+
+        .history-panel td,
+        .history-panel th {
+            padding-top: 6px;
+            padding-bottom: 6px;
+        }
+
+        @@media (max-width: 1100px) {
+            .detail-layout {
+                grid-template-columns: 240px minmax(0, 1fr);
+            }
+
+            .request-panel .data {
+                grid-template-columns: 78px minmax(0, 1fr);
+            }
+
+            .operation-tab {
+                font-size: 10px;
+                padding-left: 5px;
+                padding-right: 5px;
+            }
+        }
+
+        @@media (max-width: 850px) {
+            .detail-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .request-panel {
+                position: static;
+            }
+
+            .request-panel .data-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 0 14px;
+            }
+
+            .operation-tabs {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .summary,
+            .classification-strip {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @@media (max-width: 600px) {
+            .page {
+                padding: 8px;
+            }
+
+            .hero {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .summary,
+            .classification-strip,
+            .request-panel .data-grid,
+            .form-grid,
+            .gp12-finalizar-form .form-grid,
+            .receipt-grid,
+            .inspection-result-grid,
+            .inspection-checks {
+                grid-template-columns: 1fr;
+            }
+
+            .operation-tabs {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .span-2,
+            .span-all {
+                grid-column: auto;
+            }
+        }
+
     </style>
 </head>
 
@@ -580,8 +1117,9 @@
             </section>
         }
 
-        <section class="panel">
-            <div class="panel-title">1. Datos de la solicitud</div>
+        <div class="detail-layout">
+        <aside class="panel request-panel">
+            <div class="panel-title">Datos de la solicitud</div>
 
             <div class="panel-body">
                 <div class="data-grid">
@@ -631,10 +1169,50 @@
                     </div>
                 </div>
             </div>
-        </section>
+        </aside>
 
-        <section class="panel">
-            <div class="panel-title">2. Recepción de material / Inventario GP12</div>
+        <main class="operations-area">
+            <nav class="operation-tabs" aria-label="Etapas operativas GP12">
+                <button type="button"
+                        class="operation-tab @(tabInicial == "recepcion" ? "active" : "")"
+                        data-tab-target="recepcion"
+                        aria-selected="@(tabInicial == "recepcion" ? "true" : "false")">
+                    <span class="tab-step">2</span>Recepción
+                    <span class="tab-count">@Model.InventarioMovimientos.Count()</span>
+                </button>
+                <button type="button"
+                        class="operation-tab @(tabInicial == "programacion" ? "active" : "")"
+                        data-tab-target="programacion"
+                        aria-selected="@(tabInicial == "programacion" ? "true" : "false")">
+                    <span class="tab-step">3</span>Programación
+                    <span class="tab-count">@Model.Programaciones.Count(x => x.Activo)</span>
+                </button>
+                <button type="button"
+                        class="operation-tab @(tabInicial == "asignacion" ? "active" : "")"
+                        data-tab-target="asignacion"
+                        aria-selected="@(tabInicial == "asignacion" ? "true" : "false")">
+                    <span class="tab-step">4</span>Asignación
+                    <span class="tab-count">@Model.Asignaciones.Count(x => x.Activo)</span>
+                </button>
+                <button type="button"
+                        class="operation-tab @(tabInicial == "inspeccion" ? "active" : "")"
+                        data-tab-target="inspeccion"
+                        aria-selected="@(tabInicial == "inspeccion" ? "true" : "false")">
+                    <span class="tab-step">5</span>Inspección
+                    <span class="tab-count">@Model.Inspecciones.Count(x => x.Activo)</span>
+                </button>
+                <button type="button"
+                        class="operation-tab"
+                        data-tab-target="historial"
+                        aria-selected="false">
+                    Historial
+                    <span class="tab-count">@Model.Historial.Count()</span>
+                </button>
+            </nav>
+
+        <section class="panel tab-panel @(tabInicial == "recepcion" ? "active" : "")"
+                 data-tab-panel="recepcion">
+            <div class="panel-title">Recepción de material / Inventario GP12</div>
 
             <div class="panel-body">
                 @if (Model.PuedeRecibir)
@@ -787,8 +1365,9 @@
             </div>
         </section>
 
-        <section class="panel">
-            <div class="panel-title">3. Programación GP12</div>
+        <section class="panel tab-panel @(tabInicial == "programacion" ? "active" : "")"
+                 data-tab-panel="programacion">
+            <div class="panel-title">Programación GP12</div>
 
             <div class="panel-body">
                 @if (Model.PuedeProgramar && disponibilidadProgramar.Any())
@@ -955,8 +1534,9 @@
             </div>
         </section>
 
-        <section class="panel">
-            <div class="panel-title">4. Asignación de carga de trabajo</div>
+        <section class="panel tab-panel @(tabInicial == "asignacion" ? "active" : "")"
+                 data-tab-panel="asignacion">
+            <div class="panel-title">Asignación de carga de trabajo</div>
 
             <div class="panel-body">
                 @if (programasConDisponible.Any() &&
@@ -1098,8 +1678,9 @@
             </div>
         </section>
 
-        <section class="panel">
-            <div class="panel-title">5. Inspección GP12</div>
+        <section class="panel tab-panel @(tabInicial == "inspeccion" ? "active" : "")"
+                 data-tab-panel="inspeccion">
+            <div class="panel-title">Inspección GP12</div>
             <div class="panel-body">
                 @{
                     var asignacionesActivas = Model.Asignaciones.Where(x => x.Activo).ToList();
@@ -1149,11 +1730,11 @@
                     @foreach (var i in inspeccionesActivas)
                     {
                         var abierta = !i.FechaFin.HasValue;
-                        <div style="border:1px solid #dce3ea;border-radius:13px;padding:16px;margin-bottom:14px;background:#fff;">
-                            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px;">
+                        <div class="inspection-card">
+                            <div class="inspection-card-head">
                                 <div>
                                     <strong>Inspección #@i.InspeccionGP12ID</strong>
-                                    <div style="color:#667085;font-size:12px;margin-top:4px;">Asignación #@i.AsignacionGP12ID · @i.InspectorNombre · Inicio @(i.FechaInicio?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    <div class="inspection-meta">Asignación #@i.AsignacionGP12ID · @i.InspectorNombre · Inicio @(i.FechaInicio?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
                                 </div>
                                 <span class="badge">@(abierta ? "EN PROCESO" : "TERMINADA")</span>
                             </div>
@@ -1184,12 +1765,21 @@
                             }
                             else
                             {
-                                <div class="table-wrap">
-                                    <table>
-                                        <thead><tr><th>Revisadas</th><th>OK</th><th>NOK</th><th>Retrabajo</th><th>Scrap</th><th>Etiqueta</th><th>Docs</th><th>Ruta</th><th>Báscula</th><th>Etiqueta inspección</th><th>Fin</th></tr></thead>
-                                        <tbody><tr><td>@i.CantidadRevisada.ToString("N4")</td><td>@i.CantidadOK.ToString("N4")</td><td>@i.CantidadNOK.ToString("N4")</td><td>@i.CantidadRetrabajada.ToString("N4")</td><td>@i.CantidadScrap.ToString("N4")</td><td>@(i.ValidacionEtiqueta ? "Sí" : "No")</td><td>@(i.DocumentacionColocada ? "Sí" : "No")</td><td>@(i.RutaInspeccionValidada ? "Sí" : "No")</td><td>@(i.CantidadBasculaValidada ? "Sí" : "No")</td><td>@(i.EtiquetaInspeccionColocada ? "Sí" : "No")</td><td>@(i.FechaFin?.ToString("dd/MM/yyyy HH:mm") ?? "-")</td></tr></tbody>
-                                    </table>
+                                <div class="inspection-result-grid">
+                                    <div class="inspection-metric"><span>Revisadas</span><strong>@i.CantidadRevisada.ToString("N4")</strong></div>
+                                    <div class="inspection-metric"><span>OK</span><strong>@i.CantidadOK.ToString("N4")</strong></div>
+                                    <div class="inspection-metric"><span>NOK</span><strong>@i.CantidadNOK.ToString("N4")</strong></div>
+                                    <div class="inspection-metric"><span>Retrabajo</span><strong>@i.CantidadRetrabajada.ToString("N4")</strong></div>
+                                    <div class="inspection-metric"><span>Scrap</span><strong>@i.CantidadScrap.ToString("N4")</strong></div>
                                 </div>
+                                <div class="inspection-checks">
+                                    <div class="inspection-check"><span>Etiqueta</span><b>@(i.ValidacionEtiqueta ? "Sí" : "No")</b></div>
+                                    <div class="inspection-check"><span>Documentación</span><b>@(i.DocumentacionColocada ? "Sí" : "No")</b></div>
+                                    <div class="inspection-check"><span>Ruta</span><b>@(i.RutaInspeccionValidada ? "Sí" : "No")</b></div>
+                                    <div class="inspection-check"><span>Báscula</span><b>@(i.CantidadBasculaValidada ? "Sí" : "No")</b></div>
+                                    <div class="inspection-check"><span>Etiqueta inspección</span><b>@(i.EtiquetaInspeccionColocada ? "Sí" : "No")</b></div>
+                                </div>
+                                <div class="inspection-finish">Finalizada: @(i.FechaFin?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
                             }
                         </div>
                     }
@@ -1197,7 +1787,8 @@
             </div>
         </section>
 
-        <section class="panel">
+        <section class="panel tab-panel history-panel"
+                 data-tab-panel="historial">
             <div class="panel-title">Historial GP12</div>
 
             <div class="panel-body">
@@ -1246,20 +1837,41 @@
                 </div>
             </div>
         </section>
-
-        <section class="panel">
-            <div class="panel-title">Próxima etapa: inspección y retrabajo</div>
-
-            <div class="panel-body">
-                <div class="notice">
-                    Esta sección se habilitará después de validar el flujo
-                    Recepción → Programación → Asignación.
-                    Aquí utilizaremos el catálogo D1-D15 del formato GQ-F-CA07-02.
-                </div>
-            </div>
-        </section>
+        </main>
+        </div>
 
     </div>
+    <script>
+        (() => {
+            const tabs = Array.from(document.querySelectorAll('[data-tab-target]'));
+            const panels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+
+            if (!tabs.length || !panels.length) {
+                return;
+            }
+
+            function activarTab(nombre) {
+                const panel = panels.find(x => x.dataset.tabPanel === nombre);
+                if (!panel) return;
+
+                tabs.forEach(tab => {
+                    const activo = tab.dataset.tabTarget === nombre;
+                    tab.classList.toggle('active', activo);
+                    tab.setAttribute('aria-selected', activo ? 'true' : 'false');
+                });
+
+                panels.forEach(item => {
+                    item.classList.toggle('active', item.dataset.tabPanel === nombre);
+                });
+            }
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    activarTab(tab.dataset.tabTarget);
+                });
+            });
+        })();
+    </script>
     <script>
         (() => {
             const etiquetaSelect = document.getElementById('programacionEtiqueta');

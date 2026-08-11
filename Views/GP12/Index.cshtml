@@ -50,16 +50,7 @@
     }
 }
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1" />
-
-    <title>GP12 | ERPQuell</title>
-
-    <style>
+<style>
         :root {
             --bg: #eef2f7;
             --panel: #ffffff;
@@ -889,6 +880,8 @@
 
         .panel-body {
             padding: 19px 21px 21px;
+            min-width: 0;
+            overflow: hidden;
         }
 
         /* ======================================================
@@ -989,7 +982,10 @@
            ====================================================== */
 
         .table-wrap {
-            overflow-x: auto;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            overflow: hidden;
 
             border:
                 1px solid var(--line);
@@ -997,17 +993,18 @@
             border-radius: 16px;
         }
 
-        table {
+        .table-wrap table {
             width: 100%;
-
-            min-width: 1120px;
+            max-width: 100%;
+            min-width: 0;
 
             border-collapse: collapse;
+            table-layout: fixed;
         }
 
         th {
             padding:
-                13px 14px;
+                10px 7px;
 
             background: #f8fafc;
 
@@ -1018,25 +1015,144 @@
 
             text-align: left;
 
-            font-size: 10px;
+            font-size: 9px;
 
             font-weight: 900;
 
             text-transform: uppercase;
 
-            letter-spacing: .065em;
+            letter-spacing: .045em;
+
+            white-space: nowrap;
         }
 
         td {
             padding:
-                13px 14px;
+                10px 7px;
 
             border-bottom:
                 1px solid #f0f3f6;
 
             vertical-align: middle;
 
-            font-size: 13px;
+            font-size: 11.5px;
+
+            line-height: 1.25;
+
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        /* Distribución compacta de columnas para evitar scroll horizontal */
+        th:nth-child(1),
+        td:nth-child(1) {
+            width: 4%;
+        }
+
+        th:nth-child(2),
+        td:nth-child(2) {
+            width: 8%;
+        }
+
+        th:nth-child(3),
+        td:nth-child(3) {
+            width: 8%;
+        }
+
+        th:nth-child(4),
+        td:nth-child(4) {
+            width: 13%;
+        }
+
+        th:nth-child(5),
+        td:nth-child(5) {
+            width: 12%;
+        }
+
+        th:nth-child(6),
+        td:nth-child(6),
+        th:nth-child(7),
+        td:nth-child(7),
+        th:nth-child(8),
+        td:nth-child(8) {
+            width: 8.5%;
+        }
+
+        th:nth-child(9),
+        td:nth-child(9) {
+            width: 12%;
+        }
+
+        th:nth-child(10),
+        td:nth-child(10) {
+            width: 10%;
+        }
+
+        th:nth-child(11),
+        td:nth-child(11) {
+            width: 7%;
+            text-align: right;
+        }
+
+        td:nth-child(3),
+        td:nth-child(5) {
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+
+        .table-wrap .part,
+        .table-wrap .description {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .table-wrap .description {
+            margin-top: 2px;
+            font-size: 9.5px;
+        }
+
+        .table-wrap .number {
+            white-space: nowrap;
+            font-size: 10.5px;
+        }
+
+        .table-wrap .pill {
+            max-width: 100%;
+            padding: 5px 7px;
+            font-size: 9px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .table-date {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .table-date strong {
+            font-size: 10.5px;
+            font-weight: 800;
+        }
+
+        .table-date span {
+            color: var(--muted);
+            font-size: 9.5px;
+        }
+
+        .table-wrap .btn-open {
+            min-width: 0;
+            width: 100%;
+            max-width: 100%;
+            padding: 7px 5px;
+            font-size: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         tbody tr {
@@ -1602,6 +1718,38 @@
             }
         }
 
+        @@media (max-width: 1050px) {
+            .table-wrap th {
+                padding-left: 5px;
+                padding-right: 5px;
+                font-size: 8.5px;
+            }
+
+            .table-wrap td {
+                padding-left: 5px;
+                padding-right: 5px;
+                font-size: 10.5px;
+            }
+
+            .table-wrap .request-id {
+                font-size: 10px;
+            }
+
+            .table-wrap .pill {
+                font-size: 8.5px;
+                padding: 4px 5px;
+            }
+
+            .table-wrap .btn-open {
+                font-size: 0;
+            }
+
+            .table-wrap .btn-open::after {
+                content: "Abrir";
+                font-size: 9.5px;
+            }
+        }
+
         @@media (max-width: 950px) {
             .flow-track {
                 grid-template-columns:
@@ -1652,9 +1800,6 @@
             }
         }
     </style>
-</head>
-
-<body>
 
 <div class="page">
 
@@ -1714,6 +1859,12 @@
                        asp-action="Crear"
                        class="btn btn-new">
                         + Nueva solicitud
+                    </a>
+
+                    <a asp-controller="GP12"
+                       asp-action="Almacen"
+                       class="btn btn-refresh">
+                        ▣ Almacén GP12
                     </a>
 
                     <a asp-controller="GP12"
@@ -2153,18 +2304,15 @@
                                     </td>
 
                                     <td class="number">
-                                        @item.CantidadSolicitada
-                                            .ToString("N4")
+                                        @(item.CantidadSolicitada.ToString("N4"))
                                     </td>
 
                                     <td class="number">
-                                        @item.CantidadRecibida
-                                            .ToString("N4")
+                                        @(item.CantidadRecibida.ToString("N4"))
                                     </td>
 
                                     <td class="number">
-                                        @item.CantidadProcesada
-                                            .ToString("N4")
+                                        @(item.CantidadProcesada.ToString("N4"))
                                     </td>
 
                                     <td>
@@ -2181,11 +2329,14 @@
                                     </td>
 
                                     <td>
-
-                                        @item.FechaSolicitud
-                                            .ToString(
-                                                "dd/MM/yyyy HH:mm")
-
+                                        <div class="table-date">
+                                            <strong>
+                                                @(item.FechaSolicitud.ToString("dd/MM/yyyy"))
+                                            </strong>
+                                            <span>
+                                                @(item.FechaSolicitud.ToString("HH:mm"))
+                                            </span>
+                                        </div>
                                     </td>
 
                                     <td>
@@ -2298,6 +2449,3 @@
     </section>
 
 </div>
-
-</body>
-</html>

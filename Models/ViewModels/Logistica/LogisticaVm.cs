@@ -126,6 +126,7 @@ public sealed class LogisticaDetalleVm
     public string Unidad { get; set; } = string.Empty;
     public string Operador { get; set; } = string.Empty;
     public string Observaciones { get; set; } = string.Empty;
+    public string ReferenciaOperacion { get; set; } = string.Empty;
     public DateTime? FechaPreparacion { get; set; }
     public DateTime? FechaCarga { get; set; }
     public DateTime? FechaSalida { get; set; }
