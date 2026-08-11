@@ -1,34 +1,532 @@
-﻿@* LOGISTICA_FASE1_TEST_20260807_v1_3 *@
+﻿@* LOGISTICA_CATALOGOS_PREMIUM_V2 *@
 @using ERP.NSQuell.Models.ViewModels.Logistica
 @model LogisticaCatalogosVm
 @{
     Layout = "_LogisticaLayout";
     ViewData["Title"] = "Rutas y unidades";
 }
-<section class="log-page-head"><div><span class="log-kicker">CATÁLOGOS</span><h1>Rutas y unidades</h1><p>Catálogos propios de la operación logística.</p></div><a class="log-btn log-btn-ghost" asp-action="Index">Regresar</a></section>
-<section class="log-split">
-    <div class="log-panel">
-        <div class="log-panel-head"><div><span class="log-kicker">RUTAS</span><h2>Nueva ruta</h2></div></div>
-        <form asp-action="GuardarRuta" method="post" class="log-form-grid">
-            @Html.AntiForgeryToken()
-            <div class="log-field"><label>Código</label><input name="Codigo" required /></div>
-            <div class="log-field"><label>Nombre</label><input name="Nombre" required /></div>
-            <div class="log-field log-span-2"><label>Descripción</label><input name="Descripcion" /></div>
-            <button class="log-btn log-btn-primary" type="submit">Guardar ruta</button>
-        </form>
-        <div class="log-list">@foreach (var r in Model.Rutas) { <div><strong>@r.Codigo · @r.Nombre</strong><small>@r.Descripcion</small></div> } @if (!Model.Rutas.Any()) { <div class="log-empty-inline">Sin rutas capturadas.</div> }</div>
-    </div>
-    <div class="log-panel">
-        <div class="log-panel-head"><div><span class="log-kicker">TRANSPORTE</span><h2>Nueva unidad</h2></div></div>
-        <form asp-action="GuardarUnidad" method="post" class="log-form-grid">
-            @Html.AntiForgeryToken()
-            <div class="log-field"><label>Número económico</label><input name="NumeroEconomico" required /></div>
-            <div class="log-field"><label>Placas</label><input name="Placas" /></div>
-            <div class="log-field"><label>Marca</label><input name="Marca" /></div>
-            <div class="log-field"><label>Modelo</label><input name="Modelo" /></div>
-            <div class="log-field"><label>Capacidad piezas</label><input name="CapacidadPiezas" type="number" min="1" /></div>
-            <button class="log-btn log-btn-primary" type="submit">Guardar unidad</button>
-        </form>
-        <div class="log-list">@foreach (var u in Model.Unidades) { <div><strong>@u.NumeroEconomico · @u.Placas</strong><small>@u.Marca @u.Modelo · @(u.CapacidadPiezas?.ToString("N0") ?? "Sin capacidad") pzas</small></div> } @if (!Model.Unidades.Any()) { <div class="log-empty-inline">Sin unidades capturadas.</div> }</div>
-    </div>
-</section>
+<style>
+    :root {
+        --navy: #071b31;
+        --blue: #0f4c81;
+        --blue2: #0a3b65;
+        --green: #117a4b;
+        --red: #b42318;
+        --ink: #172033;
+        --muted: #667085;
+        --line: #d9e3ee;
+        --shadow: 0 14px 34px rgba(15,23,42,.07)
+    }
+
+    .cat-page {
+        display: flex;
+        flex-direction: column;
+        gap: 15px
+    }
+
+    .cat-hero {
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(118deg,var(--navy),#103d64 72%,#175f8c);
+        color: #fff;
+        border-radius: 22px;
+        padding: 22px 24px;
+        box-shadow: 0 20px 45px rgba(7,27,49,.18)
+    }
+
+        .cat-hero::after {
+            content: "";
+            position: absolute;
+            width: 330px;
+            height: 330px;
+            right: -120px;
+            top: -180px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,.13);
+            box-shadow: 0 0 0 35px rgba(255,255,255,.025),0 0 0 75px rgba(255,255,255,.018)
+        }
+
+    .cat-hero-row {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 18px;
+        flex-wrap: wrap
+    }
+
+    .cat-kicker {
+        display: block;
+        color: #8dc7e5;
+        font-size: .69rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .15em
+    }
+
+    .cat-hero h1 {
+        margin: 4px 0 6px;
+        font-size: 1.85rem;
+        font-weight: 950
+    }
+
+    .cat-hero p {
+        margin: 0;
+        color: rgba(255,255,255,.79);
+        font-weight: 700
+    }
+
+    .cat-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap
+    }
+
+    .cat-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        border: 1px solid #cad7e5;
+        border-radius: 11px;
+        padding: 8px 13px;
+        background: #fff;
+        color: #25364d;
+        text-decoration: none;
+        font-weight: 950;
+        cursor: pointer;
+        transition: .15s ease
+    }
+
+        .cat-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15,23,42,.10);
+            color: var(--blue)
+        }
+
+    .cat-btn-primary {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff
+    }
+
+        .cat-btn-primary:hover {
+            background: var(--blue2);
+            border-color: var(--blue2);
+            color: #fff
+        }
+
+    .cat-btn-ghost {
+        background: rgba(255,255,255,.10);
+        border-color: rgba(255,255,255,.26);
+        color: #fff
+    }
+
+        .cat-btn-ghost:hover {
+            background: #fff;
+            color: var(--blue)
+        }
+
+    .cat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        align-items: start
+    }
+
+    .cat-panel {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: var(--shadow)
+    }
+
+    .cat-panel-head {
+        min-height: 58px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(180deg,#fff,#f9fbfd);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px
+    }
+
+    .cat-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 11px
+    }
+
+    .cat-panel-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        background: #edf5fb;
+        color: var(--blue);
+        display: grid;
+        place-items: center
+    }
+
+    .cat-panel-title h2 {
+        margin: 0;
+        color: #0b1f3a;
+        font-size: 1.05rem;
+        font-weight: 950
+    }
+
+    .cat-panel-title small {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-weight: 650
+    }
+
+    .cat-panel-body {
+        padding: 16px
+    }
+
+    .cat-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #e7edf3
+    }
+
+    .cat-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px
+    }
+
+        .cat-field label {
+            color: var(--muted);
+            font-size: .67rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em
+        }
+
+        .cat-field input {
+            width: 100%;
+            min-height: 42px;
+            border: 1px solid #ccd8e5;
+            border-radius: 10px;
+            padding: 8px 10px;
+            color: var(--ink);
+            background: #fff;
+            font-weight: 700
+        }
+
+            .cat-field input:focus {
+                outline: none;
+                border-color: #5e9ac5;
+                box-shadow: 0 0 0 3px rgba(15,76,129,.10)
+            }
+
+    .cat-span-2 {
+        grid-column: span 2
+    }
+
+    .cat-form-actions {
+        grid-column: span 2;
+        display: flex;
+        justify-content: flex-end
+    }
+
+    .cat-list-head {
+        margin-top: 16px;
+        margin-bottom: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px
+    }
+
+        .cat-list-head h3 {
+            margin: 0;
+            color: #0b1f3a;
+            font-size: .84rem;
+            font-weight: 950
+        }
+
+    .cat-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 26px;
+        height: 26px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: #edf5fb;
+        color: var(--blue);
+        font-size: .68rem;
+        font-weight: 950
+    }
+
+    .cat-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px
+    }
+
+    .cat-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid #dce5ee;
+        border-radius: 12px;
+        padding: 10px 11px;
+        background: #fcfdff
+    }
+
+    .cat-item-main {
+        min-width: 0
+    }
+
+        .cat-item-main strong {
+            display: block;
+            color: #0b1f3a;
+            font-size: .82rem;
+            font-weight: 950;
+            overflow-wrap: anywhere
+        }
+
+        .cat-item-main small {
+            display: block;
+            margin-top: 2px;
+            color: #7b8797;
+            font-size: .68rem;
+            font-weight: 700;
+            overflow-wrap: anywhere
+        }
+
+    .cat-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-size: .68rem;
+        font-weight: 950;
+        border: 1px solid transparent;
+        white-space: nowrap
+    }
+
+        .cat-status.active {
+            background: #ecfdf3;
+            color: #067647;
+            border-color: #abefc6
+        }
+
+        .cat-status.inactive {
+            background: #f2f4f7;
+            color: #667085;
+            border-color: #d0d5dd
+        }
+
+    .cat-empty {
+        border: 1px dashed #ccd8e5;
+        border-radius: 12px;
+        background: #f8fafc;
+        color: #667085;
+        padding: 16px;
+        text-align: center;
+        font-size: .76rem;
+        font-weight: 800
+    }
+
+    .cat-note {
+        margin-top: 11px;
+        border-radius: 11px;
+        padding: 10px 11px;
+        background: #f7fbfe;
+        border: 1px solid #d8e6f0;
+        color: #53677c;
+        font-size: .72rem;
+        font-weight: 750;
+        line-height: 1.4
+    }
+    @@media(max - width:1050px) {
+        .cat-grid
+
+    {
+        grid-template-columns: 1fr
+    }
+
+    }
+    @@media(max - width:620px) {
+        .cat-hero
+
+    {
+        padding: 18px
+    }
+
+    .cat-hero h1 {
+        font-size: 1.5rem
+    }
+
+    .cat-form {
+        grid-template-columns: 1fr
+    }
+
+    .cat-span-2, .cat-form-actions {
+        grid-column: span 1
+    }
+
+    .cat-item {
+        align-items: flex-start;
+        flex-direction: column
+    }
+
+    }
+</style>
+
+<div class="cat-page">
+    <section class="cat-hero">
+        <div class="cat-hero-row">
+            <div>
+                <span class="cat-kicker">Configuración logística</span>
+                <h1>Rutas y unidades</h1>
+                <p>Administra los catálogos base utilizados para programar cargas, asignar transporte y preparar embarques.</p>
+            </div>
+            <div class="cat-actions">
+                <a class="cat-btn cat-btn-ghost" asp-action="Index"><i class="fa-solid fa-arrow-left"></i>Operación</a>
+                <a class="cat-btn cat-btn-ghost" asp-action="Calendario"><i class="fa-solid fa-calendar-days"></i>Calendario</a>
+            </div>
+        </div>
+    </section>
+
+    @if (TempData["LogisticaOk"] != null)
+    {
+        <div class="alert alert-success rounded-4 fw-bold mb-0"><i class="fa-solid fa-circle-check me-2"></i>@TempData["LogisticaOk"]</div>
+    }
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger rounded-4 fw-bold mb-0"><i class="fa-solid fa-triangle-exclamation me-2"></i>@TempData["LogisticaError"]</div>
+    }
+
+    <section class="cat-grid">
+        <article class="cat-panel">
+            <div class="cat-panel-head">
+                <div class="cat-panel-title">
+                    <div class="cat-panel-icon"><i class="fa-solid fa-route"></i></div>
+                    <div><h2>Rutas</h2><small>Trayectos definidos para la operación logística.</small></div>
+                </div>
+            </div>
+            <div class="cat-panel-body">
+                <form asp-action="GuardarRuta" method="post" class="cat-form" id="formRuta">
+                    @Html.AntiForgeryToken()
+                    <div class="cat-field"><label>Código</label><input name="Codigo" required autocomplete="off" placeholder="Ej. QRO-01" /></div>
+                    <div class="cat-field"><label>Nombre</label><input name="Nombre" required autocomplete="off" placeholder="Ej. Planta → Cliente Querétaro" /></div>
+                    <div class="cat-field cat-span-2"><label>Descripción</label><input name="Descripcion" autocomplete="off" placeholder="Referencia, zona, frecuencia o detalle operativo" /></div>
+                    <div class="cat-form-actions">
+                        <button class="cat-btn cat-btn-primary" type="submit" id="btnGuardarRuta"><i class="fa-solid fa-floppy-disk"></i>Guardar ruta</button>
+                    </div>
+                </form>
+
+                <div class="cat-list-head"><h3>Rutas registradas</h3><span class="cat-count">@Model.Rutas.Count</span></div>
+                <div class="cat-list">
+                    @foreach (var r in Model.Rutas)
+                    {
+                        <div class="cat-item">
+                            <div class="cat-item-main">
+                                <strong>@r.Codigo · @r.Nombre</strong>
+                                <small>@(string.IsNullOrWhiteSpace(r.Descripcion) ? "Sin descripción" : r.Descripcion)</small>
+                            </div>
+                            <span class="cat-status @(r.Activo ? "active" : "inactive")">
+                                <i class="fa-solid @(r.Activo ? "fa-circle-check" : "fa-circle-minus")"></i>@(r.Activo ? "Activa" : "Inactiva")
+                            </span>
+                        </div>
+                    }
+                    @if (!Model.Rutas.Any())
+                    {
+                        <div class="cat-empty"><i class="fa-solid fa-route me-1"></i>No hay rutas capturadas todavía.</div>
+                    }
+                </div>
+                <div class="cat-note"><i class="fa-solid fa-circle-info me-1"></i>Las rutas activas estarán disponibles al programar nuevos embarques.</div>
+            </div>
+        </article>
+
+        <article class="cat-panel">
+            <div class="cat-panel-head">
+                <div class="cat-panel-title">
+                    <div class="cat-panel-icon"><i class="fa-solid fa-truck"></i></div>
+                    <div><h2>Unidades</h2><small>Vehículos disponibles para asignación de cargas.</small></div>
+                </div>
+            </div>
+            <div class="cat-panel-body">
+                <form asp-action="GuardarUnidad" method="post" class="cat-form" id="formUnidad">
+                    @Html.AntiForgeryToken()
+                    <div class="cat-field"><label>Número económico</label><input name="NumeroEconomico" required autocomplete="off" placeholder="Ej. ECO-12" /></div>
+                    <div class="cat-field"><label>Placas</label><input name="Placas" autocomplete="off" placeholder="Ej. ABC-123-A" /></div>
+                    <div class="cat-field"><label>Marca</label><input name="Marca" autocomplete="off" placeholder="Marca" /></div>
+                    <div class="cat-field"><label>Modelo</label><input name="Modelo" autocomplete="off" placeholder="Modelo" /></div>
+                    <div class="cat-field cat-span-2"><label>Capacidad en piezas</label><input name="CapacidadPiezas" type="number" min="1" placeholder="Capacidad máxima estimada" /></div>
+                    <div class="cat-form-actions">
+                        <button class="cat-btn cat-btn-primary" type="submit" id="btnGuardarUnidad"><i class="fa-solid fa-floppy-disk"></i>Guardar unidad</button>
+                    </div>
+                </form>
+
+                <div class="cat-list-head"><h3>Unidades registradas</h3><span class="cat-count">@Model.Unidades.Count</span></div>
+                <div class="cat-list">
+                    @foreach (var u in Model.Unidades)
+                    {
+                        var descripcionUnidad = string.Join(" · ", new[]
+                        {
+                                        string.IsNullOrWhiteSpace(u.Marca)?null:u.Marca,
+                                        string.IsNullOrWhiteSpace(u.Modelo)?null:u.Modelo,
+                                        u.CapacidadPiezas.HasValue?$"{u.CapacidadPiezas.Value:N0} pzas":null
+                                        }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+                        <div class="cat-item">
+                            <div class="cat-item-main">
+                                <strong>@u.NumeroEconomico @if(!string.IsNullOrWhiteSpace(u.Placas)){
+                                <text> · @u.Placas</text>
+                            }
+</strong>
+                            <small>@(string.IsNullOrWhiteSpace(descripcionUnidad) ? "Sin información adicional" : descripcionUnidad)</small>
+                        </div>
+                        <span class="cat-status @(u.Activo ? "active" : "inactive")">
+                            <i class="fa-solid @(u.Activo ? "fa-circle-check" : "fa-circle-minus")"></i>@(u.Activo ? "Activa" : "Inactiva")
+                        </span>
+                    </div>
+                                        }
+                    @if (!Model.Unidades.Any())
+                    {
+                        <div class="cat-empty"><i class="fa-solid fa-truck me-1"></i>No hay unidades capturadas todavía.</div>
+                    }
+                </div>
+                <div class="cat-note"><i class="fa-solid fa-circle-info me-1"></i>Las unidades activas podrán asignarse desde la programación de cada embarque.</div>
+            </div>
+        </article>
+    </section>
+</div>
+
+<script>
+    (() => {
+        const formRuta=document.getElementById('formRuta');
+        const formUnidad=document.getElementById('formUnidad');
+        const btnRuta=document.getElementById('btnGuardarRuta');
+        const btnUnidad=document.getElementById('btnGuardarUnidad');
+
+        formRuta?.addEventListener('submit',()=>{
+            if(btnRuta){
+                btnRuta.disabled=true;
+                btnRuta.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>Guardando ruta...';
+            }
+        });
+
+        formUnidad?.addEventListener('submit',()=>{
+            if(btnUnidad){
+                btnUnidad.disabled=true;
+                btnUnidad.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>Guardando unidad...';
+            }
+        });
+    })();
+</script>

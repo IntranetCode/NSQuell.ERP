@@ -3761,39 +3761,76 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
         }
 
         private async Task<List<ProduccionCapturaHoraFilaVm>>
-         ObtenerFilasCapturaHoraAsync(
-             int ejecucionProduccionId,
-             int programaProduccionId,
-             SqlConnection cn,
-             SqlTransaction? tx = null)
+    ObtenerFilasCapturaHoraAsync(
+        int ejecucionProduccionId,
+        int programaProduccionId,
+        SqlConnection cn,
+        SqlTransaction? tx = null)
         {
             var filas =
                 new List<ProduccionCapturaHoraFilaVm>();
 
             DateTime? inicioReal = null;
-            DateTime? finProgramado = null;
             DateTime? finReal = null;
 
+            /*
+             * ============================================================
+             * 1. OBTENER INICIO REAL DE PRODUCCIÓN EN SERIE
+             * ============================================================
+             *
+             * La Hora 1 NO comienza cuando inicia preparación.
+             *
+             * Prioridad:
+             *
+             * 1) CONFIRMACION_INICIO_SERIE_PRODUCCION
+             * 2) Planeacion_ProgramaProduccion.FechaInicioReal
+             * 3) Produccion_Ejecucion.FechaInicioReal
+             *
+             * La confirmación de serie es la fuente más confiable porque
+             * representa el momento en que Calidad ya liberó y Producción
+             * confirmó físicamente el inicio de producción en serie.
+             */
             const string sqlPrograma = @"
 SELECT TOP (1)
-    COALESCE(
+    COALESCE
+    (
+        (
+            SELECT TOP (1)
+                h.FechaMovimiento
+            FROM dbo.Calidad_InspeccionHistorial h
+            INNER JOIN dbo.Calidad_Inspecciones ci
+                ON ci.InspeccionID = h.InspeccionID
+            WHERE ci.EjecucionProduccionID =
+                  e.EjecucionProduccionID
+              AND h.Movimiento =
+                  N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
+            ORDER BY
+                h.FechaMovimiento
+        ),
         pp.FechaInicioReal,
         e.FechaInicioReal
     ) AS FechaInicioReal,
-    pp.FechaFinProgramada,
-    COALESCE(
+
+    COALESCE
+    (
         pp.FechaFinReal,
         e.FechaFinReal
     ) AS FechaFinReal
+
 FROM dbo.Produccion_Ejecucion e
 INNER JOIN dbo.Planeacion_ProgramaProduccion pp
     ON pp.ProgramaProduccionID = e.ProgramaProduccionID
    AND pp.Activo = 1
+
 WHERE e.EjecucionProduccionID = @EjecucionProduccionID
   AND e.ProgramaProduccionID = @ProgramaProduccionID
   AND e.Activo = 1;";
 
-            await using (var cmd = new SqlCommand(sqlPrograma, cn, tx))
+            await using (var cmd =
+                new SqlCommand(
+                    sqlPrograma,
+                    cn,
+                    tx))
             {
                 cmd.Parameters.Add(
                     "@EjecucionProduccionID",
@@ -3816,12 +3853,6 @@ WHERE e.EjecucionProduccionID = @EjecucionProduccionID
                             : Convert.ToDateTime(
                                 rd["FechaInicioReal"]);
 
-                    finProgramado =
-                        rd["FechaFinProgramada"] == DBNull.Value
-                            ? null
-                            : Convert.ToDateTime(
-                                rd["FechaFinProgramada"]);
-
                     finReal =
                         rd["FechaFinReal"] == DBNull.Value
                             ? null
@@ -3833,6 +3864,10 @@ WHERE e.EjecucionProduccionID = @EjecucionProduccionID
             if (!inicioReal.HasValue)
                 return filas;
 
+            /*
+             * Trabajamos a precisión de minuto porque la vista captura
+             * HH:mm y los registros existentes están manejados igual.
+             */
             DateTime AlMinuto(DateTime value)
             {
                 return new DateTime(
@@ -3845,10 +3880,17 @@ WHERE e.EjecucionProduccionID = @EjecucionProduccionID
                     value.Kind);
             }
 
-            var inicio = AlMinuto(inicioReal.Value);
-            var ahora = DateTime.Now;
+            var inicio =
+                AlMinuto(inicioReal.Value);
 
+            var ahora =
+                DateTime.Now;
 
+            /*
+             * ============================================================
+             * 2. REGISTROS HORARIOS YA CAPTURADOS
+             * ============================================================
+             */
             var registros =
                 new List<ProduccionRegistroHoraVm>();
 
@@ -3864,8 +3906,10 @@ SELECT
     HoraInicio,
     HoraFin,
     ISNULL(CantidadOK, 0) AS CantidadOK,
-    ISNULL(CantidadSospechosa, 0) AS CantidadSospechosa,
-    ISNULL(CantidadScrap, 0) AS CantidadScrap,
+    ISNULL(CantidadSospechosa, 0)
+        AS CantidadSospechosa,
+    ISNULL(CantidadScrap, 0)
+        AS CantidadScrap,
     Observaciones,
     UsuarioCreacionID,
     FechaCreacion,
@@ -3873,13 +3917,18 @@ SELECT
     FechaModificacion,
     Activo
 FROM dbo.Produccion_RegistroHora
-WHERE EjecucionProduccionID = @EjecucionProduccionID
+WHERE EjecucionProduccionID =
+      @EjecucionProduccionID
   AND Activo = 1
 ORDER BY
     FechaProduccion,
     HoraInicio;";
 
-            await using (var cmd = new SqlCommand(sqlRegistros, cn, tx))
+            await using (var cmd =
+                new SqlCommand(
+                    sqlRegistros,
+                    cn,
+                    tx))
             {
                 cmd.Parameters.Add(
                     "@EjecucionProduccionID",
@@ -3907,22 +3956,26 @@ ORDER BY
                                     rd["ProgramaProduccionID"]),
 
                             SolicitudProduccionID =
-                                rd["SolicitudProduccionID"] == DBNull.Value
-                                    ? null
-                                    : Convert.ToInt32(
-                                        rd["SolicitudProduccionID"]),
+                                rd["SolicitudProduccionID"]
+                                    == DBNull.Value
+                                        ? null
+                                        : Convert.ToInt32(
+                                            rd[
+                                                "SolicitudProduccionID"]),
 
                             MaquinaID =
-                                rd["MaquinaID"] == DBNull.Value
-                                    ? null
-                                    : Convert.ToInt32(
-                                        rd["MaquinaID"]),
+                                rd["MaquinaID"]
+                                    == DBNull.Value
+                                        ? null
+                                        : Convert.ToInt32(
+                                            rd["MaquinaID"]),
 
                             OperadorID =
-                                rd["OperadorID"] == DBNull.Value
-                                    ? null
-                                    : Convert.ToInt32(
-                                        rd["OperadorID"]),
+                                rd["OperadorID"]
+                                    == DBNull.Value
+                                        ? null
+                                        : Convert.ToInt32(
+                                            rd["OperadorID"]),
 
                             FechaProduccion =
                                 Convert.ToDateTime(
@@ -3940,38 +3993,48 @@ ORDER BY
 
                             CantidadSospechosa =
                                 Convert.ToInt32(
-                                    rd["CantidadSospechosa"]),
+                                    rd[
+                                        "CantidadSospechosa"]),
 
                             CantidadScrap =
                                 Convert.ToInt32(
                                     rd["CantidadScrap"]),
 
                             Observaciones =
-                                rd["Observaciones"] == DBNull.Value
-                                    ? null
-                                    : rd["Observaciones"].ToString(),
+                                rd["Observaciones"]
+                                    == DBNull.Value
+                                        ? null
+                                        : rd[
+                                            "Observaciones"]
+                                            .ToString(),
 
                             UsuarioCreacionID =
-                                rd["UsuarioCreacionID"] == DBNull.Value
-                                    ? null
-                                    : Convert.ToInt32(
-                                        rd["UsuarioCreacionID"]),
+                                rd["UsuarioCreacionID"]
+                                    == DBNull.Value
+                                        ? null
+                                        : Convert.ToInt32(
+                                            rd[
+                                                "UsuarioCreacionID"]),
 
                             FechaCreacion =
                                 Convert.ToDateTime(
                                     rd["FechaCreacion"]),
 
                             UsuarioModificacionID =
-                                rd["UsuarioModificacionID"] == DBNull.Value
-                                    ? null
-                                    : Convert.ToInt32(
-                                        rd["UsuarioModificacionID"]),
+                                rd["UsuarioModificacionID"]
+                                    == DBNull.Value
+                                        ? null
+                                        : Convert.ToInt32(
+                                            rd[
+                                                "UsuarioModificacionID"]),
 
                             FechaModificacion =
-                                rd["FechaModificacion"] == DBNull.Value
-                                    ? null
-                                    : Convert.ToDateTime(
-                                        rd["FechaModificacion"]),
+                                rd["FechaModificacion"]
+                                    == DBNull.Value
+                                        ? null
+                                        : Convert.ToDateTime(
+                                            rd[
+                                                "FechaModificacion"]),
 
                             Activo =
                                 rd["Activo"] != DBNull.Value &&
@@ -3981,7 +4044,7 @@ ORDER BY
                 }
             }
 
-
+          
             var paros =
                 new List<(
                     int ParoID,
@@ -3994,15 +4057,23 @@ SELECT
     ParoID,
     FechaInicioParo,
     FechaFinParo,
-    ISNULL(EsMayorA15Minutos, 0) AS EsMayorA15Minutos
+    ISNULL(
+        EsMayorA15Minutos,
+        0
+    ) AS EsMayorA15Minutos
 FROM dbo.Produccion_Paros
-WHERE EjecucionProduccionID = @EjecucionProduccionID
+WHERE EjecucionProduccionID =
+      @EjecucionProduccionID
   AND Activo = 1
 ORDER BY
     FechaInicioParo,
     ParoID;";
 
-            await using (var cmd = new SqlCommand(sqlParos, cn, tx))
+            await using (var cmd =
+                new SqlCommand(
+                    sqlParos,
+                    cn,
+                    tx))
             {
                 cmd.Parameters.Add(
                     "@EjecucionProduccionID",
@@ -4015,19 +4086,27 @@ ORDER BY
                 while (await rd.ReadAsync())
                 {
                     paros.Add((
-                        Convert.ToInt32(rd["ParoID"]),
-                        Convert.ToDateTime(rd["FechaInicioParo"]),
-                        rd["FechaFinParo"] == DBNull.Value
-                            ? null
-                            : Convert.ToDateTime(rd["FechaFinParo"]),
-                        rd["EsMayorA15Minutos"] != DBNull.Value &&
-                            Convert.ToBoolean(
-                                rd["EsMayorA15Minutos"])
+                        Convert.ToInt32(
+                            rd["ParoID"]),
+
+                        Convert.ToDateTime(
+                            rd["FechaInicioParo"]),
+
+                        rd["FechaFinParo"]
+                            == DBNull.Value
+                                ? null
+                                : Convert.ToDateTime(
+                                    rd["FechaFinParo"]),
+
+                        rd["EsMayorA15Minutos"]
+                            != DBNull.Value &&
+                        Convert.ToBoolean(
+                            rd["EsMayorA15Minutos"])
                     ));
                 }
             }
 
-           
+         
             var confirmacionesSerie =
                 new List<DateTime>();
 
@@ -4036,13 +4115,20 @@ SELECT
     h.FechaMovimiento
 FROM dbo.Calidad_InspeccionHistorial h
 INNER JOIN dbo.Calidad_Inspecciones ci
-    ON ci.InspeccionID = h.InspeccionID
-WHERE ci.EjecucionProduccionID = @EjecucionProduccionID
-  AND h.Movimiento = N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
+    ON ci.InspeccionID =
+       h.InspeccionID
+WHERE ci.EjecucionProduccionID =
+      @EjecucionProduccionID
+  AND h.Movimiento =
+      N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
 ORDER BY
     h.FechaMovimiento;";
 
-            await using (var cmd = new SqlCommand(sqlConfirmaciones, cn, tx))
+            await using (var cmd =
+                new SqlCommand(
+                    sqlConfirmaciones,
+                    cn,
+                    tx))
             {
                 cmd.Parameters.Add(
                     "@EjecucionProduccionID",
@@ -4060,7 +4146,6 @@ ORDER BY
                 }
             }
 
-        
             var registrosDisponibles =
                 registros.ToList();
 
@@ -4068,7 +4153,9 @@ ORDER BY
                 DateTime bloqueInicio,
                 DateTime bloqueFin)
             {
-                foreach (var item in registrosDisponibles.ToList())
+                foreach (
+                    var item in
+                    registrosDisponibles.ToList())
                 {
                     var registroInicio =
                         item.FechaProduccion.Date
@@ -4079,27 +4166,41 @@ ORDER BY
                             .Add(item.HoraFin);
 
                     if (registroFin <= registroInicio)
-                        registroFin = registroFin.AddDays(1);
+                    {
+                        registroFin =
+                            registroFin.AddDays(1);
+                    }
 
-                    registroInicio = AlMinuto(registroInicio);
-                    registroFin = AlMinuto(registroFin);
+                    registroInicio =
+                        AlMinuto(registroInicio);
+
+                    registroFin =
+                        AlMinuto(registroFin);
 
                     /*
-                     * Primero buscar coincidencia exacta a minuto.
-                     * Esto también soporta bloques parciales como 15:00-15:50.
+                     * Primero intenta coincidencia exacta.
                      */
-                    if (registroInicio == bloqueInicio &&
-                        registroFin == bloqueFin)
+                    if (registroInicio ==
+                            bloqueInicio &&
+                        registroFin ==
+                            bloqueFin)
                     {
-                        registrosDisponibles.Remove(item);
+                        registrosDisponibles.Remove(
+                            item);
+
                         return item;
                     }
                 }
 
-                ProduccionRegistroHoraVm? mejorRegistro = null;
-                var mejorTraslapeMinutos = 0d;
+                ProduccionRegistroHoraVm?
+                    mejorRegistro = null;
 
-                foreach (var item in registrosDisponibles)
+                var mejorTraslapeMinutos =
+                    0d;
+
+                foreach (
+                    var item in
+                    registrosDisponibles)
                 {
                     var registroInicio =
                         item.FechaProduccion.Date
@@ -4110,7 +4211,10 @@ ORDER BY
                             .Add(item.HoraFin);
 
                     if (registroFin <= registroInicio)
-                        registroFin = registroFin.AddDays(1);
+                    {
+                        registroFin =
+                            registroFin.AddDays(1);
+                    }
 
                     var inicioTraslape =
                         registroInicio > bloqueInicio
@@ -4125,57 +4229,126 @@ ORDER BY
                     var minutosTraslape =
                         Math.Max(
                             0,
-                            (finTraslape - inicioTraslape)
-                                .TotalMinutes);
+                            (
+                                finTraslape -
+                                inicioTraslape
+                            ).TotalMinutes);
 
-                    if (minutosTraslape > mejorTraslapeMinutos)
+                    if (minutosTraslape >
+                        mejorTraslapeMinutos)
                     {
-                        mejorTraslapeMinutos = minutosTraslape;
-                        mejorRegistro = item;
+                        mejorTraslapeMinutos =
+                            minutosTraslape;
+
+                        mejorRegistro =
+                            item;
                     }
                 }
 
                 var duracionBloqueMinutos =
                     Math.Max(
                         1,
-                        (bloqueFin - bloqueInicio)
-                            .TotalMinutes);
+                        (
+                            bloqueFin -
+                            bloqueInicio
+                        ).TotalMinutes);
 
                 var traslapeMinimo =
                     Math.Min(
                         30,
-                        duracionBloqueMinutos / 2.0);
+                        duracionBloqueMinutos /
+                        2.0);
 
                 if (mejorRegistro == null ||
-                    mejorTraslapeMinutos < traslapeMinimo)
+                    mejorTraslapeMinutos <
+                    traslapeMinimo)
                 {
                     return null;
                 }
 
-                registrosDisponibles.Remove(mejorRegistro);
+                registrosDisponibles.Remove(
+                    mejorRegistro);
+
                 return mejorRegistro;
             }
 
-
-            var limite =
-                finReal ??
-                finProgramado ??
-                ahora;
-
-            if (!finReal.HasValue &&
-                ahora > limite)
+            
+            DateTime ObtenerSiguienteCorteHorario(
+                DateTime fechaInicio,
+                DateTime fechaActual)
             {
-                limite = ahora;
+                if (fechaActual <= fechaInicio)
+                {
+                    return fechaInicio.AddHours(1);
+                }
+
+                var minutosTranscurridos =
+                    (
+                        fechaActual -
+                        fechaInicio
+                    ).TotalMinutes;
+
+                var bloquesNecesarios =
+                    (int)Math.Ceiling(
+                        minutosTranscurridos /
+                        60d);
+
+                if (bloquesNecesarios < 1)
+                {
+                    bloquesNecesarios = 1;
+                }
+
+               
+                var diferenciaConCorte =
+                    Math.Abs(
+                        minutosTranscurridos -
+                        (
+                            bloquesNecesarios *
+                            60d
+                        ));
+
+                if (diferenciaConCorte <
+                    0.01)
+                {
+                    bloquesNecesarios++;
+                }
+
+                return fechaInicio.AddHours(
+                    bloquesNecesarios);
+            }
+
+            DateTime limite;
+
+            if (finReal.HasValue)
+            {
+                
+                limite =
+                    AlMinuto(
+                        finReal.Value);
+            }
+            else
+            {
+                
+                limite =
+                    ObtenerSiguienteCorteHorario(
+                        inicio,
+                        ahora);
             }
 
             if (limite <= inicio)
-                limite = inicio.AddHours(1);
+            {
+                limite =
+                    inicio.AddHours(1);
+            }
 
             var limiteSeguridad =
                 inicio.AddHours(500);
 
             if (limite > limiteSeguridad)
-                limite = limiteSeguridad;
+            {
+                limite =
+                    limiteSeguridad;
+            }
 
             var numeroHora = 1;
 
@@ -4183,36 +4356,62 @@ ORDER BY
                 DateTime segmentoInicio,
                 DateTime segmentoFin)
             {
-                segmentoInicio = AlMinuto(segmentoInicio);
-                segmentoFin = AlMinuto(segmentoFin);
+                segmentoInicio =
+                    AlMinuto(segmentoInicio);
 
-                if (segmentoFin <= segmentoInicio)
-                    return;
+                segmentoFin =
+                    AlMinuto(segmentoFin);
 
-                var inicioBloque = segmentoInicio;
-
-                while (inicioBloque < segmentoFin &&
-                       inicioBloque < limite &&
-                       numeroHora <= 500)
+                if (segmentoFin <=
+                    segmentoInicio)
                 {
+                    return;
+                }
+
+                var inicioBloque =
+                    segmentoInicio;
+
+                while (
+                    inicioBloque <
+                        segmentoFin &&
+                    inicioBloque <
+                        limite &&
+                    numeroHora <= 500)
+                {
+                    
                     var finBloque =
                         inicioBloque.AddHours(1);
 
-                    if (finBloque > segmentoFin)
-                        finBloque = segmentoFin;
-
-                    if (finBloque > limite)
-                        finBloque = limite;
-
-                    if (finReal.HasValue &&
-                        finBloque > AlMinuto(finReal.Value))
+                
+                    if (finBloque >
+                        segmentoFin)
                     {
                         finBloque =
-                            AlMinuto(finReal.Value);
+                            segmentoFin;
                     }
 
-                    if (finBloque <= inicioBloque)
+                    if (finBloque >
+                        limite)
+                    {
+                        finBloque =
+                            limite;
+                    }
+
+                    if (finReal.HasValue &&
+                        finBloque >
+                        AlMinuto(
+                            finReal.Value))
+                    {
+                        finBloque =
+                            AlMinuto(
+                                finReal.Value);
+                    }
+
+                    if (finBloque <=
+                        inicioBloque)
+                    {
                         break;
+                    }
 
                     var registro =
                         BuscarRegistroBloque(
@@ -4228,124 +4427,206 @@ ORDER BY
                     filas.Add(
                         new ProduccionCapturaHoraFilaVm
                         {
-                            NumeroHora = numeroHora,
-                            FechaProduccion = inicioBloque.Date,
-                            HoraInicio = inicioBloque.TimeOfDay,
-                            HoraFin = finBloque.TimeOfDay,
-                            RegistroHoraID = registro?.RegistroHoraID,
-                            CantidadOK = registro?.CantidadOK ?? 0,
+                            NumeroHora =
+                                numeroHora,
+
+                            FechaProduccion =
+                                inicioBloque.Date,
+
+                            HoraInicio =
+                                inicioBloque.TimeOfDay,
+
+                            HoraFin =
+                                finBloque.TimeOfDay,
+
+                            RegistroHoraID =
+                                registro?.RegistroHoraID,
+
+                            CantidadOK =
+                                registro?.CantidadOK ?? 0,
+
                             CantidadSospechosa =
-                                registro?.CantidadSospechosa ?? 0,
+                                registro?
+                                    .CantidadSospechosa
+                                ?? 0,
+
                             CantidadScrap =
-                                registro?.CantidadScrap ?? 0,
-                            Observaciones = registro?.Observaciones,
-                            Capturada = capturada,
+                                registro?
+                                    .CantidadScrap
+                                ?? 0,
+
+                            Observaciones =
+                                registro?
+                                    .Observaciones,
+
+                            Capturada =
+                                capturada,
+
                             Disponible =
-                                !capturada && bloqueTerminado,
+                                !capturada &&
+                                bloqueTerminado,
+
                             Vencida =
-                                !capturada && bloqueTerminado
+                                !capturada &&
+                                bloqueTerminado
                         });
 
-                    inicioBloque = finBloque;
+                    inicioBloque =
+                        finBloque;
+
                     numeroHora++;
                 }
             }
 
-
-            var cursorProductivo = inicio;
+          
+            var cursorProductivo =
+                inicio;
 
             foreach (var paro in paros)
             {
                 var inicioParo =
-                    AlMinuto(paro.Inicio);
+                    AlMinuto(
+                        paro.Inicio);
 
                 if (inicioParo >= limite)
                     break;
 
                 /*
-                 * Ignorar paros anteriores al inicio real de esta ejecución.
+                 * Ignorar paros anteriores al
+                 * inicio real de serie.
                  */
                 if (inicioParo < inicio)
                     continue;
 
-                if (inicioParo > cursorProductivo)
+                if (inicioParo >
+                    cursorProductivo)
                 {
                     AgregarSegmentoProductivo(
                         cursorProductivo,
                         inicioParo);
                 }
 
+              
                 if (!paro.Fin.HasValue)
                 {
-                    cursorProductivo = limite;
+                    cursorProductivo =
+                        limite;
+
                     break;
                 }
 
                 var finParo =
-                    AlMinuto(paro.Fin.Value);
+                    AlMinuto(
+                        paro.Fin.Value);
 
-                DateTime? reinicioReal = null;
+                DateTime? reinicioReal =
+                    null;
 
                 if (paro.MayorA15)
                 {
-                    
+                   
                     reinicioReal =
                         confirmacionesSerie
-                            .Where(x =>
-                                AlMinuto(x) >= finParo)
+                            .Where(
+                                x =>
+                                    AlMinuto(x) >=
+                                    finParo)
                             .OrderBy(x => x)
                             .Select(AlMinuto)
                             .FirstOrDefault();
 
                     if (!reinicioReal.HasValue ||
-                        reinicioReal.Value == DateTime.MinValue)
+                        reinicioReal.Value ==
+                            DateTime.MinValue)
                     {
-                        cursorProductivo = limite;
+                        cursorProductivo =
+                            limite;
+
                         break;
                     }
                 }
                 else
                 {
-                    /*
-                     * Paro <=15 min: se reanuda en cuanto se cierra.
-                     */
-                    reinicioReal = finParo;
+                    
+                    reinicioReal =
+                        finParo;
                 }
 
-                if (reinicioReal.Value > cursorProductivo)
+                if (reinicioReal.Value >
+                    cursorProductivo)
                 {
                     cursorProductivo =
                         reinicioReal.Value;
                 }
             }
 
-            if (cursorProductivo < limite)
+            if (cursorProductivo <
+                limite)
             {
                 AgregarSegmentoProductivo(
                     cursorProductivo,
                     limite);
             }
 
-         
+           
             var primeraPendiente =
                 filas
-                    .Where(x =>
-                        !x.Capturada &&
-                        x.Disponible)
-                    .OrderBy(x => x.NumeroHora)
+                    .Where(
+                        x =>
+                            !x.Capturada &&
+                            x.Disponible)
+                    .OrderBy(
+                        x =>
+                            x.NumeroHora)
                     .FirstOrDefault();
 
-            foreach (var fila in filas.Where(
-                x => !x.Capturada))
+            foreach (
+                var fila in
+                filas.Where(
+                    x => !x.Capturada))
             {
                 fila.Disponible =
                     primeraPendiente != null &&
                     fila.NumeroHora ==
                     primeraPendiente.NumeroHora;
+
+                /*
+                 * Vencida debe reflejar exactamente
+                 * una hora que YA terminó.
+                 *
+                 * Una fila futura nunca debe aparecer
+                 * como obligatoria.
+                 */
+                if (!fila.Disponible &&
+                    !fila.Capturada)
+                {
+                    var fechaInicioFila =
+                        fila.FechaProduccion.Date
+                            .Add(
+                                fila.HoraInicio);
+
+                    var fechaFinFila =
+                        fila.FechaProduccion.Date
+                            .Add(
+                                fila.HoraFin);
+
+                    if (fechaFinFila <=
+                        fechaInicioFila)
+                    {
+                        fechaFinFila =
+                            fechaFinFila
+                                .AddDays(1);
+                    }
+
+                    fila.Vencida =
+                        ahora >=
+                        fechaFinFila;
+                }
             }
 
             return filas;
         }
+
         private bool UsuarioEnSesion()
         {
             return HttpContext.Session.GetInt32("UsuarioID").HasValue;

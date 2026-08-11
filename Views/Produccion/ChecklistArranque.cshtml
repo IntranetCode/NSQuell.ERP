@@ -526,7 +526,7 @@
                         if (preguntas.Count == 0) { continue; }
                         <section class="section-card check-section">
                             <div class="section-head">
-                                <div><div class="section-title"><i class="bi bi-list-check me-2 text-primary"></i>@seccion.Seccion</div><div class="section-meta">Responsable sugerido: @Txt(seccion.ResponsableSugerido)</div></div>
+                                <div><div class="section-title"><i class="bi bi-list-check me-2 text-primary"></i>@seccion.Seccion</div></div>
                                 <div class="d-flex gap-2 flex-wrap">
                                     <span class="pill"><i class="bi bi-check-circle"></i><span class="contador-seccion">@seccion.TotalRespondidas / @seccion.TotalPreguntas</span></span>@if(seccion.TotalNOK > 0){
                                     <span class="pill text-danger"><i class="bi bi-x-circle"></i>@seccion.TotalNOK NOK</span>
@@ -543,48 +543,49 @@
                                 <div><div class="num">@pregunta.OrdenPregunta</div></div>
                                 <div>
                                     <div class="question-text">@pregunta.TextoPregunta</div>
-                                    <div class="question-meta">
-                                        <span class="pill"><i class="bi bi-person-badge"></i>@Txt(pregunta.ResponsableSugerido)</span><span class="@BadgeResultado(pregunta) estado-badge">@TextoResultado(pregunta)</span>@if(pregunta.RequiereCapturarValor){
-                                        <span class="pill text-primary"><i class="bi bi-input-cursor-text"></i>Valor requerido</span>
-                                    }
-                                </div>
-                            </div>
-                            <div class="answer-box">
-                                <input type="hidden" name="@(prefix + ".ChecklistArranqueDetalleID")" value="@pregunta.ChecklistArranqueDetalleID" />
-                                <input type="hidden" name="@(prefix + ".PreguntaID")" value="@pregunta.PreguntaID" />
-                                <input type="hidden" class="confirmado-hidden" name="@(prefix + ".Confirmado")" value="@pregunta.Confirmado.ToString().ToLowerInvariant()" />
-                                @if (puedeEditar)
-                                {
-                                    var esNA = resultado == "NA";
-                                    var esOK = resultado != "NOK" && !esNA;
-                                    <input type="hidden" class="resultado-hidden" name="@(prefix + ".Resultado")" value="@(esNA ? "NA" : esOK ? "OK" : "NOK")" />
-                                    <div class="status-controls">
-                                        <label class="ok-control">
-                                            <input type="checkbox" class="form-check-input switch-ok" role="switch" @(esOK ? "checked" : "") @(esNA ? "disabled" : "") />
-                                            <span class="status-text estado-switch">@(esOK ? "OK" : esNA ? "N/A" : "NOK")</span>
-                                        </label>
-                                        <label class="na-control">
-                                            <input type="checkbox" class="form-check-input na-check" @(esNA ? "checked" : "") />
-                                            <span>No aplica</span>
-                                        </label>
-                                    </div>
-                                    <div class="status-help">Encendido = OK · Apagado = NOK · N/A deshabilita el switch.</div>
                                     @if (pregunta.RequiereCapturarValor)
                                     {
-                                        <div class="extra-field">
-                                            <label class="form-label fw-bold small">
-                                                Valor capturado @if(!string.IsNullOrWhiteSpace(pregunta.Unidad)){
-                                                <text>(@pregunta.Unidad)</text>
-                                            }
-                                        </label><input type="text" class="form-control valor-capturado" name="@(prefix + ".ValorCapturado")" maxlength="100" value="@pregunta.ValorCapturado" placeholder="Captura el valor real" />
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(pregunta.Especificacion) || !string.IsNullOrWhiteSpace(pregunta.Tolerancia))
-                                    {
-                                        <div class="small text-muted mt-1">Especificación: @Txt(pregunta.Especificacion) · Tolerancia: @Txt(pregunta.Tolerancia)</div>
+                                        <div class="question-meta">
+                                            <span class="pill text-primary"><i class="bi bi-input-cursor-text"></i>Valor requerido</span>
+                                        </div>
                                     }
+                                </div>
+                                <div class="answer-box">
+                                    <input type="hidden" name="@(prefix + ".ChecklistArranqueDetalleID")" value="@pregunta.ChecklistArranqueDetalleID" />
+                                    <input type="hidden" name="@(prefix + ".PreguntaID")" value="@pregunta.PreguntaID" />
+                                    <input type="hidden" class="confirmado-hidden" name="@(prefix + ".Confirmado")" value="@pregunta.Confirmado.ToString().ToLowerInvariant()" />
+                                    @if (puedeEditar)
+                                    {
+                                        var esNA = resultado == "NA";
+                                        var esOK = resultado != "NOK" && !esNA;
+                                        <input type="hidden" class="resultado-hidden" name="@(prefix + ".Resultado")" value="@(esNA ? "NA" : esOK ? "OK" : "NOK")" />
+                                        <div class="status-controls">
+                                            <label class="ok-control">
+                                                <input type="checkbox" class="form-check-input switch-ok" role="switch" @(esOK ? "checked" : "") @(esNA ? "disabled" : "") />
+                                                <span class="status-text estado-switch">@(esOK ? "OK" : esNA ? "N/A" : "NOK")</span>
+                                            </label>
+                                            <label class="na-control">
+                                                <input type="checkbox" class="form-check-input na-check" @(esNA ? "checked" : "") />
+                                                <span>No aplica</span>
+                                            </label>
+                                        </div>
+                                        <div class="status-help">Encendido = OK · Apagado = NOK · N/A deshabilita el switch.</div>
+                                        @if (pregunta.RequiereCapturarValor)
+                                        {
+                                            <div class="extra-field">
+                                                <label class="form-label fw-bold small">
+                                                    Valor capturado @if(!string.IsNullOrWhiteSpace(pregunta.Unidad)){
+                                                    <text>(@pregunta.Unidad)</text>
+                                                }
+                                            </label><input type="text" class="form-control valor-capturado" name="@(prefix + ".ValorCapturado")" maxlength="100" value="@pregunta.ValorCapturado" placeholder="Captura el valor real" />
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(pregunta.Especificacion) || !string.IsNullOrWhiteSpace(pregunta.Tolerancia))
+                                        {
+                                            <div class="small text-muted mt-1">Especificación: @Txt(pregunta.Especificacion) · Tolerancia: @Txt(pregunta.Tolerancia)</div>
+                                        }
+                                    }
+                                    <div class="obs-wrap"><label class="form-label fw-bold small">Observación obligatoria</label><textarea class="form-control observacion" name="@(prefix + ".Observaciones")" maxlength="500" rows="2" placeholder="Indica por qué no cumple o por qué no aplica">@pregunta.Observaciones</textarea></div>
                                 }
-                                <div class="obs-wrap"><label class="form-label fw-bold small">Observación obligatoria</label><textarea class="form-control observacion" name="@(prefix + ".Observaciones")" maxlength="500" rows="2" placeholder="Indica por qué no cumple o por qué no aplica">@pregunta.Observaciones</textarea></div>
-                                                                }
                                                                 else
                                 {
                                     <div><span class="@BadgeResultado(pregunta)">@TextoResultado(pregunta)</span></div>
@@ -750,7 +751,6 @@
                 const na = row.querySelector('.na-check');
                 const hidden = row.querySelector('.resultado-hidden');
                 const texto = row.querySelector('.estado-switch');
-                const badge = row.querySelector('.estado-badge');
                 const obsWrap = row.querySelector('.obs-wrap');
                 const obs = row.querySelector('.observacion');
                 let valor = 'OK';
@@ -765,10 +765,6 @@
 
                 if (hidden) hidden.value = valor;
                 if (texto) texto.textContent = valor === 'NA' ? 'N/A' : valor;
-                if (badge) {
-                    badge.className = 'estado-badge badge ' + (valor === 'OK' ? 'bg-success' : valor === 'NOK' ? 'bg-danger' : 'bg-secondary');
-                    badge.textContent = valor === 'NA' ? 'N/A' : valor;
-                }
 
                 const requiereObservacion = valor === 'NOK' || valor === 'NA';
                 obsWrap?.classList.toggle('visible', requiereObservacion);

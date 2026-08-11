@@ -1351,17 +1351,20 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID;";
             await cmd.ExecuteNonQueryAsync();
         }
 
-
-        //Inserts
         private async Task<int> InsertarEncabezadoAsync(
-            PlaneacionOFCrearVm vm,
-            string? clienteNombre,
-            int usuarioId,
-            string usuarioNombre,
-            SqlConnection cn,
-            SqlTransaction tx)
+    PlaneacionOFCrearVm vm,
+    string? clienteNombre,
+    int usuarioId,
+    string usuarioNombre,
+    SqlConnection cn,
+    SqlTransaction tx)
         {
             const string sql = @"
+DECLARE @Ids TABLE
+(
+    SolicitudProduccionID INT NOT NULL
+);
+
 INSERT INTO dbo.SolicitudesProduccion
 (
     FolioSolicitud,
@@ -1385,6 +1388,7 @@ INSERT INTO dbo.SolicitudesProduccion
     Activo
 )
 OUTPUT INSERTED.SolicitudProduccionID
+INTO @Ids(SolicitudProduccionID)
 VALUES
 (
     @FolioSolicitud,
@@ -1406,39 +1410,91 @@ VALUES
     @UsuarioCreacionID,
     GETDATE(),
     1
-);";
+);
+
+SELECT TOP (1)
+    SolicitudProduccionID
+FROM @Ids;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
 
-            cmd.Parameters.Add("@FolioSolicitud", SqlDbType.NVarChar, 30).Value = (object?)vm.FolioSolicitud ?? DBNull.Value;
-            cmd.Parameters.Add("@NumeroOFRecibida", SqlDbType.NVarChar, 80).Value = (object?)vm.NumeroOFRecibida ?? DBNull.Value;
-            cmd.Parameters.Add("@FechaSolicitud", SqlDbType.Date).Value = vm.FechaSolicitud.Date;
-            cmd.Parameters.Add("@FechaRequerida", SqlDbType.Date).Value = (object?)vm.FechaRequerida?.Date ?? DBNull.Value;
-            cmd.Parameters.Add("@FechaInicioPlaneada", SqlDbType.DateTime).Value = (object?)vm.FechaInicioPlaneada ?? DBNull.Value;
-            cmd.Parameters.Add("@FechaFinPlaneada", SqlDbType.DateTime).Value = (object?)vm.FechaFinPlaneada ?? DBNull.Value;
-            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = (object?)vm.ClienteID ?? DBNull.Value;
-            cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value = (object?)clienteNombre ?? DBNull.Value;
-            cmd.Parameters.Add("@OrigenSolicitud", SqlDbType.NVarChar, 50).Value = (object?)vm.OrigenSolicitud ?? "Dirección";
-            cmd.Parameters.Add("@Prioridad", SqlDbType.NVarChar, 30).Value = string.IsNullOrWhiteSpace(vm.Prioridad) ? "Normal" : vm.Prioridad.Trim();
-            cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value = NormalizarTipoOF(vm.TipoOF);
-            cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(vm.MotivoTipoOF) ? DBNull.Value : vm.MotivoTipoOF.Trim();
-            cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = PlaneacionOFEstatus.Capturada;
-            cmd.Parameters.Add("@NotasGenerales", SqlDbType.NVarChar).Value = (object?)vm.NotasGenerales ?? DBNull.Value;
-            cmd.Parameters.Add("@ResponsablePlaneacionUsuarioID", SqlDbType.Int).Value = usuarioId;
-            cmd.Parameters.Add("@ResponsablePlaneacionNombre", SqlDbType.NVarChar, 200).Value = usuarioNombre;
-            cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@FolioSolicitud", SqlDbType.NVarChar, 30).Value =
+                (object?)vm.FolioSolicitud ?? DBNull.Value;
 
-            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+            cmd.Parameters.Add("@NumeroOFRecibida", SqlDbType.NVarChar, 80).Value =
+                (object?)vm.NumeroOFRecibida ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FechaSolicitud", SqlDbType.Date).Value =
+                vm.FechaSolicitud.Date;
+
+            cmd.Parameters.Add("@FechaRequerida", SqlDbType.Date).Value =
+                (object?)vm.FechaRequerida?.Date ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FechaInicioPlaneada", SqlDbType.DateTime).Value =
+                (object?)vm.FechaInicioPlaneada ?? DBNull.Value;
+
+            cmd.Parameters.Add("@FechaFinPlaneada", SqlDbType.DateTime).Value =
+                (object?)vm.FechaFinPlaneada ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
+                (object?)vm.ClienteID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value =
+                (object?)clienteNombre ?? DBNull.Value;
+
+            cmd.Parameters.Add("@OrigenSolicitud", SqlDbType.NVarChar, 50).Value =
+                (object?)vm.OrigenSolicitud ?? "Dirección";
+
+            cmd.Parameters.Add("@Prioridad", SqlDbType.NVarChar, 30).Value =
+                string.IsNullOrWhiteSpace(vm.Prioridad)
+                    ? "Normal"
+                    : vm.Prioridad.Trim();
+
+            cmd.Parameters.Add("@TipoOF", SqlDbType.NVarChar, 30).Value =
+                NormalizarTipoOF(vm.TipoOF);
+
+            cmd.Parameters.Add("@MotivoTipoOF", SqlDbType.NVarChar, 500).Value =
+                string.IsNullOrWhiteSpace(vm.MotivoTipoOF)
+                    ? DBNull.Value
+                    : vm.MotivoTipoOF.Trim();
+
+            cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value =
+                PlaneacionOFEstatus.Capturada;
+
+            cmd.Parameters.Add("@NotasGenerales", SqlDbType.NVarChar).Value =
+                (object?)vm.NotasGenerales ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ResponsablePlaneacionUsuarioID", SqlDbType.Int).Value =
+                usuarioId;
+
+            cmd.Parameters.Add("@ResponsablePlaneacionNombre", SqlDbType.NVarChar, 200).Value =
+                usuarioNombre;
+
+            cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value =
+                usuarioId;
+
+            var result = await cmd.ExecuteScalarAsync();
+
+            if (result == null || result == DBNull.Value)
+                throw new InvalidOperationException(
+                    "No fue posible obtener el ID de la solicitud de producción creada.");
+
+            return Convert.ToInt32(result);
         }
 
         private async Task<int> InsertarDetalleAsync(
-            int solicitudId,
-            int renglon,
-            PlaneacionOFDetalleCrearVm d,
-            SqlConnection cn,
-            SqlTransaction tx)
+     int solicitudId,
+     int renglon,
+     PlaneacionOFDetalleCrearVm d,
+     SqlConnection cn,
+     SqlTransaction tx)
         {
             const string sql = @"
+DECLARE @Ids TABLE
+(
+    SolicitudProduccionDetalleID INT NOT NULL
+);
+
 INSERT INTO dbo.SolicitudesProduccionDetalle
 (
     SolicitudProduccionID,
@@ -1460,29 +1516,29 @@ INSERT INTO dbo.SolicitudesProduccionDetalle
     PesoBrutoPieza,
     MaterialCodigo,
     MaterialDescripcion,
-MaterialID,
-OrigenSurtido,
-PTDisponibleAlCrear,
-MPDisponibleKgAlCrear,
-AlmacenValidado,
-MensajeAlmacen,
+    MaterialID,
+    OrigenSurtido,
+    PTDisponibleAlCrear,
+    MPDisponibleKgAlCrear,
+    AlmacenValidado,
+    MensajeAlmacen,
     EmbalajeCodigo,
     EmbalajeDescripcion,
     PiezasPorEmbalaje,
     CantidadEmbalajes,
     CantidadMpKg,
-CostoMPUnitario,
-CostoMPTotal,
-MonedaCostoMP,
-UnidadCostoMP,
-CostoEmbalajeUnitario,
-CostoEmbalajeTotal,
-MonedaCostoEmbalaje,
-UnidadCostoEmbalaje,
-CostoTotalRenglon,
-PrecioVentaUnitario,
-VentaTotalRenglon,
-UtilidadEstimadaRenglon,
+    CostoMPUnitario,
+    CostoMPTotal,
+    MonedaCostoMP,
+    UnidadCostoMP,
+    CostoEmbalajeUnitario,
+    CostoEmbalajeTotal,
+    MonedaCostoEmbalaje,
+    UnidadCostoEmbalaje,
+    CostoTotalRenglon,
+    PrecioVentaUnitario,
+    VentaTotalRenglon,
+    UtilidadEstimadaRenglon,
     Cambio,
     Arranque,
     Notas,
@@ -1491,6 +1547,7 @@ UtilidadEstimadaRenglon,
     FechaCreacion
 )
 OUTPUT INSERTED.SolicitudProduccionDetalleID
+INTO @Ids(SolicitudProduccionDetalleID)
 VALUES
 (
     @SolicitudProduccionID,
@@ -1512,70 +1569,123 @@ VALUES
     @PesoBrutoPieza,
     @MaterialCodigo,
     @MaterialDescripcion,
-@MaterialID,
-@OrigenSurtido,
-@PTDisponibleAlCrear,
-@MPDisponibleKgAlCrear,
-@AlmacenValidado,
-@MensajeAlmacen,
+    @MaterialID,
+    @OrigenSurtido,
+    @PTDisponibleAlCrear,
+    @MPDisponibleKgAlCrear,
+    @AlmacenValidado,
+    @MensajeAlmacen,
     @EmbalajeCodigo,
     @EmbalajeDescripcion,
     @PiezasPorEmbalaje,
     @CantidadEmbalajes,
     @CantidadMpKg,
-@CostoMPUnitario,
-@CostoMPTotal,
-@MonedaCostoMP,
-@UnidadCostoMP,
-@CostoEmbalajeUnitario,
-@CostoEmbalajeTotal,
-@MonedaCostoEmbalaje,
-@UnidadCostoEmbalaje,
-@CostoTotalRenglon,
-@PrecioVentaUnitario,
-@VentaTotalRenglon,
-@UtilidadEstimadaRenglon,
+    @CostoMPUnitario,
+    @CostoMPTotal,
+    @MonedaCostoMP,
+    @UnidadCostoMP,
+    @CostoEmbalajeUnitario,
+    @CostoEmbalajeTotal,
+    @MonedaCostoEmbalaje,
+    @UnidadCostoEmbalaje,
+    @CostoTotalRenglon,
+    @PrecioVentaUnitario,
+    @VentaTotalRenglon,
+    @UtilidadEstimadaRenglon,
     @Cambio,
     @Arranque,
     @Notas,
     1,
     1,
     GETDATE()
-);";
+);
+
+SELECT TOP (1)
+    SolicitudProduccionDetalleID
+FROM @Ids;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
 
-            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudId;
-            cmd.Parameters.Add("@Renglon", SqlDbType.Int).Value = renglon;
-            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = (object?)d.ParteID ?? DBNull.Value;
-            cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value = (object?)d.MoldeID ?? DBNull.Value;
-            cmd.Parameters.Add("@DesignacionDescripcionSAP", SqlDbType.NVarChar, 300).Value = d.DesignacionDescripcionSAP;
-            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value = d.ReferenciaSAP;
-            cmd.Parameters.Add("@CantidadPiezas", SqlDbType.Int).Value = d.CantidadPiezas;
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+                solicitudId;
+
+            cmd.Parameters.Add("@Renglon", SqlDbType.Int).Value =
+                renglon;
+
+            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value =
+                (object?)d.ParteID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value =
+                (object?)d.MoldeID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@DesignacionDescripcionSAP", SqlDbType.NVarChar, 300).Value =
+                (object?)d.DesignacionDescripcionSAP ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value =
+                (object?)d.ReferenciaSAP ?? DBNull.Value;
+
+            cmd.Parameters.Add("@CantidadPiezas", SqlDbType.Int).Value =
+                d.CantidadPiezas;
 
             AddDecimal(cmd, "@HorasPlaneadas", d.HorasPlaneadas, 10, 2);
-            cmd.Parameters.Add("@NumeroMoldeTexto", SqlDbType.NVarChar, 100).Value = (object?)d.NumeroMoldeTexto ?? DBNull.Value;
-            cmd.Parameters.Add("@Color", SqlDbType.NVarChar, 80).Value = (object?)d.Color ?? DBNull.Value;
-            cmd.Parameters.Add("@Cavidades", SqlDbType.Int).Value = (object?)d.Cavidades ?? DBNull.Value;
-            cmd.Parameters.Add("@ObjetivoHora", SqlDbType.Int).Value = (object?)d.ObjetivoHora ?? DBNull.Value;
-            cmd.Parameters.Add("@PiezasPorCaja", SqlDbType.Int).Value = (object?)d.PiezasPorCaja ?? DBNull.Value;
-            cmd.Parameters.Add("@Ciclo", SqlDbType.NVarChar, 80).Value = (object?)d.Ciclo ?? DBNull.Value;
-            cmd.Parameters.Add("@TipoSecado", SqlDbType.NVarChar, 100).Value = (object?)d.TipoSecado ?? DBNull.Value;
+
+            cmd.Parameters.Add("@NumeroMoldeTexto", SqlDbType.NVarChar, 100).Value =
+                (object?)d.NumeroMoldeTexto ?? DBNull.Value;
+
+            cmd.Parameters.Add("@Color", SqlDbType.NVarChar, 80).Value =
+                (object?)d.Color ?? DBNull.Value;
+
+            cmd.Parameters.Add("@Cavidades", SqlDbType.Int).Value =
+                (object?)d.Cavidades ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ObjetivoHora", SqlDbType.Int).Value =
+                (object?)d.ObjetivoHora ?? DBNull.Value;
+
+            cmd.Parameters.Add("@PiezasPorCaja", SqlDbType.Int).Value =
+                (object?)d.PiezasPorCaja ?? DBNull.Value;
+
+            cmd.Parameters.Add("@Ciclo", SqlDbType.NVarChar, 80).Value =
+                (object?)d.Ciclo ?? DBNull.Value;
+
+            cmd.Parameters.Add("@TipoSecado", SqlDbType.NVarChar, 100).Value =
+                (object?)d.TipoSecado ?? DBNull.Value;
+
             AddDecimal(cmd, "@HorasSecado", d.HorasSecado, 10, 2);
             AddDecimal(cmd, "@PesoBrutoPieza", d.PesoBrutoPieza, 18, 6);
-            cmd.Parameters.Add("@MaterialCodigo", SqlDbType.NVarChar, 100).Value = (object?)d.MaterialCodigo ?? DBNull.Value;
-            cmd.Parameters.Add("@MaterialDescripcion", SqlDbType.NVarChar, 250).Value = (object?)d.MaterialDescripcion ?? DBNull.Value;
-            cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value = (object?)d.MaterialID ?? DBNull.Value;
-            cmd.Parameters.Add("@OrigenSurtido", SqlDbType.NVarChar, 30).Value = (object?)d.OrigenSurtido ?? DBNull.Value;
-            cmd.Parameters.Add("@PTDisponibleAlCrear", SqlDbType.Int).Value = (object?)d.PTDisponibleAlCrear ?? DBNull.Value;
+
+            cmd.Parameters.Add("@MaterialCodigo", SqlDbType.NVarChar, 100).Value =
+                (object?)d.MaterialCodigo ?? DBNull.Value;
+
+            cmd.Parameters.Add("@MaterialDescripcion", SqlDbType.NVarChar, 250).Value =
+                (object?)d.MaterialDescripcion ?? DBNull.Value;
+
+            cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value =
+                (object?)d.MaterialID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@OrigenSurtido", SqlDbType.NVarChar, 30).Value =
+                (object?)d.OrigenSurtido ?? DBNull.Value;
+
+            cmd.Parameters.Add("@PTDisponibleAlCrear", SqlDbType.Int).Value =
+                (object?)d.PTDisponibleAlCrear ?? DBNull.Value;
+
             AddDecimal(cmd, "@MPDisponibleKgAlCrear", d.MPDisponibleKgAlCrear, 18, 4);
-            cmd.Parameters.Add("@AlmacenValidado", SqlDbType.Bit).Value = d.AlmacenValidado;
-            cmd.Parameters.Add("@MensajeAlmacen", SqlDbType.NVarChar, 500).Value = (object?)d.MensajeAlmacen ?? DBNull.Value;
-            cmd.Parameters.Add("@EmbalajeCodigo", SqlDbType.NVarChar, 100).Value = (object?)d.EmbalajeCodigo ?? DBNull.Value;
-            cmd.Parameters.Add("@EmbalajeDescripcion", SqlDbType.NVarChar, 250).Value = (object?)d.EmbalajeDescripcion ?? DBNull.Value;
+
+            cmd.Parameters.Add("@AlmacenValidado", SqlDbType.Bit).Value =
+                d.AlmacenValidado;
+
+            cmd.Parameters.Add("@MensajeAlmacen", SqlDbType.NVarChar, 500).Value =
+                (object?)d.MensajeAlmacen ?? DBNull.Value;
+
+            cmd.Parameters.Add("@EmbalajeCodigo", SqlDbType.NVarChar, 100).Value =
+                (object?)d.EmbalajeCodigo ?? DBNull.Value;
+
+            cmd.Parameters.Add("@EmbalajeDescripcion", SqlDbType.NVarChar, 250).Value =
+                (object?)d.EmbalajeDescripcion ?? DBNull.Value;
+
             AddDecimal(cmd, "@PiezasPorEmbalaje", d.PiezasPorEmbalaje, 18, 4);
             AddDecimal(cmd, "@CantidadEmbalajes", d.CantidadEmbalajes, 18, 4);
             AddDecimal(cmd, "@CantidadMpKg", d.CantidadMpKg, 18, 4);
+
             AddDecimal(cmd, "@CostoMPUnitario", d.CostoMPUnitario, 18, 6);
             AddDecimal(cmd, "@CostoMPTotal", d.CostoMPTotal, 18, 4);
 
@@ -1585,8 +1695,19 @@ VALUES
             cmd.Parameters.Add("@UnidadCostoMP", SqlDbType.NVarChar, 30).Value =
                 (object?)d.UnidadCostoMP ?? DBNull.Value;
 
-            AddDecimal(cmd, "@CostoEmbalajeUnitario", d.CostoEmbalajeUnitario, 18, 6);
-            AddDecimal(cmd, "@CostoEmbalajeTotal", d.CostoEmbalajeTotal, 18, 4);
+            AddDecimal(
+                cmd,
+                "@CostoEmbalajeUnitario",
+                d.CostoEmbalajeUnitario,
+                18,
+                6);
+
+            AddDecimal(
+                cmd,
+                "@CostoEmbalajeTotal",
+                d.CostoEmbalajeTotal,
+                18,
+                4);
 
             cmd.Parameters.Add("@MonedaCostoEmbalaje", SqlDbType.NVarChar, 20).Value =
                 (object?)d.MonedaCostoEmbalaje ?? DBNull.Value;
@@ -1598,11 +1719,23 @@ VALUES
             AddDecimal(cmd, "@PrecioVentaUnitario", d.PrecioVentaUnitario, 18, 6);
             AddDecimal(cmd, "@VentaTotalRenglon", d.VentaTotalRenglon, 18, 4);
             AddDecimal(cmd, "@UtilidadEstimadaRenglon", d.UtilidadEstimadaRenglon, 18, 4);
-            cmd.Parameters.Add("@Cambio", SqlDbType.Time).Value = (object?)d.Cambio ?? DBNull.Value;
-            cmd.Parameters.Add("@Arranque", SqlDbType.Time).Value = (object?)d.Arranque ?? DBNull.Value;
-            cmd.Parameters.Add("@Notas", SqlDbType.NVarChar, 500).Value = (object?)d.Notas ?? DBNull.Value;
 
-            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+            cmd.Parameters.Add("@Cambio", SqlDbType.Time).Value =
+                (object?)d.Cambio ?? DBNull.Value;
+
+            cmd.Parameters.Add("@Arranque", SqlDbType.Time).Value =
+                (object?)d.Arranque ?? DBNull.Value;
+
+            cmd.Parameters.Add("@Notas", SqlDbType.NVarChar, 500).Value =
+                (object?)d.Notas ?? DBNull.Value;
+
+            var result = await cmd.ExecuteScalarAsync();
+
+            if (result == null || result == DBNull.Value)
+                throw new InvalidOperationException(
+                    "No fue posible obtener el ID del detalle de la solicitud de producción.");
+
+            return Convert.ToInt32(result);
         }
 
         private async Task InsertarAsignacionMaquinaAsync(

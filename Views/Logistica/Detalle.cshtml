@@ -1,166 +1,1397 @@
-﻿@* LOGISTICA_UX_RAPIDA_V1_4 *@
+﻿@* LOGISTICA_DETALLE_PREMIUM_V2 *@
 @using ERP.NSQuell.Models.ViewModels.Logistica
 @model LogisticaDetalleVm
 @{
     Layout = "_LogisticaLayout";
     ViewData["Title"] = Model.Folio;
+
     string Fecha(DateTime? d) => d?.ToString("dd/MM/yyyy") ?? "—";
     string FechaHora(DateTime? d) => d?.ToString("dd/MM/yyyy HH:mm") ?? "—";
     string Hora(TimeSpan? t) => t?.ToString(@"hh\:mm") ?? "";
     bool editable = Model.Estatus is "Programado" or "Preparando";
+
+    var pasos = new[] { "Programado", "Preparando", "Preparado", "Cargado", "En ruta", "Entregado" };
+    var indiceActual = Array.IndexOf(pasos, Model.Estatus);
+    var totalSolicitado = Model.Partidas.Sum(x => x.CantidadSolicitada);
+    var totalAsignado = Model.Partidas.Sum(x => x.CantidadAsignada);
+    var totalDespachado = Model.Partidas.Sum(x => x.CantidadDespachada);
+    var totalCajas = Model.CajasAsignadas.Count;
+    var completo = totalSolicitado > 0 && totalAsignado == totalSolicitado;
 }
+<style>
+    :root {
+        --ld-navy: #071b31;
+        --ld-blue: #0f4c81;
+        --ld-blue-dark: #0a3b65;
+        --ld-blue-soft: #edf5fb;
+        --ld-green: #117a4b;
+        --ld-green-soft: #ecfdf3;
+        --ld-amber: #b76e00;
+        --ld-amber-soft: #fff7e6;
+        --ld-red: #b42318;
+        --ld-red-soft: #fff3f1;
+        --ld-purple: #6847c7;
+        --ld-cyan: #0e7490;
+        --ld-ink: #172033;
+        --ld-muted: #667085;
+        --ld-line: #d9e3ee;
+        --ld-bg: #f3f6fa;
+        --ld-shadow: 0 14px 34px rgba(15,23,42,.07)
+    }
 
-<section class="log-page-head">
-    <div><span class="log-kicker">@Model.Estatus</span><h1>@Model.Folio</h1><p>@Model.Cliente · @Model.Destino</p></div>
-    <a class="log-btn log-btn-ghost" asp-action="Index">Regresar al tablero</a>
-</section>
+    .ld-page {
+        display: flex;
+        flex-direction: column;
+        gap: 15px
+    }
 
-<section class="log-timeline">
-@foreach (var step in new[] { "Programado", "Preparando", "Preparado", "Cargado", "En ruta", "Entregado" })
-{
-    <div class="@(Model.Estatus == step ? "is-current" : "")"><span></span><strong>@step</strong></div>
-}
-</section>
+    .ld-hero {
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(118deg,var(--ld-navy),#103d64 72%,#175f8c);
+        color: #fff;
+        border-radius: 22px;
+        padding: 22px 24px;
+        box-shadow: 0 20px 45px rgba(7,27,49,.18)
+    }
 
-<section class="log-kpis log-kpis-4">
-    <article><span>Carga programada</span><strong>@Fecha(Model.FechaCargaProgramada)</strong><small>@Hora(Model.HoraCargaProgramada)</small></article>
-    <article><span>Entrega programada</span><strong>@Fecha(Model.FechaEntregaProgramada)</strong><small>@Hora(Model.HoraEntregaProgramada)</small></article>
-    <article><span>Carga real</span><strong>@FechaHora(Model.FechaCarga)</strong></article>
-    <article><span>Salida real</span><strong>@FechaHora(Model.FechaSalida)</strong></article>
-</section>
+        .ld-hero::after {
+            content: "";
+            position: absolute;
+            width: 330px;
+            height: 330px;
+            right: -120px;
+            top: -180px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,.13);
+            box-shadow: 0 0 0 35px rgba(255,255,255,.025),0 0 0 75px rgba(255,255,255,.018)
+        }
 
-<section class="log-panel">
-    <div class="log-panel-head"><div><span class="log-kicker">PARTIDAS</span><h2>Release / OF / cajas</h2></div></div>
-    <div class="log-detail-grid">
-    @foreach (var p in Model.Partidas)
+    .ld-hero-row {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: flex-start;
+        flex-wrap: wrap
+    }
+
+    .ld-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #c9e5f4;
+        text-decoration: none;
+        font-weight: 850;
+        font-size: .78rem;
+        margin-bottom: 8px
+    }
+
+        .ld-back:hover {
+            color: #fff
+        }
+
+    .ld-kicker {
+        display: block;
+        color: #8dc7e5;
+        font-size: .69rem;
+        font-weight: 950;
+        letter-spacing: .15em;
+        text-transform: uppercase
+    }
+
+    .ld-hero h1 {
+        margin: 4px 0 5px;
+        font-size: 1.9rem;
+        font-weight: 950
+    }
+
+    .ld-hero p {
+        margin: 0;
+        color: rgba(255,255,255,.80);
+        font-weight: 700
+    }
+
+    .ld-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,.11);
+        border: 1px solid rgba(255,255,255,.24);
+        font-size: .76rem;
+        font-weight: 950
+    }
+
+    .ld-top-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px
+    }
+
+    .ld-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        border: 1px solid #cad7e5;
+        border-radius: 11px;
+        padding: 8px 13px;
+        background: #fff;
+        color: #25364d;
+        text-decoration: none;
+        font-weight: 950;
+        cursor: pointer;
+        transition: .15s ease
+    }
+
+        .ld-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15,23,42,.10);
+            color: var(--ld-blue)
+        }
+
+    .ld-btn-primary {
+        background: var(--ld-blue);
+        border-color: var(--ld-blue);
+        color: #fff
+    }
+
+        .ld-btn-primary:hover {
+            background: var(--ld-blue-dark);
+            border-color: var(--ld-blue-dark);
+            color: #fff
+        }
+
+    .ld-btn-danger {
+        background: var(--ld-red);
+        border-color: var(--ld-red);
+        color: #fff
+    }
+
+        .ld-btn-danger:hover {
+            background: #8e1d14;
+            border-color: #8e1d14;
+            color: #fff
+        }
+
+    .ld-btn-ghost {
+        background: rgba(255,255,255,.10);
+        border-color: rgba(255,255,255,.26);
+        color: #fff
+    }
+
+        .ld-btn-ghost:hover {
+            background: #fff;
+            color: var(--ld-blue)
+        }
+
+    .ld-btn-sm {
+        min-height: 34px;
+        padding: 6px 9px;
+        border-radius: 9px;
+        font-size: .72rem
+    }
+
+    .ld-timeline {
+        background: #fff;
+        border: 1px solid var(--ld-line);
+        border-radius: 16px;
+        padding: 14px 16px;
+        box-shadow: 0 8px 20px rgba(15,23,42,.035)
+    }
+
+    .ld-timeline-track {
+        display: grid;
+        grid-template-columns: repeat(6,1fr);
+        gap: 0;
+        position: relative
+    }
+
+        .ld-timeline-track::before {
+            content: "";
+            position: absolute;
+            left: 7%;
+            right: 7%;
+            top: 14px;
+            height: 2px;
+            background: #d8e1eb;
+            z-index: 0
+        }
+
+    .ld-step {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        text-align: center;
+        color: #98a2b3;
+        font-size: .7rem;
+        font-weight: 900
+    }
+
+    .ld-step-dot {
+        width: 29px;
+        height: 29px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #fff;
+        border: 2px solid #cdd7e3;
+        color: #98a2b3
+    }
+
+    .ld-step.done {
+        color: #1f5f86
+    }
+
+        .ld-step.done .ld-step-dot {
+            background: #edf5fb;
+            border-color: #4e92c0;
+            color: #0f4c81
+        }
+
+    .ld-step.current {
+        color: #0b1f3a
+    }
+
+        .ld-step.current .ld-step-dot {
+            background: #0f4c81;
+            border-color: #0f4c81;
+            color: #fff;
+            box-shadow: 0 0 0 4px #dcecf7
+        }
+
+    .ld-summary {
+        display: grid;
+        grid-template-columns: repeat(6,minmax(0,1fr));
+        background: #fff;
+        border: 1px solid var(--ld-line);
+        border-radius: 16px;
+        overflow: hidden
+    }
+
+    .ld-summary-item {
+        padding: 12px 14px;
+        border-right: 1px solid var(--ld-line);
+        background: #fbfcfe
+    }
+
+        .ld-summary-item:last-child {
+            border-right: 0
+        }
+
+        .ld-summary-item span {
+            display: block;
+            color: #7b8797;
+            font-size: .65rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .ld-summary-item strong {
+            display: block;
+            margin-top: 3px;
+            color: #0b1f3a;
+            font-size: .9rem;
+            font-weight: 950
+        }
+
+        .ld-summary-item small {
+            color: #7b8797;
+            font-size: .67rem;
+            font-weight: 700
+        }
+
+    .ld-panel {
+        background: #fff;
+        border: 1px solid var(--ld-line);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: var(--ld-shadow)
+    }
+
+    .ld-panel-head {
+        min-height: 58px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        border-bottom: 1px solid var(--ld-line);
+        background: linear-gradient(180deg,#fff,#f9fbfd)
+    }
+
+    .ld-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 11px
+    }
+
+    .ld-panel-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: #edf5fb;
+        color: #0f4c81;
+        display: grid;
+        place-items: center
+    }
+
+    .ld-panel-title h2 {
+        margin: 0;
+        color: #0b1f3a;
+        font-size: 1.05rem;
+        font-weight: 950
+    }
+
+    .ld-panel-title small {
+        display: block;
+        margin-top: 2px;
+        color: #667085;
+        font-weight: 650
+    }
+
+    .ld-panel-body {
+        padding: 16px
+    }
+
+    .ld-part-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px
+    }
+
+    .ld-part {
+        border: 1px solid #d8e2ed;
+        border-radius: 14px;
+        overflow: hidden
+    }
+
+    .ld-part-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 13px 14px;
+        background: #fbfcfe;
+        border-bottom: 1px solid #e5ebf2
+    }
+
+        .ld-part-head small {
+            color: #7b8797;
+            font-size: .68rem;
+            font-weight: 800
+        }
+
+        .ld-part-head h3 {
+            margin: 2px 0 1px;
+            color: #0b1f3a;
+            font-size: 1rem;
+            font-weight: 950
+        }
+
+        .ld-part-head p {
+            margin: 0;
+            color: #667085;
+            font-size: .75rem;
+            font-weight: 650
+        }
+
+    .ld-of {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 9px;
+        border-radius: 999px;
+        background: #eef5fb;
+        color: #174d7a;
+        border: 1px solid #bfd8eb;
+        font-size: .69rem;
+        font-weight: 950
+    }
+
+    .ld-part-body {
+        padding: 13px 14px
+    }
+
+    .ld-progress {
+        height: 8px;
+        border-radius: 999px;
+        background: #e8eef5;
+        overflow: hidden
+    }
+
+        .ld-progress > div {
+            height: 100%;
+            background: #0f4c81;
+            border-radius: 999px
+        }
+
+        .ld-progress.complete > div {
+            background: #117a4b
+        }
+
+    .ld-progress-row {
+        margin-top: 6px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        color: #667085;
+        font-size: .72rem;
+        font-weight: 800
+    }
+
+        .ld-progress-row strong {
+            color: #0b1f3a
+        }
+
+    .ld-boxes {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px
+    }
+
+    .ld-box {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid #dce5ee;
+        border-radius: 11px;
+        padding: 9px 10px;
+        background: #fff
+    }
+
+        .ld-box strong {
+            color: #0b1f3a;
+            font-size: .79rem;
+            font-weight: 950
+        }
+
+        .ld-box small {
+            display: block;
+            color: #7b8797;
+            font-size: .67rem;
+            font-weight: 700;
+            margin-top: 2px
+        }
+
+    .ld-link-danger {
+        border: 0;
+        background: transparent;
+        color: #b42318;
+        font-size: .7rem;
+        font-weight: 950;
+        cursor: pointer
+    }
+
+    .ld-available {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px dashed #d5dfeb
+    }
+
+        .ld-available h4 {
+            margin: 0 0 8px;
+            color: #40566d;
+            font-size: .79rem;
+            font-weight: 950
+        }
+
+    .ld-available-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 9px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        margin-bottom: 7px;
+        background: #fcfdff
+    }
+
+        .ld-available-row strong {
+            display: block;
+            color: #0b1f3a;
+            font-size: .76rem;
+            font-weight: 950
+        }
+
+        .ld-available-row small {
+            display: block;
+            color: #7b8797;
+            font-size: .66rem;
+            font-weight: 700
+        }
+
+    .ld-empty-inline {
+        border: 1px solid #e0e7ef;
+        background: #f8fafc;
+        color: #667085;
+        border-radius: 10px;
+        padding: 10px 11px;
+        font-size: .75rem;
+        font-weight: 800
+    }
+
+    .ld-inline-form {
+        display: grid;
+        grid-template-columns: minmax(260px,1fr) 150px auto;
+        gap: 9px;
+        align-items: end
+    }
+
+        .ld-inline-form select,
+        .ld-inline-form input,
+        .ld-form-grid input,
+        .ld-form-grid textarea {
+            width: 100%;
+            min-height: 41px;
+            border: 1px solid #ccd8e5;
+            border-radius: 10px;
+            padding: 8px 10px;
+            color: #172033;
+            background: #fff;
+            font-weight: 700
+        }
+
+            .ld-inline-form select:focus,
+            .ld-inline-form input:focus,
+            .ld-form-grid input:focus,
+            .ld-form-grid textarea:focus {
+                outline: none;
+                border-color: #5e9ac5;
+                box-shadow: 0 0 0 3px rgba(15,76,129,.10)
+            }
+
+    .ld-definition {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        margin: 0
+    }
+
+        .ld-definition div {
+            padding: 11px 12px;
+            border-right: 1px solid var(--ld-line);
+            border-bottom: 1px solid var(--ld-line)
+        }
+
+            .ld-definition div:nth-child(3n) {
+                border-right: 0
+            }
+
+            .ld-definition div:nth-last-child(-n+3) {
+                border-bottom: 0
+            }
+
+        .ld-definition dt {
+            color: #7b8797;
+            font-size: .65rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .ld-definition dd {
+            margin: 3px 0 0;
+            color: #0b1f3a;
+            font-size: .81rem;
+            font-weight: 850
+        }
+
+    .ld-actions-panel {
+        background: #fff;
+        border: 1px solid var(--ld-line);
+        border-radius: 18px;
+        padding: 14px;
+        box-shadow: var(--ld-shadow)
+    }
+
+    .ld-actions-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap
+    }
+
+    .ld-action-copy strong {
+        display: block;
+        color: #0b1f3a;
+        font-size: .9rem;
+        font-weight: 950
+    }
+
+    .ld-action-copy small {
+        color: #667085;
+        font-size: .71rem;
+        font-weight: 700
+    }
+
+    .ld-action-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap
+    }
+
+    .ld-form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.2fr auto;
+        gap: 9px;
+        align-items: end;
+        width: 100%
+    }
+
+        .ld-form-grid label span {
+            display: block;
+            margin-bottom: 4px;
+            color: #667085;
+            font-size: .64rem;
+            font-weight: 950;
+            text-transform: uppercase
+        }
+
+    .ld-history {
+        position: relative;
+        padding-left: 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px
+    }
+
+        .ld-history::before {
+            content: "";
+            position: absolute;
+            left: 8px;
+            top: 5px;
+            bottom: 5px;
+            width: 2px;
+            background: #dce5ee
+        }
+
+    .ld-history-item {
+        position: relative
+    }
+
+        .ld-history-item::before {
+            content: "";
+            position: absolute;
+            left: -23px;
+            top: 4px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #0f4c81;
+            box-shadow: 0 0 0 4px #edf5fb
+        }
+
+        .ld-history-item time {
+            display: block;
+            color: #7b8797;
+            font-size: .66rem;
+            font-weight: 800
+        }
+
+        .ld-history-item strong {
+            display: inline-block;
+            margin-top: 2px;
+            color: #0b1f3a;
+            font-size: .8rem;
+            font-weight: 950
+        }
+
+    .ld-history-state {
+        margin-left: 6px;
+        color: #5f7083;
+        font-size: .69rem;
+        font-weight: 800
+    }
+
+    .ld-history-item p {
+        margin: 4px 0 1px;
+        color: #53677c;
+        font-size: .74rem;
+        font-weight: 650
+    }
+
+    .ld-history-item small {
+        color: #8a96a6;
+        font-size: .65rem;
+        font-weight: 700
+    }
+
+    .ld-confirm-modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(5,18,32,.55);
+        z-index: 1080
+    }
+
+        .ld-confirm-modal.show {
+            display: flex
+        }
+
+    .ld-confirm-box {
+        width: min(480px,100%);
+        background: #fff;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 28px 80px rgba(15,23,42,.30)
+    }
+
+    .ld-confirm-head {
+        padding: 16px 18px;
+        background: linear-gradient(135deg,#7f1d1d,#b42318);
+        color: #fff
+    }
+
+        .ld-confirm-head h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 950
+        }
+
+    .ld-confirm-body {
+        padding: 18px;
+        color: #475467;
+        font-size: .82rem;
+        font-weight: 700;
+        line-height: 1.45
+    }
+
+    .ld-confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 0 18px 18px
+    }
+
+    .ld-cancel {
+        margin-top: 10px;
+        border-top: 1px solid #e5ebf2;
+        padding-top: 10px
+    }
+
+        .ld-cancel summary {
+            cursor: pointer;
+            color: #9b2c22;
+            font-size: .72rem;
+            font-weight: 950
+        }
+
+        .ld-cancel form {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            margin-top: 9px
+        }
+
+        .ld-cancel input {
+            min-height: 40px;
+            border: 1px solid #efb6b0;
+            border-radius: 10px;
+            padding: 8px 10px
+        }
+
+    @@media(max - width:1100px) {
+        .ld-summary
+
     {
-        var pct = p.CantidadSolicitada <= 0 ? 0 : Math.Min(100, (int)Math.Round(p.CantidadAsignada * 100d / p.CantidadSolicitada));
-        var disponibles = Model.CajasDisponibles.Where(x => x.EmbarqueDetalleID == p.EmbarqueDetalleID).ToList();
-        var asignadas = Model.CajasAsignadas.Where(x => x.EmbarqueDetalleID == p.EmbarqueDetalleID).ToList();
-        <article class="log-part-card">
-            <div class="log-part-head">
-                <div><small>@p.FolioRelease · Entrega @Fecha(p.FechaEntregaRelease)</small><h3>@p.NumeroParte</h3><p>@p.Descripcion</p></div>
-                <span class="log-of">@(string.IsNullOrWhiteSpace(p.NumeroOF) ? "OF PENDIENTE" : p.NumeroOF)</span>
+        grid-template-columns: repeat(3,1fr)
+    }
+
+    .ld-summary-item:nth-child(3) {
+        border-right: 0
+    }
+
+    .ld-summary-item:nth-child(-n+3) {
+        border-bottom: 1px solid var(--ld-line)
+    }
+
+    .ld-definition {
+        grid-template-columns: repeat(2,1fr)
+    }
+
+        .ld-definition div:nth-child(3n) {
+            border-right: 1px solid var(--ld-line)
+        }
+
+        .ld-definition div:nth-child(2n) {
+            border-right: 0
+        }
+
+        .ld-definition div:nth-last-child(-n+3) {
+            border-bottom: 1px solid var(--ld-line)
+        }
+
+        .ld-definition div:nth-last-child(-n+2) {
+            border-bottom: 0
+        }
+
+    }
+
+    @@media(max - width:820px) {
+        .ld-timeline-track
+
+    {
+        grid-template-columns: repeat(3,1fr);
+        gap: 14px
+    }
+
+    .ld-timeline-track::before {
+        display: none
+    }
+
+    .ld-summary {
+        grid-template-columns: repeat(2,1fr)
+    }
+
+    .ld-summary-item:nth-child(3) {
+        border-right: 1px solid var(--ld-line)
+    }
+
+    .ld-summary-item:nth-child(2n) {
+        border-right: 0
+    }
+
+    .ld-summary-item:nth-child(-n+4) {
+        border-bottom: 1px solid var(--ld-line)
+    }
+
+    .ld-inline-form {
+        grid-template-columns: 1fr
+    }
+
+    .ld-form-grid {
+        grid-template-columns: 1fr
+    }
+
+    }
+
+    @@media(max - width:600px) {
+        .ld-hero
+
+    {
+        padding: 18px
+    }
+
+    .ld-hero h1 {
+        font-size: 1.5rem
+    }
+
+    .ld-summary {
+        grid-template-columns: 1fr
+    }
+
+    .ld-summary-item {
+        border-right: 0;
+        border-bottom: 1px solid var(--ld-line) !important
+    }
+
+        .ld-summary-item:last-child {
+            border-bottom: 0 !important
+        }
+
+    .ld-definition {
+        grid-template-columns: 1fr
+    }
+
+        .ld-definition div {
+            border-right: 0 !important;
+            border-bottom: 1px solid var(--ld-line) !important
+        }
+
+            .ld-definition div:last-child {
+                border-bottom: 0 !important
+            }
+
+    .ld-box, .ld-available-row {
+        align-items: flex-start;
+        flex-direction: column
+    }
+
+    }
+</style>
+
+<div class="ld-page">
+    <section class="ld-hero">
+        <div class="ld-hero-row">
+            <div>
+                <a class="ld-back" asp-action="Index"><i class="fa-solid fa-arrow-left"></i>Operación logística</a>
+                <span class="ld-kicker">Embarque</span>
+                <h1>@Model.Folio</h1>
+                <p>@Model.Cliente · @Model.Destino</p>
+                <div class="ld-top-actions">
+                    <a class="ld-btn ld-btn-ghost" asp-action="Calendario"><i class="fa-solid fa-calendar-days"></i>Calendario</a>
+                </div>
             </div>
-            <div class="log-progress"><div style="width:@pct%"></div></div>
-            <div class="log-progress-row"><span>Preparado: @p.CantidadAsignada.ToString("N0") / @p.CantidadSolicitada.ToString("N0")</span><strong>Pendiente @p.PendienteAsignar.ToString("N0")</strong></div>
-
-            @if (asignadas.Any())
-            {
-                <div class="log-box-list">
-                @foreach (var c in asignadas)
-                {
-                    <div class="log-box-chip">
-                        <div><strong>Lote @(string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote)</strong><small>@c.CantidadAsignada.ToString("N0") PZA · @c.NumeroParte · OF @c.NumeroOF · @c.Estatus</small><small class="log-tech-id">Etiqueta: @c.Etiqueta · Caja interna #@c.NumeroCaja</small></div>
-                        @if (editable && c.Estatus != "Despachada")
-                        {
-                            <form asp-action="LiberarCaja" method="post">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
-                                <input type="hidden" name="embarqueCajaId" value="@c.EmbarqueCajaID" />
-                                <button class="log-link-danger" type="submit">Liberar</button>
-                            </form>
-                        }
-                    </div>
-                }
-                </div>
-            }
-
-            @if (editable)
-            {
-                <div class="log-available-boxes">
-                    <h4>Lotes PT disponibles de esta OF</h4>
-                    @foreach (var c in disponibles)
-                    {
-                        <form asp-action="ReservarCaja" method="post" class="log-available-row">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
-                            <input type="hidden" name="embarqueDetalleId" value="@p.EmbarqueDetalleID" />
-                            <input type="hidden" name="cajaId" value="@c.CajaID" />
-                            <div><strong>Lote @(string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote)</strong><small>@c.Disponible.ToString("N0") PZA · @c.Ubicacion · OF @c.NumeroOF</small><small class="log-tech-id">Etiqueta: @c.Etiqueta</small></div>
-                            <button class="log-btn log-btn-small" type="submit" disabled="@(c.Disponible > p.PendienteAsignar)">Reservar</button>
-                        </form>
-                    }
-                    @if (!disponibles.Any())
-                    {
-                        <div class="log-empty-inline">@(p.SolicitudProduccionID.HasValue ? "No hay lotes PT liberados y disponibles para esta OF." : "La entrega todavía no tiene OF; no se pueden reservar cajas.")</div>
-                    }
-                </div>
-            }
-        </article>
-    }
-    </div>
-</section>
-
-@if (editable && Model.DemandasDisponibles.Any())
-{
-    <section class="log-panel">
-        <div class="log-panel-head"><div><span class="log-kicker">CONSOLIDAR CARGA</span><h2>Agregar otra entrega del mismo cliente</h2></div></div>
-        <form asp-action="AgregarDetalle" method="post" class="log-inline-form">
-            @Html.AntiForgeryToken()
-            <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
-            <select name="ReleaseDetalleID" required>
-                <option value="">Selecciona Release / parte / fecha</option>
-                @foreach (var d in Model.DemandasDisponibles)
-                {
-                    <option value="@d.ReleaseDetalleID">@d.FechaCarga?.ToString("dd/MM") → @d.FechaEntrega.ToString("dd/MM") · @d.FolioRelease · @d.NumeroParte · @(string.IsNullOrWhiteSpace(d.NumeroOF) ? "OF pendiente" : d.NumeroOF) · pendiente @d.PendienteProgramar</option>
-                }
-            </select>
-            <input name="CantidadSolicitada" type="number" min="1" placeholder="Cantidad" required />
-            <button class="log-btn" type="submit">Agregar partida</button>
-        </form>
+            <div class="ld-state">
+                <i class="fa-solid fa-truck-fast"></i>
+                @Model.Estatus
+            </div>
+        </div>
     </section>
+
+    @if (TempData["LogisticaOk"] != null)
+    {
+        <div class="alert alert-success rounded-4 fw-bold mb-0">
+            <i class="fa-solid fa-circle-check me-2"></i>@TempData["LogisticaOk"]
+        </div>
+    }
+
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger rounded-4 fw-bold mb-0">
+            <i class="fa-solid fa-triangle-exclamation me-2"></i>@TempData["LogisticaError"]
+        </div>
+    }
+
+    <section class="ld-timeline">
+        <div class="ld-timeline-track">
+            @for (var i = 0; i < pasos.Length; i++)
+            {
+                var step = pasos[i];
+                var done = indiceActual >= 0 && i < indiceActual;
+                var current = Model.Estatus == step;
+                <div class="ld-step @(done ? "done" : "") @(current ? "current" : "")">
+                    <span class="ld-step-dot">
+                        <i class="fa-solid @(done ? "fa-check" : current ? "fa-location-dot" : "fa-circle")"></i>
+                    </span>
+                    <strong>@step</strong>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="ld-summary">
+        <div class="ld-summary-item">
+            <span>Carga programada</span>
+            <strong>@Fecha(Model.FechaCargaProgramada)</strong>
+            <small>@Hora(Model.HoraCargaProgramada)</small>
+        </div>
+        <div class="ld-summary-item">
+            <span>Entrega programada</span>
+            <strong>@Fecha(Model.FechaEntregaProgramada)</strong>
+            <small>@Hora(Model.HoraEntregaProgramada)</small>
+        </div>
+        <div class="ld-summary-item">
+            <span>Carga real</span>
+            <strong>@FechaHora(Model.FechaCarga)</strong>
+        </div>
+        <div class="ld-summary-item">
+            <span>Salida real</span>
+            <strong>@FechaHora(Model.FechaSalida)</strong>
+        </div>
+        <div class="ld-summary-item">
+            <span>Preparado</span>
+            <strong>@totalAsignado.ToString("N0") / @totalSolicitado.ToString("N0")</strong>
+            <small>@totalCajas caja(s)</small>
+        </div>
+        <div class="ld-summary-item">
+            <span>Despachado</span>
+            <strong>@totalDespachado.ToString("N0") PZA</strong>
+        </div>
+    </section>
+
+    <section class="ld-panel">
+        <div class="ld-panel-head">
+            <div class="ld-panel-title">
+                <div class="ld-panel-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+                <div>
+                    <h2>Partidas y producto terminado</h2>
+                    <small>Release, OF, cajas reservadas y disponibilidad PT.</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="ld-panel-body">
+            <div class="ld-part-list">
+                @foreach (var p in Model.Partidas)
+                {
+                    var pct = p.CantidadSolicitada <= 0 ? 0 : Math.Min(100, (int)Math.Round(p.CantidadAsignada * 100d / p.CantidadSolicitada));
+                    var disponibles = Model.CajasDisponibles.Where(x => x.EmbarqueDetalleID == p.EmbarqueDetalleID).ToList();
+                    var asignadas = Model.CajasAsignadas.Where(x => x.EmbarqueDetalleID == p.EmbarqueDetalleID).ToList();
+                    var partidaCompleta = p.CantidadSolicitada > 0 && p.CantidadAsignada == p.CantidadSolicitada;
+
+                    <article class="ld-part">
+                        <div class="ld-part-head">
+                            <div>
+                                <small>@p.FolioRelease · Entrega @Fecha(p.FechaEntregaRelease)</small>
+                                <h3>@p.NumeroParte</h3>
+                                <p>@p.Descripcion</p>
+                            </div>
+                            <span class="ld-of">@(string.IsNullOrWhiteSpace(p.NumeroOF) ? "OF PENDIENTE" : p.NumeroOF)</span>
+                        </div>
+
+                        <div class="ld-part-body">
+                            <div class="ld-progress @(partidaCompleta ? "complete" : "")">
+                                <div style="width:@pct%"></div>
+                            </div>
+
+                            <div class="ld-progress-row">
+                                <span>Preparado: @p.CantidadAsignada.ToString("N0") / @p.CantidadSolicitada.ToString("N0") PZA</span>
+                                <strong>Pendiente @p.PendienteAsignar.ToString("N0")</strong>
+                            </div>
+
+                            @if (asignadas.Any())
+                            {
+                                <div class="ld-boxes">
+                                    @foreach (var c in asignadas)
+                                    {
+                                        <div class="ld-box">
+                                            <div>
+                                                <strong>Lote @(string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote)</strong>
+                                                <small>@c.CantidadAsignada.ToString("N0") PZA · @c.NumeroParte · OF @c.NumeroOF · @c.Estatus</small>
+                                                <small>Etiqueta @c.Etiqueta · Caja interna #@c.NumeroCaja</small>
+                                            </div>
+
+                                            @if (editable && c.Estatus != "Despachada")
+                                            {
+                                                <form asp-action="LiberarCaja" method="post">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                                    <input type="hidden" name="embarqueCajaId" value="@c.EmbarqueCajaID" />
+                                                    <button class="ld-link-danger" type="submit">Liberar</button>
+                                                </form>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (editable)
+                            {
+                                <div class="ld-available">
+                                    <h4>Lotes PT disponibles de esta OF</h4>
+
+                                    @foreach (var c in disponibles)
+                                    {
+                                        <form asp-action="ReservarCaja" method="post" class="ld-available-row">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                            <input type="hidden" name="embarqueDetalleId" value="@p.EmbarqueDetalleID" />
+                                            <input type="hidden" name="cajaId" value="@c.CajaID" />
+
+                                            <div>
+                                                <strong>Lote @(string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote)</strong>
+                                                <small>@c.Disponible.ToString("N0") PZA · @(string.IsNullOrWhiteSpace(c.Ubicacion) ? "Sin ubicación" : c.Ubicacion) · OF @c.NumeroOF</small>
+                                                <small>Etiqueta @c.Etiqueta</small>
+                                            </div>
+
+                                            <button class="ld-btn ld-btn-sm" type="submit" disabled="@(c.Disponible > p.PendienteAsignar)">
+                                                <i class="fa-solid fa-plus"></i>Reservar
+                                            </button>
+                                        </form>
+                                    }
+
+                                    @if (!disponibles.Any())
+                                    {
+                                        <div class="ld-empty-inline">
+                                            @(p.SolicitudProduccionID.HasValue
+                                                                            ? "No hay lotes PT liberados y disponibles para esta OF."
+                                                                            : "La entrega todavía no tiene OF; no se pueden reservar cajas.")
+                            </div>
+                                                        }
+                                </div>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        </div>
+    </section>
+
+    @if (editable && Model.DemandasDisponibles.Any())
+    {
+        <section class="ld-panel">
+            <div class="ld-panel-head">
+                <div class="ld-panel-title">
+                    <div class="ld-panel-icon"><i class="fa-solid fa-layer-group"></i></div>
+                    <div>
+                        <h2>Consolidar carga</h2>
+                        <small>Agrega otra entrega pendiente del mismo cliente al embarque actual.</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ld-panel-body">
+                <form asp-action="AgregarDetalle" method="post" class="ld-inline-form">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+
+                    <select name="ReleaseDetalleID" required>
+                        <option value="">Selecciona Release / parte / fecha</option>
+                        @foreach (var d in Model.DemandasDisponibles)
+                        {
+                            <option value="@d.ReleaseDetalleID">
+                                @d.FechaCarga?.ToString("dd/MM") → @d.FechaEntrega.ToString("dd/MM") · @d.FolioRelease · @d.NumeroParte · @(string.IsNullOrWhiteSpace(d.NumeroOF) ? "OF pendiente" : d.NumeroOF) · pendiente @d.PendienteProgramar
+                            </option>
+                        }
+                    </select>
+
+                    <input name="CantidadSolicitada" type="number" min="1" placeholder="Cantidad" required />
+
+                    <button class="ld-btn ld-btn-primary" type="submit">
+                        <i class="fa-solid fa-plus"></i>Agregar partida
+                    </button>
+                </form>
+            </div>
+        </section>
+    }
+
+    <section class="ld-panel">
+        <div class="ld-panel-head">
+            <div class="ld-panel-title">
+                <div class="ld-panel-icon"><i class="fa-solid fa-truck"></i></div>
+                <div>
+                    <h2>Transporte y destino</h2>
+                    <small>Datos de la carga y entrega programada.</small>
+                </div>
+            </div>
+        </div>
+
+        <dl class="ld-definition">
+            <div>
+                <dt>Destino</dt>
+                <dd>@Model.Destino</dd>
+            </div>
+            <div>
+                <dt>Dirección</dt>
+                <dd>@(string.IsNullOrWhiteSpace(Model.DireccionEntrega) ? "—" : Model.DireccionEntrega)</dd>
+            </div>
+            <div>
+                <dt>Ruta</dt>
+                <dd>@(string.IsNullOrWhiteSpace(Model.Ruta) ? "Sin asignar" : Model.Ruta)</dd>
+            </div>
+            <div>
+                <dt>Unidad</dt>
+                <dd>@(string.IsNullOrWhiteSpace(Model.Unidad) ? "Sin asignar" : Model.Unidad)</dd>
+            </div>
+            <div>
+                <dt>Operador</dt>
+                <dd>@(string.IsNullOrWhiteSpace(Model.Operador) ? "Sin asignar" : Model.Operador)</dd>
+            </div>
+            <div>
+                <dt>Entrega real</dt>
+                <dd>@FechaHora(Model.FechaEntrega)</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="ld-actions-panel">
+        @if (Model.Estatus is "Programado" or "Preparando")
+        {
+            <div class="ld-actions-row">
+                <div class="ld-action-copy">
+                    <strong>Preparación del embarque</strong>
+                    <small>@(completo ? "Las cantidades reservadas cubren lo solicitado." : "Aún existen partidas pendientes de completar.")</small>
+                </div>
+                <div class="ld-action-buttons">
+                    <form asp-action="MarcarPreparado" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                        <button class="ld-btn ld-btn-primary" type="submit">
+                            <i class="fa-solid fa-circle-check"></i>Confirmar preparación completa
+                        </button>
+                    </form>
+                </div>
+            </div>
+        }
+        else if (Model.Estatus == "Preparado")
+        {
+            <div class="ld-actions-row">
+                <div class="ld-action-copy">
+                    <strong>Confirmación de carga física</strong>
+                    <small>Confirma que todas las cajas reservadas se encuentran físicamente en la unidad.</small>
+                </div>
+                <form asp-action="MarcarCargado" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                    <button class="ld-btn ld-btn-primary" type="submit">
+                        <i class="fa-solid fa-truck-ramp-box"></i>Confirmar carga física
+                    </button>
+                </form>
+            </div>
+        }
+        else if (Model.Estatus == "Cargado")
+        {
+            <div class="ld-actions-row">
+                <div class="ld-action-copy">
+                    <strong>Validar salida</strong>
+                    <small>Esta operación despacha el embarque y genera el descuento correspondiente de PT.</small>
+                </div>
+                <button type="button" class="ld-btn ld-btn-danger" id="btnAbrirDespacho">
+                    <i class="fa-solid fa-truck-fast"></i>Validar salida y descontar PT
+                </button>
+            </div>
+        }
+        else if (Model.Estatus == "En ruta")
+        {
+            <form asp-action="Entregar" method="post" class="ld-form-grid">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+
+                <label>
+                    <span>Recibe</span>
+                    <input name="ReceptorNombre" required placeholder="Nombre de quien recibe" />
+                </label>
+
+                <label>
+                    <span>Remisión</span>
+                    <input name="FolioRemision" placeholder="Folio remisión" />
+                </label>
+
+                <label>
+                    <span>Observaciones</span>
+                    <input name="Observaciones" placeholder="Observaciones de entrega" />
+                </label>
+
+                <button class="ld-btn ld-btn-primary" type="submit">
+                    <i class="fa-solid fa-location-dot"></i>Confirmar entrega
+                </button>
+            </form>
+        }
+        else if (Model.Estatus == "Entregado")
+        {
+            <div class="ld-actions-row">
+                <div class="ld-action-copy">
+                    <strong>Embarque entregado</strong>
+                    <small>La entrega al cliente ya fue confirmada.</small>
+                </div>
+                <span class="ld-state" style="background:#ecfdf3;border-color:#abefc6;color:#067647">
+                    <i class="fa-solid fa-circle-check"></i>Entregado
+                </span>
+            </div>
+        }
+
+        @if (Model.Estatus is "Programado" or "Preparando" or "Preparado")
+        {
+            <details class="ld-cancel">
+                <summary>Cancelar programación</summary>
+                <form asp-action="Cancelar" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                    <input name="motivo" required placeholder="Motivo de cancelación" />
+                    <button class="ld-btn ld-btn-danger" type="submit">
+                        <i class="fa-solid fa-ban"></i>Cancelar y liberar cajas
+                    </button>
+                </form>
+            </details>
+        }
+    </section>
+
+    <section class="ld-panel">
+        <div class="ld-panel-head">
+            <div class="ld-panel-title">
+                <div class="ld-panel-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                <div>
+                    <h2>Trazabilidad</h2>
+                    <small>Historial completo del embarque.</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="ld-panel-body">
+            @if (Model.Historial.Any())
+            {
+                <div class="ld-history">
+                    @foreach (var h in Model.Historial)
+                    {
+                        <div class="ld-history-item">
+                            <time>@h.Fecha.ToString("dd/MM/yyyy HH:mm")</time>
+                            <strong>@h.Evento</strong>
+                            @if (!string.IsNullOrWhiteSpace(h.EstadoAnterior) || !string.IsNullOrWhiteSpace(h.EstadoNuevo))
+                            {
+                                <span class="ld-history-state">@h.EstadoAnterior → @h.EstadoNuevo</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(h.Observaciones))
+                            {
+                                <p>@h.Observaciones</p>
+                            }
+                            <small>@h.Usuario</small>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="ld-empty-inline">Todavía no hay eventos registrados en el historial.</div>
+            }
+        </div>
+    </section>
+</div>
+
+@if (Model.Estatus == "Cargado")
+{
+    <div class="ld-confirm-modal" id="modalDespacho" aria-hidden="true">
+        <div class="ld-confirm-box">
+            <div class="ld-confirm-head">
+                <h3><i class="fa-solid fa-triangle-exclamation me-2"></i>Confirmar salida</h3>
+            </div>
+            <div class="ld-confirm-body">
+                Al confirmar, el embarque será despachado y se generarán los movimientos de salida que descuentan producto terminado. Esta operación debe realizarse únicamente cuando la unidad esté realmente saliendo.
+            </div>
+            <div class="ld-confirm-actions">
+                <button type="button" class="ld-btn" id="btnCancelarDespacho">Volver</button>
+                <form asp-action="Despachar" method="post" id="formDespachar">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                    <button class="ld-btn ld-btn-danger" type="submit" id="btnConfirmarDespacho">
+                        <i class="fa-solid fa-truck-fast"></i>Confirmar salida
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 }
 
-<section class="log-panel">
-    <div class="log-panel-head"><div><span class="log-kicker">DATOS DE CARGA</span><h2>Transporte y destino</h2></div></div>
-    <dl class="log-definition log-definition-grid">
-        <div><dt>Destino</dt><dd>@Model.Destino</dd></div>
-        <div><dt>Dirección</dt><dd>@(string.IsNullOrWhiteSpace(Model.DireccionEntrega) ? "—" : Model.DireccionEntrega)</dd></div>
-        <div><dt>Ruta</dt><dd>@(string.IsNullOrWhiteSpace(Model.Ruta) ? "Sin asignar" : Model.Ruta)</dd></div>
-        <div><dt>Unidad</dt><dd>@(string.IsNullOrWhiteSpace(Model.Unidad) ? "Sin asignar" : Model.Unidad)</dd></div>
-        <div><dt>Operador</dt><dd>@(string.IsNullOrWhiteSpace(Model.Operador) ? "Sin asignar" : Model.Operador)</dd></div>
-        <div><dt>Entrega real</dt><dd>@FechaHora(Model.FechaEntrega)</dd></div>
-    </dl>
-</section>
+<script>
+    (() => {
+        const modal=document.getElementById('modalDespacho');
+        const abrir=document.getElementById('btnAbrirDespacho');
+        const cerrar=document.getElementById('btnCancelarDespacho');
+        const form=document.getElementById('formDespachar');
+        const confirmar=document.getElementById('btnConfirmarDespacho');
 
-<section class="log-actions-panel">
-    @if (Model.Estatus is "Programado" or "Preparando")
-    {
-        <form asp-action="MarcarPreparado" method="post">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><button class="log-btn log-btn-primary" type="submit">Confirmar preparación completa</button></form>
-    }
-    else if (Model.Estatus == "Preparado")
-    {
-        <form asp-action="MarcarCargado" method="post">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><button class="log-btn log-btn-primary" type="submit">Confirmar carga física</button></form>
-    }
-    else if (Model.Estatus == "Cargado")
-    {
-        <form asp-action="Despachar" method="post" onsubmit="return confirm('¿Confirmar salida? Esta acción generará movimientos Embarque y descontará PT.');">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><button class="log-btn log-btn-danger" type="submit">Validar salida y descontar PT</button></form>
-    }
-    else if (Model.Estatus == "En ruta")
-    {
-        <form asp-action="Entregar" method="post" class="log-inline-form">
-            @Html.AntiForgeryToken()
-            <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
-            <input name="ReceptorNombre" required placeholder="Nombre de quien recibe" />
-            <input name="FolioRemision" placeholder="Folio remisión" />
-            <input name="Observaciones" placeholder="Observaciones de entrega" />
-            <button class="log-btn log-btn-primary" type="submit">Confirmar entrega</button>
-        </form>
-    }
+        function mostrar(){
+            if(!modal)return;
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden','false');
+        }
 
-    @if (Model.Estatus is "Programado" or "Preparando" or "Preparado")
-    {
-        <details class="log-cancel"><summary>Cancelar programación</summary><form asp-action="Cancelar" method="post">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><input name="motivo" required placeholder="Motivo de cancelación" /><button class="log-btn log-btn-danger" type="submit">Cancelar y liberar cajas</button></form></details>
-    }
-</section>
+        function ocultar(){
+            if(!modal)return;
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden','true');
+        }
 
-<section class="log-panel">
-    <div class="log-panel-head"><div><span class="log-kicker">TRAZABILIDAD</span><h2>Historial</h2></div></div>
-    <div class="log-history">
-    @foreach (var h in Model.Historial)
-    {
-        <div><time>@h.Fecha.ToString("dd/MM/yyyy HH:mm")</time><strong>@h.Evento</strong><span>@h.EstadoAnterior → @h.EstadoNuevo</span><p>@h.Observaciones</p><small>@h.Usuario</small></div>
-    }
-    </div>
-</section>
+        abrir?.addEventListener('click',mostrar);
+        cerrar?.addEventListener('click',ocultar);
+
+        modal?.addEventListener('click',e=>{
+            if(e.target===modal)ocultar();
+        });
+
+        form?.addEventListener('submit',()=>{
+            if(confirmar){
+                confirmar.disabled=true;
+                confirmar.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>Despachando...';
+            }
+        });
+    })();
+</script>

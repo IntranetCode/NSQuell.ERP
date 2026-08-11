@@ -1,186 +1,1065 @@
-﻿@* LOGISTICA_UX_RAPIDA_V1_4 *@
+﻿@* LOGISTICA_CREAR_PREMIUM_V2 *@
 @using ERP.NSQuell.Models.ViewModels.Logistica
 @model LogisticaCrearVm
 @{
     Layout = "_LogisticaLayout";
     ViewData["Title"] = "Preparar salida";
+
     string Fecha(DateTime? d) => d?.ToString("dd/MM/yyyy") ?? "—";
     var demanda = Model.Demanda;
     var seleccionadas = Model.CajaIDs?.ToHashSet() ?? new HashSet<int>();
     var piezasSugeridas = Model.CajasDisponibles.Where(x => seleccionadas.Contains(x.CajaID)).Sum(x => x.Disponible);
+    var faltanteInicial = demanda == null ? 0 : Math.Max(0, demanda.PendienteProgramar - piezasSugeridas);
+    var tieneSeleccion = piezasSugeridas > 0;
+    var seleccionCompleta = demanda != null && piezasSugeridas == demanda.PendienteProgramar;
 }
 
-@if (demanda == null)
-{
-    <div class="log-empty-state">
-        <strong>No se pudo cargar la salida seleccionada.</strong>
-        <a class="log-btn log-btn-primary" asp-action="Index">Volver a programación</a>
-    </div>
-}
-else
-{
-    <section class="log-titlebar log-titlebar-compact">
-        <div>
-            <a class="log-back" asp-action="Index"><i class="fa-solid fa-arrow-left"></i> Programación</a>
-            <span class="log-eyebrow">PREPARAR SALIDA</span>
-            <h1>@demanda.Cliente</h1>
-            <p>@demanda.NumeroParte · @(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "OF pendiente" : $"OF {demanda.NumeroOF}")</p>
-        </div>
-        <div class="log-big-date">
-            <span>CARGA</span>
-            <strong>@Fecha(Model.FechaCargaProgramada)</strong>
-            <small>Entrega @Fecha(Model.FechaEntregaProgramada)</small>
-        </div>
-    </section>
+<style>
+    :root {
+        --lg-navy: #071b31;
+        --lg-blue: #0f4c81;
+        --lg-blue-dark: #0a3b65;
+        --lg-blue-soft: #edf5fb;
+        --lg-cyan: #0e7490;
+        --lg-green: #117a4b;
+        --lg-green-soft: #ecfdf3;
+        --lg-amber: #b76e00;
+        --lg-amber-soft: #fff7e6;
+        --lg-red: #b42318;
+        --lg-red-soft: #fff3f1;
+        --lg-purple: #6847c7;
+        --lg-ink: #172033;
+        --lg-muted: #667085;
+        --lg-line: #d9e3ee;
+        --lg-bg: #f3f6fa;
+        --lg-panel: #ffffff;
+        --lg-shadow: 0 14px 34px rgba(15,23,42,.07);
+    }
 
-    <form asp-action="Crear" method="post" id="programacionRapidaForm" class="log-prepare-grid">
-        @Html.AntiForgeryToken()
-        <input asp-for="ReleaseDetalleID" type="hidden" />
-        <input asp-for="CantidadSolicitada" type="hidden" />
-        <input asp-for="FechaCargaProgramada" type="hidden" />
-        <input asp-for="FechaEntregaProgramada" type="hidden" />
+    .lc-page {
+        display: flex;
+        flex-direction: column;
+        gap: 15px
+    }
 
-        <section class="log-board">
-            <div asp-validation-summary="All" class="log-validation"></div>
+    .lc-titlebar {
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(118deg,var(--lg-navy),#103d64 72%,#175f8c);
+        color: #fff;
+        border-radius: 22px;
+        padding: 22px 24px;
+        box-shadow: 0 20px 45px rgba(7,27,49,.18)
+    }
 
-            <div class="log-release-facts">
-                <div><span>Release</span><b>@demanda.FolioRelease</b></div>
-                <div><span>Parte</span><b>@demanda.NumeroParte</b></div>
-                <div><span>OF</span><b>@(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "Sin OF vinculada" : demanda.NumeroOF)</b></div>
-                <div><span>Pendiente</span><b>@demanda.PendienteProgramar.ToString("N0") PZA</b></div>
-            </div>
+        .lc-titlebar::after {
+            content: "";
+            position: absolute;
+            width: 330px;
+            height: 330px;
+            right: -120px;
+            top: -180px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,.13);
+            box-shadow: 0 0 0 35px rgba(255,255,255,.025),0 0 0 75px rgba(255,255,255,.018)
+        }
 
-            <div class="log-section-head log-section-head-tight">
-                <div>
-                    <span class="log-eyebrow">LOTES PT COMPATIBLES</span>
-                    <h2>Selecciona lo que realmente va a salir</h2>
-                </div>
-                <div class="log-selection-counter">
-                    <span>Seleccionado</span>
-                    <strong id="selectedPieces">@piezasSugeridas.ToString("N0")</strong>
-                    <small>/ @demanda.PendienteProgramar.ToString("N0") PZA</small>
-                </div>
-            </div>
+    .lc-title-row {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: flex-start;
+        flex-wrap: wrap
+    }
 
-            <p class="log-help">
-                Solo aparecen lotes liberados de la misma parte y OF. Se preseleccionan automáticamente cajas completas sin exceder la cantidad pendiente.
-            </p>
+    .lc-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #c9e5f4;
+        text-decoration: none;
+        font-weight: 850;
+        font-size: .78rem;
+        margin-bottom: 8px
+    }
 
-            <div class="log-lot-grid" id="lotGrid" data-target="@demanda.PendienteProgramar">
-                @foreach (var c in Model.CajasDisponibles)
-                {
-                    var lote = string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote;
-                    var selected = seleccionadas.Contains(c.CajaID);
-                    <label class="log-lot-card @(selected ? "is-selected" : "")">
-                        <input type="checkbox"
-                               name="CajaIDs"
-                               value="@c.CajaID"
-                               data-pieces="@c.Disponible"
-                               checked="@selected" />
-                        <span class="log-lot-check"><i class="fa-solid fa-check"></i></span>
-                        <div class="log-lot-id">
-                            <span>LOTE</span>
-                            <strong>@lote</strong>
-                            <small>@c.Etiqueta</small>
-                        </div>
-                        <div class="log-lot-meta">
-                            <span><i class="fa-solid fa-cubes"></i> @c.Disponible.ToString("N0") PZA</span>
-                            <span><i class="fa-solid fa-location-dot"></i> @(string.IsNullOrWhiteSpace(c.Ubicacion) ? "Sin ubicación" : c.Ubicacion)</span>
-                            <span><i class="fa-solid fa-file-circle-check"></i> @(string.IsNullOrWhiteSpace(c.NumeroOF) ? "Sin OF" : c.NumeroOF)</span>
-                        </div>
-                    </label>
-                }
-            </div>
+        .lc-back:hover {
+            color: #fff
+        }
 
-            @if (!Model.CajasDisponibles.Any())
-            {
-                <div class="log-empty-inline log-empty-warning">
-                    Todavía no hay lotes PT liberados y disponibles para esta parte/OF. Puedes programar la salida ahora y reservarlos después.
-                </div>
+    .lc-eyebrow {
+        display: block;
+        color: #8dc7e5;
+        font-size: .69rem;
+        font-weight: 950;
+        letter-spacing: .15em;
+        text-transform: uppercase
+    }
+
+    .lc-titlebar h1 {
+        margin: 4px 0 5px;
+        font-size: 1.85rem;
+        font-weight: 950
+    }
+
+    .lc-titlebar p {
+        margin: 0;
+        color: rgba(255,255,255,.80);
+        font-weight: 700
+    }
+
+    .lc-big-date {
+        min-width: 220px;
+        border: 1px solid rgba(255,255,255,.22);
+        background: rgba(255,255,255,.09);
+        border-radius: 15px;
+        padding: 12px 15px;
+        backdrop-filter: blur(4px)
+    }
+
+        .lc-big-date span {
+            display: block;
+            color: #b8dcec;
+            font-size: .67rem;
+            letter-spacing: .11em;
+            font-weight: 950
+        }
+
+        .lc-big-date strong {
+            display: block;
+            font-size: 1.32rem;
+            font-weight: 950;
+            margin: 2px 0
+        }
+
+        .lc-big-date small {
+            color: rgba(255,255,255,.72);
+            font-weight: 700
+        }
+
+    .lc-layout {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) 360px;
+        gap: 15px;
+        align-items: start
+    }
+
+    .lc-board {
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-radius: 18px;
+        box-shadow: var(--lg-shadow);
+        overflow: hidden
+    }
+
+    .lc-main {
+        padding: 18px
+    }
+
+    .lc-aside {
+        position: sticky;
+        top: 14px;
+        padding: 18px
+    }
+
+    .lc-validation {
+        margin-bottom: 14px
+    }
+
+        .lc-validation:empty {
+            display: none
+        }
+
+        .lc-validation ul {
+            margin: 0;
+            padding: 11px 14px 11px 32px;
+            border: 1px solid #fda29b;
+            background: var(--lg-red-soft);
+            color: var(--lg-red);
+            border-radius: 12px;
+            font-size: .8rem;
+            font-weight: 800
+        }
+
+    .lc-facts {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 0;
+        border: 1px solid var(--lg-line);
+        border-radius: 14px;
+        overflow: hidden;
+        margin-bottom: 18px
+    }
+
+    .lc-fact {
+        padding: 12px 14px;
+        background: #fbfcfe;
+        border-right: 1px solid var(--lg-line)
+    }
+
+        .lc-fact:last-child {
+            border-right: 0
+        }
+
+        .lc-fact span {
+            display: block;
+            color: #7b8797;
+            font-size: .66rem;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            font-weight: 950
+        }
+
+        .lc-fact b {
+            display: block;
+            margin-top: 3px;
+            color: #0b1f3a;
+            font-size: .92rem;
+            font-weight: 950;
+            overflow-wrap: anywhere
+        }
+
+    .lc-section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 6px
+    }
+
+        .lc-section-head h2 {
+            margin: 3px 0 0;
+            color: #0b1f3a;
+            font-size: 1.12rem;
+            font-weight: 950
+        }
+
+    .lc-selection {
+        min-width: 185px;
+        text-align: right
+    }
+
+        .lc-selection span {
+            display: block;
+            color: #7b8797;
+            font-size: .66rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em
+        }
+
+        .lc-selection strong {
+            color: var(--lg-blue);
+            font-size: 1.22rem;
+            font-weight: 950
+        }
+
+        .lc-selection small {
+            color: #667085;
+            font-weight: 750
+        }
+
+        .lc-selection.is-complete strong {
+            color: var(--lg-green)
+        }
+
+    .lc-help {
+        margin: 0 0 14px;
+        color: #667085;
+        font-size: .79rem;
+        font-weight: 700;
+        line-height: 1.45
+    }
+
+    .lc-progress {
+        height: 8px;
+        border-radius: 999px;
+        background: #e8eef5;
+        overflow: hidden;
+        margin-bottom: 16px
+    }
+
+    .lc-progress-bar {
+        width: 0;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--lg-blue);
+        transition: .2s ease
+    }
+
+        .lc-progress-bar.complete {
+            background: var(--lg-green)
+        }
+
+    .lc-lot-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 10px
+    }
+
+    .lc-lot-card {
+        position: relative;
+        display: block;
+        border: 1px solid #d5dfeb;
+        background: #fff;
+        border-radius: 14px;
+        padding: 13px 13px 12px 45px;
+        cursor: pointer;
+        transition: .15s ease;
+        min-width: 0
+    }
+
+        .lc-lot-card:hover {
+            border-color: #83acd0;
+            box-shadow: 0 8px 18px rgba(15,76,129,.08)
+        }
+
+        .lc-lot-card.is-selected {
+            border-color: #3d8abb;
+            background: #f3f9fd;
+            box-shadow: inset 0 0 0 1px #8ec0df
+        }
+
+        .lc-lot-card input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none
+        }
+
+    .lc-lot-check {
+        position: absolute;
+        left: 13px;
+        top: 13px;
+        width: 22px;
+        height: 22px;
+        border: 2px solid #b7c5d5;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+        color: transparent;
+        background: #fff;
+        transition: .15s ease
+    }
+
+    .lc-lot-card.is-selected .lc-lot-check {
+        border-color: var(--lg-blue);
+        background: var(--lg-blue);
+        color: #fff
+    }
+
+    .lc-lot-id > span {
+        display: block;
+        color: #8491a2;
+        font-size: .62rem;
+        font-weight: 950;
+        letter-spacing: .06em
+    }
+
+    .lc-lot-id strong {
+        display: block;
+        color: #0b1f3a;
+        font-size: .9rem;
+        font-weight: 950;
+        line-height: 1.25;
+        overflow-wrap: anywhere
+    }
+
+    .lc-lot-id small {
+        display: block;
+        margin-top: 2px;
+        color: #8491a2;
+        font-size: .67rem;
+        font-weight: 650;
+        overflow-wrap: anywhere
+    }
+
+    .lc-lot-meta {
+        display: flex;
+        gap: 9px 13px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+        color: #53677c;
+        font-size: .69rem;
+        font-weight: 800
+    }
+
+        .lc-lot-meta i {
+            color: #3c7eaa
+        }
+
+    .lc-empty-inline {
+        margin-top: 10px;
+        border-radius: 13px;
+        padding: 13px 14px;
+        font-size: .8rem;
+        font-weight: 800
+    }
+
+    .lc-empty-warning {
+        border: 1px solid #f3cf85;
+        background: #fff9ec;
+        color: #8a5a00
+    }
+
+    .lc-aside-title {
+        margin-bottom: 14px
+    }
+
+        .lc-aside-title h2 {
+            margin: 3px 0 0;
+            color: #0b1f3a;
+            font-size: 1.12rem;
+            font-weight: 950
+        }
+
+    .lc-field {
+        display: block;
+        margin-bottom: 12px
+    }
+
+        .lc-field > span {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 5px;
+            color: #475467;
+            font-size: .7rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+            .lc-field > span small {
+                color: #98a2b3;
+                font-size: .65rem;
+                text-transform: none;
+                font-weight: 750;
+                letter-spacing: 0
             }
+
+        .lc-field input,
+        .lc-field select,
+        .lc-field textarea {
+            width: 100%;
+            border: 1px solid #ccd8e5;
+            background: #fff;
+            color: #172033;
+            border-radius: 10px;
+            padding: 9px 10px;
+            font-weight: 700
+        }
+
+        .lc-field input,
+        .lc-field select {
+            min-height: 41px
+        }
+
+        .lc-field textarea {
+            resize: vertical;
+            min-height: 80px
+        }
+
+            .lc-field input:focus,
+            .lc-field select:focus,
+            .lc-field textarea:focus {
+                outline: none;
+                border-color: #5e9ac5;
+                box-shadow: 0 0 0 3px rgba(15,76,129,.10)
+            }
+
+    .lc-advanced {
+        margin: 2px 0 14px;
+        border-top: 1px solid #e5ebf2;
+        border-bottom: 1px solid #e5ebf2
+    }
+
+        .lc-advanced summary {
+            cursor: pointer;
+            padding: 11px 0;
+            color: #40566d;
+            font-size: .78rem;
+            font-weight: 950;
+            list-style: none
+        }
+
+            .lc-advanced summary::-webkit-details-marker {
+                display: none
+            }
+
+            .lc-advanced summary::after {
+                content: "+";
+                float: right;
+                color: #7b8797;
+                font-size: 1rem
+            }
+
+        .lc-advanced[open] summary::after {
+            content: "−"
+        }
+
+        .lc-advanced > div {
+            padding-bottom: 5px
+        }
+
+    .lc-summary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border: 1px solid var(--lg-line);
+        border-radius: 12px;
+        overflow: hidden;
+        margin: 13px 0
+    }
+
+        .lc-summary div {
+            padding: 9px 10px;
+            border-bottom: 1px solid var(--lg-line);
+            border-right: 1px solid var(--lg-line);
+            background: #fafcff
+        }
+
+            .lc-summary div:nth-child(2n) {
+                border-right: 0
+            }
+
+            .lc-summary div:nth-last-child(-n+2) {
+                border-bottom: 0
+            }
+
+        .lc-summary span {
+            display: block;
+            color: #8a96a6;
+            font-size: .61rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .lc-summary b {
+            display: block;
+            margin-top: 2px;
+            color: #0b1f3a;
+            font-size: .77rem;
+            font-weight: 950;
+            overflow-wrap: anywhere
+        }
+
+    .lc-selection-status {
+        border-radius: 12px;
+        padding: 10px 11px;
+        margin-bottom: 12px;
+        font-size: .76rem;
+        font-weight: 850;
+        line-height: 1.35
+    }
+
+        .lc-selection-status.info {
+            background: #edf5fb;
+            border: 1px solid #c6dfef;
+            color: #24597c
+        }
+
+        .lc-selection-status.ok {
+            background: var(--lg-green-soft);
+            border: 1px solid #abefc6;
+            color: #067647
+        }
+
+        .lc-selection-status.warn {
+            background: var(--lg-amber-soft);
+            border: 1px solid #f3cf85;
+            color: #8a5a00
+        }
+
+    .lc-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 42px;
+        border: 1px solid #cad7e5;
+        border-radius: 11px;
+        padding: 9px 13px;
+        background: #fff;
+        color: #25364d;
+        text-decoration: none;
+        font-weight: 950;
+        cursor: pointer;
+        transition: .15s ease
+    }
+
+        .lc-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15,23,42,.10)
+        }
+
+    .lc-btn-primary {
+        border-color: var(--lg-blue);
+        background: var(--lg-blue);
+        color: #fff
+    }
+
+        .lc-btn-primary:hover {
+            border-color: var(--lg-blue-dark);
+            background: var(--lg-blue-dark);
+            color: #fff
+        }
+
+    .lc-btn-wide {
+        width: 100%
+    }
+
+    .lc-submit-note {
+        display: block;
+        margin-top: 8px;
+        color: #7b8797;
+        font-size: .69rem;
+        font-weight: 700;
+        line-height: 1.35;
+        text-align: center
+    }
+
+    .lc-inline-message {
+        display: none;
+        border-radius: 12px;
+        padding: 10px 11px;
+        margin-bottom: 12px;
+        font-size: .76rem;
+        font-weight: 850
+    }
+
+        .lc-inline-message.show {
+            display: block
+        }
+
+        .lc-inline-message.error {
+            border: 1px solid #fda29b;
+            background: var(--lg-red-soft);
+            color: var(--lg-red)
+        }
+
+    .lc-empty-state {
+        border: 1px solid var(--lg-line);
+        background: #fff;
+        border-radius: 18px;
+        padding: 32px;
+        text-align: center;
+        box-shadow: var(--lg-shadow)
+    }
+
+        .lc-empty-state strong {
+            display: block;
+            color: #0b1f3a;
+            font-size: 1rem;
+            margin-bottom: 13px
+        }
+
+    @@media(max - width:1180px) {
+        .lc-layout
+
+    {
+        grid-template-columns: 1fr
+    }
+
+    .lc-aside {
+        position: static
+    }
+
+    }
+
+    @@media(max - width:850px) {
+        .lc-facts
+
+    {
+        grid-template-columns: 1fr 1fr
+    }
+
+    .lc-fact:nth-child(2) {
+        border-right: 0
+    }
+
+    .lc-fact:nth-child(-n+2) {
+        border-bottom: 1px solid var(--lg-line)
+    }
+
+    .lc-lot-grid {
+        grid-template-columns: 1fr
+    }
+
+    }
+
+    @@media(max - width:560px) {
+        .lc-titlebar
+
+    {
+        padding: 18px
+    }
+
+    .lc-titlebar h1 {
+        font-size: 1.45rem
+    }
+
+    .lc-big-date {
+        width: 100%
+    }
+
+    .lc-facts {
+        grid-template-columns: 1fr
+    }
+
+    .lc-fact {
+        border-right: 0 !important;
+        border-bottom: 1px solid var(--lg-line)
+    }
+
+        .lc-fact:last-child {
+            border-bottom: 0
+        }
+
+    }
+</style>
+
+<div class="lc-page">
+    @if (demanda == null)
+    {
+        <div class="lc-empty-state">
+            <strong>No se pudo cargar la salida seleccionada.</strong>
+            <a class="lc-btn lc-btn-primary" asp-action="Index">
+                <i class="fa-solid fa-arrow-left"></i>Volver a operación
+            </a>
+        </div>
+    }
+    else
+    {
+        <section class="lc-titlebar">
+            <div class="lc-title-row">
+                <div>
+                    <a class="lc-back" asp-action="Index">
+                        <i class="fa-solid fa-arrow-left"></i>Operación logística
+                    </a>
+                    <span class="lc-eyebrow">Preparar salida</span>
+                    <h1>@demanda.Cliente</h1>
+                    <p>@demanda.NumeroParte · @(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "OF pendiente" : $"OF {demanda.NumeroOF}")</p>
+                </div>
+                <div class="lc-big-date">
+                    <span>CARGA PROGRAMADA</span>
+                    <strong>@Fecha(Model.FechaCargaProgramada)</strong>
+                    <small>Entrega @Fecha(Model.FechaEntregaProgramada)</small>
+                </div>
+            </div>
         </section>
 
-        <aside class="log-prepare-aside">
-            <section class="log-board log-sticky-card">
-                <span class="log-eyebrow">DATOS AUTOMÁTICOS</span>
-                <h2>Programación</h2>
+        <form asp-action="Crear" method="post" id="programacionRapidaForm" class="lc-layout">
+            @Html.AntiForgeryToken()
+            <input asp-for="ReleaseDetalleID" type="hidden" />
+            <input asp-for="CantidadSolicitada" type="hidden" />
+            <input asp-for="FechaCargaProgramada" type="hidden" />
+            <input asp-for="FechaEntregaProgramada" type="hidden" />
 
-                <label class="log-field-clean">
+            <section class="lc-board lc-main">
+                <div asp-validation-summary="All" class="lc-validation"></div>
+
+                <div class="lc-facts">
+                    <div class="lc-fact">
+                        <span>Release</span>
+                        <b>@demanda.FolioRelease</b>
+                    </div>
+                    <div class="lc-fact">
+                        <span>Parte</span>
+                        <b>@demanda.NumeroParte</b>
+                    </div>
+                    <div class="lc-fact">
+                        <span>OF</span>
+                        <b>@(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "Sin OF vinculada" : demanda.NumeroOF)</b>
+                    </div>
+                    <div class="lc-fact">
+                        <span>Pendiente</span>
+                        <b>@demanda.PendienteProgramar.ToString("N0") PZA</b>
+                    </div>
+                </div>
+
+                <div class="lc-section-head">
+                    <div>
+                        <span class="lc-eyebrow">Producto terminado compatible</span>
+                        <h2>Selecciona las cajas que realmente van a salir</h2>
+                    </div>
+                    <div class="lc-selection @(seleccionCompleta ? "is-complete" : "")" id="selectionCounter">
+                        <span>Seleccionado</span>
+                        <strong id="selectedPieces">@piezasSugeridas.ToString("N0")</strong>
+                        <small>/ @demanda.PendienteProgramar.ToString("N0") PZA</small>
+                    </div>
+                </div>
+
+                <p class="lc-help">
+                    Solo aparecen cajas PT disponibles de la misma parte y OF. El sistema puede preseleccionar cajas completas sin exceder la cantidad pendiente. Programar una salida no descuenta inventario; el descuento ocurre al despachar.
+                </p>
+
+                <div class="lc-progress">
+                    <div id="selectionProgress" class="lc-progress-bar @(seleccionCompleta ? "complete" : "")" style="width:@(demanda.PendienteProgramar > 0 ? Math.Min(100m, Math.Round((decimal)piezasSugeridas * 100m / demanda.PendienteProgramar, 2)) : 0)%"></div>
+                </div>
+
+                <div class="lc-lot-grid" id="lotGrid" data-target="@demanda.PendienteProgramar">
+                    @foreach (var c in Model.CajasDisponibles)
+                    {
+                        var lote = string.IsNullOrWhiteSpace(c.Lote) ? c.Etiqueta : c.Lote;
+                        var selected = seleccionadas.Contains(c.CajaID);
+
+                        <label class="lc-lot-card @(selected ? "is-selected" : "")">
+                            <input type="checkbox"
+                                   name="CajaIDs"
+                                   value="@c.CajaID"
+                                   data-pieces="@c.Disponible"
+                                   checked="@selected" />
+
+                            <span class="lc-lot-check">
+                                <i class="fa-solid fa-check"></i>
+                            </span>
+
+                            <div class="lc-lot-id">
+                                <span>LOTE / CAJA</span>
+                                <strong>@(string.IsNullOrWhiteSpace(lote) ? $"Caja {c.NumeroCaja}" : lote)</strong>
+                                <small>@(string.IsNullOrWhiteSpace(c.Etiqueta) ? $"Caja #{c.NumeroCaja}" : c.Etiqueta)</small>
+                            </div>
+
+                            <div class="lc-lot-meta">
+                                <span><i class="fa-solid fa-cubes"></i>@c.Disponible.ToString("N0") PZA</span>
+                                <span><i class="fa-solid fa-location-dot"></i>@(string.IsNullOrWhiteSpace(c.Ubicacion) ? "Sin ubicación" : c.Ubicacion)</span>
+                                <span><i class="fa-solid fa-file-circle-check"></i>@(string.IsNullOrWhiteSpace(c.NumeroOF) ? "Sin OF" : c.NumeroOF)</span>
+                            </div>
+                        </label>
+                    }
+                </div>
+
+                @if (!Model.CajasDisponibles.Any())
+                {
+                    <div class="lc-empty-inline lc-empty-warning">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                        Todavía no hay cajas PT liberadas y disponibles para esta parte/OF. Puedes programar el embarque ahora y reservarlas después desde el detalle.
+                    </div>
+                }
+            </section>
+
+            <aside class="lc-board lc-aside">
+                <div class="lc-aside-title">
+                    <span class="lc-eyebrow">Datos del embarque</span>
+                    <h2>Programación</h2>
+                </div>
+
+                <div id="mensajeFormulario" class="lc-inline-message error"></div>
+
+                <label class="lc-field">
                     <span>Destino</span>
-                    <input asp-for="Destino" />
+                    <input asp-for="Destino" autocomplete="off" />
                 </label>
 
-                <label class="log-field-clean">
+                <label class="lc-field">
                     <span>Hora de carga <small>opcional</small></span>
                     <input asp-for="HoraCargaProgramada" type="time" />
                 </label>
 
-                <details class="log-advanced">
-                    <summary>Transporte / observaciones</summary>
+                <details class="lc-advanced">
+                    <summary>Transporte y observaciones</summary>
                     <div>
-                        <label class="log-field-clean">
-                            <span>Ruta</span>
+                        <label class="lc-field">
+                            <span>Ruta <small>opcional</small></span>
                             <select asp-for="RutaID">
                                 <option value="">Sin asignar</option>
-                                @foreach (var r in Model.Rutas) { <option value="@r.Id">@r.Texto</option> }
+                                @foreach (var r in Model.Rutas)
+                                {
+                                    <option value="@r.Id">@r.Texto</option>
+                                }
                             </select>
                         </label>
-                        <label class="log-field-clean">
-                            <span>Unidad</span>
+
+                        <label class="lc-field">
+                            <span>Unidad <small>opcional</small></span>
                             <select asp-for="UnidadID">
                                 <option value="">Sin asignar</option>
-                                @foreach (var u in Model.Unidades) { <option value="@u.Id">@u.Texto</option> }
+                                @foreach (var u in Model.Unidades)
+                                {
+                                    <option value="@u.Id">@u.Texto</option>
+                                }
                             </select>
                         </label>
-                        <label class="log-field-clean"><span>Operador</span><input asp-for="OperadorTexto" /></label>
-                        <label class="log-field-clean"><span>Observaciones</span><textarea asp-for="Observaciones" rows="3"></textarea></label>
+
+                        <label class="lc-field">
+                            <span>Operador <small>opcional</small></span>
+                            <input asp-for="OperadorTexto" autocomplete="off" />
+                        </label>
+
+                        <label class="lc-field">
+                            <span>Observaciones <small>opcional</small></span>
+                            <textarea asp-for="Observaciones" rows="3"></textarea>
+                        </label>
                     </div>
                 </details>
 
-                <div class="log-prepare-summary">
-                    <div><span>Parte</span><b>@demanda.NumeroParte</b></div>
-                    <div><span>OF</span><b>@(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "Pendiente" : demanda.NumeroOF)</b></div>
-                    <div><span>Carga</span><b>@Fecha(Model.FechaCargaProgramada)</b></div>
-                    <div><span>Entrega</span><b>@Fecha(Model.FechaEntregaProgramada)</b></div>
+                <div class="lc-summary">
+                    <div>
+                        <span>Parte</span>
+                        <b>@demanda.NumeroParte</b>
+                    </div>
+                    <div>
+                        <span>OF</span>
+                        <b>@(string.IsNullOrWhiteSpace(demanda.NumeroOF) ? "Pendiente" : demanda.NumeroOF)</b>
+                    </div>
+                    <div>
+                        <span>Carga</span>
+                        <b>@Fecha(Model.FechaCargaProgramada)</b>
+                    </div>
+                    <div>
+                        <span>Entrega</span>
+                        <b>@Fecha(Model.FechaEntregaProgramada)</b>
+                    </div>
                 </div>
 
-                <button class="log-btn log-btn-primary log-btn-wide" type="submit">
-                    <i class="fa-solid fa-truck-fast"></i> Programar salida
-                </button>
-                <small class="log-submit-note">Programar o reservar no descuenta PT. El stock baja únicamente al confirmar el despacho.</small>
-            </section>
-        </aside>
-    </form>
+                <div id="selectionStatus" class="lc-selection-status @(seleccionCompleta ? "ok" : tieneSeleccion ? "warn" : "info")">
+                    @if (seleccionCompleta)
+                    {
+                        <text><i class="fa-solid fa-circle-check me-1"></i>La selección PT cubre exactamente la cantidad programada.</text>
+                    }
+                    else if (tieneSeleccion)
+                    {
+                        <text><i class="fa-solid fa-circle-info me-1"></i>Faltan @faltanteInicial.ToString("N0") PZA por reservar. El embarque puede programarse y completarse después.</text>
+                    }
+                    else
+                    {
+                        <text><i class="fa-solid fa-circle-info me-1"></i>Sin cajas reservadas todavía. El embarque puede quedar programado y enlazar PT posteriormente.</text>
+                    }
+                </div>
 
+                <button class="lc-btn lc-btn-primary lc-btn-wide" type="submit" id="btnProgramar">
+                    <i class="fa-solid fa-truck-fast"></i>Programar salida
+                </button>
+
+                <small class="lc-submit-note">
+                    Reservar cajas no descuenta PT. El inventario se descuenta únicamente cuando el embarque se despacha.
+                </small>
+            </aside>
+        </form>
+    }
+</div>
+
+@if (demanda != null)
+{
     <script>
         (() => {
-            const form = document.getElementById('programacionRapidaForm');
-            const grid = document.getElementById('lotGrid');
-            const counter = document.getElementById('selectedPieces');
-            if (!form || !grid || !counter) return;
+            const form=document.getElementById('programacionRapidaForm');
+            const grid=document.getElementById('lotGrid');
+            const counter=document.getElementById('selectedPieces');
+            const counterWrap=document.getElementById('selectionCounter');
+            const progress=document.getElementById('selectionProgress');
+            const status=document.getElementById('selectionStatus');
+            const msg=document.getElementById('mensajeFormulario');
+            const btn=document.getElementById('btnProgramar');
+            const destino=document.getElementById('Destino');
 
-            const target = Number(grid.dataset.target || 0);
-            const boxes = Array.from(grid.querySelectorAll('input[type="checkbox"][name="CajaIDs"]'));
+            if(!form||!grid||!counter)return;
 
-            const refresh = changed => {
-                let total = 0;
-                boxes.forEach(box => {
-                    if (box.checked) total += Number(box.dataset.pieces || 0);
-                    box.closest('.log-lot-card')?.classList.toggle('is-selected', box.checked);
-                });
+            const target=Number(grid.dataset.target||0);
+            const boxes=Array.from(grid.querySelectorAll('input[type="checkbox"][name="CajaIDs"]'));
 
-                if (total > target && changed?.checked) {
-                    changed.checked = false;
-                    changed.closest('.log-lot-card')?.classList.remove('is-selected');
-                    total -= Number(changed.dataset.pieces || 0);
+            function mostrarMensaje(texto){
+                if(!msg)return;
+                msg.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+texto;
+                msg.classList.add('show');
+            }
+
+            function limpiarMensaje(){
+                if(!msg)return;
+                msg.innerHTML='';
+                msg.classList.remove('show');
+            }
+
+            function totalSeleccionado(){
+                return boxes.reduce((total,box)=>{
+                    return total+(box.checked?Number(box.dataset.pieces||0):0);
+                },0);
+            }
+
+            function actualizarEstado(total){
+                const porcentaje=target>0?Math.min(100,(total*100)/target):0;
+
+                counter.textContent=total.toLocaleString('es-MX');
+                counterWrap?.classList.toggle('is-complete',total===target);
+
+                if(progress){
+                    progress.style.width=porcentaje+'%';
+                    progress.classList.toggle('complete',total===target);
                 }
 
-                counter.textContent = total.toLocaleString('es-MX');
-                counter.parentElement?.classList.toggle('is-complete', total === target);
-            };
+                if(!status)return;
 
-            boxes.forEach(box => box.addEventListener('change', () => refresh(box)));
-            refresh();
+                status.classList.remove('ok','warn','info');
+
+                if(total===target&&target>0){
+                    status.classList.add('ok');
+                    status.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>La selección PT cubre exactamente la cantidad programada.';
+                    return;
+                }
+
+                if(total>0){
+                    const faltante=Math.max(0,target-total);
+                    status.classList.add('warn');
+                    status.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Faltan '+faltante.toLocaleString('es-MX')+' PZA por reservar. El embarque puede programarse y completarse después.';
+                    return;
+                }
+
+                status.classList.add('info');
+                status.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Sin cajas reservadas todavía. El embarque puede quedar programado y enlazar PT posteriormente.';
+            }
+
+            function refrescar(changed){
+                limpiarMensaje();
+
+                let total=totalSeleccionado();
+
+                if(total>target&&changed?.checked){
+                    changed.checked=false;
+                    total=totalSeleccionado();
+                    mostrarMensaje('Esa caja excede la cantidad pendiente del Release. Selecciona una combinación que no rebase '+target.toLocaleString('es-MX')+' PZA.');
+                }
+
+                boxes.forEach(box=>{
+                    box.closest('.lc-lot-card')?.classList.toggle('is-selected',box.checked);
+                });
+
+                actualizarEstado(total);
+            }
+
+            boxes.forEach(box=>{
+                box.addEventListener('change',()=>refrescar(box));
+            });
+
+            form.addEventListener('submit',e=>{
+                limpiarMensaje();
+
+                const destinoTexto=(destino?.value||'').trim();
+
+                if(!destinoTexto){
+                    e.preventDefault();
+                    mostrarMensaje('Captura el destino del embarque antes de continuar.');
+                    destino?.focus();
+                    return;
+                }
+
+                const total=totalSeleccionado();
+
+                if(total>target){
+                    e.preventDefault();
+                    mostrarMensaje('La selección de cajas excede la cantidad pendiente del Release.');
+                    return;
+                }
+
+                if(btn){
+                    btn.disabled=true;
+                    btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>Programando salida...';
+                }
+            });
+
+            refrescar();
         })();
     </script>
 }

@@ -1385,81 +1385,141 @@ VALUES
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Iniciar(int programaProduccionId, int? operadorId = null, string? operadorNombre = null, int? operadorAuxiliarId = null, string? operadorAuxiliarNombre = null, string? observaciones = null)
+        public async Task<IActionResult> Iniciar(
+    int programaProduccionId,
+    int? operadorId = null,
+    string? operadorNombre = null,
+    int? operadorAuxiliarId = null,
+    string? operadorAuxiliarNombre = null,
+    string? observaciones = null)
         {
-            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
+
             if (programaProduccionId <= 0)
             {
-                TempData["Error"] = "No se recibió correctamente el programa de producción.";
+                TempData["Error"] =
+                    "No se recibió correctamente el programa de producción.";
+
                 return RedirectToAction(nameof(Index));
             }
 
-            operadorNombre = string.IsNullOrWhiteSpace(operadorNombre) ? null : operadorNombre.Trim();
-            operadorAuxiliarNombre = string.IsNullOrWhiteSpace(operadorAuxiliarNombre) ? null : operadorAuxiliarNombre.Trim();
-            observaciones = string.IsNullOrWhiteSpace(observaciones) ? null : observaciones.Trim();
+            operadorNombre =
+                string.IsNullOrWhiteSpace(operadorNombre)
+                    ? null
+                    : operadorNombre.Trim();
 
-            if (operadorId.HasValue && operadorId.Value <= 0) operadorId = null;
-            if (operadorAuxiliarId.HasValue && operadorAuxiliarId.Value <= 0) operadorAuxiliarId = null;
+            operadorAuxiliarNombre =
+                string.IsNullOrWhiteSpace(operadorAuxiliarNombre)
+                    ? null
+                    : operadorAuxiliarNombre.Trim();
 
-            if (operadorId.HasValue && !string.IsNullOrWhiteSpace(operadorNombre))
+            observaciones =
+                string.IsNullOrWhiteSpace(observaciones)
+                    ? null
+                    : observaciones.Trim();
+
+            if (operadorId.HasValue && operadorId.Value <= 0)
+                operadorId = null;
+
+            if (operadorAuxiliarId.HasValue &&
+                operadorAuxiliarId.Value <= 0)
             {
-                TempData["Error"] = "Para el operador principal selecciona una persona del catálogo o captura un nombre manual, pero no ambos.";
-                return RedirectToAction(nameof(Index));
+                operadorAuxiliarId = null;
             }
 
-            if (operadorAuxiliarId.HasValue && !string.IsNullOrWhiteSpace(operadorAuxiliarNombre))
-            {
-                TempData["Error"] = "Para el operador auxiliar selecciona una persona del catálogo o captura un nombre manual, pero no ambos.";
-                return RedirectToAction(nameof(Index));
-            }
+            /*
+             * Si se seleccionó una persona del catálogo,
+             * el ID es la fuente de verdad.
+             *
+             * Cualquier texto residual que haya llegado desde
+             * el modal se ignora para evitar falsos positivos.
+             */
+            if (operadorId.HasValue)
+                operadorNombre = null;
+
+            if (operadorAuxiliarId.HasValue)
+                operadorAuxiliarNombre = null;
 
             if (operadorNombre?.Length > 200)
             {
-                TempData["Error"] = "El nombre manual del operador principal no puede superar 200 caracteres.";
+                TempData["Error"] =
+                    "El nombre manual del operador principal no puede superar 200 caracteres.";
+
                 return RedirectToAction(nameof(Index));
             }
 
             if (operadorAuxiliarNombre?.Length > 200)
             {
-                TempData["Error"] = "El nombre manual del operador auxiliar no puede superar 200 caracteres.";
+                TempData["Error"] =
+                    "El nombre manual del operador auxiliar no puede superar 200 caracteres.";
+
                 return RedirectToAction(nameof(Index));
             }
 
             if (observaciones?.Length > 500)
             {
-                TempData["Error"] = "Las observaciones no pueden superar 500 caracteres.";
+                TempData["Error"] =
+                    "Las observaciones no pueden superar 500 caracteres.";
+
                 return RedirectToAction(nameof(Index));
             }
 
             var usuarioId = ObtenerUsuarioID();
 
-            await using var cn = new SqlConnection(ConnectionString);
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
             await cn.OpenAsync();
 
-            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
 
             try
             {
-                var ejecucionExistenteId = await ObtenerEjecucionActivaPorProgramaAsync(programaProduccionId, cn, tx);
+                var ejecucionExistenteId =
+                    await ObtenerEjecucionActivaPorProgramaAsync(
+                        programaProduccionId,
+                        cn,
+                        tx);
+
                 if (ejecucionExistenteId.HasValue)
                 {
                     await tx.CommitAsync();
-                    TempData["Info"] = "Este programa ya tiene una ejecución de producción activa.";
-                    return RedirectToAction(nameof(Detalle), new { id = ejecucionExistenteId.Value });
+
+                    TempData["Info"] =
+                        "Este programa ya tiene una ejecución de producción activa.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = ejecucionExistenteId.Value });
                 }
 
-                var programa = await ObtenerProgramaParaIniciarAsync(programaProduccionId, cn, tx);
+                var programa =
+                    await ObtenerProgramaParaIniciarAsync(
+                        programaProduccionId,
+                        cn,
+                        tx);
+
                 if (programa == null)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "No se encontró el programa de producción o ya no está disponible para iniciar.";
+
+                    TempData["Error"] =
+                        "No se encontró el programa de producción o ya no está disponible para iniciar.";
+
                     return RedirectToAction(nameof(Index));
                 }
 
-                if (!programa.MaquinaID.HasValue || programa.MaquinaID.Value <= 0)
+                if (!programa.MaquinaID.HasValue ||
+                    programa.MaquinaID.Value <= 0)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "El programa no tiene máquina asignada. No puede iniciar preparación.";
+
+                    TempData["Error"] =
+                        "El programa no tiene máquina asignada. No puede iniciar preparación.";
+
                     return RedirectToAction(nameof(Index));
                 }
 
@@ -1475,9 +1535,9 @@ SELECT TOP (1)
     e.EstatusID,
     e.FechaInicioReal
 FROM dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
-WHERE e.Activo=1
-  AND e.MaquinaID=@MaquinaID
-  AND e.ProgramaProduccionID<>@ProgramaProduccionID
+WHERE e.Activo = 1
+  AND e.MaquinaID = @MaquinaID
+  AND e.ProgramaProduccionID <> @ProgramaProduccionID
   AND e.EstatusID IN(@EnPreparacion,@EnProduccion,@Pausado)
 ORDER BY e.EjecucionProduccionID DESC;";
 
@@ -1488,23 +1548,61 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 string? operadorOcupante = null;
                 DateTime? fechaInicioOcupante = null;
 
-                await using (var cmdOcupada = new SqlCommand(sqlMaquinaOcupada, cn, tx))
+                await using (var cmdOcupada =
+                    new SqlCommand(sqlMaquinaOcupada, cn, tx))
                 {
-                    cmdOcupada.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = programa.MaquinaID.Value;
-                    cmdOcupada.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
-                    cmdOcupada.Parameters.Add("@EnPreparacion", SqlDbType.Int).Value = ProduccionEstatus.EnPreparacion;
-                    cmdOcupada.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = ProduccionEstatus.EnProduccion;
-                    cmdOcupada.Parameters.Add("@Pausado", SqlDbType.Int).Value = ProduccionEstatus.Pausado;
+                    cmdOcupada.Parameters
+                        .Add("@MaquinaID", SqlDbType.Int)
+                        .Value = programa.MaquinaID.Value;
 
-                    await using var rdOcupada = await cmdOcupada.ExecuteReaderAsync();
+                    cmdOcupada.Parameters
+                        .Add("@ProgramaProduccionID", SqlDbType.Int)
+                        .Value = programaProduccionId;
+
+                    cmdOcupada.Parameters
+                        .Add("@EnPreparacion", SqlDbType.Int)
+                        .Value = ProduccionEstatus.EnPreparacion;
+
+                    cmdOcupada.Parameters
+                        .Add("@EnProduccion", SqlDbType.Int)
+                        .Value = ProduccionEstatus.EnProduccion;
+
+                    cmdOcupada.Parameters
+                        .Add("@Pausado", SqlDbType.Int)
+                        .Value = ProduccionEstatus.Pausado;
+
+                    await using var rdOcupada =
+                        await cmdOcupada.ExecuteReaderAsync();
+
                     if (await rdOcupada.ReadAsync())
                     {
-                        ejecucionOcupanteId = Convert.ToInt32(rdOcupada["EjecucionProduccionID"]);
-                        programaOcupanteId = Convert.ToInt32(rdOcupada["ProgramaProduccionID"]);
-                        estatusOcupanteId = Convert.ToInt32(rdOcupada["EstatusID"]);
-                        maquinaOcupadaCodigo = rdOcupada["MaquinaCodigo"] == DBNull.Value ? null : rdOcupada["MaquinaCodigo"].ToString();
-                        operadorOcupante = rdOcupada["OperadorNombre"] == DBNull.Value ? null : rdOcupada["OperadorNombre"].ToString();
-                        fechaInicioOcupante = rdOcupada["FechaInicioReal"] == DBNull.Value ? null : Convert.ToDateTime(rdOcupada["FechaInicioReal"]);
+                        ejecucionOcupanteId =
+                            Convert.ToInt32(
+                                rdOcupada["EjecucionProduccionID"]);
+
+                        programaOcupanteId =
+                            Convert.ToInt32(
+                                rdOcupada["ProgramaProduccionID"]);
+
+                        estatusOcupanteId =
+                            Convert.ToInt32(
+                                rdOcupada["EstatusID"]);
+
+                        maquinaOcupadaCodigo =
+                            rdOcupada["MaquinaCodigo"] == DBNull.Value
+                                ? null
+                                : rdOcupada["MaquinaCodigo"].ToString();
+
+                        operadorOcupante =
+                            rdOcupada["OperadorNombre"] == DBNull.Value
+                                ? null
+                                : rdOcupada["OperadorNombre"].ToString();
+
+                        fechaInicioOcupante =
+                            rdOcupada["FechaInicioReal"] == DBNull.Value
+                                ? null
+                                : Convert.ToDateTime(
+                                    rdOcupada["FechaInicioReal"]);
                     }
                 }
 
@@ -1512,185 +1610,257 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 {
                     await tx.RollbackAsync();
 
-                    var maquinaTexto = !string.IsNullOrWhiteSpace(maquinaOcupadaCodigo)
-                        ? maquinaOcupadaCodigo.Trim()
-                        : programa.MaquinaCodigo ?? "seleccionada";
+                    var maquinaTexto =
+                        !string.IsNullOrWhiteSpace(maquinaOcupadaCodigo)
+                            ? maquinaOcupadaCodigo.Trim()
+                            : programa.MaquinaCodigo ?? "seleccionada";
 
-                    var estatusTexto = estatusOcupanteId switch
-                    {
-                        ProduccionEstatus.EnPreparacion => "en preparación",
-                        ProduccionEstatus.EnProduccion => "en producción",
-                        ProduccionEstatus.Pausado => "pausada",
-                        _ => "activa"
-                    };
+                    var estatusTexto =
+                        estatusOcupanteId switch
+                        {
+                            ProduccionEstatus.EnPreparacion =>
+                                "en preparación",
 
-                    var mensaje = $"No puedes iniciar esta OF porque la máquina {maquinaTexto} está ocupada por el Programa {programaOcupanteId}, ejecución {ejecucionOcupanteId}, actualmente {estatusTexto}.";
+                            ProduccionEstatus.EnProduccion =>
+                                "en producción",
+
+                            ProduccionEstatus.Pausado =>
+                                "pausada",
+
+                            _ =>
+                                "activa"
+                        };
+
+                    var mensaje =
+                        $"No puedes iniciar esta OF porque la máquina {maquinaTexto} " +
+                        $"está ocupada por el Programa {programaOcupanteId}, " +
+                        $"ejecución {ejecucionOcupanteId}, actualmente {estatusTexto}.";
 
                     if (!string.IsNullOrWhiteSpace(operadorOcupante))
-                        mensaje += " Operador: " + operadorOcupante.Trim() + ".";
+                    {
+                        mensaje +=
+                            " Operador: " +
+                            operadorOcupante.Trim() +
+                            ".";
+                    }
 
                     if (fechaInicioOcupante.HasValue)
-                        mensaje += " Inicio real: " + fechaInicioOcupante.Value.ToString("dd/MM/yyyy HH:mm") + ".";
+                    {
+                        mensaje +=
+                            " Inicio real: " +
+                            fechaInicioOcupante.Value
+                                .ToString("dd/MM/yyyy HH:mm") +
+                            ".";
+                    }
 
-                    mensaje += " Termina o libera la ejecución anterior antes de iniciar la siguiente preparación.";
+                    mensaje +=
+                        " Termina o libera la ejecución anterior antes de iniciar la siguiente preparación.";
 
                     TempData["Error"] = mensaje;
+
                     return RedirectToAction(nameof(Index));
                 }
 
-                int? operadorPrincipalFinalId = operadorId;
-                string? operadorPrincipalFinalNombre = operadorNombre;
+                int? operadorPrincipalFinalId =
+                    operadorId;
+
+                string? operadorPrincipalFinalNombre =
+                    operadorNombre;
 
                 /*
-                 * Si la vista no manda una selección explícita, conserva
-                 * el operador principal que llegó desde Planeación.
+                 * Si no hubo selección explícita,
+                 * conserva el operador planeado.
                  */
                 if (!operadorPrincipalFinalId.HasValue &&
-                   string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) &&
-                   programa.OperadorPrincipalPlaneadoID.HasValue)
+                    string.IsNullOrWhiteSpace(
+                        operadorPrincipalFinalNombre) &&
+                    programa.OperadorPrincipalPlaneadoID.HasValue)
                 {
-                    operadorPrincipalFinalId = programa.OperadorPrincipalPlaneadoID;
+                    operadorPrincipalFinalId =
+                        programa.OperadorPrincipalPlaneadoID;
                 }
 
                 /*
-                 * Si existe un PersonaID, el servidor confirma que sea
-                 * colaborador activo y que su puesto sea exactamente OPERADOR.
+                 * Si existe PersonaID, el nombre SIEMPRE
+                 * se obtiene del catálogo.
                  */
                 if (operadorPrincipalFinalId.HasValue)
                 {
-                    operadorPrincipalFinalNombre = await ObtenerNombreOperadorProduccionAsync(
-                        operadorPrincipalFinalId.Value, cn, tx);
+                    operadorPrincipalFinalNombre =
+                        await ObtenerNombreOperadorProduccionAsync(
+                            operadorPrincipalFinalId.Value,
+                            cn,
+                            tx);
 
-                    if (string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
+                    if (string.IsNullOrWhiteSpace(
+                        operadorPrincipalFinalNombre))
                     {
                         await tx.RollbackAsync();
-                        TempData["Error"] = "El operador principal seleccionado no está activo o su puesto no es OPERADOR.";
+
+                        TempData["Error"] =
+                            "El operador principal seleccionado no está activo o su puesto no es OPERADOR.";
+
                         return RedirectToAction(nameof(Index));
                     }
                 }
 
-                /*
-                 * Como último intento se toma el operador sugerido por la escala RRHH,
-                 * pero también se valida que realmente tenga puesto OPERADOR.
-                 */
-                if (!operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
+                if (!operadorPrincipalFinalId.HasValue &&
+                    string.IsNullOrWhiteSpace(
+                        operadorPrincipalFinalNombre))
                 {
-                    var operadorSugerido = await ObtenerOperadorSugeridoProduccionAsync(
-                        programa.MaquinaID.Value,
-                        DateTime.Now,
-                        cn,
-                        tx);
-
-                    if (operadorSugerido != null)
-                    {
-                        var nombreValidado = await ObtenerNombreOperadorProduccionAsync(
-                            operadorSugerido.OperadorID,
+                    var operadorSugerido =
+                        await ObtenerOperadorSugeridoProduccionAsync(
+                            programa.MaquinaID.Value,
+                            DateTime.Now,
                             cn,
                             tx);
 
-                        if (!string.IsNullOrWhiteSpace(nombreValidado))
+                    if (operadorSugerido != null)
+                    {
+                        var nombreValidado =
+                            await ObtenerNombreOperadorProduccionAsync(
+                                operadorSugerido.OperadorID,
+                                cn,
+                                tx);
+
+                        if (!string.IsNullOrWhiteSpace(
+                            nombreValidado))
                         {
-                            operadorPrincipalFinalId = operadorSugerido.OperadorID;
-                            operadorPrincipalFinalNombre = nombreValidado;
+                            operadorPrincipalFinalId =
+                                operadorSugerido.OperadorID;
+
+                            operadorPrincipalFinalNombre =
+                                nombreValidado;
                         }
                     }
                 }
 
-                /*
-                 * El principal es obligatorio.
-                 */
-                if (!operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
+                if (!operadorPrincipalFinalId.HasValue &&
+                    string.IsNullOrWhiteSpace(
+                        operadorPrincipalFinalNombre))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "Debes indicar un operador principal antes de iniciar la preparación. Selecciona un operador del catálogo o captura su nombre manual.";
+
+                    TempData["Error"] =
+                        "Debes indicar un operador principal antes de iniciar la preparación. " +
+                        "Selecciona un operador del catálogo o captura su nombre manual.";
+
                     return RedirectToAction(nameof(Index));
                 }
 
-                int? operadorAuxiliarFinalId = operadorAuxiliarId;
-                string? operadorAuxiliarFinalNombre = operadorAuxiliarNombre;
+                int? operadorAuxiliarFinalId =
+                    operadorAuxiliarId;
 
-                /*
-                 * Si no se modificó desde el modal, conserva el auxiliar
-                 * asignado originalmente desde Planeación.
-                 */
+                string? operadorAuxiliarFinalNombre =
+                    operadorAuxiliarNombre;
+
                 if (!operadorAuxiliarFinalId.HasValue &&
-                   string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) &&
-                   programa.OperadorAuxiliarID.HasValue)
+                    string.IsNullOrWhiteSpace(
+                        operadorAuxiliarFinalNombre) &&
+                    programa.OperadorAuxiliarID.HasValue)
                 {
-                    operadorAuxiliarFinalId = programa.OperadorAuxiliarID;
+                    operadorAuxiliarFinalId =
+                        programa.OperadorAuxiliarID;
                 }
 
                 if (operadorAuxiliarFinalId.HasValue)
                 {
-                    operadorAuxiliarFinalNombre = await ObtenerNombreOperadorProduccionAsync(
-                        operadorAuxiliarFinalId.Value,
-                        cn,
-                        tx);
+                    operadorAuxiliarFinalNombre =
+                        await ObtenerNombreOperadorProduccionAsync(
+                            operadorAuxiliarFinalId.Value,
+                            cn,
+                            tx);
 
-                    if (string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre))
+                    if (string.IsNullOrWhiteSpace(
+                        operadorAuxiliarFinalNombre))
                     {
                         await tx.RollbackAsync();
-                        TempData["Error"] = "El operador auxiliar seleccionado no está activo o su puesto no es OPERADOR.";
+
+                        TempData["Error"] =
+                            "El operador auxiliar seleccionado no está activo o su puesto no es OPERADOR.";
+
                         return RedirectToAction(nameof(Index));
                     }
                 }
 
                 if (operadorPrincipalFinalId.HasValue &&
-                   operadorAuxiliarFinalId.HasValue &&
-                   operadorPrincipalFinalId.Value == operadorAuxiliarFinalId.Value)
+                    operadorAuxiliarFinalId.HasValue &&
+                    operadorPrincipalFinalId.Value ==
+                    operadorAuxiliarFinalId.Value)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "El operador principal y el operador auxiliar no pueden ser la misma persona.";
+
+                    TempData["Error"] =
+                        "El operador principal y el operador auxiliar no pueden ser la misma persona.";
+
                     return RedirectToAction(nameof(Index));
                 }
 
-                if (!string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) &&
-                   !string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) &&
-                   string.Equals(
-                       operadorPrincipalFinalNombre.Trim(),
-                       operadorAuxiliarFinalNombre.Trim(),
-                       StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(
+                        operadorPrincipalFinalNombre) &&
+                    !string.IsNullOrWhiteSpace(
+                        operadorAuxiliarFinalNombre) &&
+                    string.Equals(
+                        operadorPrincipalFinalNombre.Trim(),
+                        operadorAuxiliarFinalNombre.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "El operador principal y el operador auxiliar no pueden ser la misma persona.";
+
+                    TempData["Error"] =
+                        "El operador principal y el operador auxiliar no pueden ser la misma persona.";
+
                     return RedirectToAction(nameof(Index));
                 }
 
-                var observacionesFinales = observaciones;
+                var observacionesFinales =
+                    observaciones;
 
-                var textoOperadores = "Operadores al iniciar preparación. Principal: " +
-                                    operadorPrincipalFinalNombre!.Trim() + ".";
+                var textoOperadores =
+                    "Operadores al iniciar preparación. Principal: " +
+                    operadorPrincipalFinalNombre!.Trim() +
+                    ".";
 
-                if (!string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre))
-                    textoOperadores += " Auxiliar: " + operadorAuxiliarFinalNombre.Trim() + ".";
+                if (!string.IsNullOrWhiteSpace(
+                    operadorAuxiliarFinalNombre))
+                {
+                    textoOperadores +=
+                        " Auxiliar: " +
+                        operadorAuxiliarFinalNombre.Trim() +
+                        ".";
+                }
                 else
-                    textoOperadores += " Auxiliar: sin asignar.";
+                {
+                    textoOperadores +=
+                        " Auxiliar: sin asignar.";
+                }
 
-                observacionesFinales = string.IsNullOrWhiteSpace(observacionesFinales)
-                    ? textoOperadores
-                    : observacionesFinales + Environment.NewLine + textoOperadores;
+                observacionesFinales =
+                    string.IsNullOrWhiteSpace(
+                        observacionesFinales)
+                        ? textoOperadores
+                        : observacionesFinales +
+                          Environment.NewLine +
+                          textoOperadores;
 
                 if (observacionesFinales.Length > 500)
-                    observacionesFinales = observacionesFinales[..500];
+                {
+                    observacionesFinales =
+                        observacionesFinales[..500];
+                }
 
-                var ejecucionId = await InsertarEjecucionAsync(
-                    programa,
-                    operadorPrincipalFinalId,
-                    operadorPrincipalFinalNombre,
-                    operadorAuxiliarFinalId,
-                    operadorAuxiliarFinalNombre,
-                    observacionesFinales,
-                    usuarioId,
-                    cn,
-                    tx);
+                var ejecucionId =
+                    await InsertarEjecucionAsync(
+                        programa,
+                        operadorPrincipalFinalId,
+                        operadorPrincipalFinalNombre,
+                        operadorAuxiliarFinalId,
+                        operadorAuxiliarFinalNombre,
+                        observacionesFinales,
+                        usuarioId,
+                        cn,
+                        tx);
 
-                /*
-                 * Si se seleccionaron personas del catálogo, sincroniza los
-                 * operadores reales que tomaron la OF con Planeación.
-                 *
-                 * Los nombres manuales quedan únicamente en Produccion_Ejecucion
-                 * porque no existe PersonaID que pueda relacionarse.
-                 */
                 await SincronizarOperadorProgramaAsync(
                     programaProduccionId,
                     operadorPrincipalFinalId,
@@ -1715,11 +1885,15 @@ ORDER BY e.EjecucionProduccionID DESC;";
 
                 await tx.CommitAsync();
 
-                TempData["Success"] = string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre)
-                    ? "Preparación iniciada correctamente con operador principal confirmado. Continúa con el checklist de arranque."
-                    : "Preparación iniciada correctamente con operador principal y auxiliar confirmados. Continúa con el checklist de arranque.";
+                TempData["Success"] =
+                    string.IsNullOrWhiteSpace(
+                        operadorAuxiliarFinalNombre)
+                        ? "Preparación iniciada correctamente con operador principal confirmado. Continúa con el checklist de arranque."
+                        : "Preparación iniciada correctamente con operador principal y auxiliar confirmados. Continúa con el checklist de arranque.";
 
-                return RedirectToAction(nameof(Detalle), new { id = ejecucionId });
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = ejecucionId });
             }
             catch (Exception ex)
             {
@@ -1731,10 +1905,14 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 {
                 }
 
-                TempData["Error"] = "No fue posible iniciar la preparación: " + ex.Message;
+                TempData["Error"] =
+                    "No fue posible iniciar la preparación: " +
+                    ex.Message;
+
                 return RedirectToAction(nameof(Index));
             }
         }
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
