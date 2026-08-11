@@ -425,16 +425,16 @@
         }
 
         /* ============================================================
-                           COLORES SUAVES POR ESTADO OPERATIVO
+                                   COLORES SUAVES POR ESTADO OPERATIVO
 
-                           Amarillo = preparación / esperando Calidad
-                           Azul     = producción activa
-                           Rosa     = paro / pausado
-                           Verde    = terminado
+                                   Amarillo = preparación / esperando Calidad
+                                   Azul     = producción activa
+                                   Rosa     = paro / pausado
+                                   Verde    = terminado
 
-                           Se aplica sobre las celdas para que Bootstrap no tape
-                           el color de la fila.
-                           ============================================================ */
+                                   Se aplica sobre las celdas para que Bootstrap no tape
+                                   el color de la fila.
+                                   ============================================================ */
         .production-row.row-preparacion > td {
             background: #fff9e8 !important;
         }
@@ -551,6 +551,84 @@
             .operator-title.warn {
                 color: var(--warning);
             }
+
+        .operator-role-card {
+            border: 1px solid #d7e2f1;
+            border-radius: 16px;
+            background: #fff;
+            padding: 14px;
+            height: 100%;
+        }
+
+            .operator-role-card.required {
+                border-color: #bcd2f0;
+                background: #f8fbff;
+            }
+
+        .operator-role-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .operator-role-name {
+            color: #182437;
+            font-weight: 950;
+        }
+
+        .operator-required-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid #fecdca;
+            background: #fef3f2;
+            color: #b42318;
+            font-size: .68rem;
+            font-weight: 950;
+        }
+
+        .operator-optional-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid #d0d5dd;
+            background: #f9fafb;
+            color: #667085;
+            font-size: .68rem;
+            font-weight: 900;
+        }
+
+        .modal-validation-message {
+            display: none;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding: 12px 14px;
+            border: 1px solid #fecdca;
+            border-radius: 14px;
+            background: #fef3f2;
+            color: #b42318;
+            font-weight: 750;
+        }
+
+            .modal-validation-message.show {
+                display: flex;
+            }
+
+            .modal-validation-message.is-success {
+                border-color: #abefc6;
+                background: #ecfdf3;
+                color: #067647;
+            }
+
+        .operator-field-invalid {
+            border-color: #f04438 !important;
+            box-shadow: 0 0 0 .18rem rgba(240,68,56,.10) !important;
+        }
 
         .next-start-section {
             border-color: #f6c75c;
@@ -803,8 +881,8 @@
 
 
         /* ============================================================
-                   NAVEGACION OPERATIVA / CONTENIDO AJAX
-                   ============================================================ */
+                           NAVEGACION OPERATIVA / CONTENIDO AJAX
+                           ============================================================ */
         .production-nav {
             display: flex;
             gap: 8px;
@@ -886,29 +964,24 @@
             }
 
         @@media (max-width: 700px) {
-            .production-nav
+            .production-nav {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+            }
 
-        {
-            flex-wrap: nowrap;
-            overflow-x: auto;
+            .production-nav-btn {
+                flex: 0 0 auto;
+            }
         }
 
-        .production-nav-btn {
-            flex: 0 0 auto;
-        }
-
-        }
-    
 
         /* =========================================================
-           AJUSTE VISUAL AMIGABLE - PRODUCCION
-           Mantiene la estructura y la logica original.
-           ========================================================= */
+                   AJUSTE VISUAL AMIGABLE - PRODUCCION
+                   Mantiene la estructura y la logica original.
+                   ========================================================= */
 
         body {
-            background:
-                radial-gradient(circle at 12% 2%, rgba(25, 76, 155, .055), transparent 27%),
-                var(--bg);
+            background: radial-gradient(circle at 12% 2%, rgba(25, 76, 155, .055), transparent 27%), var(--bg);
         }
 
         .page {
@@ -969,38 +1042,38 @@
             transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
         }
 
-        .summary-item:hover {
-            transform: translateY(-2px);
-            border-color: #b7cce7;
-            box-shadow: 0 9px 22px rgba(16, 42, 78, .085);
-        }
+            .summary-item:hover {
+                transform: translateY(-2px);
+                border-color: #b7cce7;
+                box-shadow: 0 9px 22px rgba(16, 42, 78, .085);
+            }
 
-        .summary-item span {
-            margin-top: 5px;
-            font-size: .72rem;
-            line-height: 1.2;
-            color: #667085;
-            text-transform: none;
-            letter-spacing: 0;
-        }
+            .summary-item span {
+                margin-top: 5px;
+                font-size: .72rem;
+                line-height: 1.2;
+                color: #667085;
+                text-transform: none;
+                letter-spacing: 0;
+            }
 
-        .summary-item:nth-child(3),
-        .summary-item:nth-child(4),
-        .summary-item:nth-child(5) {
-            border-top: 3px solid #f2b84b;
-        }
+            .summary-item:nth-child(3),
+            .summary-item:nth-child(4),
+            .summary-item:nth-child(5) {
+                border-top: 3px solid #f2b84b;
+            }
 
-        .summary-item:nth-child(6) {
-            border-top: 3px solid #3b82f6;
-        }
+            .summary-item:nth-child(6) {
+                border-top: 3px solid #3b82f6;
+            }
 
-        .summary-item:nth-child(7) {
-            border-top: 3px solid #ef8f8f;
-        }
+            .summary-item:nth-child(7) {
+                border-top: 3px solid #ef8f8f;
+            }
 
-        .summary-item:nth-child(8) {
-            border-top: 3px solid #55b987;
-        }
+            .summary-item:nth-child(8) {
+                border-top: 3px solid #55b987;
+            }
 
         .section {
             border-color: #d9e3ef;
@@ -1027,10 +1100,10 @@
             padding: 18px;
         }
 
-        .filters .row {
-            --bs-gutter-x: 14px;
-            --bs-gutter-y: 13px;
-        }
+            .filters .row {
+                --bs-gutter-x: 14px;
+                --bs-gutter-y: 13px;
+            }
 
         .form-label {
             margin-bottom: 7px;
@@ -1047,10 +1120,10 @@
             font-size: .9rem;
         }
 
-        .form-control:hover,
-        .form-select:hover {
-            border-color: #adc4e1;
-        }
+            .form-control:hover,
+            .form-select:hover {
+                border-color: #adc4e1;
+            }
 
         .btn-action {
             min-height: 46px;
@@ -1059,9 +1132,9 @@
             transition: transform .15s ease, box-shadow .15s ease;
         }
 
-        .btn-action:hover {
-            transform: translateY(-1px);
-        }
+            .btn-action:hover {
+                transform: translateY(-1px);
+            }
 
         #formFiltrosProduccion .btn-primary {
             box-shadow: 0 6px 14px rgba(0, 74, 173, .18);
@@ -1088,78 +1161,73 @@
             color: #526071;
             font-size: .88rem;
             font-weight: 850;
-            transition:
-                background .16s ease,
-                border-color .16s ease,
-                color .16s ease,
-                transform .16s ease,
-                box-shadow .16s ease;
+            transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease;
         }
 
-        .production-nav-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 14px rgba(16, 42, 78, .08);
-        }
+            .production-nav-btn:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 6px 14px rgba(16, 42, 78, .08);
+            }
 
-        /* Pendientes / próximos: ámbar */
-        .production-nav-btn[data-production-panel="proximos"] {
-            border-color: #f2d9aa;
-            background: #fffaf1;
-            color: #8a5705;
-        }
+            /* Pendientes / próximos: ámbar */
+            .production-nav-btn[data-production-panel="proximos"] {
+                border-color: #f2d9aa;
+                background: #fffaf1;
+                color: #8a5705;
+            }
 
-        .production-nav-btn[data-production-panel="proximos"]:hover {
-            border-color: #efbd60;
-            background: #fff4dc;
-            color: #744600;
-        }
+                .production-nav-btn[data-production-panel="proximos"]:hover {
+                    border-color: #efbd60;
+                    background: #fff4dc;
+                    color: #744600;
+                }
 
-        .production-nav-btn[data-production-panel="proximos"].is-active {
-            border-color: #e9ad3d;
-            background: linear-gradient(180deg, #fff4d8 0%, #ffe9b5 100%);
-            color: #744600;
-            box-shadow: 0 6px 14px rgba(191, 126, 18, .12);
-        }
+                .production-nav-btn[data-production-panel="proximos"].is-active {
+                    border-color: #e9ad3d;
+                    background: linear-gradient(180deg, #fff4d8 0%, #ffe9b5 100%);
+                    color: #744600;
+                    box-shadow: 0 6px 14px rgba(191, 126, 18, .12);
+                }
 
-        /* En ejecución: azul */
-        .production-nav-btn[data-production-panel="ejecuciones"] {
-            border-color: #c8d9f2;
-            background: #f7faff;
-            color: #245b9f;
-        }
+            /* En ejecución: azul */
+            .production-nav-btn[data-production-panel="ejecuciones"] {
+                border-color: #c8d9f2;
+                background: #f7faff;
+                color: #245b9f;
+            }
 
-        .production-nav-btn[data-production-panel="ejecuciones"]:hover {
-            border-color: #8fb7e9;
-            background: #edf5ff;
-            color: #0f4e9a;
-        }
+                .production-nav-btn[data-production-panel="ejecuciones"]:hover {
+                    border-color: #8fb7e9;
+                    background: #edf5ff;
+                    color: #0f4e9a;
+                }
 
-        .production-nav-btn[data-production-panel="ejecuciones"].is-active {
-            border-color: #75a8e3;
-            background: linear-gradient(180deg, #eaf4ff 0%, #dcecff 100%);
-            color: #0f4e9a;
-            box-shadow: 0 6px 14px rgba(25, 76, 155, .12);
-        }
+                .production-nav-btn[data-production-panel="ejecuciones"].is-active {
+                    border-color: #75a8e3;
+                    background: linear-gradient(180deg, #eaf4ff 0%, #dcecff 100%);
+                    color: #0f4e9a;
+                    box-shadow: 0 6px 14px rgba(25, 76, 155, .12);
+                }
 
-        /* Cola: índigo suave */
-        .production-nav-btn[data-production-panel="cola"] {
-            border-color: #d8d2ee;
-            background: #fbfaff;
-            color: #65558e;
-        }
+            /* Cola: índigo suave */
+            .production-nav-btn[data-production-panel="cola"] {
+                border-color: #d8d2ee;
+                background: #fbfaff;
+                color: #65558e;
+            }
 
-        .production-nav-btn[data-production-panel="cola"]:hover {
-            border-color: #b8a9df;
-            background: #f3efff;
-            color: #51417f;
-        }
+                .production-nav-btn[data-production-panel="cola"]:hover {
+                    border-color: #b8a9df;
+                    background: #f3efff;
+                    color: #51417f;
+                }
 
-        .production-nav-btn[data-production-panel="cola"].is-active {
-            border-color: #a794d8;
-            background: linear-gradient(180deg, #f2edff 0%, #e8e0ff 100%);
-            color: #51417f;
-            box-shadow: 0 6px 14px rgba(94, 72, 151, .12);
-        }
+                .production-nav-btn[data-production-panel="cola"].is-active {
+                    border-color: #a794d8;
+                    background: linear-gradient(180deg, #f2edff 0%, #e8e0ff 100%);
+                    color: #51417f;
+                    box-shadow: 0 6px 14px rgba(94, 72, 151, .12);
+                }
 
         .production-nav-count {
             min-width: 26px;
@@ -1228,9 +1296,9 @@
 
 
         /* =========================================================
-           REFINAMIENTO PROFESIONAL - PRODUCCION
-           Ajustes de jerarquia, espaciado y consistencia visual.
-           ========================================================= */
+                   REFINAMIENTO PROFESIONAL - PRODUCCION
+                   Ajustes de jerarquia, espaciado y consistencia visual.
+                   ========================================================= */
 
         .page {
             max-width: 1660px;
@@ -1266,16 +1334,16 @@
             background: #fbfcfe;
         }
 
-        .production-filters .section-head::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 13px;
-            bottom: 13px;
-            width: 3px;
-            border-radius: 0 4px 4px 0;
-            background: #2f6fbd;
-        }
+            .production-filters .section-head::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 13px;
+                bottom: 13px;
+                width: 3px;
+                border-radius: 0 4px 4px 0;
+                background: #2f6fbd;
+            }
 
         .production-filters .section-title {
             color: #163b68;
@@ -1283,18 +1351,18 @@
             font-weight: 800;
         }
 
-        .production-filters .section-title i {
-            width: 25px;
-            height: 25px;
-            display: inline-grid;
-            place-items: center;
-            margin-right: 6px !important;
-            border: 1px solid #d5e2f1;
-            border-radius: 8px;
-            background: #f1f6fc;
-            color: #2f6fbd;
-            font-size: .76rem;
-        }
+            .production-filters .section-title i {
+                width: 25px;
+                height: 25px;
+                display: inline-grid;
+                place-items: center;
+                margin-right: 6px !important;
+                border: 1px solid #d5e2f1;
+                border-radius: 8px;
+                background: #f1f6fc;
+                color: #2f6fbd;
+                font-size: .76rem;
+            }
 
         .production-filters .section-sub {
             margin-left: 34px;
@@ -1329,18 +1397,18 @@
             transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
         }
 
-        .production-filters .form-control:hover,
-        .production-filters .form-select:hover {
-            border-color: #b6c9df;
-            background: #fcfdff;
-        }
+            .production-filters .form-control:hover,
+            .production-filters .form-select:hover {
+                border-color: #b6c9df;
+                background: #fcfdff;
+            }
 
-        .production-filters .form-control:focus,
-        .production-filters .form-select:focus {
-            border-color: #7ea8dd;
-            background: #fff;
-            box-shadow: 0 0 0 .18rem rgba(47,111,189,.10);
-        }
+            .production-filters .form-control:focus,
+            .production-filters .form-select:focus {
+                border-color: #7ea8dd;
+                background: #fff;
+                box-shadow: 0 0 0 .18rem rgba(47,111,189,.10);
+            }
 
         #formFiltrosProduccion .btn-primary {
             min-height: 44px;
@@ -1352,10 +1420,10 @@
             font-weight: 800;
         }
 
-        #formFiltrosProduccion .btn-primary:hover {
-            background: linear-gradient(180deg, #1f7ed5 0%, #0e68bb 100%);
-            box-shadow: 0 6px 14px rgba(20,114,201,.20);
-        }
+            #formFiltrosProduccion .btn-primary:hover {
+                background: linear-gradient(180deg, #1f7ed5 0%, #0e68bb 100%);
+                box-shadow: 0 6px 14px rgba(20,114,201,.20);
+            }
 
         .production-nav {
             gap: 8px;
@@ -1375,37 +1443,37 @@
             box-shadow: none;
         }
 
-        .production-nav-btn:hover {
-            transform: none;
-            box-shadow: 0 2px 7px rgba(16,42,78,.06);
-        }
+            .production-nav-btn:hover {
+                transform: none;
+                box-shadow: 0 2px 7px rgba(16,42,78,.06);
+            }
 
-        .production-nav-btn[data-production-panel="proximos"] {
-            background: #fffdfa;
-        }
+            .production-nav-btn[data-production-panel="proximos"] {
+                background: #fffdfa;
+            }
 
-        .production-nav-btn[data-production-panel="proximos"].is-active {
-            background: #fff5de;
-            box-shadow: inset 0 -2px 0 #e6a72e;
-        }
+                .production-nav-btn[data-production-panel="proximos"].is-active {
+                    background: #fff5de;
+                    box-shadow: inset 0 -2px 0 #e6a72e;
+                }
 
-        .production-nav-btn[data-production-panel="ejecuciones"] {
-            background: #fbfdff;
-        }
+            .production-nav-btn[data-production-panel="ejecuciones"] {
+                background: #fbfdff;
+            }
 
-        .production-nav-btn[data-production-panel="ejecuciones"].is-active {
-            background: #edf5ff;
-            box-shadow: inset 0 -2px 0 #2f6fbd;
-        }
+                .production-nav-btn[data-production-panel="ejecuciones"].is-active {
+                    background: #edf5ff;
+                    box-shadow: inset 0 -2px 0 #2f6fbd;
+                }
 
-        .production-nav-btn[data-production-panel="cola"] {
-            background: #fdfcff;
-        }
+            .production-nav-btn[data-production-panel="cola"] {
+                background: #fdfcff;
+            }
 
-        .production-nav-btn[data-production-panel="cola"].is-active {
-            background: #f3effd;
-            box-shadow: inset 0 -2px 0 #7b67b5;
-        }
+                .production-nav-btn[data-production-panel="cola"].is-active {
+                    background: #f3effd;
+                    box-shadow: inset 0 -2px 0 #7b67b5;
+                }
 
         .production-nav-count {
             min-width: 23px;
@@ -1440,11 +1508,11 @@
 
 
         /* ==========================================================
-           TEMA OSCURO INTERACTIVO - PRODUCCION
-           Se activa con html[data-produccion-theme="dark"].
-           El script al final sincroniza esta vista con el switch
-           Claro/Oscuro existente en _Layout.
-           ========================================================== */
+                   TEMA OSCURO INTERACTIVO - PRODUCCION
+                   Se activa con html[data-produccion-theme="dark"].
+                   El script al final sincroniza esta vista con el switch
+                   Claro/Oscuro existente en _Layout.
+                   ========================================================== */
         html[data-produccion-theme="dark"] {
             color-scheme: dark;
             --azul: #7db7ff;
@@ -1522,17 +1590,17 @@
             color: #eaf2ff;
         }
 
-        html[data-produccion-theme="dark"] .form-control::placeholder {
-            color: #75869d;
-        }
+            html[data-produccion-theme="dark"] .form-control::placeholder {
+                color: #75869d;
+            }
 
-        html[data-produccion-theme="dark"] .form-control:focus,
-        html[data-produccion-theme="dark"] .form-select:focus {
-            background-color: #101c2f;
-            border-color: #5da6ff;
-            color: #fff;
-            box-shadow: 0 0 0 .2rem rgba(93, 166, 255, .14);
-        }
+            html[data-produccion-theme="dark"] .form-control:focus,
+            html[data-produccion-theme="dark"] .form-select:focus {
+                background-color: #101c2f;
+                border-color: #5da6ff;
+                color: #fff;
+                box-shadow: 0 0 0 .2rem rgba(93, 166, 255, .14);
+            }
 
         html[data-produccion-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
         html[data-produccion-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
@@ -1558,50 +1626,50 @@
             color: #cbd7e7;
         }
 
-        html[data-produccion-theme="dark"] .production-nav-btn:hover {
-            background: #1a2941;
-            border-color: #58779e;
-            color: #f3f7ff;
-        }
+            html[data-produccion-theme="dark"] .production-nav-btn:hover {
+                background: #1a2941;
+                border-color: #58779e;
+                color: #f3f7ff;
+            }
 
-        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="proximos"] {
-            background: #201c12;
-            border-color: #5a4b26;
-            color: #e9cf80;
-        }
+            html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="proximos"] {
+                background: #201c12;
+                border-color: #5a4b26;
+                color: #e9cf80;
+            }
 
-        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="proximos"].is-active {
-            background: #322815;
-            border-color: #d39c29;
-            color: #ffd66b;
-            box-shadow: 0 0 0 1px rgba(211, 156, 41, .14), 0 5px 14px rgba(0, 0, 0, .14);
-        }
+                html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="proximos"].is-active {
+                    background: #322815;
+                    border-color: #d39c29;
+                    color: #ffd66b;
+                    box-shadow: 0 0 0 1px rgba(211, 156, 41, .14), 0 5px 14px rgba(0, 0, 0, .14);
+                }
 
-        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"] {
-            background: #10243d;
-            border-color: #28517d;
-            color: #9bc7fb;
-        }
+            html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"] {
+                background: #10243d;
+                border-color: #28517d;
+                color: #9bc7fb;
+            }
 
-        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"].is-active {
-            background: #15355a;
-            border-color: #5ba6f5;
-            color: #d9ebff;
-            box-shadow: 0 0 0 1px rgba(91, 166, 245, .13), 0 5px 14px rgba(0, 0, 0, .14);
-        }
+                html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"].is-active {
+                    background: #15355a;
+                    border-color: #5ba6f5;
+                    color: #d9ebff;
+                    box-shadow: 0 0 0 1px rgba(91, 166, 245, .13), 0 5px 14px rgba(0, 0, 0, .14);
+                }
 
-        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="cola"] {
-            background: #211b34;
-            border-color: #4d416e;
-            color: #c6b9ee;
-        }
+            html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="cola"] {
+                background: #211b34;
+                border-color: #4d416e;
+                color: #c6b9ee;
+            }
 
-        html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="cola"].is-active {
-            background: #30264a;
-            border-color: #8d74d6;
-            color: #e7deff;
-            box-shadow: 0 0 0 1px rgba(141, 116, 214, .13), 0 5px 14px rgba(0, 0, 0, .14);
-        }
+                html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="cola"].is-active {
+                    background: #30264a;
+                    border-color: #8d74d6;
+                    color: #e7deff;
+                    box-shadow: 0 0 0 1px rgba(141, 116, 214, .13), 0 5px 14px rgba(0, 0, 0, .14);
+                }
 
         html[data-produccion-theme="dark"] .production-nav-count {
             background: rgba(255, 255, 255, .08);
@@ -1658,16 +1726,42 @@
             filter: invert(1) grayscale(1) brightness(1.7);
         }
 
+        html[data-produccion-theme="dark"] .operator-role-card {
+            background: #101a2b;
+            border-color: #31455f;
+        }
+
+            html[data-produccion-theme="dark"] .operator-role-card.required {
+                background: #10243d;
+                border-color: #28517d;
+            }
+
+        html[data-produccion-theme="dark"] .operator-role-name {
+            color: #eef5ff;
+        }
+
+        html[data-produccion-theme="dark"] .modal-validation-message {
+            background: #351719;
+            border-color: #7f2b32;
+            color: #fecdd3;
+        }
+
+            html[data-produccion-theme="dark"] .modal-validation-message.is-success {
+                background: #102a20;
+                border-color: #266447;
+                color: #86efac;
+            }
+
         html[data-produccion-theme="dark"] .operator-box {
             background: #16243a;
             border-color: #344861;
             color: #dce7f6;
         }
 
-        html[data-produccion-theme="dark"] .operator-box.warn {
-            background: #2b2214;
-            border-color: #7c5d23;
-        }
+            html[data-produccion-theme="dark"] .operator-box.warn {
+                background: #2b2214;
+                border-color: #7c5d23;
+            }
 
         html[data-produccion-theme="dark"] .program-alert {
             background: #151f32;
@@ -1675,10 +1769,10 @@
             color: #dce7f6;
         }
 
-        html[data-produccion-theme="dark"] .program-alert.has-highlight {
-            background: #2b2313;
-            border-color: #7a5b22;
-        }
+            html[data-produccion-theme="dark"] .program-alert.has-highlight {
+                background: #2b2313;
+                border-color: #7a5b22;
+            }
 
         html[data-produccion-theme="dark"] .alerts-modal,
         html[data-produccion-theme="dark"] .alerts-modal-summary,
@@ -1871,20 +1965,6 @@
                 Pendientes / próximos
                 <span class="production-nav-count">@Model.TotalProximosAIniciar</span>
             </button>
-<<<<<<< HEAD
-
-            <button type="button"
-                    class="production-nav-btn "
-                    data-production-panel="ejecuciones"
-                    data-url="@Url.Action("PanelEjecuciones", "Produccion")">
-                <i class="bi bi-activity"></i>
-                En ejecución
-                <span class="production-nav-count">@totalActivas</span>
-            </button>
-
-           
-=======
->>>>>>> origin/Alex_modulo-altas
 
             <button type="button"
                     class="production-nav-btn"
@@ -2073,7 +2153,7 @@
                                 Confirmar inicio de preparación
                             </h5>
                             <div class="small opacity-75">
-                                Revisa el programa y confirma el operador real antes de tomar la OF.
+                                Revisa el programa y confirma al operador principal y, si aplica, al auxiliar antes de tomar la OF.
                             </div>
                         </div>
 
@@ -2087,6 +2167,7 @@
                     <div class="modal-body">
                         <input type="hidden" name="programaProduccionId" id="modalProgramaProduccionId" />
                         <input type="hidden" name="operadorNombre" id="modalOperadorNombre" />
+                        <input type="hidden" name="operadorAuxiliarNombre" id="modalOperadorAuxiliarNombre" />
 
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
@@ -2136,51 +2217,70 @@
 
                         <div class="operator-box" id="boxOperadorSugerido">
                             <div class="operator-title" id="tituloOperadorSugerido">
-                                Operador sugerido desde RRHH
+                                Operador principal sugerido desde RRHH
                             </div>
-                            <div class="small text-muted mt-1" id="detalleOperadorSugerido">
-                                -
+                            <div class="small text-muted mt-1" id="detalleOperadorSugerido">-</div>
+                        </div>
+
+                        <div class="modal-validation-message" id="mensajeValidacionOperadores" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                            <div id="textoValidacionOperadores"></div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-lg-6">
+                                <div class="operator-role-card required">
+                                    <div class="operator-role-head">
+                                        <div class="operator-role-name"><i class="bi bi-person-badge me-1"></i>Operador principal</div>
+                                        <span class="operator-required-badge">Obligatorio</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Seleccionar operador</label>
+                                        <select name="operadorId" id="modalOperadorId" class="form-select">
+                                            @foreach (var op in operadoresProduccion)
+                                            {
+                                                <option value="@op.Value">@op.Text</option>
+                                            }
+                                        </select>
+                                        <div class="small text-muted mt-1">Solo se muestran colaboradores activos con puesto OPERADOR.</div>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Nombre manual</label>
+                                        <input type="text" id="modalOperadorManual" class="form-control" maxlength="200" placeholder="Solo si no aparece en la lista" />
+                                        <div class="small text-muted mt-1">Usa lista o nombre manual, nunca ambos.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="operator-role-card">
+                                    <div class="operator-role-head">
+                                        <div class="operator-role-name"><i class="bi bi-person-plus me-1"></i>Operador auxiliar</div>
+                                        <span class="operator-optional-badge">Opcional</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Seleccionar auxiliar</label>
+                                        <select name="operadorAuxiliarId" id="modalOperadorAuxiliarId" class="form-select">
+                                            @foreach (var op in operadoresProduccion)
+                                            {
+                                                <option value="@op.Value">@op.Text</option>
+                                            }
+                                        </select>
+                                        <div class="small text-muted mt-1">Puede dejarse sin auxiliar si la preparación no lo requiere.</div>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Nombre manual auxiliar</label>
+                                        <input type="text" id="modalOperadorAuxiliarManual" class="form-control" maxlength="200" placeholder="Solo si no aparece en la lista" />
+                                        <div class="small text-muted mt-1">No puede ser la misma persona que el operador principal.</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <div class="row g-3">
-                            <div class="col-md-7">
-                                <label class="form-label">Operador real al iniciar</label>
-                                <select name="operadorId" id="modalOperadorId" class="form-select">
-                                    @foreach (var op in operadoresProduccion)
-                                    {
-                                        <option value="@op.Value">
-                                            @op.Text
-                                        </option>
-                                    }
-                                </select>
-
-                                <div class="small text-muted mt-1">
-                                    Puede quedar sin operador o cambiarse a la mera hora.
-                                </div>
-                            </div>
-
-                            <div class="col-md-5">
-                                <label class="form-label">Nombre manual</label>
-                                <input type="text"
-                                       id="modalOperadorManual"
-                                       class="form-control"
-                                       maxlength="200"
-                                       placeholder="Solo si no aparece en la lista" />
-
-                                <div class="small text-muted mt-1">
-                                    Este nombre se guardará si no seleccionas operador del catálogo.
-                                </div>
-                            </div>
-
                             <div class="col-12">
                                 <label class="form-label">Observaciones</label>
-                                <textarea name="observaciones"
-                                          id="modalObservaciones"
-                                          class="form-control"
-                                          rows="3"
-                                          maxlength="500"
-                                          placeholder="Observaciones de preparación, cambio de operador, indicaciones especiales..."></textarea>
+                                <textarea name="observaciones" id="modalObservaciones" class="form-control" rows="3" maxlength="500" placeholder="Observaciones de preparación, cambio de operador, indicaciones especiales..."></textarea>
                             </div>
                         </div>
                     </div>
@@ -2229,7 +2329,12 @@
             const modalOperadorId = document.getElementById('modalOperadorId');
             const modalOperadorNombre = document.getElementById('modalOperadorNombre');
             const modalOperadorManual = document.getElementById('modalOperadorManual');
+            const modalOperadorAuxiliarId = document.getElementById('modalOperadorAuxiliarId');
+            const modalOperadorAuxiliarNombre = document.getElementById('modalOperadorAuxiliarNombre');
+            const modalOperadorAuxiliarManual = document.getElementById('modalOperadorAuxiliarManual');
             const modalObservaciones = document.getElementById('modalObservaciones');
+            const mensajeValidacionOperadores = document.getElementById('mensajeValidacionOperadores');
+            const textoValidacionOperadores = document.getElementById('textoValidacionOperadores');
 
             const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
             const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
@@ -2242,29 +2347,39 @@
                 return value.trim();
             }
 
-            function seleccionarOperadorSiExiste(operadorId) {
-                if (!modalOperadorId) return false;
-
-                const id = operadorId || '';
-
-                for (const option of modalOperadorId.options) {
+            function seleccionarPersonaSiExiste(select, personaId) {
+                if (!select) return false;
+                const id = personaId || '';
+                for (const option of select.options) {
                     if (option.value === id) {
-                        modalOperadorId.value = id;
+                        select.value = id;
                         return true;
                     }
                 }
-
-                modalOperadorId.value = '';
+                select.value = '';
                 return false;
             }
 
-            function obtenerTextoOperadorSeleccionado() {
-                if (!modalOperadorId || !modalOperadorId.value) {
-                    return '';
-                }
-
-                const selected = modalOperadorId.options[modalOperadorId.selectedIndex];
+            function obtenerTextoSeleccionado(select) {
+                if (!select || !select.value) return '';
+                const selected = select.options[select.selectedIndex];
                 return selected ? (selected.textContent || '').trim() : '';
+            }
+
+            function limpiarValidacionOperadores() {
+                mensajeValidacionOperadores?.classList.remove('show', 'is-success');
+                if (textoValidacionOperadores) textoValidacionOperadores.textContent = '';
+                [modalOperadorId, modalOperadorManual, modalOperadorAuxiliarId, modalOperadorAuxiliarManual]
+                    .forEach(x => x?.classList.remove('operator-field-invalid'));
+            }
+
+            function mostrarValidacionOperadores(mensaje, campos = [], exito = false) {
+                limpiarValidacionOperadores();
+                if (textoValidacionOperadores) textoValidacionOperadores.textContent = mensaje;
+                mensajeValidacionOperadores?.classList.add('show');
+                if (exito) mensajeValidacionOperadores?.classList.add('is-success');
+                campos.forEach(x => x?.classList.add('operator-field-invalid'));
+                campos.find(x => x)?.focus();
             }
 
             function marcarPanelActivo(panel) {
@@ -2420,6 +2535,8 @@
                 const fin = btnInicio.dataset.fin || '';
                 const operadorId = btnInicio.dataset.operadorId || '';
                 const operadorNombre = btnInicio.dataset.operadorNombre || '';
+                const operadorAuxiliarId = btnInicio.dataset.operadorAuxiliarId || '';
+                const operadorAuxiliarNombre = btnInicio.dataset.operadorAuxiliarNombre || '';
                 const turno = btnInicio.dataset.turno || '';
 
                 if (modalProgramaProduccionId) modalProgramaProduccionId.value = programaId;
@@ -2435,14 +2552,23 @@
                 if (modalObservaciones) modalObservaciones.value = '';
                 if (modalOperadorManual) modalOperadorManual.value = '';
                 if (modalOperadorNombre) modalOperadorNombre.value = '';
+                if (modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
+                if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = '';
+                if (modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
+                limpiarValidacionOperadores();
 
-                const pudoSeleccionar = seleccionarOperadorSiExiste(operadorId);
+                const pudoSeleccionar = seleccionarPersonaSiExiste(modalOperadorId, operadorId);
+                const pudoSeleccionarAuxiliar = seleccionarPersonaSiExiste(modalOperadorAuxiliarId, operadorAuxiliarId);
+
+                if (operadorAuxiliarNombre && !pudoSeleccionarAuxiliar && modalOperadorAuxiliarManual) {
+                    modalOperadorAuxiliarManual.value = operadorAuxiliarNombre;
+                }
 
                 if (operadorNombre) {
                     boxOperadorSugerido?.classList.remove('warn');
 
                     if (tituloOperadorSugerido) {
-                        tituloOperadorSugerido.textContent = 'Operador sugerido desde RRHH';
+                        tituloOperadorSugerido.textContent = 'Operador principal sugerido desde RRHH';
                         tituloOperadorSugerido.className = 'operator-title';
                     }
 
@@ -2467,42 +2593,93 @@
 
                     if (detalleOperadorSugerido) {
                         detalleOperadorSugerido.textContent =
-                            'No hay operador asignado en la escala RRHH para este horario. Puedes seleccionar uno manualmente o iniciar sin operador.';
+                            'No hay operador principal sugerido en la escala RRHH para este horario. Debes seleccionar un operador del catálogo o capturar su nombre manual antes de iniciar.';
                     }
                 }
             });
 
             modalOperadorId?.addEventListener('change', () => {
-                if (modalOperadorId.value && modalOperadorManual) {
-                    modalOperadorManual.value = '';
-                }
+                if (modalOperadorId.value && modalOperadorManual) modalOperadorManual.value = '';
+                limpiarValidacionOperadores();
             });
 
             modalOperadorManual?.addEventListener('input', () => {
-                if (modalOperadorManual.value.trim() && modalOperadorId) {
-                    modalOperadorId.value = '';
-                }
+                if (modalOperadorManual.value.trim() && modalOperadorId) modalOperadorId.value = '';
+                limpiarValidacionOperadores();
             });
 
-            formIniciarPreparacion?.addEventListener('submit', () => {
-                let nombreFinal = '';
+            modalOperadorAuxiliarId?.addEventListener('change', () => {
+                if (modalOperadorAuxiliarId.value && modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
+                limpiarValidacionOperadores();
+            });
 
-                if (modalOperadorId?.value) {
-                    nombreFinal = obtenerTextoOperadorSeleccionado();
-                }
-                else if (modalOperadorManual?.value.trim()) {
-                    nombreFinal = modalOperadorManual.value.trim();
+            modalOperadorAuxiliarManual?.addEventListener('input', () => {
+                if (modalOperadorAuxiliarManual.value.trim() && modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
+                limpiarValidacionOperadores();
+            });
+
+            formIniciarPreparacion?.addEventListener('submit', event => {
+                event.preventDefault();
+                limpiarValidacionOperadores();
+
+                const principalId = modalOperadorId?.value || '';
+                const principalManual = modalOperadorManual?.value.trim() || '';
+                const auxiliarId = modalOperadorAuxiliarId?.value || '';
+                const auxiliarManual = modalOperadorAuxiliarManual?.value.trim() || '';
+
+                if (!principalId && !principalManual) {
+                    mostrarValidacionOperadores(
+                        'Falta confirmar el operador principal. Selecciona un OPERADOR de la lista o captura su nombre manual antes de iniciar la preparación.',
+                        [modalOperadorId, modalOperadorManual]);
+                    return;
                 }
 
-                if (modalOperadorNombre) {
-                    modalOperadorNombre.value = nombreFinal;
+                if (principalId && principalManual) {
+                    mostrarValidacionOperadores(
+                        'Para el operador principal usa solamente una opción: selección del catálogo o nombre manual.',
+                        [modalOperadorId, modalOperadorManual]);
+                    return;
                 }
+
+                if (auxiliarId && auxiliarManual) {
+                    mostrarValidacionOperadores(
+                        'Para el operador auxiliar usa solamente una opción: selección del catálogo o nombre manual.',
+                        [modalOperadorAuxiliarId, modalOperadorAuxiliarManual]);
+                    return;
+                }
+
+                const nombrePrincipal = principalId
+                    ? obtenerTextoSeleccionado(modalOperadorId)
+                    : principalManual;
+
+                const nombreAuxiliar = auxiliarId
+                    ? obtenerTextoSeleccionado(modalOperadorAuxiliarId)
+                    : auxiliarManual;
+
+                if (principalId && auxiliarId && principalId === auxiliarId) {
+                    mostrarValidacionOperadores(
+                        'El operador principal y el auxiliar no pueden ser la misma persona.',
+                        [modalOperadorId, modalOperadorAuxiliarId]);
+                    return;
+                }
+
+                if (nombrePrincipal && nombreAuxiliar &&
+                    nombrePrincipal.localeCompare(nombreAuxiliar, 'es', { sensitivity: 'base' }) === 0) {
+                    mostrarValidacionOperadores(
+                        'El operador principal y el auxiliar no pueden tener el mismo nombre.',
+                        [modalOperadorManual, modalOperadorAuxiliarManual]);
+                    return;
+                }
+
+                if (modalOperadorNombre) modalOperadorNombre.value = nombrePrincipal;
+                if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = nombreAuxiliar;
 
                 if (btnConfirmarInicio) {
                     btnConfirmarInicio.disabled = true;
-                    btnConfirmarInicio.innerHTML =
-                        '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
+                    btnConfirmarInicio.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
                 }
+
+                formIniciarPreparacion.submit();
             });
 
             // Panel inicial: pendientes / próximos.

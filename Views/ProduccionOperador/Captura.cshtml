@@ -10,7 +10,7 @@
     var horasPendientesVisibles = horasPendientes.Take(5).ToList();
     var horasPendientesAdicionales = horasPendientes.Skip(5).ToList();
     var horasCapturadas = horas.Where(x => x.Capturada).OrderByDescending(x => x.NumeroHora).ToList();
-    var horaObligatoria = horasPendientes.FirstOrDefault(x => x.Vencida) ?? horasPendientes.FirstOrDefault(x => x.Disponible);
+    var horaObligatoria = horasPendientes.Where(x => x.Disponible).OrderBy(x => x.NumeroHora).FirstOrDefault();
     var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
 }
 @functions {
@@ -762,6 +762,7 @@
                             <i class="fa-solid fa-circle-info me-1"></i>
                             Al confirmar, la ejecución quedará pausada y se bloqueará la captura por hora hasta cerrar el paro.
                         </div>
+                        <div id="mensajeParo" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
 
                         <div class="mb-3">
                             <label class="form-label fw-bold">Motivo del paro</label>
@@ -858,6 +859,7 @@
                         <input type="hidden" name="HoraInicio" id="modalInicio" />
                         <input type="hidden" name="HoraFin" id="modalFin" />
                         <div class="text-center mb-3"><div class="text-muted fw-bold">Debes completar</div><div class="modal-hour" id="modalTituloHora">Hora pendiente</div><div class="text-muted" id="modalRangoHora"></div></div>
+                        <div id="mensajeCapturaHora" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
                         <div class="modal-grid mb-3">
                             <div><div class="modal-label text-success">OK</div><input type="number" min="0" value="" placeholder="0" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" /></div>
                             <div><div class="modal-label text-warning">Amarillos</div><input type="number" min="0" value="" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" /></div>
@@ -899,11 +901,39 @@
                 cargarFila(row);
                 modal?.show();
             }));
+            function mostrarMensajeCaptura(mensaje){
+                const box=document.getElementById('mensajeCapturaHora');
+                if(!box)return;
+                box.innerHTML='<i class="fa-solid fa-triangle-exclamation me-2"></i>'+mensaje;
+                box.classList.remove('d-none');
+            }
+            function limpiarMensajeCaptura(){
+                const box=document.getElementById('mensajeCapturaHora');
+                if(!box)return;
+                box.classList.add('d-none');
+                box.innerHTML='';
+            }
             form?.addEventListener('submit',function(e){
-                const ok=Number(document.getElementById('modalOK').value||0),yellow=Number(document.getElementById('modalYellow').value||0),scrap=Number(document.getElementById('modalScrap').value||0),obs=(document.getElementById('modalObs').value||'').trim();
-                if(ok<0||yellow<0||scrap<0){e.preventDefault();alert('Las cantidades no pueden ser negativas.');return;}
-                if(ok===0&&yellow===0&&scrap===0&&!obs){e.preventDefault();alert('Captura una cantidad o explica en observaciones por qué no hubo producción.');return;}
-                const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';}
+                limpiarMensajeCaptura();
+                const ok=Number(document.getElementById('modalOK').value||0);
+                const yellow=Number(document.getElementById('modalYellow').value||0);
+                const scrap=Number(document.getElementById('modalScrap').value||0);
+                const obs=(document.getElementById('modalObs').value||'').trim();
+                if(ok<0||yellow<0||scrap<0){
+                    e.preventDefault();
+                    mostrarMensajeCaptura('Las cantidades no pueden ser negativas. Revisa OK, Amarillos y Scrap.');
+                    return;
+                }
+                if(ok===0&&yellow===0&&scrap===0&&!obs){
+                    e.preventDefault();
+                    mostrarMensajeCaptura('Captura al menos una cantidad o explica en observaciones por qué no hubo producción durante esta hora.');
+                    return;
+                }
+                const button=form.querySelector('button[type="submit"]');
+                if(button){
+                    button.disabled=true;
+                    button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';
+                }
             });
             const obligatoria=document.querySelector('[data-hour-row][data-obligatoria="true"]');
             if(capturaHabilitada && !tieneParoAbierto && obligatoria){
@@ -913,17 +943,33 @@
                 modal?.hide();
             }
 
+            function mostrarMensajeParo(mensaje){
+                const box=document.getElementById('mensajeParo');
+                if(!box)return;
+                box.innerHTML='<i class="fa-solid fa-triangle-exclamation me-2"></i>'+mensaje;
+                box.classList.remove('d-none');
+            }
+            function limpiarMensajeParo(){
+                const box=document.getElementById('mensajeParo');
+                if(!box)return;
+                box.classList.add('d-none');
+                box.innerHTML='';
+            }
             const formIniciarParo=document.getElementById('formIniciarParo');
             formIniciarParo?.addEventListener('submit',function(e){
+                limpiarMensajeParo();
                 const motivoId=(document.getElementById('motivoParoId')?.value||'').trim();
                 const motivoTexto=(document.getElementById('motivoParoTexto')?.value||'').trim();
                 if(!motivoId&&!motivoTexto){
                     e.preventDefault();
-                    alert('Selecciona un motivo o captura otro motivo para el paro.');
+                    mostrarMensajeParo('Selecciona un motivo del catálogo o captura otro motivo antes de iniciar el paro.');
                     return;
                 }
                 const button=document.getElementById('btnConfirmarParo');
-                if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Iniciando paro...';}
+                if(button){
+                    button.disabled=true;
+                    button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Iniciando paro...';
+                }
             });
 
             const formCerrarParo=document.getElementById('formCerrarParo');
@@ -932,7 +978,18 @@
                 if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Finalizando...';}
             });
 
-            setTimeout(()=>window.location.reload(),60000);
+            function programarActualizacion(){
+                window.setTimeout(function(){
+                    const hayModalAbierto=document.querySelector('.modal.show');
+                    const hayCampoActivo=document.activeElement&&['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+                    if(hayModalAbierto||hayCampoActivo){
+                        programarActualizacion();
+                        return;
+                    }
+                    window.location.reload();
+                },60000);
+            }
+            programarActualizacion();
         });
     </script>
 </body>
