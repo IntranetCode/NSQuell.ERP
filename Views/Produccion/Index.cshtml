@@ -3,6 +3,7 @@
 
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Producción";
 
     var operadoresProduccion =
         ViewBag.OperadoresProduccion as List<SelectListItem>
@@ -96,15 +97,8 @@
     }
 }
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Producción - Bandeja</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
 
     <style>
         :root {
@@ -1822,10 +1816,74 @@
             background: #10271d;
         }
 
-    </style>
-</head>
 
-<body>
+        /* =========================================================
+           MODALES INTEGRADOS CON EL LAYOUT GLOBAL
+           - El backdrop cubre también el navbar.
+           - El modal siempre queda por encima del layout.
+           - Los modales altos hacen scroll internamente.
+           ========================================================= */
+        #modalIniciarPreparacion .modal-dialog {
+            width: min(760px, calc(100vw - 32px));
+            max-width: 760px;
+            margin: 20px auto;
+        }
+
+        #modalIniciarPreparacion .modal-content {
+            max-height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #modalIniciarPreparacion .modal-header,
+        #modalIniciarPreparacion .modal-footer {
+            flex: 0 0 auto;
+        }
+
+        #modalIniciarPreparacion .modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+        }
+
+        #modalIniciarPreparacion .modal-footer {
+            background: #fff;
+            border-top: 1px solid #e8eef6 !important;
+            padding-top: 14px !important;
+        }
+
+        html[data-produccion-theme="dark"] #modalIniciarPreparacion .modal-footer {
+            background: #111b2d;
+            border-top-color: #2c3d55 !important;
+        }
+
+        @@media (max-height: 760px) {
+            #modalIniciarPreparacion .modal-dialog {
+                margin: 12px auto;
+            }
+
+            #modalIniciarPreparacion .modal-content {
+                max-height: calc(100vh - 24px);
+            }
+
+            #modalIniciarPreparacion .modal-header {
+                padding: 14px 18px;
+            }
+
+            #modalIniciarPreparacion .modal-body {
+                padding: 16px 18px;
+            }
+
+            #modalIniciarPreparacion .modal-footer {
+                padding: 12px 18px 14px !important;
+            }
+        }
+
+    </style>
+}
+
     <div class="page">
 
         <header class="topbar">
@@ -2141,7 +2199,7 @@
     </div>
 
     <div class="modal fade" id="modalIniciarPreparacion" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
             <div class="modal-content">
                 <form method="post" action="@Url.Action("Iniciar", "Produccion")" id="formIniciarPreparacion">
                     @Html.AntiForgeryToken()
@@ -2304,8 +2362,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
+@section Scripts {
     <script>
         (() => {
             const contenidoProduccion = document.getElementById('contenidoProduccion');
@@ -2703,10 +2760,12 @@
                 const body = document.body;
 
                 const pistas = [
+                    html.getAttribute('data-nsq-theme'),
                     html.getAttribute('data-theme'),
                     html.getAttribute('data-bs-theme'),
                     html.getAttribute('data-color-mode'),
                     html.className,
+                    body?.getAttribute('data-nsq-theme'),
                     body?.getAttribute('data-theme'),
                     body?.getAttribute('data-bs-theme'),
                     body?.getAttribute('data-color-mode'),
@@ -2763,7 +2822,7 @@
 
             observer.observe(document.documentElement, {
                 attributes: true,
-                attributeFilter: ['class', 'data-theme', 'data-bs-theme', 'data-color-mode']
+                attributeFilter: ['class', 'data-nsq-theme', 'data-theme', 'data-bs-theme', 'data-color-mode']
             });
 
             if (document.body) {
@@ -2771,7 +2830,7 @@
                     attributes: true,
                     childList: true,
                     subtree: true,
-                    attributeFilter: ['class', 'data-theme', 'data-bs-theme', 'data-color-mode']
+                    attributeFilter: ['class', 'data-nsq-theme', 'data-theme', 'data-bs-theme', 'data-color-mode']
                 });
             }
 
@@ -2786,5 +2845,4 @@
         })();
     </script>
 
-</body>
-</html>
+}
