@@ -1,0 +1,269 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenScrapIndexVm
+@{
+    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    ViewData["Title"] = "Scrap";
+}
+
+@functions {
+    public static string EstadoClase(string? estado)
+    {
+        return (estado ?? string.Empty).ToUpperInvariant() switch
+        {
+            "PENDIENTE_RECEPCION" => "is-pending",
+            "RECIBIDO" => "is-received",
+            "MOLIDO" => "is-ground",
+            _ => "is-neutral"
+        };
+    }
+
+    public static string OrigenClase(string? origen)
+    {
+        return (origen ?? string.Empty).ToUpperInvariant() switch
+        {
+            "CALIDAD" => "from-quality",
+            "GP12" => "from-gp12",
+            "ENTRADA_SCRAP" => "from-scan",
+            _ => "from-other"
+        };
+    }
+}
+
+<link rel="stylesheet" href="~/css/Almacen/almacen-scrap.css" asp-append-version="true" />
+
+<section class="alm-hero scrap-hero">
+    <div>
+        <small>ALMACÉN · TRAZABILIDAD SCRAP</small>
+        <h1>Recepción y transformación de Scrap</h1>
+        <p>
+            Entrada directa por escáner, recepción de Calidad / GP12 y conversión controlada a MP Molido.
+            Scrap conserva historial; MP cambia únicamente al guardar el peso molido.
+        </p>
+    </div>
+    <div class="alm-actions scrap-hero-actions">
+        <a class="alm-btn" asp-action="Entrada">
+            <i class="fa-solid fa-barcode"></i>
+            Entrada de Scrap
+        </a>
+        <a class="alm-btn secondary" asp-action="Recepciones">
+            <i class="fa-solid fa-inbox"></i>
+            Recepciones
+            @if (Model.PendientesRecepcion > 0)
+            {
+                <span class="scrap-action-count">@Model.PendientesRecepcion</span>
+            }
+        </a>
+        <a class="alm-btn secondary" asp-action="Historial">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            Historial
+        </a>
+    </div>
+</section>
+
+@if (!Model.Configurado)
+{
+    <div class="alm-alert warning">
+        <strong>Módulo pendiente de instalación SQL.</strong>
+        <div>@Model.MensajeConfiguracion</div>
+    </div>
+}
+else
+{
+    <section class="scrap-kpi-grid" aria-label="Resumen de Scrap">
+        <article class="scrap-kpi">
+            <span class="scrap-kpi__icon"><i class="fa-solid fa-recycle"></i></span>
+            <div>
+                <small>Registros</small>
+                <strong>@Model.TotalRegistros.ToString("N0")</strong>
+            </div>
+        </article>
+
+        <a class="scrap-kpi scrap-kpi-link is-pending" asp-action="Recepciones">
+            <span class="scrap-kpi__icon"><i class="fa-solid fa-inbox"></i></span>
+            <div>
+                <small>Recepciones Calidad / GP12</small>
+                <strong>@Model.PendientesRecepcion.ToString("N0")</strong>
+                <span>pendientes</span>
+            </div>
+            <i class="fa-solid fa-chevron-right scrap-kpi__arrow"></i>
+        </a>
+
+        <a class="scrap-kpi scrap-kpi-link is-received"
+           asp-action="Index"
+           asp-route-estatus="RECIBIDO"
+           title="Mostrar en el listado los Scrap listos para moler">
+            <span class="scrap-kpi__icon"><i class="fa-solid fa-gears"></i></span>
+            <div>
+                <small>Pendientes de molido</small>
+                <strong>@Model.Recibidos.ToString("N0")</strong>
+                <span>Ver en listado principal</span>
+            </div>
+            <i class="fa-solid fa-arrow-down scrap-kpi__arrow"></i>
+        </a>
+
+        <article class="scrap-kpi is-ground">
+            <span class="scrap-kpi__icon"><i class="fa-solid fa-boxes-stacked"></i></span>
+            <div>
+                <small>MP Molido generado</small>
+                <strong>@Model.Molidos.ToString("N0")</strong>
+                <span>@Model.KgMolidos.ToString("N3") KG</span>
+            </div>
+        </article>
+    </section>
+
+    <section class="alm-card scrap-list-card">
+        <header>
+            <span class="scrap-header-title">
+                <span class="scrap-header-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                Registros de Scrap
+            </span>
+            <span>Máximo 500 registros por consulta</span>
+        </header>
+
+        <form method="get" class="alm-filter scrap-filter">
+            <div class="alm-field scrap-filter__search">
+                <label for="q">Buscar</label>
+                <input id="q" name="q" class="alm-input" type="search"
+                       value="@Model.Busqueda"
+                       placeholder="Código, OF, parte, designación, lote..."
+                       autocomplete="off" />
+            </div>
+
+            <div class="alm-field">
+                <label for="origen">Origen</label>
+                <select id="origen" name="origen" class="alm-select">
+                    <option value="">Todos</option>
+                    <option value="ENTRADA_SCRAP" selected="@(Model.Origen == "ENTRADA_SCRAP")">Entrada Scrap</option>
+                    <option value="CALIDAD" selected="@(Model.Origen == "CALIDAD")">Calidad</option>
+                    <option value="GP12" selected="@(Model.Origen == "GP12")">GP12</option>
+                </select>
+            </div>
+
+            <div class="alm-field">
+                <label for="estatus">Estatus</label>
+                <select id="estatus" name="estatus" class="alm-select">
+                    <option value="">Todos</option>
+                    <option value="PENDIENTE_RECEPCION" selected="@(Model.Estatus == "PENDIENTE_RECEPCION")">Pendiente de recepción</option>
+                    <option value="RECIBIDO" selected="@(Model.Estatus == "RECIBIDO")">Pendiente de molido</option>
+                    <option value="MOLIDO" selected="@(Model.Estatus == "MOLIDO")">MP Molido generado</option>
+                </select>
+            </div>
+
+            <button type="submit" class="alm-btn">
+                <i class="fa-solid fa-filter"></i>
+                Filtrar
+            </button>
+            <a asp-action="Index" class="alm-btn secondary">
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+                Limpiar
+            </a>
+        </form>
+
+        @if (Model.Recibidos > 0 && (string.IsNullOrWhiteSpace(Model.Estatus) || Model.Estatus == "RECIBIDO"))
+        {
+            <div class="scrap-inline-help">
+                <span class="scrap-inline-help__icon"><i class="fa-solid fa-gears"></i></span>
+                <div>
+                    <strong>Scrap listo para moler</strong>
+                    <span>Los registros recibidos muestran el botón <b>Realizar MP Molido</b> en la columna de acciones.</span>
+                </div>
+            </div>
+        }
+
+        @if (Model.Registros.Any())
+        {
+            <div class="alm-table-wrap scrap-table-wrap">
+                <table class="alm-table scrap-table">
+                    <thead>
+                        <tr>
+                            <th>Registro</th><th>Origen</th><th>OF / parte</th><th>Designación</th>
+                            <th>Piezas</th><th>Lote</th><th>Estatus</th><th>Recepción</th><th>MP Molido</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var item in Model.Registros)
+                    {
+                        <tr>
+                            <td>
+                                <a class="scrap-record-link" asp-action="Detalle" asp-route-id="@item.ScrapRegistroID">
+                                    <strong>#@item.ScrapRegistroID</strong>
+                                    <small>@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</small>
+                                </a>
+                            </td>
+                            <td>
+                                <span class="scrap-origin @OrigenClase(item.Origen)">@item.OrigenTexto</span>
+                                @if (!string.IsNullOrWhiteSpace(item.OrigenReferencia))
+                                { <small class="scrap-subtext">@item.OrigenReferencia</small> }
+                            </td>
+                            <td><strong>@item.NumeroOF</strong><small class="scrap-subtext">@item.NumeroParte</small></td>
+                            <td><span class="scrap-designation" title="@item.Designacion">@item.Designacion</span></td>
+                            <td>@item.CantidadPiezas.ToString("N0") PZA</td>
+                            <td><strong>@item.Lote</strong></td>
+                            <td><span class="scrap-status @EstadoClase(item.Estatus)">@item.EstatusTexto</span></td>
+                            <td>
+                                @if (item.FechaRecepcion.HasValue)
+                                {
+                                    <strong>@item.FechaRecepcion.Value.ToString("dd/MM/yyyy")</strong>
+                                    <small class="scrap-subtext">@item.FechaRecepcion.Value.ToString("HH:mm") · @item.RecibidoPorNombre</small>
+                                }
+                                else { <span class="scrap-empty">Pendiente</span> }
+                            </td>
+                            <td>
+                                @if (item.MPMovimientoID.HasValue)
+                                {
+                                    <strong>@(item.PesoMolidoKg?.ToString("N3") ?? "0.000") KG</strong>
+                                    <small class="scrap-subtext">@item.MaterialMolido</small>
+                                    <small class="scrap-subtext">Movimiento MP #@item.MPMovimientoID</small>
+                                }
+                                else { <span class="scrap-empty">Sin generar</span> }
+                            </td>
+                            <td>
+                                <div class="scrap-actions">
+                                    @if (item.PuedeConfirmarRecepcion)
+                                    {
+                                        <form asp-action="ConfirmarRecepcion" method="post"
+                                              onsubmit="return confirm('¿Confirmar la recepción física de este Scrap?');">
+                                            <input type="hidden" name="id" value="@item.ScrapRegistroID" />
+                                            <input type="hidden" name="returnTo" value="index" />
+                                            <button class="scrap-action is-confirm" type="submit">
+                                                <i class="fa-solid fa-box-open"></i><span>Recibir</span>
+                                            </button>
+                                        </form>
+                                    }
+                                    @if (item.PuedeRealizarMolido)
+                                    {
+                                        <a class="scrap-action is-mill" asp-action="Molido" asp-route-id="@item.ScrapRegistroID">
+                                            <i class="fa-solid fa-gears"></i><span>Realizar MP Molido</span>
+                                        </a>
+                                    }
+                                    <a class="scrap-action" asp-action="Detalle" asp-route-id="@item.ScrapRegistroID">
+                                        <i class="fa-solid fa-clock-rotate-left"></i><span>Detalle</span>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="alm-empty">No hay registros de Scrap para los filtros seleccionados.</div>
+        }
+    </section>
+
+    <section class="scrap-info-grid">
+        <article class="scrap-info-card">
+            <span class="scrap-info-icon"><i class="fa-solid fa-shield-halved"></i></span>
+            <div><strong>Scrap no es inventario</strong><p>La recepción solo crea trazabilidad. No suma ni resta PT o MP.</p></div>
+        </article>
+        <article class="scrap-info-card">
+            <span class="scrap-info-icon"><i class="fa-solid fa-inbox"></i></span>
+            <div><strong>Recepciones separadas</strong><p>Lo enviado por Calidad y GP12 aparece en Recepciones hasta que Almacén confirma físicamente.</p></div>
+        </article>
+        <article class="scrap-info-card">
+            <span class="scrap-info-icon"><i class="fa-solid fa-gears"></i></span>
+            <div><strong>Molido directo desde el listado</strong><p>Cuando el Scrap está recibido aparece aquí mismo el botón Realizar MP Molido, sin entrar a otra cola.</p></div>
+        </article>
+    </section>
+}

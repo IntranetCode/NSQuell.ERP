@@ -20,6 +20,7 @@
         "AlmacenEmbalajes" => "Embalajes",
         "AlmacenOF" => "OF",
         "AlmacenPT" => "PT",
+        "AlmacenScrap" => "Scrap",
         "AlmacenUbicaciones" => "Ubicaciones",
         _ => "Almacenes"
     };
@@ -85,6 +86,9 @@
                 => "/AlmacenOF/Index",
         "AlmacenPT" => "/AlmacenPT/Index",
 
+        "AlmacenScrap" when action.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenScrap" => "/AlmacenScrap/Index",
         "AlmacenOF" when action.Equals("Index", StringComparison.OrdinalIgnoreCase)
             => "/Menu/Grupo/1",
         "AlmacenOF" => "/AlmacenOF/Index",
@@ -182,7 +186,11 @@
                        aria-current="@(seccionActual == "PT" ? "page" : null)">
                         PT
                     </a>
-                    <a href="/AlmacenUbicaciones/Index"
+                    <a href="/AlmacenScrap/Index"
+                       class="alm-shell-shortcut @(seccionActual == "Scrap" ? "active" : string.Empty)"
+                       aria-current="@(seccionActual == "Scrap" ? "page" : null)">
+                        Scrap
+                    </a>                    <a href="/AlmacenUbicaciones/Index"
                        class="alm-shell-shortcut @(seccionActual == "Ubicaciones" ? "active" : string.Empty)"
                        aria-current="@(seccionActual == "Ubicaciones" ? "page" : null)">
                         Ubicaciones
