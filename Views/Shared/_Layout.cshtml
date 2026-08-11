@@ -26,6 +26,13 @@
     @RenderSection("Styles", required: false)
 
     <style>
+        :root {
+            --nsq-z-navbar: 3000;
+            --nsq-z-alert: 8000;
+            --nsq-z-modal-backdrop: 9000;
+            --nsq-z-modal: 9010;
+        }
+
         html,
         body {
             min-height: 100%;
@@ -60,7 +67,7 @@
             padding: clamp(1rem, 1.6vw, 1.45rem) clamp(1rem, 2vw, 1.75rem) 0;
             background: transparent;
             position: relative;
-            z-index: 3000;
+            z-index: var(--nsq-z-navbar);
         }
 
         .global-render-host {
@@ -78,7 +85,7 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            z-index: 8000;
+            z-index: var(--nsq-z-alert);
             min-width: 300px;
             border-radius: 16px;
             border-left: 5px solid #22c55e;
@@ -89,12 +96,47 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            z-index: 8000;
+            z-index: var(--nsq-z-alert);
             min-width: 300px;
             border-radius: 16px;
             border-left: 5px solid #ef4444;
             box-shadow: 0 18px 45px rgba(0, 0, 0, .18);
         }
+
+
+
+        /* =========================================================
+           CAPA GLOBAL DE MODALES
+           Bootstrap usa 1040/1055 por defecto; el navbar de este ERP
+           vive en 3000. Elevamos modal y backdrop para que el overlay
+           cubra de forma uniforme todo el layout, incluido el navbar.
+           ========================================================= */
+        .modal-backdrop {
+            z-index: var(--nsq-z-modal-backdrop) !important;
+            --bs-backdrop-bg: #07111f;
+            --bs-backdrop-opacity: .70;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+        }
+
+        html[data-nsq-theme="dark"] .modal-backdrop {
+            --bs-backdrop-bg: #020711;
+            --bs-backdrop-opacity: .78;
+        }
+
+        .modal {
+            z-index: var(--nsq-z-modal) !important;
+        }
+
+        body.modal-open {
+            overflow: hidden !important;
+            padding-right: 0 !important;
+        }
+
+        body.modal-open .global-navbar-host {
+            pointer-events: none;
+        }
+
 
         @@media (max-width: 768px) {
             .global-navbar-host {

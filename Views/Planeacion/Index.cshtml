@@ -774,6 +774,251 @@
             border-radius: 10px;
         }
 
+
+        /* =========================================================
+           VISTA DE OF EN FILAS
+           Conserva los mismos data-* y acciones de la vista original.
+           ========================================================= */
+        .of-grid {
+            display: block;
+            overflow-x: auto;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            box-shadow: 0 5px 16px rgba(31, 55, 86, .04);
+        }
+
+        .of-table-head,
+        .of-card {
+            min-width: 1280px;
+            display: grid;
+            grid-template-columns:
+                minmax(190px, 1.25fr)
+                minmax(180px, 1.15fr)
+                minmax(115px, .72fr)
+                minmax(165px, 1fr)
+                minmax(100px, .6fr)
+                minmax(215px, 1.35fr)
+                minmax(155px, .95fr)
+                minmax(165px, 1fr)
+                minmax(94px, .55fr);
+            align-items: stretch;
+        }
+
+        .of-table-head {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f5f8fc;
+            color: #697a91;
+            border-bottom: 1px solid #dfe7f1;
+            font-size: .64rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .055em;
+        }
+
+        .of-table-head > div {
+            padding: 9px 10px;
+            display: flex;
+            align-items: center;
+            border-right: 1px solid #e6edf5;
+        }
+
+        .of-table-head > div:last-child {
+            border-right: 0;
+            justify-content: center;
+        }
+
+        .of-card {
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            border-top: 1px solid #edf1f6;
+            background: #fff;
+            box-shadow: none;
+            transition: background-color .16s ease, box-shadow .16s ease;
+        }
+
+        .of-table-head + .of-card {
+            border-top: 0;
+        }
+
+        .of-card:hover {
+            transform: none;
+            border-color: transparent;
+            background: #f8fbff;
+            box-shadow: inset 3px 0 0 #8bb9ee;
+        }
+
+        .of-card.is-program {
+            background: #fffdf8;
+            border-color: transparent;
+            box-shadow: inset 3px 0 0 #e9ad3f;
+        }
+
+        .of-card.is-program:hover {
+            background: #fff9ee;
+        }
+
+        .of-cell {
+            min-width: 0;
+            padding: 11px 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 4px;
+            border-right: 1px solid #edf1f6;
+        }
+
+        .of-cell:last-child {
+            border-right: 0;
+        }
+
+        .of-cell-action {
+            align-items: center;
+        }
+
+        .row-badges {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-bottom: 2px;
+        }
+
+        .row-title {
+            color: #14375f;
+            font-size: .86rem;
+            font-weight: 950;
+            line-height: 1.18;
+            overflow-wrap: anywhere;
+        }
+
+        .row-subtitle {
+            color: var(--muted);
+            font-size: .69rem;
+            font-weight: 700;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
+        }
+
+        .row-primary {
+            color: #263b56;
+            font-size: .79rem;
+            font-weight: 850;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .row-secondary {
+            color: var(--muted);
+            font-size: .67rem;
+            font-weight: 700;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .row-label-mobile {
+            display: none;
+            color: #8492a6;
+            font-size: .6rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .delivery-pill {
+            width: 100%;
+            border-radius: 9px;
+            padding: 7px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            font-size: .68rem;
+            font-weight: 850;
+            line-height: 1.2;
+        }
+
+        .delivery-pill strong {
+            font-size: .72rem;
+        }
+
+        .planning-stack {
+            display: grid;
+            gap: 4px;
+        }
+
+        .planning-line {
+            display: grid;
+            grid-template-columns: 39px minmax(0, 1fr);
+            gap: 5px;
+            align-items: baseline;
+        }
+
+        .planning-line span {
+            color: #8996a8;
+            font-size: .59rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .planning-line strong {
+            color: #2a3d57;
+            font-size: .7rem;
+            font-weight: 800;
+            overflow-wrap: anywhere;
+        }
+
+        .row-responsible {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #4d607a;
+            font-size: .72rem;
+            font-weight: 750;
+            overflow-wrap: anywhere;
+        }
+
+        .row-responsible i {
+            flex: 0 0 auto;
+            color: #8492a6;
+        }
+
+        .of-cell .status-pill {
+            max-width: 100%;
+            width: fit-content;
+            border-radius: 8px;
+            padding: 6px 8px;
+            line-height: 1.2;
+        }
+
+        .of-cell .type-badge,
+        .of-cell .origin-badge {
+            padding: 4px 7px;
+            font-size: .62rem;
+        }
+
+        .row-action {
+            min-width: 72px;
+            min-height: 32px;
+            padding: 6px 9px;
+            border-radius: 9px;
+            font-size: .7rem;
+        }
+
+        @@media (max-width: 900px) {
+            .of-grid {
+                border-radius: 12px;
+            }
+
+            .of-table-head,
+            .of-card {
+                min-width: 1120px;
+            }
+        }
+
         .empty-state, .no-results {
             background: #fff;
             border: 1px dashed #cbd7e6;
@@ -944,6 +1189,235 @@
                 grid-template-columns: 1fr;
             }
         }
+
+
+        /* =========================================================
+           AJUSTE FINAL: MISMOS APARTADOS, FILAS MAS COMPACTAS
+           - Mantiene las 9 columnas originales.
+           - Elimina el scroll horizontal.
+           - Reduce alto, paddings y tipografia sin perder lectura.
+           ========================================================= */
+        .of-grid {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden !important;
+            overflow-y: visible;
+            border-radius: 12px;
+        }
+
+        .of-table-head,
+        .of-card {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0 !important;
+            grid-template-columns:
+                minmax(0, 1.30fr)  /* Orden / origen */
+                minmax(0, 1.22fr)  /* Cliente */
+                minmax(0, .72fr)   /* Tipo */
+                minmax(0, 1.18fr)  /* Entrega */
+                minmax(0, .58fr)   /* Piezas */
+                minmax(0, 1.38fr)  /* Planeacion */
+                minmax(0, 1.08fr)  /* Responsable */
+                minmax(0, 1.02fr)  /* Estatus */
+                68px;              /* Accion */
+        }
+
+        .of-table-head {
+            font-size: .58rem;
+            letter-spacing: .045em;
+        }
+
+        .of-table-head > div {
+            min-width: 0;
+            padding: 7px 7px;
+            line-height: 1.05;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .of-card {
+            min-height: 58px;
+        }
+
+        .of-cell {
+            min-width: 0;
+            padding: 7px 7px;
+            gap: 2px;
+            overflow: hidden;
+        }
+
+        .row-badges {
+            gap: 3px;
+            margin-bottom: 0;
+        }
+
+        .row-title {
+            font-size: .78rem;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .row-subtitle,
+        .row-secondary {
+            font-size: .61rem;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .row-primary {
+            font-size: .72rem;
+            line-height: 1.15;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .of-cell .origin-badge,
+        .of-cell .type-badge {
+            max-width: 100%;
+            padding: 3px 5px;
+            font-size: .56rem;
+            line-height: 1.05;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .delivery-pill {
+            width: 100%;
+            min-width: 0;
+            padding: 5px 6px;
+            gap: 1px;
+            border-radius: 8px;
+            font-size: .60rem;
+            line-height: 1.08;
+            overflow: hidden;
+        }
+
+        .delivery-pill > span,
+        .delivery-pill strong {
+            max-width: 100%;
+            font-size: .61rem;
+            line-height: 1.08;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .planning-stack {
+            gap: 2px;
+        }
+
+        .planning-line {
+            grid-template-columns: 31px minmax(0, 1fr);
+            gap: 3px;
+            line-height: 1.08;
+        }
+
+        .planning-line span {
+            font-size: .52rem;
+        }
+
+        .planning-line strong {
+            min-width: 0;
+            font-size: .61rem;
+            line-height: 1.08;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .row-responsible {
+            min-width: 0;
+            gap: 4px;
+            font-size: .63rem;
+            line-height: 1.1;
+        }
+
+        .row-responsible span {
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .of-cell .status-pill {
+            max-width: 100%;
+            padding: 4px 5px;
+            border-radius: 7px;
+            font-size: .57rem;
+            line-height: 1.08;
+            gap: 3px;
+        }
+
+        .of-cell .status-pill i {
+            font-size: .44rem;
+        }
+
+        .of-cell-action {
+            padding-left: 4px;
+            padding-right: 4px;
+        }
+
+        .row-action {
+            width: 100%;
+            min-width: 0;
+            min-height: 29px;
+            padding: 4px 5px;
+            border-radius: 8px;
+            font-size: .62rem;
+            gap: 3px;
+        }
+
+        .machine-header {
+            padding-top: 12px;
+            padding-bottom: 12px;
+        }
+
+        .priority-heading {
+            padding-top: 7px;
+            padding-bottom: 7px;
+        }
+
+        /* En pantallas menores sigue sin haber scroll horizontal:
+           se reorganiza la misma informacion en dos niveles. */
+        @@media (max-width: 1050px) {
+            .of-table-head {
+                display: none;
+            }
+
+            .of-card {
+                min-width: 0 !important;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                border-bottom: 1px solid #e6edf5;
+            }
+
+            .of-cell {
+                min-height: 52px;
+                border-bottom: 1px solid #edf1f6;
+            }
+
+            .of-cell:nth-child(9) {
+                grid-column: span 1;
+            }
+
+            .row-label-mobile {
+                display: block;
+                margin-bottom: 1px;
+                font-size: .49rem;
+            }
+        }
+
+        @@media (max-width: 760px) {
+            .of-card {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -1141,6 +1615,18 @@
                                     </div>
 
                                     <div class="of-grid">
+                                        <div class="of-table-head" aria-hidden="true">
+                                            <div>Orden / origen</div>
+                                            <div>Cliente</div>
+                                            <div>Tipo</div>
+                                            <div>Entrega</div>
+                                            <div>Piezas</div>
+                                            <div>Planeación</div>
+                                            <div>Responsable</div>
+                                            <div>Estatus</div>
+                                            <div>Acción</div>
+                                        </div>
+
                                         @foreach (var item in prioridad
                                                                     .OrderBy(x => x.FechaRequerida ?? DateTime.MaxValue)
                                                                     .ThenBy(x => x.FolioSolicitud))
@@ -1171,90 +1657,101 @@
                                                      data-of-card
                                                      data-type="@tipoOF"
                                                      data-search="@textoBusqueda">
-                                                <div class="card-top">
-                                                    <div>
-                                                        <div class="badge-stack">
-                                                            @if (esPendientePrograma)
-                                                            {
-                                                                <span class="origin-badge origin-program">
-                                                                    <i class="fa-solid fa-gears"></i>Programa
-                                                                </span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <span class="origin-badge origin-of">
-                                                                    <i class="fa-solid fa-file-lines"></i>OF
-                                                                </span>
-                                                            }
 
-                                                            <span class="type-badge @ClaseTipoOF(item.TipoOF)"
-                                                                  title="@Texto(item.MotivoTipoOF)">
-                                                                <i class="fa-solid @IconoTipoOF(item.TipoOF)"></i>
-                                                                @tipoOFTexto
+                                                <div class="of-cell">
+                                                    <span class="row-label-mobile">Orden / origen</span>
+                                                    <div class="row-badges">
+                                                        @if (esPendientePrograma)
+                                                        {
+                                                            <span class="origin-badge origin-program">
+                                                                <i class="fa-solid fa-gears"></i>Programa
                                                             </span>
-                                                        </div>
-
-                                                        <div class="folio">@Texto(item.FolioSolicitud)</div>
-                                                        <div class="of-number">
-                                                            @if (esPendientePrograma)
-                                                            {
-                                                                <span>Programa #@programaProduccionId</span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <span>@Texto(item.NumeroOFRecibida)</span>
-                                                            }
-                                                        </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="origin-badge origin-of">
+                                                                <i class="fa-solid fa-file-lines"></i>OF
+                                                            </span>
+                                                        }
                                                     </div>
 
+                                                    <div class="row-title">@Texto(item.FolioSolicitud)</div>
+                                                    <div class="row-subtitle">
+                                                        @if (esPendientePrograma)
+                                                        {
+                                                            <span>Programa #@programaProduccionId</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>@Texto(item.NumeroOFRecibida)</span>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                <div class="of-cell">
+                                                    <span class="row-label-mobile">Cliente</span>
+                                                    <div class="row-primary">@Texto(item.Cliente)</div>
+                                                </div>
+
+                                                <div class="of-cell">
+                                                    <span class="row-label-mobile">Tipo</span>
+                                                    <span class="type-badge @ClaseTipoOF(item.TipoOF)"
+                                                          title="@Texto(item.MotivoTipoOF)">
+                                                        <i class="fa-solid @IconoTipoOF(item.TipoOF)"></i>
+                                                        @tipoOFTexto
+                                                    </span>
+                                                </div>
+
+                                                <div class="of-cell">
+                                                    <span class="row-label-mobile">Entrega</span>
+                                                    <div class="delivery-pill @ClaseFecha(item.FechaRequerida)">
+                                                        <span>
+                                                            <i class="fa-regular fa-calendar me-1"></i>
+                                                            @TextoFechaEntrega(item.FechaRequerida)
+                                                        </span>
+                                                        <strong>@Fecha(item.FechaRequerida)</strong>
+                                                    </div>
+                                                </div>
+
+                                                <div class="of-cell">
+                                                    <span class="row-label-mobile">Piezas</span>
+                                                    <div class="row-primary">@item.TotalPiezas.ToString("N0")</div>
+                                                    <div class="row-secondary">@item.TotalRenglones.ToString("N0") renglón(es)</div>
+                                                </div>
+
+                                                <div class="of-cell">
+                                                    <span class="row-label-mobile">Planeación</span>
+                                                    <div class="planning-stack">
+                                                        <div class="planning-line">
+                                                            <span>Inicio</span>
+                                                            <strong>@FechaHora(item.FechaInicioPlaneada)</strong>
+                                                        </div>
+                                                        <div class="planning-line">
+                                                            <span>Fin</span>
+                                                            <strong>@FechaHora(item.FechaFinPlaneada)</strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="of-cell">
+                                                    <span class="row-label-mobile">Responsable</span>
+                                                    <div class="row-responsible"
+                                                         title="@Texto(item.ResponsablePlaneacionNombre)">
+                                                        <i class="fa-regular fa-user"></i>
+                                                        <span>@Texto(item.ResponsablePlaneacionNombre)</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="of-cell">
+                                                    <span class="row-label-mobile">Estatus</span>
                                                     <span class="status-pill @ClaseEstatus(item.EstatusID)">
                                                         <i class="fa-solid fa-circle"></i>
                                                         @Texto(item.EstatusNombre)
                                                     </span>
                                                 </div>
 
-                                                <div class="date-banner @ClaseFecha(item.FechaRequerida)">
-                                                    <span>
-                                                        <i class="fa-regular fa-calendar me-1"></i>
-                                                        @TextoFechaEntrega(item.FechaRequerida)
-                                                    </span>
-                                                    <strong>@Fecha(item.FechaRequerida)</strong>
-                                                </div>
-
-                                                <div class="data-row">
-                                                    <div class="data-box data-box-wide">
-                                                        <div class="data-label">Cliente</div>
-                                                        <div class="data-value">@Texto(item.Cliente)</div>
-                                                    </div>
-                                                    <div class="data-box">
-                                                        <div class="data-label">Tipo de OF</div>
-                                                        <div class="data-value">@tipoOFTexto</div>
-                                                    </div>
-                                                    <div class="data-box">
-                                                        <div class="data-label">Piezas</div>
-                                                        <div class="data-value">@item.TotalPiezas.ToString("N0")</div>
-                                                    </div>
-                                                    <div class="data-box">
-                                                        <div class="data-label">Renglones</div>
-                                                        <div class="data-value">@item.TotalRenglones.ToString("N0")</div>
-                                                    </div>
-                                                    <div class="data-box">
-                                                        <div class="data-label">Inicio planeado</div>
-                                                        <div class="data-value">@FechaHora(item.FechaInicioPlaneada)</div>
-                                                    </div>
-                                                    <div class="data-box">
-                                                        <div class="data-label">Fin planeado</div>
-                                                        <div class="data-value">@FechaHora(item.FechaFinPlaneada)</div>
-                                                    </div>
-                                                </div>
-
-                                                <footer class="card-footer-custom">
-                                                    <div class="responsible"
-                                                         title="@Texto(item.ResponsablePlaneacionNombre)">
-                                                        <i class="fa-regular fa-user me-1"></i>
-                                                        @Texto(item.ResponsablePlaneacionNombre)
-                                                    </div>
-
+                                                <div class="of-cell of-cell-action">
+                                                    <span class="row-label-mobile">Acción</span>
                                                     @if (esPendientePrograma)
                                                     {
                                                         <form id="@formGenerarId"
@@ -1268,7 +1765,7 @@
                                                                    value="@programaProduccionId" />
 
                                                             <button type="button"
-                                                                    class="btn-erp btn-erp-primary card-action"
+                                                                    class="btn-erp btn-erp-primary row-action"
                                                                     data-generar-of
                                                                     data-form-id="@formGenerarId"
                                                                     data-programa="@programaProduccionId"
@@ -1279,7 +1776,7 @@
                                                                     data-piezas="@item.TotalPiezas.ToString("N0")"
                                                                     data-fecha="@Fecha(item.FechaRequerida)">
                                                                 <i class="fa-solid fa-file-circle-plus"></i>
-                                                                Generar OF
+                                                                Generar
                                                             </button>
                                                         </form>
                                                     }
@@ -1288,11 +1785,11 @@
                                                         <a asp-controller="Planeacion"
                                                            asp-action="Detalle"
                                                            asp-route-id="@item.SolicitudProduccionID"
-                                                           class="btn-erp btn-erp-light card-action">
+                                                           class="btn-erp btn-erp-light row-action">
                                                             <i class="fa-regular fa-eye"></i>Ver
                                                         </a>
                                                     }
-                                                </footer>
+                                                </div>
                                             </article>
                                         }
                                     </div>
