@@ -1221,6 +1221,136 @@ namespace ERP.NSQuell.Models
 
 
     // ============================================================
+    // VIEWMODELS - ALMACÉN GP12
+    // El almacén GP12 consulta y administra todo el material activo
+    // de GP12 sin importar su origen. No escribe en tablas de Almacén PT.
+    // ============================================================
+
+    public class GP12AlmacenViewModel
+    {
+        public string? Busqueda { get; set; }
+        public string? Filtro { get; set; }
+
+        public int TotalSolicitudes { get; set; }
+        public int TotalPendienteRecibir { get; set; }
+        public int TotalEnInventario { get; set; }
+        public int TotalListoAlmacen { get; set; }
+        public int TotalSalidaRegistrada { get; set; }
+
+        public decimal PiezasPendientesRecibir { get; set; }
+        public decimal PiezasEnInventario { get; set; }
+        public decimal PiezasListasAlmacen { get; set; }
+
+        public List<GP12AlmacenItemViewModel> Materiales { get; set; } = new();
+        public string? Origen { get; set; }
+    }
+
+
+    public class GP12AlmacenItemViewModel
+    {
+        public int SolicitudGP12ID { get; set; }
+
+        public long? CajaProduccionID { get; set; }
+        public int? CajaLiberadaID { get; set; }
+        public int? CalidadInspeccionID { get; set; }
+
+        public string Origen { get; set; } = string.Empty;
+        public string? OrdenFabricacion { get; set; }
+        public string? ClienteNombre { get; set; }
+        public string? NumeroParte { get; set; }
+        public string? DescripcionParte { get; set; }
+        public string? MaterialCodigo { get; set; }
+        public string? MaterialDescripcion { get; set; }
+
+        public decimal CantidadSolicitada { get; set; }
+        public decimal CantidadRecibida { get; set; }
+        public decimal CantidadProcesada { get; set; }
+        public decimal SaldoInventario { get; set; }
+
+        public int EstatusID { get; set; }
+        public string EstatusNombre { get; set; } = string.Empty;
+
+        public string EstadoAlmacen { get; set; } =
+            GP12FiltroAlmacen.PendienteRecepcion;
+
+        public DateTime FechaSolicitud { get; set; }
+        public DateTime? FechaRecepcion { get; set; }
+        public DateTime? FechaUltimaEntrada { get; set; }
+        public DateTime? FechaUltimaSalida { get; set; }
+
+        public decimal PendienteRecibir =>
+            Math.Max(0, CantidadSolicitada - CantidadRecibida);
+
+        public bool EsPendienteRecepcion =>
+            EstadoAlmacen == GP12FiltroAlmacen.PendienteRecepcion;
+
+        public bool EstaEnGP12 =>
+            EstadoAlmacen == GP12FiltroAlmacen.EnGP12;
+
+        public bool EstaListoAlmacen =>
+            EstadoAlmacen == GP12FiltroAlmacen.ListoAlmacen;
+
+        public bool TieneSalidaRegistrada =>
+            EstadoAlmacen == GP12FiltroAlmacen.SalidaRegistrada;
+    }
+
+
+    // Contrato preparado para la integración futura con Almacén.
+    // Quien implemente Almacén podrá hacer POST a
+    // /GP12/RegistrarSalidaParaAlmacen usando este modelo.
+    public class GP12SalidaAlmacenViewModel
+    {
+        [Range(1, int.MaxValue)]
+        public int SolicitudGP12ID { get; set; }
+
+        [Range(
+            typeof(decimal),
+            "0.0001",
+            "999999999",
+            ErrorMessage = "La cantidad de salida debe ser mayor a cero.")]
+        public decimal Cantidad { get; set; }
+
+        [Required(ErrorMessage = "Captura la referencia de recepción de Almacén.")]
+        [StringLength(250)]
+        public string ReferenciaAlmacen { get; set; } = string.Empty;
+
+        [StringLength(1000)]
+        public string? Observaciones { get; set; }
+    }
+
+
+    public static class GP12FiltroAlmacen
+    {
+        public const string Todos = "TODOS";
+        public const string PendienteRecepcion = "PENDIENTE_RECEPCION";
+        public const string EnGP12 = "EN_GP12";
+        public const string ListoAlmacen = "LISTO_ALMACEN";
+        public const string SalidaRegistrada = "SALIDA_REGISTRADA";
+
+        public static bool EsValido(string? filtro)
+        {
+            return filtro == Todos ||
+                   filtro == PendienteRecepcion ||
+                   filtro == EnGP12 ||
+                   filtro == ListoAlmacen ||
+                   filtro == SalidaRegistrada;
+        }
+
+        public static string Nombre(string? filtro)
+        {
+            return filtro switch
+            {
+                PendienteRecepcion => "Pendiente de recibir",
+                EnGP12 => "En almacén GP12",
+                ListoAlmacen => "Listo para Almacén",
+                SalidaRegistrada => "Salida registrada",
+                _ => "Todos"
+            };
+        }
+    }
+
+
+    // ============================================================
     // CATÁLOGOS Y CONSTANTES
     // ============================================================
 

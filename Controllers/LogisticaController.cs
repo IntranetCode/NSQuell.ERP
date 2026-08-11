@@ -750,11 +750,35 @@ WHERE EmbarqueID=@Id;",
             {
                 CommandType = CommandType.StoredProcedure
             };
+
             cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
             cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
-            TempData["LogisticaOk"] = "Salida validada. PT fue descontado mediante movimientos de Embarque.";
+
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            if (!await rd.ReadAsync(cancellationToken))
+                throw new InvalidOperationException("El procedimiento de despacho terminó sin devolver confirmación.");
+
+            var referencia = Texto(rd, "ReferenciaOperacion");
+            var yaDespachado = Booleano(rd, "YaDespachado");
+
+            if (yaDespachado)
+            {
+                TempData["LogisticaOk"] = string.IsNullOrWhiteSpace(referencia)
+                    ? "El embarque ya había sido despachado. No se generaron movimientos PT duplicados."
+                    : $"El embarque ya había sido despachado. No se generaron movimientos PT duplicados. Referencia: {referencia}.";
+            }
+            else
+            {
+                TempData["LogisticaOk"] = string.IsNullOrWhiteSpace(referencia)
+                    ? "Salida validada y PT descontado correctamente."
+                    : $"Salida validada y PT descontado correctamente. Referencia: {referencia}.";
+            }
+        }
+        catch (SqlException ex)
+        {
+            TempData["LogisticaError"] = $"No fue posible confirmar la salida: {ex.Message}";
         }
         catch (Exception ex)
         {
@@ -1395,6 +1419,7 @@ SELECT e.EmbarqueID,ISNULL(e.Folio,N'') AS Folio,e.ClienteID,e.ClienteNombreSnap
        ISNULL(r.Codigo + N' - ' + r.Nombre,N'') AS Ruta,
        ISNULL(u.NumeroEconomico + CASE WHEN NULLIF(u.Placas,N'') IS NULL THEN N'' ELSE N' - ' + u.Placas END,N'') AS Unidad,
        ISNULL(e.OperadorTexto,N'') AS Operador,ISNULL(e.Observaciones,N'') AS Observaciones,
+       ISNULL(e.ReferenciaOperacion,N'') AS ReferenciaOperacion,
        e.FechaPreparacion,e.FechaCarga,e.FechaSalida,e.FechaEntrega,e.TieneIncidencia
 FROM dbo.Logistica_Embarques e
 LEFT JOIN dbo.Logistica_Rutas r ON r.RutaID=e.RutaID
@@ -1422,6 +1447,7 @@ WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
             vm.Unidad = Texto(rd, "Unidad");
             vm.Operador = Texto(rd, "Operador");
             vm.Observaciones = Texto(rd, "Observaciones");
+            vm.ReferenciaOperacion = Texto(rd, "ReferenciaOperacion");
             vm.FechaPreparacion = Fecha(rd, "FechaPreparacion");
             vm.FechaCarga = Fecha(rd, "FechaCarga");
             vm.FechaSalida = Fecha(rd, "FechaSalida");
