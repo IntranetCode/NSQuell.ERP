@@ -1561,6 +1561,181 @@ ORDER BY FechaEvento DESC,HistorialID DESC;";
         return vm;
     }
 
+    [HttpGet]
+    public async Task<IActionResult> Calendario(CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        await using var cn = await AbrirAsync(cancellationToken);
+        if (!await TieneFase1Async(cn, cancellationToken))
+        {
+            TempData["LogisticaError"] = "Falta la estructura de Logística Fase 1.";
+            return RedirectToAction(nameof(Index));
+        }
+        return View();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> EventosCalendario(DateTime desde, DateTime hasta, string? estatus = null, string? q = null, CancellationToken cancellationToken = default)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        desde = desde.Date;
+        hasta = hasta.Date;
+        if (hasta < desde) return BadRequest(new { ok = false, mensaje = "El rango de fechas del calendario no es válido." });
+        if ((hasta - desde).TotalDays > 120) return BadRequest(new { ok = false, mensaje = "El calendario solo puede consultar hasta 120 días por solicitud." });
+        q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+        estatus = string.IsNullOrWhiteSpace(estatus) ? null : estatus.Trim();
+        await using var cn = await AbrirAsync(cancellationToken);
+        if (!await TieneFase1Async(cn, cancellationToken))
+            return BadRequest(new { ok = false, mensaje = "Falta la estructura de Logística Fase 1." });
+        var eventos = new List<object>();
+        const string sqlEmbarques = @"
+SELECT
+    e.EmbarqueID,
+    ISNULL(e.Folio,N'') AS Folio,
+    ISNULL(e.ClienteNombreSnapshot,N'') AS Cliente,
+    ISNULL(e.Destino,N'') AS Destino,
+    e.FechaCargaProgramada,
+    e.HoraCargaProgramada,
+    e.FechaEntregaProgramada,
+    e.HoraEntregaProgramada,
+    ISNULL(e.Estatus,N'') AS Estatus,
+    ISNULL(e.TieneIncidencia,0) AS TieneIncidencia,
+    ISNULL
+    (
+        (
+            SELECT COUNT(*)
+            FROM dbo.Logistica_EmbarqueCajas ec
+            WHERE ec.EmbarqueID=e.EmbarqueID
+              AND ec.Activo=1
+        ),
+        0
+    ) AS TotalCajas,
+    ISNULL
+    (
+        (
+            SELECT SUM(d.CantidadSolicitada)
+            FROM dbo.Logistica_EmbarqueDetalle d
+            WHERE d.EmbarqueID=e.EmbarqueID
+              AND d.Activo=1
+        ),
+        0
+    ) AS TotalPiezas
+FROM dbo.Logistica_Embarques e
+WHERE e.Activo=1
+  AND (@Estatus IS NULL OR e.Estatus=@Estatus)
+  AND
+  (
+      @Q IS NULL
+      OR e.Folio LIKE N'%'+@Q+N'%'
+      OR e.ClienteNombreSnapshot LIKE N'%'+@Q+N'%'
+      OR e.Destino LIKE N'%'+@Q+N'%'
+  )
+  AND
+  (
+      (e.FechaCargaProgramada>=@Desde AND e.FechaCargaProgramada<DATEADD(DAY,1,@Hasta))
+      OR
+      (e.FechaEntregaProgramada>=@Desde AND e.FechaEntregaProgramada<DATEADD(DAY,1,@Hasta))
+  )
+ORDER BY
+    COALESCE(e.FechaCargaProgramada,e.FechaEntregaProgramada),
+    e.HoraCargaProgramada,
+    e.EmbarqueID;";
+        await using (var cmd = new SqlCommand(sqlEmbarques, cn))
+        {
+            cmd.Parameters.Add("@Desde", SqlDbType.Date).Value = desde;
+            cmd.Parameters.Add("@Hasta", SqlDbType.Date).Value = hasta;
+            cmd.Parameters.Add("@Estatus", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(estatus) ? DBNull.Value : estatus;
+            cmd.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(q) ? DBNull.Value : q;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await rd.ReadAsync(cancellationToken))
+            {
+                var embarqueId = Entero(rd, "EmbarqueID");
+                var folio = Texto(rd, "Folio");
+                var cliente = Texto(rd, "Cliente");
+                var destino = Texto(rd, "Destino");
+                var fechaCarga = Fecha(rd, "FechaCargaProgramada");
+                var horaCarga = Hora(rd, "HoraCargaProgramada");
+                var fechaEntrega = Fecha(rd, "FechaEntregaProgramada");
+                var horaEntrega = Hora(rd, "HoraEntregaProgramada");
+                var estado = Texto(rd, "Estatus");
+                var incidencia = Booleano(rd, "TieneIncidencia");
+                var totalCajas = Entero(rd, "TotalCajas");
+                var totalPiezas = Entero(rd, "TotalPiezas");
+                if (fechaCarga.HasValue && fechaCarga.Value.Date >= desde && fechaCarga.Value.Date <= hasta)
+                {
+                    eventos.Add(new
+                    {
+                        id = $"CARGA-{embarqueId}",
+                        embarqueId,
+                        tipo = "CARGA",
+                        fecha = fechaCarga.Value.ToString("yyyy-MM-dd"),
+                        hora = horaCarga?.ToString(@"hh\:mm") ?? "",
+                        titulo = string.IsNullOrWhiteSpace(folio) ? $"Embarque {embarqueId}" : folio,
+                        cliente,
+                        destino,
+                        estatus = estado,
+                        totalCajas,
+                        totalPiezas,
+                        incidencia,
+                        url = Url.Action(nameof(Detalle), "Logistica", new { id = embarqueId })
+                    });
+                }
+                if (fechaEntrega.HasValue && fechaEntrega.Value.Date >= desde && fechaEntrega.Value.Date <= hasta)
+                {
+                    eventos.Add(new
+                    {
+                        id = $"ENTREGA-{embarqueId}",
+                        embarqueId,
+                        tipo = "ENTREGA",
+                        fecha = fechaEntrega.Value.ToString("yyyy-MM-dd"),
+                        hora = horaEntrega?.ToString(@"hh\:mm") ?? "",
+                        titulo = string.IsNullOrWhiteSpace(folio) ? $"Embarque {embarqueId}" : folio,
+                        cliente,
+                        destino,
+                        estatus = estado,
+                        totalCajas,
+                        totalPiezas,
+                        incidencia,
+                        url = Url.Action(nameof(Detalle), "Logistica", new { id = embarqueId })
+                    });
+                }
+            }
+        }
+        var demandas = await CargarDemandasAsync(cn, q, desde, hasta, true, null, cancellationToken);
+        foreach (var demanda in demandas.Where(x => x.PendienteProgramar > 0))
+        {
+            var fechaCarga = (demanda.FechaCarga ?? demanda.FechaEntrega.AddDays(-1)).Date;
+            if (fechaCarga < desde || fechaCarga > hasta) continue;
+            eventos.Add(new
+            {
+                id = $"PENDIENTE-{demanda.ReleaseDetalleID}",
+                releaseDetalleId = demanda.ReleaseDetalleID,
+                tipo = "PENDIENTE",
+                fecha = fechaCarga.ToString("yyyy-MM-dd"),
+                hora = "",
+                titulo = string.IsNullOrWhiteSpace(demanda.FolioRelease) ? "Release pendiente" : demanda.FolioRelease,
+                cliente = demanda.Cliente,
+                destino = "",
+                estatus = "Pendiente programar",
+                numeroParte = demanda.NumeroParte,
+                numeroOF = demanda.NumeroOF,
+                totalCajas = demanda.CajasPTDisponibles,
+                totalPiezas = demanda.PendienteProgramar,
+                incidencia = demanda.PiezasPTDisponibles < demanda.PendienteProgramar,
+                url = Url.Action(nameof(Crear), "Logistica", new { releaseDetalleId = demanda.ReleaseDetalleID })
+            });
+        }
+        return Json(new
+        {
+            ok = true,
+            desde = desde.ToString("yyyy-MM-dd"),
+            hasta = hasta.ToString("yyyy-MM-dd"),
+            total = eventos.Count,
+            eventos
+        });
+    }
     private async Task CargarCatalogosAsync(LogisticaCrearVm vm, SqlConnection cn, CancellationToken cancellationToken)
     {
         const string sql = @"

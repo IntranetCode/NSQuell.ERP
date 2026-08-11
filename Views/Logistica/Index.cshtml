@@ -1,154 +1,1154 @@
-﻿@* LOGISTICA_UX_RAPIDA_V1_4 *@
-@using ERP.NSQuell.Models.ViewModels.Logistica
+﻿@using ERP.NSQuell.Models.ViewModels.Logistica
 @model LogisticaIndexVm
 @{
     Layout = "_LogisticaLayout";
-    ViewData["Title"] = "Programación logística";
-    string Fecha(DateTime? d) => d?.ToString("dd/MM/yyyy") ?? "—";
-    string Hora(TimeSpan? t) => t?.ToString(@"hh\:mm") ?? "";
+    ViewData["Title"] = "Operación Logística";
 
-    var grupos = Model.Demandas
-        .Where(x => x.PendienteProgramar > 0)
-        .GroupBy(x => new
+    string Fecha(DateTime? value) => value?.ToString("dd/MM/yyyy") ?? "—";
+    string Hora(TimeSpan? value) => value?.ToString(@"hh\:mm") ?? "";
+    string EstadoClase(string? estado)
+    {
+        var e = (estado ?? "").Trim().ToUpperInvariant();
+        return e switch
         {
-            FechaCarga = (x.FechaCarga ?? x.FechaEntrega.AddDays(-1)).Date,
-            FechaEntrega = x.FechaEntrega.Date,
-            ClienteID = x.ClienteID ?? 0,
-            Cliente = x.Cliente
-        })
-        .OrderBy(x => x.Key.FechaCarga)
-        .ThenBy(x => x.Key.Cliente)
+            "PROGRAMADO" => "st-programado",
+            "PREPARANDO" => "st-preparando",
+            "PREPARADO" => "st-preparado",
+            "CARGADO" => "st-cargado",
+            "EN RUTA" => "st-ruta",
+            "ENTREGADO" => "st-entregado",
+            "CANCELADO" => "st-cancelado",
+            _ => "st-default"
+        };
+    }
+
+    string EstadoIcono(string? estado)
+    {
+        var e = (estado ?? "").Trim().ToUpperInvariant();
+        return e switch
+        {
+            "PROGRAMADO" => "fa-calendar-check",
+            "PREPARANDO" => "fa-boxes-packing",
+            "PREPARADO" => "fa-circle-check",
+            "CARGADO" => "fa-truck-ramp-box",
+            "EN RUTA" => "fa-truck-fast",
+            "ENTREGADO" => "fa-location-dot",
+            "CANCELADO" => "fa-ban",
+            _ => "fa-circle"
+        };
+    }
+
+    var demandasPendientes = (Model.Demandas ?? new List<LogisticaDemandaVm>())
+        .Where(x => x.PendienteProgramar > 0)
+        .OrderBy(x => (x.FechaCarga ?? x.FechaEntrega.AddDays(-1)).Date)
+        .ThenBy(x => x.Cliente)
+        .ThenBy(x => x.NumeroParte)
         .ToList();
+
+    var embarques = (Model.Embarques ?? new List<LogisticaEmbarqueResumenVm>())
+        .OrderBy(x => x.Estatus == "Entregado" || x.Estatus == "Cancelado" ? 1 : 0)
+        .ThenBy(x => x.FechaCargaProgramada ?? DateTime.MaxValue)
+        .ThenBy(x => x.HoraCargaProgramada)
+        .ThenBy(x => x.Cliente)
+        .ToList();
+
+    var porProgramar = demandasPendientes.Count;
+    var enPreparacion = embarques.Count(x => x.Estatus == "Programado" || x.Estatus == "Preparando");
+    var listos = embarques.Count(x => x.Estatus == "Preparado" || x.Estatus == "Cargado");
+    var enRuta = embarques.Count(x => x.Estatus == "En ruta");
+    var entregados = embarques.Count(x => x.Estatus == "Entregado");
 }
-
-<section class="log-titlebar">
-    <div>
-        <span class="log-eyebrow">PROGRAMACIÓN DE SALIDAS</span>
-        <h1>Qué tiene que salir, cuándo y con qué lotes</h1>
-        <p>Release define la fecha y la cantidad. PT aporta los lotes físicos. Logística solo coordina y reserva; el stock se descuenta al despachar.</p>
-    </div>
-    <div class="log-title-actions">
-        <a class="log-btn" asp-controller="AlmacenPT" asp-action="Cajas"><i class="fa-solid fa-box"></i> Lotes PT</a>
-        <a class="log-btn log-btn-muted" asp-controller="PlaneacionRelease" asp-action="Index"><i class="fa-solid fa-calendar-days"></i> Releases</a>
-    </div>
-</section>
-
-<form method="get" class="log-toolbar">
-    <div class="log-search">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <input name="q" value="@Model.Busqueda" placeholder="Cliente, parte, OF o Release" />
-    </div>
-    <label>Desde <input type="date" name="fechaDesde" value="@Model.FechaDesde?.ToString("yyyy-MM-dd")" /></label>
-    <label>Hasta <input type="date" name="fechaHasta" value="@Model.FechaHasta?.ToString("yyyy-MM-dd")" /></label>
-    <button class="log-btn log-btn-primary" type="submit">Aplicar</button>
-    <a class="log-btn log-btn-muted" asp-action="Index">Limpiar</a>
-</form>
-
-<div class="log-summary-strip">
-    <span><b>@Model.DemandasPendientes</b> salidas pendientes</span>
-    <span><b>@Model.PiezasPendientes.ToString("N0")</b> PZA por programar</span>
-    <span><b>@Model.EmbarquesActivos</b> embarques activos</span>
-    @if (Model.EntregasAtrasadas > 0)
-    {
-        <span class="is-alert"><b>@Model.EntregasAtrasadas</b> entrega(s) atrasada(s)</span>
+<style>
+    :root {
+        --lg-navy: #071b31;
+        --lg-blue: #0f4c81;
+        --lg-blue-2: #1f6fa6;
+        --lg-cyan: #4ba3c7;
+        --lg-bg: #f3f6fa;
+        --lg-panel: #ffffff;
+        --lg-line: #d9e3ee;
+        --lg-ink: #172033;
+        --lg-muted: #667085;
+        --lg-green: #117a4b;
+        --lg-amber: #b76e00;
+        --lg-red: #b42318;
+        --lg-purple: #6847c7;
+        --lg-shadow: 0 12px 32px rgba(15,23,42,.07)
     }
-</div>
 
-<section class="log-board">
-    <div class="log-section-head">
-        <div><span class="log-eyebrow">SALIDAS POR PROGRAMAR</span><h2>Agenda de carga</h2></div>
-        <small>Ordenada por fecha de carga y cliente</small>
-    </div>
+    .log-page {
+        display: flex;
+        flex-direction: column;
+        gap: 15px
+    }
 
-    @foreach (var g in grupos)
-    {
-        var pendientes = g.Sum(x => x.PendienteProgramar);
-        var pt = g.Sum(x => x.PiezasPTDisponibles);
-        var listo = pt >= pendientes && pendientes > 0;
-        var primero = g.First();
+    .log-hero {
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(118deg,var(--lg-navy),#103d64 72%,#175f8c);
+        color: #fff;
+        border-radius: 22px;
+        padding: 22px 24px;
+        box-shadow: 0 20px 45px rgba(7,27,49,.18)
+    }
 
-        <article class="log-dispatch-card @(listo ? "is-ready" : "")">
-            <header>
-                <div class="log-date-block">
-                    <span>CARGA</span>
-                    <strong>@g.Key.FechaCarga.ToString("dd MMM")</strong>
-                    <small>Entrega @g.Key.FechaEntrega.ToString("dd/MM/yyyy")</small>
-                </div>
-                <div class="log-client-block">
-                    <span class="log-client-name">@g.Key.Cliente</span>
-                    <small>@g.Count() partida(s) · @pendientes.ToString("N0") PZA pendientes</small>
-                </div>
-                <div class="log-readiness @(listo ? "is-ok" : "is-warn")">
-                    <span>PT disponible</span>
-                    <strong>@pt.ToString("N0") / @pendientes.ToString("N0")</strong>
-                </div>
-            </header>
+        .log-hero::after {
+            content: "";
+            position: absolute;
+            width: 340px;
+            height: 340px;
+            right: -120px;
+            top: -170px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,.13);
+            box-shadow: 0 0 0 35px rgba(255,255,255,.025),0 0 0 75px rgba(255,255,255,.018)
+        }
 
-            <div class="log-demand-list">
-            @foreach (var d in g.OrderBy(x => x.NumeroParte))
-            {
-                var dListo = d.PiezasPTDisponibles >= d.PendienteProgramar && d.PendienteProgramar > 0;
-                <div class="log-demand-row">
-                    <div class="log-part-main">
-                        <strong>@d.NumeroParte</strong>
-                        <span>@d.Descripcion</span>
-                    </div>
-                    <div>
-                        <span class="log-label">OF</span>
-                        <b>@(string.IsNullOrWhiteSpace(d.NumeroOF) ? "SIN OF" : d.NumeroOF)</b>
-                    </div>
-                    <div>
-                        <span class="log-label">Release</span>
-                        <b>@d.FolioRelease</b>
-                    </div>
-                    <div class="log-num">
-                        <span class="log-label">Pendiente</span>
-                        <b>@d.PendienteProgramar.ToString("N0")</b>
-                    </div>
-                    <div class="log-num @(dListo ? "log-ok" : "log-warning")">
-                        <span class="log-label">PT / lotes</span>
-                        <b>@d.PiezasPTDisponibles.ToString("N0") / @d.CajasPTDisponibles</b>
-                    </div>
-                    <a class="log-btn log-btn-primary log-btn-small"
-                       asp-action="Crear"
-                       asp-route-releaseDetalleId="@d.ReleaseDetalleID">
-                        Preparar
-                    </a>
-                </div>
+    .log-hero-row {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 20px;
+        flex-wrap: wrap
+    }
+
+    .log-kicker {
+        font-size: .7rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .16em;
+        color: #a9d7ef
+    }
+
+    .log-hero h1 {
+        margin: 4px 0 6px;
+        font-size: 1.9rem;
+        font-weight: 950
+    }
+
+    .log-hero p {
+        margin: 0;
+        max-width: 860px;
+        color: rgba(255,255,255,.78);
+        font-weight: 650
+    }
+
+    .log-actions {
+        display: flex;
+        gap: 9px;
+        flex-wrap: wrap
+    }
+
+    .log-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid #cad7e5;
+        background: #fff;
+        color: #25364d;
+        border-radius: 11px;
+        min-height: 40px;
+        padding: 8px 13px;
+        text-decoration: none;
+        font-weight: 900;
+        cursor: pointer;
+        transition: .15s ease;
+        white-space: nowrap
+    }
+
+        .log-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15,23,42,.10);
+            color: var(--lg-blue)
+        }
+
+    .log-btn-primary {
+        background: var(--lg-blue);
+        border-color: var(--lg-blue);
+        color: #fff
+    }
+
+        .log-btn-primary:hover {
+            background: #0a3b65;
+            border-color: #0a3b65;
+            color: #fff
+        }
+
+    .log-btn-hero {
+        border-color: rgba(255,255,255,.28);
+        background: rgba(255,255,255,.10);
+        color: #fff
+    }
+
+        .log-btn-hero:hover {
+            background: #fff;
+            color: var(--lg-blue)
+        }
+
+    .log-toolbar {
+        display: grid;
+        grid-template-columns: minmax(300px,1fr) 155px 155px 190px auto auto;
+        gap: 10px;
+        align-items: end;
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-radius: 16px;
+        padding: 12px 14px;
+        box-shadow: 0 8px 20px rgba(15,23,42,.035)
+    }
+
+    .log-field label {
+        display: block;
+        margin-bottom: 5px;
+        color: #667085;
+        font-size: .68rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .055em
+    }
+
+    .log-input, .log-select {
+        width: 100%;
+        height: 42px;
+        border: 1px solid #ccd8e5;
+        border-radius: 10px;
+        background: #fff;
+        color: #172033;
+        padding: 0 11px;
+        font-weight: 700
+    }
+
+        .log-input:focus, .log-select:focus {
+            outline: none;
+            border-color: #5e9ac5;
+            box-shadow: 0 0 0 3px rgba(15,76,129,.10)
+        }
+
+    .log-search {
+        position: relative
+    }
+
+        .log-search i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #7b8ca2
+        }
+
+        .log-search .log-input {
+            padding-left: 36px
+        }
+
+    .log-operational-nav {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-radius: 16px;
+        padding: 9px;
+        box-shadow: 0 8px 20px rgba(15,23,42,.035)
+    }
+
+    .log-nav-btn {
+        border: 1px solid transparent;
+        background: #f7f9fc;
+        color: #506176;
+        border-radius: 11px;
+        padding: 9px 12px;
+        font-size: .79rem;
+        font-weight: 950;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: .15s ease
+    }
+
+        .log-nav-btn:hover {
+            background: #edf4f9;
+            color: var(--lg-blue)
+        }
+
+        .log-nav-btn.active {
+            background: var(--lg-blue);
+            border-color: var(--lg-blue);
+            color: #fff;
+            box-shadow: 0 7px 16px rgba(15,76,129,.18)
+        }
+
+    .log-nav-count {
+        min-width: 24px;
+        height: 24px;
+        padding: 0 7px;
+        border-radius: 999px;
+        display: inline-grid;
+        place-items: center;
+        background: rgba(255,255,255,.92);
+        color: inherit;
+        border: 1px solid rgba(15,23,42,.10);
+        font-size: .69rem;
+        font-weight: 950
+    }
+
+    .log-nav-btn.active .log-nav-count {
+        color: var(--lg-blue)
+    }
+
+    .log-strip {
+        display: flex;
+        align-items: center;
+        gap: 19px;
+        flex-wrap: wrap;
+        padding: 0 3px;
+        color: #667085;
+        font-size: .82rem;
+        font-weight: 750
+    }
+
+        .log-strip strong {
+            color: #0b1f3a
+        }
+
+        .log-strip .danger {
+            color: var(--lg-red)
+        }
+
+    .log-panel {
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: var(--lg-shadow)
+    }
+
+    .log-panel-head {
+        min-height: 58px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        background: linear-gradient(180deg,#fff,#f9fbfd);
+        border-bottom: 1px solid var(--lg-line)
+    }
+
+    .log-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 11px
+    }
+
+        .log-panel-title > i {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            color: var(--lg-blue);
+            background: #edf5fb
+        }
+
+        .log-panel-title h2 {
+            margin: 0;
+            color: #0b1f3a;
+            font-size: 1.05rem;
+            font-weight: 950
+        }
+
+        .log-panel-title small {
+            display: block;
+            margin-top: 2px;
+            color: #667085;
+            font-weight: 650
+        }
+
+    .log-panel-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap
+    }
+
+    .log-table-wrap {
+        overflow: auto
+    }
+
+    .log-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 1160px
+    }
+
+        .log-table th {
+            padding: 10px 12px;
+            background: #f7f9fc;
+            border-bottom: 1px solid var(--lg-line);
+            color: #687789;
+            font-size: .67rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            white-space: nowrap;
+            text-align: left
+        }
+
+        .log-table td {
+            padding: 11px 12px;
+            border-bottom: 1px solid #edf1f6;
+            color: #25364d;
+            font-size: .82rem;
+            font-weight: 700;
+            vertical-align: middle
+        }
+
+        .log-table tbody tr {
+            transition: .12s ease
+        }
+
+            .log-table tbody tr:hover td {
+                background: #fbfdff
             }
-            </div>
-        </article>
+
+    .log-main {
+        display: block;
+        color: #0b1f3a;
+        font-weight: 950
     }
 
-    @if (!grupos.Any())
+    .log-sub {
+        display: block;
+        margin-top: 2px;
+        color: #7b8797;
+        font-size: .71rem;
+        font-weight: 650
+    }
+
+    .log-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 5px 8px;
+        border: 1px solid transparent;
+        font-size: .7rem;
+        font-weight: 950;
+        white-space: nowrap
+    }
+
+    .st-programado {
+        background: #eef5fb;
+        color: #174d7a;
+        border-color: #bfd8eb
+    }
+
+    .st-preparando {
+        background: #fff7ed;
+        color: #9a4f06;
+        border-color: #fed7aa
+    }
+
+    .st-preparado {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border-color: #bfdbfe
+    }
+
+    .st-cargado {
+        background: #f3f0ff;
+        color: #5b3fd1;
+        border-color: #d9d0ff
+    }
+
+    .st-ruta {
+        background: #ecfeff;
+        color: #0e7490;
+        border-color: #a5f3fc
+    }
+
+    .st-entregado {
+        background: #ecfdf3;
+        color: #067647;
+        border-color: #abefc6
+    }
+
+    .st-cancelado {
+        background: #f2f4f7;
+        color: #667085;
+        border-color: #d0d5dd
+    }
+
+    .st-default {
+        background: #f2f4f7;
+        color: #475467;
+        border-color: #d0d5dd
+    }
+
+    .log-pt {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: .72rem;
+        font-weight: 950
+    }
+
+        .log-pt.ok {
+            color: #067647
+        }
+
+        .log-pt.partial {
+            color: #b54708
+        }
+
+        .log-pt.none {
+            color: #b42318
+        }
+
+    .log-deadline {
+        display: flex;
+        flex-direction: column;
+        gap: 2px
+    }
+
+        .log-deadline.late .log-main {
+            color: #b42318
+        }
+
+        .log-deadline.today .log-main {
+            color: #b54708
+        }
+
+    .log-incidence {
+        margin-top: 4px;
+        color: #b42318;
+        font-size: .7rem;
+        font-weight: 900
+    }
+
+    .log-empty {
+        padding: 32px 20px;
+        text-align: center;
+        color: #667085;
+        font-weight: 750
+    }
+
+        .log-empty i {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1.8rem;
+            color: #98a2b3
+        }
+
+    .log-hidden {
+        display: none !important
+    }
+
+    .log-inline-alert {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 9px;
+        padding: 5px 8px;
+        background: #fff3f1;
+        color: #b42318;
+        font-size: .7rem;
+        font-weight: 950
+    }
+
+    .log-mini-action {
+        display: flex;
+        justify-content: flex-end
+    }
+
+    @@media(max-width:1150px) {
+        .log-toolbar {
+            grid-template-columns: 1fr 1fr 1fr
+        }
+    }
+
+    @@media(max-width:760px) {
+        .log-toolbar {
+            grid-template-columns: 1fr
+        }
+
+        .log-hero {
+            padding: 18px
+        }
+
+            .log-hero h1 {
+                font-size: 1.5rem
+            }
+
+        .log-operational-nav {
+            overflow: auto;
+            flex-wrap: nowrap
+        }
+
+        .log-nav-btn {
+            flex: 0 0 auto
+        }
+    }
+</style>
+
+<div class="log-page">
+    <section class="log-hero">
+        <div class="log-hero-row">
+            <div>
+                <div class="log-kicker">Centro de operación logística</div>
+                <h1>Programación, preparación y seguimiento de embarques</h1>
+                <p>Administra releases pendientes, reserva producto terminado, prepara cargas y controla el avance hasta la entrega al cliente.</p>
+            </div>
+            <div class="log-actions">
+                <a class="log-btn log-btn-hero" asp-action="Calendario"><i class="fa-solid fa-calendar-days"></i>Calendario</a>
+                <a class="log-btn log-btn-hero" asp-action="Catalogos"><i class="fa-solid fa-route"></i>Rutas y unidades</a>
+                <a class="log-btn log-btn-hero" asp-controller="AlmacenPT" asp-action="Cajas"><i class="fa-solid fa-warehouse"></i>Almacén PT</a>
+            </div>
+        </div>
+    </section>
+
+    @if (TempData["LogisticaOk"] != null)
     {
-        <div class="log-empty-state">
-            <i class="fa-solid fa-circle-check"></i>
-            <strong>No hay salidas pendientes con estos filtros.</strong>
+        <div class="alert alert-success rounded-4 fw-bold mb-0">
+            <i class="fa-solid fa-circle-check me-2"></i>@TempData["LogisticaOk"]
         </div>
     }
-</section>
 
-<section class="log-board log-board-secondary">
-    <div class="log-section-head">
-        <div><span class="log-eyebrow">EN OPERACIÓN</span><h2>Embarques programados</h2></div>
-    </div>
-    <div class="log-active-list">
-    @foreach (var e in Model.Embarques)
+    @if (TempData["LogisticaError"] != null)
     {
-        <a class="log-active-row" asp-action="Detalle" asp-route-id="@e.EmbarqueID">
-            <span class="log-status-dot"></span>
-            <div><strong>@e.Folio</strong><small>@e.Cliente · @e.Destino</small></div>
-            <div><span class="log-label">Carga</span><b>@Fecha(e.FechaCargaProgramada) @Hora(e.HoraCargaProgramada)</b></div>
-            <div><span class="log-label">Lotes</span><b>@e.TotalCajas</b></div>
-            <div><span class="log-label">Piezas</span><b>@e.TotalPiezasSolicitadas.ToString("N0")</b></div>
-            <span class="log-state-chip">@e.Estatus</span>
-            <i class="fa-solid fa-chevron-right"></i>
+        <div class="alert alert-danger rounded-4 fw-bold mb-0">
+            <i class="fa-solid fa-triangle-exclamation me-2"></i>@TempData["LogisticaError"]
+        </div>
+    }
+
+    @if (ViewBag.ErrorConfiguracion != null)
+    {
+        <div class="alert alert-danger rounded-4 fw-bold mb-0">
+            <i class="fa-solid fa-database me-2"></i>@ViewBag.ErrorConfiguracion
+        </div>
+    }
+
+    <form method="get" class="log-toolbar">
+        <div class="log-field">
+            <label>Buscar</label>
+            <div class="log-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="log-input" name="q" value="@Model.Busqueda" placeholder="Cliente, destino, parte, OF, Release o embarque" />
+            </div>
+        </div>
+
+        <div class="log-field">
+            <label>Desde</label>
+            <input class="log-input" type="date" name="fechaDesde" value="@Model.FechaDesde?.ToString("yyyy-MM-dd")" />
+        </div>
+
+        <div class="log-field">
+            <label>Hasta</label>
+            <input class="log-input" type="date" name="fechaHasta" value="@Model.FechaHasta?.ToString("yyyy-MM-dd")" />
+        </div>
+
+        <div class="log-field">
+            <label>Estatus</label>
+            <select class="log-select" name="estatus">
+                <option value="">Todos</option>
+                @foreach (var estado in new[] { "Programado", "Preparando", "Preparado", "Cargado", "En ruta", "Entregado", "Cancelado" })
+                {
+                    <option value="@estado" selected="@(string.Equals(Model.Estatus, estado, StringComparison.OrdinalIgnoreCase))">@estado</option>
+                }
+            </select>
+        </div>
+
+        <button class="log-btn log-btn-primary" type="submit">
+            <i class="fa-solid fa-filter"></i>Aplicar
+        </button>
+
+        <a class="log-btn" asp-action="Index">
+            <i class="fa-solid fa-rotate-left"></i>Limpiar
         </a>
-    }
-    @if (!Model.Embarques.Any())
-    {
-        <div class="log-empty-inline">Todavía no hay embarques programados.</div>
-    }
+    </form>
+
+    <div class="log-operational-nav">
+        <button type="button" class="log-nav-btn active" data-panel="pendientes">
+            <i class="fa-solid fa-clock"></i>
+            Por programar
+            <span class="log-nav-count">@porProgramar</span>
+        </button>
+
+        <button type="button" class="log-nav-btn" data-panel="preparacion">
+            <i class="fa-solid fa-boxes-packing"></i>
+            Preparación
+            <span class="log-nav-count">@enPreparacion</span>
+        </button>
+
+        <button type="button" class="log-nav-btn" data-panel="listos">
+            <i class="fa-solid fa-truck-ramp-box"></i>
+            Listos / cargados
+            <span class="log-nav-count">@listos</span>
+        </button>
+
+        <button type="button" class="log-nav-btn" data-panel="ruta">
+            <i class="fa-solid fa-truck-fast"></i>
+            En ruta
+            <span class="log-nav-count">@enRuta</span>
+        </button>
+
+        <button type="button" class="log-nav-btn" data-panel="entregados">
+            <i class="fa-solid fa-circle-check"></i>
+            Entregados
+            <span class="log-nav-count">@entregados</span>
+        </button>
+
+        <button type="button" class="log-nav-btn" data-panel="todos">
+            <i class="fa-solid fa-list"></i>
+            Todos
+            <span class="log-nav-count">@embarques.Count</span>
+        </button>
     </div>
-</section>
+
+    <div class="log-strip">
+        <span><strong>@Model.PiezasPendientes.ToString("N0")</strong> piezas pendientes por programar</span>
+        <span><strong>@Model.PiezasPTListas.ToString("N0")</strong> piezas PT disponibles para demandas abiertas</span>
+        <span><strong>@Model.CargasHoy</strong> carga(s) programada(s) hoy</span>
+        @if (Model.EntregasAtrasadas > 0)
+        {
+            <span class="danger"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>@Model.EntregasAtrasadas</strong> entrega(s) atrasada(s)</span>
+        }
+    </div>
+
+    <section class="log-panel" id="panelPendientes">
+        <div class="log-panel-head">
+            <div class="log-panel-title">
+                <i class="fa-solid fa-clipboard-list"></i>
+                <div>
+                    <h2>Releases pendientes de programación</h2>
+                    <small>Demanda todavía no cubierta por un embarque logístico.</small>
+                </div>
+            </div>
+            <div class="log-panel-actions">
+                <a class="log-btn" asp-controller="PlaneacionRelease" asp-action="Index">
+                    <i class="fa-solid fa-file-lines"></i>Ver releases
+                </a>
+            </div>
+        </div>
+
+        @if (demandasPendientes.Any())
+        {
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Carga sugerida</th>
+                            <th>Entrega cliente</th>
+                            <th>Cliente</th>
+                            <th>Release</th>
+                            <th>Parte / OF</th>
+                            <th>Demanda</th>
+                            <th>Disponibilidad PT</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in demandasPendientes)
+                        {
+                            var fechaCarga = (d.FechaCarga ?? d.FechaEntrega.AddDays(-1)).Date;
+                            var hoy = DateTime.Today;
+                            var claseFecha = d.FechaEntrega.Date < hoy ? "late" : d.FechaEntrega.Date == hoy ? "today" : "";
+                            var ptCompleto = d.PiezasPTDisponibles >= d.PendienteProgramar && d.PendienteProgramar > 0;
+                            var ptParcial = d.PiezasPTDisponibles > 0 && !ptCompleto;
+                            var clasePt = ptCompleto ? "ok" : ptParcial ? "partial" : "none";
+
+                            <tr>
+                                <td>
+                                    <div class="log-deadline">
+                                        <span class="log-main">@fechaCarga.ToString("dd/MM/yyyy")</span>
+                                        <span class="log-sub">Fecha de carga</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="log-deadline @claseFecha">
+                                        <span class="log-main">@d.FechaEntrega.ToString("dd/MM/yyyy")</span>
+                                        <span class="log-sub">Entrega requerida</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="log-main">@d.Cliente</span>
+                                </td>
+                                <td>
+                                    <span class="log-main">@d.FolioRelease</span>
+                                    <span class="log-sub">Secuencia @(d.SecuenciaEntrega?.ToString() ?? "—")</span>
+                                </td>
+                                <td>
+                                    <span class="log-main">@d.NumeroParte</span>
+                                    <span class="log-sub">OF @(string.IsNullOrWhiteSpace(d.NumeroOF) ? "Sin OF" : d.NumeroOF)</span>
+                                </td>
+                                <td>
+                                    <span class="log-main">@d.PendienteProgramar.ToString("N0") PZA</span>
+                                    <span class="log-sub">Requeridas @d.CantidadRequerida.ToString("N0")</span>
+                                </td>
+                                <td>
+                                    <span class="log-pt @clasePt">
+                                        <i class="fa-solid @(ptCompleto ? "fa-circle-check" : ptParcial ? "fa-circle-half-stroke" : "fa-circle-xmark")"></i>
+                                        @d.PiezasPTDisponibles.ToString("N0") PZA
+                                    </span>
+                                    <span class="log-sub">@d.CajasPTDisponibles caja(s) disponible(s)</span>
+                                </td>
+                                <td>
+                                    <div class="log-mini-action">
+                                        <a class="log-btn log-btn-primary" asp-action="Crear" asp-route-releaseDetalleId="@d.ReleaseDetalleID">
+                                            <i class="fa-solid fa-calendar-plus"></i>Programar
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="log-empty">
+                <i class="fa-solid fa-circle-check text-success"></i>
+                No hay releases pendientes con los filtros actuales.
+            </div>
+        }
+    </section>
+
+    <section class="log-panel log-hidden" id="panelPreparacion">
+        <div class="log-panel-head">
+            <div class="log-panel-title">
+                <i class="fa-solid fa-boxes-packing"></i>
+                <div>
+                    <h2>Embarques en preparación</h2>
+                    <small>Programados o con cajas PT actualmente en reserva y preparación.</small>
+                </div>
+            </div>
+        </div>
+
+        @{
+            var listaPreparacion = embarques.Where(x => x.Estatus == "Programado" || x.Estatus == "Preparando").ToList();
+        }
+
+        @if (listaPreparacion.Any())
+        {
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Carga</th>
+                            <th>Entrega</th>
+                            <th>Cliente / destino</th>
+                            <th>Partidas</th>
+                            <th>Cajas</th>
+                            <th>Piezas</th>
+                            <th>Estatus</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in listaPreparacion)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="log-main">@e.Folio</span>
+                                    @if (e.TieneIncidencia)
+                                    {
+                                        <span class="log-incidence"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
+                                    }
+                                </td>
+                                <td><span class="log-main">@Fecha(e.FechaCargaProgramada)</span><span class="log-sub">@Hora(e.HoraCargaProgramada)</span></td>
+                                <td><span class="log-main">@Fecha(e.FechaEntregaProgramada)</span><span class="log-sub">@Hora(e.HoraEntregaProgramada)</span></td>
+                                <td><span class="log-main">@e.Cliente</span><span class="log-sub">@e.Destino</span></td>
+                                <td>@e.TotalPartidas</td>
+                                <td>@e.TotalCajas</td>
+                                <td><span class="log-main">@e.TotalPiezasSolicitadas.ToString("N0")</span><span class="log-sub">Despachadas @e.TotalPiezasDespachadas.ToString("N0")</span></td>
+                                <td><span class="log-state @EstadoClase(e.Estatus)"><i class="fa-solid @EstadoIcono(e.Estatus)"></i>@e.Estatus</span></td>
+                                <td><a class="log-btn" asp-action="Detalle" asp-route-id="@e.EmbarqueID"><i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="log-empty"><i class="fa-solid fa-box-open"></i>No hay embarques en preparación.</div>
+        }
+    </section>
+
+    <section class="log-panel log-hidden" id="panelListos">
+        <div class="log-panel-head">
+            <div class="log-panel-title">
+                <i class="fa-solid fa-truck-ramp-box"></i>
+                <div>
+                    <h2>Listos para salida / cargados</h2>
+                    <small>Embarques preparados o cuya carga física ya fue confirmada.</small>
+                </div>
+            </div>
+        </div>
+
+        @{
+            var listaListos = embarques.Where(x => x.Estatus == "Preparado" || x.Estatus == "Cargado").ToList();
+        }
+
+        @if (listaListos.Any())
+        {
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Carga</th>
+                            <th>Entrega</th>
+                            <th>Cliente / destino</th>
+                            <th>Cajas</th>
+                            <th>Piezas</th>
+                            <th>Estatus</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in listaListos)
+                        {
+                            <tr>
+                                <td><span class="log-main">@e.Folio</span></td>
+                                <td><span class="log-main">@Fecha(e.FechaCargaProgramada)</span><span class="log-sub">@Hora(e.HoraCargaProgramada)</span></td>
+                                <td><span class="log-main">@Fecha(e.FechaEntregaProgramada)</span><span class="log-sub">@Hora(e.HoraEntregaProgramada)</span></td>
+                                <td><span class="log-main">@e.Cliente</span><span class="log-sub">@e.Destino</span></td>
+                                <td>@e.TotalCajas</td>
+                                <td>@e.TotalPiezasSolicitadas.ToString("N0")</td>
+                                <td><span class="log-state @EstadoClase(e.Estatus)"><i class="fa-solid @EstadoIcono(e.Estatus)"></i>@e.Estatus</span></td>
+                                <td><a class="log-btn log-btn-primary" asp-action="Detalle" asp-route-id="@e.EmbarqueID"><i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="log-empty"><i class="fa-solid fa-truck-ramp-box"></i>No hay embarques listos o cargados.</div>
+        }
+    </section>
+
+    <section class="log-panel log-hidden" id="panelRuta">
+        <div class="log-panel-head">
+            <div class="log-panel-title">
+                <i class="fa-solid fa-truck-fast"></i>
+                <div>
+                    <h2>Embarques en ruta</h2>
+                    <small>Salidas despachadas pendientes de confirmación de entrega.</small>
+                </div>
+            </div>
+        </div>
+
+        @{
+            var listaRuta = embarques.Where(x => x.Estatus == "En ruta").ToList();
+        }
+
+        @if (listaRuta.Any())
+        {
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Salida / carga</th>
+                            <th>Entrega programada</th>
+                            <th>Cliente</th>
+                            <th>Destino</th>
+                            <th>Cajas</th>
+                            <th>Piezas despachadas</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in listaRuta)
+                        {
+                            var atrasado = e.FechaEntregaProgramada.HasValue && e.FechaEntregaProgramada.Value.Date < DateTime.Today;
+                            <tr>
+                                <td><span class="log-main">@e.Folio</span>@if(e.TieneIncidencia){
+                                <span class="log-incidence"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
+                            }
+    </td>
+                            <td><span class="log-main">@Fecha(e.FechaCargaProgramada)</span><span class="log-sub">@Hora(e.HoraCargaProgramada)</span></td>
+                            <td>
+                                <div class="log-deadline @(atrasado ? "late" : "")">
+                                    <span class="log-main">@Fecha(e.FechaEntregaProgramada)</span>
+                                    <span class="log-sub">@Hora(e.HoraEntregaProgramada)</span>
+                                </div>
+                            </td>
+                            <td><span class="log-main">@e.Cliente</span></td>
+                            <td>@e.Destino</td>
+                            <td>@e.TotalCajas</td>
+                            <td>@e.TotalPiezasDespachadas.ToString("N0")</td>
+                            <td><a class="log-btn log-btn-primary" asp-action="Detalle" asp-route-id="@e.EmbarqueID"><i class="fa-solid fa-location-arrow"></i>Seguimiento</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+                }
+                else
+        {
+            <div class="log-empty"><i class="fa-solid fa-route"></i>No hay embarques actualmente en ruta.</div>
+        }
+    </section>
+
+    <section class="log-panel log-hidden" id="panelEntregados">
+        <div class="log-panel-head">
+            <div class="log-panel-title">
+                <i class="fa-solid fa-circle-check"></i>
+                <div>
+                    <h2>Entregas confirmadas</h2>
+                    <small>Historial de embarques completados con recepción del cliente.</small>
+                </div>
+            </div>
+        </div>
+
+        @{
+            var listaEntregados = embarques.Where(x => x.Estatus == "Entregado").ToList();
+        }
+
+        @if (listaEntregados.Any())
+        {
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Cliente / destino</th>
+                            <th>Carga programada</th>
+                            <th>Entrega programada</th>
+                            <th>Cajas</th>
+                            <th>Piezas</th>
+                            <th>Estatus</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in listaEntregados)
+                        {
+                            <tr>
+                                <td><span class="log-main">@e.Folio</span></td>
+                                <td><span class="log-main">@e.Cliente</span><span class="log-sub">@e.Destino</span></td>
+                                <td>@Fecha(e.FechaCargaProgramada)</td>
+                                <td>@Fecha(e.FechaEntregaProgramada)</td>
+                                <td>@e.TotalCajas</td>
+                                <td>@e.TotalPiezasDespachadas.ToString("N0")</td>
+                                <td><span class="log-state st-entregado"><i class="fa-solid fa-circle-check"></i>Entregado</span></td>
+                                <td><a class="log-btn" asp-action="Detalle" asp-route-id="@e.EmbarqueID"><i class="fa-solid fa-eye"></i>Ver</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="log-empty"><i class="fa-solid fa-box-archive"></i>No hay entregas confirmadas con los filtros actuales.</div>
+        }
+    </section>
+
+    <section class="log-panel log-hidden" id="panelTodos">
+        <div class="log-panel-head">
+            <div class="log-panel-title">
+                <i class="fa-solid fa-list"></i>
+                <div>
+                    <h2>Todos los embarques</h2>
+                    <small>Vista completa del tablero logístico actual.</small>
+                </div>
+            </div>
+        </div>
+
+        @if (embarques.Any())
+        {
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Carga</th>
+                            <th>Entrega</th>
+                            <th>Cliente / destino</th>
+                            <th>Partidas</th>
+                            <th>Cajas</th>
+                            <th>Piezas</th>
+                            <th>Estatus</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in embarques)
+                        {
+                            <tr>
+                                <td><span class="log-main">@e.Folio</span>@if(e.TieneIncidencia){
+                                <span class="log-incidence"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
+                            }
+    </td>
+                            <td><span class="log-main">@Fecha(e.FechaCargaProgramada)</span><span class="log-sub">@Hora(e.HoraCargaProgramada)</span></td>
+                            <td><span class="log-main">@Fecha(e.FechaEntregaProgramada)</span><span class="log-sub">@Hora(e.HoraEntregaProgramada)</span></td>
+                            <td><span class="log-main">@e.Cliente</span><span class="log-sub">@e.Destino</span></td>
+                            <td>@e.TotalPartidas</td>
+                            <td>@e.TotalCajas</td>
+                            <td><span class="log-main">@e.TotalPiezasSolicitadas.ToString("N0")</span><span class="log-sub">Despachadas @e.TotalPiezasDespachadas.ToString("N0")</span></td>
+                            <td><span class="log-state @EstadoClase(e.Estatus)"><i class="fa-solid @EstadoIcono(e.Estatus)"></i>@e.Estatus</span></td>
+                            <td><a class="log-btn" asp-action="Detalle" asp-route-id="@e.EmbarqueID"><i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+                }
+                else
+        {
+            <div class="log-empty"><i class="fa-solid fa-inbox"></i>No hay embarques con los filtros actuales.</div>
+        }
+    </section>
+</div>
+
+<script>
+    (() => {
+        const botones=document.querySelectorAll('[data-panel]');
+        const paneles={
+            pendientes:document.getElementById('panelPendientes'),
+            preparacion:document.getElementById('panelPreparacion'),
+            listos:document.getElementById('panelListos'),
+            ruta:document.getElementById('panelRuta'),
+            entregados:document.getElementById('panelEntregados'),
+            todos:document.getElementById('panelTodos')
+        };
+
+        function mostrarPanel(nombre){
+            Object.entries(paneles).forEach(([clave,panel])=>{
+                panel?.classList.toggle('log-hidden',clave!==nombre);
+            });
+
+            botones.forEach(btn=>{
+                btn.classList.toggle('active',btn.dataset.panel===nombre);
+            });
+
+            try{
+                sessionStorage.setItem('logistica.index.panel',nombre);
+            }catch{}
+        }
+
+        botones.forEach(btn=>{
+            btn.addEventListener('click',()=>mostrarPanel(btn.dataset.panel||'pendientes'));
+        });
+
+        let inicial='pendientes';
+
+        try{
+            const guardado=sessionStorage.getItem('logistica.index.panel');
+            if(guardado&&paneles[guardado])inicial=guardado;
+        }catch{}
+
+        mostrarPanel(inicial);
+    })();
+</script>
