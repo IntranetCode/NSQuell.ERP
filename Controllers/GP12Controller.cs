@@ -25,9 +25,6 @@ namespace ERP.NSQuell.Controllers
             ?? throw new InvalidOperationException(
                 "No se encontró la cadena de conexión DefaultConnection.");
 
-        // =========================================================
-        // BANDEJA PRINCIPAL
-        // =========================================================
         [HttpGet]
         public async Task<IActionResult> Index(
             string? busqueda,
