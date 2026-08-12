@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models.ViewModels.Almacen;
+﻿using ERP.NSQuell.Models.ViewModels.Almacen;
 using ERP.NSQuell.Servicios.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -730,7 +730,7 @@ ORDER BY Codigo;";
                 vm.MaterialesFiltro.Add(new AlmacenSelectVm
                 {
                     Id = Entero(reader, "MaterialID"),
-                    Texto = $"{Texto(reader, "Codigo")} · {Texto(reader, "Nombre")}",
+                    Texto = $"{Texto(reader, "Codigo")} Â· {Texto(reader, "Nombre")}",
                     Extra = Texto(reader, "Codigo")
                 });
             }
@@ -809,7 +809,7 @@ ORDER BY Valor;";
         await using var connection = await AbrirConexionAsync(cancellationToken);
         if (!await ExisteObjetoAsync(connection, "dbo.ERP_Materiales", "U", cancellationToken))
         {
-            Mensaje("warning", "Primero ejecuta el script de estructura de Almacén.");
+            Mensaje("warning", "Primero ejecuta el script de estructura de AlmacÃ©n.");
             return View(rows);
         }
 
@@ -880,7 +880,7 @@ FROM dbo.ERP_Materiales WHERE MaterialID = @Id;";
         model.Nombre = model.Nombre?.Trim() ?? string.Empty;
         model.UnidadDefault = model.UnidadDefault?.Trim().ToUpperInvariant() ?? string.Empty;
         if (model.StockAviso < model.StockMinimo)
-            ModelState.AddModelError(nameof(model.StockAviso), "El nivel de aviso debe ser igual o mayor al stock mínimo.");
+            ModelState.AddModelError(nameof(model.StockAviso), "El nivel de aviso debe ser igual o mayor al stock mÃ­nimo.");
 
         if (!ModelState.IsValid) return View(model);
 
@@ -897,7 +897,7 @@ SELECT
             duplicate.Parameters.Add("@Id", SqlDbType.Int).Value = model.MaterialID.HasValue ? model.MaterialID.Value : DBNull.Value;
             if (Convert.ToInt32(await duplicate.ExecuteScalarAsync(cancellationToken)) > 0)
             {
-                ModelState.AddModelError(nameof(model.Codigo), "El código ya existe en MP o en Embalajes.");
+                ModelState.AddModelError(nameof(model.Codigo), "El cÃ³digo ya existe en MP o en Embalajes.");
                 return View(model);
             }
         }
@@ -1003,9 +1003,9 @@ ORDER BY CASE WHEN StockConfigurado = 0 THEN 0 ELSE 1 END, Nombre;";
         {
             var item = model.Items[i];
             if (item.StockMinimo < 0)
-                ModelState.AddModelError($"Items[{i}].StockMinimo", "El stock mínimo no puede ser negativo.");
+                ModelState.AddModelError($"Items[{i}].StockMinimo", "El stock mÃ­nimo no puede ser negativo.");
             if (item.StockAviso < item.StockMinimo)
-                ModelState.AddModelError($"Items[{i}].StockAviso", "El stock de aviso debe ser igual o mayor al mínimo.");
+                ModelState.AddModelError($"Items[{i}].StockAviso", "El stock de aviso debe ser igual o mayor al mÃ­nimo.");
         }
 
         if (!ModelState.IsValid)
@@ -1153,7 +1153,36 @@ WHERE MaterialID=@Id AND Activo=1;";
         if (sesion != null) return sesion;
 
         model.TipoMP = NormalizarTipoMP(model.TipoMP);
-        model.Lote = "S/L";
+
+        // SCRAP_V15_MP_LOTE
+        var loteCapturado = model.Lote?.Trim();
+        var codigoScrapEscaneado = string.Empty;
+
+        if (!model.EsEntregaOF
+            && model.TipoMovimiento == "Entrada"
+            && model.TipoMP == "M"
+            && !string.IsNullOrWhiteSpace(loteCapturado)
+            && !loteCapturado.Equals("S/L", StringComparison.OrdinalIgnoreCase))
+        {
+            if (AlmacenPTCodigoBarrasService.TryParse(
+                    loteCapturado,
+                    out var codigoScrap,
+                    out _)
+                && codigoScrap != null)
+            {
+                codigoScrapEscaneado = loteCapturado;
+                model.Lote = codigoScrap.Lote.Trim();
+            }
+            else
+            {
+                model.Lote = loteCapturado;
+            }
+        }
+        else
+        {
+            model.Lote = "S/L";
+        }
+
         model.Unidad = "KG";
         model.NumeroOF = model.NumeroOF?.Trim();
         model.FolioCompra = model.FolioCompra?.Trim();
@@ -1617,7 +1646,7 @@ VALUES
 (
     SYSDATETIME(), @MaterialID, @MaterialSolicitadoID,
     @Tipo, @TipoMP,
-    N'S/L', @Cantidad, N'KG', @UbicacionID, @NumeroOF,
+    @Lote, @Cantidad, N'KG', @UbicacionID, @NumeroOF,
     @FolioCompra,
     @UsuarioID, @Responsable, @Observaciones,
     SYSUTCDATETIME(), @Responsable, 1,
@@ -1644,6 +1673,13 @@ VALUES
                     observacionesGuardar =
                         $"[COMPRA MP VIRGEN] Folio {model.FolioCompra}. {observacionesGuardar}".Trim();
                 }
+                else if (model.TipoMovimiento == "Entrada"
+                         && movimiento.TipoMP == "M"
+                         && !string.IsNullOrWhiteSpace(codigoScrapEscaneado))
+                {
+                    observacionesGuardar =
+                        $"[CODIGO SCRAP] {codigoScrapEscaneado}. Lote {model.Lote}. {observacionesGuardar}".Trim();
+                }
 
                 if (observacionesGuardar.Length > 800)
                     observacionesGuardar = observacionesGuardar[..800];
@@ -1656,6 +1692,8 @@ VALUES
                     model.EsEntregaOF ? materialSolicitadoID : DBNull.Value;
                 insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value = model.TipoMovimiento;
                 insert.Parameters.Add("@TipoMP", SqlDbType.NVarChar, 20).Value = movimiento.TipoMP;
+                insert.Parameters.Add("@Lote", SqlDbType.NVarChar, 120).Value =
+                    string.IsNullOrWhiteSpace(model.Lote) ? "S/L" : model.Lote;
 
                 var cantidadParametro = insert.Parameters.Add("@Cantidad", SqlDbType.Decimal);
                 cantidadParametro.Precision = 18;
@@ -1715,6 +1753,43 @@ END;";
             }
 
             await transaction.CommitAsync(cancellationToken);
+
+            // SCRAP_V15_MP_LOTE: una Entrada Molido con lote puede cerrar
+            // automaticamente el registro Scrap enlazado, sin borrar historial.
+            if (!model.EsEntregaOF
+                && model.TipoMovimiento == "Entrada"
+                && model.TipoMP == "M"
+                && !string.IsNullOrWhiteSpace(model.Lote)
+                && !model.Lote.Equals("S/L", StringComparison.OrdinalIgnoreCase)
+                && await ExisteObjetoAsync(
+                    connection,
+                    "dbo.usp_AlmacenScrap_SincronizarOrigenes",
+                    "P",
+                    cancellationToken))
+            {
+                await using var syncScrap =
+                    new SqlCommand(
+                        "dbo.usp_AlmacenScrap_SincronizarOrigenes",
+                        connection)
+                    {
+                        CommandType = CommandType.StoredProcedure
+                    };
+
+                syncScrap.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                    UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
+                syncScrap.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 180).Value =
+                    UsuarioNombre;
+
+                try
+                {
+                    await syncScrap.ExecuteNonQueryAsync(cancellationToken);
+                }
+                catch (SqlException)
+                {
+                    // El movimiento MP ya quedo confirmado. El modulo Scrap
+                    // volvera a intentar la conciliacion al abrir Index/Recepciones.
+                }
+            }
         }
         catch (SqlException ex) when (ex.Number is 2601 or 2627)
         {
@@ -1773,7 +1848,7 @@ ORDER BY Codigo;";
                     new AlmacenSelectVm
                     {
                         Id = Entero(reader, "MaterialID"),
-                        Texto = $"{Texto(reader, "Codigo")} · {Texto(reader, "Nombre")}",
+                        Texto = $"{Texto(reader, "Codigo")} Â· {Texto(reader, "Nombre")}",
                         Extra = "KG"
                     });
             }
@@ -1873,7 +1948,8 @@ GROUP BY inventario.MaterialID;";
                 .ToList();
 
         vm.Unidad = "KG";
-        vm.Lote = "S/L";
+        if (string.IsNullOrWhiteSpace(vm.Lote))
+            vm.Lote = "S/L";
         vm.TipoMP = NormalizarTipoMP(vm.TipoMP);
     }
 
@@ -1931,7 +2007,7 @@ ORDER BY Almacen, Rack, Nivel, Posicion;";
             rows.Add(new AlmacenSelectVm
             {
                 Id = Entero(reader, "UbicacionID"),
-                Texto = string.Join(" · ", new[] { Texto(reader, "Almacen"), Texto(reader, "Rack"), Texto(reader, "Nivel"), Texto(reader, "Posicion") }.Where(x => !string.IsNullOrWhiteSpace(x)))
+                Texto = string.Join(" Â· ", new[] { Texto(reader, "Almacen"), Texto(reader, "Rack"), Texto(reader, "Nivel"), Texto(reader, "Posicion") }.Where(x => !string.IsNullOrWhiteSpace(x)))
             });
         }
         return rows;

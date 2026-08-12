@@ -54,6 +54,9 @@ public sealed class AlmacenScrapController : AlmacenBaseController
             return View(vm);
         }
 
+        // SCRAP_V15_SYNC_ORIGENES
+        await SincronizarOrigenesScrapAsync(connection, cancellationToken);
+
         const string resumenSql = @"
 SELECT
     COUNT_BIG(*) AS TotalRegistros,
@@ -164,6 +167,9 @@ ORDER BY
             return View(vm);
         }
 
+        // SCRAP_V15_SYNC_RECEPCIONES
+        await SincronizarOrigenesScrapAsync(connection, cancellationToken);
+
         const string resumenSql = @"
 SELECT
     COUNT(*) AS TotalPendientes,
@@ -271,7 +277,8 @@ ORDER BY ScrapRegistroID DESC;";
             "RECEPCION_ESCANER",
             "ENVIADO_A_ALMACEN",
             "RECEPCION_CONFIRMADA",
-            "MP_MOLIDO_GENERADO"
+            "MP_MOLIDO_GENERADO",
+            "MP_MOLIDO_DETECTADO"
         };
 
         var vm = new AlmacenScrapHistorialIndexVm
@@ -470,7 +477,14 @@ ORDER BY h.ScrapHistorialID DESC;";
             var catalogo = await ResolverCatalogoAsync(
                 connection,
                 preview.NumeroParte,
+                preview.Designacion,
                 cancellationToken);
+
+            if (catalogo.ParteID.HasValue &&
+                !string.IsNullOrWhiteSpace(catalogo.NumeroParteCanonico))
+            {
+                preview.NumeroParte = catalogo.NumeroParteCanonico;
+            }
 
             preview.ParteID = catalogo.ParteID;
             preview.ParteDescripcion = catalogo.ParteDescripcion;
@@ -811,6 +825,45 @@ ORDER BY ScrapHistorialID DESC;";
         return View(vm);
     }
 
+    // SCRAP_V15_SYNC_ORIGENES
+    private async Task SincronizarOrigenesScrapAsync(
+        SqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (!await ExisteObjetoAsync(
+                connection,
+                "dbo.usp_AlmacenScrap_SincronizarOrigenes",
+                "P",
+                cancellationToken))
+        {
+            return;
+        }
+
+        try
+        {
+            await using var command =
+                new SqlCommand(
+                    "dbo.usp_AlmacenScrap_SincronizarOrigenes",
+                    connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+            command.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
+            command.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 180).Value =
+                UsuarioNombre;
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (SqlException ex)
+        {
+            Mensaje(
+                "warning",
+                "Scrap se abrio, pero no fue posible sincronizar GP12/Calidad: " +
+                ex.Message);
+        }
+    }
     private static async Task<bool> ModuloConfiguradoAsync(
         SqlConnection connection,
         CancellationToken cancellationToken)
@@ -930,6 +983,7 @@ WHERE ScrapRegistroID = @ScrapRegistroID
         var catalogo = await ResolverCatalogoAsync(
             connection,
             registro.NumeroParte,
+            registro.Designacion,
             cancellationToken);
 
         if (registro.ParteID.HasValue)
@@ -1031,63 +1085,39 @@ ORDER BY ScrapRegistroID DESC;";
     private static async Task<CatalogoResolucion> ResolverCatalogoAsync(
         SqlConnection connection,
         string numeroParte,
+        string? designacionCodigo,
         CancellationToken cancellationToken)
     {
         var result = new CatalogoResolucion();
+        var clave = NormalizarClaveParte(numeroParte);
+
+        if (string.IsNullOrWhiteSpace(clave))
+        {
+            result.ParteError = "El codigo no contiene una clave de parte valida.";
+            return result;
+        }
 
         const string sql = @"
-DECLARE @Numero NVARCHAR(120) = LTRIM(RTRIM(@NumeroParte));
-DECLARE @Normalizado NVARCHAR(120) =
-    UPPER
-    (
-        REPLACE
-        (
-            REPLACE
-            (
-                REPLACE
-                (
-                    REPLACE(@Numero, N'.', N''),
-                    N'-', N''
-                ),
-                N'_', N''
-            ),
-            N' ', N''
-        )
-    );
-
-SELECT TOP (10)
+SELECT TOP (50)
     ParteID,
     NumeroParte,
-    Descripcion
+    ISNULL(ReferenciaSAP, N'') AS ReferenciaSAP,
+    Descripcion,
+    ISNULL(Designacion, N'') AS Designacion
 FROM dbo.ERP_Partes
 WHERE Activo = 1
   AND
   (
-      UPPER(LTRIM(RTRIM(NumeroParte))) = UPPER(@Numero)
-      OR
-      UPPER
-      (
-          REPLACE
-          (
-              REPLACE
-              (
-                  REPLACE
-                  (
-                      REPLACE(LTRIM(RTRIM(NumeroParte)), N'.', N''),
-                      N'-', N''
-                  ),
-                  N'_', N''
-              ),
-              N' ', N''
-          )
-      ) = @Normalizado
+      UPPER(LTRIM(RTRIM(NumeroParte))) = UPPER(@NumeroParte)
+      OR UPPER(LTRIM(RTRIM(ISNULL(ReferenciaSAP, N'')))) = UPPER(@NumeroParte)
+      OR UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+            LTRIM(RTRIM(ISNULL(NumeroParte, N''))),
+            N'.', N''), N'-', N''), N'_', N''), N' ', N''), NCHAR(39), N''), N'/', N''), N'\', N'')) = @Clave
+      OR UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+            LTRIM(RTRIM(ISNULL(ReferenciaSAP, N''))),
+            N'.', N''), N'-', N''), N'_', N''), N' ', N''), NCHAR(39), N''), N'/', N''), N'\', N'')) = @Clave
   )
-ORDER BY
-    CASE
-        WHEN UPPER(LTRIM(RTRIM(NumeroParte))) = UPPER(@Numero) THEN 0
-        ELSE 1
-    END,
-    ParteID;";
+ORDER BY ParteID;";
 
         var partes = new List<ParteCandidata>();
 
@@ -1095,6 +1125,7 @@ ORDER BY
         {
             command.Parameters.Add("@NumeroParte", SqlDbType.NVarChar, 120).Value =
                 numeroParte.Trim();
+            command.Parameters.Add("@Clave", SqlDbType.NVarChar, 120).Value = clave;
 
             await using var reader =
                 await command.ExecuteReaderAsync(cancellationToken);
@@ -1106,48 +1137,79 @@ ORDER BY
                     {
                         ParteID = Entero(reader, "ParteID"),
                         NumeroParte = Texto(reader, "NumeroParte"),
-                        Descripcion = Texto(reader, "Descripcion")
+                        ReferenciaSAP = Texto(reader, "ReferenciaSAP"),
+                        Descripcion = Texto(reader, "Descripcion"),
+                        Designacion = Texto(reader, "Designacion")
                     });
             }
         }
 
-        var exactas =
-            partes.Where(
-                    x => x.NumeroParte.Equals(
-                        numeroParte.Trim(),
-                        StringComparison.OrdinalIgnoreCase))
-                .ToList();
+        var evaluadas = partes
+            .Select(x => new
+            {
+                Parte = x,
+                Puntaje =
+                    x.NumeroParte.Equals(numeroParte.Trim(), StringComparison.OrdinalIgnoreCase) ? 0 :
+                    x.ReferenciaSAP.Equals(numeroParte.Trim(), StringComparison.OrdinalIgnoreCase) ? 1 :
+                    NormalizarClaveParte(x.NumeroParte) == clave ? 2 :
+                    NormalizarClaveParte(x.ReferenciaSAP) == clave ? 3 :
+                    99
+            })
+            .Where(x => x.Puntaje < 99)
+            .ToList();
+
+        if (evaluadas.Count == 0)
+        {
+            result.ParteError =
+                "No se encontro una parte activa por NumeroParte o ReferenciaSAP para el codigo escaneado.";
+            return result;
+        }
+
+        var mejorPuntaje = evaluadas.Min(x => x.Puntaje);
+        var mejores = evaluadas
+            .Where(x => x.Puntaje == mejorPuntaje)
+            .Select(x => x.Parte)
+            .ToList();
 
         ParteCandidata? seleccionada = null;
 
-        if (exactas.Count == 1)
+        if (mejores.Count == 1)
         {
-            seleccionada = exactas[0];
-        }
-        else if (exactas.Count > 1)
-        {
-            result.ParteError =
-                "Hay más de una parte activa con el mismo número exacto.";
-            return result;
-        }
-        else if (partes.Count == 1)
-        {
-            seleccionada = partes[0];
-        }
-        else if (partes.Count > 1)
-        {
-            result.ParteError =
-                "La comparación normalizada encontró más de una parte activa. Requiere revisión.";
-            return result;
+            seleccionada = mejores[0];
         }
         else
         {
+            var textoDesignacion = NormalizarClaveParte(designacionCodigo);
+
+            if (!string.IsNullOrWhiteSpace(textoDesignacion))
+            {
+                var porDesignacion = mejores
+                    .Where(x =>
+                    {
+                        var descripcion = NormalizarClaveParte(x.Descripcion);
+                        var designacion = NormalizarClaveParte(x.Designacion);
+
+                        return (!string.IsNullOrWhiteSpace(descripcion) &&
+                                textoDesignacion.Contains(descripcion, StringComparison.OrdinalIgnoreCase))
+                               || (!string.IsNullOrWhiteSpace(designacion) &&
+                                   textoDesignacion.Contains(designacion, StringComparison.OrdinalIgnoreCase));
+                    })
+                    .ToList();
+
+                if (porDesignacion.Count == 1)
+                    seleccionada = porDesignacion[0];
+            }
+        }
+
+        if (seleccionada == null)
+        {
             result.ParteError =
-                "No se encontró una parte activa para el número de parte del código.";
+                "El codigo coincide con mas de una parte activa. No se selecciono una parte automaticamente.";
             return result;
         }
 
         result.ParteID = seleccionada.ParteID;
+        result.NumeroParteCanonico = seleccionada.NumeroParte;
         result.ParteDescripcion = seleccionada.Descripcion;
 
         var material =
@@ -1163,7 +1225,6 @@ ORDER BY
 
         return result;
     }
-
     private static async Task<CatalogoResolucion> ResolverMaterialPorParteAsync(
         SqlConnection connection,
         int parteId,
@@ -1317,6 +1378,17 @@ SELECT CASE WHEN EXISTS
             .Replace('\'', '/');
     }
 
+    private static string NormalizarClaveParte(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+            return string.Empty;
+
+        return new string(
+            valor
+                .Where(char.IsLetterOrDigit)
+                .Select(char.ToUpperInvariant)
+                .ToArray());
+    }
     private static string? NormalizarFiltro(
         string? valor,
         IEnumerable<string> permitidos)
@@ -1367,7 +1439,9 @@ SELECT CASE WHEN EXISTS
     {
         public int ParteID { get; set; }
         public string NumeroParte { get; set; } = string.Empty;
+        public string ReferenciaSAP { get; set; } = string.Empty;
         public string Descripcion { get; set; } = string.Empty;
+        public string Designacion { get; set; } = string.Empty;
     }
 
     private sealed class MaterialCandidato
@@ -1380,6 +1454,7 @@ SELECT CASE WHEN EXISTS
     private sealed class CatalogoResolucion
     {
         public int? ParteID { get; set; }
+        public string NumeroParteCanonico { get; set; } = string.Empty;
         public string ParteDescripcion { get; set; } = string.Empty;
         public string ParteError { get; set; } = string.Empty;
 

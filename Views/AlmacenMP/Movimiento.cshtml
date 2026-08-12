@@ -112,7 +112,11 @@
         <input asp-for="EsEntregaOF" type="hidden" />
         <input asp-for="OperacionToken" type="hidden" />
         <input asp-for="Unidad" type="hidden" value="KG" />
-        <input asp-for="Lote" type="hidden" value="S/L" />
+
+        @if (Model.EsEntregaOF)
+        {
+            <input asp-for="Lote" type="hidden" value="S/L" />
+        }
 
         @if (Model.EsEntregaOF)
         {
@@ -310,6 +314,20 @@
                 <span asp-validation-for="SolicitudProduccionID"></span>
             </div>
 
+            <!-- SCRAP_V15_MP_SCAN_UI -->
+            <div class="alm-field full" id="LoteMolidoField">
+                <label for="Lote">Lote / codigo de Scrap</label>
+                <input asp-for="Lote"
+                       class="alm-input"
+                       id="Lote"
+                       maxlength="500"
+                       autocomplete="off"
+                       placeholder="Escanea la etiqueta Scrap o captura el lote" />
+                <small class="alm-filter-hint">
+                    Se usa para Entrada de Molido. Si escaneas el codigo completo, el sistema extrae el lote y enlaza el movimiento con Scrap.
+                </small>
+                <span asp-validation-for="Lote"></span>
+            </div>
             <div class="alm-field full" id="FolioCompraField">
                 <label for="FolioCompra">Folio de compra</label>
                 <input asp-for="FolioCompra"
