@@ -1879,7 +1879,20 @@
             #modalIniciarPreparacion .modal-footer {
                 padding: 12px 18px 14px !important;
             }
+
         }
+
+        .production-nav-btn[href*="Preparacion"] {
+            border-color: #c9d8ef;
+            background: #f5f8ff;
+            color: #324f89;
+        }
+
+            .production-nav-btn[href*="Preparacion"]:hover {
+                border-color: #8eaae0;
+                background: #edf3ff;
+                color: #203f7c;
+            }
 
     </style>
 }
@@ -2041,6 +2054,13 @@
                 Cola
                 <span class="production-nav-count">@Model.TotalDisponibles</span>
             </button>
+
+        <a class="production-nav-btn"
+           asp-controller="Produccion"
+           asp-action="Preparacion">
+            <i class="bi bi-tools"></i>
+            Preparación próxima
+        </a>
         </nav>
 
         <section class="production-content-shell" id="contenidoProduccion" aria-live="polite">

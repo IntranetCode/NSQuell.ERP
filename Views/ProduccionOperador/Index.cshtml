@@ -366,7 +366,7 @@
 </head>
 <body>
     <div class="page">
-        <section class="hero"><div class="d-flex justify-content-between align-items-start flex-wrap gap-3"><div><h1><i class="fa-solid fa-tablet-screen-button me-2"></i>Kiosco de Operador</h1><p>Consulta las OF programadas por máquina y entra directamente a la captura horaria.</p></div><div class="d-flex gap-2 flex-wrap"><a href="@Url.Action("Index", "Produccion")" class="btn-hero"><i class="fa-solid fa-arrow-left"></i>Producción</a><a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero"><i class="fa-solid fa-rotate-right"></i>Actualizar</a></div></div></section>
+        <section class="hero"><div class="d-flex justify-content-between align-items-start flex-wrap gap-3"><div><h1><i class="fa-solid fa-tablet-screen-button me-2"></i>Kiosco de Operador</h1><p>Consulta las OF programadas por máquina y entra directamente a la captura horaria.</p></div><div class="d-flex gap-2 flex-wrap"><a href="@Url.Action("Index", "Produccion")" class="btn-hero"></i> <i class="fa-solid fa-rotate-right"></i>Actualizar</a></div></div></section>
         @if (TempData["Success"] != null)
         {
             <div class="alert alert-success rounded-4 fw-bold">@TempData["Success"]</div>

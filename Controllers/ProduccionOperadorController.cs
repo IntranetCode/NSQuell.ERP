@@ -22,26 +22,49 @@ namespace ERP.NSQuell.Controllers
 
 
 
-[HttpGet]
+        [HttpGet]
         public async Task<IActionResult> Index()
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
 
-            await using var cn = new SqlConnection(ConnectionString);
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
             await cn.OpenAsync();
 
-            var usuarioId = ObtenerUsuarioID();
+            var usuarioId =
+                ObtenerUsuarioID();
 
-            var esOperador = await UsuarioEsOperadorAsync(usuarioId, cn);
+            var esOperador =
+                await UsuarioEsOperadorAsync(
+                    usuarioId,
+                    cn);
 
             if (!esOperador)
                 return AccesoDenegadoOperador();
 
-            var programas = await ObtenerProgramasEnProduccionAsync(cn);
+            var personaId =
+                await ObtenerPersonaIDUsuarioAsync(
+                    usuarioId,
+                    cn);
+
+            if (!personaId.HasValue ||
+                personaId.Value <= 0)
+            {
+                return AccesoDenegadoOperador();
+            }
+
+            var programas =
+                await ObtenerProgramasEnProduccionAsync(
+                    personaId.Value,
+                    cn);
 
             ViewBag.AlertasProximosProgramas =
-                await ObtenerAlertasProximosProgramasAsync(cn, 15);
+                await ObtenerAlertasProximosProgramasAsync(
+                    personaId.Value,
+                    cn,
+                    15);
 
             return View(programas);
         }
@@ -2508,8 +2531,10 @@ WHERE NOT EXISTS
                 await cmd.ExecuteNonQueryAsync();
             }
         }
-        private async Task<List<ProduccionOperadorTabletVm>> ObtenerProgramasEnProduccionAsync(
-            SqlConnection cn)
+        private async Task<List<ProduccionOperadorTabletVm>>
+    ObtenerProgramasEnProduccionAsync(
+        int personaId,
+        SqlConnection cn)
         {
             var lista = new List<ProduccionOperadorTabletVm>();
 
@@ -2569,6 +2594,16 @@ LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
    AND pp.Activo = 1
 WHERE e.Activo = 1
   AND e.EstatusID IN (@EnProduccion, @Pausado)
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.Planeacion_ProgramaOperadores po
+      WHERE po.ProgramaProduccionID = e.ProgramaProduccionID
+        AND po.PersonaID = @PersonaID
+        AND po.Activo = 1
+        AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))
+            IN (N'PRINCIPAL',N'AUXILIAR')
+  )
 ORDER BY
     e.MaquinaCodigo,
     ISNULL(pp.FechaInicioProgramada, e.FechaInicioReal),
@@ -3321,12 +3356,9 @@ WHERE u.UsuarioID = @UsuarioID
         }
 
 
-        private async Task<List<ProduccionAlertaProximoProgramaVm>> ObtenerAlertasProximosProgramasAsync(
-      SqlConnection cn,
-      int minutosAntes)
+        private async Task<List<ProduccionAlertaProximoProgramaVm>> ObtenerAlertasProximosProgramasAsync(int personaId, SqlConnection cn, int minutosAntes)
         {
             var lista = new List<ProduccionAlertaProximoProgramaVm>();
-
             const string sql = @"
 DECLARE @Ahora DATETIME = GETDATE();
 DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
@@ -3336,24 +3368,18 @@ DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
     SELECT
         pp.ProgramaProduccionID,
         pe.EjecucionProduccionID,
-
         pp.MaquinaID,
         COALESCE(NULLIF(pp.MaquinaCodigo, ''), maq.Codigo) AS MaquinaCodigo,
         COALESCE(NULLIF(pp.MaquinaNombre, ''), maq.Nombre) AS MaquinaNombre,
-
         pp.ParteID,
         pp.NumeroParte,
         pp.ReferenciaSAP,
         pp.DesignacionDescripcionSAP AS DescripcionParte,
-
         pp.MoldeID,
         pp.MoldeCodigo,
-
         CONVERT(INT, ISNULL(pp.CantidadProgramada, 0)) AS CantidadProgramada,
-
         pp.FechaInicioProgramada,
         pp.FechaFinProgramada,
-
         CASE
             WHEN pp.Cambio IS NULL THEN NULL
             ELSE DATEADD
@@ -3363,7 +3389,6 @@ DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
                 CAST(CAST(ISNULL(pp.FechaInicioProgramada, GETDATE()) AS DATE) AS DATETIME)
             )
         END AS FechaCambioMolde,
-
         CASE
             WHEN pp.Arranque IS NULL THEN ISNULL(pp.FechaInicioProgramada, GETDATE())
             ELSE DATEADD
@@ -3373,18 +3398,13 @@ DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
                 CAST(CAST(ISNULL(pp.FechaInicioProgramada, GETDATE()) AS DATE) AS DATETIME)
             )
         END AS FechaArranque,
-
         opPrincipal.PersonaID AS OperadorPrincipalID,
         opPrincipal.NombreCompleto AS OperadorPrincipalNombre,
-
         opAuxiliar.PersonaID AS OperadorAuxiliarID,
         opAuxiliar.NombreCompleto AS OperadorAuxiliarNombre
-
     FROM dbo.Planeacion_ProgramaProduccion pp
-
     LEFT JOIN dbo.ERP_Maquinas maq
         ON maq.MaquinaID = pp.MaquinaID
-
     OUTER APPLY
     (
         SELECT TOP (1)
@@ -3394,7 +3414,6 @@ DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
           AND e.Activo = 1
         ORDER BY e.EjecucionProduccionID DESC
     ) pe
-
     OUTER APPLY
     (
         SELECT TOP (1)
@@ -3409,10 +3428,9 @@ DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
             ON p.PersonaID = po.PersonaID
         WHERE po.ProgramaProduccionID = pp.ProgramaProduccionID
           AND po.Activo = 1
-          AND UPPER(ISNULL(po.RolOperador, '')) = 'PRINCIPAL'
+          AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador, '')))) = 'PRINCIPAL'
         ORDER BY po.ProgramaOperadorID
     ) opPrincipal
-
     OUTER APPLY
     (
         SELECT TOP (1)
@@ -3427,10 +3445,9 @@ DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
             ON p.PersonaID = po.PersonaID
         WHERE po.ProgramaProduccionID = pp.ProgramaProduccionID
           AND po.Activo = 1
-          AND UPPER(ISNULL(po.RolOperador, '')) = 'AUXILIAR'
+          AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador, '')))) = 'AUXILIAR'
         ORDER BY po.ProgramaOperadorID
     ) opAuxiliar
-
     WHERE pp.Activo = 1
       AND pp.MaquinaID IS NOT NULL
       AND ISNULL(pp.EstatusID, 1) IN
@@ -3438,35 +3455,38 @@ DECLARE @Hasta DATETIME = DATEADD(MINUTE, @MinutosAntes, @Ahora);
           @EstatusPendiente,
           @EstatusEnPreparacion
       )
+      AND EXISTS
+      (
+          SELECT 1
+          FROM dbo.Planeacion_ProgramaOperadores poFiltro
+          WHERE poFiltro.ProgramaProduccionID = pp.ProgramaProduccionID
+            AND poFiltro.PersonaID = @PersonaID
+            AND poFiltro.Activo = 1
+            AND UPPER(LTRIM(RTRIM(ISNULL(poFiltro.RolOperador, ''))))
+                IN ('PRINCIPAL', 'AUXILIAR')
+      )
 ),
 Alertas AS
 (
     SELECT
         ProgramaProduccionID,
         EjecucionProduccionID,
-
         MaquinaID,
         MaquinaCodigo,
         MaquinaNombre,
-
         ParteID,
         NumeroParte,
         ReferenciaSAP,
         DescripcionParte,
-
         MoldeID,
         MoldeCodigo,
-
         CantidadProgramada,
-
         'CAMBIO_MOLDE' AS TipoAlerta,
         FechaCambioMolde AS FechaObjetivo,
-
         OperadorPrincipalID,
         OperadorPrincipalNombre,
         OperadorAuxiliarID,
         OperadorAuxiliarNombre
-
     FROM ProgramasBase
     WHERE FechaCambioMolde IS NOT NULL
       AND FechaCambioMolde <= @Hasta
@@ -3482,29 +3502,22 @@ Alertas AS
     SELECT
         ProgramaProduccionID,
         EjecucionProduccionID,
-
         MaquinaID,
         MaquinaCodigo,
         MaquinaNombre,
-
         ParteID,
         NumeroParte,
         ReferenciaSAP,
         DescripcionParte,
-
         MoldeID,
         MoldeCodigo,
-
         CantidadProgramada,
-
         'ARRANQUE' AS TipoAlerta,
         FechaArranque AS FechaObjetivo,
-
         OperadorPrincipalID,
         OperadorPrincipalNombre,
         OperadorAuxiliarID,
         OperadorAuxiliarNombre
-
     FROM ProgramasBase
     WHERE FechaArranque IS NOT NULL
       AND FechaArranque <= @Hasta
@@ -3513,30 +3526,23 @@ Alertas AS
 SELECT
     ProgramaProduccionID,
     EjecucionProduccionID,
-
     MaquinaID,
     MaquinaCodigo,
     MaquinaNombre,
-
     ParteID,
     NumeroParte,
     ReferenciaSAP,
     DescripcionParte,
-
     MoldeID,
     MoldeCodigo,
-
     CantidadProgramada,
-
     TipoAlerta,
     FechaObjetivo,
     DATEDIFF(MINUTE, @Ahora, FechaObjetivo) AS MinutosRestantes,
-
     OperadorPrincipalID,
     OperadorPrincipalNombre,
     OperadorAuxiliarID,
     OperadorAuxiliarNombre
-
 FROM Alertas
 ORDER BY
     FechaObjetivo,
@@ -3546,57 +3552,39 @@ ORDER BY
     END,
     MaquinaCodigo,
     ProgramaProduccionID;";
-
             await using var cmd = new SqlCommand(sql, cn);
-
-            cmd.Parameters.Add("@MinutosAntes", SqlDbType.Int).Value =
-                minutosAntes;
-
-            cmd.Parameters.Add("@EstatusPendiente", SqlDbType.Int).Value =
-                ProgramaProduccionEstatus.Pendiente;
-
-            cmd.Parameters.Add("@EstatusEnPreparacion", SqlDbType.Int).Value =
-                ProgramaProduccionEstatus.EnPreparacion;
-
+            cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId;
+            cmd.Parameters.Add("@MinutosAntes", SqlDbType.Int).Value = minutosAntes;
+            cmd.Parameters.Add("@EstatusPendiente", SqlDbType.Int).Value = ProgramaProduccionEstatus.Pendiente;
+            cmd.Parameters.Add("@EstatusEnPreparacion", SqlDbType.Int).Value = ProgramaProduccionEstatus.EnPreparacion;
             await using var rd = await cmd.ExecuteReaderAsync();
-
             while (await rd.ReadAsync())
             {
                 lista.Add(new ProduccionAlertaProximoProgramaVm
                 {
                     ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
                     EjecucionProduccionID = NullableEntero(rd, "EjecucionProduccionID"),
-
                     MaquinaID = NullableEntero(rd, "MaquinaID"),
                     MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
                     MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
-
                     ParteID = NullableEntero(rd, "ParteID"),
                     NumeroParte = TextoNullable(rd, "NumeroParte"),
                     ReferenciaSAP = TextoNullable(rd, "ReferenciaSAP"),
                     DescripcionParte = TextoNullable(rd, "DescripcionParte"),
-
                     MoldeID = NullableEntero(rd, "MoldeID"),
                     MoldeCodigo = TextoNullable(rd, "MoldeCodigo"),
-
                     CantidadProgramada = Entero(rd, "CantidadProgramada"),
-
                     TipoAlerta = TextoNullable(rd, "TipoAlerta") ?? "",
                     FechaObjetivo = Convert.ToDateTime(rd["FechaObjetivo"]),
                     MinutosRestantes = Entero(rd, "MinutosRestantes"),
-
                     OperadorPrincipalID = NullableEntero(rd, "OperadorPrincipalID"),
                     OperadorPrincipalNombre = TextoNullable(rd, "OperadorPrincipalNombre"),
-
                     OperadorAuxiliarID = NullableEntero(rd, "OperadorAuxiliarID"),
                     OperadorAuxiliarNombre = TextoNullable(rd, "OperadorAuxiliarNombre")
                 });
             }
-
             return lista;
         }
-
-
         private async Task<PersonaOperadorInfo> ObtenerPersonaOperadorAsync(
             int usuarioId,
             SqlConnection cn,
@@ -4759,6 +4747,36 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
             return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
         }
 
+        private async Task<int?> ObtenerPersonaIDUsuarioAsync(
+    int usuarioId,
+    SqlConnection cn)
+        {
+            const string sql = @"
+SELECT TOP (1)
+    u.PersonaID
+FROM dbo.Usuarios u
+WHERE u.UsuarioID = @UsuarioID
+  AND u.Activo = 1
+  AND u.PersonaID IS NOT NULL;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
+                usuarioId;
+
+            var resultado =
+                await cmd.ExecuteScalarAsync();
+
+            if (resultado == null ||
+                resultado == DBNull.Value)
+            {
+                return null;
+            }
+
+            return Convert.ToInt32(resultado);
+        }
         private static long EnteroLargo(SqlDataReader rd, string columna)
         {
             var ordinal = rd.GetOrdinal(columna);
