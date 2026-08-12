@@ -138,7 +138,9 @@ public sealed class AlmacenMPMovimientoFormVm
     [StringLength(20)]
     public string Unidad { get; set; } = "KG";
 
-    [StringLength(120)]
+    // SCRAP_V15_LOTE_SCAN: puede recibir temporalmente un codigo de Scrap;
+    // el controlador extrae y persiste solo el lote (max. 120 en SQL).
+    [StringLength(500)]
     public string Lote { get; set; } = "S/L";
 
     [Display(Name = "UbicaciÃ³n")]
