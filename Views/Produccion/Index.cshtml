@@ -2324,8 +2324,8 @@
                                     </div>
                                     <div>
                                         <label class="form-label">Nombre manual</label>
-                                        <input type="text" id="modalOperadorManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
-                                        <div class="small text-muted mt-1">El operador principal se controla desde Escala de Personal.</div>
+                                        <input type="text" id="modalOperadorManual" class="form-control" maxlength="200" placeholder="Escribe el nombre si no seleccionas operador" />
+                                        <div class="small text-muted mt-1">Puedes seleccionar un operador o capturar un nombre manual. Al seleccionar uno de la lista, la captura manual se bloquea.</div>
                                     </div>
                                 </div>
                             </div>
@@ -2469,13 +2469,29 @@
                 return partes.filter(Boolean).join(sep);
             }
 
+
+            function sincronizarModoManual(select, manual) {
+                if (!manual) return;
+
+                const haySeleccion = !!select?.value;
+                manual.disabled = haySeleccion;
+
+                if (haySeleccion) {
+                    manual.value = '';
+                    manual.placeholder = 'Bloqueado: ya seleccionaste un operador';
+                }
+                else {
+                    manual.placeholder = 'Escribe el nombre si no seleccionas operador';
+                }
+            }
+
             async function cargarOperadoresPolivalencia(programaId, parteId, maquinaId, operadorPreferido, auxiliarPreferido) {
                 limpiarSelectEscala(modalOperadorId, '-- Cargando operadores --');
                 limpiarSelectEscala(modalOperadorAuxiliarId, '-- Cargando auxiliares --');
 
                 if (modalOperadorManual) {
-                    modalOperadorManual.value = '';
-                    modalOperadorManual.disabled = true;
+                    modalOperadorManual.disabled = false;
+                    modalOperadorManual.placeholder = 'Escribe el nombre si no seleccionas operador';
                 }
                 if (modalOperadorAuxiliarManual) {
                     modalOperadorAuxiliarManual.value = '';
@@ -2529,6 +2545,7 @@
 
                     // Solo conserva el sugerido si tambien esta dentro del listado permitido.
                     seleccionarPersonaSiExiste(modalOperadorId, operadorPreferido);
+                    sincronizarModoManual(modalOperadorId, modalOperadorManual);
 
                     limpiarSelectEscala(
                         modalOperadorAuxiliarId,
@@ -2554,7 +2571,7 @@
                                 : 'small text-danger fw-semibold mt-1';
                         } else {
                             modalPolivalenciaInfo.textContent =
-                                `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; se usa el catalogo general de Operadores.`;
+                                `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; puedes seleccionar del catalogo general o capturar un nombre manual.`;
                             modalPolivalenciaInfo.className = 'small text-warning fw-semibold mt-1';
                         }
                     }
@@ -2589,7 +2606,7 @@
                         }
                         if (detalleOperadorSugerido) {
                             detalleOperadorSugerido.textContent =
-                                'Se habilita el catalogo general porque esta pieza aun no tiene matriz.';
+                                'Se habilita el catalogo general. Si la persona no aparece, tambien puedes capturar el nombre manualmente.';
                         }
                     }
                 }
@@ -2847,11 +2864,13 @@
 
             modalOperadorId?.addEventListener('change', () => {
                 if (modalOperadorId.value && modalOperadorManual) modalOperadorManual.value = '';
+                sincronizarModoManual(modalOperadorId, modalOperadorManual);
                 limpiarValidacionOperadores();
             });
 
             modalOperadorManual?.addEventListener('input', () => {
                 if (modalOperadorManual.value.trim() && modalOperadorId) modalOperadorId.value = '';
+                sincronizarModoManual(modalOperadorId, modalOperadorManual);
                 limpiarValidacionOperadores();
             });
 
