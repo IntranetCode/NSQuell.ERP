@@ -11,11 +11,7 @@ namespace ERP.NSQuell.Models
         [Key]
         public int InspeccionID { get; set; }
 
-        // =========================================================
-        // RELACIONES DEL FLUJO
-        // Planeacion -> Produccion -> Checklist -> Calidad
-        // =========================================================
-
+      
         public int? ProgramaProduccionID { get; set; }
         public int? EjecucionProduccionID { get; set; }
         public int? ChecklistArranqueID { get; set; }

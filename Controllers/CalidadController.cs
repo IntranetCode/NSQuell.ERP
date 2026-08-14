@@ -913,176 +913,135 @@ INNER JOIN RegistrosDisponibles registro
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> GuardarChecklistAuditor(
-            CalidadChecklistGuardarViewModel model)
+        public async Task<IActionResult> GuardarChecklistAuditor(CalidadChecklistGuardarViewModel model)
         {
             if (!ModelState.IsValid)
             {
-                TempData["Error"] =
-                    "No se recibió correctamente el checklist del auditor.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = model.InspeccionID });
+                TempData["Error"] = "No se recibió correctamente el checklist del auditor.";
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
             }
-
             var usuarioId = ObtenerUsuarioIdActual();
-
             if (!usuarioId.HasValue || usuarioId.Value <= 0)
                 return Unauthorized();
-
-            var inspeccion = await _context.CalidadInspecciones
-                .FirstOrDefaultAsync(x =>
-                    x.InspeccionID == model.InspeccionID &&
-                    x.ChecklistArranqueID == model.ChecklistArranqueID);
-
+            var inspeccion = await _context.CalidadInspecciones.FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID && x.ChecklistArranqueID == model.ChecklistArranqueID);
             if (inspeccion == null)
                 return NotFound();
-
             if (!CalidadEstados.PuedeAutorizarPrearranque(inspeccion.Estado))
             {
-                TempData["Error"] =
-                    "El checklist ya no está disponible para revisión de prearranque.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = model.InspeccionID });
+                TempData["Error"] = "El checklist ya no está disponible para revisión de prearranque.";
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
             }
-
-            await AsegurarPreguntasChecklistAuditorAsync(
-                model.ChecklistArranqueID,
-                usuarioId);
-
+            await AsegurarPreguntasChecklistAuditorAsync(model.ChecklistArranqueID, usuarioId);
+            var respuestas = model.Respuestas ?? new List<CalidadChecklistRespuestaViewModel>();
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
-
             try
             {
-                foreach (var respuesta in
-                    model.Respuestas ??
-                    new List<CalidadChecklistRespuestaViewModel>())
+                foreach (var respuesta in respuestas)
                 {
-                    var resultado =
-                        NormalizarResultadoChecklistAuditor(respuesta.Resultado);
-
+                    var resultado = NormalizarResultadoChecklistAuditor(respuesta.Resultado);
                     if (resultado == "__INVALIDO__")
-                    {
-                        throw new InvalidOperationException(
-                            "Se recibió una respuesta inválida en el checklist del auditor.");
-                    }
-
-                    if (resultado == CalidadChecklistResultado.Nok &&
-                        string.IsNullOrWhiteSpace(respuesta.Observaciones))
-                    {
-                        throw new InvalidOperationException(
-                            "Toda respuesta NOK del auditor requiere una observación.");
-                    }
-
+                        throw new InvalidOperationException("Se recibió una respuesta inválida en el checklist del auditor.");
+                    if (string.IsNullOrWhiteSpace(resultado))
+                        throw new InvalidOperationException("Todas las preguntas del checklist de Calidad deben responderse con OK, NOK o NO APLICA.");
+                    if (resultado == CalidadChecklistResultado.Nok && string.IsNullOrWhiteSpace(respuesta.Observaciones))
+                        throw new InvalidOperationException("Toda respuesta NOK del auditor requiere una observación.");
                     const string sqlUpdate = @"
 UPDATE d
-SET
-    d.Resultado = @Resultado,
+SET d.Resultado = @Resultado,
     d.Observaciones = @Observaciones,
     d.UsuarioRespuestaID = @UsuarioID,
-    d.FechaRespuesta =
-        CASE WHEN @Resultado IS NULL THEN d.FechaRespuesta ELSE GETDATE() END,
+    d.FechaRespuesta = GETDATE(),
     d.UsuarioModificacionID = @UsuarioID,
     d.FechaModificacion = GETDATE()
 FROM dbo.Produccion_ChecklistArranqueDetalle d
-INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
-    ON p.PreguntaID = d.PreguntaID
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p ON p.PreguntaID = d.PreguntaID
 WHERE d.ChecklistArranqueDetalleID = @DetalleID
   AND d.ChecklistArranqueID = @ChecklistArranqueID
   AND d.Activo = 1
   AND p.Activo = 1
-  AND
-  (
+  AND (
         UPPER(ISNULL(p.Seccion, N'')) LIKE N'%CALIDAD%'
      OR UPPER(ISNULL(p.Seccion, N'')) LIKE N'%AUDITOR%'
      OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%CALIDAD%'
      OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%AUDITOR%'
   );";
-
                     await using var cmd = new SqlCommand(sqlUpdate, cn, tx);
-
-                    cmd.Parameters.Add("@Resultado", SqlDbType.NVarChar, 10).Value =
-                        (object?)resultado ?? DBNull.Value;
-
-                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
-                        string.IsNullOrWhiteSpace(respuesta.Observaciones)
-                            ? DBNull.Value
-                            : respuesta.Observaciones.Trim();
-
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
-                        usuarioId.Value;
-
-                    cmd.Parameters.Add("@DetalleID", SqlDbType.Int).Value =
-                        respuesta.ChecklistArranqueDetalleID;
-
-                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
-                        model.ChecklistArranqueID;
-
-                    await cmd.ExecuteNonQueryAsync();
+                    cmd.Parameters.Add("@Resultado", SqlDbType.NVarChar, 10).Value = resultado;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(respuesta.Observaciones) ? DBNull.Value : respuesta.Observaciones.Trim();
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@DetalleID", SqlDbType.Int).Value = respuesta.ChecklistArranqueDetalleID;
+                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = model.ChecklistArranqueID;
+                    var filas = await cmd.ExecuteNonQueryAsync();
+                    if (filas <= 0)
+                        throw new InvalidOperationException("Una de las respuestas no pertenece al checklist de Calidad actual.");
                 }
-
+                const string sqlValidar = @"
+SELECT
+    COUNT(*) AS TotalPreguntas,
+    ISNULL(SUM(CASE WHEN d.Resultado IS NULL OR LTRIM(RTRIM(d.Resultado)) = N'' THEN 1 ELSE 0 END), 0) AS Pendientes,
+    ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(d.Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A') THEN 1 ELSE 0 END), 0) AS Invalidas,
+    ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(d.Resultado, N'')))) = N'NOK' AND (d.Observaciones IS NULL OR LTRIM(RTRIM(d.Observaciones)) = N'') THEN 1 ELSE 0 END), 0) AS NokSinObservacion
+FROM dbo.Produccion_ChecklistArranqueDetalle d
+INNER JOIN dbo.ERP_ChecklistArranquePreguntas p ON p.PreguntaID = d.PreguntaID
+WHERE d.ChecklistArranqueID = @ChecklistArranqueID
+  AND d.Activo = 1
+  AND p.Activo = 1
+  AND UPPER(ISNULL(p.Seccion, N'')) NOT LIKE N'%PARO%'
+  AND (
+        UPPER(ISNULL(p.Seccion, N'')) LIKE N'%CALIDAD%'
+     OR UPPER(ISNULL(p.Seccion, N'')) LIKE N'%AUDITOR%'
+     OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%CALIDAD%'
+     OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%AUDITOR%'
+  );";
+                await using (var cmdValidar = new SqlCommand(sqlValidar, cn, tx))
+                {
+                    cmdValidar.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = model.ChecklistArranqueID;
+                    await using var rd = await cmdValidar.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                        throw new InvalidOperationException("No fue posible validar el checklist de Calidad.");
+                    var totalPreguntas = Convert.ToInt32(rd["TotalPreguntas"]);
+                    var pendientes = Convert.ToInt32(rd["Pendientes"]);
+                    var invalidas = Convert.ToInt32(rd["Invalidas"]);
+                    var nokSinObservacion = Convert.ToInt32(rd["NokSinObservacion"]);
+                    if (totalPreguntas <= 0)
+                        throw new InvalidOperationException("No se encontraron preguntas asignadas a Calidad o al auditor.");
+                    if (pendientes > 0)
+                        throw new InvalidOperationException($"Faltan {pendientes} pregunta(s) por responder. Selecciona OK, NOK o NO APLICA en todas las preguntas antes de guardar.");
+                    if (invalidas > 0)
+                        throw new InvalidOperationException("El checklist contiene respuestas no válidas. Solo se permite OK, NOK o NO APLICA.");
+                    if (nokSinObservacion > 0)
+                        throw new InvalidOperationException($"Existen {nokSinObservacion} respuesta(s) NOK sin observación. Captura el motivo del hallazgo antes de guardar.");
+                }
                 const string sqlHeader = @"
 UPDATE dbo.Produccion_ChecklistArranque
-SET
-    UsuarioCalidadID = @UsuarioID,
+SET UsuarioCalidadID = @UsuarioID,
     ObservacionesCalidad = @ObservacionesCalidad,
     UsuarioModificacionID = @UsuarioID,
     FechaModificacion = GETDATE()
 WHERE ChecklistArranqueID = @ChecklistArranqueID
   AND Activo = 1;";
-
                 await using (var cmd = new SqlCommand(sqlHeader, cn, tx))
                 {
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
-                        usuarioId.Value;
-
-                    cmd.Parameters.Add("@ObservacionesCalidad", SqlDbType.NVarChar, 1000).Value =
-                        string.IsNullOrWhiteSpace(model.ObservacionesCalidad)
-                            ? DBNull.Value
-                            : model.ObservacionesCalidad.Trim();
-
-                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
-                        model.ChecklistArranqueID;
-
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@ObservacionesCalidad", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(model.ObservacionesCalidad) ? DBNull.Value : model.ObservacionesCalidad.Trim();
+                    cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = model.ChecklistArranqueID;
                     await cmd.ExecuteNonQueryAsync();
                 }
-
                 await tx.CommitAsync();
-
                 inspeccion.FechaInicioValidacionPrearranque ??= DateTime.Now;
                 MarcarModificacion(inspeccion, usuarioId);
-
-                AgregarHistorial(
-                    inspeccion,
-                    CalidadMovimientos.ChecklistCalidadCapturado,
-                    inspeccion.Estado,
-                    inspeccion.Estado,
-                    inspeccion.ResultadoCalidad,
-                    inspeccion.Etiqueta,
-                    "El auditor guardó su sección del checklist de arranque.",
-                    usuarioId);
-
+                AgregarHistorial(inspeccion, CalidadMovimientos.ChecklistCalidadCapturado, inspeccion.Estado, inspeccion.Estado, inspeccion.ResultadoCalidad, inspeccion.Etiqueta, "El auditor completó y guardó su sección del checklist de arranque.", usuarioId);
                 await _context.SaveChangesAsync();
-
-                TempData["Mensaje"] =
-                    "Sección del auditor de Calidad guardada correctamente.";
+                TempData["Mensaje"] = "Checklist de Calidad completo y guardado correctamente.";
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "No fue posible guardar el checklist del auditor: " + ex.Message;
+                TempData["Error"] = "No fue posible guardar el checklist del auditor: " + ex.Message;
             }
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = model.InspeccionID });
+            return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
         }
 
         [HttpPost]
@@ -1517,9 +1476,7 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
         }
 
 
-        private async Task<(bool Valido, string Mensaje)>
-            ValidarChecklistCompletoParaAutorizarAsync(
-                int checklistArranqueId)
+        private async Task<(bool Valido, string Mensaje)> ValidarChecklistCompletoParaAutorizarAsync(int checklistArranqueId)
         {
             const string sql = @"
 ;WITH Preguntas AS
@@ -1527,20 +1484,16 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
     SELECT
         d.Resultado,
         d.Observaciones,
-        ISNULL(p.RequiereObservacionSiNOK, 0) AS RequiereObservacionSiNOK,
         CASE
-            WHEN
-            (
-                  UPPER(ISNULL(p.Seccion, N'')) LIKE N'%CALIDAD%'
-               OR UPPER(ISNULL(p.Seccion, N'')) LIKE N'%AUDITOR%'
-               OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%CALIDAD%'
-               OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%AUDITOR%'
-            )
-            THEN 1 ELSE 0
+            WHEN (
+                   UPPER(ISNULL(p.Seccion, N'')) LIKE N'%CALIDAD%'
+                OR UPPER(ISNULL(p.Seccion, N'')) LIKE N'%AUDITOR%'
+                OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%CALIDAD%'
+                OR UPPER(ISNULL(p.ResponsableSugerido, N'')) LIKE N'%AUDITOR%'
+            ) THEN 1 ELSE 0
         END AS EsCalidad
     FROM dbo.Produccion_ChecklistArranqueDetalle d
-    INNER JOIN dbo.ERP_ChecklistArranquePreguntas p
-        ON p.PreguntaID = d.PreguntaID
+    INNER JOIN dbo.ERP_ChecklistArranquePreguntas p ON p.PreguntaID = d.PreguntaID
     WHERE d.ChecklistArranqueID = @ChecklistArranqueID
       AND d.Activo = 1
       AND p.Activo = 1
@@ -1549,57 +1502,50 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
 SELECT
     ISNULL(SUM(CASE WHEN EsCalidad = 0 THEN 1 ELSE 0 END), 0) AS TotalProduccion,
     ISNULL(SUM(CASE WHEN EsCalidad = 0 AND (Resultado IS NULL OR LTRIM(RTRIM(Resultado)) = N'') THEN 1 ELSE 0 END), 0) AS PendientesProduccion,
-    ISNULL(SUM(CASE WHEN EsCalidad = 0 AND Resultado = N'NOK' THEN 1 ELSE 0 END), 0) AS NokProduccion,
+    ISNULL(SUM(CASE WHEN EsCalidad = 0 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A') THEN 1 ELSE 0 END), 0) AS InvalidasProduccion,
+    ISNULL(SUM(CASE WHEN EsCalidad = 0 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) = N'NOK' THEN 1 ELSE 0 END), 0) AS NokProduccion,
     ISNULL(SUM(CASE WHEN EsCalidad = 1 THEN 1 ELSE 0 END), 0) AS TotalCalidad,
     ISNULL(SUM(CASE WHEN EsCalidad = 1 AND (Resultado IS NULL OR LTRIM(RTRIM(Resultado)) = N'') THEN 1 ELSE 0 END), 0) AS PendientesCalidad,
-    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND Resultado = N'NOK' THEN 1 ELSE 0 END), 0) AS NokCalidad,
-    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND Resultado = N'NOK' AND ISNULL(RequiereObservacionSiNOK, 0) = 1 AND (Observaciones IS NULL OR LTRIM(RTRIM(Observaciones)) = N'') THEN 1 ELSE 0 END), 0) AS NokSinObservacion
+    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A') THEN 1 ELSE 0 END), 0) AS InvalidasCalidad,
+    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) = N'NOK' THEN 1 ELSE 0 END), 0) AS NokCalidad,
+    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) = N'NOK' AND (Observaciones IS NULL OR LTRIM(RTRIM(Observaciones)) = N'') THEN 1 ELSE 0 END), 0) AS NokSinObservacion
 FROM Preguntas;";
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value =
-                checklistArranqueId;
-
+            cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
             await using var rd = await cmd.ExecuteReaderAsync();
-
             if (!await rd.ReadAsync())
                 return (false, "No fue posible leer el checklist de arranque.");
-
             var totalProduccion = Convert.ToInt32(rd["TotalProduccion"]);
             var pendientesProduccion = Convert.ToInt32(rd["PendientesProduccion"]);
+            var invalidasProduccion = Convert.ToInt32(rd["InvalidasProduccion"]);
             var nokProduccion = Convert.ToInt32(rd["NokProduccion"]);
             var totalCalidad = Convert.ToInt32(rd["TotalCalidad"]);
             var pendientesCalidad = Convert.ToInt32(rd["PendientesCalidad"]);
+            var invalidasCalidad = Convert.ToInt32(rd["InvalidasCalidad"]);
             var nokCalidad = Convert.ToInt32(rd["NokCalidad"]);
             var nokSinObservacion = Convert.ToInt32(rd["NokSinObservacion"]);
-
             if (totalProduccion <= 0)
                 return (false, "No se encontraron preguntas de preparación respondidas por Producción.");
-
             if (pendientesProduccion > 0)
-                return (false, "El checklist de Producción todavía tiene preguntas pendientes.");
-
+                return (false, $"El checklist de Producción tiene {pendientesProduccion} pregunta(s) pendiente(s). Todas deben responderse con OK, NOK o NO APLICA.");
+            if (invalidasProduccion > 0)
+                return (false, "El checklist de Producción contiene respuestas inválidas.");
             if (nokProduccion > 0)
-                return (false, "El checklist de Producción contiene resultados NOK y debe devolverse para corrección.");
-
+                return (false, $"El checklist de Producción contiene {nokProduccion} resultado(s) NOK y debe devolverse para corrección.");
             if (totalCalidad <= 0)
                 return (false, "No se encontraron preguntas asignadas a Calidad o al auditor.");
-
             if (pendientesCalidad > 0)
-                return (false, "Responde todas las preguntas del auditor antes de autorizar el prearranque.");
-
+                return (false, $"Faltan {pendientesCalidad} pregunta(s) del auditor por responder. Selecciona OK, NOK o NO APLICA antes de autorizar el prearranque.");
+            if (invalidasCalidad > 0)
+                return (false, "El checklist del auditor contiene respuestas inválidas. Solo se permite OK, NOK o NO APLICA.");
             if (nokSinObservacion > 0)
-                return (false, "Existen respuestas NOK del auditor sin observación.");
-
+                return (false, $"Existen {nokSinObservacion} respuesta(s) NOK sin observación.");
             if (nokCalidad > 0)
-                return (false, "El checklist del auditor contiene resultados NOK. Debe devolverse a Producción.");
-
+                return (false, $"El checklist del auditor contiene {nokCalidad} resultado(s) NOK. No se puede autorizar el prearranque; debe devolverse a Producción.");
             return (true, string.Empty);
         }
-
         private static string? NormalizarResultadoChecklistAuditor(
             string? resultado)
         {

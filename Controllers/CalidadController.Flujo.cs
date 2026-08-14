@@ -141,41 +141,36 @@ namespace ERP.NSQuell.Controllers
             model.Monitoreos = await CargarMonitoreosDetalleAsync(id);
 
             model.Disposiciones = await _context.CalidadDisposicionesMaterial
-                .AsNoTracking()
-                .Where(x => x.InspeccionID == id && x.Activo)
-                .OrderByDescending(x => x.FechaInicio)
-                .Select(x => new CalidadDisposicionItemViewModel
-                {
-                    DisposicionID = x.DisposicionID,
-                    MonitoreoID = x.MonitoreoID,
-                    NumeroHora = x.Monitoreo == null
-                        ? (int?)null
-                        : x.Monitoreo.NumeroHora,
-                    FechaHoraRevision = x.Monitoreo != null
-                        ? x.Monitoreo.FechaHoraRevision
-                        : null,
-                    ResultadoMonitoreoOrigen = x.Monitoreo != null
-                        ? x.Monitoreo.Resultado
-                        : null,
-                    DefectoCodigo = x.Monitoreo != null
-                        ? x.Monitoreo.DefectoCodigo
-                        : null,
-                    DefectoDescripcion = x.Monitoreo != null
-                        ? x.Monitoreo.DefectoDescripcion
-                        : null,
-                    TipoMaterial = x.TipoMaterial,
-                    CantidadAfectada = x.CantidadAfectada,
-                    Etiqueta = x.Etiqueta,
-                    Disposicion = x.Disposicion,
-                    Responsable = x.Responsable,
-                    FechaInicio = x.FechaInicio,
-                    FechaFin = x.FechaFin,
-                    CantidadLiberada = x.CantidadLiberada,
-                    CantidadScrap = x.CantidadScrap,
-                    ResultadoFinal = x.ResultadoFinal,
-                    Observaciones = x.Observaciones
-                })
-                .ToListAsync();
+     .AsNoTracking()
+     .Where(x => x.InspeccionID == id && x.Activo)
+     .OrderByDescending(x => x.FechaInicio)
+     .Select(x => new CalidadDisposicionItemViewModel
+     {
+         DisposicionID = x.DisposicionID,
+         MonitoreoID = x.MonitoreoID,
+         NumeroHora = x.Monitoreo == null ? (int?)null : x.Monitoreo.NumeroHora,
+         FechaHoraRevision = x.Monitoreo != null ? x.Monitoreo.FechaHoraRevision : null,
+         ResultadoMonitoreoOrigen = x.Monitoreo != null ? x.Monitoreo.Resultado : null,
+         DefectoCodigo = x.Monitoreo != null ? x.Monitoreo.DefectoCodigo : null,
+         DefectoDescripcion = x.Monitoreo != null ? x.Monitoreo.DefectoDescripcion : null,
+         TipoMaterial = x.TipoMaterial,
+         CantidadAfectada = x.CantidadAfectada,
+         Etiqueta = x.Etiqueta,
+         Disposicion = x.Disposicion,
+         Responsable = x.Responsable,
+         DepartamentoResponsableID = x.DepartamentoResponsableID,
+         UsuarioResponsableID = x.UsuarioResponsableID,
+         EstadoTratamiento = x.EstadoTratamiento,
+         FechaInicioTratamiento = x.FechaInicioTratamiento,
+         FechaFinTratamiento = x.FechaFinTratamiento,
+         FechaInicio = x.FechaInicio,
+         FechaFin = x.FechaFin,
+         CantidadLiberada = x.CantidadLiberada,
+         CantidadScrap = x.CantidadScrap,
+         ResultadoFinal = x.ResultadoFinal,
+         Observaciones = x.Observaciones
+     })
+     .ToListAsync();
 
             model.Cajas = await _context.CalidadCajasLiberadas
                 .AsNoTracking()
@@ -1877,25 +1872,16 @@ WHERE NOT EXISTS
                         _context.CalidadDisposicionesMaterial.Add(disposicion);
                     }
 
-                    disposicion.TipoMaterial =
-                        resultado == CalidadResultadoMonitoreo.NoConforme
-                            ? CalidadTipoMaterial.NoConforme
-                            : CalidadTipoMaterial.Sospechoso;
-
+                    disposicion.TipoMaterial = resultado == CalidadResultadoMonitoreo.NoConforme ? CalidadTipoMaterial.NoConforme : CalidadTipoMaterial.Sospechoso;
                     disposicion.CantidadAfectada = cantidadAfectada;
-                    disposicion.Etiqueta =
-                        resultado == CalidadResultadoMonitoreo.NoConforme
-                            ? "ROJA"
-                            : "AMARILLA";
-
-                    disposicion.Disposicion = model.RequiereRetrabajo
-                        ? CalidadTipoDisposicion.Retrabajo
-                        : CalidadTipoDisposicion.Seleccion;
-
-                    disposicion.Responsable = model.RequiereRetrabajo
-                        ? model.ResponsableRetrabajo
-                        : CalidadResponsable.Calidad;
-
+                    disposicion.Etiqueta = resultado == CalidadResultadoMonitoreo.NoConforme ? "ROJA" : "AMARILLA";
+                    disposicion.Disposicion = model.RequiereRetrabajo ? CalidadTipoDisposicion.Retrabajo : CalidadTipoDisposicion.Seleccion;
+                    disposicion.Responsable = null;
+                    disposicion.DepartamentoResponsableID = null;
+                    disposicion.UsuarioResponsableID = null;
+                    disposicion.EstadoTratamiento = CalidadEstadoTratamiento.PendienteAsignacion;
+                    disposicion.FechaInicioTratamiento = null;
+                    disposicion.FechaFinTratamiento = null;
                     disposicion.ResultadoFinal = CalidadResultadoDisposicion.Pendiente;
                     disposicion.Observaciones = model.Observaciones;
                     disposicion.UsuarioModificacionID = usuarioId;
@@ -1941,179 +1927,119 @@ WHERE NOT EXISTS
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ResolverDisposicion(
-            CalidadDisposicionResolverViewModel model)
+        public async Task<IActionResult> ResolverDisposicion(CalidadDisposicionResolverViewModel model)
         {
             if (!ModelState.IsValid)
             {
                 TempData["Error"] = "Los datos de la disposición no son válidos.";
                 return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
             }
-
             model.Observaciones = model.Observaciones?.Trim();
-
             var usuarioId = ObtenerUsuarioIdActual();
             if (!usuarioId.HasValue || usuarioId.Value <= 0)
                 return Unauthorized();
-
             await using var tx = await _context.Database.BeginTransactionAsync();
-
             try
             {
-                var disposicion = await _context.CalidadDisposicionesMaterial
-                    .FirstOrDefaultAsync(x =>
-                        x.DisposicionID == model.DisposicionID &&
-                        x.InspeccionID == model.InspeccionID &&
-                        x.Activo);
-
+                var disposicion = await _context.CalidadDisposicionesMaterial.FirstOrDefaultAsync(x => x.DisposicionID == model.DisposicionID && x.InspeccionID == model.InspeccionID && x.Activo);
                 if (disposicion == null)
                     return NotFound();
-
                 if (disposicion.ResultadoFinal != CalidadResultadoDisposicion.Pendiente)
                 {
                     TempData["Error"] = "Esta disposición ya fue resuelta.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
+                if (!disposicion.DepartamentoResponsableID.HasValue || disposicion.DepartamentoResponsableID.Value <= 0)
+                {
+                    TempData["Error"] = "Primero selecciona el departamento responsable de la disposición.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                }
+                if (!disposicion.UsuarioResponsableID.HasValue || disposicion.UsuarioResponsableID.Value <= 0)
+                {
+                    TempData["Error"] = "Primero selecciona el usuario responsable de la disposición.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                }
+                await using (var cnValidacion = new SqlConnection(ConnectionString))
+                {
+                    await cnValidacion.OpenAsync();
+                    const string sqlResponsable = @"
+SELECT COUNT(1)
+FROM dbo.Usuarios u
+INNER JOIN dbo.Departamentos d ON d.DepartamentoID=u.DepartamentoID
+WHERE u.UsuarioID=@UsuarioID
+  AND u.DepartamentoID=@DepartamentoID
+  AND u.Activo=1
+  AND d.Activo=1;";
+                    await using var cmd = new SqlCommand(sqlResponsable, cnValidacion);
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = disposicion.UsuarioResponsableID.Value;
+                    cmd.Parameters.Add("@DepartamentoID", SqlDbType.Int).Value = disposicion.DepartamentoResponsableID.Value;
+                    var valido = Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
+                    if (!valido)
+                    {
+                        TempData["Error"] = "El usuario responsable ya no pertenece al departamento asignado o se encuentra inactivo. Reasigna la disposición.";
+                        return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                    }
+                }
                 if (model.CantidadLiberada < 0 || model.CantidadScrap < 0)
                 {
                     TempData["Error"] = "Las cantidades no pueden ser negativas.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                if (model.CantidadLiberada + model.CantidadScrap !=
-                    disposicion.CantidadAfectada)
+                if (model.CantidadLiberada + model.CantidadScrap != disposicion.CantidadAfectada)
                 {
-                    TempData["Error"] =
-                        "La suma de material liberado y scrap debe ser igual a la cantidad afectada.";
-
+                    TempData["Error"] = "La suma de material liberado y scrap debe ser igual a la cantidad afectada.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                if (model.CantidadScrap > 0 &&
-                    string.IsNullOrWhiteSpace(model.Observaciones))
+                if (model.CantidadScrap > 0 && string.IsNullOrWhiteSpace(model.Observaciones))
                 {
-                    TempData["Error"] =
-                        "Documenta el motivo o resultado cuando la disposición incluya scrap.";
-
+                    TempData["Error"] = "Documenta el motivo o resultado cuando la disposición incluya scrap.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                var inspeccion = await _context.CalidadInspecciones
-                    .FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID);
-
+                var inspeccion = await _context.CalidadInspecciones.FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID);
                 if (inspeccion == null)
                     return NotFound();
-
                 if (disposicion.CantidadAfectada <= 0)
                 {
-                    TempData["Error"] =
-                        "La disposición no contiene una cantidad afectada válida.";
-
+                    TempData["Error"] = "La disposición no contiene una cantidad afectada válida.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
                 var ahora = DateTime.Now;
-                var liberacionTotal =
-                    model.CantidadLiberada == disposicion.CantidadAfectada &&
-                    model.CantidadScrap == 0;
-                var liberacionParcial =
-                    model.CantidadLiberada > 0 &&
-                    model.CantidadScrap > 0;
-                var scrapTotal =
-                    model.CantidadLiberada == 0 &&
-                    model.CantidadScrap == disposicion.CantidadAfectada;
-
+                var liberacionTotal = model.CantidadLiberada == disposicion.CantidadAfectada && model.CantidadScrap == 0;
+                var liberacionParcial = model.CantidadLiberada > 0 && model.CantidadScrap > 0;
+                var scrapTotal = model.CantidadLiberada == 0 && model.CantidadScrap == disposicion.CantidadAfectada;
                 disposicion.CantidadLiberada = model.CantidadLiberada;
                 disposicion.CantidadScrap = model.CantidadScrap;
                 disposicion.FechaFin = ahora;
-                disposicion.ResultadoFinal = model.CantidadLiberada > 0
-                    ? CalidadResultadoDisposicion.Liberado
-                    : CalidadResultadoDisposicion.Scrap;
-
-                /*
-                 * Disposicion conserva el tratamiento aplicado
-                 * (SELECCION o RETRABAJO). El resultado final se
-                 * guarda por separado en ResultadoFinal y cantidades.
-                 */
-                disposicion.Etiqueta = liberacionTotal
-                    ? "VERDE"
-                    : scrapTotal
-                        ? "ROJA"
-                        : "AMARILLA";
-
-                disposicion.Observaciones = UnirObservaciones(
-                    disposicion.Observaciones,
-                    model.Observaciones);
+                disposicion.ResultadoFinal = model.CantidadLiberada > 0 ? CalidadResultadoDisposicion.Liberado : CalidadResultadoDisposicion.Scrap;
+                disposicion.Etiqueta = liberacionTotal ? "VERDE" : scrapTotal ? "ROJA" : "AMARILLA";
+                disposicion.Observaciones = UnirObservaciones(disposicion.Observaciones, model.Observaciones);
                 disposicion.UsuarioModificacionID = usuarioId;
                 disposicion.FechaModificacion = ahora;
-
                 if (disposicion.MonitoreoID.HasValue)
                 {
-                    var monitor = await _context.CalidadMonitoreosProceso
-                        .FirstOrDefaultAsync(x =>
-                            x.MonitoreoID == disposicion.MonitoreoID.Value &&
-                            x.Activo);
-
+                    var monitor = await _context.CalidadMonitoreosProceso.FirstOrDefaultAsync(x => x.MonitoreoID == disposicion.MonitoreoID.Value && x.Activo);
                     if (monitor != null)
                     {
-                        monitor.Resultado = model.CantidadLiberada > 0
-                            ? CalidadResultadoMonitoreo.Reinspeccion
-                            : CalidadResultadoMonitoreo.NoConforme;
-
-                        monitor.Observaciones = UnirObservaciones(
-                            monitor.Observaciones,
-                            "Disposición concluida. Material liberado: " +
-                            model.CantidadLiberada + ". Scrap: " +
-                            model.CantidadScrap + ". " +
-                            (model.Observaciones ?? string.Empty));
+                        monitor.Resultado = model.CantidadLiberada > 0 ? CalidadResultadoMonitoreo.Reinspeccion : CalidadResultadoMonitoreo.NoConforme;
+                        monitor.Observaciones = UnirObservaciones(monitor.Observaciones, "Disposición concluida. Responsable: " + disposicion.Responsable + ". Material liberado: " + model.CantidadLiberada + ". Scrap: " + model.CantidadScrap + ". " + (model.Observaciones ?? string.Empty));
                         monitor.UsuarioModificacionID = usuarioId;
                         monitor.FechaModificacion = ahora;
                     }
                 }
-
                 MarcarModificacion(inspeccion, usuarioId);
-
-                var resultadoDisposicionTexto = liberacionTotal
-                    ? "Liberación total"
-                    : liberacionParcial
-                        ? "Liberación parcial con scrap"
-                        : "Scrap total";
-
-                AgregarHistorial(
-                    inspeccion,
-                    "DISPOSICION_RESUELTA",
-                    inspeccion.Estado,
-                    inspeccion.Estado,
-                    disposicion.ResultadoFinal,
-                    disposicion.Etiqueta,
-                    $"Disposición {disposicion.DisposicionID} resuelta: " +
-                    $"{resultadoDisposicionTexto}. " +
-                    $"Tratamiento: {disposicion.Disposicion}. " +
-                    $"Liberado: {model.CantidadLiberada}. " +
-                    $"Scrap: {model.CantidadScrap}. " +
-                    (model.Observaciones ?? string.Empty),
-                    usuarioId);
-
+                var resultadoDisposicionTexto = liberacionTotal ? "Liberación total" : liberacionParcial ? "Liberación parcial con scrap" : "Scrap total";
+                AgregarHistorial(inspeccion, "DISPOSICION_RESUELTA", inspeccion.Estado, inspeccion.Estado, disposicion.ResultadoFinal, disposicion.Etiqueta, $"Disposición {disposicion.DisposicionID} resuelta: {resultadoDisposicionTexto}. Responsable: {disposicion.Responsable}. Tratamiento: {disposicion.Disposicion}. Liberado: {model.CantidadLiberada}. Scrap: {model.CantidadScrap}. " + (model.Observaciones ?? string.Empty), usuarioId);
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
-
-                TempData["Mensaje"] = liberacionTotal
-                    ? "La reinspección concluyó con liberación total del material."
-                    : liberacionParcial
-                        ? "La reinspección concluyó con liberación parcial y scrap documentado."
-                        : "La disposición concluyó como scrap total documentado.";
+                TempData["Mensaje"] = liberacionTotal ? "La reinspección concluyó con liberación total del material." : liberacionParcial ? "La reinspección concluyó con liberación parcial y scrap documentado." : "La disposición concluyó como scrap total documentado.";
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                TempData["Error"] =
-                    "No fue posible resolver la disposición: " + ex.Message;
+                TempData["Error"] = "No fue posible resolver la disposición: " + ex.Message;
             }
-
             return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> GuardarMuestraResguardo(
@@ -2567,6 +2493,345 @@ WHERE NOT EXISTS
 
             return RedirectToAction(nameof(Detalle), new { id });
         }
+
+        [HttpGet]
+        public async Task<IActionResult> ObtenerDepartamentosDisposicion()
+        {
+            var lista = new List<object>();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            const string sql = @"SELECT DepartamentoID,NombreDepartamento FROM dbo.Departamentos WHERE Activo=1 ORDER BY NombreDepartamento;";
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new
+                {
+                    departamentoID = Convert.ToInt32(rd["DepartamentoID"]),
+                    nombreDepartamento = rd["NombreDepartamento"]?.ToString()?.Trim() ?? string.Empty
+                });
+            }
+            return Json(new { ok = true, departamentos = lista });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ObtenerUsuariosDepartamentoDisposicion(int departamentoID)
+        {
+            var lista = new List<object>();
+            if (departamentoID <= 0)
+                return Json(new { ok = true, usuarios = lista });
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            const string sql = @"
+SELECT
+    u.UsuarioID,
+    u.Username,
+    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS NombreCompleto
+FROM dbo.Usuarios u
+INNER JOIN dbo.Persona p ON p.PersonaID=u.PersonaID
+WHERE u.Activo=1
+  AND u.DepartamentoID=@DepartamentoID
+ORDER BY p.Nombre,p.ApellidoPaterno,p.ApellidoMaterno;";
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@DepartamentoID", SqlDbType.Int).Value = departamentoID;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                var nombre = rd["NombreCompleto"]?.ToString()?.Trim();
+                var username = rd["Username"]?.ToString()?.Trim();
+                lista.Add(new
+                {
+                    usuarioID = Convert.ToInt32(rd["UsuarioID"]),
+                    nombre = string.IsNullOrWhiteSpace(nombre) ? username : nombre,
+                    username
+                });
+            }
+            return Json(new { ok = true, usuarios = lista });
+        }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AsignarResponsableDisposicion(int disposicionID, int inspeccionID, int departamentoResponsableID, int usuarioResponsableID)
+        {
+            if (disposicionID <= 0 || inspeccionID <= 0)
+            {
+                TempData["Error"] = "La disposición no es válida.";
+                return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+            }
+            if (departamentoResponsableID <= 0)
+            {
+                TempData["Error"] = "Selecciona el departamento responsable.";
+                return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+            }
+            if (usuarioResponsableID <= 0)
+            {
+                TempData["Error"] = "Selecciona el usuario responsable.";
+                return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+            }
+            var usuarioActualID = ObtenerUsuarioIdActual();
+            if (!usuarioActualID.HasValue || usuarioActualID.Value <= 0)
+                return Unauthorized();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+            try
+            {
+                string? nombreDepartamento = null;
+                const string sqlDepartamento = @"SELECT TOP(1) NombreDepartamento FROM dbo.Departamentos WITH(UPDLOCK,HOLDLOCK) WHERE DepartamentoID=@DepartamentoID AND Activo=1;";
+                await using (var cmd = new SqlCommand(sqlDepartamento, cn, tx))
+                {
+                    cmd.Parameters.Add("@DepartamentoID", SqlDbType.Int).Value = departamentoResponsableID;
+                    var resultado = await cmd.ExecuteScalarAsync();
+                    nombreDepartamento = resultado == null || resultado == DBNull.Value ? null : resultado.ToString()?.Trim();
+                }
+                if (string.IsNullOrWhiteSpace(nombreDepartamento))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El departamento seleccionado no existe o está inactivo.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+                }
+                string? nombreUsuario = null;
+                const string sqlUsuario = @"
+SELECT TOP(1)
+    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS NombreCompleto
+FROM dbo.Usuarios u
+INNER JOIN dbo.Persona p ON p.PersonaID=u.PersonaID
+WHERE u.UsuarioID=@UsuarioID
+  AND u.DepartamentoID=@DepartamentoID
+  AND u.Activo=1;";
+                await using (var cmd = new SqlCommand(sqlUsuario, cn, tx))
+                {
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioResponsableID;
+                    cmd.Parameters.Add("@DepartamentoID", SqlDbType.Int).Value = departamentoResponsableID;
+                    var resultado = await cmd.ExecuteScalarAsync();
+                    nombreUsuario = resultado == null || resultado == DBNull.Value ? null : resultado.ToString()?.Trim();
+                }
+                if (string.IsNullOrWhiteSpace(nombreUsuario))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El usuario seleccionado no pertenece al departamento indicado o ya no está activo.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+                }
+                const string sqlActualizar = @"
+UPDATE dbo.Calidad_DisposicionesMaterial
+SET DepartamentoResponsableID=@DepartamentoResponsableID,
+    UsuarioResponsableID=@UsuarioResponsableID,
+    Responsable=@Responsable,
+    EstadoTratamiento=@EstadoAsignada,
+    FechaInicioTratamiento=NULL,
+    FechaFinTratamiento=NULL,
+    UsuarioModificacionID=@UsuarioModificacionID,
+    FechaModificacion=@Ahora
+WHERE DisposicionID=@DisposicionID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(ResultadoFinal,N''))))=@Pendiente
+  AND UPPER(LTRIM(RTRIM(ISNULL(EstadoTratamiento,N'')))) IN (@PendienteAsignacion,@Asignada);";
+                var ahora = DateTime.Now;
+                await using (var cmd = new SqlCommand(sqlActualizar, cn, tx))
+                {
+                    cmd.Parameters.Add("@DepartamentoResponsableID", SqlDbType.Int).Value = departamentoResponsableID;
+                    cmd.Parameters.Add("@UsuarioResponsableID", SqlDbType.Int).Value = usuarioResponsableID;
+                    cmd.Parameters.Add("@Responsable", SqlDbType.NVarChar, 250).Value = $"{nombreDepartamento} - {nombreUsuario}";
+                    cmd.Parameters.Add("@EstadoAsignada", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.Asignada;
+                    cmd.Parameters.Add("@PendienteAsignacion", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.PendienteAsignacion;
+                    cmd.Parameters.Add("@Asignada", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.Asignada;
+                    cmd.Parameters.Add("@UsuarioModificacionID", SqlDbType.Int).Value = usuarioActualID.Value;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@DisposicionID", SqlDbType.Int).Value = disposicionID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionID;
+                    cmd.Parameters.Add("@Pendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Pendiente;
+                    var afectados = await cmd.ExecuteNonQueryAsync();
+                    if (afectados != 1)
+                        throw new InvalidOperationException("La disposición ya inició su tratamiento, está esperando reinspección o ya fue resuelta.");
+                }
+                await InsertarHistorialCalidadSqlAsync(inspeccionID, "DISPOSICION_ASIGNADA", null, null, null, null, $"Disposición {disposicionID} asignada a {nombreDepartamento} - {nombreUsuario}.", usuarioActualID.Value, ahora, cn, tx);
+                await tx.CommitAsync();
+                TempData["Mensaje"] = $"Responsable asignado: {nombreDepartamento} - {nombreUsuario}.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible asignar el responsable: " + ex.Message;
+            }
+            return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> IniciarTratamientoDisposicion(int disposicionID, int inspeccionID)
+        {
+            if (disposicionID <= 0 || inspeccionID <= 0)
+                return NotFound();
+            var usuarioId = ObtenerUsuarioIdActual();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+            try
+            {
+                const string sql = @"
+UPDATE dbo.Calidad_DisposicionesMaterial
+SET EstadoTratamiento=@EnProceso,
+    FechaInicioTratamiento=COALESCE(FechaInicioTratamiento,@Ahora),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE DisposicionID=@DisposicionID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1
+  AND UsuarioResponsableID=@UsuarioID
+  AND UPPER(LTRIM(RTRIM(ISNULL(ResultadoFinal,N''))))=@ResultadoPendiente
+  AND UPPER(LTRIM(RTRIM(ISNULL(EstadoTratamiento,N''))))=@Asignada;";
+                var ahora = DateTime.Now;
+                await using (var cmd = new SqlCommand(sql, cn, tx))
+                {
+                    cmd.Parameters.Add("@EnProceso", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.EnProceso;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@DisposicionID", SqlDbType.Int).Value = disposicionID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionID;
+                    cmd.Parameters.Add("@ResultadoPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Pendiente;
+                    cmd.Parameters.Add("@Asignada", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.Asignada;
+                    if (await cmd.ExecuteNonQueryAsync() != 1)
+                        throw new InvalidOperationException("La disposición no está asignada a tu usuario o ya cambió de estado.");
+                }
+                await InsertarHistorialCalidadSqlAsync(inspeccionID, "DISPOSICION_TRATAMIENTO_INICIADO", null, null, null, null, $"El usuario {usuarioId.Value} inició el tratamiento de la disposición {disposicionID}.", usuarioId.Value, ahora, cn, tx);
+                await tx.CommitAsync();
+                TempData["Mensaje"] = "Tratamiento iniciado correctamente.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible iniciar el tratamiento: " + ex.Message;
+            }
+            return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> TerminarTratamientoDisposicion(int disposicionID, int inspeccionID, string? observaciones)
+        {
+            if (disposicionID <= 0 || inspeccionID <= 0)
+                return NotFound();
+            var usuarioId = ObtenerUsuarioIdActual();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+            observaciones = observaciones?.Trim();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+            try
+            {
+                const string sql = @"
+UPDATE dbo.Calidad_DisposicionesMaterial
+SET EstadoTratamiento=@PendienteReinspeccion,
+    FechaFinTratamiento=@Ahora,
+    Observaciones=
+        CASE
+            WHEN @Observaciones IS NULL THEN Observaciones
+            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observaciones
+            ELSE Observaciones+CHAR(13)+CHAR(10)+@Observaciones
+        END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE DisposicionID=@DisposicionID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1
+  AND UsuarioResponsableID=@UsuarioID
+  AND UPPER(LTRIM(RTRIM(ISNULL(ResultadoFinal,N''))))=@ResultadoPendiente
+  AND UPPER(LTRIM(RTRIM(ISNULL(EstadoTratamiento,N''))))=@EnProceso;";
+                var ahora = DateTime.Now;
+                var comentario = string.IsNullOrWhiteSpace(observaciones) ? $"Tratamiento de disposición {disposicionID} terminado. Pendiente de reinspección por Calidad." : $"Tratamiento de disposición {disposicionID} terminado. Pendiente de reinspección por Calidad. {observaciones}";
+                await using (var cmd = new SqlCommand(sql, cn, tx))
+                {
+                    cmd.Parameters.Add("@PendienteReinspeccion", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.PendienteReinspeccion;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@DisposicionID", SqlDbType.Int).Value = disposicionID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionID;
+                    cmd.Parameters.Add("@ResultadoPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Pendiente;
+                    cmd.Parameters.Add("@EnProceso", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.EnProceso;
+                    if (await cmd.ExecuteNonQueryAsync() != 1)
+                        throw new InvalidOperationException("La disposición no está en tratamiento por tu usuario o ya cambió de estado.");
+                }
+                await InsertarHistorialCalidadSqlAsync(inspeccionID, "DISPOSICION_PENDIENTE_REINSPECCION", null, null, null, null, comentario, usuarioId.Value, ahora, cn, tx);
+                await tx.CommitAsync();
+                TempData["Mensaje"] = "Tratamiento terminado. La disposición quedó pendiente de reinspección por Calidad.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible finalizar el tratamiento: " + ex.Message;
+            }
+            return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+        }
+
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RecibirDisposicionParaReinspeccion(int disposicionID, int inspeccionID, string? observaciones)
+        {
+            if (disposicionID <= 0 || inspeccionID <= 0)
+                return NotFound();
+            var usuarioId = ObtenerUsuarioIdActual();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+            observaciones = observaciones?.Trim();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+            try
+            {
+                const string sql = @"
+UPDATE dbo.Calidad_DisposicionesMaterial
+SET EstadoTratamiento=@PendienteReinspeccion,
+    FechaFinTratamiento=@Ahora,
+    Observaciones=
+        CASE
+            WHEN @Observaciones IS NULL THEN Observaciones
+            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observaciones
+            ELSE Observaciones+CHAR(13)+CHAR(10)+@Observaciones
+        END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE DisposicionID=@DisposicionID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1
+  AND DepartamentoResponsableID IS NOT NULL
+  AND UsuarioResponsableID IS NOT NULL
+  AND UPPER(LTRIM(RTRIM(ISNULL(ResultadoFinal,N''))))=@ResultadoPendiente
+  AND UPPER(LTRIM(RTRIM(ISNULL(EstadoTratamiento,N''))))=@Asignada;";
+                var ahora = DateTime.Now;
+                await using (var cmd = new SqlCommand(sql, cn, tx))
+                {
+                    cmd.Parameters.Add("@PendienteReinspeccion", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.PendienteReinspeccion;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@DisposicionID", SqlDbType.Int).Value = disposicionID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionID;
+                    cmd.Parameters.Add("@ResultadoPendiente", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Pendiente;
+                    cmd.Parameters.Add("@Asignada", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.Asignada;
+                    var afectados = await cmd.ExecuteNonQueryAsync();
+                    if (afectados != 1)
+                        throw new InvalidOperationException("La disposición no está asignada, ya fue recibida por Calidad o cambió de estado.");
+                }
+                var comentario = string.IsNullOrWhiteSpace(observaciones)
+                    ? $"Disposición {disposicionID} recibida por Calidad para reinspección."
+                    : $"Disposición {disposicionID} recibida por Calidad para reinspección. {observaciones}";
+                await InsertarHistorialCalidadSqlAsync(inspeccionID, "DISPOSICION_RECIBIDA_CALIDAD", null, null, null, null, comentario, usuarioId.Value, ahora, cn, tx);
+                await tx.CommitAsync();
+                TempData["Mensaje"] = "Material recibido por Calidad. La disposición quedó pendiente de reinspección.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible recibir la disposición: " + ex.Message;
+            }
+            return RedirectToAction(nameof(Detalle), new { id = inspeccionID });
+        }
+
 
         private static async Task InsertarHistorialCalidadSqlAsync(
             int inspeccionId,

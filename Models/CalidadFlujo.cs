@@ -100,55 +100,59 @@ namespace ERP.NSQuell.Models
             new List<CalidadDisposicionMaterial>();
     }
 
+  
     [Table("Calidad_DisposicionesMaterial")]
     public class CalidadDisposicionMaterial
     {
         [Key]
         public int DisposicionID { get; set; }
-
         public int InspeccionID { get; set; }
         public int? MonitoreoID { get; set; }
-
         [Required]
         [StringLength(20)]
         public string TipoMaterial { get; set; } = CalidadTipoMaterial.Sospechoso;
-
         public int CantidadAfectada { get; set; }
-
         [StringLength(20)]
         public string? Etiqueta { get; set; }
-
         [Required]
         [StringLength(20)]
         public string Disposicion { get; set; } = CalidadTipoDisposicion.Pendiente;
-
-        [StringLength(20)]
+        [StringLength(250)]
         public string? Responsable { get; set; }
-
+        public int? DepartamentoResponsableID { get; set; }
+        public int? UsuarioResponsableID { get; set; }
+        [Required]
+        [StringLength(30)]
+        public string EstadoTratamiento { get; set; } = CalidadEstadoTratamiento.PendienteAsignacion;
+        public DateTime? FechaInicioTratamiento { get; set; }
+        public DateTime? FechaFinTratamiento { get; set; }
         public DateTime FechaInicio { get; set; } = DateTime.Now;
         public DateTime? FechaFin { get; set; }
-
         public int CantidadLiberada { get; set; }
         public int CantidadScrap { get; set; }
-
         [Required]
         [StringLength(20)]
         public string ResultadoFinal { get; set; } = CalidadResultadoDisposicion.Pendiente;
-
         [StringLength(1000)]
         public string? Observaciones { get; set; }
-
         public int? UsuarioCreacionID { get; set; }
         public DateTime FechaCreacion { get; set; } = DateTime.Now;
         public int? UsuarioModificacionID { get; set; }
         public DateTime? FechaModificacion { get; set; }
         public bool Activo { get; set; } = true;
-
         [ForeignKey(nameof(InspeccionID))]
         public CalidadInspeccion? Inspeccion { get; set; }
-
         [ForeignKey(nameof(MonitoreoID))]
         public CalidadMonitoreoProceso? Monitoreo { get; set; }
+    }
+
+    public static class CalidadEstadoTratamiento
+    {
+        public const string PendienteAsignacion = "PENDIENTE_ASIGNACION";
+        public const string Asignada = "ASIGNADA";
+        public const string EnProceso = "EN_PROCESO";
+        public const string PendienteReinspeccion = "PENDIENTE_REINSPECCION";
+        public const string Concluida = "CONCLUIDA";
     }
 
     [Table("Calidad_CajasLiberadas")]

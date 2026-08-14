@@ -32,8 +32,15 @@
         valor.HasValue ? (valor.Value ? "true" : "false") : string.Empty;
 
     var confirmacionAjustes = esReliberacion ? "¿Confirmas que deseas rechazar la reliberación y solicitar nuevas primeras piezas?" : "¿Confirmas que deseas solicitar ajustes a Producción?";
-    var seccionCalidadGuardada = Model.PreguntasChecklistCalidad.Any()
-        && Model.PreguntasChecklistCalidad.All(x => !string.IsNullOrWhiteSpace(x.Resultado));
+    var totalPreguntasCalidad = Model.PreguntasChecklistCalidad.Count;
+    var preguntasCalidadRespondidas = Model.PreguntasChecklistCalidad.Count(x =>
+        !string.IsNullOrWhiteSpace(x.Resultado) &&
+        new[] { "OK", "NOK", "NO_APLICA", "N/A", "NA" }.Contains(x.Resultado.Trim().ToUpperInvariant()));
+    var preguntasCalidadPendientes = totalPreguntasCalidad - preguntasCalidadRespondidas;
+    var preguntasCalidadNok = Model.PreguntasChecklistCalidad.Count(x =>
+        string.Equals(x.Resultado?.Trim(), "NOK", StringComparison.OrdinalIgnoreCase));
+    var seccionCalidadGuardada = totalPreguntasCalidad > 0 && preguntasCalidadPendientes == 0;
+    var checklistCalidadPuedeAutorizar = seccionCalidadGuardada && preguntasCalidadNok == 0;
 }
 <style>
     .quality-liberacion {
@@ -260,6 +267,58 @@
         }
 
 
+        .quality-liberacion .quality-checklist-progress {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 0 0 10px;
+            padding: 8px 10px;
+            border: 1px solid #dbe3eb;
+            border-radius: 8px;
+            background: #f8fafc;
+            font-size: .8rem;
+            font-weight: 750;
+            color: #475569
+        }
+
+        .quality-liberacion .quality-checklist-item.is-pending {
+            border-color: #fdba74;
+            background: #fffaf5
+        }
+
+        .quality-liberacion .quality-checklist-item.is-nok {
+            border-color: #fca5a5;
+            background: #fffafa
+        }
+
+        .quality-liberacion .quality-checklist-item.is-na {
+            border-color: #cbd5e1
+        }
+
+        .quality-liberacion .quality-checklist-message {
+            display: none;
+            margin: 10px 0 0;
+            padding: 9px 11px;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            background: #fff1f2;
+            color: #991b1b;
+            font-size: .8rem;
+            font-weight: 750
+        }
+
+            .quality-liberacion .quality-checklist-message.is-visible {
+                display: block
+            }
+
+        .quality-liberacion .quality-prearranque-help {
+            margin-top: 8px;
+            color: #b45309;
+            font-size: .8rem;
+            font-weight: 750
+        }
+
         /* Sección del auditor compacta */
         .quality-liberacion .quality-auditor-card .quality-card-header {
             display: flex;
@@ -422,9 +481,9 @@
         }
 
         /* ============================================================
-                   PRIMERAS PIEZAS / RELIBERACIÓN - VISTA COMPACTA
-                   Reduce scroll sin cambiar nombres de campos ni comportamiento.
-                   ============================================================ */
+                       PRIMERAS PIEZAS / RELIBERACIÓN - VISTA COMPACTA
+                       Reduce scroll sin cambiar nombres de campos ni comportamiento.
+                       ============================================================ */
         .quality-liberacion .quality-firstpieces-card .quality-card-header {
             padding: 9px 14px;
         }
@@ -653,140 +712,90 @@
     {
         <section class="quality-card quality-auditor-card" data-auditor-section>
             <div class="quality-card-header">
-                <h2>
-                    <i class="fa-solid fa-list-check"></i>
-                    Sección del auditor de Calidad
-                </h2>
-
-                @if (seccionCalidadGuardada)
-                {
-                    <span class="quality-auditor-summary">
-                        <i class="fa-solid fa-circle-check"></i>
-                        Sección guardada
+                <h2><i class="fa-solid fa-list-check"></i> Sección del auditor de Calidad</h2>
+                <span class="quality-auditor-summary" data-auditor-summary>
+                    <i class="fa-solid @(preguntasCalidadPendientes > 0 ? "fa-clock" : preguntasCalidadNok > 0 ? "fa-triangle-exclamation" : "fa-circle-check")"></i>
+                    <span data-auditor-summary-text>
+                        @if (preguntasCalidadPendientes > 0)
+                        {
+                            <text>@preguntasCalidadRespondidas de @totalPreguntasCalidad respondidas</text>
+                        }
+                        else if (preguntasCalidadNok > 0)
+                        {
+                            <text>@preguntasCalidadNok NOK</text>
+                        }
+                        else
+                        {
+                            <text>Checklist completo</text>
+                        }
                     </span>
-                }
-
-                <button type="button"
-                        class="quality-auditor-toggle"
-                        data-auditor-toggle
-                        aria-expanded="@(!seccionCalidadGuardada ? "true" : "false")">
-                    <i class="fa-solid @(seccionCalidadGuardada ? "fa-pen-to-square" : "fa-chevron-up")"
-                       data-auditor-toggle-icon></i>
-                    <span data-auditor-toggle-text>
-                        @(seccionCalidadGuardada ? "Ver o editar" : "Comprimir")
-                    </span>
+                </span>
+                <button type="button" class="quality-auditor-toggle" data-auditor-toggle aria-expanded="@(!seccionCalidadGuardada ? "true" : "false")">
+                    <i class="fa-solid @(seccionCalidadGuardada ? "fa-pen-to-square" : "fa-chevron-up")" data-auditor-toggle-icon></i>
+                    <span data-auditor-toggle-text>@(seccionCalidadGuardada ? "Ver o editar" : "Comprimir")</span>
                 </button>
             </div>
-
-            <div class="quality-card-body quality-auditor-content @(seccionCalidadGuardada ? "is-collapsed" : string.Empty)"
-                 data-auditor-content>
-                <form asp-controller="Calidad"
-                      asp-action="GuardarChecklistCalidad"
-                      method="post"
-                      data-auditor-form>
+            <div class="quality-card-body quality-auditor-content @(seccionCalidadGuardada ? "is-collapsed" : string.Empty)" data-auditor-content>
+                <form asp-controller="Calidad" asp-action="GuardarChecklistCalidad" method="post" data-auditor-form>
                     @Html.AntiForgeryToken()
-
                     <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
                     <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
-
                     <div class="quality-checklist-instructions">
                         <i class="fa-solid fa-circle-info"></i>
-                        <span>
-                            Las respuestas nuevas comienzan en <strong>OK</strong>.
-                            Cambia a <strong>NOK</strong> o marca <strong>N/A</strong> para habilitar observaciones.
+                        <span>Responde expresamente cada pregunta con <strong>OK</strong>, <strong>NOK</strong> o <strong>NO APLICA</strong>. Una pregunta sin selección permanece pendiente.</span>
+                    </div>
+                    <div class="quality-checklist-progress">
+                        <span><strong data-checklist-count>@preguntasCalidadRespondidas de @totalPreguntasCalidad</strong> respondidas</span>
+                        <span data-checklist-status>
+                            @if (preguntasCalidadPendientes > 0)
+                            {
+                                <text>@preguntasCalidadPendientes pendiente(s)</text>
+                            }
+                            else if (preguntasCalidadNok > 0)
+                            {
+                                <text>@preguntasCalidadNok NOK</text>
+                            }
+                            else
+                            {
+                                <text>Completo</text>
+                            }
                         </span>
                     </div>
-
                     @for (var i = 0; i < Model.PreguntasChecklistCalidad.Count; i++)
                     {
                         var pregunta = Model.PreguntasChecklistCalidad[i];
-                        var resultadoActual = string.IsNullOrWhiteSpace(pregunta.Resultado)
-                        ? "OK"
-                        : pregunta.Resultado.Trim().ToUpperInvariant();
-                        var esNa = resultadoActual == "NA";
+                        var resultadoActual = (pregunta.Resultado ?? string.Empty).Trim().ToUpperInvariant();
+                        if (resultadoActual == "N/A" || resultadoActual == "NA") resultadoActual = "NO_APLICA";
+                        var esOk = resultadoActual == "OK";
                         var esNok = resultadoActual == "NOK";
-                        var esOk = !esNa && !esNok;
-                        var observacionesHabilitadas = esNok || esNa;
-
-                        <input type="hidden"
-                               name="Respuestas[@i].ChecklistArranqueDetalleID"
-                               value="@pregunta.ChecklistArranqueDetalleID" />
-
-                        <div class="quality-side-action quality-checklist-item"
-                             data-quality-result>
+                        var esNa = resultadoActual == "NO_APLICA";
+                        var esPendiente = !esOk && !esNok && !esNa;
+                        <input type="hidden" name="Respuestas[@i].ChecklistArranqueDetalleID" value="@pregunta.ChecklistArranqueDetalleID" />
+                        <div class="quality-side-action quality-checklist-item @(esPendiente ? "is-pending" : esNok ? "is-nok" : esNa ? "is-na" : string.Empty)" data-quality-result>
                             <h3>@pregunta.OrdenPregunta. @pregunta.TextoPregunta</h3>
-
-                            <input type="hidden"
-                                   name="Respuestas[@i].Resultado"
-                                   value="@resultadoActual"
-                                   data-result-value />
-
                             <div class="quality-form-grid quality-checklist-grid">
                                 <div>
                                     <label class="quality-form-label">Resultado</label>
-
-                                    <div class="quality-result-selector">
-                                        <div class="quality-result-switch-group">
-                                            <span class="quality-result-option quality-result-option-nok">NOK</span>
-
-                                            <label class="quality-toggle-switch"
-                                                   title="Cambiar entre NOK y OK">
-                                                <input type="checkbox"
-                                                       data-result-switch
-                                                       checked="@(esOk ? "checked" : null)"
-                                                       disabled="@(esNa ? "disabled" : null)" />
-                                                <span class="quality-toggle-slider"></span>
-                                            </label>
-
-                                            <span class="quality-result-option quality-result-option-ok">OK</span>
-                                        </div>
-
-                                        <label class="quality-na-option">
-                                            <input type="checkbox"
-                                                   data-result-na
-                                                   checked="@(esNa ? "checked" : null)" />
-                                            <span>N/A</span>
-                                        </label>
-                                    </div>
-
-                                    <div class="quality-result-current"
-                                         data-result-caption>
-                                        @(esNa ? "No aplica" : esNok ? "No conforme" : "Conforme")
-                                    </div>
+                                    <select name="Respuestas[@i].Resultado" class="quality-form-select" data-result-select required>
+                                        <option value="" selected="@(esPendiente ? "selected" : null)">Selecciona...</option>
+                                        <option value="OK" selected="@(esOk ? "selected" : null)">OK</option>
+                                        <option value="NOK" selected="@(esNok ? "selected" : null)">NOK</option>
+                                        <option value="NO_APLICA" selected="@(esNa ? "selected" : null)">NO APLICA</option>
+                                    </select>
+                                    <div class="quality-result-current" data-result-caption>@(esPendiente ? "Pendiente de responder" : esNok ? "No conforme" : esNa ? "No aplica" : "Conforme")</div>
                                 </div>
-
                                 <div>
                                     <label class="quality-form-label">Observaciones</label>
-                                    <textarea name="Respuestas[@i].Observaciones"
-                                      class="quality-form-control quality-result-observation @(observacionesHabilitadas ? "" : "is-locked")"
-                                      maxlength="500"
-                                      rows="2"
-                                      data-result-observation
-                                      readonly="@(!observacionesHabilitadas ? "readonly" : null)"
-                                      aria-readonly="@(!observacionesHabilitadas ? "true" : "false")"
-                                      placeholder="@(esNok ? "Describe la no conformidad (obligatorio)..." : esNa ? "Explica por qué no aplica (opcional)..." : "Se habilita al seleccionar NOK o N/A")">@pregunta.Observaciones</textarea>
-                                    <div class="quality-observation-help" data-observation-help>
-                                        @(esNok
-                                                                        ? "La observación es obligatoria para un resultado NOK."
-                                                                        : esNa
-                                                                        ? "Puedes documentar por qué esta validación no aplica."
-                                                                        : "El campo se habilitará cuando el resultado sea NOK o N/A.")
+                                    <textarea name="Respuestas[@i].Observaciones" class="quality-form-control quality-result-observation @(esNok || esNa ? string.Empty : "is-locked")" maxlength="500" rows="2" data-result-observation readonly="@(esNok || esNa ? null : "readonly")" placeholder="@(esNok ? "Describe la no conformidad (obligatorio)..." : esNa ? "Explica por qué no aplica (opcional)..." : "Se habilita al seleccionar NOK o NO APLICA")">@pregunta.Observaciones</textarea>
+                                    <div class="quality-observation-help" data-observation-help>@(esNok ? "La observación es obligatoria para un resultado NOK." : esNa ? "Puedes documentar por qué esta validación no aplica." : "El campo se habilitará cuando el resultado sea NOK o NO APLICA.")</div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                                }
-
+                    }
+                    <div class="quality-checklist-message" data-checklist-message role="alert"></div>
                     <label class="quality-form-label">Observaciones generales de Calidad</label>
-                    <textarea name="ObservacionesCalidad"
-                          class="quality-form-control quality-general-observation"
-                          maxlength="1000"
-                          rows="2"
-                          placeholder="Observaciones generales de la revisión..."></textarea>
-
-                    <button type="submit"
-                            class="quality-btn quality-btn-primary mt-3"
-                            data-auditor-submit>
+                    <textarea name="ObservacionesCalidad" class="quality-form-control quality-general-observation" maxlength="1000" rows="2" placeholder="Observaciones generales de la revisión...">@Model.ObservacionesChecklistCalidad</textarea>
+                    <button type="submit" class="quality-btn quality-btn-primary mt-3" data-auditor-submit>
                         <i class="fa-solid fa-floppy-disk"></i>
                         <span data-auditor-submit-text>Guardar sección de Calidad</span>
                     </button>
@@ -877,10 +886,24 @@
                               placeholder="Observaciones de la autorización..."></textarea>
 
                         <button type="submit"
-                                class="quality-btn quality-btn-success mt-3">
+                                class="quality-btn quality-btn-success mt-3"
+                                disabled="@(!checklistCalidadPuedeAutorizar)">
                             <i class="fa-solid fa-circle-check"></i>
                             Autorizar prearranque
                         </button>
+                        @if (!checklistCalidadPuedeAutorizar)
+                        {
+                            <div class="quality-prearranque-help">
+                                @if (preguntasCalidadPendientes > 0)
+                                {
+                                    <text>Faltan @preguntasCalidadPendientes pregunta(s) del checklist de Calidad por responder y guardar.</text>
+                                }
+                                else if (preguntasCalidadNok > 0)
+                                {
+                                    <text>Existen @preguntasCalidadNok resultado(s) NOK. No se puede autorizar el prearranque.</text>
+                                }
+                            </div>
+                        }
                     </form>
 
                     <form asp-controller="Calidad"
@@ -1437,9 +1460,81 @@
 </div>
 <script>
     document.addEventListener('DOMContentLoaded',function(){
-    function actualizarResultadoChecklist(c){const i=c.querySelector('[data-result-switch]'),n=c.querySelector('[data-result-na]'),v=c.querySelector('[data-result-value]'),o=c.querySelector('[data-result-observation]'),l=c.querySelector('[data-result-caption]'),a=c.querySelector('[data-observation-help]');if(!i||!n||!v||!o)return;let r;if(n.checked){r='NA';i.disabled=true}else{i.disabled=false;r=i.checked?'OK':'NOK'}v.value=r;c.classList.toggle('is-nok',r==='NOK');c.classList.toggle('is-na',r==='NA');const h=r==='NOK'||r==='NA';o.readOnly=!h;o.setAttribute('aria-readonly',h?'false':'true');o.classList.toggle('is-locked',!h);if(r==='NOK'){o.placeholder='Describe la no conformidad (obligatorio)...';if(l)l.textContent='No conforme';if(a)a.textContent='La observación es obligatoria para un resultado NOK.'}else if(r==='NA'){o.placeholder='Explica por qué no aplica (opcional)...';if(l)l.textContent='No aplica';if(a)a.textContent='Puedes documentar por qué esta validación no aplica.'}else{o.placeholder='Se habilita al seleccionar NOK o N/A';if(l)l.textContent='Conforme';if(a)a.textContent='El campo se habilitará cuando el resultado sea NOK o N/A.'}}
-    document.querySelectorAll('.quality-liberacion [data-quality-result]').forEach(function(c){const i=c.querySelector('[data-result-switch]'),n=c.querySelector('[data-result-na]');if(!i||!n)return;actualizarResultadoChecklist(c);i.addEventListener('change',()=>actualizarResultadoChecklist(c));n.addEventListener('change',function(){if(n.checked)c.dataset.resultadoAnterior=i.checked?'OK':'NOK';else i.checked=c.dataset.resultadoAnterior!=='NOK';actualizarResultadoChecklist(c)})});
-    document.querySelectorAll('.quality-liberacion form').forEach(function(f){if(!f.querySelector('[data-quality-result]'))return;f.addEventListener('submit',function(e){let p=null;f.querySelectorAll('[data-quality-result]').forEach(function(c){const v=c.querySelector('[data-result-value]'),o=c.querySelector('[data-result-observation]');if(!v||!o)return;const x=v.value==='NOK'&&!o.value.trim();o.classList.toggle('is-invalid',x);if(x&&!p)p=o});if(p){e.preventDefault();p.focus();p.scrollIntoView({behavior:'smooth',block:'center'});alert('Las respuestas NOK requieren una observación antes de guardar.')}})});
+    function actualizarChecklistAuditor(){
+        document.querySelectorAll('.quality-liberacion [data-auditor-section]').forEach(function(section){
+            const items=Array.from(section.querySelectorAll('[data-quality-result]'));
+            let respondidas=0,nok=0;
+            items.forEach(function(item){
+                const select=item.querySelector('[data-result-select]');
+                const obs=item.querySelector('[data-result-observation]');
+                const caption=item.querySelector('[data-result-caption]');
+                const help=item.querySelector('[data-observation-help]');
+                if(!select||!obs)return;
+                const r=select.value;
+                if(r)respondidas++;
+                if(r==='NOK')nok++;
+                item.classList.toggle('is-pending',!r);
+                item.classList.toggle('is-nok',r==='NOK');
+                item.classList.toggle('is-na',r==='NO_APLICA');
+                const habilitar=r==='NOK'||r==='NO_APLICA';
+                obs.readOnly=!habilitar;
+                obs.classList.toggle('is-locked',!habilitar);
+                if(r==='NOK'){
+                    obs.placeholder='Describe la no conformidad (obligatorio)...';
+                    if(caption)caption.textContent='No conforme';
+                    if(help)help.textContent='La observación es obligatoria para un resultado NOK.';
+                }else if(r==='NO_APLICA'){
+                    obs.placeholder='Explica por qué no aplica (opcional)...';
+                    if(caption)caption.textContent='No aplica';
+                    if(help)help.textContent='Puedes documentar por qué esta validación no aplica.';
+                }else if(r==='OK'){
+                    if(caption)caption.textContent='Conforme';
+                    if(help)help.textContent='El campo se habilitará cuando el resultado sea NOK o NO APLICA.';
+                }else{
+                    if(caption)caption.textContent='Pendiente de responder';
+                    if(help)help.textContent='Selecciona OK, NOK o NO APLICA.';
+                }
+            });
+            const total=items.length;
+            const pendientes=total-respondidas;
+            const count=section.querySelector('[data-checklist-count]');
+            const status=section.querySelector('[data-checklist-status]');
+            const summary=section.querySelector('[data-auditor-summary-text]');
+            if(count)count.textContent=respondidas+' de '+total;
+            if(status)status.textContent=pendientes>0?pendientes+' pendiente(s)':nok>0?nok+' NOK':'Completo';
+            if(summary)summary.textContent=pendientes>0?respondidas+' de '+total+' respondidas':nok>0?nok+' NOK':'Checklist completo';
+        });
+    }
+    document.querySelectorAll('.quality-liberacion [data-result-select]').forEach(function(select){select.addEventListener('change',actualizarChecklistAuditor)});
+    document.querySelectorAll('.quality-liberacion [data-auditor-form]').forEach(function(form){
+        form.addEventListener('submit',function(e){
+            const message=form.querySelector('[data-checklist-message]');
+            let pendientes=0;
+            let primerPendiente=null;
+            let nokSinObs=0;
+            let primeraObs=null;
+            form.querySelectorAll('[data-quality-result]').forEach(function(item){
+                const select=item.querySelector('[data-result-select]');
+                const obs=item.querySelector('[data-result-observation]');
+                if(!select||!obs)return;
+                if(!select.value){pendientes++;if(!primerPendiente)primerPendiente=select}
+                if(select.value==='NOK'&&!obs.value.trim()){nokSinObs++;obs.classList.add('is-invalid');if(!primeraObs)primeraObs=obs}else{obs.classList.remove('is-invalid')}
+            });
+            if(pendientes>0||nokSinObs>0){
+                e.preventDefault();
+                if(message){
+                    message.textContent=pendientes>0?'Faltan '+pendientes+' pregunta(s) por responder. Selecciona OK, NOK o NO APLICA en todas.':'Toda respuesta NOK requiere una observación.';
+                    message.classList.add('is-visible');
+                }
+                const foco=primerPendiente||primeraObs;
+                foco?.focus();
+                foco?.scrollIntoView({behavior:'smooth',block:'center'});
+                return;
+            }
+            if(message)message.classList.remove('is-visible');
+        });
+    });
+    actualizarChecklistAuditor();
     document.querySelectorAll('.quality-liberacion [data-auditor-section]').forEach(function(section){
         const toggle=section.querySelector('[data-auditor-toggle]');
         const content=section.querySelector('[data-auditor-content]');

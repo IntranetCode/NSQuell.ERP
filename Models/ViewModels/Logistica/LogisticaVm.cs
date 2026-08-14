@@ -137,7 +137,169 @@ public sealed class LogisticaDetalleVm
     public List<LogisticaCajaDisponibleVm> CajasDisponibles { get; set; } = new();
     public List<LogisticaDemandaVm> DemandasDisponibles { get; set; } = new();
     public List<LogisticaHistorialVm> Historial { get; set; } = new();
+
+
+    // =====================================================
+    // LOGISTICA CONTROL TOWER - FASE 1
+    // =====================================================
+
+    // Estado ejecutivo
+    public string EstadoGeneral { get; set; } = "En tiempo";
+    public string EstadoGeneralClase { get; set; } = "success";
+    public string EstadoGeneralIcono { get; set; } = "fa-circle-check";
+
+    // Avance
+    public int PorcentajeAvance { get; set; }
+    public string ProximaAccion { get; set; } = string.Empty;
+    public string ProximaAccionDetalle { get; set; } = string.Empty;
+
+    // Preparacion
+    public int TotalPiezasSolicitadas { get; set; }
+    public int TotalPiezasPreparadas { get; set; }
+    public int TotalPiezasDespachadas { get; set; }
+
+    public int TotalCajasAsignadas { get; set; }
+    public int TotalCajasCargadas { get; set; }
+
+    public int PiezasPendientesPreparar =>
+        Math.Max(0, TotalPiezasSolicitadas - TotalPiezasPreparadas);
+
+    public decimal PorcentajePreparacion =>
+        TotalPiezasSolicitadas <= 0
+            ? 0
+            : Math.Min(
+                100,
+                Math.Round(
+                    (decimal)TotalPiezasPreparadas
+                    / TotalPiezasSolicitadas * 100,
+                    1));
+
+    // Tiempo / riesgo
+    public DateTime? FechaHoraCargaProgramada { get; set; }
+    public DateTime? FechaHoraEntregaProgramada { get; set; }
+
+    public bool CargaAtrasada { get; set; }
+    public bool EntregaAtrasada { get; set; }
+    public bool EnRiesgo { get; set; }
+
+    public int? MinutosParaCarga { get; set; }
+    public int? MinutosParaEntrega { get; set; }
+
+    public string MensajeRiesgo { get; set; } = string.Empty;
+
+    // Validaciones de salida
+    public bool TieneRuta => !string.IsNullOrWhiteSpace(Ruta);
+    public bool TieneUnidad => !string.IsNullOrWhiteSpace(Unidad);
+    public bool TieneOperador => !string.IsNullOrWhiteSpace(Operador);
+
+    public bool PreparacionCompleta =>
+        TotalPiezasSolicitadas > 0
+        && TotalPiezasPreparadas >= TotalPiezasSolicitadas;
+
+    public bool CargaCompleta =>
+        Estatus is "Cargado" or "En ruta" or "Entregado";
+
+    public bool PuedeSalir =>
+        TieneRuta
+        && TieneUnidad
+        && TieneOperador
+        && PreparacionCompleta
+        && CargaCompleta;
+
+    // Incidencias
+    public int IncidenciasAbiertas { get; set; }
+    public int IncidenciasCriticas { get; set; }
+
+    public List<LogisticaChecklistVm> Checklist { get; set; } = new();
+    public List<LogisticaIncidenciaVm> Incidencias { get; set; } = new();
 }
+
+public sealed class LogisticaChecklistVm
+{
+    public string Codigo { get; set; } = string.Empty;
+
+    public string Concepto { get; set; } = string.Empty;
+
+    public string Descripcion { get; set; } = string.Empty;
+
+    public bool Completo { get; set; }
+
+    public bool Obligatorio { get; set; } = true;
+
+    public string Icono =>
+        Completo
+            ? "fa-circle-check"
+            : "fa-circle-xmark";
+
+    public string Clase =>
+        Completo
+            ? "success"
+            : "danger";
+}
+
+public sealed class LogisticaIncidenciaVm
+{
+    public int IncidenciaID { get; set; }
+
+    public int EmbarqueID { get; set; }
+
+    public string Folio { get; set; } = string.Empty;
+
+    public string Tipo { get; set; } = string.Empty;
+
+    public string Severidad { get; set; } = string.Empty;
+
+    public string Descripcion { get; set; } = string.Empty;
+
+    public string Responsable { get; set; } = string.Empty;
+
+    public string Estatus { get; set; } = string.Empty;
+
+    public DateTime FechaRegistro { get; set; }
+
+    public DateTime? FechaCompromiso { get; set; }
+
+    public DateTime? FechaCierre { get; set; }
+
+    public string Solucion { get; set; } = string.Empty;
+
+    public string UsuarioRegistro { get; set; } = string.Empty;
+}
+
+public sealed class LogisticaIncidenciaCrearVm
+{
+    [Required]
+    public int EmbarqueID { get; set; }
+
+    [Required, StringLength(80)]
+    public string Tipo { get; set; } = string.Empty;
+
+    [Required, StringLength(20)]
+    public string Severidad { get; set; } = "Media";
+
+    [Required, StringLength(1200)]
+    public string Descripcion { get; set; } = string.Empty;
+
+    [StringLength(200)]
+    public string? Responsable { get; set; }
+
+    [DataType(DataType.DateTime)]
+    public DateTime? FechaCompromiso { get; set; }
+}
+
+public sealed class LogisticaIncidenciaCerrarVm
+{
+    [Required]
+    public int IncidenciaID { get; set; }
+
+    [Required]
+    public int EmbarqueID { get; set; }
+
+    [Required, StringLength(1200)]
+    public string Solucion { get; set; } = string.Empty;
+}
+
+
 
 public sealed class LogisticaDetallePartidaVm
 {

@@ -1583,9 +1583,360 @@ ORDER BY FechaEvento DESC,HistorialID DESC;";
                 });
             }
         }
-
+        CalcularEstadoOperativo(vm);
         return vm;
     }
+
+    private static void CalcularEstadoOperativo(LogisticaDetalleVm vm)
+    {
+        var ahora = DateTime.Now;
+
+        vm.TotalPiezasSolicitadas =
+            vm.Partidas.Sum(x => x.CantidadSolicitada);
+
+        vm.TotalPiezasPreparadas =
+            vm.Partidas.Sum(x => x.CantidadAsignada);
+
+        vm.TotalPiezasDespachadas =
+            vm.Partidas.Sum(x => x.CantidadDespachada);
+
+        vm.TotalCajasAsignadas =
+            vm.CajasAsignadas.Count;
+
+        vm.TotalCajasCargadas =
+            vm.CajasAsignadas.Count(x =>
+                string.Equals(
+                    x.Estatus,
+                    "Cargada",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    x.Estatus,
+                    "Despachada",
+                    StringComparison.OrdinalIgnoreCase));
+
+        vm.FechaHoraCargaProgramada =
+            CombinarFechaHora(
+                vm.FechaCargaProgramada,
+                vm.HoraCargaProgramada);
+
+        vm.FechaHoraEntregaProgramada =
+            CombinarFechaHora(
+                vm.FechaEntregaProgramada,
+                vm.HoraEntregaProgramada);
+
+        // =====================================================
+        // PORCENTAJE DE AVANCE
+        // =====================================================
+
+        vm.PorcentajeAvance = vm.Estatus switch
+        {
+            "Programado" => 10,
+            "Preparando" => CalcularAvancePreparacion(vm),
+            "Preparado" => 55,
+            "Cargado" => 70,
+            "En ruta" => 85,
+            "Entregado" => 100,
+            "Cancelado" => 0,
+            _ => 0
+        };
+
+        // =====================================================
+        // PROXIMA ACCION
+        // =====================================================
+
+        switch (vm.Estatus)
+        {
+            case "Programado":
+
+                vm.ProximaAccion = "Iniciar preparación";
+
+                vm.ProximaAccionDetalle =
+                    vm.TotalPiezasPreparadas > 0
+                        ? $"Ya existen {vm.TotalPiezasPreparadas:N0} piezas reservadas."
+                        : "Asignar las cajas PT correspondientes al embarque.";
+
+                break;
+
+            case "Preparando":
+
+                if (!vm.PreparacionCompleta)
+                {
+                    vm.ProximaAccion = "Completar preparación";
+
+                    vm.ProximaAccionDetalle =
+                        $"Faltan {vm.PiezasPendientesPreparar:N0} piezas por preparar.";
+                }
+                else
+                {
+                    vm.ProximaAccion = "Confirmar embarque preparado";
+
+                    vm.ProximaAccionDetalle =
+                        "La cantidad requerida ya está completamente asignada.";
+                }
+
+                break;
+
+            case "Preparado":
+
+                vm.ProximaAccion = "Confirmar carga física";
+
+                vm.ProximaAccionDetalle =
+                    "El producto está preparado y puede cargarse en la unidad.";
+
+                break;
+
+            case "Cargado":
+
+                vm.ProximaAccion = "Validar salida";
+
+                vm.ProximaAccionDetalle =
+                    "Confirmar checklist de salida y despachar el embarque.";
+
+                break;
+
+            case "En ruta":
+
+                vm.ProximaAccion = "Confirmar entrega";
+
+                vm.ProximaAccionDetalle =
+                    "El embarque se encuentra en tránsito hacia el cliente.";
+
+                break;
+
+            case "Entregado":
+
+                vm.ProximaAccion = "Proceso completado";
+
+                vm.ProximaAccionDetalle =
+                    "El embarque ya fue recibido por el cliente.";
+
+                break;
+
+            case "Cancelado":
+
+                vm.ProximaAccion = "Programación cancelada";
+
+                vm.ProximaAccionDetalle =
+                    "Este embarque ya no continúa en el flujo.";
+
+                break;
+
+            default:
+
+                vm.ProximaAccion = "Revisar embarque";
+                vm.ProximaAccionDetalle = "Estatus no reconocido.";
+
+                break;
+        }
+
+        // =====================================================
+        // TIEMPOS
+        // =====================================================
+
+        if (vm.FechaHoraCargaProgramada.HasValue)
+        {
+            vm.MinutosParaCarga =
+                (int)Math.Round(
+                    (vm.FechaHoraCargaProgramada.Value - ahora)
+                    .TotalMinutes);
+
+            vm.CargaAtrasada =
+                vm.Estatus is "Programado" or "Preparando" or "Preparado"
+                && ahora > vm.FechaHoraCargaProgramada.Value;
+        }
+
+        if (vm.FechaHoraEntregaProgramada.HasValue)
+        {
+            vm.MinutosParaEntrega =
+                (int)Math.Round(
+                    (vm.FechaHoraEntregaProgramada.Value - ahora)
+                    .TotalMinutes);
+
+            vm.EntregaAtrasada =
+                vm.Estatus is not "Entregado"
+                and not "Cancelado"
+                && ahora > vm.FechaHoraEntregaProgramada.Value;
+        }
+
+        // =====================================================
+        // RIESGO PREVENTIVO
+        // =====================================================
+
+        vm.EnRiesgo = false;
+        vm.MensajeRiesgo = string.Empty;
+
+        if (vm.Estatus is "Entregado" or "Cancelado")
+        {
+            // Ya no evaluamos riesgo operativo.
+        }
+        else if (vm.EntregaAtrasada)
+        {
+            vm.MensajeRiesgo =
+                "La hora comprometida de entrega ya fue superada.";
+        }
+        else if (vm.CargaAtrasada)
+        {
+            vm.MensajeRiesgo =
+                "La hora programada de carga ya fue superada.";
+        }
+        else if (
+            vm.FechaHoraCargaProgramada.HasValue
+            && vm.MinutosParaCarga.HasValue
+            && vm.MinutosParaCarga.Value <= 60
+            && vm.Estatus is "Programado" or "Preparando")
+        {
+            vm.EnRiesgo = true;
+
+            vm.MensajeRiesgo =
+                vm.PiezasPendientesPreparar > 0
+                    ? $"La carga está próxima y faltan {vm.PiezasPendientesPreparar:N0} piezas por preparar."
+                    : "La carga está próxima y todavía no se ha confirmado la preparación.";
+        }
+        else if (
+            vm.FechaHoraEntregaProgramada.HasValue
+            && vm.MinutosParaEntrega.HasValue
+            && vm.MinutosParaEntrega.Value <= 120
+            && vm.Estatus != "En ruta")
+        {
+            vm.EnRiesgo = true;
+
+            vm.MensajeRiesgo =
+                "La entrega está próxima y el embarque todavía no se encuentra en ruta.";
+        }
+
+        // =====================================================
+        // ESTADO EJECUTIVO
+        // =====================================================
+
+        if (vm.Estatus == "Cancelado")
+        {
+            vm.EstadoGeneral = "Cancelado";
+            vm.EstadoGeneralClase = "secondary";
+            vm.EstadoGeneralIcono = "fa-ban";
+        }
+        else if (vm.Estatus == "Entregado")
+        {
+            vm.EstadoGeneral = "Entregado";
+            vm.EstadoGeneralClase = "success";
+            vm.EstadoGeneralIcono = "fa-circle-check";
+        }
+        else if (vm.EntregaAtrasada || vm.CargaAtrasada)
+        {
+            vm.EstadoGeneral = "Atrasado";
+            vm.EstadoGeneralClase = "danger";
+            vm.EstadoGeneralIcono = "fa-triangle-exclamation";
+        }
+        else if (vm.EnRiesgo)
+        {
+            vm.EstadoGeneral = "En riesgo";
+            vm.EstadoGeneralClase = "warning";
+            vm.EstadoGeneralIcono = "fa-clock";
+        }
+        else
+        {
+            vm.EstadoGeneral = "En tiempo";
+            vm.EstadoGeneralClase = "success";
+            vm.EstadoGeneralIcono = "fa-circle-check";
+        }
+
+        // =====================================================
+        // CHECKLIST
+        // =====================================================
+
+        vm.Checklist = new List<LogisticaChecklistVm>
+    {
+        new()
+        {
+            Codigo = "RUTA",
+            Concepto = "Ruta asignada",
+            Descripcion = vm.TieneRuta
+                ? vm.Ruta
+                : "El embarque todavía no tiene ruta.",
+            Completo = vm.TieneRuta
+        },
+
+        new()
+        {
+            Codigo = "UNIDAD",
+            Concepto = "Unidad asignada",
+            Descripcion = vm.TieneUnidad
+                ? vm.Unidad
+                : "El embarque todavía no tiene unidad.",
+            Completo = vm.TieneUnidad
+        },
+
+        new()
+        {
+            Codigo = "OPERADOR",
+            Concepto = "Operador asignado",
+            Descripcion = vm.TieneOperador
+                ? vm.Operador
+                : "El embarque todavía no tiene operador.",
+            Completo = vm.TieneOperador
+        },
+
+        new()
+        {
+            Codigo = "PRODUCTO",
+            Concepto = "Producto preparado",
+            Descripcion =
+                $"{vm.TotalPiezasPreparadas:N0} de {vm.TotalPiezasSolicitadas:N0} piezas",
+            Completo = vm.PreparacionCompleta
+        },
+
+        new()
+        {
+            Codigo = "CARGA",
+            Concepto = "Carga física confirmada",
+            Descripcion = vm.CargaCompleta
+                ? "Carga completa."
+                : "La carga física todavía no se ha confirmado.",
+            Completo = vm.CargaCompleta
+        },
+
+        new()
+        {
+            Codigo = "INCIDENCIAS",
+            Concepto = "Sin incidencias críticas",
+            Descripcion = vm.IncidenciasCriticas == 0
+                ? "Sin bloqueos críticos."
+                : $"{vm.IncidenciasCriticas} incidencia(s) crítica(s) abierta(s).",
+            Completo = vm.IncidenciasCriticas == 0
+        }
+    };
+    }
+
+    private static DateTime? CombinarFechaHora(
+    DateTime? fecha,
+    TimeSpan? hora)
+    {
+        if (!fecha.HasValue)
+            return null;
+
+        return fecha.Value.Date.Add(
+            hora ?? TimeSpan.Zero);
+    }
+
+    private static int CalcularAvancePreparacion(
+        LogisticaDetalleVm vm)
+    {
+        if (vm.TotalPiezasSolicitadas <= 0)
+            return 15;
+
+        var proporcion =
+            Math.Clamp(
+                (decimal)vm.TotalPiezasPreparadas
+                / vm.TotalPiezasSolicitadas,
+                0m,
+                1m);
+
+        // Programación = 10%
+        // Preparación ocupa del 10 al 50%
+        return 10 + (int)Math.Round(proporcion * 40m);
+    }
+
+
 
     [HttpGet]
     public async Task<IActionResult> Calendario(CancellationToken cancellationToken)
