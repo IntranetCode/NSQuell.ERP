@@ -32,7 +32,6 @@ public class LoginController : Controller
         _servicioNotificaciones = servicioNotificaciones;
     }
 
-    // ---------- LOGIN GET ----------
     [HttpGet]
     [AllowAnonymous]
     public IActionResult Login()
@@ -44,6 +43,13 @@ public class LoginController : Controller
 
         if (HttpContext.Session.GetInt32("UsuarioID") != null)
         {
+            var rolId = HttpContext.Session.GetInt32("RolID");
+
+            if (rolId == 4)
+            {
+                return RedirectToAction("Index", "ProduccionOperador");
+            }
+
             return RedirectToAction("Index", "Menu");
         }
 
@@ -95,7 +101,7 @@ public class LoginController : Controller
         return await CompletarLogin(usuario);
     }
 
-    // ---------- VALIDAR POLÍTICA DE CONTRASEÑA ----------
+
     private async Task<bool> DebeRedirigirCambioPasswordAsync(int usuarioId)
     {
         using var connection = new SqlConnection(_connectionString);
@@ -159,7 +165,6 @@ public class LoginController : Controller
         return fechaUltimoCambio.Value <= fechaLimite;
     }
 
-    // ---------- COMPLETAR LOGIN ----------
     private async Task<IActionResult> CompletarLogin(UsuarioModel usuario)
     {
         if (await DebeRedirigirCambioPasswordAsync(usuario.UsuarioID))
@@ -250,6 +255,12 @@ public class LoginController : Controller
         var principal = new ClaimsPrincipal(identity);
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+
+        if (rolId == 4)
+        {
+            TempData["Bienvenida"] = $"Bienvenido, {nombreMostrar ?? usuario.Username}";
+            return RedirectToAction("Index", "ProduccionOperador");
+        }
 
         if (rolId == 7)
         {
@@ -1149,6 +1160,13 @@ public class LoginController : Controller
     {
         if (HttpContext.Session.GetInt32("UsuarioID") != null)
         {
+            var rolId = HttpContext.Session.GetInt32("RolID");
+
+            if (rolId == 4)
+            {
+                return RedirectToAction("Index", "ProduccionOperador");
+            }
+
             return RedirectToAction("Index", "Menu");
         }
 

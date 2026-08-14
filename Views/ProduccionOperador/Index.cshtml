@@ -375,9 +375,7 @@
         {
             <div class="alert alert-danger rounded-4 fw-bold">@TempData["Error"]</div>
         }
-        <section class="panel"><div class="panel-head"><i class="fa-solid fa-filter me-2"></i>Filtros</div><div class="panel-body"><div class="filter-grid"><div><label class="filter-label" for="filtroMaquina">Máquina</label><select id="filtroMaquina" class="form-select"><option value="">Todas las máquinas</option>@foreach(var maquina in maquinas){
-        <option value="@maquina">@maquina</option>
-                }
+    
 </select></div><div class="machine-summary" id="resumenFiltro">Mostrando @producciones.Count producción(es).</div></div></div></section>
         <section class="panel"><div class="panel-body"><button class="alert-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#proximasProducciones" aria-expanded="false" aria-controls="proximasProducciones"><span><i class="fa-solid fa-bell me-2"></i>Próximas producciones en 15 minutos (@alertas.Count)</span><i class="fa-solid fa-chevron-down"></i></button><div class="collapse" id="proximasProducciones"><div class="alert-list">@if(alertas.Any()){foreach(var alerta in alertas.OrderBy(x=>x.FechaObjetivo)){
         <div class="alert-row"><div><div class="alert-type">@AlertaTipo(alerta)</div><div class="alert-time">@AlertaTiempo(alerta)</div></div><div><div class="main">@alerta.TextoMaquina</div><div class="sub">Objetivo @alerta.FechaObjetivo.ToString("dd/MM/yyyy HH:mm")</div></div><div><div class="main">@alerta.TextoParte</div><div class="sub">Molde @Txt(alerta.MoldeCodigo)</div></div><div><div class="main">@alerta.CantidadProgramada.ToString("N0")</div><div class="sub">piezas</div></div><div>@if(alerta.EjecucionProduccionID.HasValue){

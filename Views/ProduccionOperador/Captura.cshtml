@@ -12,6 +12,7 @@
     var horasCapturadas = horas.Where(x => x.Capturada).OrderByDescending(x => x.NumeroHora).ToList();
     var horaObligatoria = horasPendientes.Where(x => x.Disponible).OrderBy(x => x.NumeroHora).FirstOrDefault();
     var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
+    var objetivoHora = Model.ObjetivoHora;
 }
 @functions {
     public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
@@ -111,7 +112,7 @@
 
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(5,minmax(0,1fr));
+            grid-template-columns: repeat(6,minmax(0,1fr));
             gap: 10px;
             margin-bottom: 14px
         }
@@ -358,6 +359,91 @@
                 color: var(--red)
             }
 
+        .objective-summary {
+            border-color: #b9ccff;
+            background: linear-gradient(180deg,#f8fbff,#eef4ff)
+        }
+
+        .objective-cell {
+            text-align: center;
+            min-width: 115px
+        }
+
+        .objective-main {
+            font-size: 1.05rem;
+            font-weight: 950;
+            color: var(--blue-dark)
+        }
+
+        .objective-sub {
+            display: block;
+            margin-top: 2px;
+            font-size: .67rem;
+            color: var(--muted);
+            font-weight: 750
+        }
+
+        .goal-result {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 130px;
+            border-radius: 12px;
+            padding: 7px 10px;
+            font-weight: 950;
+            line-height: 1.15
+        }
+
+            .goal-result small {
+                margin-top: 3px;
+                font-size: .67rem;
+                font-weight: 800
+            }
+
+        .goal-success {
+            background: #ecfdf3;
+            color: #067647
+        }
+
+        .goal-danger {
+            background: #fef3f2;
+            color: #b42318
+        }
+
+        .goal-neutral {
+            background: #f2f4f7;
+            color: #667085
+        }
+
+        .modal-goal {
+            border: 1px solid #b9ccff;
+            background: #f4f7ff;
+            border-radius: 16px;
+            padding: 12px 14px;
+            text-align: center;
+            margin-bottom: 14px
+        }
+
+            .modal-goal .goal-label {
+                color: var(--muted);
+                font-size: .72rem;
+                font-weight: 900;
+                text-transform: uppercase
+            }
+
+            .modal-goal .goal-value {
+                color: var(--blue-dark);
+                font-size: 1.55rem;
+                font-weight: 950
+            }
+
+        .modal-goal-feedback {
+            margin-top: 8px;
+            min-height: 22px;
+            font-weight: 900
+        }
+
         .history-toggle {
             width: 100%;
             border: 1px solid var(--border);
@@ -601,8 +687,16 @@
             <div class="summary"><div class="k">Máquina</div><div class="v">@Txt(Model.MaquinaCodigo)</div><div class="text-muted small">@Txt(Model.MaquinaNombre)</div></div>
             <div class="summary"><div class="k">Parte</div><div class="v">@Txt(Model.ReferenciaSAP ?? Model.NumeroParte)</div><div class="text-muted small">@Txt(Model.DescripcionParte)</div></div>
             <div class="summary"><div class="k">OK</div><div class="v text-success">@Numero(Model.CantidadOKTotal)</div></div>
-            <div class="summary"><div class="k">Amarillos</div><div class="v text-warning">@Numero(Model.CantidadSospechosaTotal)</div></div>
+            <div class="summary"><div class="k">Sospechosos</div><div class="v text-warning">@Numero(Model.CantidadSospechosaTotal)</div></div>
             <div class="summary"><div class="k">Scrap</div><div class="v text-danger">@Numero(Model.CantidadScrapTotal)</div></div>
+            <div class="summary objective-summary"><div class="k">Objetivo por hora</div><div class="v">@(objetivoHora.HasValue && objetivoHora.Value > 0 ? Numero(objetivoHora.Value) : "-")</div><div class="text-muted small">@(objetivoHora.HasValue && objetivoHora.Value > 0 ? "PZA / H" : "Sin objetivo configurado")@if(Model.Ciclo.HasValue){
+            <span> · Ciclo @Model.Ciclo.Value.ToString("0.##")</span>
+                        }
+@if (Model.Cavidades.HasValue)
+{
+                <span> · @Model.Cavidades.Value cav.</span>
+            }
+</div></div>
         </section>
 
         <section class="paro-toolbar @(Model.TieneParoAbierto ? "open" : "")">
@@ -655,7 +749,7 @@
                 else
                 {
 
-                    <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Escribe los números directamente en la fila. “Amarillos” corresponde a piezas sospechosas. Las horas futuras permanecen bloqueadas.</div>
+                    <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Escribe los números directamente en la fila. El objetivo de cada bloque se calcula desde ObjetivoHora y se ajusta al tiempo productivo real cuando el bloque es menor a 60 minutos. Las horas futuras permanecen bloqueadas.</div>
                 }
 
                 @if (horas.Count == 0)
@@ -666,16 +760,17 @@
                 {
                     <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
                         <table class="hour-table">
-                            <thead><tr><th>Hora</th><th>Rango</th><th>OK</th><th>Amarillos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
+                            <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
                             <tbody>
                                 @foreach (var fila in horasPendientesVisibles)
                                 {
                                     var editable = capturaHabilitada && !fila.Capturada && fila.Disponible;
                                     var claseFila = fila.Vencida ? "row-overdue" : fila.Disponible ? "row-ready" : "";
                                     var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora;
-                                    <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-obligatoria="@(esObligatoria ? "true" : "false")">
+                                    <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-objetivo="@(fila.ObjetivoBloque ?? fila.ObjetivoHora ?? 0)" data-obligatoria="@(esObligatoria ? "true" : "false")">
                                         <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
                                         <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                        <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
                                         <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
                                         <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
                                         <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
@@ -693,16 +788,17 @@
                         <div class="collapse history-box" id="pendientesAdicionales">
                             <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
                                 <table class="hour-table">
-                                    <thead><tr><th>Hora</th><th>Rango</th><th>OK</th><th>Amarillos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
+                                    <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
                                     <tbody>
                                         @foreach (var fila in horasPendientesAdicionales)
                                         {
                                             var editable = capturaHabilitada && !fila.Capturada && fila.Disponible;
                                             var claseFila = fila.Vencida ? "row-overdue" : fila.Disponible ? "row-ready" : "";
                                             var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora;
-                                            <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-obligatoria="@(esObligatoria ? "true" : "false")">
+                                            <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-objetivo="@(fila.ObjetivoBloque ?? fila.ObjetivoHora ?? 0)" data-obligatoria="@(esObligatoria ? "true" : "false")">
                                                 <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
                                                 <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                                <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
                                                 <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
                                                 <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
                                                 <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
@@ -722,16 +818,37 @@
                         <div class="collapse history-box" id="historialCapturas">
                             <div class="table-wrap">
                                 <table class="hour-table">
-                                    <thead><tr><th>Hora</th><th>Rango</th><th>OK</th><th>Amarillos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th></tr></thead>
+                                    <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Cumplimiento</th><th>Observaciones</th><th>Estado</th></tr></thead>
                                     <tbody>
                                         @foreach (var fila in horasCapturadas)
                                         {
                                             <tr class="row-complete">
                                                 <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
                                                 <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                                <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">PZA</span></td>
                                                 <td><span class="status-pill status-complete">@fila.CantidadOK</span></td>
                                                 <td><span class="status-pill status-ready">@fila.CantidadSospechosa</span></td>
                                                 <td><span class="status-pill status-overdue">@fila.CantidadScrap</span></td>
+                                                <td>
+                                                    @if (!fila.ObjetivoBloque.HasValue || fila.ObjetivoBloque.Value <= 0)
+                                                    {
+                                                        <span class="goal-result goal-neutral">Sin objetivo</span>
+                                                    }
+                                                    else if (fila.CumplioObjetivo)
+                                                    {
+                                                        <span class="goal-result goal-success">
+                                                            <span><i class="fa-solid fa-arrow-trend-up me-1"></i>@(fila.PiezasSobreObjetivo > 0 ? $"+{fila.PiezasSobreObjetivo:N0} piezas" : "Objetivo cumplido")</span>
+                                                            <small>@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</small>
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="goal-result goal-danger">
+                                                            <span><i class="fa-solid fa-arrow-trend-down me-1"></i>Faltaron @fila.PiezasFaltantes.ToString("N0")</span>
+                                                            <small>@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</small>
+                                                        </span>
+                                                    }
+                                                </td>
                                                 <td>@Txt(fila.Observaciones)</td>
                                                 <td><span class="status-pill status-complete"><i class="fa-solid fa-check"></i> Capturada</span></td>
                                             </tr>
@@ -859,10 +976,15 @@
                         <input type="hidden" name="HoraInicio" id="modalInicio" />
                         <input type="hidden" name="HoraFin" id="modalFin" />
                         <div class="text-center mb-3"><div class="text-muted fw-bold">Debes completar</div><div class="modal-hour" id="modalTituloHora">Hora pendiente</div><div class="text-muted" id="modalRangoHora"></div></div>
+                        <div class="modal-goal">
+                            <div class="goal-label">Objetivo de este bloque</div>
+                            <div class="goal-value"><span id="modalObjetivo">-</span> <small>PZA</small></div>
+                            <div class="modal-goal-feedback" id="modalObjetivoFeedback">Captura las piezas OK para comparar contra el objetivo.</div>
+                        </div>
                         <div id="mensajeCapturaHora" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
                         <div class="modal-grid mb-3">
                             <div><div class="modal-label text-success">OK</div><input type="number" min="0" value="" placeholder="0" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" /></div>
-                            <div><div class="modal-label text-warning">Amarillos</div><input type="number" min="0" value="" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" /></div>
+                            <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" /></div>
                             <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" /></div>
                         </div>
                         <label class="form-label fw-bold">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Necesaria cuando no hubo producción o para explicar incidencias"></textarea>
@@ -887,11 +1009,30 @@
                 document.getElementById('modalFin').value=row.dataset.fin||'';
                 document.getElementById('modalTituloHora').textContent='Hora '+(row.dataset.numero||'');
                 document.getElementById('modalRangoHora').textContent=(row.dataset.inicio||'')+' - '+(row.dataset.fin||'');
+                document.getElementById('modalObjetivo').textContent=Number(row.dataset.objetivo||0)>0?Number(row.dataset.objetivo).toLocaleString('es-MX'):'-';
+                document.getElementById('modalOK').dataset.objetivo=row.dataset.objetivo||'0';
                 document.getElementById('modalOK').value=row.querySelector('[data-field="ok"]')?.value||'';
                 document.getElementById('modalYellow').value=row.querySelector('[data-field="yellow"]')?.value||'';
                 document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'';
                 document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
+                actualizarComparacionObjetivo();
             }
+            function actualizarComparacionObjetivo(){
+                const input=document.getElementById('modalOK');
+                const feedback=document.getElementById('modalObjetivoFeedback');
+                if(!input||!feedback)return;
+                const objetivo=Number(input.dataset.objetivo||0);
+                const valorRaw=(input.value||'').trim();
+                if(objetivo<=0){feedback.className='modal-goal-feedback text-muted';feedback.textContent='Esta pieza no tiene ObjetivoHora configurado.';return;}
+                if(valorRaw===''){feedback.className='modal-goal-feedback text-muted';feedback.textContent='Captura las piezas OK para comparar contra el objetivo.';return;}
+                const ok=Number(valorRaw||0);
+                const diferencia=ok-objetivo;
+                const porcentaje=Math.round((ok/objetivo)*1000)/10;
+                if(diferencia>0){feedback.className='modal-goal-feedback text-success';feedback.innerHTML='<i class="fa-solid fa-arrow-trend-up me-1"></i>Rebasaste el objetivo por '+diferencia.toLocaleString('es-MX')+' pieza(s) · '+porcentaje.toLocaleString('es-MX')+'%';}
+                else if(diferencia===0){feedback.className='modal-goal-feedback text-success';feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Alcanzaste exactamente el objetivo · 100%';}
+                else{feedback.className='modal-goal-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-arrow-trend-down me-1"></i>No alcanzaste el objetivo. Faltan '+Math.abs(diferencia).toLocaleString('es-MX')+' pieza(s) · '+porcentaje.toLocaleString('es-MX')+'%';}
+            }
+            document.getElementById('modalOK')?.addEventListener('input',actualizarComparacionObjetivo);
             const capturaHabilitada = @capturaHabilitada.ToString().ToLowerInvariant();
             const tieneParoAbierto = @Model.TieneParoAbierto.ToString().ToLowerInvariant();
 
@@ -921,7 +1062,7 @@
                 const obs=(document.getElementById('modalObs').value||'').trim();
                 if(ok<0||yellow<0||scrap<0){
                     e.preventDefault();
-                    mostrarMensajeCaptura('Las cantidades no pueden ser negativas. Revisa OK, Amarillos y Scrap.');
+                    mostrarMensajeCaptura('Las cantidades no pueden ser negativas. Revisa OK, Sospechosos y Scrap.');
                     return;
                 }
                 if(ok===0&&yellow===0&&scrap===0&&!obs){

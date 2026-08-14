@@ -775,6 +775,10 @@ public sealed class ProduccionOperadorTabletVm
     public int CantidadSospechosaTotal { get; set; }
     public int CantidadScrapTotal { get; set; }
 
+    public int? ObjetivoHora { get; set; }
+    public decimal? Ciclo { get; set; }
+    public int? Cavidades { get; set; }
+
     public int EstatusID { get; set; }
     public string EstatusNombre => ProduccionEstatus.Nombre(EstatusID);
     public string EstatusClase => ProduccionEstatus.ClaseBadge(EstatusID);
@@ -807,28 +811,19 @@ public sealed class ProduccionOperadorTabletVm
 public sealed class ProduccionCapturaHoraFilaVm
 {
     public int NumeroHora { get; set; }
-
     public DateTime FechaProduccion { get; set; }
-
     public TimeSpan HoraInicio { get; set; }
-
     public TimeSpan HoraFin { get; set; }
-
     public int CantidadOK { get; set; }
-
     public int CantidadSospechosa { get; set; }
-
     public int CantidadScrap { get; set; }
-
     public string? Observaciones { get; set; }
-
     public bool Capturada { get; set; }
-
     public bool Disponible { get; set; }
-
     public bool Vencida { get; set; }
-
     public int? RegistroHoraID { get; set; }
+    public int? ObjetivoHora { get; set; }
+    public int? ObjetivoBloque { get; set; }
 
     public string RangoHora =>
         $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
@@ -854,7 +849,37 @@ public sealed class ProduccionCapturaHoraFilaVm
             return "bg-secondary";
         }
     }
+
+    public int DiferenciaObjetivo =>
+        ObjetivoBloque.HasValue && ObjetivoBloque.Value > 0
+            ? CantidadOK - ObjetivoBloque.Value
+            : 0;
+
+    public decimal PorcentajeCumplimiento =>
+        ObjetivoBloque.HasValue && ObjetivoBloque.Value > 0
+            ? Math.Round(
+                (decimal)CantidadOK / ObjetivoBloque.Value * 100m,
+                1)
+            : 0m;
+
+    public bool CumplioObjetivo =>
+        ObjetivoBloque.HasValue &&
+        ObjetivoBloque.Value > 0 &&
+        CantidadOK >= ObjetivoBloque.Value;
+
+    public int PiezasFaltantes =>
+        ObjetivoBloque.HasValue &&
+        ObjetivoBloque.Value > CantidadOK
+            ? ObjetivoBloque.Value - CantidadOK
+            : 0;
+
+    public int PiezasSobreObjetivo =>
+        ObjetivoBloque.HasValue &&
+        CantidadOK > ObjetivoBloque.Value
+            ? CantidadOK - ObjetivoBloque.Value
+            : 0;
 }
+
 public sealed class ProduccionRecepcionOFVm
 {
     public int RecepcionOFID { get; set; }
