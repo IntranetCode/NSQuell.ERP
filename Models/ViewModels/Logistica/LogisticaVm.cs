@@ -212,6 +212,8 @@ public sealed class LogisticaDetalleVm
 
     public List<LogisticaChecklistVm> Checklist { get; set; } = new();
     public List<LogisticaIncidenciaVm> Incidencias { get; set; } = new();
+
+    
 }
 
 public sealed class LogisticaChecklistVm
@@ -240,30 +242,31 @@ public sealed class LogisticaChecklistVm
 public sealed class LogisticaIncidenciaVm
 {
     public int IncidenciaID { get; set; }
-
     public int EmbarqueID { get; set; }
 
     public string Folio { get; set; } = string.Empty;
-
     public string Tipo { get; set; } = string.Empty;
-
     public string Severidad { get; set; } = string.Empty;
-
     public string Descripcion { get; set; } = string.Empty;
-
     public string Responsable { get; set; } = string.Empty;
-
     public string Estatus { get; set; } = string.Empty;
 
     public DateTime FechaRegistro { get; set; }
-
     public DateTime? FechaCompromiso { get; set; }
-
     public DateTime? FechaCierre { get; set; }
 
     public string Solucion { get; set; } = string.Empty;
-
     public string UsuarioRegistro { get; set; } = string.Empty;
+
+    public bool EstaAbierta =>
+        Estatus is "Abierta" or "En seguimiento";
+
+    public bool EsCritica =>
+        EstaAbierta &&
+        string.Equals(
+            Severidad,
+            "Crítica",
+            StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class LogisticaIncidenciaCrearVm
@@ -283,7 +286,6 @@ public sealed class LogisticaIncidenciaCrearVm
     [StringLength(200)]
     public string? Responsable { get; set; }
 
-    [DataType(DataType.DateTime)]
     public DateTime? FechaCompromiso { get; set; }
 }
 
@@ -298,6 +300,8 @@ public sealed class LogisticaIncidenciaCerrarVm
     [Required, StringLength(1200)]
     public string Solucion { get; set; } = string.Empty;
 }
+
+
 
 
 

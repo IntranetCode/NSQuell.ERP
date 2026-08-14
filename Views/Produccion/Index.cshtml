@@ -419,16 +419,16 @@
         }
 
         /* ============================================================
-                                   COLORES SUAVES POR ESTADO OPERATIVO
+                                           COLORES SUAVES POR ESTADO OPERATIVO
 
-                                   Amarillo = preparación / esperando Calidad
-                                   Azul     = producción activa
-                                   Rosa     = paro / pausado
-                                   Verde    = terminado
+                                           Amarillo = preparación / esperando Calidad
+                                           Azul     = producción activa
+                                           Rosa     = paro / pausado
+                                           Verde    = terminado
 
-                                   Se aplica sobre las celdas para que Bootstrap no tape
-                                   el color de la fila.
-                                   ============================================================ */
+                                           Se aplica sobre las celdas para que Bootstrap no tape
+                                           el color de la fila.
+                                           ============================================================ */
         .production-row.row-preparacion > td {
             background: #fff9e8 !important;
         }
@@ -875,8 +875,8 @@
 
 
         /* ============================================================
-                           NAVEGACION OPERATIVA / CONTENIDO AJAX
-                           ============================================================ */
+                                   NAVEGACION OPERATIVA / CONTENIDO AJAX
+                                   ============================================================ */
         .production-nav {
             display: flex;
             gap: 8px;
@@ -970,9 +970,9 @@
 
 
         /* =========================================================
-                   AJUSTE VISUAL AMIGABLE - PRODUCCION
-                   Mantiene la estructura y la logica original.
-                   ========================================================= */
+                           AJUSTE VISUAL AMIGABLE - PRODUCCION
+                           Mantiene la estructura y la logica original.
+                           ========================================================= */
 
         body {
             background: radial-gradient(circle at 12% 2%, rgba(25, 76, 155, .055), transparent 27%), var(--bg);
@@ -1290,9 +1290,9 @@
 
 
         /* =========================================================
-                   REFINAMIENTO PROFESIONAL - PRODUCCION
-                   Ajustes de jerarquia, espaciado y consistencia visual.
-                   ========================================================= */
+                           REFINAMIENTO PROFESIONAL - PRODUCCION
+                           Ajustes de jerarquia, espaciado y consistencia visual.
+                           ========================================================= */
 
         .page {
             max-width: 1660px;
@@ -1502,11 +1502,11 @@
 
 
         /* ==========================================================
-                   TEMA OSCURO INTERACTIVO - PRODUCCION
-                   Se activa con html[data-produccion-theme="dark"].
-                   El script al final sincroniza esta vista con el switch
-                   Claro/Oscuro existente en _Layout.
-                   ========================================================== */
+                           TEMA OSCURO INTERACTIVO - PRODUCCION
+                           Se activa con html[data-produccion-theme="dark"].
+                           El script al final sincroniza esta vista con el switch
+                           Claro/Oscuro existente en _Layout.
+                           ========================================================== */
         html[data-produccion-theme="dark"] {
             color-scheme: dark;
             --azul: #7db7ff;
@@ -1818,11 +1818,11 @@
 
 
         /* =========================================================
-           MODALES INTEGRADOS CON EL LAYOUT GLOBAL
-           - El backdrop cubre también el navbar.
-           - El modal siempre queda por encima del layout.
-           - Los modales altos hacen scroll internamente.
-           ========================================================= */
+                   MODALES INTEGRADOS CON EL LAYOUT GLOBAL
+                   - El backdrop cubre también el navbar.
+                   - El modal siempre queda por encima del layout.
+                   - Los modales altos hacen scroll internamente.
+                   ========================================================= */
         #modalIniciarPreparacion .modal-dialog {
             width: min(760px, calc(100vw - 32px));
             max-width: 760px;
@@ -1833,7 +1833,16 @@
             max-height: calc(100vh - 40px);
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
+
+            #modalIniciarPreparacion .modal-content > form {
+                display: flex;
+                flex-direction: column;
+                flex: 1 1 auto;
+                min-height: 0;
+                max-height: calc(100vh - 40px);
+            }
 
         #modalIniciarPreparacion .modal-header,
         #modalIniciarPreparacion .modal-footer {
@@ -1864,7 +1873,8 @@
                 margin: 12px auto;
             }
 
-            #modalIniciarPreparacion .modal-content {
+            #modalIniciarPreparacion .modal-content,
+            #modalIniciarPreparacion .modal-content > form {
                 max-height: calc(100vh - 24px);
             }
 
@@ -1879,7 +1889,6 @@
             #modalIniciarPreparacion .modal-footer {
                 padding: 12px 18px 14px !important;
             }
-
         }
 
         .production-nav-btn[href*="Preparacion"] {
@@ -1897,163 +1906,163 @@
     </style>
 }
 
-    <div class="page">
+<div class="page">
 
-        <header class="topbar">
-            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                <div>
-                    <h1 class="topbar-title">
-                        <i class="bi bi-gear-wide-connected me-2"></i>
-                        Producción
-                    </h1>
-                    <div class="topbar-sub">
-                        Centro operativo de Producción: ejecución, próximos inicios y cola programada.
-                    </div>
-                </div>
-
-                <div class="text-end">
-                    <div class="small opacity-75">Fecha</div>
-                    <div class="fw-bold">@DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
-                </div>
-            </div>
-        </header>
-
-        @if (TempData["Success"] != null)
-        {
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="bi bi-check-circle me-1"></i>
-                @TempData["Success"]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        }
-
-        @if (TempData["Error"] != null)
-        {
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="bi bi-exclamation-triangle me-1"></i>
-                @TempData["Error"]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        }
-
-        @if (TempData["Info"] != null)
-        {
-            <div class="alert alert-info alert-dismissible fade show" role="alert">
-                <i class="bi bi-info-circle me-1"></i>
-                @TempData["Info"]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        }
-
-        <section class="section production-filters">
-            <div class="section-head">
-                <div>
-                    <h2 class="section-title">
-                        <i class="bi bi-funnel"></i>
-                        Filtros
-                    </h2>
-                    <div class="section-sub">
-                        Busca por máquina, parte, molde, operador, programa u OF.
-                    </div>
+    <header class="topbar">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <h1 class="topbar-title">
+                    <i class="bi bi-gear-wide-connected me-2"></i>
+                    Producción
+                </h1>
+                <div class="topbar-sub">
+                    Centro operativo de Producción: ejecución, próximos inicios y cola programada.
                 </div>
             </div>
 
-            <div class="filters">
-                <form method="get" action="@Url.Action("Index", "Produccion")" id="formFiltrosProduccion" class="row g-3 align-items-end">
-                    <div class="col-12 col-xl-3">
-                        <label class="form-label">Buscar</label>
-                        <input type="text"
-                               name="busqueda"
-                               value="@Model.Busqueda"
-                               class="form-control"
-                               placeholder="Máquina, parte, molde, operador..." />
-                    </div>
-
-                    <div class="col-12 col-md-6 col-xl-2">
-                        <label class="form-label">Máquina</label>
-                        <select name="maquinaId" class="form-select">
-                            @foreach (var item in Model.Maquinas)
-                            {
-                                <option value="@item.Value" selected="@(item.Value == Model.MaquinaID?.ToString())">
-                                    @item.Text
-                                </option>
-                            }
-                        </select>
-                    </div>
-
-                    <div class="col-12 col-md-6 col-xl-2">
-                        <label class="form-label">Estatus (ejecuciones)</label>
-                        <select name="estatusId" class="form-select">
-                            @foreach (var item in Model.Estatus)
-                            {
-                                <option value="@item.Value" selected="@(item.Value == Model.EstatusID?.ToString())">
-                                    @item.Text
-                                </option>
-                            }
-                        </select>
-                    </div>
-
-                    <div class="col-6 col-xl-2">
-                        <label class="form-label">Desde</label>
-                        <input type="date"
-                               name="fechaDesde"
-                               value="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
-                               class="form-control" />
-                    </div>
-
-                    <div class="col-6 col-xl-2">
-                        <label class="form-label">Hasta</label>
-                        <input type="date"
-                               name="fechaHasta"
-                               value="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))"
-                               class="form-control" />
-                    </div>
-
-                    <div class="col-12 col-xl-1 d-grid">
-                        <button type="submit" class="btn btn-primary btn-action">
-                            <i class="bi bi-search me-1"></i>
-                            Buscar
-                        </button>
-                    </div>
-                </form>
+            <div class="text-end">
+                <div class="small opacity-75">Fecha</div>
+                <div class="fw-bold">@DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
             </div>
-        </section>
+        </div>
+    </header>
 
-        @{
-            var totalActivas =
-            Model.Pendientes +
-            Model.EnPreparacion +
-            Model.EnProduccion +
-            Model.Pausados;
-        }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle me-1"></i>
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
 
-        <nav class="production-nav" aria-label="Navegación operativa de Producción">
-            <button type="button"
-                    class="production-nav-btn is-active"
-                    data-production-panel="proximos"
-                    data-url="@Url.Action("PanelProximos", "Produccion")">
-                <i class="bi bi-alarm"></i>
-                Pendientes / próximos
-                <span class="production-nav-count">@Model.TotalProximosAIniciar</span>
-            </button>
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
 
-            <button type="button"
-                    class="production-nav-btn"
-                    data-production-panel="ejecuciones"
-                    data-url="@Url.Action("PanelEjecuciones", "Produccion")">
-                <i class="bi bi-activity"></i>
-                En ejecución
-                <span class="production-nav-count">@totalActivas</span>
-            </button>
+    @if (TempData["Info"] != null)
+    {
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="bi bi-info-circle me-1"></i>
+            @TempData["Info"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
 
-            <button type="button"
-                    class="production-nav-btn"
-                    data-production-panel="cola"
-                    data-url="@Url.Action("PanelCola", "Produccion")">
-                <i class="bi bi-list-ol"></i>
-                Cola
-                <span class="production-nav-count">@Model.TotalDisponibles</span>
-            </button>
+    <section class="section production-filters">
+        <div class="section-head">
+            <div>
+                <h2 class="section-title">
+                    <i class="bi bi-funnel"></i>
+                    Filtros
+                </h2>
+                <div class="section-sub">
+                    Busca por máquina, parte, molde, operador, programa u OF.
+                </div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <form method="get" action="@Url.Action("Index", "Produccion")" id="formFiltrosProduccion" class="row g-3 align-items-end">
+                <div class="col-12 col-xl-3">
+                    <label class="form-label">Buscar</label>
+                    <input type="text"
+                           name="busqueda"
+                           value="@Model.Busqueda"
+                           class="form-control"
+                           placeholder="Máquina, parte, molde, operador..." />
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <label class="form-label">Máquina</label>
+                    <select name="maquinaId" class="form-select">
+                        @foreach (var item in Model.Maquinas)
+                        {
+                            <option value="@item.Value" selected="@(item.Value == Model.MaquinaID?.ToString())">
+                                @item.Text
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <label class="form-label">Estatus (ejecuciones)</label>
+                    <select name="estatusId" class="form-select">
+                        @foreach (var item in Model.Estatus)
+                        {
+                            <option value="@item.Value" selected="@(item.Value == Model.EstatusID?.ToString())">
+                                @item.Text
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-6 col-xl-2">
+                    <label class="form-label">Desde</label>
+                    <input type="date"
+                           name="fechaDesde"
+                           value="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
+                           class="form-control" />
+                </div>
+
+                <div class="col-6 col-xl-2">
+                    <label class="form-label">Hasta</label>
+                    <input type="date"
+                           name="fechaHasta"
+                           value="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))"
+                           class="form-control" />
+                </div>
+
+                <div class="col-12 col-xl-1 d-grid">
+                    <button type="submit" class="btn btn-primary btn-action">
+                        <i class="bi bi-search me-1"></i>
+                        Buscar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    @{
+        var totalActivas =
+        Model.Pendientes +
+        Model.EnPreparacion +
+        Model.EnProduccion +
+        Model.Pausados;
+    }
+
+    <nav class="production-nav" aria-label="Navegación operativa de Producción">
+        <button type="button"
+                class="production-nav-btn is-active"
+                data-production-panel="proximos"
+                data-url="@Url.Action("PanelProximos", "Produccion")">
+            <i class="bi bi-alarm"></i>
+            Pendientes / próximos
+            <span class="production-nav-count">@Model.TotalProximosAIniciar</span>
+        </button>
+
+        <button type="button"
+                class="production-nav-btn"
+                data-production-panel="ejecuciones"
+                data-url="@Url.Action("PanelEjecuciones", "Produccion")">
+            <i class="bi bi-activity"></i>
+            En ejecución
+            <span class="production-nav-count">@totalActivas</span>
+        </button>
+
+        <button type="button"
+                class="production-nav-btn"
+                data-production-panel="cola"
+                data-url="@Url.Action("PanelCola", "Produccion")">
+            <i class="bi bi-list-ol"></i>
+            Cola
+            <span class="production-nav-count">@Model.TotalDisponibles</span>
+        </button>
 
         <a class="production-nav-btn"
            asp-controller="Produccion"
@@ -2061,49 +2070,177 @@
             <i class="bi bi-tools"></i>
             Preparación próxima
         </a>
-        </nav>
+    </nav>
 
-        <section class="production-content-shell" id="contenidoProduccion" aria-live="polite">
-            <div class="panel-loading">
-                <div class="spinner-border" role="status" aria-hidden="true"></div>
-                <div>Cargando operaciones...</div>
+    <section class="production-content-shell" id="contenidoProduccion" aria-live="polite">
+        <div class="panel-loading">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+            <div>Cargando operaciones...</div>
+        </div>
+    </section>
+</div>
+
+<button type="button"
+        class="alerts-floating-button @(Model.TotalAlertasMuyRecientes > 0 ? "has-highlight" : "")"
+        data-bs-toggle="modal"
+        data-bs-target="#modalMovimientosProgramacion"
+        title="Ver movimientos de programación"
+        aria-label="Ver movimientos de programación">
+    <i class="bi bi-bell-fill"></i>
+
+    @if (Model.TotalAlertasReprogramacion > 0)
+    {
+        <span class="alerts-floating-badge">
+            @(Model.TotalAlertasReprogramacion > 99
+                    ? "99+"
+                    : Model.TotalAlertasReprogramacion.ToString())
+    </span>
+        }
+</button>
+
+<div class="modal fade alerts-modal"
+     id="modalMovimientosProgramacion"
+     tabindex="-1"
+     aria-labelledby="modalMovimientosProgramacionLabel"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="modalMovimientosProgramacionLabel">
+                        <i class="bi bi-bell-fill me-2"></i>
+                        Movimientos de programación
+                    </h5>
+                    <div class="small opacity-75 mt-1">
+                        Destacadas: últimas 2 horas. Visibles: últimas 24 horas.
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar">
+                </button>
             </div>
-        </section>
-    </div>
 
-    <button type="button"
-            class="alerts-floating-button @(Model.TotalAlertasMuyRecientes > 0 ? "has-highlight" : "")"
-            data-bs-toggle="modal"
-            data-bs-target="#modalMovimientosProgramacion"
-            title="Ver movimientos de programación"
-            aria-label="Ver movimientos de programación">
-        <i class="bi bi-bell-fill"></i>
-
-        @if (Model.TotalAlertasReprogramacion > 0)
-        {
-            <span class="alerts-floating-badge">
-                @(Model.TotalAlertasReprogramacion > 99
-                            ? "99+"
-                            : Model.TotalAlertasReprogramacion.ToString())
-        </span>
+            <div class="alerts-modal-summary">
+                @if (Model.TotalAlertasMuyRecientes > 0)
+                {
+                    <span class="tag tag-warn">
+                        <i class="bi bi-lightning-charge"></i>
+                        @Model.TotalAlertasMuyRecientes destacada(s)
+                    </span>
                 }
-    </button>
 
-    <div class="modal fade alerts-modal"
-         id="modalMovimientosProgramacion"
-         tabindex="-1"
-         aria-labelledby="modalMovimientosProgramacionLabel"
-         aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
-            <div class="modal-content">
+                <span class="tag tag-blue">
+                    <i class="bi bi-bell"></i>
+                    @Model.TotalAlertasReprogramacion cambio(s)
+                </span>
+            </div>
+
+            @if (ViewBag.ErrorAlertasReprogramacion != null)
+            {
+                <div class="alert alert-warning mx-3 mt-3 mb-0">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    @ViewBag.ErrorAlertasReprogramacion
+                </div>
+            }
+
+            <div class="alerts-list">
+                @if (!alertasOrdenadas.Any())
+                {
+                    <div class="alerts-modal-empty">
+                        <i class="bi bi-bell-slash"></i>
+                        No hay movimientos de programación en las últimas 24 horas.
+                    </div>
+                }
+                else
+                {
+                    foreach (var alerta in alertasOrdenadas)
+                    {
+                        <article class="program-alert @(alerta.EsMuyReciente ? "is-highlighted" : "")">
+                            <div class="program-alert-icon">
+                                <i class="bi @(alerta.EsMovimientoAutomatico ? "bi-shuffle" : alerta.CambioMaquina ? "bi-arrow-left-right" : "bi-calendar2-week")"></i>
+                            </div>
+
+                            <div>
+                                <div class="program-alert-title">
+                                    @alerta.Titulo · Programa @alerta.ProgramaProduccionID · @alerta.TextoParte
+                                </div>
+
+                                <div class="program-alert-message">
+                                    @alerta.Mensaje
+                                </div>
+
+                                <div class="program-alert-meta">
+                                    @if (!string.IsNullOrWhiteSpace(alerta.Motivo))
+                                    {
+                                        <span>
+                                            <i class="bi bi-chat-left-text me-1"></i>
+                                            Motivo: @alerta.Motivo
+                                        </span>
+                                    }
+
+                                    @if (alerta.EsMovimientoAutomatico && alerta.ProgramaOrigenMovimientoID.HasValue)
+                                    {
+                                        <span>
+                                            <i class="bi bi-diagram-3 me-1"></i>
+                                            Originado por programa @alerta.ProgramaOrigenMovimientoID
+                                        </span>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(alerta.UsuarioNombre))
+                                    {
+                                        <span>
+                                            <i class="bi bi-person me-1"></i>
+                                            @alerta.UsuarioNombre
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="program-alert-date">
+                                @if (alerta.EsMuyReciente)
+                                {
+                                    <span class="badge bg-warning text-dark mb-1">
+                                        Destacada
+                                    </span>
+                                    <br />
+                                }
+
+                                @alerta.FechaCambioTexto
+                            </div>
+                        </article>
+                    }
+                }
+            </div>
+
+            <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                <button type="button"
+                        class="btn btn-primary btn-action"
+                        data-bs-dismiss="modal">
+                    <i class="bi bi-check2 me-1"></i>
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalIniciarPreparacion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <form method="post" action="@Url.Action("Iniciar", "Produccion")" id="formIniciarPreparacion">
+                @Html.AntiForgeryToken()
+
                 <div class="modal-header">
                     <div>
-                        <h5 class="modal-title" id="modalMovimientosProgramacionLabel">
-                            <i class="bi bi-bell-fill me-2"></i>
-                            Movimientos de programación
+                        <h5 class="modal-title">
+                            <i class="bi bi-play-circle me-2"></i>
+                            Confirmar inicio de preparación
                         </h5>
-                        <div class="small opacity-75 mt-1">
-                            Destacadas: últimas 2 horas. Visibles: últimas 24 horas.
+                        <div class="small opacity-75">
+                            Revisa el programa y confirma al operador principal y, si aplica, al auxiliar antes de tomar la OF.
                         </div>
                     </div>
 
@@ -2114,273 +2251,145 @@
                     </button>
                 </div>
 
-                <div class="alerts-modal-summary">
-                    @if (Model.TotalAlertasMuyRecientes > 0)
-                    {
-                        <span class="tag tag-warn">
-                            <i class="bi bi-lightning-charge"></i>
-                            @Model.TotalAlertasMuyRecientes destacada(s)
-                        </span>
-                    }
+                <div class="modal-body">
+                    <input type="hidden" name="programaProduccionId" id="modalProgramaProduccionId" />
+                    <input type="hidden" name="operadorNombre" id="modalOperadorNombre" />
+                    <input type="hidden" name="operadorAuxiliarNombre" id="modalOperadorAuxiliarNombre" />
 
-                    <span class="tag tag-blue">
-                        <i class="bi bi-bell"></i>
-                        @Model.TotalAlertasReprogramacion cambio(s)
-                    </span>
-                </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="info-line">
+                                <div class="info-k">Programa</div>
+                                <div class="info-v" id="modalProgramaTexto">-</div>
+                            </div>
 
-                @if (ViewBag.ErrorAlertasReprogramacion != null)
-                {
-                    <div class="alert alert-warning mx-3 mt-3 mb-0">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
-                        @ViewBag.ErrorAlertasReprogramacion
-                    </div>
-                }
+                            <div class="info-line">
+                                <div class="info-k">Máquina</div>
+                                <div class="info-v" id="modalMaquinaTexto">-</div>
+                            </div>
 
-                <div class="alerts-list">
-                    @if (!alertasOrdenadas.Any())
-                    {
-                        <div class="alerts-modal-empty">
-                            <i class="bi bi-bell-slash"></i>
-                            No hay movimientos de programación en las últimas 24 horas.
+                            <div class="info-line">
+                                <div class="info-k">Molde</div>
+                                <div class="info-v" id="modalMoldeTexto">-</div>
+                            </div>
+
+                            <div class="info-line">
+                                <div class="info-k">Cantidad</div>
+                                <div class="info-v" id="modalCantidadTexto">-</div>
+                            </div>
                         </div>
-                    }
-                    else
-                    {
-                        foreach (var alerta in alertasOrdenadas)
-                        {
-                            <article class="program-alert @(alerta.EsMuyReciente ? "is-highlighted" : "")">
-                                <div class="program-alert-icon">
-                                    <i class="bi @(alerta.EsMovimientoAutomatico ? "bi-shuffle" : alerta.CambioMaquina ? "bi-arrow-left-right" : "bi-calendar2-week")"></i>
-                                </div>
 
+                        <div class="col-md-6">
+                            <div class="info-line">
+                                <div class="info-k">Parte</div>
+                                <div class="info-v" id="modalParteTexto">-</div>
+                            </div>
+
+                            <div class="info-line">
+                                <div class="info-k">Descripción</div>
+                                <div class="info-v" id="modalDescripcionTexto">-</div>
+                            </div>
+
+                            <div class="info-line">
+                                <div class="info-k">Inicio prog.</div>
+                                <div class="info-v" id="modalInicioTexto">-</div>
+                            </div>
+
+                            <div class="info-line">
+                                <div class="info-k">Fin prog.</div>
+                                <div class="info-v" id="modalFinTexto">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="operator-box" id="boxOperadorSugerido">
+                        <div class="operator-title" id="tituloOperadorSugerido">
+                            Operador principal sugerido desde RRHH
+                        </div>
+                        <div class="small text-muted mt-1" id="detalleOperadorSugerido">-</div>
+                    </div>
+
+                    <div class="modal-validation-message" id="mensajeValidacionOperadores" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                        <div id="textoValidacionOperadores"></div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-lg-6">
+                            <div class="operator-role-card required">
+                                <div class="operator-role-head">
+                                    <div class="operator-role-name"><i class="bi bi-person-badge me-1"></i>Operador principal</div>
+                                    <span class="operator-required-badge">Obligatorio</span>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Seleccionar operador</label>
+                                    <select name="operadorId" id="modalOperadorId" class="form-select">
+                                        @foreach (var op in operadoresProduccion)
+                                        {
+                                            <option value="@op.Value">@op.Text</option>
+                                        }
+                                    </select>
+                                    <div class="small text-muted mt-1" id="modalPolivalenciaInfo">Si la pieza tiene matriz, se mostrarán solo operadores evaluados y su nivel.</div>
+                                </div>
                                 <div>
-                                    <div class="program-alert-title">
-                                        @alerta.Titulo · Programa @alerta.ProgramaProduccionID · @alerta.TextoParte
-                                    </div>
-
-                                    <div class="program-alert-message">
-                                        @alerta.Mensaje
-                                    </div>
-
-                                    <div class="program-alert-meta">
-                                        @if (!string.IsNullOrWhiteSpace(alerta.Motivo))
-                                        {
-                                            <span>
-                                                <i class="bi bi-chat-left-text me-1"></i>
-                                                Motivo: @alerta.Motivo
-                                            </span>
-                                        }
-
-                                        @if (alerta.EsMovimientoAutomatico && alerta.ProgramaOrigenMovimientoID.HasValue)
-                                        {
-                                            <span>
-                                                <i class="bi bi-diagram-3 me-1"></i>
-                                                Originado por programa @alerta.ProgramaOrigenMovimientoID
-                                            </span>
-                                        }
-
-                                        @if (!string.IsNullOrWhiteSpace(alerta.UsuarioNombre))
-                                        {
-                                            <span>
-                                                <i class="bi bi-person me-1"></i>
-                                                @alerta.UsuarioNombre
-                                            </span>
-                                        }
-                                    </div>
+                                    <label class="form-label">Nombre manual</label>
+                                    <input type="text" id="modalOperadorManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
+                                    <div class="small text-muted mt-1">El operador principal se controla desde Escala de Personal.</div>
                                 </div>
+                            </div>
+                        </div>
 
-                                <div class="program-alert-date">
-                                    @if (alerta.EsMuyReciente)
-                                    {
-                                        <span class="badge bg-warning text-dark mb-1">
-                                            Destacada
-                                        </span>
-                                        <br />
-                                    }
-
-                                    @alerta.FechaCambioTexto
+                        <div class="col-lg-6">
+                            <div class="operator-role-card">
+                                <div class="operator-role-head">
+                                    <div class="operator-role-name"><i class="bi bi-person-plus me-1"></i>Operador auxiliar</div>
+                                    <span class="operator-optional-badge">Opcional</span>
                                 </div>
-                            </article>
-                        }
-                    }
+                                <div class="mb-3">
+                                    <label class="form-label">Seleccionar auxiliar</label>
+                                    <select name="operadorAuxiliarId" id="modalOperadorAuxiliarId" class="form-select">
+                                        @foreach (var op in operadoresProduccion)
+                                        {
+                                            <option value="@op.Value">@op.Text</option>
+                                        }
+                                    </select>
+                                    <div class="small text-muted mt-1">Puede dejarse sin auxiliar si la preparación no lo requiere.</div>
+                                </div>
+                                <div>
+                                    <label class="form-label">Nombre manual auxiliar</label>
+                                    <input type="text" id="modalOperadorAuxiliarManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
+                                    <div class="small text-muted mt-1">El auxiliar es opcional y no puede ser la misma persona que el operador principal.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">Observaciones</label>
+                            <textarea name="observaciones" id="modalObservaciones" class="form-control" rows="3" maxlength="500" placeholder="Observaciones de preparación, cambio de operador, indicaciones especiales..."></textarea>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                <div class="modal-footer border-0 px-4 pb-4">
                     <button type="button"
-                            class="btn btn-primary btn-action"
+                            class="btn btn-light btn-action"
                             data-bs-dismiss="modal">
-                        <i class="bi bi-check2 me-1"></i>
-                        Cerrar
+                        Cancelar
+                    </button>
+
+                    <button type="submit"
+                            class="btn btn-success btn-action"
+                            id="btnConfirmarInicio">
+                        <i class="bi bi-play-fill me-1"></i>
+                        Iniciar preparación
                     </button>
                 </div>
-            </div>
+            </form>
         </div>
     </div>
-
-    <div class="modal fade" id="modalIniciarPreparacion" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
-            <div class="modal-content">
-                <form method="post" action="@Url.Action("Iniciar", "Produccion")" id="formIniciarPreparacion">
-                    @Html.AntiForgeryToken()
-
-                    <div class="modal-header">
-                        <div>
-                            <h5 class="modal-title">
-                                <i class="bi bi-play-circle me-2"></i>
-                                Confirmar inicio de preparación
-                            </h5>
-                            <div class="small opacity-75">
-                                Revisa el programa y confirma al operador principal y, si aplica, al auxiliar antes de tomar la OF.
-                            </div>
-                        </div>
-
-                        <button type="button"
-                                class="btn-close btn-close-white"
-                                data-bs-dismiss="modal"
-                                aria-label="Cerrar">
-                        </button>
-                    </div>
-
-                    <div class="modal-body">
-                        <input type="hidden" name="programaProduccionId" id="modalProgramaProduccionId" />
-                        <input type="hidden" name="operadorNombre" id="modalOperadorNombre" />
-                        <input type="hidden" name="operadorAuxiliarNombre" id="modalOperadorAuxiliarNombre" />
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <div class="info-line">
-                                    <div class="info-k">Programa</div>
-                                    <div class="info-v" id="modalProgramaTexto">-</div>
-                                </div>
-
-                                <div class="info-line">
-                                    <div class="info-k">Máquina</div>
-                                    <div class="info-v" id="modalMaquinaTexto">-</div>
-                                </div>
-
-                                <div class="info-line">
-                                    <div class="info-k">Molde</div>
-                                    <div class="info-v" id="modalMoldeTexto">-</div>
-                                </div>
-
-                                <div class="info-line">
-                                    <div class="info-k">Cantidad</div>
-                                    <div class="info-v" id="modalCantidadTexto">-</div>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="info-line">
-                                    <div class="info-k">Parte</div>
-                                    <div class="info-v" id="modalParteTexto">-</div>
-                                </div>
-
-                                <div class="info-line">
-                                    <div class="info-k">Descripción</div>
-                                    <div class="info-v" id="modalDescripcionTexto">-</div>
-                                </div>
-
-                                <div class="info-line">
-                                    <div class="info-k">Inicio prog.</div>
-                                    <div class="info-v" id="modalInicioTexto">-</div>
-                                </div>
-
-                                <div class="info-line">
-                                    <div class="info-k">Fin prog.</div>
-                                    <div class="info-v" id="modalFinTexto">-</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="operator-box" id="boxOperadorSugerido">
-                            <div class="operator-title" id="tituloOperadorSugerido">
-                                Operador principal sugerido desde RRHH
-                            </div>
-                            <div class="small text-muted mt-1" id="detalleOperadorSugerido">-</div>
-                        </div>
-
-                        <div class="modal-validation-message" id="mensajeValidacionOperadores" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill mt-1"></i>
-                            <div id="textoValidacionOperadores"></div>
-                        </div>
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-lg-6">
-                                <div class="operator-role-card required">
-                                    <div class="operator-role-head">
-                                        <div class="operator-role-name"><i class="bi bi-person-badge me-1"></i>Operador principal</div>
-                                        <span class="operator-required-badge">Obligatorio</span>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Seleccionar operador</label>
-                                        <select name="operadorId" id="modalOperadorId" class="form-select">
-                                            @foreach (var op in operadoresProduccion)
-                                            {
-                                                <option value="@op.Value">@op.Text</option>
-                                            }
-                                        </select>
-                                        <div class="small text-muted mt-1" id="modalPolivalenciaInfo">Si la pieza tiene matriz, se mostrarán solo operadores evaluados y su nivel.</div>
-                                    </div>
-                                    <div>
-                                        <label class="form-label">Nombre manual</label>
-                                        <input type="text" id="modalOperadorManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
-                                        <div class="small text-muted mt-1">El operador principal se controla desde Escala de Personal.</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-lg-6">
-                                <div class="operator-role-card">
-                                    <div class="operator-role-head">
-                                        <div class="operator-role-name"><i class="bi bi-person-plus me-1"></i>Operador auxiliar</div>
-                                        <span class="operator-optional-badge">Opcional</span>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Seleccionar auxiliar</label>
-                                        <select name="operadorAuxiliarId" id="modalOperadorAuxiliarId" class="form-select">
-                                            @foreach (var op in operadoresProduccion)
-                                            {
-                                                <option value="@op.Value">@op.Text</option>
-                                            }
-                                        </select>
-                                        <div class="small text-muted mt-1">Puede dejarse sin auxiliar si la preparación no lo requiere.</div>
-                                    </div>
-                                    <div>
-                                        <label class="form-label">Nombre manual auxiliar</label>
-                                        <input type="text" id="modalOperadorAuxiliarManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
-                                        <div class="small text-muted mt-1">El auxiliar es opcional y no puede ser la misma persona que el operador principal.</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <label class="form-label">Observaciones</label>
-                                <textarea name="observaciones" id="modalObservaciones" class="form-control" rows="3" maxlength="500" placeholder="Observaciones de preparación, cambio de operador, indicaciones especiales..."></textarea>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="modal-footer border-0 px-4 pb-4">
-                        <button type="button"
-                                class="btn btn-light btn-action"
-                                data-bs-dismiss="modal">
-                            Cancelar
-                        </button>
-
-                        <button type="submit"
-                                class="btn btn-success btn-action"
-                                id="btnConfirmarInicio">
-                            <i class="bi bi-play-fill me-1"></i>
-                            Iniciar preparación
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+</div>
 
 @section Scripts {
     <script>

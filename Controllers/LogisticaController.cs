@@ -738,54 +738,253 @@ WHERE EmbarqueID=@Id;",
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Despachar(int embarqueId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Despachar(
+     int embarqueId,
+     CancellationToken cancellationToken)
     {
-        var acceso = await ValidarAccesoAsync("Tablero de Logística");
-        if (acceso != null) return acceso;
+        var acceso =
+            await ValidarAccesoAsync("Tablero de Logística");
+
+        if (acceso != null)
+            return acceso;
 
         try
         {
-            await using var cn = await AbrirAsync(cancellationToken);
-            await using var cmd = new SqlCommand("dbo.usp_Logistica_DespacharEmbarque", cn)
+            await using var cn =
+                await AbrirAsync(cancellationToken);
+
+            // =====================================================
+            // VALIDACION OPERATIVA PREVIA A SALIDA
+            // =====================================================
+
+            const string sqlValidacion = @"
+SELECT
+    e.EmbarqueID,
+    ISNULL(e.Estatus,N'') AS Estatus,
+    e.RutaID,
+    e.UnidadID,
+    ISNULL(NULLIF(LTRIM(RTRIM(e.OperadorTexto)),N''),N'') AS Operador,
+
+    ISNULL
+    (
+        (
+            SELECT SUM(d.CantidadSolicitada)
+            FROM dbo.Logistica_EmbarqueDetalle d
+            WHERE
+                d.EmbarqueID=e.EmbarqueID
+                AND d.Activo=1
+        ),
+        0
+    ) AS TotalSolicitado,
+
+    ISNULL
+    (
+        (
+            SELECT SUM(ec.CantidadAsignada)
+            FROM dbo.Logistica_EmbarqueCajas ec
+            WHERE
+                ec.EmbarqueID=e.EmbarqueID
+                AND ec.Activo=1
+        ),
+        0
+    ) AS TotalAsignado,
+
+    ISNULL
+    (
+        (
+            SELECT COUNT_BIG(*)
+            FROM dbo.Logistica_Incidencias i
+            WHERE
+                i.EmbarqueID=e.EmbarqueID
+                AND i.Activo=1
+                AND i.Estatus IN
+                (
+                    N'Abierta',
+                    N'En seguimiento'
+                )
+                AND i.Severidad=N'Crítica'
+        ),
+        0
+    ) AS IncidenciasCriticas
+
+FROM dbo.Logistica_Embarques e
+WHERE
+    e.EmbarqueID=@EmbarqueID
+    AND e.Activo=1;";
+
+            string estatus;
+            int? rutaId;
+            int? unidadId;
+            string operador;
+            int totalSolicitado;
+            int totalAsignado;
+            long incidenciasCriticas;
+
+            await using (var cmd =
+                new SqlCommand(sqlValidacion, cn))
             {
-                CommandType = CommandType.StoredProcedure
-            };
+                cmd.Parameters.Add(
+                    "@EmbarqueID",
+                    SqlDbType.Int).Value = embarqueId;
 
-            cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
-            cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                await using var rd =
+                    await cmd.ExecuteReaderAsync(
+                        cancellationToken);
 
-            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+                if (!await rd.ReadAsync(cancellationToken))
+                {
+                    throw new InvalidOperationException(
+                        "El embarque no existe.");
+                }
 
-            if (!await rd.ReadAsync(cancellationToken))
-                throw new InvalidOperationException("El procedimiento de despacho terminó sin devolver confirmación.");
+                estatus =
+                    Texto(rd, "Estatus");
 
-            var referencia = Texto(rd, "ReferenciaOperacion");
-            var yaDespachado = Booleano(rd, "YaDespachado");
+                rutaId =
+                    EnteroNullable(rd, "RutaID");
+
+                unidadId =
+                    EnteroNullable(rd, "UnidadID");
+
+                operador =
+                    Texto(rd, "Operador");
+
+                totalSolicitado =
+                    Entero(rd, "TotalSolicitado");
+
+                totalAsignado =
+                    Entero(rd, "TotalAsignado");
+
+                incidenciasCriticas =
+                    EnteroLargo(rd, "IncidenciasCriticas");
+            }
+
+            // =====================================================
+            // VALIDACIONES
+            // =====================================================
+
+            if (estatus != "Cargado")
+            {
+                throw new InvalidOperationException(
+                    "Solo un embarque Cargado puede confirmar su salida.");
+            }
+
+            if (!rutaId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "No se puede confirmar la salida porque el embarque no tiene ruta asignada.");
+            }
+
+            if (!unidadId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "No se puede confirmar la salida porque el embarque no tiene unidad asignada.");
+            }
+
+            if (string.IsNullOrWhiteSpace(operador))
+            {
+                throw new InvalidOperationException(
+                    "No se puede confirmar la salida porque el embarque no tiene operador asignado.");
+            }
+
+            if (totalSolicitado <= 0)
+            {
+                throw new InvalidOperationException(
+                    "El embarque no contiene piezas para despachar.");
+            }
+
+            if (totalAsignado != totalSolicitado)
+            {
+                throw new InvalidOperationException(
+                    $"La preparación está incompleta. " +
+                    $"Programado: {totalSolicitado:N0} PZA. " +
+                    $"Preparado: {totalAsignado:N0} PZA.");
+            }
+
+            if (incidenciasCriticas > 0)
+            {
+                throw new InvalidOperationException(
+                    incidenciasCriticas == 1
+                        ? "El embarque tiene una incidencia crítica abierta. Debe resolverse antes de confirmar la salida."
+                        : $"El embarque tiene {incidenciasCriticas:N0} incidencias críticas abiertas. Deben resolverse antes de confirmar la salida.");
+            }
+
+            // =====================================================
+            // DESPACHO REAL PT
+            // =====================================================
+
+            await using var sp =
+                new SqlCommand(
+                    "dbo.usp_Logistica_DespacharEmbarque",
+                    cn)
+                {
+                    CommandType =
+                        CommandType.StoredProcedure
+                };
+
+            sp.Parameters.Add(
+                "@EmbarqueID",
+                SqlDbType.Int).Value = embarqueId;
+
+            sp.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
+                Db(UsuarioID);
+
+            sp.Parameters.Add(
+                "@UsuarioNombre",
+                SqlDbType.NVarChar,
+                200).Value = UsuarioNombre;
+
+            await using var resultado =
+                await sp.ExecuteReaderAsync(
+                    cancellationToken);
+
+            if (!await resultado.ReadAsync(cancellationToken))
+            {
+                throw new InvalidOperationException(
+                    "El procedimiento de despacho terminó sin devolver confirmación.");
+            }
+
+            var referencia =
+                Texto(
+                    resultado,
+                    "ReferenciaOperacion");
+
+            var yaDespachado =
+                Booleano(
+                    resultado,
+                    "YaDespachado");
 
             if (yaDespachado)
             {
-                TempData["LogisticaOk"] = string.IsNullOrWhiteSpace(referencia)
-                    ? "El embarque ya había sido despachado. No se generaron movimientos PT duplicados."
-                    : $"El embarque ya había sido despachado. No se generaron movimientos PT duplicados. Referencia: {referencia}.";
+                TempData["LogisticaOk"] =
+                    string.IsNullOrWhiteSpace(referencia)
+                        ? "El embarque ya había sido despachado. No se generaron movimientos PT duplicados."
+                        : $"El embarque ya había sido despachado. No se generaron movimientos PT duplicados. Referencia: {referencia}.";
             }
             else
             {
-                TempData["LogisticaOk"] = string.IsNullOrWhiteSpace(referencia)
-                    ? "Salida validada y PT descontado correctamente."
-                    : $"Salida validada y PT descontado correctamente. Referencia: {referencia}.";
+                TempData["LogisticaOk"] =
+                    string.IsNullOrWhiteSpace(referencia)
+                        ? "Salida validada y PT descontado correctamente."
+                        : $"Salida validada y PT descontado correctamente. Referencia: {referencia}.";
             }
         }
         catch (SqlException ex)
         {
-            TempData["LogisticaError"] = $"No fue posible confirmar la salida: {ex.Message}";
+            TempData["LogisticaError"] =
+                $"No fue posible confirmar la salida: {ex.Message}";
         }
         catch (Exception ex)
         {
-            TempData["LogisticaError"] = ex.Message;
+            TempData["LogisticaError"] =
+                ex.Message;
         }
 
-        return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+        return RedirectToAction(
+            nameof(Detalle),
+            new { id = embarqueId });
     }
 
     [HttpPost]
@@ -1583,7 +1782,13 @@ ORDER BY FechaEvento DESC,HistorialID DESC;";
                 });
             }
         }
+        await CargarIncidenciasAsync(
+    cn,
+    vm,
+    cancellationToken);
+
         CalcularEstadoOperativo(vm);
+
         return vm;
     }
 
@@ -1937,6 +2142,554 @@ ORDER BY FechaEvento DESC,HistorialID DESC;";
     }
 
 
+    private async Task CargarIncidenciasAsync(
+    SqlConnection cn,
+    LogisticaDetalleVm vm,
+    CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT
+    i.IncidenciaID,
+    i.EmbarqueID,
+    ISNULL(CONVERT(NVARCHAR(50), i.Folio), N'') AS Folio,
+    ISNULL(i.Tipo, N'') AS Tipo,
+    ISNULL(i.Severidad, N'') AS Severidad,
+    ISNULL(i.Descripcion, N'') AS Descripcion,
+    ISNULL(i.Responsable, N'') AS Responsable,
+    ISNULL(i.Estatus, N'') AS Estatus,
+    i.FechaRegistro,
+    i.FechaCompromiso,
+    i.FechaCierre,
+    ISNULL(i.Solucion, N'') AS Solucion,
+    ISNULL(i.UsuarioRegistro, N'') AS UsuarioRegistro
+FROM dbo.Logistica_Incidencias i
+WHERE
+    i.EmbarqueID = @EmbarqueID
+    AND i.Activo = 1
+ORDER BY
+    CASE
+        WHEN i.Estatus IN (N'Abierta', N'En seguimiento') THEN 0
+        ELSE 1
+    END,
+    CASE i.Severidad
+        WHEN N'Crítica' THEN 1
+        WHEN N'Alta' THEN 2
+        WHEN N'Media' THEN 3
+        WHEN N'Baja' THEN 4
+        ELSE 5
+    END,
+    i.FechaRegistro DESC,
+    i.IncidenciaID DESC;";
+
+        await using var cmd = new SqlCommand(sql, cn);
+
+        cmd.Parameters.Add(
+            "@EmbarqueID",
+            SqlDbType.Int).Value = vm.EmbarqueID;
+
+        await using var rd =
+            await cmd.ExecuteReaderAsync(cancellationToken);
+
+        while (await rd.ReadAsync(cancellationToken))
+        {
+            vm.Incidencias.Add(new LogisticaIncidenciaVm
+            {
+                IncidenciaID =
+                    Entero(rd, "IncidenciaID"),
+
+                EmbarqueID =
+                    Entero(rd, "EmbarqueID"),
+
+                Folio =
+                    Texto(rd, "Folio"),
+
+                Tipo =
+                    Texto(rd, "Tipo"),
+
+                Severidad =
+                    Texto(rd, "Severidad"),
+
+                Descripcion =
+                    Texto(rd, "Descripcion"),
+
+                Responsable =
+                    Texto(rd, "Responsable"),
+
+                Estatus =
+                    Texto(rd, "Estatus"),
+
+                FechaRegistro =
+                    Fecha(rd, "FechaRegistro")
+                    ?? DateTime.MinValue,
+
+                FechaCompromiso =
+                    Fecha(rd, "FechaCompromiso"),
+
+                FechaCierre =
+                    Fecha(rd, "FechaCierre"),
+
+                Solucion =
+                    Texto(rd, "Solucion"),
+
+                UsuarioRegistro =
+                    Texto(rd, "UsuarioRegistro")
+            });
+        }
+
+        vm.IncidenciasAbiertas =
+            vm.Incidencias.Count(x =>
+                x.Estatus is "Abierta" or "En seguimiento");
+
+        vm.IncidenciasCriticas =
+            vm.Incidencias.Count(x =>
+                x.Estatus is "Abierta" or "En seguimiento"
+                &&
+                string.Equals(
+                    x.Severidad,
+                    "Crítica",
+                    StringComparison.OrdinalIgnoreCase));
+
+        vm.TieneIncidencia =
+            vm.IncidenciasAbiertas > 0;
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RegistrarIncidencia(
+    LogisticaIncidenciaCrearVm model,
+    CancellationToken cancellationToken)
+    {
+        var acceso =
+            await ValidarAccesoAsync("Tablero de Logística");
+
+        if (acceso != null)
+            return acceso;
+
+        if (!ModelState.IsValid)
+        {
+            TempData["LogisticaError"] =
+                "Completa correctamente los datos de la incidencia.";
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.EmbarqueID });
+        }
+
+        var tiposPermitidos = new HashSet<string>(
+            StringComparer.OrdinalIgnoreCase)
+    {
+        "Producto incompleto",
+        "Caja dañada",
+        "Unidad no disponible",
+        "Operador",
+        "Producción",
+        "Calidad",
+        "Transporte",
+        "Dirección / cliente",
+        "Retraso",
+        "Rechazo de entrega",
+        "Diferencia de cantidades",
+        "Otro"
+    };
+
+        var severidadesPermitidas = new HashSet<string>(
+            StringComparer.OrdinalIgnoreCase)
+    {
+        "Baja",
+        "Media",
+        "Alta",
+        "Crítica"
+    };
+
+        model.Tipo = model.Tipo?.Trim() ?? string.Empty;
+        model.Severidad =
+            model.Severidad?.Trim() ?? string.Empty;
+        model.Descripcion =
+            model.Descripcion?.Trim() ?? string.Empty;
+        model.Responsable =
+            model.Responsable?.Trim();
+
+        if (!tiposPermitidos.Contains(model.Tipo))
+        {
+            TempData["LogisticaError"] =
+                "El tipo de incidencia seleccionado no es válido.";
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.EmbarqueID });
+        }
+
+        if (!severidadesPermitidas.Contains(model.Severidad))
+        {
+            TempData["LogisticaError"] =
+                "La severidad seleccionada no es válida.";
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.EmbarqueID });
+        }
+
+        await using var cn =
+            await AbrirAsync(cancellationToken);
+
+        await using var tx =
+            (SqlTransaction)await cn.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+
+        try
+        {
+            var header = await ObtenerHeaderAsync(
+                cn,
+                tx,
+                model.EmbarqueID,
+                cancellationToken)
+                ?? throw new InvalidOperationException(
+                    "El embarque no existe.");
+
+            if (header.Estatus == "Cancelado")
+            {
+                throw new InvalidOperationException(
+                    "No se pueden registrar incidencias en un embarque cancelado.");
+            }
+
+            const string sql = @"
+INSERT INTO dbo.Logistica_Incidencias
+(
+    EmbarqueID,
+    Tipo,
+    Severidad,
+    Descripcion,
+    Responsable,
+    Estatus,
+    FechaRegistro,
+    FechaCompromiso,
+    UsuarioRegistroID,
+    UsuarioRegistro,
+    Activo
+)
+VALUES
+(
+    @EmbarqueID,
+    @Tipo,
+    @Severidad,
+    @Descripcion,
+    @Responsable,
+    N'Abierta',
+    SYSDATETIME(),
+    @FechaCompromiso,
+    @UsuarioID,
+    @UsuarioNombre,
+    1
+);
+
+SELECT CONVERT(INT, SCOPE_IDENTITY());";
+
+            int incidenciaId;
+
+            await using (var cmd =
+                new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add(
+                    "@EmbarqueID",
+                    SqlDbType.Int).Value = model.EmbarqueID;
+
+                cmd.Parameters.Add(
+                    "@Tipo",
+                    SqlDbType.NVarChar,
+                    80).Value = model.Tipo;
+
+                cmd.Parameters.Add(
+                    "@Severidad",
+                    SqlDbType.NVarChar,
+                    20).Value = model.Severidad;
+
+                cmd.Parameters.Add(
+                    "@Descripcion",
+                    SqlDbType.NVarChar,
+                    1200).Value = model.Descripcion;
+
+                cmd.Parameters.Add(
+                    "@Responsable",
+                    SqlDbType.NVarChar,
+                    200).Value = Db(model.Responsable);
+
+                cmd.Parameters.Add(
+                    "@FechaCompromiso",
+                    SqlDbType.DateTime2).Value =
+                    Db(model.FechaCompromiso);
+
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    Db(UsuarioID);
+
+                cmd.Parameters.Add(
+                    "@UsuarioNombre",
+                    SqlDbType.NVarChar,
+                    200).Value = UsuarioNombre;
+
+                incidenciaId =
+                    Convert.ToInt32(
+                        await cmd.ExecuteScalarAsync(
+                            cancellationToken));
+            }
+
+            // Mantener sincronizado el indicador rápido del embarque.
+            await EjecutarAsync(
+                cn,
+                tx,
+                @"
+UPDATE dbo.Logistica_Embarques
+SET
+    TieneIncidencia = 1,
+    FechaModificacion = SYSDATETIME(),
+    ActualizadoPor = @Usuario
+WHERE EmbarqueID = @EmbarqueID;",
+                cancellationToken,
+                ("@Usuario", UsuarioNombre),
+                ("@EmbarqueID", model.EmbarqueID));
+
+            await InsertarHistorialAsync(
+                cn,
+                tx,
+                model.EmbarqueID,
+                "INCIDENCIA_REGISTRADA",
+                header.Estatus,
+                header.Estatus,
+                $"Incidencia INC-{incidenciaId:000000}. " +
+                $"{model.Tipo} / {model.Severidad}. " +
+                model.Descripcion,
+                cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
+
+            TempData["LogisticaOk"] =
+                $"Incidencia INC-{incidenciaId:000000} registrada correctamente.";
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+
+            TempData["LogisticaError"] =
+                $"No fue posible registrar la incidencia: {ex.Message}";
+        }
+
+        return RedirectToAction(
+            nameof(Detalle),
+            new { id = model.EmbarqueID });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CerrarIncidencia(
+    LogisticaIncidenciaCerrarVm model,
+    CancellationToken cancellationToken)
+    {
+        var acceso =
+            await ValidarAccesoAsync("Tablero de Logística");
+
+        if (acceso != null)
+            return acceso;
+
+        if (!ModelState.IsValid)
+        {
+            TempData["LogisticaError"] =
+                "Debes indicar la solución aplicada.";
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.EmbarqueID });
+        }
+
+        model.Solucion =
+            model.Solucion?.Trim() ?? string.Empty;
+
+        await using var cn =
+            await AbrirAsync(cancellationToken);
+
+        await using var tx =
+            (SqlTransaction)await cn.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+
+        try
+        {
+            const string sqlObtener = @"
+SELECT
+    Tipo,
+    Severidad,
+    Estatus
+FROM dbo.Logistica_Incidencias
+WHERE
+    IncidenciaID = @IncidenciaID
+    AND EmbarqueID = @EmbarqueID
+    AND Activo = 1;";
+
+            string tipo;
+            string severidad;
+            string estatus;
+
+            await using (var cmd =
+                new SqlCommand(sqlObtener, cn, tx))
+            {
+                cmd.Parameters.Add(
+                    "@IncidenciaID",
+                    SqlDbType.Int).Value =
+                    model.IncidenciaID;
+
+                cmd.Parameters.Add(
+                    "@EmbarqueID",
+                    SqlDbType.Int).Value =
+                    model.EmbarqueID;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync(
+                        cancellationToken);
+
+                if (!await rd.ReadAsync(cancellationToken))
+                {
+                    throw new InvalidOperationException(
+                        "La incidencia no existe.");
+                }
+
+                tipo = Texto(rd, "Tipo");
+                severidad = Texto(rd, "Severidad");
+                estatus = Texto(rd, "Estatus");
+            }
+
+            if (estatus == "Cerrada")
+            {
+                throw new InvalidOperationException(
+                    "La incidencia ya se encuentra cerrada.");
+            }
+
+            const string sqlCerrar = @"
+UPDATE dbo.Logistica_Incidencias
+SET
+    Estatus = N'Cerrada',
+    Solucion = @Solucion,
+    FechaCierre = SYSDATETIME(),
+    UsuarioCierreID = @UsuarioID,
+    UsuarioCierre = @UsuarioNombre
+WHERE
+    IncidenciaID = @IncidenciaID
+    AND EmbarqueID = @EmbarqueID
+    AND Activo = 1;";
+
+            await using (var cmd =
+                new SqlCommand(sqlCerrar, cn, tx))
+            {
+                cmd.Parameters.Add(
+                    "@Solucion",
+                    SqlDbType.NVarChar,
+                    1200).Value = model.Solucion;
+
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    Db(UsuarioID);
+
+                cmd.Parameters.Add(
+                    "@UsuarioNombre",
+                    SqlDbType.NVarChar,
+                    200).Value = UsuarioNombre;
+
+                cmd.Parameters.Add(
+                    "@IncidenciaID",
+                    SqlDbType.Int).Value =
+                    model.IncidenciaID;
+
+                cmd.Parameters.Add(
+                    "@EmbarqueID",
+                    SqlDbType.Int).Value =
+                    model.EmbarqueID;
+
+                var afectados =
+                    await cmd.ExecuteNonQueryAsync(
+                        cancellationToken);
+
+                if (afectados == 0)
+                {
+                    throw new InvalidOperationException(
+                        "No fue posible cerrar la incidencia.");
+                }
+            }
+
+            // Revisar si quedan incidencias abiertas.
+            const string sqlPendientes = @"
+SELECT COUNT_BIG(*)
+FROM dbo.Logistica_Incidencias
+WHERE
+    EmbarqueID = @EmbarqueID
+    AND Activo = 1
+    AND Estatus IN (N'Abierta', N'En seguimiento');";
+
+            long pendientes;
+
+            await using (var cmd =
+                new SqlCommand(sqlPendientes, cn, tx))
+            {
+                cmd.Parameters.Add(
+                    "@EmbarqueID",
+                    SqlDbType.Int).Value =
+                    model.EmbarqueID;
+
+                pendientes =
+                    Convert.ToInt64(
+                        await cmd.ExecuteScalarAsync(
+                            cancellationToken));
+            }
+
+            await EjecutarAsync(
+                cn,
+                tx,
+                @"
+UPDATE dbo.Logistica_Embarques
+SET
+    TieneIncidencia = @TieneIncidencia,
+    FechaModificacion = SYSDATETIME(),
+    ActualizadoPor = @Usuario
+WHERE EmbarqueID = @EmbarqueID;",
+                cancellationToken,
+                ("@TieneIncidencia", pendientes > 0),
+                ("@Usuario", UsuarioNombre),
+                ("@EmbarqueID", model.EmbarqueID));
+
+            var header = await ObtenerHeaderAsync(
+                cn,
+                tx,
+                model.EmbarqueID,
+                cancellationToken);
+
+            await InsertarHistorialAsync(
+                cn,
+                tx,
+                model.EmbarqueID,
+                "INCIDENCIA_CERRADA",
+                header?.Estatus ?? string.Empty,
+                header?.Estatus ?? string.Empty,
+                $"Incidencia INC-{model.IncidenciaID:000000} cerrada. " +
+                $"{tipo} / {severidad}. Solución: {model.Solucion}",
+                cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
+
+            TempData["LogisticaOk"] =
+                $"Incidencia INC-{model.IncidenciaID:000000} cerrada correctamente.";
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+
+            TempData["LogisticaError"] =
+                $"No fue posible cerrar la incidencia: {ex.Message}";
+        }
+
+        return RedirectToAction(
+            nameof(Detalle),
+            new { id = model.EmbarqueID });
+    }
 
     [HttpGet]
     public async Task<IActionResult> Calendario(CancellationToken cancellationToken)

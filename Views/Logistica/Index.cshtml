@@ -57,6 +57,53 @@
     var listos = embarques.Count(x => x.Estatus == "Preparado" || x.Estatus == "Cargado");
     var enRuta = embarques.Count(x => x.Estatus == "En ruta");
     var entregados = embarques.Count(x => x.Estatus == "Entregado");
+
+    DateTime? Combinar(DateTime? fecha, TimeSpan? hora)
+        => fecha?.Date.Add(hora ?? TimeSpan.Zero);
+
+    string RiesgoTexto(LogisticaEmbarqueResumenVm e)
+    {
+        if (e.Estatus == "Cancelado") return "Cancelado";
+        if (e.Estatus == "Entregado") return "Entregado";
+
+        var ahora = DateTime.Now;
+        var carga = Combinar(e.FechaCargaProgramada, e.HoraCargaProgramada);
+        var entrega = Combinar(e.FechaEntregaProgramada, e.HoraEntregaProgramada);
+
+        if (entrega.HasValue && ahora > entrega.Value) return "Atrasado";
+        if (carga.HasValue && e.Estatus is "Programado" or "Preparando" or "Preparado" && ahora > carga.Value) return "Atrasado";
+        if (e.TieneIncidencia) return "En riesgo";
+        if (carga.HasValue && e.Estatus is "Programado" or "Preparando" && carga.Value > ahora && (carga.Value - ahora).TotalMinutes <= 60) return "En riesgo";
+        if (entrega.HasValue && e.Estatus != "En ruta" && entrega.Value > ahora && (entrega.Value - ahora).TotalMinutes <= 120) return "En riesgo";
+
+        return "En tiempo";
+    }
+
+    string RiesgoClase(LogisticaEmbarqueResumenVm e)
+        => RiesgoTexto(e) switch
+        {
+            "Atrasado" => "risk-danger",
+            "En riesgo" => "risk-warning",
+            "Entregado" => "risk-success",
+            "Cancelado" => "risk-muted",
+            _ => "risk-success"
+        };
+
+    string RiesgoIcono(LogisticaEmbarqueResumenVm e)
+        => RiesgoTexto(e) switch
+        {
+            "Atrasado" => "fa-triangle-exclamation",
+            "En riesgo" => "fa-clock",
+            "Entregado" => "fa-circle-check",
+            "Cancelado" => "fa-ban",
+            _ => "fa-circle-check"
+        };
+
+    var activos = embarques.Where(x => x.Estatus is not "Entregado" and not "Cancelado").ToList();
+    var atrasados = activos.Count(x => RiesgoTexto(x) == "Atrasado");
+    var enRiesgo = activos.Count(x => RiesgoTexto(x) == "En riesgo");
+    var conIncidencia = activos.Count(x => x.TieneIncidencia);
+    var enTiempo = activos.Count(x => RiesgoTexto(x) == "En tiempo");
 }
 <style>
     :root {
@@ -565,15 +612,209 @@
         justify-content: flex-end
     }
 
+    .log-control-grid {
+        display: grid;
+        grid-template-columns: repeat(6,minmax(0,1fr));
+        gap: 10px;
+    }
+
+    .log-control-card {
+        position: relative;
+        overflow: hidden;
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-radius: 16px;
+        padding: 14px;
+        box-shadow: 0 8px 20px rgba(15,23,42,.04);
+    }
+
+        .log-control-card::after {
+            content: "";
+            position: absolute;
+            width: 72px;
+            height: 72px;
+            right: -24px;
+            top: -24px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: .055;
+        }
+
+        .log-control-card .icon {
+            width: 34px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: #f3f6fa;
+        }
+
+        .log-control-card span {
+            display: block;
+            color: #7b8797;
+            font-size: .64rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .log-control-card strong {
+            display: block;
+            margin-top: 3px;
+            color: #0b1f3a;
+            font-size: 1.45rem;
+            line-height: 1;
+            font-weight: 950;
+        }
+
+        .log-control-card small {
+            display: block;
+            margin-top: 5px;
+            color: #7b8797;
+            font-size: .68rem;
+            font-weight: 700;
+        }
+
+        .log-control-card.danger {
+            color: var(--lg-red);
+            border-color: #f5c2bd;
+        }
+
+        .log-control-card.warning {
+            color: var(--lg-amber);
+            border-color: #f1d39a;
+        }
+
+        .log-control-card.success {
+            color: var(--lg-green);
+            border-color: #b8e2ca;
+        }
+
+        .log-control-card.info {
+            color: var(--lg-blue);
+        }
+
+        .log-control-card.purple {
+            color: var(--lg-purple);
+        }
+
+    .log-risk {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 5px 8px;
+        border: 1px solid transparent;
+        font-size: .68rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .risk-danger {
+        background: #fff3f1;
+        color: #b42318;
+        border-color: #f7c2bc;
+    }
+
+    .risk-warning {
+        background: #fff7e6;
+        color: #9a5700;
+        border-color: #f5d394;
+    }
+
+    .risk-success {
+        background: #ecfdf3;
+        color: #067647;
+        border-color: #abefc6;
+    }
+
+    .risk-muted {
+        background: #f2f4f7;
+        color: #667085;
+        border-color: #d0d5dd;
+    }
+
+    .log-priority-panel {
+        background: linear-gradient(180deg,#fff,#fbfcfe);
+    }
+
+    .log-priority-list {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 10px;
+        padding: 14px;
+    }
+
+    .log-priority-item {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        border: 1px solid #dce5ee;
+        border-radius: 13px;
+        padding: 12px;
+        background: #fff;
+        transition: .15s ease;
+    }
+
+        .log-priority-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15,23,42,.08);
+        }
+
+    .log-priority-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: flex-start;
+    }
+
+    .log-priority-item h3 {
+        margin: 0;
+        color: #0b1f3a;
+        font-size: .88rem;
+        font-weight: 950;
+    }
+
+    .log-priority-item p {
+        margin: 4px 0 0;
+        color: #667085;
+        font-size: .72rem;
+        font-weight: 700;
+    }
+
+    .log-priority-meta {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 9px;
+        color: #7b8797;
+        font-size: .67rem;
+        font-weight: 800;
+    }
+
     @@media(max-width:1150px) {
         .log-toolbar {
             grid-template-columns: 1fr 1fr 1fr
+        }
+
+        .log-control-grid {
+            grid-template-columns: repeat(3,1fr);
+        }
+
+        .log-priority-list {
+            grid-template-columns: repeat(2,1fr);
         }
     }
 
     @@media(max-width:760px) {
         .log-toolbar {
             grid-template-columns: 1fr
+        }
+
+        .log-control-grid,
+        .log-priority-list {
+            grid-template-columns: 1fr;
         }
 
         .log-hero {
@@ -630,6 +871,98 @@
         <div class="alert alert-danger rounded-4 fw-bold mb-0">
             <i class="fa-solid fa-database me-2"></i>@ViewBag.ErrorConfiguracion
         </div>
+    }
+
+    <section class="log-control-grid">
+        <article class="log-control-card info">
+            <div class="icon"><i class="fa-solid fa-truck"></i></div>
+            <span>Embarques activos</span>
+            <strong>@activos.Count</strong>
+            <small>Operaciones todavía abiertas</small>
+        </article>
+
+        <article class="log-control-card success">
+            <div class="icon"><i class="fa-solid fa-circle-check"></i></div>
+            <span>En tiempo</span>
+            <strong>@enTiempo</strong>
+            <small>Sin riesgo operativo detectado</small>
+        </article>
+
+        <article class="log-control-card warning">
+            <div class="icon"><i class="fa-solid fa-clock"></i></div>
+            <span>En riesgo</span>
+            <strong>@enRiesgo</strong>
+            <small>Requieren atención preventiva</small>
+        </article>
+
+        <article class="log-control-card danger">
+            <div class="icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <span>Atrasados</span>
+            <strong>@atrasados</strong>
+            <small>Compromiso de carga o entrega vencido</small>
+        </article>
+
+        <article class="log-control-card purple">
+            <div class="icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+            <span>Con incidencia</span>
+            <strong>@conIncidencia</strong>
+            <small>Embarques activos con seguimiento abierto</small>
+        </article>
+
+        <article class="log-control-card info">
+            <div class="icon"><i class="fa-solid fa-calendar-day"></i></div>
+            <span>Cargas hoy</span>
+            <strong>@Model.CargasHoy</strong>
+            <small>Programadas para el día</small>
+        </article>
+    </section>
+
+    @{
+        var prioridades = activos
+        .Where(x => RiesgoTexto(x) is "Atrasado" or "En riesgo")
+        .OrderBy(x => RiesgoTexto(x) == "Atrasado" ? 0 : 1)
+        .ThenBy(x => Combinar(x.FechaEntregaProgramada, x.HoraEntregaProgramada) ?? DateTime.MaxValue)
+        .Take(6)
+        .ToList();
+    }
+
+    @if (prioridades.Any())
+    {
+        <section class="log-panel log-priority-panel">
+            <div class="log-panel-head">
+                <div class="log-panel-title">
+                    <i class="fa-solid fa-tower-broadcast"></i>
+                    <div>
+                        <h2>Atención operativa</h2>
+                        <small>Embarques que necesitan intervención primero.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="log-priority-list">
+                @foreach (var e in prioridades)
+                {
+                    <a class="log-priority-item" asp-action="Detalle" asp-route-id="@e.EmbarqueID">
+                        <div class="log-priority-top">
+                            <div>
+                                <h3>@e.Folio · @e.Cliente</h3>
+                                <p>@e.Destino</p>
+                            </div>
+                            <span class="log-risk @RiesgoClase(e)">
+                                <i class="fa-solid @RiesgoIcono(e)"></i>@RiesgoTexto(e)
+                            </span>
+                        </div>
+                        <div class="log-priority-meta">
+                            <span><i class="fa-solid fa-boxes-packing me-1"></i>@e.Estatus</span>
+                            <span><i class="fa-solid fa-calendar-days me-1"></i>Entrega @Fecha(e.FechaEntregaProgramada) @Hora(e.HoraEntregaProgramada)</span>
+                            @if (e.TieneIncidencia)
+                            {
+                                <span style="color:#b42318"><i class="fa-solid fa-circle-exclamation me-1"></i>Incidencia abierta</span>
+                            }
+                        </div>
+                    </a>
+                }
+            </div>
+        </section>
     }
 
     <form method="get" class="log-toolbar">
@@ -972,10 +1305,11 @@
                         {
                             var atrasado = e.FechaEntregaProgramada.HasValue && e.FechaEntregaProgramada.Value.Date < DateTime.Today;
                             <tr>
-                                <td><span class="log-main">@e.Folio</span>@if(e.TieneIncidencia){
-                                <span class="log-incidence"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
-                            }
-    </td>
+                                <td>
+                                    <span class="log-main">@e.Folio</span>@if(e.TieneIncidencia){
+                                    <span class="log-incidence"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
+                                }
+                            </td>
                             <td><span class="log-main">@Fecha(e.FechaCargaProgramada)</span><span class="log-sub">@Hora(e.HoraCargaProgramada)</span></td>
                             <td>
                                 <div class="log-deadline @(atrasado ? "late" : "")">
@@ -1080,6 +1414,7 @@
                             <th>Cajas</th>
                             <th>Piezas</th>
                             <th>Estatus</th>
+                            <th>Estado general</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -1087,10 +1422,11 @@
                         @foreach (var e in embarques)
                         {
                             <tr>
-                                <td><span class="log-main">@e.Folio</span>@if(e.TieneIncidencia){
-                                <span class="log-incidence"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
-                            }
-    </td>
+                                <td>
+                                    <span class="log-main">@e.Folio</span>@if(e.TieneIncidencia){
+                                    <span class="log-incidence"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
+                                }
+                            </td>
                             <td><span class="log-main">@Fecha(e.FechaCargaProgramada)</span><span class="log-sub">@Hora(e.HoraCargaProgramada)</span></td>
                             <td><span class="log-main">@Fecha(e.FechaEntregaProgramada)</span><span class="log-sub">@Hora(e.HoraEntregaProgramada)</span></td>
                             <td><span class="log-main">@e.Cliente</span><span class="log-sub">@e.Destino</span></td>
@@ -1098,6 +1434,7 @@
                             <td>@e.TotalCajas</td>
                             <td><span class="log-main">@e.TotalPiezasSolicitadas.ToString("N0")</span><span class="log-sub">Despachadas @e.TotalPiezasDespachadas.ToString("N0")</span></td>
                             <td><span class="log-state @EstadoClase(e.Estatus)"><i class="fa-solid @EstadoIcono(e.Estatus)"></i>@e.Estatus</span></td>
+                            <td><span class="log-risk @RiesgoClase(e)"><i class="fa-solid @RiesgoIcono(e)"></i>@RiesgoTexto(e)</span></td>
                             <td><a class="log-btn" asp-action="Detalle" asp-route-id="@e.EmbarqueID"><i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir</a></td>
                         </tr>
                     }
