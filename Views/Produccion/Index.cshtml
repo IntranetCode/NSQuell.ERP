@@ -2386,7 +2386,175 @@
                         Iniciar preparación
                     </button>
                 </div>
+<<<<<<< HEAD
             </form>
+=======
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalIniciarPreparacion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <form method="post" action="@Url.Action("Iniciar", "Produccion")" id="formIniciarPreparacion">
+                    @Html.AntiForgeryToken()
+
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title">
+                                <i class="bi bi-play-circle me-2"></i>
+                                Confirmar inicio de preparación
+                            </h5>
+                            <div class="small opacity-75">
+                                Revisa el programa y confirma al operador principal y, si aplica, al auxiliar antes de tomar la OF.
+                            </div>
+                        </div>
+
+                        <button type="button"
+                                class="btn-close btn-close-white"
+                                data-bs-dismiss="modal"
+                                aria-label="Cerrar">
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+                        <input type="hidden" name="programaProduccionId" id="modalProgramaProduccionId" />
+                        <input type="hidden" name="operadorNombre" id="modalOperadorNombre" />
+                        <input type="hidden" name="operadorAuxiliarNombre" id="modalOperadorAuxiliarNombre" />
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="info-line">
+                                    <div class="info-k">Programa</div>
+                                    <div class="info-v" id="modalProgramaTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Máquina</div>
+                                    <div class="info-v" id="modalMaquinaTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Molde</div>
+                                    <div class="info-v" id="modalMoldeTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Cantidad</div>
+                                    <div class="info-v" id="modalCantidadTexto">-</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="info-line">
+                                    <div class="info-k">Parte</div>
+                                    <div class="info-v" id="modalParteTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Descripción</div>
+                                    <div class="info-v" id="modalDescripcionTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Inicio prog.</div>
+                                    <div class="info-v" id="modalInicioTexto">-</div>
+                                </div>
+
+                                <div class="info-line">
+                                    <div class="info-k">Fin prog.</div>
+                                    <div class="info-v" id="modalFinTexto">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="operator-box" id="boxOperadorSugerido">
+                            <div class="operator-title" id="tituloOperadorSugerido">
+                                Operador principal sugerido desde RRHH
+                            </div>
+                            <div class="small text-muted mt-1" id="detalleOperadorSugerido">-</div>
+                        </div>
+
+                        <div class="modal-validation-message" id="mensajeValidacionOperadores" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                            <div id="textoValidacionOperadores"></div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-lg-6">
+                                <div class="operator-role-card required">
+                                    <div class="operator-role-head">
+                                        <div class="operator-role-name"><i class="bi bi-person-badge me-1"></i>Operador principal</div>
+                                        <span class="operator-required-badge">Obligatorio</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Seleccionar operador</label>
+                                        <select name="operadorId" id="modalOperadorId" class="form-select">
+                                            @foreach (var op in operadoresProduccion)
+                                            {
+                                                <option value="@op.Value">@op.Text</option>
+                                            }
+                                        </select>
+                                        <div class="small text-muted mt-1" id="modalPolivalenciaInfo">Si la pieza tiene matriz, se mostrarán solo operadores evaluados y su nivel.</div>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Nombre manual</label>
+                                        <input type="text" id="modalOperadorManual" class="form-control" maxlength="200" placeholder="Escribe el nombre si no seleccionas operador" />
+                                        <div class="small text-muted mt-1">Puedes seleccionar un operador o capturar un nombre manual. Al seleccionar uno de la lista, la captura manual se bloquea.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="operator-role-card">
+                                    <div class="operator-role-head">
+                                        <div class="operator-role-name"><i class="bi bi-person-plus me-1"></i>Operador auxiliar</div>
+                                        <span class="operator-optional-badge">Opcional</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Seleccionar auxiliar</label>
+                                        <select name="operadorAuxiliarId" id="modalOperadorAuxiliarId" class="form-select">
+                                            @foreach (var op in operadoresProduccion)
+                                            {
+                                                <option value="@op.Value">@op.Text</option>
+                                            }
+                                        </select>
+                                        <div class="small text-muted mt-1">Puede dejarse sin auxiliar si la preparación no lo requiere.</div>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Nombre manual auxiliar</label>
+                                        <input type="text" id="modalOperadorAuxiliarManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
+                                        <div class="small text-muted mt-1">El auxiliar es opcional y no puede ser la misma persona que el operador principal.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Observaciones</label>
+                                <textarea name="observaciones" id="modalObservaciones" class="form-control" rows="3" maxlength="500" placeholder="Observaciones de preparación, cambio de operador, indicaciones especiales..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="button"
+                                class="btn btn-light btn-action"
+                                data-bs-dismiss="modal">
+                            Cancelar
+                        </button>
+
+                        <button type="submit"
+                                class="btn btn-success btn-action"
+                                id="btnConfirmarInicio">
+                            <i class="bi bi-play-fill me-1"></i>
+                            Iniciar preparación
+                        </button>
+                    </div>
+                </form>
+            </div>
+>>>>>>> origin/Rama_Adrian
         </div>
     </div>
 </div>
@@ -2478,13 +2646,29 @@
                 return partes.filter(Boolean).join(sep);
             }
 
+
+            function sincronizarModoManual(select, manual) {
+                if (!manual) return;
+
+                const haySeleccion = !!select?.value;
+                manual.disabled = haySeleccion;
+
+                if (haySeleccion) {
+                    manual.value = '';
+                    manual.placeholder = 'Bloqueado: ya seleccionaste un operador';
+                }
+                else {
+                    manual.placeholder = 'Escribe el nombre si no seleccionas operador';
+                }
+            }
+
             async function cargarOperadoresPolivalencia(programaId, parteId, maquinaId, operadorPreferido, auxiliarPreferido) {
                 limpiarSelectEscala(modalOperadorId, '-- Cargando operadores --');
                 limpiarSelectEscala(modalOperadorAuxiliarId, '-- Cargando auxiliares --');
 
                 if (modalOperadorManual) {
-                    modalOperadorManual.value = '';
-                    modalOperadorManual.disabled = true;
+                    modalOperadorManual.disabled = false;
+                    modalOperadorManual.placeholder = 'Escribe el nombre si no seleccionas operador';
                 }
                 if (modalOperadorAuxiliarManual) {
                     modalOperadorAuxiliarManual.value = '';
@@ -2538,6 +2722,7 @@
 
                     // Solo conserva el sugerido si tambien esta dentro del listado permitido.
                     seleccionarPersonaSiExiste(modalOperadorId, operadorPreferido);
+                    sincronizarModoManual(modalOperadorId, modalOperadorManual);
 
                     limpiarSelectEscala(
                         modalOperadorAuxiliarId,
@@ -2563,7 +2748,7 @@
                                 : 'small text-danger fw-semibold mt-1';
                         } else {
                             modalPolivalenciaInfo.textContent =
-                                `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; se usa el catalogo general de Operadores.`;
+                                `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; puedes seleccionar del catalogo general o capturar un nombre manual.`;
                             modalPolivalenciaInfo.className = 'small text-warning fw-semibold mt-1';
                         }
                     }
@@ -2598,7 +2783,7 @@
                         }
                         if (detalleOperadorSugerido) {
                             detalleOperadorSugerido.textContent =
-                                'Se habilita el catalogo general porque esta pieza aun no tiene matriz.';
+                                'Se habilita el catalogo general. Si la persona no aparece, tambien puedes capturar el nombre manualmente.';
                         }
                     }
                 }
@@ -2856,11 +3041,13 @@
 
             modalOperadorId?.addEventListener('change', () => {
                 if (modalOperadorId.value && modalOperadorManual) modalOperadorManual.value = '';
+                sincronizarModoManual(modalOperadorId, modalOperadorManual);
                 limpiarValidacionOperadores();
             });
 
             modalOperadorManual?.addEventListener('input', () => {
                 if (modalOperadorManual.value.trim() && modalOperadorId) modalOperadorId.value = '';
+                sincronizarModoManual(modalOperadorId, modalOperadorManual);
                 limpiarValidacionOperadores();
             });
 
