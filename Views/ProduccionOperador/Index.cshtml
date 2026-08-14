@@ -340,27 +340,131 @@
         .hidden-row {
             display: none !important
         }
-        @@media(max - width:800px)
 
-        {
-            .page
-
-        {
-            padding: 10px
+        .turn-reception {
+            border: 1px solid #93c5fd;
+            background: linear-gradient(135deg,#eff6ff,#fff);
+            border-radius: 20px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 10px 28px rgba(15,23,42,.06)
         }
 
-        .filter-grid {
-            grid-template-columns: 1fr
+        .turn-reception-title {
+            color: var(--azul-oscuro);
+            font-size: 1.05rem;
+            font-weight: 950
         }
 
-        .alert-row {
-            grid-template-columns: 1fr
+        .turn-reception-sub {
+            color: var(--gris);
+            font-size: .82rem;
+            font-weight: 700
         }
 
-        .hero {
-            border-radius: 18px
+        .turn-reception-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 12px
         }
 
+        .turn-reception-card {
+            border: 1px solid var(--borde);
+            border-radius: 16px;
+            background: #fff;
+            padding: 14px;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr 1fr auto;
+            gap: 12px;
+            align-items: center
+        }
+
+            .turn-reception-card .label {
+                color: var(--gris);
+                font-size: .68rem;
+                font-weight: 900;
+                text-transform: uppercase
+            }
+
+            .turn-reception-card .value {
+                color: var(--azul-oscuro);
+                font-weight: 950;
+                margin-top: 2px
+            }
+
+        .btn-receive-turn {
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 14px;
+            background: var(--verde);
+            color: #fff;
+            font-weight: 950;
+            white-space: nowrap
+        }
+
+            .btn-receive-turn:hover {
+                background: #0b5d31
+            }
+
+        .turn-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px;
+            margin-bottom: 14px
+        }
+
+        .turn-detail-card {
+            border: 1px solid var(--borde);
+            border-radius: 14px;
+            padding: 12px;
+            background: #f8fbff
+        }
+
+            .turn-detail-card .k {
+                color: var(--gris);
+                font-size: .68rem;
+                font-weight: 900;
+                text-transform: uppercase
+            }
+
+            .turn-detail-card .v {
+                color: var(--azul-oscuro);
+                font-size: 1.05rem;
+                font-weight: 950;
+                margin-top: 3px
+            }
+
+        .turn-accept-header {
+            background: linear-gradient(135deg,#065f46,#107c41);
+            color: #fff
+        }
+
+        .turn-observations {
+            border: 1px solid #d0d5dd;
+            border-radius: 14px;
+            padding: 12px;
+            background: #f8fafc;
+            white-space: pre-wrap;
+            color: #344054;
+            font-weight: 700
+        }
+
+        @@media(max - width:800px) {
+            .page {
+                padding: 10px
+            }
+
+            .filter-grid {
+                grid-template-columns: 1fr
+            }
+
+            .alert-row {
+                grid-template-columns: 1fr
+            }
+
+            .hero {
+                border-radius: 18px
+            }
         }
     </style>
 </head>
@@ -375,63 +479,152 @@
         {
             <div class="alert alert-danger rounded-4 fw-bold">@TempData["Error"]</div>
         }
-    
-</select></div><div class="machine-summary" id="resumenFiltro">Mostrando @producciones.Count producción(es).</div></div></div></section>
-        <section class="panel"><div class="panel-body"><button class="alert-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#proximasProducciones" aria-expanded="false" aria-controls="proximasProducciones"><span><i class="fa-solid fa-bell me-2"></i>Próximas producciones en 15 minutos (@alertas.Count)</span><i class="fa-solid fa-chevron-down"></i></button><div class="collapse" id="proximasProducciones"><div class="alert-list">@if(alertas.Any()){foreach(var alerta in alertas.OrderBy(x=>x.FechaObjetivo)){
-        <div class="alert-row"><div><div class="alert-type">@AlertaTipo(alerta)</div><div class="alert-time">@AlertaTiempo(alerta)</div></div><div><div class="main">@alerta.TextoMaquina</div><div class="sub">Objetivo @alerta.FechaObjetivo.ToString("dd/MM/yyyy HH:mm")</div></div><div><div class="main">@alerta.TextoParte</div><div class="sub">Molde @Txt(alerta.MoldeCodigo)</div></div><div><div class="main">@alerta.CantidadProgramada.ToString("N0")</div><div class="sub">piezas</div></div><div>@if(alerta.EjecucionProduccionID.HasValue){
-        <a class="btn-captura" href="@Url.Action("Detalle", "Produccion", new { id = alerta.EjecucionProduccionID.Value })"><i class="fa-solid fa-eye"></i>Ver preparación</a>
-                }else
-        {
+        <section class="turn-reception d-none" id="turnosPendientesSection">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2"><div><div class="turn-reception-title"><i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Tienes un turno pendiente por recibir</div><div class="turn-reception-sub">Revisa exactamente lo que recibes antes de aceptar. La responsabilidad cambia únicamente cuando confirmas la recepción.</div></div><span class="badge bg-primary" id="turnosPendientesCount">0</span></div>
+            <div class="turn-reception-list" id="turnosPendientesLista"></div>
+        </section>
 
-            <a class="btn-captura" href="@Url.Action("Index", "Produccion")"><i class="fa-solid fa-industry"></i>Ir a Producción</a>
-        }
-</div></div>
-                }}else
-        {
+        </select>
+    </div>
+    <div class="machine-summary" id="resumenFiltro">Mostrando @producciones.Count producción(es).</div></div></div></section>
+    <section class="panel">
+        <div class="panel-body">
+            <button class="alert-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#proximasProducciones" aria-expanded="false" aria-controls="proximasProducciones"><span><i class="fa-solid fa-bell me-2"></i>Próximas producciones en 15 minutos (@alertas.Count)</span><i class="fa-solid fa-chevron-down"></i></button><div class="collapse" id="proximasProducciones">
+                <div class="alert-list">
+                    @if (alertas.Any())
+                    {
+                        foreach (var alerta in alertas.OrderBy(x => x.FechaObjetivo))
+                        {
+                            <div class="alert-row">
+                                <div><div class="alert-type">@AlertaTipo(alerta)</div><div class="alert-time">@AlertaTiempo(alerta)</div></div><div><div class="main">@alerta.TextoMaquina</div><div class="sub">Objetivo @alerta.FechaObjetivo.ToString("dd/MM/yyyy HH:mm")</div></div><div><div class="main">@alerta.TextoParte</div><div class="sub">Molde @Txt(alerta.MoldeCodigo)</div></div><div><div class="main">@alerta.CantidadProgramada.ToString("N0")</div><div class="sub">piezas</div></div><div>
+                                    @if (alerta.EjecucionProduccionID.HasValue)
+                                    {
+                                        <a class="btn-captura" href="@Url.Action("Detalle", "Produccion", new { id = alerta.EjecucionProduccionID.Value })"><i class="fa-solid fa-eye"></i>Ver preparación</a>
+                                    }
+                                    else
+                                    {
 
-            <div class="empty">No hay próximas producciones dentro de la ventana de 15 minutos.</div>
-        }
-</div></div></div></section>
-        <section class="panel"><div class="panel-head d-flex justify-content-between align-items-center"><span><i class="fa-solid fa-list-check me-2"></i>OF programadas por máquina</span><span id="contadorVisible" class="badge bg-primary">@producciones.Count</span></div><div class="panel-body">@if(!producciones.Any()){
-        <div class="empty"><i class="fa-solid fa-folder-open fa-2x mb-2"></i><div>No hay producciones disponibles.</div></div>
-                }else
-        {
+                                        <a class="btn-captura" href="@Url.Action("Index", "Produccion")"><i class="fa-solid fa-industry"></i>Ir a Producción</a>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
 
-            <div class="table-wrap"><table class="prod-table"><thead><tr><th>Máquina</th><th>OF / Programa</th><th>Parte</th><th>Operador</th><th>Estado</th><th>Cantidades</th><th>Avance</th><th>Acción</th></tr></thead><tbody>@foreach(var item in producciones.OrderBy(x=>x.MaquinaCodigo).ThenBy(x=>x.ProgramaProduccionID)){var maquina=string.IsNullOrWhiteSpace(item.MaquinaCodigo)?"SIN MÁQUINA":item.MaquinaCodigo.Trim();var avance=Avance(item);var avanceCss=avance.ToString("0.##",System.Globalization.CultureInfo.InvariantCulture);
-            <tr data-maquina="@maquina"><td><div class="main">@maquina</div><div class="sub">@Txt(item.MaquinaNombre)</div></td><td><div class="main">@OFTexto(item)</div><div class="sub">Programa @item.ProgramaProduccionID</div></td><td><div class="main">@ParteTexto(item)</div><div class="sub">@Txt(item.DescripcionParte)</div></td><td><div class="main">@Txt(item.OperadorNombre)</div><div class="sub">@(item.OperadorID.HasValue ? "ID " + item.OperadorID.Value : "Sin operador")</div></td><td><span class="estado @EstadoClase(item)">@EstadoTexto(item)</span></td><td><div class="qty"><span class="pill ok">OK @item.CantidadOKTotal.ToString("N0")</span><span class="pill sos">Amarillos @item.CantidadSospechosaTotal.ToString("N0")</span><span class="pill scrap">Scrap @item.CantidadScrapTotal.ToString("N0")</span></div></td><td><div class="d-flex justify-content-between small fw-bold mb-1"><span>@avance.ToString("0.##")%</span><span>@item.CantidadOKTotal.ToString("N0") / @((item.CantidadPlaneada ?? 0).ToString("N0"))</span></div><div class="progress"><div class="progress-bar" style="width:@avanceCss%"></div></div></td>
-                                        <td>
-                                            <div class="d-flex gap-2 flex-wrap">
+                        <div class="empty">No hay próximas producciones dentro de la ventana de 15 minutos.</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="panel">
+        <div class="panel-head d-flex justify-content-between align-items-center"><span><i class="fa-solid fa-list-check me-2"></i>OF programadas por máquina</span><span id="contadorVisible" class="badge bg-primary">@producciones.Count</span></div><div class="panel-body">
+            @if (!producciones.Any())
+            {
+                <div class="empty"><i class="fa-solid fa-folder-open fa-2x mb-2"></i><div>No hay producciones disponibles.</div></div>
+            }
+            else
+            {
 
-                                                <a href="@Url.Action(
-                                                               "Captura",
-                                                               "ProduccionOperador",
-                                                               new { id = item.EjecucionProduccionID })"
-                                           class="btn-captura">
-                                            <i class="fa-solid fa-keyboard"></i>
-                                            Capturar
-                                        </a>
+                <div class="table-wrap">
+                    <table class="prod-table">
+                        <thead><tr><th>Máquina</th><th>OF / Programa</th><th>Parte</th><th>Operador</th><th>Estado</th><th>Cantidades</th><th>Avance</th><th>Acción</th></tr></thead>
+                        <tbody>
+                            @foreach (var item in producciones.OrderBy(x => x.MaquinaCodigo).ThenBy(x => x.ProgramaProduccionID))
+                            {
+                                var maquina = string.IsNullOrWhiteSpace(item.MaquinaCodigo) ? "SIN MÁQUINA" : item.MaquinaCodigo.Trim(); var avance = Avance(item); var avanceCss = avance.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                                <tr data-maquina="@maquina">
+                                    <td><div class="main">@maquina</div><div class="sub">@Txt(item.MaquinaNombre)</div></td>
+                                    <td><div class="main">@OFTexto(item)</div><div class="sub">Programa @item.ProgramaProduccionID</div></td>
+                                    <td><div class="main">@ParteTexto(item)</div><div class="sub">@Txt(item.DescripcionParte)</div></td>
+                                    <td><div class="main">@Txt(item.OperadorNombre)</div><div class="sub">@(item.OperadorID.HasValue ? "ID " + item.OperadorID.Value : "Sin operador")</div></td>
+                                    <td><span class="estado @EstadoClase(item)">@EstadoTexto(item)</span></td>
+                                    <td><div class="qty"><span class="pill ok">OK @item.CantidadOKTotal.ToString("N0")</span><span class="pill sos">Amarillos @item.CantidadSospechosaTotal.ToString("N0")</span><span class="pill scrap">Scrap @item.CantidadScrapTotal.ToString("N0")</span></div></td>
+                                    <td><div class="d-flex justify-content-between small fw-bold mb-1"><span>@avance.ToString("0.##")%</span><span>@item.CantidadOKTotal.ToString("N0") / @((item.CantidadPlaneada ?? 0).ToString("N0"))</span></div><div class="progress"><div class="progress-bar" style="width:@avanceCss%"></div></div></td>
+                                    <td>
+                                        <div class="d-flex gap-2 flex-wrap">
 
-                                                <a href="@Url.Action(
-                                                       "Cajas",
-                                                       "ProduccionOperador",
-                                                       new { id = item.EjecucionProduccionID })"
-                                           class="btn-captura"
-                                           style="background:#107c41;">
-                                            <i class="fa-solid fa-box"></i>
-                                            Cajas
-                                        </a>
+                                            <a href="@Url.Action(
+                                                                                                              "Captura",
+                                                                                                              "ProduccionOperador",
+                                                                                                              new { id = item.EjecucionProduccionID })"
+                                       class="btn-captura">
+                                        <i class="fa-solid fa-keyboard"></i>
+                                        Capturar
+                                    </a>
 
-                                            </div>
-                                        </td>
-            </tr>
-        }
-</tbody></table></div>
-                }
-</div></section>
+                                            <a href="@Url.Action(
+                                                                                              "Cajas",
+                                                                                              "ProduccionOperador",
+                                                                                              new { id = item.EjecucionProduccionID })"
+                                       class="btn-captura"
+                                       style="background:#107c41;">
+                                        <i class="fa-solid fa-box"></i>
+                                        Cajas
+                                    </a>
+
+                                        </div>
+                                    </td>
+                                </tr>
+                                                }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </section>
+    </div>
+    <div class="modal fade" id="modalRecibirTurno" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 rounded-4">
+                <div class="modal-header turn-accept-header rounded-top-4"><h5 class="modal-title fw-bold"><i class="fa-solid fa-handshake me-2"></i>Recepción de turno</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <form method="post" action="@Url.Action("RecibirTurno","ProduccionOperador")" id="formRecibirTurno">
+                    @Html.AntiForgeryToken()<input type="hidden" name="CambioTurnoID" id="recibirCambioTurnoID" />
+                    <div class="modal-body p-4">
+                        <div class="alert alert-info rounded-4 fw-bold"><i class="fa-solid fa-circle-info me-1"></i>Al aceptar, esta máquina quedará bajo tu responsabilidad como único operador asignado.</div>
+                        <div class="turn-detail-grid">
+                            <div class="turn-detail-card"><div class="k">Recibes de</div><div class="v" id="recibirSaliente">-</div></div>
+                            <div class="turn-detail-card"><div class="k">Máquina</div><div class="v" id="recibirMaquina">-</div></div>
+                            <div class="turn-detail-card"><div class="k">Parte</div><div class="v" id="recibirParte">-</div></div>
+                            <div class="turn-detail-card"><div class="k">Fecha entrega</div><div class="v" id="recibirFecha">-</div></div>
+                            <div class="turn-detail-card"><div class="k">OK acumulado</div><div class="v text-success" id="recibirOK">0</div></div>
+                            <div class="turn-detail-card"><div class="k">Sospechoso</div><div class="v text-warning" id="recibirSos">0</div></div>
+                            <div class="turn-detail-card"><div class="k">Scrap</div><div class="v text-danger" id="recibirScrap">0</div></div>
+                            <div class="turn-detail-card"><div class="k">Cajas producidas</div><div class="v" id="recibirCajas">0</div></div>
+                            <div class="turn-detail-card"><div class="k">Cajas entregadas</div><div class="v text-success" id="recibirCajasEntregadas">0</div></div>
+                        </div>
+                        <div class="mb-3"><label class="form-label fw-bold">Observaciones del operador saliente</label><div class="turn-observations" id="recibirObservacionesEntrega">Sin observaciones.</div></div>
+                        <div class="mb-3"><label class="form-label fw-bold">Observaciones de recepción</label><textarea class="form-control" rows="3" maxlength="1000" name="ObservacionesRecepcion" id="observacionesRecepcion" placeholder="Opcional. Registra cualquier condición detectada al recibir."></textarea></div>
+                        <div class="form-check p-3 border rounded-4 bg-light"><input class="form-check-input" type="checkbox" id="confirmoRecepcion"><label class="form-check-label fw-bold" for="confirmoRecepcion">Confirmo que revisé la máquina, producción, cajas y observaciones mostradas.</label></div>
+                        <div class="alert alert-danger rounded-4 fw-bold d-none mt-3 mb-0" id="mensajeRecepcionTurno"></div>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4"><button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success fw-bold" id="btnAceptarRecepcion" disabled><i class="fa-solid fa-circle-check me-1"></i>Aceptar y recibir turno</button></div>
+                </form>
+            </div>
+        </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded',function(){const filtro=document.getElementById('filtroMaquina'),filas=Array.from(document.querySelectorAll('tr[data-maquina]')),contador=document.getElementById('contadorVisible'),resumen=document.getElementById('resumenFiltro');function aplicar(){const valor=(filtro?.value||'').trim().toLowerCase();let visibles=0;filas.forEach(f=>{const maquina=(f.dataset.maquina||'').trim().toLowerCase(),mostrar=!valor||maquina===valor;f.classList.toggle('hidden-row',!mostrar);if(mostrar)visibles++;});if(contador)contador.textContent=visibles;if(resumen)resumen.textContent='Mostrando '+visibles+' producción(es).';}filtro?.addEventListener('change',aplicar);setInterval(function(){if(!document.hidden)window.location.reload();},60000);});
+        document.addEventListener('DOMContentLoaded',function(){
+            const filtro=document.getElementById('filtroMaquina'),filas=Array.from(document.querySelectorAll('tr[data-maquina]')),contador=document.getElementById('contadorVisible'),resumen=document.getElementById('resumenFiltro');
+            const section=document.getElementById('turnosPendientesSection'),lista=document.getElementById('turnosPendientesLista'),count=document.getElementById('turnosPendientesCount'),modalEl=document.getElementById('modalRecibirTurno'),modal=modalEl?bootstrap.Modal.getOrCreateInstance(modalEl):null,form=document.getElementById('formRecibirTurno'),check=document.getElementById('confirmoRecepcion'),btn=document.getElementById('btnAceptarRecepcion');
+            let turnos=[];
+            function prop(o,...n){if(!o)return null;for(const k of n)if(Object.prototype.hasOwnProperty.call(o,k))return o[k];return null;}
+            function txt(v,a='-'){return v===null||v===undefined||String(v).trim()===''?a:String(v).trim();}
+            function num(v){const n=Number(v||0);return Number.isFinite(n)?n.toLocaleString('es-MX'):'0';}
+            function fecha(v){if(!v)return '-';const d=new Date(v);return Number.isNaN(d.getTime())?txt(v):d.toLocaleString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+            function aplicar(){const valor=(filtro?.value||'').trim().toLowerCase();let visibles=0;filas.forEach(f=>{const maquina=(f.dataset.maquina||'').trim().toLowerCase(),mostrar=!valor||maquina===valor;f.classList.toggle('hidden-row',!mostrar);if(mostrar)visibles++;});if(contador)contador.textContent=visibles;if(resumen)resumen.textContent='Mostrando '+visibles+' producción(es).';}
+            filtro?.addEventListener('change',aplicar);
+            function abrir(id){const t=turnos.find(x=>Number(prop(x,'cambioTurnoID','CambioTurnoID'))===id);if(!t)return;document.getElementById('recibirCambioTurnoID').value=String(id);document.getElementById('recibirSaliente').textContent=txt(prop(t,'operadorSalienteNombre','OperadorSalienteNombre'));document.getElementById('recibirMaquina').textContent=txt(prop(t,'maquinaCodigo','MaquinaCodigo'));document.getElementById('recibirParte').textContent=txt(prop(t,'referenciaSAP','ReferenciaSAP')||prop(t,'numeroParte','NumeroParte'));document.getElementById('recibirFecha').textContent=fecha(prop(t,'fechaEntrega','FechaEntrega'));document.getElementById('recibirOK').textContent=num(prop(t,'cantidadOK','CantidadOK'));document.getElementById('recibirSos').textContent=num(prop(t,'cantidadSospechosa','CantidadSospechosa'));document.getElementById('recibirScrap').textContent=num(prop(t,'cantidadScrap','CantidadScrap'));document.getElementById('recibirCajas').textContent=num(prop(t,'totalCajas','TotalCajas'));document.getElementById('recibirCajasEntregadas').textContent=num(prop(t,'totalCajasEntregadas','TotalCajasEntregadas'));document.getElementById('recibirObservacionesEntrega').textContent=txt(prop(t,'observaciones','Observaciones'),'Sin observaciones.');document.getElementById('observacionesRecepcion').value='';check.checked=false;btn.disabled=true;modal?.show();}
+            function render(){count.textContent=String(turnos.length);if(!turnos.length){section.classList.add('d-none');lista.innerHTML='';return;}section.classList.remove('d-none');lista.innerHTML='';turnos.forEach(t=>{const id=Number(prop(t,'cambioTurnoID','CambioTurnoID')||0),card=document.createElement('div');card.className='turn-reception-card';card.innerHTML='<div><div class="label">Entrega de</div><div class="value">'+txt(prop(t,'operadorSalienteNombre','OperadorSalienteNombre'))+'</div><div class="sub">'+fecha(prop(t,'fechaEntrega','FechaEntrega'))+'</div></div><div><div class="label">Máquina</div><div class="value">'+txt(prop(t,'maquinaCodigo','MaquinaCodigo'))+'</div><div class="sub">'+txt(prop(t,'referenciaSAP','ReferenciaSAP')||prop(t,'numeroParte','NumeroParte'))+'</div></div><div><div class="label">Lo que recibes</div><div class="qty"><span class="pill ok">OK '+num(prop(t,'cantidadOK','CantidadOK'))+'</span><span class="pill sos">Sos '+num(prop(t,'cantidadSospechosa','CantidadSospechosa'))+'</span><span class="pill scrap">Scrap '+num(prop(t,'cantidadScrap','CantidadScrap'))+'</span></div><div class="sub mt-1">Cajas '+num(prop(t,'totalCajasEntregadas','TotalCajasEntregadas'))+' / '+num(prop(t,'totalCajas','TotalCajas'))+'</div></div><div><button type="button" class="btn-receive-turn" data-id="'+id+'"><i class="fa-solid fa-handshake me-1"></i>Revisar y recibir</button></div>';lista.appendChild(card);});lista.querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>abrir(Number(b.dataset.id||0))));}
+            async function cargar(){try{const r=await fetch('@Url.Action("ObtenerTurnosPendientesRecepcion", "ProduccionOperador")',{headers:{'X-Requested-With':'XMLHttpRequest'}}),d=await r.json();if(!r.ok||!d||d.ok===false)throw new Error(d?.mensaje||'No fue posible consultar turnos pendientes.');turnos=d.turnos??d.Turnos??[];if(!Array.isArray(turnos))turnos=[];render();}catch(e){console.error(e);}}
+            check?.addEventListener('change',()=>btn.disabled=!check.checked);
+            form?.addEventListener('submit',function(e){if(!check.checked){e.preventDefault();const m=document.getElementById('mensajeRecepcionTurno');m.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>Confirma que revisaste lo que estás recibiendo.';m.classList.remove('d-none');return;}btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Recibiendo turno...';});
+            cargar();
+            setInterval(function(){if(!document.hidden&&!document.querySelector('.modal.show'))window.location.reload();},60000);
+        });
     </script>
 </body>
 </html>

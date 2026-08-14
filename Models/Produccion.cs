@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 
+
 namespace ERP.NSQuell.Models;
 
 public static class ProduccionEstatus
@@ -797,6 +798,9 @@ public sealed class ProduccionOperadorTabletVm
     public bool TieneParoAbierto { get; set; }
     public int? ParoAbiertoID { get; set; }
 
+    public List<ProduccionHistorialTurnoVm> HistorialTurnos { get; set; } = new();
+    public List<ProduccionCambioTurnoHistorialVm> HistorialCambiosTurno { get; set; } = new();
+
     public List<SelectListItem> MotivosParo { get; set; } = new();
 
     public string RangoHoraSugerido =>
@@ -814,6 +818,91 @@ public sealed class ProduccionOperadorTabletVm
     }
 }
 
+public static class ProduccionCambioTurnoEstado
+{
+    public const string PendienteRecepcion = "PENDIENTE_RECEPCION";
+    public const string Recibido = "RECIBIDO";
+    public const string Cancelado = "CANCELADO";
+}
+public static class ProduccionCambioTurnoOrigen
+{
+    public const string Escala = "ESCALA";
+    public const string Manual = "MANUAL";
+}
+public sealed class ProduccionCambioTurnoCandidatoVm
+{
+    public int PersonaID { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public int? Nivel { get; set; }
+    public bool EnEscala { get; set; }
+    public int? TurnoID { get; set; }
+    public string? TurnoNombre { get; set; }
+    public TimeSpan? HoraInicioTurno { get; set; }
+    public int? MinutosParaInicio { get; set; }
+    public bool EsSugerido { get; set; }
+    public string TextoNivel => Nivel.HasValue ? $"N{Nivel.Value}" : "Sin nivel";
+}
+public sealed class ProduccionCambioTurnoResumenVm
+{
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+    public int? MaquinaID { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? MaquinaNombre { get; set; }
+    public int? ParteID { get; set; }
+    public string? NumeroParte { get; set; }
+    public string? ReferenciaSAP { get; set; }
+    public int OperadorSalienteID { get; set; }
+    public string OperadorSalienteNombre { get; set; } = string.Empty;
+    public int CantidadOK { get; set; }
+    public int CantidadSospechosa { get; set; }
+    public int CantidadScrap { get; set; }
+    public int? UltimoRegistroHoraID { get; set; }
+    public string? UltimaHoraTexto { get; set; }
+    public int TotalCajas { get; set; }
+    public int TotalCajasEntregadas { get; set; }
+    public int TotalCajasPendientes { get; set; }
+    public bool TieneMatrizPolivalencia { get; set; }
+    public bool EscalaEncontrada { get; set; }
+    public string? EscalaFolio { get; set; }
+    public int? OperadorSugeridoID { get; set; }
+    public string? OperadorSugeridoNombre { get; set; }
+    public string? TurnoSugeridoNombre { get; set; }
+    public bool PuedeEntregar { get; set; }
+    public string? MotivoBloqueo { get; set; }
+    public List<ProduccionCambioTurnoCandidatoVm> Operadores { get; set; } = new();
+}
+public sealed class ProduccionCambioTurnoEntregaPostVm
+{
+    public int EjecucionProduccionID { get; set; }
+    public int OperadorEntranteID { get; set; }
+    public string? Observaciones { get; set; }
+}
+public sealed class ProduccionCambioTurnoRecepcionPostVm
+{
+    public int CambioTurnoID { get; set; }
+    public string? ObservacionesRecepcion { get; set; }
+}
+public sealed class ProduccionCambioTurnoPendienteVm
+{
+    public int CambioTurnoID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+    public int OperadorSalienteID { get; set; }
+    public string OperadorSalienteNombre { get; set; } = string.Empty;
+    public int OperadorEntranteID { get; set; }
+    public string OperadorEntranteNombre { get; set; } = string.Empty;
+    public DateTime FechaEntrega { get; set; }
+    public int CantidadOK { get; set; }
+    public int CantidadSospechosa { get; set; }
+    public int CantidadScrap { get; set; }
+    public int TotalCajas { get; set; }
+    public int TotalCajasEntregadas { get; set; }
+    public string? Observaciones { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? ReferenciaSAP { get; set; }
+    public string? NumeroParte { get; set; }
+}
 public sealed class ProduccionCapturaHoraFilaVm
 {
     public int NumeroHora { get; set; }
@@ -830,6 +919,9 @@ public sealed class ProduccionCapturaHoraFilaVm
     public int? RegistroHoraID { get; set; }
     public int? ObjetivoHora { get; set; }
     public int? ObjetivoBloque { get; set; }
+
+    public int? OperadorID { get; set; }
+    public string? OperadorNombre { get; set; }
 
     public string RangoHora =>
         $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
@@ -1111,6 +1203,7 @@ public sealed class ProduccionChecklistArranqueVm
         }
     }
 
+  
     public string TituloChecklist
     {
         get
@@ -1126,6 +1219,44 @@ public sealed class ProduccionChecklistArranqueVm
     }
 }
 
+public sealed class ProduccionHistorialTurnoVm
+{
+    public int NumeroTurno { get; set; }
+    public string TurnoNombre { get; set; } = string.Empty;
+    public int OperadorID { get; set; }
+    public string OperadorNombre { get; set; } = string.Empty;
+    public DateTime FechaInicio { get; set; }
+    public DateTime? FechaFin { get; set; }
+    public int CantidadOK { get; set; }
+    public int CantidadSospechosa { get; set; }
+    public int CantidadScrap { get; set; }
+    public int ObjetivoTotal { get; set; }
+    public decimal PorcentajeCumplimiento { get; set; }
+    public bool CumplioObjetivo { get; set; }
+    public List<ProduccionCapturaHoraFilaVm> Horas { get; set; } = new();
+}
+public sealed class ProduccionCambioTurnoHistorialVm
+{
+    public int CambioTurnoID { get; set; }
+    public int OperadorSalienteID { get; set; }
+    public string OperadorSalienteNombre { get; set; } = string.Empty;
+    public int OperadorEntranteID { get; set; }
+    public string OperadorEntranteNombre { get; set; } = string.Empty;
+    public string? TurnoSalienteNombre { get; set; }
+    public string? TurnoEntranteNombre { get; set; }
+    public DateTime FechaEntrega { get; set; }
+    public DateTime? FechaRecepcion { get; set; }
+    public string Estado { get; set; } = string.Empty;
+    public string? OrigenOperadorEntrante { get; set; }
+    public int CantidadOK { get; set; }
+    public int CantidadSospechosa { get; set; }
+    public int CantidadScrap { get; set; }
+    public int TotalCajas { get; set; }
+    public int TotalCajasEntregadas { get; set; }
+    public int TotalCajasPendientes { get; set; }
+    public string? ObservacionesEntrega { get; set; }
+    public string? ObservacionesRecepcion { get; set; }
+}
 public class ProduccionMonitoreoTurnoAvisoVm
 {
     public int ChecklistArranqueID { get; set; }

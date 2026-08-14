@@ -1,9 +1,10 @@
 ﻿using ERP.NSQuell.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using System.Data;
+using static ERP.NSQuell.Models.ProduccionChecklistArranqueVm;
 
 namespace ERP.NSQuell.Controllers
 {
@@ -69,49 +70,29 @@ namespace ERP.NSQuell.Controllers
             return View(programas);
         }
 
+
         [HttpGet]
         public async Task<IActionResult> Captura(int id)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
-
-            if (id <= 0)
-                return NotFound();
-
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (id <= 0) return NotFound();
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var usuarioId = ObtenerUsuarioID();
-
-            var esOperador = await UsuarioEsOperadorAsync(usuarioId, cn);
-
-            if (!esOperador)
-                return AccesoDenegadoOperador();
-
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
             var vm = await ObtenerTabletVmAsync(id, cn);
-
-            if (vm == null)
-                return NotFound();
-
+            if (vm == null) return NotFound();
             vm.MotivosParo = await CargarMotivosParoAsync(cn);
-
-            vm.HorasCaptura = await ObtenerFilasCapturaHoraAsync(
-                vm.EjecucionProduccionID,
-                vm.ProgramaProduccionID,
-                cn);
-
-            var primeraPendiente = vm.HorasCaptura
-                .Where(x => !x.Capturada)
-                .OrderBy(x => x.NumeroHora)
-                .FirstOrDefault();
-
+            vm.HorasCaptura = await ObtenerFilasCapturaHoraAsync(vm.EjecucionProduccionID, vm.ProgramaProduccionID, cn);
+            vm.HistorialCambiosTurno = await ObtenerHistorialCambiosTurnoAsync(vm.EjecucionProduccionID, cn);
+            vm.HistorialTurnos = ConstruirHistorialTurnos(vm.HorasCaptura, vm.HistorialCambiosTurno);
+            var primeraPendiente = vm.HorasCaptura.Where(x => !x.Capturada).OrderBy(x => x.NumeroHora).FirstOrDefault();
             if (primeraPendiente != null)
             {
                 vm.FechaProduccion = primeraPendiente.FechaProduccion;
                 vm.HoraInicioSugerida = primeraPendiente.HoraInicio;
                 vm.HoraFinSugerida = primeraPendiente.HoraFin;
             }
-
             return View(vm);
         }
 
@@ -2338,6 +2319,153 @@ ORDER BY
             return lista;
         }
 
+        private async Task<List<ProduccionCambioTurnoHistorialVm>> ObtenerHistorialCambiosTurnoAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            const string sql = @"
+SELECT
+    ct.CambioTurnoID,
+    ct.OperadorSalienteID,
+    LTRIM(RTRIM(CONCAT(ISNULL(ps.Nombre,N''),N' ',ISNULL(ps.ApellidoPaterno,N''),N' ',ISNULL(ps.ApellidoMaterno,N'')))) AS OperadorSalienteNombre,
+    ct.OperadorEntranteID,
+    LTRIM(RTRIM(CONCAT(ISNULL(pe.Nombre,N''),N' ',ISNULL(pe.ApellidoPaterno,N''),N' ',ISNULL(pe.ApellidoMaterno,N'')))) AS OperadorEntranteNombre,
+    ct.TurnoSalienteNombre,
+    ct.TurnoEntranteNombre,
+    ct.FechaEntrega,
+    ct.FechaRecepcion,
+    ct.EstadoCambioTurno,
+    ct.OrigenOperadorEntrante,
+    ISNULL(ct.CantidadOKAcumulada,0) AS CantidadOK,
+    ISNULL(ct.CantidadSospechosaAcumulada,0) AS CantidadSospechosa,
+    ISNULL(ct.CantidadScrapAcumulada,0) AS CantidadScrap,
+    ISNULL(ct.TotalCajasFormadas,0) AS TotalCajas,
+    ISNULL(ct.TotalCajasEntregadas,0) AS TotalCajasEntregadas,
+    ISNULL(ct.TotalCajasPendientes,0) AS TotalCajasPendientes,
+    ct.Observaciones,
+    ct.ObservacionesRecepcion
+FROM dbo.Produccion_CambiosTurno ct
+LEFT JOIN dbo.Persona ps ON ps.PersonaID=ct.OperadorSalienteID
+LEFT JOIN dbo.Persona pe ON pe.PersonaID=ct.OperadorEntranteID
+WHERE ct.EjecucionProduccionID=@EjecucionProduccionID
+  AND ct.Activo=1
+ORDER BY ct.FechaEntrega,ct.CambioTurnoID;";
+            var lista = new List<ProduccionCambioTurnoHistorialVm>();
+            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new ProduccionCambioTurnoHistorialVm
+                {
+                    CambioTurnoID = Convert.ToInt32(rd["CambioTurnoID"]),
+                    OperadorSalienteID = Convert.ToInt32(rd["OperadorSalienteID"]),
+                    OperadorSalienteNombre = rd["OperadorSalienteNombre"]?.ToString()?.Trim() ?? string.Empty,
+                    OperadorEntranteID = Convert.ToInt32(rd["OperadorEntranteID"]),
+                    OperadorEntranteNombre = rd["OperadorEntranteNombre"]?.ToString()?.Trim() ?? string.Empty,
+                    TurnoSalienteNombre = rd["TurnoSalienteNombre"] == DBNull.Value ? null : rd["TurnoSalienteNombre"].ToString(),
+                    TurnoEntranteNombre = rd["TurnoEntranteNombre"] == DBNull.Value ? null : rd["TurnoEntranteNombre"].ToString(),
+                    FechaEntrega = Convert.ToDateTime(rd["FechaEntrega"]),
+                    FechaRecepcion = rd["FechaRecepcion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaRecepcion"]),
+                    Estado = rd["EstadoCambioTurno"]?.ToString()?.Trim() ?? string.Empty,
+                    OrigenOperadorEntrante = rd["OrigenOperadorEntrante"] == DBNull.Value ? null : rd["OrigenOperadorEntrante"].ToString(),
+                    CantidadOK = Convert.ToInt32(rd["CantidadOK"]),
+                    CantidadSospechosa = Convert.ToInt32(rd["CantidadSospechosa"]),
+                    CantidadScrap = Convert.ToInt32(rd["CantidadScrap"]),
+                    TotalCajas = Convert.ToInt32(rd["TotalCajas"]),
+                    TotalCajasEntregadas = Convert.ToInt32(rd["TotalCajasEntregadas"]),
+                    TotalCajasPendientes = Convert.ToInt32(rd["TotalCajasPendientes"]),
+                    ObservacionesEntrega = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"].ToString(),
+                    ObservacionesRecepcion = rd["ObservacionesRecepcion"] == DBNull.Value ? null : rd["ObservacionesRecepcion"].ToString()
+                });
+            }
+            return lista;
+        }
+
+        private static List<ProduccionHistorialTurnoVm> ConstruirHistorialTurnos(List<ProduccionCapturaHoraFilaVm> horas, List<ProduccionCambioTurnoHistorialVm> cambios)
+        {
+            var resultado = new List<ProduccionHistorialTurnoVm>();
+            var capturadas = horas.Where(x => x.Capturada).OrderBy(x => ObtenerInicioHora(x)).ThenBy(x => x.NumeroHora).ToList();
+            if (capturadas.Count == 0) return resultado;
+            var segmentos = new List<List<ProduccionCapturaHoraFilaVm>>();
+            List<ProduccionCapturaHoraFilaVm>? segmentoActual = null;
+            int? operadorAnterior = null;
+            foreach (var fila in capturadas)
+            {
+                var cambioOperador = segmentoActual == null || fila.OperadorID != operadorAnterior;
+                if (cambioOperador)
+                {
+                    segmentoActual = new List<ProduccionCapturaHoraFilaVm>();
+                    segmentos.Add(segmentoActual);
+                    operadorAnterior = fila.OperadorID;
+                }
+                segmentoActual!.Add(fila);
+            }
+            for (var i = 0; i < segmentos.Count; i++)
+            {
+                var filas = segmentos[i];
+                var primera = filas.First();
+                var ultima = filas.Last();
+                var operadorId = primera.OperadorID ?? 0;
+                var inicioHoras = ObtenerInicioHora(primera);
+                var finHoras = ObtenerFinHora(ultima);
+                ProduccionCambioTurnoHistorialVm? cambioEntrada = null;
+                ProduccionCambioTurnoHistorialVm? cambioSalida = null;
+                if (operadorId > 0)
+                {
+                    cambioEntrada = cambios.Where(x => x.OperadorEntranteID == operadorId && x.FechaRecepcion.HasValue && x.FechaRecepcion.Value <= finHoras).OrderByDescending(x => x.FechaRecepcion).FirstOrDefault();
+                    cambioSalida = cambios.Where(x => x.OperadorSalienteID == operadorId && x.FechaEntrega >= inicioHoras).OrderBy(x => x.FechaEntrega).FirstOrDefault();
+                }
+                var fechaInicio = cambioEntrada?.FechaRecepcion ?? inicioHoras;
+                var fechaFin = cambioSalida?.FechaRecepcion ?? cambioSalida?.FechaEntrega;
+                if (fechaFin.HasValue && fechaFin.Value < fechaInicio) fechaFin = null;
+                var objetivoTotal = filas.Sum(x => x.ObjetivoBloque ?? x.ObjetivoHora ?? 0);
+                var cantidadOK = filas.Sum(x => x.CantidadOK);
+                var cantidadSospechosa = filas.Sum(x => x.CantidadSospechosa);
+                var cantidadScrap = filas.Sum(x => x.CantidadScrap);
+                var porcentaje = objetivoTotal > 0 ? Math.Round(cantidadOK * 100m / objetivoTotal, 1) : 0m;
+                string turnoNombre;
+                if (!string.IsNullOrWhiteSpace(cambioEntrada?.TurnoEntranteNombre)) turnoNombre = cambioEntrada!.TurnoEntranteNombre!;
+                else if (!string.IsNullOrWhiteSpace(cambioSalida?.TurnoSalienteNombre)) turnoNombre = cambioSalida!.TurnoSalienteNombre!;
+                else turnoNombre = NombreTurnoSecuencial(i + 1);
+                resultado.Add(new ProduccionHistorialTurnoVm
+                {
+                    NumeroTurno = i + 1,
+                    TurnoNombre = turnoNombre,
+                    OperadorID = operadorId,
+                    OperadorNombre = !string.IsNullOrWhiteSpace(primera.OperadorNombre) ? primera.OperadorNombre! : "Sin operador",
+                    FechaInicio = fechaInicio,
+                    FechaFin = fechaFin,
+                    CantidadOK = cantidadOK,
+                    CantidadSospechosa = cantidadSospechosa,
+                    CantidadScrap = cantidadScrap,
+                    ObjetivoTotal = objetivoTotal,
+                    PorcentajeCumplimiento = porcentaje,
+                    CumplioObjetivo = objetivoTotal > 0 && cantidadOK >= objetivoTotal,
+                    Horas = filas
+                });
+            }
+            return resultado;
+        }
+        private static DateTime ObtenerInicioHora(ProduccionCapturaHoraFilaVm fila)
+        {
+            return fila.FechaProduccion.Date.Add(fila.HoraInicio);
+        }
+        private static DateTime ObtenerFinHora(ProduccionCapturaHoraFilaVm fila)
+        {
+            var inicio = ObtenerInicioHora(fila);
+            var fin = fila.FechaProduccion.Date.Add(fila.HoraFin);
+            if (fin <= inicio) fin = fin.AddDays(1);
+            return fin;
+        }
+        private static string NombreTurnoSecuencial(int numero)
+        {
+            return numero switch
+            {
+                1 => "1er Turno",
+                2 => "2do Turno",
+                3 => "3er Turno",
+                _ => $"Turno {numero}"
+            };
+        }
         private async Task<ProduccionOperadorTabletVm?>
        ObtenerTabletVmAsync(
            int ejecucionProduccionId,
@@ -3544,6 +3672,764 @@ WHERE u.UsuarioID = @UsuarioID
             };
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ObtenerResumenCambioTurno(int ejecucionProduccionId)
+        {
+            if (!UsuarioEnSesion()) return Unauthorized();
+            if (ejecucionProduccionId <= 0) return BadRequest(new { ok = false, mensaje = "La ejecución no es válida." });
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            var usuarioId = ObtenerUsuarioID();
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return StatusCode(StatusCodes.Status403Forbidden);
+            var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
+            if (!personaId.HasValue) return Unauthorized();
+            var resumen = await ConstruirResumenCambioTurnoAsync(ejecucionProduccionId, personaId.Value, cn);
+            if (resumen == null) return NotFound(new { ok = false, mensaje = "No se encontró la ejecución de producción." });
+            return Json(new { ok = true, resumen });
+        }
+
+        private async Task<ProduccionCambioTurnoResumenVm?> ConstruirResumenCambioTurnoAsync(int ejecucionProduccionId, int personaSalienteId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            const string sql = @"
+SELECT TOP (1)
+    e.EjecucionProduccionID,
+    e.ProgramaProduccionID,
+    e.MaquinaID,
+    e.MaquinaCodigo,
+    e.MaquinaNombre,
+    e.ParteID,
+    e.NumeroParte,
+    e.ReferenciaSAP,
+    e.OperadorID,
+    e.OperadorNombre,
+    ISNULL(e.CantidadOKTotal,0) AS CantidadOKTotal,
+    ISNULL(e.CantidadSospechosaTotal,0) AS CantidadSospechosaTotal,
+    ISNULL(e.CantidadScrapTotal,0) AS CantidadScrapTotal,
+    e.EstatusID,
+    ultimo.RegistroHoraID,
+    ultimo.FechaProduccion,
+    ultimo.HoraInicio,
+    ultimo.HoraFin
+FROM dbo.Produccion_Ejecucion e
+OUTER APPLY
+(
+    SELECT TOP (1)
+        rh.RegistroHoraID,
+        rh.FechaProduccion,
+        rh.HoraInicio,
+        rh.HoraFin
+    FROM dbo.Produccion_RegistroHora rh
+    WHERE rh.EjecucionProduccionID=e.EjecucionProduccionID
+      AND rh.Activo=1
+    ORDER BY rh.FechaProduccion DESC,rh.HoraInicio DESC,rh.RegistroHoraID DESC
+) ultimo
+WHERE e.EjecucionProduccionID=@EjecucionProduccionID
+  AND e.Activo=1;";
+            ProduccionCambioTurnoResumenVm? vm = null;
+            var estatusId = 0;
+            await using (var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (!await rd.ReadAsync()) return null;
+                var operadorId = rd["OperadorID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["OperadorID"]);
+                estatusId = Convert.ToInt32(rd["EstatusID"]);
+                string? ultimaHora = null;
+                if (rd["RegistroHoraID"] != DBNull.Value)
+                {
+                    var fecha = Convert.ToDateTime(rd["FechaProduccion"]);
+                    var inicio = (TimeSpan)rd["HoraInicio"];
+                    var fin = (TimeSpan)rd["HoraFin"];
+                    ultimaHora = $"{fecha:dd/MM/yyyy} {inicio:hh\\:mm} - {fin:hh\\:mm}";
+                }
+                vm = new ProduccionCambioTurnoResumenVm
+                {
+                    EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                    ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    MaquinaID = rd["MaquinaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaID"]),
+                    MaquinaCodigo = rd["MaquinaCodigo"] == DBNull.Value ? null : rd["MaquinaCodigo"].ToString(),
+                    MaquinaNombre = rd["MaquinaNombre"] == DBNull.Value ? null : rd["MaquinaNombre"].ToString(),
+                    ParteID = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]),
+                    NumeroParte = rd["NumeroParte"] == DBNull.Value ? null : rd["NumeroParte"].ToString(),
+                    ReferenciaSAP = rd["ReferenciaSAP"] == DBNull.Value ? null : rd["ReferenciaSAP"].ToString(),
+                    OperadorSalienteID = operadorId,
+                    OperadorSalienteNombre = rd["OperadorNombre"]?.ToString()?.Trim() ?? string.Empty,
+                    CantidadOK = Convert.ToInt32(rd["CantidadOKTotal"]),
+                    CantidadSospechosa = Convert.ToInt32(rd["CantidadSospechosaTotal"]),
+                    CantidadScrap = Convert.ToInt32(rd["CantidadScrapTotal"]),
+                    UltimoRegistroHoraID = rd["RegistroHoraID"] == DBNull.Value ? null : Convert.ToInt32(rd["RegistroHoraID"]),
+                    UltimaHoraTexto = ultimaHora
+                };
+            }
+            const string sqlCajas = @"
+SELECT
+    COUNT(1) AS TotalCajas,
+    SUM(CASE WHEN EstadoCajaID=@Formada THEN 0 ELSE 1 END) AS Entregadas,
+    SUM(CASE WHEN EstadoCajaID=@Formada THEN 1 ELSE 0 END) AS Pendientes
+FROM dbo.Produccion_Cajas
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1;";
+            await using (var cmd = tx == null ? new SqlCommand(sqlCajas, cn) : new SqlCommand(sqlCajas, cn, tx))
+            {
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                cmd.Parameters.Add("@Formada", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (await rd.ReadAsync())
+                {
+                    vm.TotalCajas = rd["TotalCajas"] == DBNull.Value ? 0 : Convert.ToInt32(rd["TotalCajas"]);
+                    vm.TotalCajasEntregadas = rd["Entregadas"] == DBNull.Value ? 0 : Convert.ToInt32(rd["Entregadas"]);
+                    vm.TotalCajasPendientes = rd["Pendientes"] == DBNull.Value ? 0 : Convert.ToInt32(rd["Pendientes"]);
+                }
+            }
+            var candidatos = await ObtenerCandidatosCambioTurnoAsync(vm.ParteID, vm.MaquinaID, personaSalienteId, DateTime.Now, cn, tx);
+            vm.TieneMatrizPolivalencia = candidatos.TieneMatriz;
+            vm.EscalaEncontrada = candidatos.EscalaEncontrada;
+            vm.EscalaFolio = candidatos.EscalaFolio;
+            vm.Operadores = candidatos.Operadores;
+            var sugerido = vm.Operadores.Where(x => x.EnEscala).OrderBy(x => x.MinutosParaInicio ?? int.MaxValue).ThenByDescending(x => x.Nivel ?? 0).FirstOrDefault();
+            if (sugerido != null)
+            {
+                sugerido.EsSugerido = true;
+                vm.OperadorSugeridoID = sugerido.PersonaID;
+                vm.OperadorSugeridoNombre = sugerido.Nombre;
+                vm.TurnoSugeridoNombre = sugerido.TurnoNombre;
+            }
+            if (vm.OperadorSalienteID != personaSalienteId)
+            {
+                vm.PuedeEntregar = false;
+                vm.MotivoBloqueo = "La ejecución ya no está asignada al operador conectado.";
+                return vm;
+            }
+            if (estatusId != ProduccionEstatus.EnProduccion)
+            {
+                vm.PuedeEntregar = false;
+                vm.MotivoBloqueo = "El cambio de turno solo puede realizarse mientras la ejecución está en producción.";
+                return vm;
+            }
+            var bloqueo = await ValidarEntregaTurnoAsync(ejecucionProduccionId, vm.ProgramaProduccionID, cn, tx);
+            vm.PuedeEntregar = string.IsNullOrWhiteSpace(bloqueo);
+            vm.MotivoBloqueo = bloqueo;
+            return vm;
+        }
+
+        private async Task<string?> ValidarEntregaTurnoAsync(int ejecucionProduccionId, int programaProduccionId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            const string sql = @"
+SELECT
+    CASE WHEN EXISTS
+    (
+        SELECT 1
+        FROM dbo.Produccion_Paros
+        WHERE EjecucionProduccionID=@EjecucionProduccionID
+          AND Activo=1
+          AND FechaFinParo IS NULL
+    ) THEN 1 ELSE 0 END AS ParoAbierto,
+    (
+        SELECT COUNT(1)
+        FROM dbo.Produccion_Cajas
+        WHERE EjecucionProduccionID=@EjecucionProduccionID
+          AND Activo=1
+          AND EstadoCajaID=@FormadaProduccion
+    ) AS CajasPendientes,
+    CASE WHEN EXISTS
+    (
+        SELECT 1
+        FROM dbo.Produccion_CambiosTurno
+        WHERE EjecucionProduccionID=@EjecucionProduccionID
+          AND EstadoCambioTurno=N'PENDIENTE_RECEPCION'
+          AND Activo=1
+    ) THEN 1 ELSE 0 END AS CambioPendiente;";
+            await using (var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                cmd.Parameters.Add("@FormadaProduccion", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                await rd.ReadAsync();
+                if (Convert.ToBoolean(rd["ParoAbierto"])) return "No puedes entregar turno mientras exista un paro abierto.";
+                var cajasPendientes = Convert.ToInt32(rd["CajasPendientes"]);
+                if (cajasPendientes > 0) return $"No puedes entregar turno. Existen {cajasPendientes:N0} caja(s) que todavía no han sido entregadas a Calidad.";
+                if (Convert.ToBoolean(rd["CambioPendiente"])) return "Ya existe una entrega de turno pendiente de recepción.";
+            }
+            var horas = await ObtenerFilasCapturaHoraAsync(ejecucionProduccionId, programaProduccionId, cn, tx);
+            var horasPendientes = horas.Count(x => !x.Capturada && x.Vencida);
+            if (horasPendientes > 0) return $"No puedes entregar turno. Existen {horasPendientes:N0} hora(s) de producción vencida(s) sin capturar.";
+            return null;
+        }
+        private async Task<ResultadoCandidatosCambioTurno> ObtenerCandidatosCambioTurnoAsync(int? parteId, int? maquinaId, int operadorSalienteId, DateTime ahora, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var resultado = new ResultadoCandidatosCambioTurno();
+            const string sqlEscala = @"
+SELECT TOP (1) EscalaID,Folio
+FROM dbo.RRHH_EscalasPersonal
+WHERE Activo=1
+  AND Estado IN(N'Publicada',N'Borrador')
+  AND CONVERT(date,@Ahora) BETWEEN FechaInicio AND FechaFin
+ORDER BY CASE WHEN Estado=N'Publicada' THEN 0 ELSE 1 END,
+         ISNULL(FechaPublicacion,FechaRegistro) DESC,
+         EscalaID DESC;";
+            await using (var cmd = tx == null ? new SqlCommand(sqlEscala, cn) : new SqlCommand(sqlEscala, cn, tx))
+            {
+                cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (await rd.ReadAsync())
+                {
+                    resultado.EscalaEncontrada = true;
+                    resultado.EscalaID = Convert.ToInt32(rd["EscalaID"]);
+                    resultado.EscalaFolio = rd["Folio"]?.ToString();
+                }
+            }
+            if (parteId.HasValue && parteId.Value > 0)
+            {
+                const string sqlMatriz = @"
+SELECT CONVERT(bit,CASE WHEN EXISTS
+(
+    SELECT 1
+    FROM dbo.vw_RRHH_PolivalenciaOperadoresParte
+    WHERE ParteID=@ParteID
+) THEN 1 ELSE 0 END);";
+                await using var cmd = tx == null ? new SqlCommand(sqlMatriz, cn) : new SqlCommand(sqlMatriz, cn, tx);
+                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId.Value;
+                resultado.TieneMatriz = Convert.ToBoolean(await cmd.ExecuteScalarAsync() ?? false);
+            }
+            var sql = resultado.TieneMatriz ? @"
+SELECT DISTINCT
+    p.PersonaID,
+    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS Nombre,
+    CONVERT(INT,v.Nivel) AS Nivel,
+    escala.EscalaTurnoID AS TurnoID,
+    escala.TurnoNombre,
+    escala.HoraInicio,
+    CONVERT(bit,CASE WHEN escala.EscalaTurnoID IS NULL THEN 0 ELSE 1 END) AS EnEscala,
+    escala.MinutosParaInicio
+FROM dbo.vw_RRHH_PolivalenciaOperadoresParte v
+INNER JOIN dbo.Persona p ON p.PersonaID=v.PersonalID AND ISNULL(p.EsColaboradorActivo,1)=1
+OUTER APPLY
+(
+    SELECT TOP (1)
+        a.EscalaTurnoID,
+        et.Nombre AS TurnoNombre,
+        et.HoraInicio,
+        CASE
+            WHEN et.HoraInicio IS NULL THEN NULL
+            WHEN DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)>0 THEN DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)
+            ELSE DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)+1440
+        END AS MinutosParaInicio
+    FROM dbo.RRHH_EscalaAsignaciones a
+    INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
+    LEFT JOIN dbo.RRHH_EscalaTurnos et ON et.EscalaTurnoID=a.EscalaTurnoID AND et.Activo=1
+    WHERE @EscalaID IS NOT NULL
+      AND a.EscalaID=@EscalaID
+      AND a.PersonalID=p.PersonaID
+      AND a.Activo=1
+      AND UPPER(LTRIM(RTRIM(f.Nombre)))=N'OPERADOR'
+      AND (@MaquinaID IS NULL OR a.MaquinaID=@MaquinaID)
+      AND CONVERT(date,@Ahora) BETWEEN a.FechaInicio AND a.FechaFin
+    ORDER BY
+        CASE WHEN et.HoraInicio IS NULL THEN 1 ELSE 0 END,
+        CASE WHEN DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)>0
+             THEN DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)
+             ELSE DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)+1440 END,
+        a.AsignacionID DESC
+) escala
+WHERE v.ParteID=@ParteID
+  AND v.Nivel BETWEEN 1 AND 4
+  AND p.PersonaID<>@OperadorSalienteID
+  AND
+  (
+      UPPER(LTRIM(RTRIM(ISNULL(v.PuestoMatriz,N''))))=N'OPERADOR'
+      OR UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
+      OR EXISTS
+      (
+          SELECT 1
+          FROM dbo.RRHH_EscalaAsignaciones ah
+          INNER JOIN dbo.RRHH_FuncionesPersonal fh ON fh.FuncionID=ah.FuncionID AND fh.Activo=1
+          WHERE ah.PersonalID=p.PersonaID
+            AND ah.Activo=1
+            AND UPPER(LTRIM(RTRIM(fh.Nombre)))=N'OPERADOR'
+      )
+  )
+ORDER BY EnEscala DESC,MinutosParaInicio,CONVERT(INT,v.Nivel) DESC,Nombre;" : @"
+SELECT DISTINCT
+    p.PersonaID,
+    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS Nombre,
+    CAST(NULL AS INT) AS Nivel,
+    escala.EscalaTurnoID AS TurnoID,
+    escala.TurnoNombre,
+    escala.HoraInicio,
+    CONVERT(bit,CASE WHEN escala.EscalaTurnoID IS NULL THEN 0 ELSE 1 END) AS EnEscala,
+    escala.MinutosParaInicio
+FROM dbo.Persona p
+OUTER APPLY
+(
+    SELECT TOP (1)
+        a.EscalaTurnoID,
+        et.Nombre AS TurnoNombre,
+        et.HoraInicio,
+        CASE
+            WHEN et.HoraInicio IS NULL THEN NULL
+            WHEN DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)>0 THEN DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)
+            ELSE DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)+1440
+        END AS MinutosParaInicio
+    FROM dbo.RRHH_EscalaAsignaciones a
+    INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
+    LEFT JOIN dbo.RRHH_EscalaTurnos et ON et.EscalaTurnoID=a.EscalaTurnoID AND et.Activo=1
+    WHERE @EscalaID IS NOT NULL
+      AND a.EscalaID=@EscalaID
+      AND a.PersonalID=p.PersonaID
+      AND a.Activo=1
+      AND UPPER(LTRIM(RTRIM(f.Nombre)))=N'OPERADOR'
+      AND (@MaquinaID IS NULL OR a.MaquinaID=@MaquinaID)
+      AND CONVERT(date,@Ahora) BETWEEN a.FechaInicio AND a.FechaFin
+    ORDER BY
+        CASE WHEN et.HoraInicio IS NULL THEN 1 ELSE 0 END,
+        CASE WHEN DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)>0
+             THEN DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)
+             ELSE DATEDIFF(MINUTE,CONVERT(time,@Ahora),et.HoraInicio)+1440 END,
+        a.AsignacionID DESC
+) escala
+WHERE ISNULL(p.EsColaboradorActivo,1)=1
+  AND p.PersonaID<>@OperadorSalienteID
+  AND
+  (
+      UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
+      OR EXISTS
+      (
+          SELECT 1
+          FROM dbo.RRHH_EscalaAsignaciones ah
+          INNER JOIN dbo.RRHH_FuncionesPersonal fh ON fh.FuncionID=ah.FuncionID AND fh.Activo=1
+          WHERE ah.PersonalID=p.PersonaID
+            AND ah.Activo=1
+            AND UPPER(LTRIM(RTRIM(fh.Nombre)))=N'OPERADOR'
+      )
+  )
+ORDER BY EnEscala DESC,MinutosParaInicio,Nombre;";
+            await using (var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId.HasValue && parteId.Value > 0 ? parteId.Value : DBNull.Value;
+                cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId.HasValue && maquinaId.Value > 0 ? maquinaId.Value : DBNull.Value;
+                cmd.Parameters.Add("@OperadorSalienteID", SqlDbType.Int).Value = operadorSalienteId;
+                cmd.Parameters.Add("@EscalaID", SqlDbType.Int).Value = resultado.EscalaID.HasValue ? resultado.EscalaID.Value : DBNull.Value;
+                cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                while (await rd.ReadAsync())
+                {
+                    resultado.Operadores.Add(new ProduccionCambioTurnoCandidatoVm
+                    {
+                        PersonaID = Convert.ToInt32(rd["PersonaID"]),
+                        Nombre = rd["Nombre"]?.ToString()?.Trim() ?? string.Empty,
+                        Nivel = rd["Nivel"] == DBNull.Value ? null : Convert.ToInt32(rd["Nivel"]),
+                        TurnoID = rd["TurnoID"] == DBNull.Value ? null : Convert.ToInt32(rd["TurnoID"]),
+                        TurnoNombre = rd["TurnoNombre"] == DBNull.Value ? null : rd["TurnoNombre"].ToString(),
+                        HoraInicioTurno = rd["HoraInicio"] == DBNull.Value ? null : (TimeSpan?)rd["HoraInicio"],
+                        EnEscala = rd["EnEscala"] != DBNull.Value && Convert.ToBoolean(rd["EnEscala"]),
+                        MinutosParaInicio = rd["MinutosParaInicio"] == DBNull.Value ? null : Convert.ToInt32(rd["MinutosParaInicio"])
+                    });
+                }
+            }
+            return resultado;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EntregarTurno(ProduccionCambioTurnoEntregaPostVm vm)
+        {
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (vm.EjecucionProduccionID <= 0 || vm.OperadorEntranteID <= 0)
+            {
+                TempData["Error"] = "Selecciona correctamente al operador que recibirá el turno.";
+                return RedirectToAction(nameof(Index));
+            }
+            if (!string.IsNullOrWhiteSpace(vm.Observaciones) && vm.Observaciones.Trim().Length > 1000)
+            {
+                TempData["Error"] = "Las observaciones no pueden superar 1000 caracteres.";
+                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+            }
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            var usuarioId = ObtenerUsuarioID();
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+            var personaSalienteId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
+            if (!personaSalienteId.HasValue) return Unauthorized();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var resumen = await ConstruirResumenCambioTurnoAsync(vm.EjecucionProduccionID, personaSalienteId.Value, cn, tx);
+                if (resumen == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+                if (!resumen.PuedeEntregar)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = resumen.MotivoBloqueo ?? "El turno no puede entregarse.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+                var operadorEntrante = resumen.Operadores.FirstOrDefault(x => x.PersonaID == vm.OperadorEntranteID);
+                if (operadorEntrante == null)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = resumen.TieneMatrizPolivalencia
+                        ? "El operador seleccionado no tiene nivel de polivalencia autorizado para esta parte."
+                        : "El operador seleccionado no se encuentra activo o no pertenece al catálogo de operadores.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+                var origen = resumen.OperadorSugeridoID == operadorEntrante.PersonaID && operadorEntrante.EnEscala
+                    ? ProduccionCambioTurnoOrigen.Escala
+                    : ProduccionCambioTurnoOrigen.Manual;
+                const string sqlInsert = @"
+INSERT INTO dbo.Produccion_CambiosTurno
+(
+    EjecucionProduccionID,
+    ProgramaProduccionID,
+    OperadorSalienteID,
+    OperadorEntranteID,
+    OperadorAuxiliarSalienteID,
+    OperadorAuxiliarEntranteID,
+    FechaEntrega,
+    CantidadOKAcumulada,
+    CantidadSospechosaAcumulada,
+    CantidadScrapAcumulada,
+    UltimoRegistroHoraID,
+    TotalCajasFormadas,
+    TotalCajasEntregadas,
+    TotalCajasPendientes,
+    Observaciones,
+    UsuarioEntregaID,
+    FechaCreacion,
+    Activo,
+    EstadoCambioTurno,
+    TurnoEntranteID,
+    TurnoEntranteNombre,
+    OrigenOperadorEntrante
+)
+OUTPUT INSERTED.CambioTurnoID
+VALUES
+(
+    @EjecucionProduccionID,
+    @ProgramaProduccionID,
+    @OperadorSalienteID,
+    @OperadorEntranteID,
+    NULL,
+    NULL,
+    GETDATE(),
+    @CantidadOK,
+    @CantidadSospechosa,
+    @CantidadScrap,
+    @UltimoRegistroHoraID,
+    @TotalCajas,
+    @TotalCajasEntregadas,
+    @TotalCajasPendientes,
+    @Observaciones,
+    @UsuarioID,
+    GETDATE(),
+    1,
+    N'PENDIENTE_RECEPCION',
+    @TurnoEntranteID,
+    @TurnoEntranteNombre,
+    @OrigenOperadorEntrante
+);";
+                int cambioTurnoId;
+                await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
+                {
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = resumen.EjecucionProduccionID;
+                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = resumen.ProgramaProduccionID;
+                    cmd.Parameters.Add("@OperadorSalienteID", SqlDbType.Int).Value = resumen.OperadorSalienteID;
+                    cmd.Parameters.Add("@OperadorEntranteID", SqlDbType.Int).Value = operadorEntrante.PersonaID;
+                    cmd.Parameters.Add("@CantidadOK", SqlDbType.Int).Value = resumen.CantidadOK;
+                    cmd.Parameters.Add("@CantidadSospechosa", SqlDbType.Int).Value = resumen.CantidadSospechosa;
+                    cmd.Parameters.Add("@CantidadScrap", SqlDbType.Int).Value = resumen.CantidadScrap;
+                    cmd.Parameters.Add("@UltimoRegistroHoraID", SqlDbType.Int).Value = (object?)resumen.UltimoRegistroHoraID ?? DBNull.Value;
+                    cmd.Parameters.Add("@TotalCajas", SqlDbType.Int).Value = resumen.TotalCajas;
+                    cmd.Parameters.Add("@TotalCajasEntregadas", SqlDbType.Int).Value = resumen.TotalCajasEntregadas;
+                    cmd.Parameters.Add("@TotalCajasPendientes", SqlDbType.Int).Value = resumen.TotalCajasPendientes;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(vm.Observaciones) ? DBNull.Value : vm.Observaciones.Trim();
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    cmd.Parameters.Add("@TurnoEntranteID", SqlDbType.Int).Value = (object?)operadorEntrante.TurnoID ?? DBNull.Value;
+                    cmd.Parameters.Add("@TurnoEntranteNombre", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(operadorEntrante.TurnoNombre) ? DBNull.Value : operadorEntrante.TurnoNombre;
+                    cmd.Parameters.Add("@OrigenOperadorEntrante", SqlDbType.NVarChar, 20).Value = origen;
+                    cambioTurnoId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                }
+                const string sqlCajas = @"
+INSERT INTO dbo.Produccion_CambioTurnoCajas
+(
+    CambioTurnoID,
+    CajaProduccionID,
+    NumeroCaja,
+    FolioCaja,
+    CantidadPiezas,
+    TipoCaja,
+    EstadoCajaID,
+    EstadoCajaNombre,
+    FechaCreacion,
+    Activo
+)
+SELECT
+    @CambioTurnoID,
+    CajaProduccionID,
+    ISNULL(NumeroCaja,0),
+    COALESCE(NULLIF(FolioCaja,N''),NULLIF(EtiquetaFolio,N''),NULLIF(Etiqueta,N''),CONVERT(NVARCHAR(100),CajaProduccionID)),
+    ISNULL(CantidadPiezas,ISNULL(Cantidad,0)),
+    ISNULL(TipoCaja,N'OK'),
+    ISNULL(EstadoCajaID,1),
+    ISNULL(EstadoCajaNombre,N''),
+    GETDATE(),
+    1
+FROM dbo.Produccion_Cajas
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1;";
+                await using (var cmd = new SqlCommand(sqlCajas, cn, tx))
+                {
+                    cmd.Parameters.Add("@CambioTurnoID", SqlDbType.Int).Value = cambioTurnoId;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = resumen.EjecucionProduccionID;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                await tx.CommitAsync();
+                TempData["Success"] = $"Turno enviado a {operadorEntrante.Nombre}. Está pendiente de que el operador confirme la recepción.";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible entregar el turno: " + ex.Message;
+                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ObtenerTurnosPendientesRecepcion()
+        {
+            if (!UsuarioEnSesion()) return Unauthorized();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            var usuarioId = ObtenerUsuarioID();
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return StatusCode(StatusCodes.Status403Forbidden);
+            var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
+            if (!personaId.HasValue) return Unauthorized();
+            const string sql = @"
+SELECT
+    ct.CambioTurnoID,
+    ct.EjecucionProduccionID,
+    ct.ProgramaProduccionID,
+    ct.OperadorSalienteID,
+    sal.NombreCompleto AS OperadorSalienteNombre,
+    ct.OperadorEntranteID,
+    ent.NombreCompleto AS OperadorEntranteNombre,
+    ct.FechaEntrega,
+    ct.CantidadOKAcumulada,
+    ct.CantidadSospechosaAcumulada,
+    ct.CantidadScrapAcumulada,
+    ct.TotalCajasFormadas,
+    ct.TotalCajasEntregadas,
+    ct.Observaciones,
+    e.MaquinaCodigo,
+    e.ReferenciaSAP,
+    e.NumeroParte
+FROM dbo.Produccion_CambiosTurno ct
+INNER JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=ct.EjecucionProduccionID
+OUTER APPLY
+(
+    SELECT LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS NombreCompleto
+    FROM dbo.Persona p
+    WHERE p.PersonaID=ct.OperadorSalienteID
+) sal
+OUTER APPLY
+(
+    SELECT LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS NombreCompleto
+    FROM dbo.Persona p
+    WHERE p.PersonaID=ct.OperadorEntranteID
+) ent
+WHERE ct.OperadorEntranteID=@PersonaID
+  AND ct.EstadoCambioTurno=N'PENDIENTE_RECEPCION'
+  AND ct.Activo=1
+ORDER BY ct.FechaEntrega;";
+            var lista = new List<ProduccionCambioTurnoPendienteVm>();
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId.Value;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new ProduccionCambioTurnoPendienteVm
+                {
+                    CambioTurnoID = Convert.ToInt32(rd["CambioTurnoID"]),
+                    EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                    ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    OperadorSalienteID = Convert.ToInt32(rd["OperadorSalienteID"]),
+                    OperadorSalienteNombre = rd["OperadorSalienteNombre"]?.ToString()?.Trim() ?? string.Empty,
+                    OperadorEntranteID = Convert.ToInt32(rd["OperadorEntranteID"]),
+                    OperadorEntranteNombre = rd["OperadorEntranteNombre"]?.ToString()?.Trim() ?? string.Empty,
+                    FechaEntrega = Convert.ToDateTime(rd["FechaEntrega"]),
+                    CantidadOK = Convert.ToInt32(rd["CantidadOKAcumulada"]),
+                    CantidadSospechosa = Convert.ToInt32(rd["CantidadSospechosaAcumulada"]),
+                    CantidadScrap = Convert.ToInt32(rd["CantidadScrapAcumulada"]),
+                    TotalCajas = Convert.ToInt32(rd["TotalCajasFormadas"]),
+                    TotalCajasEntregadas = Convert.ToInt32(rd["TotalCajasEntregadas"]),
+                    Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"].ToString(),
+                    MaquinaCodigo = rd["MaquinaCodigo"] == DBNull.Value ? null : rd["MaquinaCodigo"].ToString(),
+                    ReferenciaSAP = rd["ReferenciaSAP"] == DBNull.Value ? null : rd["ReferenciaSAP"].ToString(),
+                    NumeroParte = rd["NumeroParte"] == DBNull.Value ? null : rd["NumeroParte"].ToString()
+                });
+            }
+            return Json(new { ok = true, turnos = lista });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RecibirTurno(ProduccionCambioTurnoRecepcionPostVm vm)
+        {
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (vm.CambioTurnoID <= 0)
+            {
+                TempData["Error"] = "No se recibió correctamente la entrega de turno.";
+                return RedirectToAction(nameof(Index));
+            }
+            if (!string.IsNullOrWhiteSpace(vm.ObservacionesRecepcion) && vm.ObservacionesRecepcion.Trim().Length > 1000)
+            {
+                TempData["Error"] = "Las observaciones de recepción no pueden superar 1000 caracteres.";
+                return RedirectToAction(nameof(Index));
+            }
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            var usuarioId = ObtenerUsuarioID();
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+            var personaEntranteId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
+            if (!personaEntranteId.HasValue) return Unauthorized();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                const string sqlCambio = @"
+SELECT TOP (1)
+    CambioTurnoID,
+    EjecucionProduccionID,
+    ProgramaProduccionID,
+    OperadorSalienteID,
+    OperadorEntranteID,
+    OrigenOperadorEntrante,
+    EstadoCambioTurno
+FROM dbo.Produccion_CambiosTurno WITH (UPDLOCK,HOLDLOCK)
+WHERE CambioTurnoID=@CambioTurnoID
+  AND Activo=1;";
+                int ejecucionId;
+                int programaId;
+                int operadorSalienteId;
+                int operadorEntranteId;
+                string origen;
+                await using (var cmd = new SqlCommand(sqlCambio, cn, tx))
+                {
+                    cmd.Parameters.Add("@CambioTurnoID", SqlDbType.Int).Value = vm.CambioTurnoID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        return NotFound();
+                    }
+                    var estado = rd["EstadoCambioTurno"]?.ToString()?.Trim() ?? string.Empty;
+                    if (!string.Equals(estado, ProduccionCambioTurnoEstado.PendienteRecepcion, StringComparison.OrdinalIgnoreCase))
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Esta entrega de turno ya fue atendida o cancelada.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                    ejecucionId = Convert.ToInt32(rd["EjecucionProduccionID"]);
+                    programaId = Convert.ToInt32(rd["ProgramaProduccionID"]);
+                    operadorSalienteId = Convert.ToInt32(rd["OperadorSalienteID"]);
+                    operadorEntranteId = Convert.ToInt32(rd["OperadorEntranteID"]);
+                    origen = rd["OrigenOperadorEntrante"]?.ToString()?.Trim() ?? ProduccionCambioTurnoOrigen.Manual;
+                }
+                if (operadorEntranteId != personaEntranteId.Value)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Esta entrega de turno está asignada a otro operador.";
+                    return RedirectToAction(nameof(Index));
+                }
+                const string sqlPersona = @"
+SELECT
+    ISNULL(EsColaboradorActivo,1) AS Activo,
+    LTRIM(RTRIM(CONCAT(ISNULL(Nombre,N''),N' ',ISNULL(ApellidoPaterno,N''),N' ',ISNULL(ApellidoMaterno,N'')))) AS Nombre
+FROM dbo.Persona
+WHERE PersonaID=@PersonaID;";
+                string nombreEntrante;
+                await using (var cmd = new SqlCommand(sqlPersona, cn, tx))
+                {
+                    cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = operadorEntranteId;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync() || !Convert.ToBoolean(rd["Activo"]))
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "El operador entrante ya no se encuentra activo.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                    nombreEntrante = rd["Nombre"]?.ToString()?.Trim() ?? string.Empty;
+                }
+                const string sqlActualizar = @"
+UPDATE dbo.Produccion_CambiosTurno
+SET EstadoCambioTurno=N'RECIBIDO',
+    FechaRecepcion=GETDATE(),
+    UsuarioRecepcionID=@UsuarioID,
+    ObservacionesRecepcion=@ObservacionesRecepcion
+WHERE CambioTurnoID=@CambioTurnoID
+  AND EstadoCambioTurno=N'PENDIENTE_RECEPCION'
+  AND Activo=1;
+
+IF @@ROWCOUNT<>1
+    THROW 51090,'La entrega de turno cambió de estado mientras se confirmaba.',1;
+
+UPDATE dbo.Produccion_Ejecucion
+SET OperadorID=@OperadorEntranteID,
+    OperadorNombre=@OperadorEntranteNombre,
+    OperadoresModificadosManual=CASE WHEN @Origen=N'MANUAL' THEN 1 ELSE OperadoresModificadosManual END,
+    MotivoCambioOperadores=CASE WHEN @Origen=N'MANUAL' THEN N'Cambio de turno con operador seleccionado manualmente.' ELSE MotivoCambioOperadores END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1;
+
+IF @@ROWCOUNT<>1
+    THROW 51091,'No fue posible actualizar el operador de la ejecución.',1;
+
+UPDATE dbo.Planeacion_ProgramaOperadores
+SET PersonaID=@OperadorEntranteID
+WHERE ProgramaProduccionID=@ProgramaProduccionID
+  AND PersonaID=@OperadorSalienteID
+  AND Activo=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(RolOperador,N''))))=N'PRINCIPAL';
+
+IF @@ROWCOUNT<>1
+    THROW 51092,'No fue posible sincronizar al operador principal del programa.',1;";
+                await using (var cmd = new SqlCommand(sqlActualizar, cn, tx))
+                {
+                    cmd.Parameters.Add("@CambioTurnoID", SqlDbType.Int).Value = vm.CambioTurnoID;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionId;
+                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaId;
+                    cmd.Parameters.Add("@OperadorSalienteID", SqlDbType.Int).Value = operadorSalienteId;
+                    cmd.Parameters.Add("@OperadorEntranteID", SqlDbType.Int).Value = operadorEntranteId;
+                    cmd.Parameters.Add("@OperadorEntranteNombre", SqlDbType.NVarChar, 250).Value = nombreEntrante;
+                    cmd.Parameters.Add("@Origen", SqlDbType.NVarChar, 20).Value = origen;
+                    cmd.Parameters.Add("@ObservacionesRecepcion", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(vm.ObservacionesRecepcion) ? DBNull.Value : vm.ObservacionesRecepcion.Trim();
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                await tx.CommitAsync();
+                TempData["Success"] = "Turno recibido correctamente. A partir de este momento la producción quedó bajo tu responsabilidad.";
+                return RedirectToAction(nameof(Captura), new { id = ejecucionId });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible recibir el turno: " + ex.Message;
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
+
+        private sealed class ResultadoCandidatosCambioTurno
+        {
+            public bool TieneMatriz { get; set; }
+            public bool EscalaEncontrada { get; set; }
+            public int? EscalaID { get; set; }
+            public string? EscalaFolio { get; set; }
+            public List<ProduccionCambioTurnoCandidatoVm> Operadores { get; set; } = new();
+        }
 
         private async Task DesplazarFinProgramadoParoCortoAsync(
     int programaProduccionId,
@@ -3740,6 +4626,35 @@ ORDER BY FechaProduccion,HoraInicio;";
                     });
                 }
             }
+
+            var nombresOperadores = new Dictionary<int, string>();
+            var operadoresRegistro = registros.Where(x => x.OperadorID.HasValue && x.OperadorID.Value > 0).Select(x => x.OperadorID!.Value).Distinct().ToList();
+            if (operadoresRegistro.Count > 0)
+            {
+                var parametros = new List<string>();
+                await using var cmd = tx == null ? new SqlCommand() : new SqlCommand(string.Empty, cn, tx);
+                cmd.Connection = cn;
+                for (var i = 0; i < operadoresRegistro.Count; i++)
+                {
+                    var nombreParametro = "@Operador" + i;
+                    parametros.Add(nombreParametro);
+                    cmd.Parameters.Add(nombreParametro, SqlDbType.Int).Value = operadoresRegistro[i];
+                }
+                cmd.CommandText = $@"
+SELECT
+    PersonaID,
+    LTRIM(RTRIM(CONCAT(ISNULL(Nombre,N''),N' ',ISNULL(ApellidoPaterno,N''),N' ',ISNULL(ApellidoMaterno,N'')))) AS NombreCompleto
+FROM dbo.Persona
+WHERE PersonaID IN({string.Join(",", parametros)});";
+                await using var rd = await cmd.ExecuteReaderAsync();
+                while (await rd.ReadAsync())
+                {
+                    var personaId = Convert.ToInt32(rd["PersonaID"]);
+                    var nombre = rd["NombreCompleto"]?.ToString()?.Trim();
+                    nombresOperadores[personaId] = string.IsNullOrWhiteSpace(nombre) ? $"Operador {personaId}" : nombre;
+                }
+            }
+
             var paros = new List<(int ParoID, DateTime Inicio, DateTime? Fin, bool MayorA15)>();
             const string sqlParos = @"
 SELECT ParoID,FechaInicioParo,FechaFinParo,ISNULL(EsMayorA15Minutos,0) AS EsMayorA15Minutos
@@ -3849,6 +4764,9 @@ ORDER BY h.FechaMovimiento;";
                     }
                     var objetivoHoraFila = capturada ? (registro!.ObjetivoHora ?? objetivoHora) : objetivoHora;
                     var objetivoBloqueFila = capturada ? (registro!.ObjetivoBloque ?? objetivoBloqueCalculado) : objetivoBloqueCalculado;
+                    var operadorRegistroId = registro?.OperadorID;
+                    string? operadorRegistroNombre = null;
+                    if (operadorRegistroId.HasValue && nombresOperadores.TryGetValue(operadorRegistroId.Value, out var nombreEncontrado)) operadorRegistroNombre = nombreEncontrado;
                     filas.Add(new ProduccionCapturaHoraFilaVm
                     {
                         NumeroHora = numeroHora,
@@ -3856,6 +4774,8 @@ ORDER BY h.FechaMovimiento;";
                         HoraInicio = inicioBloque.TimeOfDay,
                         HoraFin = finBloque.TimeOfDay,
                         RegistroHoraID = registro?.RegistroHoraID,
+                        OperadorID = operadorRegistroId,
+                        OperadorNombre = operadorRegistroNombre,
                         CantidadOK = registro?.CantidadOK ?? 0,
                         CantidadSospechosa = registro?.CantidadSospechosa ?? 0,
                         CantidadScrap = registro?.CantidadScrap ?? 0,
@@ -4042,6 +4962,8 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
 
             return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
         }
+
+
 
         private async Task<int?> ObtenerPersonaIDUsuarioAsync(
     int usuarioId,
