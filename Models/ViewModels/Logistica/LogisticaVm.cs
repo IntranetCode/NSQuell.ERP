@@ -216,6 +216,32 @@ public sealed class LogisticaDetalleVm
     
 }
 
+public sealed class LogisticaReprogramarVm
+{
+    [Required]
+    public int EmbarqueID { get; set; }
+
+    [Required, DataType(DataType.Date)]
+    [Display(Name = "Nueva fecha de carga")]
+    public DateTime FechaCargaProgramada { get; set; }
+
+    [Display(Name = "Nueva hora de carga")]
+    public TimeSpan? HoraCargaProgramada { get; set; }
+
+    [Required, DataType(DataType.Date)]
+    [Display(Name = "Nueva fecha de entrega")]
+    public DateTime FechaEntregaProgramada { get; set; }
+
+    [Display(Name = "Nueva hora de entrega")]
+    public TimeSpan? HoraEntregaProgramada { get; set; }
+
+    [Required, StringLength(80)]
+    public string Motivo { get; set; } = string.Empty;
+
+    [StringLength(1200)]
+    public string? Observaciones { get; set; }
+}
+
 public sealed class LogisticaChecklistVm
 {
     public string Codigo { get; set; } = string.Empty;
