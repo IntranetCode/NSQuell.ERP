@@ -309,6 +309,12 @@ public sealed class ProduccionRegistroHoraVm
     public DateTime? FechaModificacion { get; set; }
     public bool Activo { get; set; } = true;
 
+    public int? ObjetivoHora { get; set; }
+    public int? ObjetivoBloque { get; set; }
+    public bool? CumplioObjetivo { get; set; }
+    public int? DiferenciaObjetivo { get; set; }
+    public decimal? PorcentajeCumplimiento { get; set; }
+
     public int TotalCapturado =>
         CantidadOK + CantidadSospechosa + CantidadScrap;
 

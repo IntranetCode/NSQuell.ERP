@@ -13,6 +13,9 @@
     var horaObligatoria = horasPendientes.Where(x => x.Disponible).OrderBy(x => x.NumeroHora).FirstOrDefault();
     var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
     var objetivoHora = Model.ObjetivoHora;
+    var mensajeSuccess = TempData["Success"]?.ToString();
+    var mensajeObjetivoNoCumplido = !string.IsNullOrWhiteSpace(mensajeSuccess) && mensajeSuccess.Contains("No alcanzaste el objetivo por hora", StringComparison.OrdinalIgnoreCase);
+    var mensajeSinObjetivo = !string.IsNullOrWhiteSpace(mensajeSuccess) && mensajeSuccess.Contains("no tiene objetivo por hora configurado", StringComparison.OrdinalIgnoreCase);
 }
 @functions {
     public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
@@ -549,7 +552,47 @@
             pointer-events: none
         }
 
+        .hour-table tr.row-goal-fail td {
+            background: #fff8f6;
+            border-color: #fda29b
+        }
 
+        .saved-goal-result {
+            border-radius: 16px;
+            padding: 13px 15px;
+            margin-bottom: 14px;
+            font-weight: 900
+        }
+
+            .saved-goal-result.success {
+                border: 1px solid #abefc6;
+                background: #ecfdf3;
+                color: #067647
+            }
+
+            .saved-goal-result.danger {
+                border: 1px solid #fda29b;
+                background: #fef3f2;
+                color: #b42318
+            }
+
+            .saved-goal-result.neutral {
+                border: 1px solid #d0d5dd;
+                background: #f2f4f7;
+                color: #475467
+            }
+
+        .history-goal-title {
+            display: block;
+            font-weight: 950
+        }
+
+        .history-goal-detail {
+            display: block;
+            margin-top: 3px;
+            font-size: .7rem;
+            font-weight: 800
+        }
 
         .paro-toolbar {
             display: flex;
@@ -674,9 +717,13 @@
             </div>
         </section>
 
-        @if (TempData["Success"] != null)
+        @if (!string.IsNullOrWhiteSpace(mensajeSuccess))
         {
-            <div class="alert alert-success rounded-4 fw-bold"><i class="fa-solid fa-circle-check me-1"></i>@TempData["Success"]</div>
+            var claseResultadoGuardado = mensajeObjetivoNoCumplido ? "danger" : mensajeSinObjetivo ? "neutral" : "success";
+            var iconoResultadoGuardado = mensajeObjetivoNoCumplido ? "fa-arrow-trend-down" : mensajeSinObjetivo ? "fa-circle-info" : "fa-circle-check";
+            <div class="saved-goal-result @claseResultadoGuardado">
+                <i class="fa-solid @iconoResultadoGuardado me-2"></i>@mensajeSuccess
+            </div>
         }
         @if (TempData["Error"] != null)
         {
@@ -689,14 +736,17 @@
             <div class="summary"><div class="k">OK</div><div class="v text-success">@Numero(Model.CantidadOKTotal)</div></div>
             <div class="summary"><div class="k">Sospechosos</div><div class="v text-warning">@Numero(Model.CantidadSospechosaTotal)</div></div>
             <div class="summary"><div class="k">Scrap</div><div class="v text-danger">@Numero(Model.CantidadScrapTotal)</div></div>
-            <div class="summary objective-summary"><div class="k">Objetivo por hora</div><div class="v">@(objetivoHora.HasValue && objetivoHora.Value > 0 ? Numero(objetivoHora.Value) : "-")</div><div class="text-muted small">@(objetivoHora.HasValue && objetivoHora.Value > 0 ? "PZA / H" : "Sin objetivo configurado")@if(Model.Ciclo.HasValue){
-            <span> · Ciclo @Model.Ciclo.Value.ToString("0.##")</span>
-                        }
-@if (Model.Cavidades.HasValue)
-{
-                <span> · @Model.Cavidades.Value cav.</span>
-            }
-</div></div>
+            <div class="summary objective-summary">
+                <div class="k">Objetivo por hora</div><div class="v">@(objetivoHora.HasValue && objetivoHora.Value > 0 ? Numero(objetivoHora.Value) : "-")</div><div class="text-muted small">
+                    @(objetivoHora.HasValue && objetivoHora.Value > 0 ? "PZA / H" : "Sin objetivo configurado")@if(Model.Ciclo.HasValue){
+                    <span> · Ciclo @Model.Ciclo.Value.ToString("0.##")</span>
+                                        }
+                    @if (Model.Cavidades.HasValue)
+                    {
+                        <span> · @Model.Cavidades.Value cav.</span>
+                    }
+                </div>
+            </div>
         </section>
 
         <section class="paro-toolbar @(Model.TieneParoAbierto ? "open" : "")">
@@ -814,7 +864,7 @@
                     }
                     @if (horasCapturadas.Count > 0)
                     {
-                        <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialCapturas" aria-expanded="false" aria-controls="historialCapturas"><span><i class="fa-solid fa-box-archive me-2"></i>Ver horas ya capturadas (@horasCapturadas.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
+                        <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialCapturas" aria-expanded="false" aria-controls="historialCapturas"><span><i class="fa-solid fa-box-archive me-2"></i>Historial de horas y cumplimiento (@horasCapturadas.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
                         <div class="collapse history-box" id="historialCapturas">
                             <div class="table-wrap">
                                 <table class="hour-table">
@@ -822,7 +872,8 @@
                                     <tbody>
                                         @foreach (var fila in horasCapturadas)
                                         {
-                                            <tr class="row-complete">
+                                            var claseHistorial = fila.ObjetivoBloque.HasValue && fila.ObjetivoBloque.Value > 0 && !fila.CumplioObjetivo ? "row-goal-fail" : "row-complete";
+                                            <tr class="@claseHistorial">
                                                 <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
                                                 <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
                                                 <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">PZA</span></td>
@@ -832,20 +883,25 @@
                                                 <td>
                                                     @if (!fila.ObjetivoBloque.HasValue || fila.ObjetivoBloque.Value <= 0)
                                                     {
-                                                        <span class="goal-result goal-neutral">Sin objetivo</span>
+                                                        <span class="goal-result goal-neutral">
+                                                            <span class="history-goal-title"><i class="fa-solid fa-circle-info me-1"></i>Sin objetivo</span>
+                                                            <span class="history-goal-detail">No se pudo evaluar esta hora</span>
+                                                        </span>
                                                     }
                                                     else if (fila.CumplioObjetivo)
                                                     {
                                                         <span class="goal-result goal-success">
-                                                            <span><i class="fa-solid fa-arrow-trend-up me-1"></i>@(fila.PiezasSobreObjetivo > 0 ? $"+{fila.PiezasSobreObjetivo:N0} piezas" : "Objetivo cumplido")</span>
-                                                            <small>@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</small>
+                                                            <span class="history-goal-title"><i class="fa-solid fa-circle-check me-1"></i>Cumplió</span>
+                                                            <span class="history-goal-detail">@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</span>
+                                                            <span class="history-goal-detail">@(fila.PiezasSobreObjetivo > 0 ? $"Superó por {fila.PiezasSobreObjetivo:N0} pieza(s)" : "Objetivo exacto")</span>
                                                         </span>
                                                     }
                                                     else
                                                     {
                                                         <span class="goal-result goal-danger">
-                                                            <span><i class="fa-solid fa-arrow-trend-down me-1"></i>Faltaron @fila.PiezasFaltantes.ToString("N0")</span>
-                                                            <small>@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</small>
+                                                            <span class="history-goal-title"><i class="fa-solid fa-circle-xmark me-1"></i>No cumplió</span>
+                                                            <span class="history-goal-detail">@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</span>
+                                                            <span class="history-goal-detail">Faltaron @fila.PiezasFaltantes.ToString("N0") pieza(s)</span>
                                                         </span>
                                                     }
                                                 </td>
@@ -1023,14 +1079,31 @@
                 if(!input||!feedback)return;
                 const objetivo=Number(input.dataset.objetivo||0);
                 const valorRaw=(input.value||'').trim();
-                if(objetivo<=0){feedback.className='modal-goal-feedback text-muted';feedback.textContent='Esta pieza no tiene ObjetivoHora configurado.';return;}
-                if(valorRaw===''){feedback.className='modal-goal-feedback text-muted';feedback.textContent='Captura las piezas OK para comparar contra el objetivo.';return;}
+                if(objetivo<=0){
+                    feedback.className='modal-goal-feedback text-muted';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Esta parte no tiene objetivo por hora configurado.';
+                    return;
+                }
+                if(valorRaw===''){
+                    feedback.className='modal-goal-feedback text-muted';
+                    feedback.textContent='Captura las piezas OK para comparar contra el objetivo de esta hora.';
+                    return;
+                }
                 const ok=Number(valorRaw||0);
                 const diferencia=ok-objetivo;
                 const porcentaje=Math.round((ok/objetivo)*1000)/10;
-                if(diferencia>0){feedback.className='modal-goal-feedback text-success';feedback.innerHTML='<i class="fa-solid fa-arrow-trend-up me-1"></i>Rebasaste el objetivo por '+diferencia.toLocaleString('es-MX')+' pieza(s) · '+porcentaje.toLocaleString('es-MX')+'%';}
-                else if(diferencia===0){feedback.className='modal-goal-feedback text-success';feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Alcanzaste exactamente el objetivo · 100%';}
-                else{feedback.className='modal-goal-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-arrow-trend-down me-1"></i>No alcanzaste el objetivo. Faltan '+Math.abs(diferencia).toLocaleString('es-MX')+' pieza(s) · '+porcentaje.toLocaleString('es-MX')+'%';}
+                if(diferencia>0){
+                    feedback.className='modal-goal-feedback text-success';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Alcanzaste el objetivo: <strong>'+porcentaje.toLocaleString('es-MX')+'%</strong>. Lo superaste por '+diferencia.toLocaleString('es-MX')+' pieza(s).';
+                    return;
+                }
+                if(diferencia===0){
+                    feedback.className='modal-goal-feedback text-success';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Alcanzaste exactamente el objetivo: <strong>100%</strong>.';
+                    return;
+                }
+                feedback.className='modal-goal-feedback text-danger';
+                feedback.innerHTML='<i class="fa-solid fa-circle-xmark me-1"></i>No alcanzaste el objetivo: <strong>'+porcentaje.toLocaleString('es-MX')+'%</strong>. Faltaron '+Math.abs(diferencia).toLocaleString('es-MX')+' pieza(s).';
             }
             document.getElementById('modalOK')?.addEventListener('input',actualizarComparacionObjetivo);
             const capturaHabilitada = @capturaHabilitada.ToString().ToLowerInvariant();

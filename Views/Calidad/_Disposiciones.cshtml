@@ -2,6 +2,22 @@
 @using ERP.NSQuell.Models
 @{
     string Mostrar(string? valor) => string.IsNullOrWhiteSpace(valor) ? "—" : valor.Trim();
+    string EstadoTratamientoTexto(string? estado) => (estado ?? CalidadEstadoTratamiento.PendienteAsignacion).Trim().ToUpperInvariant() switch
+    {
+        CalidadEstadoTratamiento.PendienteAsignacion => "Pendiente de asignación",
+        CalidadEstadoTratamiento.Asignada => "Asignada",
+        CalidadEstadoTratamiento.PendienteReinspeccion => "Entregada a Calidad",
+        CalidadEstadoTratamiento.Concluida => "Concluida",
+        _ => "Pendiente"
+    };
+    string EstadoTratamientoBadge(string? estado) => (estado ?? CalidadEstadoTratamiento.PendienteAsignacion).Trim().ToUpperInvariant() switch
+    {
+        CalidadEstadoTratamiento.PendienteAsignacion => "bg-secondary",
+        CalidadEstadoTratamiento.Asignada => "bg-primary",
+        CalidadEstadoTratamiento.PendienteReinspeccion => "bg-info text-dark",
+        CalidadEstadoTratamiento.Concluida => "bg-success",
+        _ => "bg-secondary"
+    };
 }
 <style>
     .quality-dispositions {
@@ -104,11 +120,74 @@
             text-decoration: none
         }
 
+        .quality-dispositions .quality-btn-primary {
+            background: #1d4ed8;
+            color: #fff;
+            border-color: #1d4ed8
+        }
+
+        .quality-dispositions .quality-btn-warning {
+            background: #d97706;
+            color: #fff;
+            border-color: #d97706
+        }
+
+        .quality-dispositions .quality-btn-info {
+            background: #0369a1;
+            color: #fff;
+            border-color: #0369a1
+        }
+
         .quality-dispositions .quality-btn-success {
             background: #15803d;
             color: #fff;
             border-color: #15803d
         }
+
+        .quality-dispositions .quality-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed
+        }
+
+        .quality-dispositions .quality-step {
+            position: relative;
+            padding: 12px 14px;
+            border: 1px solid var(--qd-border);
+            border-radius: 10px;
+            background: #f8fafc
+        }
+
+        .quality-dispositions .quality-step-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: .82rem;
+            font-weight: 800;
+            color: var(--qd-navy)
+        }
+
+        .quality-dispositions .quality-assignment {
+            padding: 14px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 10px;
+            background: #f8fafc
+        }
+
+        .quality-dispositions .quality-inline-error {
+            display: none;
+            margin-top: 10px;
+            padding: 9px 11px;
+            border: 1px solid #fca5a5;
+            border-radius: 8px;
+            background: #fef2f2;
+            color: #991b1b;
+            font-size: .82rem;
+            font-weight: 700
+        }
+
+            .quality-dispositions .quality-inline-error.is-visible {
+                display: block
+            }
 
     html[data-nsq-theme="dark"] .quality-dispositions {
         --qd-border: rgba(255,255,255,.10);
@@ -125,10 +204,14 @@
             background: #0e1828
         }
 
-        html[data-nsq-theme="dark"] .quality-dispositions .form-control {
+        html[data-nsq-theme="dark"] .quality-dispositions .form-control, html[data-nsq-theme="dark"] .quality-dispositions .form-select {
             background: #0b1422;
             color: #f8fafc;
             border-color: rgba(255,255,255,.13)
+        }
+
+        html[data-nsq-theme="dark"] .quality-dispositions .quality-step, html[data-nsq-theme="dark"] .quality-dispositions .quality-assignment {
+            background: #0e1828
         }
 
     @@media(max-width:767.98px) {
@@ -141,257 +224,180 @@
         }
     }
 </style>
-<div class="quality-dispositions">
+<div class="quality-dispositions" data-departamentos-url="@Url.Action("ObtenerDepartamentosDisposicion", "Calidad")" data-usuarios-url="@Url.Action("ObtenerUsuariosDepartamentoDisposicion", "Calidad")">
     @if (Model.Disposiciones.Any())
     {
         <section class="quality-card" id="disposiciones-material">
             <div class="quality-card-header">
                 <div>
-                    <h2>
-                        <i class="fa-solid fa-boxes-stacked"></i>
-                        Material separado, reinspección y disposición
-                    </h2>
-                    <div class="quality-help">
-                        Cada hallazgo conserva su defecto de origen, tratamiento, responsable y resultado final.
-                        El material pendiente permanece bloqueado hasta concluir su reinspección.
-                    </div>
+                    <h2><i class="fa-solid fa-boxes-stacked"></i>Material separado, tratamiento y reinspección</h2>
+                    <div class="quality-help">Cada hallazgo conserva defecto de origen, tratamiento, departamento y usuario responsable. El material permanece bloqueado hasta que Calidad confirme su recepción y concluya la reinspección.</div>
                 </div>
-
                 @if (Model.DisposicionesPendientes > 0)
                 {
-                    <span class="badge bg-warning text-dark">
-                        @Model.DisposicionesPendientes pendiente(s)
-                    </span>
+                    <span class="badge bg-warning text-dark">@Model.DisposicionesPendientes pendiente(s)</span>
                 }
             </div>
-
             <div class="quality-card-body d-grid gap-3">
                 @foreach (var disposicion in Model.Disposiciones)
                 {
+                    var estadoTratamiento = (disposicion.EstadoTratamiento ?? CalidadEstadoTratamiento.PendienteAsignacion).Trim().ToUpperInvariant();
+                    var esPendienteAsignacion = estadoTratamiento == CalidadEstadoTratamiento.PendienteAsignacion;
+                    var esAsignada = estadoTratamiento == CalidadEstadoTratamiento.Asignada;
+                    var esPendienteReinspeccion = estadoTratamiento == CalidadEstadoTratamiento.PendienteReinspeccion;
+                    var esConcluida = estadoTratamiento == CalidadEstadoTratamiento.Concluida || !disposicion.EsPendiente;
                     <article class="border rounded-3 p-3 @disposicion.ResultadoFinalBordeClase">
                         <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
                             <div>
                                 <h3 class="h6 fw-bold mb-1">
-                                    Disposición #@disposicion.DisposicionID
-                                    @if (disposicion.NumeroHora.HasValue)
-                                    {
-                                        <span>· Revisión hora @disposicion.NumeroHora</span>
-                                    }
-                                </h3>
-                                <div class="quality-help">
-                                    Monitor: @(disposicion.MonitoreoID?.ToString() ?? "Sin monitor") ·
-                                    Inicio: @disposicion.FechaInicio.ToString("dd/MM/yyyy HH:mm")
-                                    @if (disposicion.FechaHoraRevision.HasValue)
-                                    {
-                                        <span> · Hallazgo: @disposicion.FechaHoraRevision.Value.ToString("dd/MM/yyyy HH:mm")</span>
-                                    }
-                                    @if (disposicion.FechaFin.HasValue)
-                                    {
-                                        <span> · Cierre: @disposicion.FechaFin.Value.ToString("dd/MM/yyyy HH:mm")</span>
-                                    }
-                                </div>
-                            </div>
-
-                            <span class="badge @disposicion.ResultadoFinalBadgeClase">
-                                @disposicion.ResultadoFinalTexto
-                            </span>
+                                    Disposición #@disposicion.DisposicionID @if(disposicion.NumeroHora.HasValue){
+                                    <span>· Revisión hora @disposicion.NumeroHora</span>
+                                }
+                            </h3>
+                            <div class="quality-help">
+                                Monitor: @(disposicion.MonitoreoID?.ToString() ?? "Sin monitor") · Inicio: @disposicion.FechaInicio.ToString("dd/MM/yyyy HH:mm") @if(disposicion.FechaHoraRevision.HasValue){
+                                <span> · Hallazgo: @disposicion.FechaHoraRevision.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                            }
+                            @if (disposicion.FechaFin.HasValue)
+                            {
+                                <span> · Cierre: @disposicion.FechaFin.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                            }
                         </div>
-
-                        @if (disposicion.EsPendiente)
-                        {
-                            <div class="alert alert-warning py-2 mb-3">
-                                <i class="fa-solid fa-lock me-1"></i>
-                                <strong>@disposicion.CantidadAfectada pieza(s) bloqueada(s).</strong>
-                                Deben concluir selección o retrabajo y reinspección antes de resolver esta disposición.
-                            </div>
-                        }
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-2">
-                                <div class="quality-data-label">Tipo de material</div>
-                                <div class="fw-semibold">@disposicion.TipoMaterial.Replace("_", " ")</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="quality-data-label">Etiqueta actual</div>
-                                <div class="fw-semibold">@Mostrar(disposicion.Etiqueta)</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="quality-data-label">Cantidad afectada</div>
-                                <div class="fw-bold">@disposicion.CantidadAfectada</div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="quality-data-label">Tratamiento</div>
-                                <div class="fw-semibold">@disposicion.TratamientoTexto</div>
-                                <div class="quality-help">Responsable: @disposicion.ResponsableTexto</div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="quality-data-label">Defecto de origen</div>
-                                <div class="fw-semibold">
-                                    @if (!string.IsNullOrWhiteSpace(disposicion.DefectoCodigo))
-                                    {
-                                        <span>@disposicion.DefectoCodigo - </span>
-                                    }
-                                @(string.IsNullOrWhiteSpace(disposicion.DefectoDescripcion)
-                                                            ? "Sin descripción registrada"
-                                                            : disposicion.DefectoDescripcion)
+                    </div>
+                    <div class="d-flex flex-wrap gap-2"><span class="badge @EstadoTratamientoBadge(estadoTratamiento)">@EstadoTratamientoTexto(estadoTratamiento)</span><span class="badge @disposicion.ResultadoFinalBadgeClase">@disposicion.ResultadoFinalTexto</span></div>
+                </div>
+                @if (disposicion.EsPendiente)
+                {
+                    <div class="alert alert-warning py-2 mb-3"><i class="fa-solid fa-lock me-1"></i><strong>@disposicion.CantidadAfectada pieza(s) bloqueada(s).</strong> No podrán considerarse liberadas hasta terminar el tratamiento y la reinspección de Calidad.</div>
+                }
+                <div class="row g-3 mb-3">
+                    <div class="col-md-2"><div class="quality-data-label">Tipo de material</div><div class="fw-semibold">@disposicion.TipoMaterial.Replace("_", " ")</div></div>
+                    <div class="col-md-2"><div class="quality-data-label">Etiqueta actual</div><div class="fw-semibold">@Mostrar(disposicion.Etiqueta)</div></div>
+                    <div class="col-md-2"><div class="quality-data-label">Cantidad afectada</div><div class="fw-bold">@disposicion.CantidadAfectada</div></div>
+                    <div class="col-md-3"><div class="quality-data-label">Tratamiento</div><div class="fw-semibold">@disposicion.TratamientoTexto</div><div class="quality-help">Responsable: @disposicion.ResponsableTexto</div></div>
+                    <div class="col-md-3">
+                        <div class="quality-data-label">Defecto de origen</div><div class="fw-semibold">
+                            @if (!string.IsNullOrWhiteSpace(disposicion.DefectoCodigo))
+                            {
+                                <span>@disposicion.DefectoCodigo - </span>
+                            }
+                            @(string.IsNullOrWhiteSpace(disposicion.DefectoDescripcion) ? "Sin descripción registrada" : disposicion.DefectoDescripcion)
                         </div>
                     </div>
                 </div>
-
-                @if (!disposicion.EsPendiente)
-                        {
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-4">
-                                    <div class="border rounded-3 p-3 h-100">
-                                        <div class="quality-data-label">Resultado de reinspección</div>
-                                        <div class="fw-bold">@disposicion.ResultadoFinalTexto</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="border rounded-3 p-3 h-100">
-                                        <div class="quality-data-label">Liberado</div>
-                                        <div class="fs-5 fw-bold text-success">@disposicion.CantidadLiberada</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="border rounded-3 p-3 h-100">
-                                        <div class="quality-data-label">Scrap documentado</div>
-                                        <div class="fs-5 fw-bold text-danger">@disposicion.CantidadScrap</div>
-                                    </div>
+                @if (disposicion.EsPendiente)
+                {
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4"><div class="quality-step h-100"><div class="quality-step-title"><i class="fa-solid fa-user-check"></i>Asignación</div><div class="quality-help">@((disposicion.DepartamentoResponsableID.HasValue && disposicion.UsuarioResponsableID.HasValue) ? disposicion.ResponsableTexto : "Pendiente de seleccionar departamento y usuario.")</div></div></div>
+                        <div class="col-md-4">
+                            <div class="quality-step h-100">
+                                <div class="quality-step-title"><i class="fa-solid fa-screwdriver-wrench"></i>Tratamiento</div><div class="quality-help">
+                                    @if (esPendienteAsignacion)
+                                    {
+                                        <span>Pendiente de asignar responsable.</span>
+                                    }
+                                    else if (esAsignada)
+                                    {
+                                        <span>Asignado. Esperando devolución física del material a Calidad.</span>
+                                    }
+                                    else if (esPendienteReinspeccion)
+                                    {
+                                        <span>Material recibido por Calidad.</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Tratamiento concluido.</span>
+                                    }
                                 </div>
                             </div>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(disposicion.Observaciones))
-                        {
-                            <div class="alert alert-light border py-2 mb-3">
-                                <strong>Seguimiento:</strong>
-                                <div style="white-space: pre-wrap;">@disposicion.Observaciones</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="quality-step h-100">
+                                <div class="quality-step-title"><i class="fa-solid fa-microscope"></i>Calidad</div><div class="quality-help">
+                                    @if (esPendienteReinspeccion)
+                                    {
+                                        <span>Material recibido y listo para reinspección.</span>
+                                    }
+                                    else if (esConcluida)
+                                    {
+                                        <span>Reinspección concluida.</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Esperando recepción física del material.</span>
+                                    }
+                                </div>
                             </div>
-                        }
-
-                        @if (disposicion.EsPendiente)
-                        {
-                            <form asp-controller="Calidad"
-                                  asp-action="ResolverDisposicion"
-                                  method="post"
-                                  data-disposition-form
-                                  data-afectada="@disposicion.CantidadAfectada">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="DisposicionID" value="@disposicion.DisposicionID" />
-                                <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
-
-                                <div class="row g-3">
-                                    <div class="col-md-3">
-                                        <label class="form-label fw-semibold">Cantidad liberada</label>
-                                        <input type="number"
-                                               name="CantidadLiberada"
-                                               min="0"
-                                               max="@disposicion.CantidadAfectada"
-                                               value="0"
-                                               class="form-control"
-                                               data-disposition-liberada
-                                               required />
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label fw-semibold">Cantidad scrap</label>
-                                        <input type="number"
-                                               name="CantidadScrap"
-                                               min="0"
-                                               max="@disposicion.CantidadAfectada"
-                                               value="0"
-                                               class="form-control"
-                                               data-disposition-scrap
-                                               required />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-semibold">Resultado de reinspección</label>
-                                        <textarea name="Observaciones"
-                                      rows="3"
-                                      maxlength="1000"
-                                      class="form-control"
-                                      data-disposition-observations
-                                      placeholder="Documenta el resultado de la selección o retrabajo. Es obligatorio cuando exista scrap."></textarea>
-                                        <div class="quality-help">
-                                            Liberado + scrap debe ser igual a @disposicion.CantidadAfectada.
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2 d-flex align-items-end">
-                                        <button type="submit"
-                                                class="quality-btn quality-btn-success w-100"
-                                                data-submit-confirm="¿Confirmas el resultado final de la reinspección?">
-                                            <i class="fa-solid fa-check"></i>
-                                            Resolver
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="quality-disposition-balance mt-3"
-                                     data-disposition-balance>
-                                    Pendiente por distribuir: @disposicion.CantidadAfectada
-                                </div>
-
-                                <div class="quality-help mt-2"
-                                     data-disposition-preview>
-                                    Captura las cantidades para obtener el resultado final.
-                                </div>
-                            </form>
-                        }
-                    </article>
+                        </div>
+                    </div>
                 }
-            </div>
-        </section>
-    }
-
+                @if (disposicion.EsPendiente && (esPendienteAsignacion || esAsignada))
+                {
+                    <div class="quality-assignment mb-3">
+                        <div class="fw-bold mb-2"><i class="fa-solid fa-user-tag me-1"></i>Asignar responsable del tratamiento</div>
+                        <form asp-controller="Calidad" asp-action="AsignarResponsableDisposicion" method="post" data-assignment-form data-departamento-actual="@(disposicion.DepartamentoResponsableID?.ToString()??"")" data-usuario-actual="@(disposicion.UsuarioResponsableID?.ToString()??"")">
+                            @Html.AntiForgeryToken()<input type="hidden" name="disposicionID" value="@disposicion.DisposicionID" /><input type="hidden" name="inspeccionID" value="@Model.InspeccionID" />
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-4"><label class="form-label fw-semibold">Departamento</label><select name="departamentoResponsableID" class="form-select" data-departamento-select required><option value="">Cargando departamentos...</option></select></div>
+                                <div class="col-md-4"><label class="form-label fw-semibold">Usuario responsable</label><select name="usuarioResponsableID" class="form-select" data-usuario-select required disabled><option value="">Selecciona primero un departamento</option></select></div>
+                                <div class="col-md-4"><button type="submit" class="quality-btn quality-btn-primary w-100"><i class="fa-solid fa-floppy-disk"></i>@(esAsignada ? "Reasignar" : "Asignar")</button></div>
+                            </div>
+                            <div class="quality-inline-error" data-assignment-error></div>
+                        </form>
+                    </div>
+                }
+                @if (disposicion.EsPendiente && esAsignada)
+                {
+                    <div class="quality-assignment mb-3">
+                        <div class="fw-bold mb-2"><i class="fa-solid fa-box-open me-1"></i>Recepción del material en Calidad</div>
+                        <div class="quality-help mb-3">Confirma esta acción únicamente cuando el departamento responsable haya terminado la selección o retrabajo y entregue físicamente el material a Calidad. Esta acción no libera las piezas; solo las deja listas para reinspección.</div>
+                        <form asp-controller="Calidad" asp-action="RecibirDisposicionParaReinspeccion" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="disposicionID" value="@disposicion.DisposicionID" />
+                            <input type="hidden" name="inspeccionID" value="@Model.InspeccionID" />
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-8">
+                                    <label class="form-label fw-semibold">Observaciones de recepción</label>
+                                    <textarea name="observaciones" rows="3" maxlength="1000" class="form-control" placeholder="Ej. Producción entrega material después de retrabajo. Se recibe identificado y separado para reinspección."></textarea>
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="submit" class="quality-btn quality-btn-info w-100"><i class="fa-solid fa-box-open"></i>Recibir para reinspección</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                }
+                @if (disposicion.EsPendiente && esPendienteReinspeccion)
+                {
+                    <div class="alert alert-info mb-3">
+                        <i class="fa-solid fa-circle-check me-1"></i><strong>Material recibido por Calidad para reinspección.</strong>@if(disposicion.FechaFinTratamiento.HasValue){
+                        <span> Recibido el @disposicion.FechaFinTratamiento.Value.ToString("dd/MM/yyyy HH:mm").</span>
+                    }
+                    Las piezas siguen bloqueadas hasta registrar el resultado de la reinspección.
+                </div>
+                <form asp-controller="Calidad" asp-action="ResolverDisposicion" method="post" data-disposition-form data-afectada="@disposicion.CantidadAfectada">@Html.AntiForgeryToken()<input type="hidden" name="DisposicionID" value="@disposicion.DisposicionID" /><input type="hidden" name="InspeccionID" value="@Model.InspeccionID" /><div class="row g-3"><div class="col-md-3"><label class="form-label fw-semibold">Cantidad liberada</label><input type="number" name="CantidadLiberada" min="0" max="@disposicion.CantidadAfectada" value="0" class="form-control" data-disposition-liberada required /></div><div class="col-md-3"><label class="form-label fw-semibold">Cantidad scrap</label><input type="number" name="CantidadScrap" min="0" max="@disposicion.CantidadAfectada" value="0" class="form-control" data-disposition-scrap required /></div><div class="col-md-4"><label class="form-label fw-semibold">Resultado de reinspección</label><textarea name="Observaciones" rows="3" maxlength="1000" class="form-control" data-disposition-observations placeholder="Documenta el resultado. Es obligatorio cuando exista scrap."></textarea><div class="quality-help">Liberado + scrap debe ser igual a @disposicion.CantidadAfectada.</div></div><div class="col-md-2 d-flex align-items-end"><button type="submit" class="quality-btn quality-btn-success w-100"><i class="fa-solid fa-check"></i>Resolver</button></div></div><div class="quality-disposition-balance mt-3" data-disposition-balance>Pendiente por distribuir: @disposicion.CantidadAfectada</div><div class="quality-help mt-2" data-disposition-preview>Captura las cantidades para obtener el resultado final.</div><div class="quality-inline-error" data-disposition-error></div></form>
+                                }
+                @if (!disposicion.EsPendiente)
+                {
+                    <div class="row g-3 mb-3"><div class="col-md-4"><div class="border rounded-3 p-3 h-100"><div class="quality-data-label">Resultado de reinspección</div><div class="fw-bold">@disposicion.ResultadoFinalTexto</div></div></div><div class="col-md-4"><div class="border rounded-3 p-3 h-100"><div class="quality-data-label">Liberado</div><div class="fs-5 fw-bold text-success">@disposicion.CantidadLiberada</div></div></div><div class="col-md-4"><div class="border rounded-3 p-3 h-100"><div class="quality-data-label">Scrap documentado</div><div class="fs-5 fw-bold text-danger">@disposicion.CantidadScrap</div></div></div></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(disposicion.Observaciones))
+                {
+                    <div class="alert alert-light border py-2 mb-0"><strong>Seguimiento:</strong><div style="white-space:pre-wrap;">@disposicion.Observaciones</div></div>
+                }
+            </article>
+                        }
+        </div>
+    </section>
+        }
 </div>
 <script>
     (function(){
-        document.querySelectorAll('.quality-dispositions [data-disposition-form]').forEach(function(form){
-            if(form.dataset.dispositionInitialized==='true') return;
-            form.dataset.dispositionInitialized='true';
-            const cantidadAfectada=Number(form.dataset.afectada||'0');
-            const liberada=form.querySelector('[data-disposition-liberada]');
-            const scrap=form.querySelector('[data-disposition-scrap]');
-            const observaciones=form.querySelector('[data-disposition-observations]');
-            const balance=form.querySelector('[data-disposition-balance]');
-            const preview=form.querySelector('[data-disposition-preview]');
-            function actualizarBalance(){
-                const cantidadLiberada=Number(liberada?.value||'0');
-                const cantidadScrap=Number(scrap?.value||'0');
-                const total=cantidadLiberada+cantidadScrap;
-                const pendiente=cantidadAfectada-total;
-                if(balance){
-                    balance.classList.toggle('is-complete',pendiente===0);
-                    balance.classList.toggle('is-invalid',pendiente<0);
-                    if(pendiente===0) balance.textContent='Distribución completa: '+total+' de '+cantidadAfectada+'.';
-                    else if(pendiente<0) balance.textContent='La distribución excede la cantidad afectada por '+Math.abs(pendiente)+'.';
-                    else balance.textContent='Pendiente por distribuir: '+pendiente+' de '+cantidadAfectada+'.';
-                }
-                if(preview){
-                    if(pendiente!==0) preview.textContent='Captura las cantidades hasta completar el material afectado.';
-                    else if(cantidadLiberada===cantidadAfectada&&cantidadScrap===0) preview.textContent='Resultado: liberación total del material.';
-                    else if(cantidadLiberada>0&&cantidadScrap>0) preview.textContent='Resultado: liberación parcial con scrap documentado.';
-                    else if(cantidadLiberada===0&&cantidadScrap===cantidadAfectada) preview.textContent='Resultado: scrap total.';
-                    else preview.textContent='Revisa la distribución capturada.';
-                }
-            }
-            liberada?.addEventListener('input',actualizarBalance);
-            scrap?.addEventListener('input',actualizarBalance);
-            form.addEventListener('submit',function(event){
-                const cantidadLiberada=Number(liberada?.value||'0');
-                const cantidadScrap=Number(scrap?.value||'0');
-                if(cantidadLiberada+cantidadScrap!==cantidadAfectada){
-                    event.preventDefault();
-                    window.alert('Liberado + scrap debe ser igual a la cantidad afectada.');
-                    return;
-                }
-                if(cantidadScrap>0&&!observaciones?.value.trim()){
-                    event.preventDefault();
-                    observaciones?.focus();
-                    window.alert('Documenta el motivo o resultado cuando exista cantidad scrap.');
-                }
-            });
-            actualizarBalance();
-        });
+        const root=document.querySelector('.quality-dispositions');if(!root||root.dataset.initialized==='true')return;root.dataset.initialized='true';
+        const departamentosUrl=root.dataset.departamentosUrl,usuariosUrl=root.dataset.usuariosUrl;let departamentosCache=null;
+        async function obtenerDepartamentos(){if(departamentosCache)return departamentosCache;const response=await fetch(departamentosUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}});if(!response.ok)throw new Error('No fue posible consultar los departamentos.');const data=await response.json();departamentosCache=Array.isArray(data.departamentos)?data.departamentos:[];return departamentosCache;}
+        async function cargarUsuarios(selectUsuario,departamentoID,usuarioActual){selectUsuario.innerHTML='<option value="">Cargando usuarios...</option>';selectUsuario.disabled=true;if(!departamentoID){selectUsuario.innerHTML='<option value="">Selecciona primero un departamento</option>';return;}const response=await fetch(usuariosUrl+'?departamentoID='+encodeURIComponent(departamentoID),{headers:{'X-Requested-With':'XMLHttpRequest'}});if(!response.ok)throw new Error('No fue posible consultar los usuarios del departamento.');const data=await response.json(),usuarios=Array.isArray(data.usuarios)?data.usuarios:[];selectUsuario.innerHTML='<option value="">Selecciona un usuario</option>';usuarios.forEach(function(usuario){const option=document.createElement('option');option.value=usuario.usuarioID;option.textContent=usuario.nombre+(usuario.username?' ('+usuario.username+')':'');if(String(usuario.usuarioID)===String(usuarioActual||''))option.selected=true;selectUsuario.appendChild(option);});selectUsuario.disabled=false;}
+        root.querySelectorAll('[data-assignment-form]').forEach(async function(form){const departamentoSelect=form.querySelector('[data-departamento-select]'),usuarioSelect=form.querySelector('[data-usuario-select]'),error=form.querySelector('[data-assignment-error]'),departamentoActual=form.dataset.departamentoActual||'',usuarioActual=form.dataset.usuarioActual||'';try{const departamentos=await obtenerDepartamentos();departamentoSelect.innerHTML='<option value="">Selecciona un departamento</option>';departamentos.forEach(function(departamento){const option=document.createElement('option');option.value=departamento.departamentoID;option.textContent=departamento.nombreDepartamento;if(String(departamento.departamentoID)===String(departamentoActual))option.selected=true;departamentoSelect.appendChild(option);});if(departamentoActual)await cargarUsuarios(usuarioSelect,departamentoActual,usuarioActual);}catch(ex){error.textContent=ex.message||'No fue posible cargar los responsables.';error.classList.add('is-visible');}departamentoSelect.addEventListener('change',async function(){error.classList.remove('is-visible');try{await cargarUsuarios(usuarioSelect,departamentoSelect.value,'');}catch(ex){error.textContent=ex.message||'No fue posible cargar los usuarios.';error.classList.add('is-visible');}});form.addEventListener('submit',function(event){error.classList.remove('is-visible');if(!departamentoSelect.value||!usuarioSelect.value){event.preventDefault();error.textContent='Selecciona departamento y usuario responsable.';error.classList.add('is-visible');}});});
+        root.querySelectorAll('[data-disposition-form]').forEach(function(form){const cantidadAfectada=Number(form.dataset.afectada||'0'),liberada=form.querySelector('[data-disposition-liberada]'),scrap=form.querySelector('[data-disposition-scrap]'),observaciones=form.querySelector('[data-disposition-observations]'),balance=form.querySelector('[data-disposition-balance]'),preview=form.querySelector('[data-disposition-preview]'),error=form.querySelector('[data-disposition-error]');function actualizarBalance(){const cantidadLiberada=Number(liberada?.value||'0'),cantidadScrap=Number(scrap?.value||'0'),total=cantidadLiberada+cantidadScrap,pendiente=cantidadAfectada-total;balance?.classList.toggle('is-complete',pendiente===0);balance?.classList.toggle('is-invalid',pendiente<0);if(balance){if(pendiente===0)balance.textContent='Distribución completa: '+total+' de '+cantidadAfectada+'.';else if(pendiente<0)balance.textContent='La distribución excede la cantidad afectada por '+Math.abs(pendiente)+'.';else balance.textContent='Pendiente por distribuir: '+pendiente+' de '+cantidadAfectada+'.';}if(preview){if(pendiente!==0)preview.textContent='Captura las cantidades hasta completar el material afectado.';else if(cantidadLiberada===cantidadAfectada&&cantidadScrap===0)preview.textContent='Resultado: liberación total del material.';else if(cantidadLiberada>0&&cantidadScrap>0)preview.textContent='Resultado: liberación parcial con scrap documentado.';else if(cantidadLiberada===0&&cantidadScrap===cantidadAfectada)preview.textContent='Resultado: scrap total.';else preview.textContent='Revisa la distribución capturada.';}}liberada?.addEventListener('input',actualizarBalance);scrap?.addEventListener('input',actualizarBalance);form.addEventListener('submit',function(event){error?.classList.remove('is-visible');const cantidadLiberada=Number(liberada?.value||'0'),cantidadScrap=Number(scrap?.value||'0');if(cantidadLiberada+cantidadScrap!==cantidadAfectada){event.preventDefault();if(error){error.textContent='Liberado + scrap debe ser igual a la cantidad afectada.';error.classList.add('is-visible');}return;}if(cantidadScrap>0&&!observaciones?.value.trim()){event.preventDefault();observaciones?.focus();if(error){error.textContent='Documenta el motivo o resultado cuando exista cantidad scrap.';error.classList.add('is-visible');}}});actualizarBalance();});
     })();
 </script>

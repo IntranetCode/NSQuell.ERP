@@ -931,6 +931,12 @@ namespace ERP.NSQuell.Models.ViewModels
         public string ResultadoFinal { get; set; } = string.Empty;
         public string? Observaciones { get; set; }
 
+        public int? DepartamentoResponsableID { get; set; }
+        public int? UsuarioResponsableID { get; set; }
+        public string EstadoTratamiento { get; set; } = CalidadEstadoTratamiento.PendienteAsignacion;
+        public DateTime? FechaInicioTratamiento { get; set; }
+        public DateTime? FechaFinTratamiento { get; set; }
+
         public bool EsPendiente =>
             ResultadoFinal == CalidadResultadoDisposicion.Pendiente;
 
