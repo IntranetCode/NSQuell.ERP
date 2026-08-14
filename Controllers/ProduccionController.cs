@@ -1766,7 +1766,7 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 if (operadorAuxiliarFinalId.HasValue)
                 {
                     operadorAuxiliarFinalNombre =
-                        await ObtenerNombreOperadorProduccionAsync(
+                        await ObtenerNombrePersonaActivaProduccionAsync(
                             operadorAuxiliarFinalId.Value,
                             cn,
                             tx);
@@ -1777,7 +1777,7 @@ ORDER BY e.EjecucionProduccionID DESC;";
                         await tx.RollbackAsync();
 
                         TempData["Error"] =
-                            "El operador auxiliar seleccionado no está activo o su puesto no es OPERADOR.";
+                            "El auxiliar seleccionado no esta activo o ya no existe en el catalogo de Personal.";
 
                         return RedirectToAction(nameof(Index));
                     }
@@ -1882,16 +1882,8 @@ ORDER BY e.EjecucionProduccionID DESC;";
                     TempData["Error"] =
                         "El auxiliar debe seleccionarse del catalogo activo de Auxiliares.";
                     return RedirectToAction(nameof(Index));
-                }
-
-                if (!operadorAuxiliarFinalId.HasValue &&
-                    !string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre))
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] =
-                        "Selecciona el auxiliar desde la lista; no se permite captura manual.";
-                    return RedirectToAction(nameof(Index));
-                }
+                }                // NSQ_PRODUCCION_AUXILIAR_MANUAL_V4
+                // Sin PersonaID se conserva el nombre manual; el auxiliar sigue siendo opcional.
                 // NSQ_ESCALA_OPERADORES_V5_END
 var observacionesFinales =
                     observaciones;
@@ -6748,7 +6740,34 @@ FROM @Ids;";
                 throw new InvalidOperationException("La ejecución fue creada, pero no fue posible recuperar EjecucionProduccionID.");
 
             return Convert.ToInt32(resultado);
+        }        private static async Task<string?> ObtenerNombrePersonaActivaProduccionAsync(
+            int personaId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            if (personaId <= 0)
+                return null;
+
+            const string sql = @"
+SELECT TOP (1)
+    LTRIM(RTRIM(CONCAT(
+        ISNULL(p.Nombre,N''),N' ',
+        ISNULL(p.ApellidoPaterno,N''),N' ',
+        ISNULL(p.ApellidoMaterno,N''))))
+FROM dbo.Persona p
+WHERE p.PersonaID=@PersonaID
+  AND ISNULL(p.EsColaboradorActivo,1)=1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId;
+
+            var value = await cmd.ExecuteScalarAsync();
+            return value == null || value == DBNull.Value
+                ? null
+                : value.ToString()?.Trim();
         }
+
+
 
         private static async Task<string?> ObtenerNombreOperadorProduccionAsync(int personaId, SqlConnection cn, SqlTransaction tx)
         {
