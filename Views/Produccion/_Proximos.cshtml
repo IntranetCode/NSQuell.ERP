@@ -788,6 +788,8 @@
                                     data-programa-id="@item.ProgramaProduccionID"
                                     data-titulo="@Data(item.TituloPrograma)"
                                     data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
+                                    data-maquina-id="@(item.MaquinaID?.ToString() ?? "")"
+                                    data-parte-id="@(item.ParteID?.ToString() ?? "")"
                                     data-parte="@Data(item.TextoParte)"
                                     data-descripcion="@Data(item.DescripcionParte)"
                                     data-molde="@Data(item.MoldeCodigo)"

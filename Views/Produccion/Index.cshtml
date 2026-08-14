@@ -2320,12 +2320,12 @@
                                                 <option value="@op.Value">@op.Text</option>
                                             }
                                         </select>
-                                        <div class="small text-muted mt-1">Solo se muestran colaboradores activos con puesto OPERADOR.</div>
+                                        <div class="small text-muted mt-1" id="modalPolivalenciaInfo">Si la pieza tiene matriz, se mostrarán solo operadores evaluados y su nivel.</div>
                                     </div>
                                     <div>
                                         <label class="form-label">Nombre manual</label>
-                                        <input type="text" id="modalOperadorManual" class="form-control" maxlength="200" placeholder="Solo si no aparece en la lista" />
-                                        <div class="small text-muted mt-1">Usa lista o nombre manual, nunca ambos.</div>
+                                        <input type="text" id="modalOperadorManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
+                                        <div class="small text-muted mt-1">El operador principal se controla desde Escala de Personal.</div>
                                     </div>
                                 </div>
                             </div>
@@ -2348,8 +2348,8 @@
                                     </div>
                                     <div>
                                         <label class="form-label">Nombre manual auxiliar</label>
-                                        <input type="text" id="modalOperadorAuxiliarManual" class="form-control" maxlength="200" placeholder="Solo si no aparece en la lista" />
-                                        <div class="small text-muted mt-1">No puede ser la misma persona que el operador principal.</div>
+                                        <input type="text" id="modalOperadorAuxiliarManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
+                                        <div class="small text-muted mt-1">El auxiliar es opcional y no puede ser la misma persona que el operador principal.</div>
                                     </div>
                                 </div>
                             </div>
@@ -2409,6 +2409,9 @@
             const modalOperadorAuxiliarId = document.getElementById('modalOperadorAuxiliarId');
             const modalOperadorAuxiliarNombre = document.getElementById('modalOperadorAuxiliarNombre');
             const modalOperadorAuxiliarManual = document.getElementById('modalOperadorAuxiliarManual');
+            const modalPolivalenciaInfo = document.getElementById('modalPolivalenciaInfo');
+            const opcionesOperadorBase = modalOperadorId?.innerHTML || '';
+            const opcionesAuxiliarBase = modalOperadorAuxiliarId?.innerHTML || '';
             const modalObservaciones = document.getElementById('modalObservaciones');
             const mensajeValidacionOperadores = document.getElementById('mensajeValidacionOperadores');
             const textoValidacionOperadores = document.getElementById('textoValidacionOperadores');
@@ -2441,6 +2444,164 @@
                 if (!select || !select.value) return '';
                 const selected = select.options[select.selectedIndex];
                 return selected ? (selected.textContent || '').trim() : '';
+            }
+
+            function limpiarSelectEscala(select, placeholder) {
+                if (!select) return;
+                select.innerHTML = '';
+                const vacio = document.createElement('option');
+                vacio.value = '';
+                vacio.textContent = placeholder;
+                select.appendChild(vacio);
+            }
+
+            function textoPersonaEscala(x, mostrarNivel) {
+                const sep = ' \u00B7 ';
+                const partes = [];
+
+                if (mostrarNivel && x.nivel) partes.push(`N${x.nivel}`);
+                partes.push(x.nombre || '');
+                if (x.numeroControl) partes.push(`Ctrl ${x.numeroControl}`);
+                if (x.enEscala) partes.push('EN ESCALA');
+                if (x.turnoNombre) partes.push(x.turnoNombre);
+                if (x.maquinaCodigo) partes.push(x.maquinaCodigo);
+
+                return partes.filter(Boolean).join(sep);
+            }
+
+            async function cargarOperadoresPolivalencia(programaId, parteId, maquinaId, operadorPreferido, auxiliarPreferido) {
+                limpiarSelectEscala(modalOperadorId, '-- Cargando operadores --');
+                limpiarSelectEscala(modalOperadorAuxiliarId, '-- Cargando auxiliares --');
+
+                if (modalOperadorManual) {
+                    modalOperadorManual.value = '';
+                    modalOperadorManual.disabled = true;
+                }
+                if (modalOperadorAuxiliarManual) {
+                    modalOperadorAuxiliarManual.value = '';
+                    modalOperadorAuxiliarManual.disabled = true;
+                }
+
+                try {
+                    const params = new URLSearchParams();
+                    if (programaId) params.set('programaId', programaId);
+                    if (parteId) params.set('parteId', parteId);
+                    if (maquinaId) params.set('maquinaId', maquinaId);
+
+                    const url = '@Url.Action("OperadoresPolivalenciaParte", "Produccion")' + '?' + params.toString();
+                    const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+
+                    if (!data?.configurado) {
+                        limpiarSelectEscala(modalOperadorId, '-- Polivalencia no configurada --');
+                        limpiarSelectEscala(modalOperadorAuxiliarId, '-- Auxiliares no disponibles --');
+                        if (modalPolivalenciaInfo) {
+                            modalPolivalenciaInfo.textContent = 'No esta disponible la configuracion de Polivalencia.';
+                            modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+                        }
+                        return;
+                    }
+
+                    const operadores = Array.isArray(data.operadores) ? data.operadores : [];
+                    const auxiliares = Array.isArray(data.auxiliares) ? data.auxiliares : [];
+                    const tieneMatriz = data.tieneMatriz === true;
+                    const numeroParte = data.numeroParte || '';
+                    const etiquetaEscala = data.escalaEncontrada
+                        ? `${data.escalaFolio || 'Escala'} - ${data.escalaEstado || ''}`
+                        : 'Sin Escala aplicable';
+
+                    limpiarSelectEscala(
+                        modalOperadorId,
+                        tieneMatriz
+                            ? (operadores.length > 0
+                                ? '-- Seleccionar operador evaluado N1-N4 --'
+                                : '-- Sin operadores evaluados N1-N4 --')
+                            : '-- Seleccionar operador --');
+
+                    operadores.forEach(x => {
+                        const op = document.createElement('option');
+                        op.value = String(x.personaID);
+                        op.textContent = textoPersonaEscala(x, tieneMatriz);
+                        if (x.nivel) op.dataset.nivel = String(x.nivel);
+                        modalOperadorId?.appendChild(op);
+                    });
+
+                    // Solo conserva el sugerido si tambien esta dentro del listado permitido.
+                    seleccionarPersonaSiExiste(modalOperadorId, operadorPreferido);
+
+                    limpiarSelectEscala(
+                        modalOperadorAuxiliarId,
+                        auxiliares.length > 0
+                            ? '-- Seleccionar auxiliar --'
+                            : '-- Sin auxiliares activos --');
+
+                    auxiliares.forEach(x => {
+                        const op = document.createElement('option');
+                        op.value = String(x.personaID);
+                        op.textContent = textoPersonaEscala(x, false);
+                        modalOperadorAuxiliarId?.appendChild(op);
+                    });
+                    seleccionarPersonaSiExiste(modalOperadorAuxiliarId, auxiliarPreferido);
+
+                    if (modalPolivalenciaInfo) {
+                        if (tieneMatriz) {
+                            modalPolivalenciaInfo.textContent = operadores.length > 0
+                                ? `Parte ${numeroParte || ''} enlazada a Polivalencia: ${operadores.length} operador(es) evaluados N1-N4. Los asignados en ${etiquetaEscala} aparecen primero; despues N4 -> N1.`
+                                : `Parte ${numeroParte || ''} tiene matriz, pero no hay operadores activos evaluados N1-N4.`;
+                            modalPolivalenciaInfo.className = operadores.length > 0
+                                ? 'small text-success fw-semibold mt-1'
+                                : 'small text-danger fw-semibold mt-1';
+                        } else {
+                            modalPolivalenciaInfo.textContent =
+                                `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; se usa el catalogo general de Operadores.`;
+                            modalPolivalenciaInfo.className = 'small text-warning fw-semibold mt-1';
+                        }
+                    }
+
+                    if (tieneMatriz) {
+                        if (operadores.length > 0) {
+                            boxOperadorSugerido?.classList.remove('warn');
+                            if (tituloOperadorSugerido) {
+                                tituloOperadorSugerido.textContent = 'Operadores evaluados para la pieza';
+                                tituloOperadorSugerido.className = 'operator-title';
+                            }
+                            if (detalleOperadorSugerido) {
+                                detalleOperadorSugerido.textContent =
+                                    `${operadores.length} operador(es) con nivel N1-N4 para ${numeroParte || 'esta pieza'}. No se muestran personas sin nivel. Auxiliares disponibles: ${auxiliares.length}.`;
+                            }
+                        } else {
+                            boxOperadorSugerido?.classList.add('warn');
+                            if (tituloOperadorSugerido) {
+                                tituloOperadorSugerido.textContent = 'Sin operadores evaluados';
+                                tituloOperadorSugerido.className = 'operator-title warn';
+                            }
+                            if (detalleOperadorSugerido) {
+                                detalleOperadorSugerido.textContent =
+                                    `La pieza ${numeroParte || ''} tiene matriz, pero no hay personas activas con N1-N4.`;
+                            }
+                        }
+                    } else {
+                        boxOperadorSugerido?.classList.add('warn');
+                        if (tituloOperadorSugerido) {
+                            tituloOperadorSugerido.textContent = 'Pieza sin matriz de polivalencia';
+                            tituloOperadorSugerido.className = 'operator-title warn';
+                        }
+                        if (detalleOperadorSugerido) {
+                            detalleOperadorSugerido.textContent =
+                                'Se habilita el catalogo general porque esta pieza aun no tiene matriz.';
+                        }
+                    }
+                }
+                catch (error) {
+                    console.error('Polivalencia:', error);
+                    limpiarSelectEscala(modalOperadorId, '-- Error al cargar operadores --');
+                    limpiarSelectEscala(modalOperadorAuxiliarId, '-- Error al cargar auxiliares --');
+                    if (modalPolivalenciaInfo) {
+                        modalPolivalenciaInfo.textContent = 'No fue posible consultar Polivalencia.';
+                        modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+                    }
+                }
             }
 
             function limpiarValidacionOperadores() {
@@ -2604,6 +2765,8 @@
                 const programaId = btnInicio.dataset.programaId || '';
                 const titulo = btnInicio.dataset.titulo || '';
                 const maquina = btnInicio.dataset.maquina || '';
+                const maquinaId = btnInicio.dataset.maquinaId || '';
+                const parteId = btnInicio.dataset.parteId || '';
                 const parte = btnInicio.dataset.parte || '';
                 const descripcion = btnInicio.dataset.descripcion || '';
                 const molde = btnInicio.dataset.molde || '';
@@ -2673,6 +2836,13 @@
                             'No hay operador principal sugerido en la escala RRHH para este horario. Debes seleccionar un operador del catálogo o capturar su nombre manual antes de iniciar.';
                     }
                 }
+
+                cargarOperadoresPolivalencia(
+                    programaId,
+                    parteId,
+                    maquinaId,
+                    operadorId,
+                    operadorAuxiliarId);
             });
 
             modalOperadorId?.addEventListener('change', () => {

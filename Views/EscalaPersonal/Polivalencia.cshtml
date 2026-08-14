@@ -1,0 +1,257 @@
+﻿@model ERP.NSQuell.Models.PolivalenciaIndexVm
+@{
+    ViewData["Title"] = "Matriz de Polivalencia";
+    Layout = "_Layout";
+}
+
+<style>
+    .poly-page { max-width: 1580px; margin: 0 auto; padding: 22px; }
+    .poly-hero { background: linear-gradient(135deg, #17324d, #244f73); color: #fff; border-radius: 18px; padding: 20px; margin-bottom: 16px; }
+    .poly-hero h1 { font-size: 1.45rem; font-weight: 850; margin: 0; }
+    .poly-hero p { opacity: .86; margin: .35rem 0 0; }
+    .poly-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .poly-stat { background: #fff; border: 1px solid #dfe6ed; border-radius: 14px; padding: 14px; }
+    .poly-stat small { display: block; color: #6b7a8c; font-weight: 700; }
+    .poly-stat strong { display: block; color: #17324d; font-size: 1.45rem; margin-top: 4px; }
+    .poly-panel { background: #fff; border: 1px solid #dfe6ed; border-radius: 16px; overflow: hidden; margin-bottom: 16px; }
+    .poly-head { padding: 14px 16px; background: #f7f9fb; border-bottom: 1px solid #dfe6ed; display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .poly-head h2 { font-size: 1rem; color: #17324d; font-weight: 850; margin: 0; }
+    .poly-head small { color: #667085; }
+    .poly-body { padding: 16px; }
+    .poly-filter { display: flex; gap: 8px; flex-wrap: wrap; }
+    .poly-filter select, .poly-filter input { min-height: 40px; border: 1px solid #d3dde7; border-radius: 10px; padding: 7px 10px; }
+    .poly-filter select { min-width: min(520px, 100%); }
+    .poly-table { width: 100%; border-collapse: collapse; }
+    .poly-table th { background: #f8fafc; color: #667085; font-size: .72rem; text-transform: uppercase; padding: 10px; border-bottom: 1px solid #e4e9ef; white-space: nowrap; }
+    .poly-table td { padding: 10px; border-bottom: 1px solid #edf1f4; font-size: .84rem; vertical-align: middle; }
+    .poly-person-row:hover { background: #f8fbff; }
+    .poly-person-main { min-width: 260px; }
+    .poly-person-main strong { color: #17324d; }
+    .poly-person-meta { color: #667085; font-size: .72rem; margin-top: 2px; }
+    .poly-level { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; height: 30px; border-radius: 999px; font-weight: 900; }
+    .n4 { background: #e5f6ec; color: #18764b; }
+    .n3 { background: #e9f1ff; color: #245b9f; }
+    .n2 { background: #fff2d8; color: #9a5a00; }
+    .n1 { background: #eef0f3; color: #586474; }
+    .poly-badge { font-size: .72rem; border-radius: 999px; padding: 4px 8px; background: #eef4ff; color: #194185; font-weight: 800; }
+    .poly-warn { border: 1px solid #fed7aa; background: #fff7ed; color: #9a3412; border-radius: 12px; padding: 12px 14px; }
+    .poly-back { color: #17324d; text-decoration: none; font-weight: 750; }
+    .poly-empty { padding: 24px; text-align: center; color: #667085; }
+    .poly-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #bfd3f2; background: #eef4ff; color: #194185; border-radius: 9px; padding: 6px 9px; text-decoration: none; font-size: .74rem; font-weight: 850; white-space: nowrap; }
+    .poly-action:hover { background: #e0ecff; color: #123f79; }
+    .poly-hint { margin: 0 0 16px; border: 1px solid #cfe0f4; background: #f6faff; color: #365c82; border-radius: 12px; padding: 11px 13px; font-size: .8rem; }
+    .poly-count { font-weight: 850; color: #344054; }
+    @@media(max-width: 850px) {
+        .poly-stats { grid-template-columns: repeat(2, 1fr); }
+        .poly-page { padding: 14px; }
+    }
+</style>
+
+<div class="poly-page">
+    <partial name="_EscalaNavegacion" />
+    <div class="mb-3">
+        <a asp-action="Index" class="poly-back">← Volver a Escala de Personal</a>
+    </div>
+
+    <section class="poly-hero">
+        <h1>Matriz de Polivalencia</h1>
+        <p>Competencia por persona y ParteID real del ERP. Nivel 4 es el más alto y Nivel 1 el más bajo.</p>
+        @if (Model.Configurado)
+        {
+            <div class="small mt-2">@Model.FuenteDocumento · V.@Model.VersionDocumento · @Model.Periodo</div>
+        }
+    </section>
+
+    @if (!Model.Configurado)
+    {
+        <div class="poly-warn">
+            Falta ejecutar <strong>31_Instalar_Polivalencia_Julio_2026.sql</strong> en ERP_QUELL.
+        </div>
+    }
+    else
+    {
+        <div class="poly-hint">
+            Los números de parte, SAP, designación y descripción se consultan desde <strong>ERP_Partes</strong> mediante <strong>ParteID</strong>. La matriz no mantiene un catálogo paralelo de piezas.
+        </div>
+
+        <section class="poly-stats">
+            <div class="poly-stat"><small>Personal evaluado</small><strong>@Model.TotalOperadores</strong></div>
+            <div class="poly-stat"><small>Partes ERP enlazadas</small><strong>@Model.TotalPartesMapeadas</strong></div>
+            <div class="poly-stat"><small>Columnas sin ParteID activa</small><strong>@Model.TotalPartesSinMapeo</strong></div>
+            <div class="poly-stat"><small>Escala</small><strong>N1–N4</strong></div>
+        </section>
+
+        <section class="poly-panel">
+            <div class="poly-head">
+                <div>
+                    <h2>¿Quién puede fabricar esta pieza?</h2>
+                    <small>Selecciona la misma pieza maestra utilizada por Producción.</small>
+                </div>
+                <form method="get" class="poly-filter">
+                    <select name="parteId" aria-label="Número de parte">
+                        <option value="">Selecciona una parte</option>
+                        @foreach (var parte in Model.Partes)
+                        {
+                            <option value="@parte.ParteID"
+                                    selected="@(Model.ParteID == parte.ParteID ? "selected" : null)">
+                                @parte.Texto
+                            </option>
+                        }
+                    </select>
+                    <input type="search" name="q" value="@Model.Busqueda" placeholder="Operador, control o pieza" />
+                    <button class="btn btn-primary" type="submit">Consultar</button>
+                </form>
+            </div>
+
+            @if (Model.ParteID.HasValue)
+            {
+                <div class="table-responsive">
+                    <table class="poly-table">
+                        <thead>
+                            <tr>
+                                <th>Nivel</th>
+                                <th>Control</th>
+                                <th>Operador</th>
+                                <th>Puesto</th>
+                                <th>Parte ERP</th>
+                                <th>Escala actual</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var competencia in Model.Competencias)
+                            {
+                                <tr>
+                                    <td><span class="poly-level n@(competencia.Nivel)">@($"N{competencia.Nivel}")</span></td>
+                                    <td>@competencia.NumeroControl</td>
+                                    <td><strong>@competencia.Nombre</strong></td>
+                                    <td>@competencia.Puesto</td>
+                                    <td>
+                                        <strong>@competencia.NumeroParte</strong>
+                                        @if (!string.IsNullOrWhiteSpace(competencia.Designacion))
+                                        {
+                                            <div class="text-muted small">Designación: @competencia.Designacion</div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(competencia.ReferenciaSAP))
+                                        {
+                                            <div class="text-muted small">SAP: @competencia.ReferenciaSAP</div>
+                                        }
+                                        <div class="text-muted small">@competencia.DescripcionParte · ParteID @competencia.ParteID</div>
+                                    </td>
+                                    <td>
+                                        @if (competencia.EnEscalaActual)
+                                        {
+                                            <span class="poly-badge">En escala publicada</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Fuera de escala actual</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <a asp-action="PolivalenciaDetalle"
+                                           asp-route-personalId="@competencia.PersonalID"
+                                           class="poly-action">Ver perfil</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (!Model.Competencias.Any())
+                    {
+                        <div class="poly-empty">No hay personal evaluado para esta parte.</div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="poly-body text-muted">
+                    Selecciona un número de parte para ver únicamente el personal evaluado y su nivel.
+                </div>
+            }
+        </section>
+
+        <section class="poly-panel">
+            <div class="poly-head">
+                <div>
+                    <h2>Personal evaluado</h2>
+                    <small>Entra al detalle de una persona para ver exactamente qué piezas ERP tiene asociadas.</small>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="poly-table">
+                    <thead>
+                        <tr>
+                            <th>Control</th>
+                            <th>Persona</th>
+                            <th>Puesto</th>
+                            <th>Nivel máximo</th>
+                            <th>Partes ERP</th>
+                            <th>N4</th>
+                            <th>N3</th>
+                            <th>N2</th>
+                            <th>N1</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var persona in Model.Operadores)
+                        {
+                            <tr class="poly-person-row">
+                                <td>@persona.NumeroControl</td>
+                                <td class="poly-person-main">
+                                    <strong>@persona.Nombre</strong>
+                                    <div class="poly-person-meta">
+                                        @if (persona.PartesDominioAlto > 0)
+                                        {
+                                            <span>@persona.PartesDominioAlto pieza(s) en N3/N4</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Sin piezas N3/N4 en la matriz vigente</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>@persona.Puesto</td>
+                                <td><span class="poly-level n@(persona.NivelMaximo)">@($"N{persona.NivelMaximo}")</span></td>
+                                <td class="poly-count">@persona.PartesEvaluadas</td>
+                                <td>@persona.Nivel4</td>
+                                <td>@persona.Nivel3</td>
+                                <td>@persona.Nivel2</td>
+                                <td>@persona.Nivel1</td>
+                                <td>
+                                    <a asp-action="PolivalenciaDetalle"
+                                       asp-route-personalId="@persona.PersonalID"
+                                       class="poly-action">Ver piezas</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        @if (Model.SinMapeo.Any())
+        {
+            <section class="poly-panel">
+                <div class="poly-head"><h2>Piezas de la matriz sin parte activa equivalente</h2></div>
+                <div class="poly-body">
+                    <div class="poly-warn">
+                        Estas columnas se conservaron para trazabilidad, pero no filtran Producción hasta que exista o se defina una ParteID activa.
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="poly-table">
+                        <thead><tr><th>Columna</th><th>Encabezado matriz</th></tr></thead>
+                        <tbody>
+                            @foreach (var pendiente in Model.SinMapeo)
+                            {
+                                <tr><td>@pendiente.ClaveMatriz</td><td>@pendiente.EncabezadoMatriz</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+    }
+</div>

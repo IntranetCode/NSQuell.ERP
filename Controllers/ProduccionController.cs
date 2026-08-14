@@ -1813,7 +1813,107 @@ ORDER BY e.EjecucionProduccionID DESC;";
                     return RedirectToAction(nameof(Index));
                 }
 
-                var observacionesFinales =
+                if (programa.ParteID.HasValue && programa.ParteID.Value > 0 &&
+                    await ParteTienePolivalenciaProduccionAsync(programa.ParteID.Value, cn, tx))
+                {
+                    if (!operadorPrincipalFinalId.HasValue)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] =
+                            "Esta pieza tiene matriz de polivalencia. Selecciona un operador evaluado de la lista; no se permite nombre manual para esta pieza.";
+                        return RedirectToAction(nameof(Index));
+                    }
+
+                    var nivelPolivalencia =
+                        await ObtenerNivelPolivalenciaProduccionAsync(
+                            programa.ParteID.Value,
+                            operadorPrincipalFinalId.Value,
+                            cn,
+                            tx);
+
+                    if (!nivelPolivalencia.HasValue)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] =
+                            "El operador seleccionado no está evaluado para el número de parte de este programa. Selecciona un operador N1–N4 de la matriz de polivalencia.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                }
+
+                // NSQ_ESCALA_OPERADORES_V5_BEGIN
+                if (!operadorPrincipalFinalId.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Selecciona un operador principal de la lista.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var partePolivalenciaValidacion =
+                    await ResolverPartePolivalenciaProgramaAsync(
+                        programa.ProgramaProduccionID,
+                        programa.ParteID,
+                        cn,
+                        tx);
+
+                var tieneMatrizPolivalencia =
+                    partePolivalenciaValidacion.HasValue &&
+                    await ParteTienePolivalenciaProduccionAsync(
+                        partePolivalenciaValidacion.Value,
+                        cn,
+                        tx);
+
+                if (tieneMatrizPolivalencia)
+                {
+                    var nivelSeleccionado =
+                        await ObtenerNivelPolivalenciaProduccionAsync(
+                            partePolivalenciaValidacion!.Value,
+                            operadorPrincipalFinalId.Value,
+                            cn,
+                            tx);
+
+                    if (!nivelSeleccionado.HasValue ||
+                        nivelSeleccionado.Value < 1 ||
+                        nivelSeleccionado.Value > 4)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] =
+                            "Para esta pieza solo puedes seleccionar operadores evaluados N1-N4 en la matriz de polivalencia.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                }
+                else if (!await PersonaEsOperadorActivoProduccionAsync(
+                             operadorPrincipalFinalId.Value,
+                             cn,
+                             tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] =
+                        "La pieza no tiene matriz; selecciona una persona activa del catalogo de Operadores.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                if (operadorAuxiliarFinalId.HasValue &&
+                    !await PersonaEsAuxiliarActivoProduccionAsync(
+                        operadorAuxiliarFinalId.Value,
+                        cn,
+                        tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] =
+                        "El auxiliar debe seleccionarse del catalogo activo de Auxiliares.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                if (!operadorAuxiliarFinalId.HasValue &&
+                    !string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] =
+                        "Selecciona el auxiliar desde la lista; no se permite captura manual.";
+                    return RedirectToAction(nameof(Index));
+                }
+                // NSQ_ESCALA_OPERADORES_V5_END
+var observacionesFinales =
                     observaciones;
 
                 var textoOperadores =

@@ -17,7 +17,7 @@ using EscalaVM = ERP.NSQuell.Models.EscalaPersonal;
 namespace ERP.NSQuell.Controllers
 {
     [Authorize]
-    public class EscalaPersonalController : Controller
+    public partial class EscalaPersonalController : Controller
     {
         private readonly string _connectionString;
 

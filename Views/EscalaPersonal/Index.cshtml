@@ -237,7 +237,7 @@
         .escala-page .ep-tools {
             display: grid;
             gap: .9rem;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             margin-bottom: 1.15rem;
         }
 
@@ -512,6 +512,7 @@
 </style>
 
 <div class="container-fluid escala-page">
+    <partial name="_EscalaNavegacion" />
     <div class="ep-header">
         <div>
             <div class="ep-eyebrow">Recursos Humanos</div>
@@ -638,6 +639,15 @@
                     <span class="ep-tool-title">Preparar nueva semana</span>
                     <span class="ep-tool-text d-block">
                         Genera el encabezado y selecciona los turnos aplicables.
+                    </span>
+                </span>
+            </a>
+            <a asp-action="Polivalencia" class="ep-tool">
+                <span class="ep-tool-mark">PV</span>
+                <span>
+                    <span class="ep-tool-title">Matriz de polivalencia</span>
+                    <span class="ep-tool-text d-block">
+                        Consulta operadores evaluados por número de parte y nivel N1–N4.
                     </span>
                 </span>
             </a>

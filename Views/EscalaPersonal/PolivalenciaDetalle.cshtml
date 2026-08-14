@@ -1,0 +1,195 @@
+﻿@model ERP.NSQuell.Models.PolivalenciaOperadorDetalleVm
+@{
+    ViewData["Title"] = "Detalle de Polivalencia";
+    Layout = "_Layout";
+}
+
+<style>
+    .pd-page { max-width: 1580px; margin: 0 auto; padding: 22px; }
+    .pd-back { color: #17324d; text-decoration: none; font-weight: 780; }
+    .pd-hero { margin-top: 12px; background: linear-gradient(135deg,#17324d,#244f73); color:#fff; border-radius:18px; padding:20px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:center; }
+    .pd-kicker { font-size:.72rem; letter-spacing:.09em; text-transform:uppercase; opacity:.72; font-weight:850; }
+    .pd-title { font-size:1.55rem; font-weight:900; margin:3px 0 0; }
+    .pd-meta { margin-top:6px; opacity:.86; font-size:.84rem; }
+    .pd-level-big { min-width:76px; height:76px; border-radius:50%; display:grid; place-items:center; font-size:1.35rem; font-weight:950; background:#fff; color:#17324d; }
+    .pd-stats { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:9px; margin:14px 0; }
+    .pd-stat { background:#fff; border:1px solid #dfe6ed; border-radius:13px; padding:12px 13px; }
+    .pd-stat small { display:block; color:#6b7a8c; font-weight:700; }
+    .pd-stat strong { display:block; color:#17324d; font-size:1.25rem; margin-top:3px; }
+    .pd-scale { background:#f6faff; border:1px solid #cfe0f4; border-radius:14px; padding:13px 15px; margin-bottom:14px; }
+    .pd-scale strong { color:#17324d; }
+    .pd-panel { background:#fff; border:1px solid #dfe6ed; border-radius:16px; overflow:hidden; margin-bottom:16px; }
+    .pd-head { padding:14px 16px; background:#f7f9fb; border-bottom:1px solid #dfe6ed; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .pd-head h2 { margin:0; color:#17324d; font-size:1rem; font-weight:900; }
+    .pd-head small { color:#667085; }
+    .pd-filter { display:flex; gap:8px; flex-wrap:wrap; }
+    .pd-filter input,.pd-filter select { min-height:40px; border:1px solid #d3dde7; border-radius:10px; padding:7px 10px; }
+    .pd-table { width:100%; border-collapse:collapse; }
+    .pd-table th { background:#f8fafc; color:#667085; font-size:.7rem; text-transform:uppercase; padding:10px; border-bottom:1px solid #e4e9ef; white-space:nowrap; }
+    .pd-table td { padding:10px; border-bottom:1px solid #edf1f4; font-size:.8rem; vertical-align:top; }
+    .pd-part { min-width:245px; }
+    .pd-part strong { color:#17324d; font-size:.86rem; }
+    .pd-muted { color:#667085; font-size:.7rem; margin-top:2px; }
+    .pd-level { display:inline-flex; align-items:center; justify-content:center; min-width:42px; height:30px; border-radius:999px; font-weight:900; }
+    .n4 { background:#e5f6ec; color:#18764b; }
+    .n3 { background:#e9f1ff; color:#245b9f; }
+    .n2 { background:#fff2d8; color:#9a5a00; }
+    .n1 { background:#eef0f3; color:#586474; }
+    .pd-prod { display:inline-flex; border:1px solid #bfd3f2; background:#eef4ff; color:#194185; border-radius:9px; padding:6px 8px; text-decoration:none; font-size:.72rem; font-weight:850; white-space:nowrap; }
+    .pd-empty { padding:28px; text-align:center; color:#667085; }
+    .pd-source { margin:0 0 14px; padding:10px 13px; border:1px solid #cfe0f4; border-radius:12px; background:#f6faff; color:#365c82; font-size:.78rem; }
+    @@media(max-width:1000px){ .pd-stats{grid-template-columns:repeat(3,1fr);} }
+    @@media(max-width:700px){ .pd-page{padding:14px;} .pd-hero{grid-template-columns:1fr;} .pd-level-big{width:64px;height:64px;} .pd-stats{grid-template-columns:repeat(2,1fr);} }
+</style>
+
+<div class="pd-page">
+    <partial name="_EscalaNavegacion" />
+    <a asp-action="Polivalencia" class="pd-back">← Volver a Matriz de Polivalencia</a>
+
+    @if (!Model.Configurado)
+    {
+        <div class="alert alert-warning mt-3">
+            El módulo de Polivalencia no está configurado en la base de datos.
+        </div>
+    }
+    else
+    {
+        <section class="pd-hero">
+            <div>
+                <div class="pd-kicker">Perfil de competencia · Control @Model.NumeroControl</div>
+                <h1 class="pd-title">@Model.Nombre</h1>
+                <div class="pd-meta">@Model.Puesto · PersonaID @Model.PersonalID</div>
+            </div>
+            <div class="pd-level-big">@($"N{Model.NivelMaximo}")</div>
+        </section>
+
+        <section class="pd-stats">
+            <div class="pd-stat"><small>Partes ERP evaluadas</small><strong>@Model.PartesEvaluadas</strong></div>
+            <div class="pd-stat"><small>Nivel máximo</small><strong>@($"N{Model.NivelMaximo}")</strong></div>
+            <div class="pd-stat"><small>N4</small><strong>@Model.Nivel4</strong></div>
+            <div class="pd-stat"><small>N3</small><strong>@Model.Nivel3</strong></div>
+            <div class="pd-stat"><small>N2</small><strong>@Model.Nivel2</strong></div>
+            <div class="pd-stat"><small>N1</small><strong>@Model.Nivel1</strong></div>
+        </section>
+
+        @if (Model.EnEscalaActual)
+        {
+            <div class="pd-scale">
+                <strong>Asignación actual en Escala:</strong>
+                @Model.EscalaFolio
+                @if (!string.IsNullOrWhiteSpace(Model.FuncionActual)) { <text> · @Model.FuncionActual</text> }
+                @if (!string.IsNullOrWhiteSpace(Model.MaquinaActual)) { <text> · @Model.MaquinaActual</text> }
+                @if (!string.IsNullOrWhiteSpace(Model.TurnoActual)) { <text> · @Model.TurnoActual</text> }
+            </div>
+        }
+
+        <div class="pd-source">
+            Cada renglón está ligado por <strong>ParteID</strong> al catálogo <strong>ERP_Partes</strong>. Número de parte, SAP, designación, descripción, cliente y datos técnicos se leen del maestro que utiliza Producción.
+        </div>
+
+        <section class="pd-panel">
+            <div class="pd-head">
+                <div>
+                    <h2>Piezas asociadas a este operador</h2>
+                    <small>Filtra por nivel o busca número de parte, SAP, designación, cliente, proceso o máquina.</small>
+                </div>
+                <form method="get" class="pd-filter">
+                    <input type="hidden" name="personalId" value="@Model.PersonalID" />
+                    <select name="nivel">
+                        <option value="">Todos los niveles</option>
+                        @for (var n = 4; n >= 1; n--)
+                        {
+                            <option value="@n" selected="@(Model.NivelFiltro == n ? "selected" : null)">@($"N{n}")</option>
+                        }
+                    </select>
+                    <input type="search" name="q" value="@Model.Busqueda" placeholder="Parte, SAP, cliente, máquina..." />
+                    <button type="submit" class="btn btn-primary">Filtrar</button>
+                    <a asp-action="PolivalenciaDetalle"
+                       asp-route-personalId="@Model.PersonalID"
+                       class="btn btn-outline-secondary">Limpiar</a>
+                </form>
+            </div>
+
+            <div class="table-responsive">
+                <table class="pd-table">
+                    <thead>
+                        <tr>
+                            <th>Nivel</th>
+                            <th>Parte ERP</th>
+                            <th>Designación / descripción</th>
+                            <th>Cliente</th>
+                            <th>Proceso / máquina</th>
+                            <th>Material</th>
+                            <th>Objetivo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var parte in Model.Partes)
+                        {
+                            <tr>
+                                <td><span class="pd-level n@(parte.Nivel)">@($"N{parte.Nivel}")</span></td>
+                                <td class="pd-part">
+                                    <strong>@parte.NumeroParte</strong>
+                                    <div class="pd-muted">ParteID @parte.ParteID</div>
+                                    @if (!string.IsNullOrWhiteSpace(parte.ReferenciaSAP))
+                                    {
+                                        <div class="pd-muted">SAP @parte.ReferenciaSAP</div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(parte.Designacion))
+                                    {
+                                        <strong>@parte.Designacion</strong>
+                                    }
+                                    <div class="pd-muted">@parte.Descripcion</div>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(parte.ClienteCodigo))
+                                    {
+                                        <strong>@parte.ClienteCodigo</strong>
+                                    }
+                                    <div class="pd-muted">@parte.ClienteNombre</div>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(parte.TipoProceso))
+                                    {
+                                        <strong>@parte.TipoProceso</strong>
+                                    }
+                                    <div class="pd-muted">Principal: @(string.IsNullOrWhiteSpace(parte.MaquinaPrincipal) ? "-" : parte.MaquinaPrincipal)</div>
+                                    @if (!string.IsNullOrWhiteSpace(parte.MaquinaSustituta))
+                                    {
+                                        <div class="pd-muted">Sustituta: @parte.MaquinaSustituta</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(parte.Ciclo))
+                                    {
+                                        <div class="pd-muted">Ciclo: @parte.Ciclo</div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(parte.MaterialCodigo))
+                                    {
+                                        <strong>@parte.MaterialCodigo</strong>
+                                    }
+                                    <div class="pd-muted">@parte.MaterialDescripcion</div>
+                                </td>
+                                <td>@(parte.ObjetivoHora.HasValue ? $"{parte.ObjetivoHora} pza/h" : "-")</td>
+                                <td>
+                                    <a asp-controller="Produccion"
+                                       asp-action="Index"
+                                       asp-route-busqueda="@parte.NumeroParte"
+                                       class="pd-prod">Ver en Producción</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (!Model.Partes.Any())
+            {
+                <div class="pd-empty">No hay piezas que coincidan con el filtro.</div>
+            }
+        </section>
+    }
+</div>
