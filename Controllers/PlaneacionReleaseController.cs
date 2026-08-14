@@ -1569,11 +1569,11 @@ WHERE ReleaseID = @ReleaseID
             var observations = rd["Observaciones"] as string ?? string.Empty;
             var match = Regex.Match(
                 observations,
-                @"ARCHIVO_GUARDADO:(?<path>[^;]+)",
+                @"(?:ARCHIVO_GUARDADO|ARCHIVO):(?<path>[^;]+)",
                 RegexOptions.IgnoreCase);
 
             if (!match.Success)
-                return NotFound("Este Release no tiene un documento original conservado por la importacion v1.3.");
+                return NotFound("Este Release no tiene una ruta de archivo original registrada.");
 
             var relative = match.Groups["path"].Value.Trim()
                 .Replace('/', Path.DirectorySeparatorChar);
@@ -5327,7 +5327,7 @@ WHERE ClienteID = @ClienteID
                     vm.EstatusID = PlaneacionReleaseEstatus.Capturado;
                     vm.Observaciones =
                         $"IMPORTACION_VALIDADA;PLANTILLA:{documento.Plantilla};" +
-                        $"SHA256:{documento.Sha256};ARCHIVO:{archivoGuardado};LOTE:{lote.LoteID}";
+                        $"SHA256:{documento.Sha256};ARCHIVO_GUARDADO:{archivoGuardado};LOTE:{lote.LoteID}";
 
                     var versionesCerradas = 0;
 
