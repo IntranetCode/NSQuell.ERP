@@ -17,22 +17,27 @@
     {
         return (x.PiezasAProducir ?? 0) > 0;
     }
-
-    // LANZAMIENTO TEMPORAL SIN ALMACEN:
-    // PT, MP y embalaje se muestran como referencia, pero NO bloquean la programación.
+    // NSQ_PLANEACION_VISTA_ABASTO_V1
+    // PT sigue fuera de este bloqueo. MP y embalajes usan disponibilidad neta de reservas.
     public static bool StockOk(PlaneacionProgramaNecesidadVm x)
     {
-        return true;
+        return MpOk(x) && EmbalajeOk(x);
     }
 
     public static bool MpOk(PlaneacionProgramaNecesidadVm x)
     {
-        return true;
+        if (!NecesitaProduccion(x)) return true;
+        var requerido = x.MPRequeridaKg ?? 0m;
+        if (requerido <= 0m) return true;
+        return (x.MPDisponibleKg ?? 0m) + 0.0005m >= requerido;
     }
 
     public static bool EmbalajeOk(PlaneacionProgramaNecesidadVm x)
     {
-        return true;
+        if (!NecesitaProduccion(x)) return true;
+        var requerido = x.EmbalajeRequerido ?? 0m;
+        if (requerido <= 0m) return true;
+        return (x.EmbalajeDisponible ?? 0m) + 0.0005m >= requerido;
     }
 
     public static bool MoldeOk(PlaneacionProgramaNecesidadVm x)
@@ -45,8 +50,6 @@
         return !NecesitaProduccion(x) || x.MaquinaSugeridaID.HasValue;
     }
 
-    // Material sí sigue siendo dato técnico obligatorio.
-    // No importa si hay saldo en almacén, pero sí debe existir el material/resina en datos técnicos.
     public static bool MaterialOk(PlaneacionProgramaNecesidadVm x)
     {
         return !NecesitaProduccion(x) ||
@@ -74,16 +77,9 @@
         return !NecesitaProduccion(x) || ((x.PesoBrutoPieza ?? 0) > 0);
     }
 
-    // Embalaje requerido/piezas por embalaje se mantiene como dato técnico.
-    // Lo que NO bloquea es el saldo disponible en almacén.
     public static bool EmbalajeTecnicoOk(PlaneacionProgramaNecesidadVm x)
     {
-        /*
-            LANZAMIENTO TEMPORAL SIN ALMACEN:
-            Embalaje no bloquea programación.
-            Se mantiene visible como referencia, pero no impide pasar a Programa Cambio de Molde.
-        */
-        return true;
+        return !NecesitaProduccion(x) || (!string.IsNullOrWhiteSpace(x.EmbalajeCodigo) && (x.EmbalajeRequerido ?? 0m) > 0m);
     }
 
     public static bool DatosTecnicosOk(PlaneacionProgramaNecesidadVm x)
@@ -100,20 +96,18 @@
 
     public static bool ListoCambioMolde(PlaneacionProgramaNecesidadVm x)
     {
-        // LANZAMIENTO TEMPORAL SIN ALMACEN:
-        // Solo se exige que tenga producción pendiente y datos técnicos completos.
-        // No se bloquea por MP disponible ni por embalaje disponible.
         return !x.ProgramaProduccionID.HasValue &&
                NecesitaProduccion(x) &&
-               DatosTecnicosOk(x);
+               DatosTecnicosOk(x) &&
+               StockOk(x);
     }
 
     public static bool PendienteAbasto(PlaneacionProgramaNecesidadVm x)
     {
-        // LANZAMIENTO TEMPORAL SIN ALMACEN:
-        // Por ahora nada debe caer aquí por falta de stock/MP/embalaje.
-        // Se deja el método para reactivarlo cuando almacén esté integrado.
-        return false;
+        return !x.ProgramaProduccionID.HasValue &&
+               NecesitaProduccion(x) &&
+               DatosTecnicosOk(x) &&
+               !StockOk(x);
     }
 
     public static bool PendienteDatosTecnicos(PlaneacionProgramaNecesidadVm x)
@@ -145,6 +139,7 @@
         if (x.ProgramaProduccionID.HasValue) return "Ya programado";
         if (!NecesitaProduccion(x)) return "Cubierto";
         if (ListoCambioMolde(x)) return "Listo para Cambio de Molde";
+        if (PendienteAbasto(x)) return "Pendiente de abastecimiento";
         if (PendienteDatosTecnicos(x)) return "Pendiente de datos técnicos";
         return "Pendiente de revisión";
     }
@@ -152,6 +147,7 @@
     public static string EstadoClase(PlaneacionProgramaNecesidadVm x)
     {
         if (ListoCambioMolde(x)) return "estado-ok";
+        if (PendienteAbasto(x)) return "estado-warn";
         if (PendienteDatosTecnicos(x)) return "estado-danger";
         return "estado-muted";
     }
@@ -159,6 +155,7 @@
     public static string CardClase(PlaneacionProgramaNecesidadVm x)
     {
         if (ListoCambioMolde(x)) return "card-ok";
+        if (PendienteAbasto(x)) return "card-warn";
         if (PendienteDatosTecnicos(x)) return "card-danger";
         return "card-muted";
     }
@@ -276,10 +273,11 @@
         .ThenBy(PrioridadEntrada)
         .ToList();
 
-    // LANZAMIENTO TEMPORAL SIN ALMACEN:
-    // Por ahora no habrá sección bloqueante de abastecimiento.
-    // MP y embalaje quedan solo como referencia visual.
-    var abasto = new List<PlaneacionProgramaNecesidadVm>();
+    var abasto = necesidades
+        .Where(PendienteAbasto)
+        .OrderBy(PrioridadFecha)
+        .ThenBy(PrioridadEntrada)
+        .ToList();
 
     var datosTecnicos = necesidades
         .Where(PendienteDatosTecnicos)
@@ -298,7 +296,7 @@
     new SeccionUi
     {
         Titulo = "Listos para Programa Cambio de Molde",
-        Sub = "Renglones liberados para definir cambio, arranque, máquina y molde final. Almacén queda solo como referencia temporal.",
+        Sub = "Renglones con datos técnicos completos y MP/embalaje disponibles después de reservas activas.",
         Items = listos,
         Open = true,
         Icono = "fa-circle-check",
@@ -307,7 +305,7 @@
     new SeccionUi
     {
         Titulo = "Pendientes de abastecimiento",
-        Sub = "Temporalmente no bloquea. MP y embalaje se muestran solo como referencia hasta integrar Almacén.",
+        Sub = "Renglones con datos técnicos completos pero con MP o embalaje insuficiente después de reservas activas.",
         Items = abasto,
         Open = false,
         Icono = "fa-truck-ramp-box",

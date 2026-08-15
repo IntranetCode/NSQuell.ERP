@@ -45,10 +45,10 @@ namespace ERP.NSQuell.Controllers
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
-            // LANZAMIENTO TEMPORAL SIN DESCUENTO DE ALMACÉN:
-            // Por ahora solo se consulta/calcula el stock como referencia.
-            // No se aparta ni se descuenta PT automáticamente desde Planeación.
-            // REACTIVAR_ALMACEN: await SincronizarApartadosPTAsync(cn);
+            // NSQ_PLANEACION_RESERVAS_MP_EMB_V1
+            // MP y Embalajes vuelven a reservarse contra las OF activas.
+            // PT continua deliberadamente sin apartado automatico en este cambio.
+            await SincronizarReservasAlmacenPlaneacionAsync(cn);
 
             vm.Clientes = await CargarSelectAsync(
                 cn,
@@ -131,8 +131,8 @@ SELECT
     t.HorasSecadoTexto,
 
     ISNULL(pt.Disponible, 0) AS PTDisponible,
-    ISNULL(mp.Saldo, 0) AS MPDisponible,
-    ISNULL(emb.Saldo, 0) AS EmbalajeDisponible,
+    ISNULL(mp.Disponible, 0) AS MPDisponible,
+    ISNULL(emb.Disponible, 0) AS EmbalajeDisponible,
 
     ISNULL(prog.ProgramadoPendiente, 0) AS ProgramadoPendiente,
     ISNULL(aptPropio.CantidadApartada, 0) AS PTApartadoPropio,
@@ -288,14 +288,16 @@ OUTER APPLY
 
 OUTER APPLY
 (
-    SELECT TOP 1 ISNULL(Saldo, 0) AS Saldo
+    SELECT TOP 1 ISNULL(Disponible, 0) AS Disponible
     FROM dbo.vw_AlmacenMPInventario
     WHERE MaterialID = t.MaterialID
+      AND TipoMP = N'V'
+    ORDER BY OrdenTipo
 ) mp
 
 OUTER APPLY
 (
-    SELECT TOP 1 ISNULL(Saldo, 0) AS Saldo
+    SELECT TOP 1 ISNULL(Disponible, 0) AS Disponible
     FROM dbo.vw_AlmacenEmbalajesInventario
     WHERE Codigo = t.EmbalajeCodigo
 ) emb
@@ -429,14 +431,18 @@ ORDER BY
                 var faltaObjetivo = !objetivoHora.HasValue || objetivoHora.Value <= 0;
                 var faltaPeso = !pesoBrutoPieza.HasValue || pesoBrutoPieza.Value <= 0;
                 var faltaEmbalaje = piezasAProducir > 0 && (!piezasPorEmbalaje.HasValue || piezasPorEmbalaje.Value <= 0);
+                var faltaMPStock = piezasAProducir > 0 && mpRequeridaKg > mpDisponible + 0.0005m;
+                var faltaEmbalajeStock = piezasAProducir > 0 && embalajeRequerido > embalajeDisponible + 0.0005m;
 
                 string mensaje;
                 if (piezasAProducir <= 0)
                     mensaje = "Cubierto con stock y/o producción ya programada.";
                 else if (faltaMaterial)
                     mensaje = "Falta material o resina en datos técnicos.";
-                // Almacén queda solo informativo en esta primera salida.
-                // Aunque falte MP o embalaje, sí se permite continuar hasta OF.
+                else if (faltaMPStock)
+                    mensaje = $"MP insuficiente: requiere {mpRequeridaKg:N4} kg y hay {mpDisponible:N4} kg disponibles sin reservar.";
+                else if (faltaEmbalajeStock)
+                    mensaje = $"Embalaje insuficiente: requiere {embalajeRequerido:N0} y hay {embalajeDisponible:N4} disponibles sin reservar.";
                 else if (faltaMolde)
                     mensaje = "Falta molde en datos técnicos.";
                 else if (faltaMaquina)
@@ -542,16 +548,27 @@ ORDER BY
          !faltaCiclo &&
          !faltaObjetivo &&
          !faltaPeso &&
-         !faltaEmbalaje
+         !faltaEmbalaje &&
+         !faltaMPStock &&
+         !faltaEmbalajeStock
      ))
                 {
                     continue;
                 }
 
-                // LANZAMIENTO TEMPORAL SIN ALMACEN:
-                // El filtro de pendiente de abasto queda deshabilitado.
-                // Aunque falte saldo de MP o embalaje, no debe bloquear ni separar el release.
-                if (soloPendienteAbasto)
+                // NSQ_PLANEACION_ABASTO_REINTEGRADO_V1
+                if (soloPendienteAbasto &&
+                    !(!necesidad.ProgramaProduccionID.HasValue &&
+                      (necesidad.PiezasAProducir ?? 0) > 0 &&
+                      !faltaMaterial &&
+                      !faltaMaquina &&
+                      !faltaMolde &&
+                      !faltaCavidades &&
+                      !faltaCiclo &&
+                      !faltaObjetivo &&
+                      !faltaPeso &&
+                      !faltaEmbalaje &&
+                      (faltaMPStock || faltaEmbalajeStock)))
                 {
                     continue;
                 }
@@ -1655,8 +1672,8 @@ SELECT
     t.HorasSecadoTexto,
 
     ISNULL(pt.Disponible, 0) AS PTDisponible,
-    ISNULL(mp.Saldo, 0) AS MPDisponible,
-    ISNULL(emb.Saldo, 0) AS EmbalajeDisponible,
+    ISNULL(mp.Disponible, 0) AS MPDisponible,
+    ISNULL(emb.Disponible, 0) AS EmbalajeDisponible,
     ISNULL(prog.ProgramadoPendiente, 0) AS ProgramadoPendiente,
     ISNULL(aptPropio.CantidadApartada, 0) AS PTApartadoPropio,
     ISNULL(aptOtros.CantidadApartada, 0) AS PTApartadoOtros
@@ -1811,14 +1828,16 @@ OUTER APPLY
 
 OUTER APPLY
 (
-    SELECT TOP 1 ISNULL(Saldo, 0) AS Saldo
+    SELECT TOP 1 ISNULL(Disponible, 0) AS Disponible
     FROM dbo.vw_AlmacenMPInventario
     WHERE MaterialID = t.MaterialID
+      AND TipoMP = N'V'
+    ORDER BY OrdenTipo
 ) mp
 
 OUTER APPLY
 (
-    SELECT TOP 1 ISNULL(Saldo, 0) AS Saldo
+    SELECT TOP 1 ISNULL(Disponible, 0) AS Disponible
     FROM dbo.vw_AlmacenEmbalajesInventario
     WHERE Codigo = t.EmbalajeCodigo
 ) emb
@@ -4901,6 +4920,24 @@ ORDER BY
             return Math.Round(total, 4);
         }
 
+
+        // NSQ_PLANEACION_RESERVAS_SYNC_HELPER_V1
+        private async Task SincronizarReservasAlmacenPlaneacionAsync(SqlConnection cn)
+        {
+            const string sql = @"
+IF OBJECT_ID(N'dbo.sp_Almacen_SincronizarReservas', N'P') IS NOT NULL
+BEGIN
+    EXEC dbo.sp_Almacen_SincronizarReservas @Usuario = @Usuario;
+END;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            var usuario =
+                HttpContext.Session.GetString("Username")
+                ?? User?.Identity?.Name
+                ?? "PLANEACION";
+            cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = usuario;
+            await cmd.ExecuteNonQueryAsync();
+        }
         private sealed class OperadorEscalaProgramaVm
         {
             public int EscalaAsignacionID { get; set; }

@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models.ViewModels.Almacen;
+﻿using ERP.NSQuell.Models.ViewModels.Almacen;
 using ERP.NSQuell.Servicios.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -63,6 +63,9 @@ public sealed class AlmacenEmbalajesController : AlmacenBaseController
             return View(vm);
         }
 
+        // NSQ_ALMACEN_EMB_RESERVAS_REINTEGRADAS_V1
+        await SincronizarReservasAlmacenAsync(connection, cancellationToken);
+
         // ALMACEN_RESERVAS_V5_0
         const string sql = @"
 SELECT TOP (500)
@@ -73,7 +76,7 @@ SELECT TOP (500)
     inventario.Entradas,
     inventario.Salidas,
     inventario.Disponible AS Saldo,
-    CONVERT(DECIMAL(18,4), 0) AS Solicitado,
+    inventario.Reservado AS Solicitado,
     inventario.StockMinimo,
     inventario.StockAviso,
     inventario.StockConfigurado,

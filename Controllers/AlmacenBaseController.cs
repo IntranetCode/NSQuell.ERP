@@ -216,5 +216,22 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID
         return string.IsNullOrWhiteSpace(numeroOF) ? null : numeroOF;
     }
 
+
+    // NSQ_ALMACEN_RESERVAS_SYNC_V1
+    protected async Task SincronizarReservasAlmacenAsync(
+        SqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+IF OBJECT_ID(N'dbo.sp_Almacen_SincronizarReservas', N'P') IS NOT NULL
+BEGIN
+    EXEC dbo.sp_Almacen_SincronizarReservas @Usuario = @Usuario;
+END;";
+
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
 }
 

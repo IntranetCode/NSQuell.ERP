@@ -2396,9 +2396,12 @@ WHERE d.ParteID = @ParteID
                 return 0;
 
             const string sql = @"
-SELECT TOP 1 ISNULL(Saldo, 0)
+-- NSQ_RELEASE_DISPONIBLE_RESERVAS_V1
+SELECT TOP 1 ISNULL(Disponible, 0)
 FROM dbo.vw_AlmacenMPInventario
-WHERE MaterialID = @MaterialID;";
+WHERE MaterialID = @MaterialID
+  AND TipoMP = N'V'
+ORDER BY OrdenTipo;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@MaterialID", SqlDbType.Int).Value = materialId.Value;
@@ -2416,7 +2419,7 @@ WHERE MaterialID = @MaterialID;";
                 return 0;
 
             const string sql = @"
-SELECT TOP 1 ISNULL(Saldo, 0)
+SELECT TOP 1 ISNULL(Disponible, 0)
 FROM dbo.vw_AlmacenEmbalajesInventario
 WHERE Codigo = @Codigo;";
 

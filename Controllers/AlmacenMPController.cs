@@ -72,6 +72,9 @@ public sealed partial class AlmacenMPController : AlmacenBaseController
             return View(vm);
         }
 
+        // NSQ_ALMACEN_MP_RESERVAS_REINTEGRADAS_V1
+        await SincronizarReservasAlmacenAsync(connection, cancellationToken);
+
         // ALMACEN_RESERVAS_V5_0
         const string sql = @"
 SELECT TOP (1000)
@@ -83,7 +86,7 @@ SELECT TOP (1000)
     Entradas,
     Salidas,
     Disponible AS Saldo,
-    CONVERT(DECIMAL(18,4), 0) AS Solicitado,
+    Reservado AS Solicitado,
     StockMinimo,
     StockAviso,
     StockConfigurado,
