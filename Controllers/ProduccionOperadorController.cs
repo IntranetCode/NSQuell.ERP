@@ -3260,7 +3260,8 @@ WHERE u.UsuarioID = @UsuarioID
             var puesto = result.ToString()?.Trim() ?? string.Empty;
 
             return puesto.Equals("OPERADOR", StringComparison.OrdinalIgnoreCase) ||
-                   puesto.Contains("OPERADOR", StringComparison.OrdinalIgnoreCase);
+                   puesto.Contains("OPERADOR", StringComparison.OrdinalIgnoreCase) ||
+                   puesto.Equals("AUXILIAR DE PRODUCCION", StringComparison.OrdinalIgnoreCase);
         }
 
 
@@ -3536,9 +3537,52 @@ WHERE u.UsuarioID = @UsuarioID
             Response.StatusCode = StatusCodes.Status403Forbidden;
 
             return Content(
-                "Acceso denegado. Esta pantalla es exclusiva para usuarios con puesto OPERADOR.",
+                "Acceso denegado. Esta pantalla es exclusiva para usuarios OPERADOR o AUXILIAR DE PRODUCCION activos.",
                 "text/plain");
         }
+        private static decimal? DecimalFlexibleProduccion(SqlDataReader rd, string columna)
+        {
+            var valor = rd[columna];
+            if (valor == null || valor == DBNull.Value)
+                return null;
+
+            if (valor is decimal d)
+                return d;
+
+            if (valor is int i)
+                return i;
+
+            if (valor is long l)
+                return l;
+
+            if (valor is double db)
+                return Convert.ToDecimal(db);
+
+            var texto = valor.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(texto))
+                return null;
+
+            if (decimal.TryParse(texto, out var directo))
+                return directo;
+
+            var match = System.Text.RegularExpressions.Regex.Match(
+                texto,
+                @"[-+]?\d+(?:[\.,]\d+)?");
+
+            if (!match.Success)
+                return null;
+
+            var numero = match.Value.Replace(',', '.');
+
+            return decimal.TryParse(
+                numero,
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var convertido)
+                    ? convertido
+                    : null;
+        }
+
 
 
         private static ProduccionOperadorTabletVm
@@ -3643,11 +3687,7 @@ WHERE u.UsuarioID = @UsuarioID
                         : Convert.ToInt32(
                             rd["ObjetivoHora"]),
 
-                Ciclo =
-                    rd["Ciclo"] == DBNull.Value
-                        ? null
-                        : Convert.ToDecimal(
-                            rd["Ciclo"]),
+                Ciclo = DecimalFlexibleProduccion(rd, "Ciclo"),
 
                 Cavidades =
                     rd["Cavidades"] == DBNull.Value
