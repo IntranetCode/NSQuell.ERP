@@ -821,6 +821,292 @@
         }
     }
 
+
+
+    /* =========================================================
+       TEMA GLOBAL ERP
+       La vista responde directamente a html[data-nsq-theme].
+       ========================================================= */
+    html[data-nsq-theme="dark"] .ejec-panel {
+        --ej-blue: #8cc6ff;
+        --ej-border: #2d3e55;
+        --ej-muted: #9aa9bd;
+        --ej-text: #e7eef9;
+        background: #111b2d;
+        border-color: #2d3e55;
+        box-shadow: 0 5px 16px rgba(0,0,0,.16);
+    }
+
+    html[data-nsq-theme="dark"] .ejec-toolbar {
+        background: linear-gradient(180deg,#152238 0%,#111b2d 100%);
+        border-bottom-color: #2d3e55;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-title,
+    html[data-nsq-theme="dark"] .ejec-machine-code,
+    html[data-nsq-theme="dark"] .ejec-programa,
+    html[data-nsq-theme="dark"] .ejec-parte,
+    html[data-nsq-theme="dark"] .ejec-empty-title {
+        color: #eaf2ff;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-title i {
+        background: #102b4c;
+        border-color: #28598b;
+        color: #9dcaff;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-sub,
+    html[data-nsq-theme="dark"] .ejec-machine-name,
+    html[data-nsq-theme="dark"] .ejec-small,
+    html[data-nsq-theme="dark"] .ejec-desc,
+    html[data-nsq-theme="dark"] .ejec-empty-text {
+        color: #9aa9bd;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-visible-count,
+    html[data-nsq-theme="dark"] .ejec-tab,
+    html[data-nsq-theme="dark"] .ejec-machine-count,
+    html[data-nsq-theme="dark"] .ejec-tab-count {
+        background: #17263c;
+        border-color: #354961;
+        color: #cbd7e7;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-tab > i {
+        background: #223149;
+        color: #aebbd0;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-tab:hover {
+        background: #1a2941;
+        border-color: #58779e;
+        color: #f3f7ff;
+        box-shadow: none;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-tab:hover > i {
+        background: #27405f;
+        color: #d9ebff;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-tab.is-active {
+        background: #15355a;
+        border-color: #5ba6f5;
+        color: #d9ebff;
+        box-shadow: inset 0 -2px 0 #5ba6f5;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-tabs .ejec-tab:nth-child(3).is-active {
+        background: #322815;
+        border-color: #d39c29;
+        color: #ffd66b;
+        box-shadow: inset 0 -2px 0 #d39c29;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-tabs .ejec-tab:nth-child(4).is-active {
+        background: #351719;
+        border-color: #a83d46;
+        color: #ff9ca8;
+        box-shadow: inset 0 -2px 0 #a83d46;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-tabs .ejec-tab:nth-child(5).is-active {
+        background: #102a20;
+        border-color: #286446;
+        color: #79e3a8;
+        box-shadow: inset 0 -2px 0 #286446;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-tab.is-active .ejec-tab-count {
+        background: rgba(255,255,255,.08);
+        border-color: rgba(255,255,255,.18);
+        color: inherit;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-machine {
+        background: #111b2d;
+        border-color: #2d3e55;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-machine-head {
+        background: #152238;
+        border-bottom-color: #2d3e55;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-table th {
+        background: #101a2b;
+        border-bottom-color: #2d3e55;
+        color: #9aa9bd;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-table td {
+        border-bottom-color: #26364d;
+        color: #dce7f6;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-table tbody tr {
+        background: #111b2d;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-table tbody tr:hover {
+        background: #18263c;
+        box-shadow: inset 3px 0 0 rgba(91,166,245,.26);
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-produccion {
+        background: #102843 !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-preparacion {
+        background: #2b2412 !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-pausado {
+        background: #30191d !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-terminado {
+        background: #10271d !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-produccion:hover {
+        background: #15355a !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-preparacion:hover {
+        background: #382f17 !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-pausado:hover {
+        background: #3b2025 !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-terminado:hover {
+        background: #153423 !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-status {
+        background: #17263c;
+        border-color: #354961;
+        color: #cbd7e7;
+    }
+
+    html[data-nsq-theme="dark"] .estado-produccion {
+        background: #102b4c;
+        border-color: #28598b;
+        color: #9dcaff;
+    }
+
+    html[data-nsq-theme="dark"] .estado-preparacion {
+        background: #2b2313;
+        border-color: #76571e;
+        color: #f6cc6d;
+    }
+
+    html[data-nsq-theme="dark"] .estado-pausado {
+        background: #351719;
+        border-color: #7f2b32;
+        color: #ff9ca8;
+    }
+
+    html[data-nsq-theme="dark"] .estado-terminado {
+        background: #102a20;
+        border-color: #286446;
+        color: #79e3a8;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-avance-top {
+        color: #aebbd0;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-progress {
+        background: #26364d;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-num.ok {
+        color: #79e3a8;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-num.sos {
+        color: #f6cc6d;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-num.scrap {
+        color: #ff9ca8;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-empty {
+        background: #111b2d;
+        color: #9aa9bd;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-empty-icon {
+        background: #17263c;
+        border-color: #354961;
+        color: #9aa9bd;
+    }
+    
+
+    /* DARK V2: filas neutras; estatus mediante borde/acento. */
+    html[data-nsq-theme="dark"] .ejec-panel,
+    html[data-nsq-theme="dark"] .ejec-machine,
+    html[data-nsq-theme="dark"] .ejec-empty {
+        background: #162133;
+        border-color: #2d3d54;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-toolbar,
+    html[data-nsq-theme="dark"] .ejec-machine-head {
+        background: #1a2639;
+        border-color: #2d3d54;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-table th {
+        background: #111b2b;
+        border-color: #2d3d54;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-table tbody tr,
+    html[data-nsq-theme="dark"] .ejec-row-produccion,
+    html[data-nsq-theme="dark"] .ejec-row-preparacion,
+    html[data-nsq-theme="dark"] .ejec-row-pausado,
+    html[data-nsq-theme="dark"] .ejec-row-terminado {
+        background: #162133 !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-produccion {
+        box-shadow: inset 4px 0 0 #4ea3f7;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-preparacion {
+        box-shadow: inset 4px 0 0 #fbbf24;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-pausado {
+        box-shadow: inset 4px 0 0 #fb7185;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-terminado {
+        box-shadow: inset 4px 0 0 #4ade80;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-row-produccion:hover,
+    html[data-nsq-theme="dark"] .ejec-row-preparacion:hover,
+    html[data-nsq-theme="dark"] .ejec-row-pausado:hover,
+    html[data-nsq-theme="dark"] .ejec-row-terminado:hover {
+        background: #1b2a40 !important;
+    }
+
+    html[data-nsq-theme="dark"] .ejec-status,
+    html[data-nsq-theme="dark"] .ejec-visible-count,
+    html[data-nsq-theme="dark"] .ejec-tab,
+    html[data-nsq-theme="dark"] .ejec-machine-count,
+    html[data-nsq-theme="dark"] .ejec-tab-count {
+        background: #1c2a40;
+        border-color: #38506c;
+    }
+
 </style>
 
 <div class="ejec-panel">

@@ -407,7 +407,7 @@ ViewBag.MaquinasOcupadas as HashSet<int>
     }
 
     /* Tema oscuro heredado desde Index.cshtml */
-    html[data-produccion-theme="dark"] .cola-panel {
+    html[data-nsq-theme="dark"] .cola-panel {
         --cola-blue: #7db7ff;
         --cola-blue-2: #4f9cff;
         --cola-border: #304159;
@@ -415,70 +415,162 @@ ViewBag.MaquinasOcupadas as HashSet<int>
         --cola-soft: #152b46;
     }
 
-    html[data-produccion-theme="dark"] .cola-sidebar,
-    html[data-produccion-theme="dark"] .cola-content,
-    html[data-produccion-theme="dark"] .cola-card,
-    html[data-produccion-theme="dark"] .cola-empty,
-    html[data-produccion-theme="dark"] .cola-no-machine {
+    html[data-nsq-theme="dark"] .cola-sidebar,
+    html[data-nsq-theme="dark"] .cola-content,
+    html[data-nsq-theme="dark"] .cola-card,
+    html[data-nsq-theme="dark"] .cola-empty,
+    html[data-nsq-theme="dark"] .cola-no-machine {
         background: #111b2d;
         border-color: #2d3e55;
         color: #dce7f6;
     }
 
-    html[data-produccion-theme="dark"] .cola-sidebar-head,
-    html[data-produccion-theme="dark"] .cola-content-head {
+    html[data-nsq-theme="dark"] .cola-sidebar-head,
+    html[data-nsq-theme="dark"] .cola-content-head {
         background: #152238;
         border-color: #2d3e55;
     }
 
-    html[data-produccion-theme="dark"] .cola-title,
-    html[data-produccion-theme="dark"] .cola-selected-machine,
-    html[data-produccion-theme="dark"] .cola-machine-code,
-    html[data-produccion-theme="dark"] .cola-program,
-    html[data-produccion-theme="dark"] .cola-part,
-    html[data-produccion-theme="dark"] .cola-meta-value,
-    html[data-produccion-theme="dark"] .cola-operator {
+    html[data-nsq-theme="dark"] .cola-title,
+    html[data-nsq-theme="dark"] .cola-selected-machine,
+    html[data-nsq-theme="dark"] .cola-machine-code,
+    html[data-nsq-theme="dark"] .cola-program,
+    html[data-nsq-theme="dark"] .cola-part,
+    html[data-nsq-theme="dark"] .cola-meta-value,
+    html[data-nsq-theme="dark"] .cola-operator {
         color: #eef5ff;
     }
 
-    html[data-produccion-theme="dark"] .cola-sub,
-    html[data-produccion-theme="dark"] .cola-machine-name,
-    html[data-produccion-theme="dark"] .cola-of,
-    html[data-produccion-theme="dark"] .cola-description,
-    html[data-produccion-theme="dark"] .cola-meta-label,
-    html[data-produccion-theme="dark"] .cola-schedule {
+    html[data-nsq-theme="dark"] .cola-sub,
+    html[data-nsq-theme="dark"] .cola-machine-name,
+    html[data-nsq-theme="dark"] .cola-of,
+    html[data-nsq-theme="dark"] .cola-description,
+    html[data-nsq-theme="dark"] .cola-meta-label,
+    html[data-nsq-theme="dark"] .cola-schedule {
         color: #9aa9bd;
     }
 
-    html[data-produccion-theme="dark"] .cola-machine-btn {
+    html[data-nsq-theme="dark"] .cola-machine-btn {
         background: #111b2d;
         border-color: transparent;
         color: #cbd7e7;
     }
 
-    html[data-produccion-theme="dark"] .cola-machine-btn:hover {
+    html[data-nsq-theme="dark"] .cola-machine-btn:hover {
         background: #17263c;
         border-color: #3a526f;
     }
 
-    html[data-produccion-theme="dark"] .cola-machine-btn.is-active {
+    html[data-nsq-theme="dark"] .cola-machine-btn.is-active {
         background: #15304f;
         border-color: #4f82ba;
         color: #dcecff;
         box-shadow: inset 4px 0 0 #4f9cff;
     }
 
-    html[data-produccion-theme="dark"] .cola-count,
-    html[data-produccion-theme="dark"] .cola-badge,
-    html[data-produccion-theme="dark"] .cola-order {
+    html[data-nsq-theme="dark"] .cola-count,
+    html[data-nsq-theme="dark"] .cola-badge,
+    html[data-nsq-theme="dark"] .cola-order {
         background: #17263c;
         border-color: #3b506a;
         color: #b9d8fb;
     }
 
-    html[data-produccion-theme="dark"] .cola-card:hover {
+    html[data-nsq-theme="dark"] .cola-card:hover {
         border-color: #557395;
         box-shadow: 0 8px 20px rgba(0, 0, 0, .18);
+    }
+
+
+
+    /* DARK V2: misma familia visual que Index/Proximos/Ejecuciones. */
+    html[data-nsq-theme="dark"] .cola-sidebar,
+    html[data-nsq-theme="dark"] .cola-content,
+    html[data-nsq-theme="dark"] .cola-card,
+    html[data-nsq-theme="dark"] .cola-empty,
+    html[data-nsq-theme="dark"] .cola-no-machine {
+        background: #162133;
+        border-color: #2d3d54;
+    }
+
+    html[data-nsq-theme="dark"] .cola-sidebar-head,
+    html[data-nsq-theme="dark"] .cola-content-head {
+        background: #1a2639;
+        border-color: #2d3d54;
+    }
+
+    html[data-nsq-theme="dark"] .cola-machine-btn {
+        background: #162133;
+        border-color: #2d3d54;
+    }
+
+    html[data-nsq-theme="dark"] .cola-machine-btn:hover {
+        background: #1b2a40;
+        border-color: #435a77;
+    }
+
+    html[data-nsq-theme="dark"] .cola-machine-btn.is-active {
+        background: #1a2b41;
+        border-color: #4e93dc;
+        box-shadow: inset 3px 0 0 #5da6ff;
+    }
+
+    html[data-nsq-theme="dark"] .cola-count,
+    html[data-nsq-theme="dark"] .cola-badge,
+    html[data-nsq-theme="dark"] .cola-order {
+        background: #1c2a40;
+        border-color: #38506c;
+    }
+
+
+    /* ==========================================================
+       AJUSTES FINALES DARK V4
+       Corrige contrastes puntuales de la cola sin alterar layout.
+       ========================================================== */
+    html[data-nsq-theme="dark"] .cola-operator {
+        background: #243247;
+        border: 1px solid #3b4d66;
+        color: #dce7f6;
+        box-shadow: none;
+    }
+
+    html[data-nsq-theme="dark"] .cola-operator.has-operator {
+        background: #183553;
+        border-color: #356b9f;
+        color: #cfe6ff;
+    }
+
+    html[data-nsq-theme="dark"] .cola-selected-machine .text-muted {
+        color: #9fb0c5 !important;
+        opacity: 1;
+    }
+
+    html[data-nsq-theme="dark"] .cola-of,
+    html[data-nsq-theme="dark"] .cola-description,
+    html[data-nsq-theme="dark"] .cola-machine-name {
+        color: #aebdd0;
+    }
+
+    html[data-nsq-theme="dark"] .cola-meta-label {
+        color: #91a3ba;
+    }
+
+    html[data-nsq-theme="dark"] .cola-no-machine {
+        background: rgba(245, 158, 11, .10);
+        border-color: rgba(245, 158, 11, .42);
+        color: #f8c66f;
+    }
+
+    html[data-nsq-theme="dark"] .cola-action .badge.text-bg-warning {
+        background-color: rgba(245, 158, 11, .18) !important;
+        border: 1px solid rgba(245, 158, 11, .45);
+        color: #ffd98d !important;
+    }
+
+    html[data-nsq-theme="dark"] .cola-action .badge.text-bg-danger {
+        background-color: rgba(239, 68, 68, .17) !important;
+        border: 1px solid rgba(239, 68, 68, .45);
+        color: #ffadb1 !important;
     }
 
 </style>

@@ -120,7 +120,6 @@
 
         body {
             margin: 0;
-            background: var(--bg);
             color: var(--txt);
             font-family: "Segoe UI", Arial, Helvetica, sans-serif;
             font-size: 14px;
@@ -963,8 +962,9 @@
                                            Mantiene la estructura y la logica original.
                                            ========================================================= */
 
-        body {
-            background: radial-gradient(circle at 12% 2%, rgba(25, 76, 155, .055), transparent 27%), var(--bg);
+        /* El fondo exterior pertenece al Layout global. */
+        .page {
+            background: transparent;
         }
 
         .page {
@@ -1492,11 +1492,11 @@
 
         /* ==========================================================
                                            TEMA OSCURO INTERACTIVO - PRODUCCION
-                                           Se activa con html[data-produccion-theme="dark"].
+                                           Se activa con html[data-nsq-theme="dark"].
                                            El script al final sincroniza esta vista con el switch
                                            Claro/Oscuro existente en _Layout.
                                            ========================================================== */
-        html[data-produccion-theme="dark"] {
+        html[data-nsq-theme="dark"] {
             color-scheme: dark;
             --azul: #7db7ff;
             --azul2: #4f9cff;
@@ -1526,159 +1526,158 @@
             transition: background-color .22s ease, border-color .22s ease, color .22s ease, box-shadow .22s ease;
         }
 
-        html[data-produccion-theme="dark"] body {
-            background: #0b1220;
+        html[data-nsq-theme="dark"] body {
             color: #e7eef9;
         }
 
-        html[data-produccion-theme="dark"] .topbar {
+        html[data-nsq-theme="dark"] .topbar {
             background: linear-gradient(135deg, #0b2343, #123f73);
             border-color: #34577e;
             box-shadow: 0 12px 28px rgba(0, 0, 0, .22);
         }
 
-        html[data-produccion-theme="dark"] .section,
-        html[data-produccion-theme="dark"] .production-content-shell {
+        html[data-nsq-theme="dark"] .section,
+        html[data-nsq-theme="dark"] .production-content-shell {
             background: #111b2d;
             border-color: #2c3d55;
             box-shadow: 0 8px 22px rgba(0, 0, 0, .12);
         }
 
-        html[data-produccion-theme="dark"] .section-head {
+        html[data-nsq-theme="dark"] .section-head {
             background: #152238;
             border-bottom-color: #2c3d55;
         }
 
-        html[data-produccion-theme="dark"] .section-title,
-        html[data-produccion-theme="dark"] .machine-title,
-        html[data-produccion-theme="dark"] .line-main,
-        html[data-produccion-theme="dark"] .info-v,
-        html[data-produccion-theme="dark"] .operator-title,
-        html[data-produccion-theme="dark"] .modal-title {
+        html[data-nsq-theme="dark"] .section-title,
+        html[data-nsq-theme="dark"] .machine-title,
+        html[data-nsq-theme="dark"] .line-main,
+        html[data-nsq-theme="dark"] .info-v,
+        html[data-nsq-theme="dark"] .operator-title,
+        html[data-nsq-theme="dark"] .modal-title {
             color: #eef5ff;
         }
 
-        html[data-produccion-theme="dark"] .section-sub,
-        html[data-produccion-theme="dark"] .machine-sub,
-        html[data-produccion-theme="dark"] .line-sub,
-        html[data-produccion-theme="dark"] .info-k,
-        html[data-produccion-theme="dark"] .form-label {
+        html[data-nsq-theme="dark"] .section-sub,
+        html[data-nsq-theme="dark"] .machine-sub,
+        html[data-nsq-theme="dark"] .line-sub,
+        html[data-nsq-theme="dark"] .info-k,
+        html[data-nsq-theme="dark"] .form-label {
             color: #9aa9bd;
         }
 
-        html[data-produccion-theme="dark"] .form-control,
-        html[data-produccion-theme="dark"] .form-select {
+        html[data-nsq-theme="dark"] .form-control,
+        html[data-nsq-theme="dark"] .form-select {
             background-color: #0d1727;
             border-color: #354961;
             color: #eaf2ff;
         }
 
-            html[data-produccion-theme="dark"] .form-control::placeholder {
+            html[data-nsq-theme="dark"] .form-control::placeholder {
                 color: #75869d;
             }
 
-            html[data-produccion-theme="dark"] .form-control:focus,
-            html[data-produccion-theme="dark"] .form-select:focus {
+            html[data-nsq-theme="dark"] .form-control:focus,
+            html[data-nsq-theme="dark"] .form-select:focus {
                 background-color: #101c2f;
                 border-color: #5da6ff;
                 color: #fff;
                 box-shadow: 0 0 0 .2rem rgba(93, 166, 255, .14);
             }
 
-        html[data-produccion-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
-        html[data-produccion-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
+        html[data-nsq-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+        html[data-nsq-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
             filter: invert(1) brightness(1.25);
             opacity: .78;
         }
 
-        html[data-produccion-theme="dark"] .btn-action {
+        html[data-nsq-theme="dark"] .btn-action {
             background: linear-gradient(135deg, #1769c2, #2b8ee8);
             border-color: #4ea3f7;
             box-shadow: 0 5px 14px rgba(32, 121, 211, .22);
         }
 
-        html[data-produccion-theme="dark"] .production-nav {
+        html[data-nsq-theme="dark"] .production-nav {
             background: #101a2b;
             border-color: #2d4059;
             box-shadow: 0 5px 16px rgba(0, 0, 0, .14);
         }
 
-        html[data-produccion-theme="dark"] .production-nav-btn {
+        html[data-nsq-theme="dark"] .production-nav-btn {
             background: #152136;
             border-color: #31455f;
             color: #cbd7e7;
         }
 
-            html[data-produccion-theme="dark"] .production-nav-btn:hover {
+            html[data-nsq-theme="dark"] .production-nav-btn:hover {
                 background: #1a2941;
                 border-color: #58779e;
                 color: #f3f7ff;
             }
 
-            html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="proximos"] {
+            html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="proximos"] {
                 background: #201c12;
                 border-color: #5a4b26;
                 color: #e9cf80;
             }
 
-                html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="proximos"].is-active {
+                html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="proximos"].is-active {
                     background: #322815;
                     border-color: #d39c29;
                     color: #ffd66b;
                     box-shadow: 0 0 0 1px rgba(211, 156, 41, .14), 0 5px 14px rgba(0, 0, 0, .14);
                 }
 
-            html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"] {
+            html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"] {
                 background: #10243d;
                 border-color: #28517d;
                 color: #9bc7fb;
             }
 
-                html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"].is-active {
+                html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"].is-active {
                     background: #15355a;
                     border-color: #5ba6f5;
                     color: #d9ebff;
                     box-shadow: 0 0 0 1px rgba(91, 166, 245, .13), 0 5px 14px rgba(0, 0, 0, .14);
                 }
 
-            html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="cola"] {
+            html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="cola"] {
                 background: #211b34;
                 border-color: #4d416e;
                 color: #c6b9ee;
             }
 
-                html[data-produccion-theme="dark"] .production-nav-btn[data-production-panel="cola"].is-active {
+                html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="cola"].is-active {
                     background: #30264a;
                     border-color: #8d74d6;
                     color: #e7deff;
                     box-shadow: 0 0 0 1px rgba(141, 116, 214, .13), 0 5px 14px rgba(0, 0, 0, .14);
                 }
 
-        html[data-produccion-theme="dark"] .production-nav-count {
+        html[data-nsq-theme="dark"] .production-nav-count {
             background: rgba(255, 255, 255, .08);
             border-color: rgba(255, 255, 255, .18);
             color: inherit;
         }
 
-        html[data-produccion-theme="dark"] .panel-loading,
-        html[data-produccion-theme="dark"] .panel-error {
+        html[data-nsq-theme="dark"] .panel-loading,
+        html[data-nsq-theme="dark"] .panel-error {
             color: #aebbd0;
         }
 
-        html[data-produccion-theme="dark"] .machine-row,
-        html[data-produccion-theme="dark"] .production-row,
-        html[data-produccion-theme="dark"] .next-start-row {
+        html[data-nsq-theme="dark"] .machine-row,
+        html[data-nsq-theme="dark"] .production-row,
+        html[data-nsq-theme="dark"] .next-start-row {
             background: #111b2d;
             border-color: #2d3e55;
         }
 
-        html[data-produccion-theme="dark"] .machine-header,
-        html[data-produccion-theme="dark"] .next-start-section {
+        html[data-nsq-theme="dark"] .machine-header,
+        html[data-nsq-theme="dark"] .next-start-section {
             background: #152238;
             border-color: #2d3e55;
         }
 
-        html[data-produccion-theme="dark"] .table {
+        html[data-nsq-theme="dark"] .table {
             --bs-table-bg: transparent;
             --bs-table-color: #dce7f6;
             --bs-table-border-color: #2d3e55;
@@ -1686,122 +1685,122 @@
             --bs-table-hover-color: #ffffff;
         }
 
-        html[data-produccion-theme="dark"] .progress {
+        html[data-nsq-theme="dark"] .progress {
             background: #26364d;
         }
 
-        html[data-produccion-theme="dark"] .modal-content {
+        html[data-nsq-theme="dark"] .modal-content {
             background: #111b2d;
             border-color: #344861;
             color: #e7eef9;
             box-shadow: 0 28px 70px rgba(0, 0, 0, .45);
         }
 
-        html[data-produccion-theme="dark"] .modal-header {
+        html[data-nsq-theme="dark"] .modal-header {
             border-bottom-color: #2d3e55;
         }
 
-        html[data-produccion-theme="dark"] .modal-footer {
+        html[data-nsq-theme="dark"] .modal-footer {
             border-top-color: #2d3e55;
         }
 
-        html[data-produccion-theme="dark"] .btn-close {
+        html[data-nsq-theme="dark"] .btn-close {
             filter: invert(1) grayscale(1) brightness(1.7);
         }
 
-        html[data-produccion-theme="dark"] .operator-role-card {
+        html[data-nsq-theme="dark"] .operator-role-card {
             background: #101a2b;
             border-color: #31455f;
         }
 
-            html[data-produccion-theme="dark"] .operator-role-card.required {
+            html[data-nsq-theme="dark"] .operator-role-card.required {
                 background: #10243d;
                 border-color: #28517d;
             }
 
-        html[data-produccion-theme="dark"] .operator-role-name {
+        html[data-nsq-theme="dark"] .operator-role-name {
             color: #eef5ff;
         }
 
-        html[data-produccion-theme="dark"] .modal-validation-message {
+        html[data-nsq-theme="dark"] .modal-validation-message {
             background: #351719;
             border-color: #7f2b32;
             color: #fecdd3;
         }
 
-            html[data-produccion-theme="dark"] .modal-validation-message.is-success {
+            html[data-nsq-theme="dark"] .modal-validation-message.is-success {
                 background: #102a20;
                 border-color: #266447;
                 color: #86efac;
             }
 
-        html[data-produccion-theme="dark"] .operator-box {
+        html[data-nsq-theme="dark"] .operator-box {
             background: #16243a;
             border-color: #344861;
             color: #dce7f6;
         }
 
-            html[data-produccion-theme="dark"] .operator-box.warn {
+            html[data-nsq-theme="dark"] .operator-box.warn {
                 background: #2b2214;
                 border-color: #7c5d23;
             }
 
-        html[data-produccion-theme="dark"] .program-alert {
+        html[data-nsq-theme="dark"] .program-alert {
             background: #151f32;
             border-color: #33455d;
             color: #dce7f6;
         }
 
-            html[data-produccion-theme="dark"] .program-alert.has-highlight {
+            html[data-nsq-theme="dark"] .program-alert.has-highlight {
                 background: #2b2313;
                 border-color: #7a5b22;
             }
 
-        html[data-produccion-theme="dark"] .alerts-modal,
-        html[data-produccion-theme="dark"] .alerts-modal-summary,
-        html[data-produccion-theme="dark"] .alerts-modal-empty {
+        html[data-nsq-theme="dark"] .alerts-modal,
+        html[data-nsq-theme="dark"] .alerts-modal-summary,
+        html[data-nsq-theme="dark"] .alerts-modal-empty {
             color: #dce7f6;
         }
 
-        html[data-produccion-theme="dark"] .tag,
-        html[data-produccion-theme="dark"] .queue-badge,
-        html[data-produccion-theme="dark"] .operator-pill {
+        html[data-nsq-theme="dark"] .tag,
+        html[data-nsq-theme="dark"] .queue-badge,
+        html[data-nsq-theme="dark"] .operator-pill {
             background: #17263c;
             border-color: #354961;
             color: #cbd7e7;
         }
 
-        html[data-produccion-theme="dark"] .tag-blue {
+        html[data-nsq-theme="dark"] .tag-blue {
             background: #102b4c;
             border-color: #28598b;
             color: #9dcaff;
         }
 
-        html[data-produccion-theme="dark"] .tag-ok {
+        html[data-nsq-theme="dark"] .tag-ok {
             background: #102a20;
             border-color: #286446;
             color: #79e3a8;
         }
 
-        html[data-produccion-theme="dark"] .tag-warn {
+        html[data-nsq-theme="dark"] .tag-warn {
             background: #2b2313;
             border-color: #76571e;
             color: #f6cc6d;
         }
 
-        html[data-produccion-theme="dark"] .row-produccion {
+        html[data-nsq-theme="dark"] .row-produccion {
             background: #102843;
         }
 
-        html[data-produccion-theme="dark"] .row-preparacion {
+        html[data-nsq-theme="dark"] .row-preparacion {
             background: #2b2412;
         }
 
-        html[data-produccion-theme="dark"] .row-pausado {
+        html[data-nsq-theme="dark"] .row-pausado {
             background: #30191d;
         }
 
-        html[data-produccion-theme="dark"] .row-terminado {
+        html[data-nsq-theme="dark"] .row-terminado {
             background: #10271d;
         }
 
@@ -1848,7 +1847,7 @@
             padding-top: 14px !important;
         }
 
-        html[data-produccion-theme="dark"] #modalIniciarPreparacion .modal-footer {
+        html[data-nsq-theme="dark"] #modalIniciarPreparacion .modal-footer {
             background: #111b2d;
             border-top-color: #2c3d55 !important;
         }
@@ -1876,6 +1875,60 @@
             }
         }
 
+        /* Navegación de retorno separada de la cabecera principal. */
+        .production-page-nav {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 42px;
+            margin: 0 0 10px;
+        }
+
+        .production-back-btn {
+            border: 1px solid #c9d8ea;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .88);
+            color: #244a76;
+            padding: 9px 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-weight: 900;
+            text-decoration: none;
+            white-space: nowrap;
+            box-shadow: 0 7px 18px rgba(22, 49, 82, .08);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease;
+        }
+
+        .production-back-btn:hover {
+            border-color: #8fb3df;
+            background: #fff;
+            color: #123f75;
+            transform: translateY(-1px);
+            box-shadow: 0 9px 22px rgba(22, 49, 82, .13);
+        }
+
+        .production-back-btn:focus-visible {
+            outline: 0;
+            box-shadow: 0 0 0 .22rem rgba(39, 122, 214, .18);
+        }
+
+        html[data-nsq-theme="dark"] .production-back-btn {
+            border-color: #334860;
+            background: rgba(18, 31, 49, .82);
+            color: #e7eef8;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, .18);
+        }
+
+        html[data-nsq-theme="dark"] .production-back-btn:hover {
+            border-color: #52739a;
+            background: #1a2a40;
+            color: #fff;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, .24);
+        }
+
         .production-nav-btn[href*="Preparacion"] {
             border-color: #c9d8ef;
             background: #f5f8ff;
@@ -1888,13 +1941,167 @@
                 color: #203f7c;
             }
 
+    
+
+        /* ==========================================================
+           PRODUCCION - REFINAMIENTO VISUAL DARK V2
+           Superficies neutras + estados como acento, no como relleno.
+           ========================================================== */
+        .page {
+            background: transparent !important;
+        }
+
+        html[data-nsq-theme="dark"] .page {
+            background: transparent !important;
+            color: #e8eef7;
+        }
+
+        html[data-nsq-theme="dark"] .topbar {
+            background: linear-gradient(135deg, #12325f 0%, #174b85 100%);
+            border: 1px solid rgba(125, 183, 255, .20);
+            box-shadow: 0 14px 34px rgba(0, 0, 0, .24);
+        }
+
+        html[data-nsq-theme="dark"] .section,
+        html[data-nsq-theme="dark"] .production-content-shell {
+            background: #162133;
+            border-color: #2b3a50;
+            box-shadow: 0 10px 26px rgba(0, 0, 0, .16);
+        }
+
+        html[data-nsq-theme="dark"] .section-head,
+        html[data-nsq-theme="dark"] .production-filters .section-head {
+            background: #1a2639;
+            border-bottom-color: #2d3d54;
+        }
+
+        html[data-nsq-theme="dark"] .production-filters .filters {
+            background: #162133;
+            border-top-color: #2d3d54;
+        }
+
+        html[data-nsq-theme="dark"] .production-filters .section-title {
+            color: #f3f7fd;
+        }
+
+        html[data-nsq-theme="dark"] .production-filters .section-sub,
+        html[data-nsq-theme="dark"] .production-filters .form-label {
+            color: #9eacc0;
+        }
+
+        html[data-nsq-theme="dark"] .production-filters .section-title i {
+            background: #20324b;
+            border-color: #38516f;
+            color: #9ecbff;
+        }
+
+        html[data-nsq-theme="dark"] .production-filters .form-control,
+        html[data-nsq-theme="dark"] .production-filters .form-select {
+            background: #0f1a2a;
+            border-color: #34465e;
+            color: #edf4fd;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.015);
+        }
+
+        html[data-nsq-theme="dark"] .production-filters .form-control:hover,
+        html[data-nsq-theme="dark"] .production-filters .form-select:hover {
+            background: #122036;
+            border-color: #48617f;
+        }
+
+        html[data-nsq-theme="dark"] .production-filters .form-control:focus,
+        html[data-nsq-theme="dark"] .production-filters .form-select:focus {
+            background: #122036;
+            border-color: #5da6ff;
+            color: #ffffff;
+            box-shadow: 0 0 0 .2rem rgba(93, 166, 255, .12);
+        }
+
+        html[data-nsq-theme="dark"] .production-nav {
+            background: #111b2b;
+            border-color: #2b3a50;
+            box-shadow: 0 8px 20px rgba(0,0,0,.14);
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-btn,
+        html[data-nsq-theme="dark"] .production-nav-btn[href*="Preparacion"] {
+            background: #182438;
+            border-color: #33455e;
+            color: #c8d4e4;
+            box-shadow: none;
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-btn:hover,
+        html[data-nsq-theme="dark"] .production-nav-btn[href*="Preparacion"]:hover {
+            background: #1d2d45;
+            border-color: #506b8c;
+            color: #ffffff;
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="proximos"] {
+            background: #182438;
+            border-color: #4a4536;
+            color: #e5c66e;
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="proximos"].is-active {
+            background: #202638;
+            border-color: #c9982f;
+            color: #ffd56b;
+            box-shadow: inset 0 -2px 0 #d6a63e;
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"] {
+            background: #182438;
+            border-color: #334f70;
+            color: #a8cefb;
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="ejecuciones"].is-active {
+            background: #1a2b41;
+            border-color: #4e93dc;
+            color: #d9ebff;
+            box-shadow: inset 0 -2px 0 #5da6ff;
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="cola"] {
+            background: #182438;
+            border-color: #4b4261;
+            color: #cabce9;
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-btn[data-production-panel="cola"].is-active {
+            background: #24283e;
+            border-color: #806bc2;
+            color: #e9e1ff;
+            box-shadow: inset 0 -2px 0 #9b84e4;
+        }
+
+        html[data-nsq-theme="dark"] .production-nav-count {
+            background: #223149;
+            border-color: #3c506b;
+            color: inherit;
+        }
+
     </style>
 }
 
 <div class="page">
 
+    <nav class="production-page-nav" aria-label="Navegación de Producción">
+        <a class="production-back-btn"
+           asp-controller="Menu"
+           asp-action="Grupo"
+           asp-route-id="2"
+           title="Regresar al menú de Producción"
+           aria-label="Regresar al menú de Producción">
+            <i class="bi bi-arrow-left"></i>
+            Regresar
+        </a>
+    </nav>
+
     <header class="topbar">
-        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div>
                 <h1 class="topbar-title">
                     <i class="bi bi-gear-wide-connected me-2"></i>
@@ -1904,6 +2111,7 @@
                     Centro operativo de Producción: ejecución, próximos inicios y cola programada.
                 </div>
             </div>
+
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <a class="production-nav-btn"
                    asp-controller="Produccion"
@@ -2958,105 +3166,6 @@
                 })();
     </script>
 
-    <script>
-        (() => {
-            const root = document.documentElement;
-
-            function textoNormalizado(el) {
-                return (el?.textContent || '')
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .toLowerCase();
-            }
-
-            function detectarTemaERP() {
-                const html = document.documentElement;
-                const body = document.body;
-
-                const pistas = [
-                    html.getAttribute('data-nsq-theme'),
-                    html.getAttribute('data-theme'),
-                    html.getAttribute('data-bs-theme'),
-                    html.getAttribute('data-color-mode'),
-                    html.className,
-                    body?.getAttribute('data-nsq-theme'),
-                    body?.getAttribute('data-theme'),
-                    body?.getAttribute('data-bs-theme'),
-                    body?.getAttribute('data-color-mode'),
-                    body?.className
-                ]
-                    .filter(Boolean)
-                    .join(' ')
-                    .toLowerCase();
-
-                if (/(^|\s|[-_])(dark|oscuro|night)(\s|$|[-_])/.test(pistas)) {
-                    return 'dark';
-                }
-
-                if (/(^|\s|[-_])(light|claro)(\s|$|[-_])/.test(pistas)) {
-                    return 'light';
-                }
-
-                // En el layout actual el botón muestra el modo al que puedes cambiar:
-                // si dice "Claro", el ERP está actualmente en oscuro;
-                // si dice "Oscuro", el ERP está actualmente en claro.
-                const controles = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-                const switchTema = controles.find(el => {
-                    const txt = textoNormalizado(el);
-                    return txt === 'claro' || txt === 'oscuro' ||
-                           txt.startsWith('claro ') || txt.startsWith('oscuro ');
-                });
-
-                if (switchTema) {
-                    const txt = textoNormalizado(switchTema);
-                    if (txt.startsWith('claro')) return 'dark';
-                    if (txt.startsWith('oscuro')) return 'light';
-                }
-
-                return window.matchMedia?.('(prefers-color-scheme: dark)').matches
-                    ? 'dark'
-                    : 'light';
-            }
-
-            let temaActual = '';
-
-            function sincronizarTemaProduccion() {
-                const tema = detectarTemaERP();
-                if (tema === temaActual) return;
-
-                temaActual = tema;
-                root.setAttribute('data-produccion-theme', tema);
-            }
-
-            sincronizarTemaProduccion();
-
-            const observer = new MutationObserver(() => {
-                window.requestAnimationFrame(sincronizarTemaProduccion);
-            });
-
-            observer.observe(document.documentElement, {
-                attributes: true,
-                attributeFilter: ['class', 'data-nsq-theme', 'data-theme', 'data-bs-theme', 'data-color-mode']
-            });
-
-            if (document.body) {
-                observer.observe(document.body, {
-                    attributes: true,
-                    childList: true,
-                    subtree: true,
-                    attributeFilter: ['class', 'data-nsq-theme', 'data-theme', 'data-bs-theme', 'data-color-mode']
-                });
-            }
-
-            document.addEventListener('click', () => {
-                setTimeout(sincronizarTemaProduccion, 0);
-                setTimeout(sincronizarTemaProduccion, 120);
-                setTimeout(sincronizarTemaProduccion, 300);
-            }, true);
-
-            window.matchMedia?.('(prefers-color-scheme: dark)')
-                .addEventListener?.('change', sincronizarTemaProduccion);
-        })();
-    </script>
+    
 
 }

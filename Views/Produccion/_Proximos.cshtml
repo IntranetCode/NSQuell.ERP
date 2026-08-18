@@ -458,119 +458,206 @@
     }
 
     /* Tema oscuro heredado desde Index.cshtml */
-    html[data-produccion-theme="dark"] .prox-panel {
+    html[data-nsq-theme="dark"] .prox-panel {
         --prox-blue: #7db7ff;
         --prox-border: #304159;
         --prox-muted: #9aa9bd;
         --prox-text: #e7eef9;
     }
 
-    html[data-produccion-theme="dark"] .prox-header,
-    html[data-produccion-theme="dark"] .prox-card,
-    html[data-produccion-theme="dark"] .prox-empty {
+    html[data-nsq-theme="dark"] .prox-header,
+    html[data-nsq-theme="dark"] .prox-card,
+    html[data-nsq-theme="dark"] .prox-empty {
         background: #111b2d;
         border-color: #2d3e55;
         color: #dce7f6;
     }
 
-    html[data-produccion-theme="dark"] .prox-title,
-    html[data-produccion-theme="dark"] .prox-program,
-    html[data-produccion-theme="dark"] .prox-part,
-    html[data-produccion-theme="dark"] .prox-meta-value,
-    html[data-produccion-theme="dark"] .prox-machine,
-    html[data-produccion-theme="dark"] .prox-operator {
+    html[data-nsq-theme="dark"] .prox-title,
+    html[data-nsq-theme="dark"] .prox-program,
+    html[data-nsq-theme="dark"] .prox-part,
+    html[data-nsq-theme="dark"] .prox-meta-value,
+    html[data-nsq-theme="dark"] .prox-machine,
+    html[data-nsq-theme="dark"] .prox-operator {
         color: #eef5ff;
     }
 
-    html[data-produccion-theme="dark"] .prox-sub,
-    html[data-produccion-theme="dark"] .prox-description,
-    html[data-produccion-theme="dark"] .prox-of,
-    html[data-produccion-theme="dark"] .prox-meta-label {
+    html[data-nsq-theme="dark"] .prox-sub,
+    html[data-nsq-theme="dark"] .prox-description,
+    html[data-nsq-theme="dark"] .prox-of,
+    html[data-nsq-theme="dark"] .prox-meta-label {
         color: #9aa9bd;
     }
 
-    html[data-produccion-theme="dark"] .prox-summary-pill {
+    html[data-nsq-theme="dark"] .prox-summary-pill {
         background: #17263c;
         border-color: #354961;
         color: #cbd7e7;
     }
 
-    html[data-produccion-theme="dark"] .prox-summary-pill strong {
+    html[data-nsq-theme="dark"] .prox-summary-pill strong {
         color: #d9eaff;
     }
 
-    html[data-produccion-theme="dark"] .prox-summary-pill.is-ready {
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-ready {
         background: #102a20;
         border-color: #286446;
         color: #79e3a8;
     }
 
-    html[data-produccion-theme="dark"] .prox-summary-pill.is-ready strong {
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-ready strong {
         color: #79e3a8;
     }
 
-    html[data-produccion-theme="dark"] .prox-summary-pill.is-blocked {
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-blocked {
         background: #30191d;
         border-color: #75333c;
         color: #ff9ca8;
     }
 
-    html[data-produccion-theme="dark"] .prox-summary-pill.is-blocked strong {
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-blocked strong {
         color: #ff9ca8;
     }
 
-    html[data-produccion-theme="dark"] .prox-card-danger {
+    html[data-nsq-theme="dark"] .prox-card-danger {
         background: #2a171a;
         border-color: #553039;
         border-left-color: #fb7185;
     }
 
-    html[data-produccion-theme="dark"] .prox-card-overdue {
+    html[data-nsq-theme="dark"] .prox-card-overdue {
         background: #2b1d13;
         border-color: #5f4526;
         border-left-color: #f59e0b;
     }
 
-    html[data-produccion-theme="dark"] .prox-card-now {
+    html[data-nsq-theme="dark"] .prox-card-now {
         background: #2b2412;
         border-color: #635224;
         border-left-color: #fbbf24;
     }
 
-    html[data-produccion-theme="dark"] .prox-card-soon {
+    html[data-nsq-theme="dark"] .prox-card-soon {
         background: #242315;
         border-color: #4f4a2c;
         border-left-color: #d9b84b;
     }
 
-    html[data-produccion-theme="dark"] .prox-card.is-machine-busy {
+    html[data-nsq-theme="dark"] .prox-card.is-machine-busy {
         box-shadow: inset 0 0 0 1px #75333c;
     }
 
-    html[data-produccion-theme="dark"] .prox-time,
-    html[data-produccion-theme="dark"] .prox-blocked-note {
+    html[data-nsq-theme="dark"] .prox-time,
+    html[data-nsq-theme="dark"] .prox-blocked-note {
         background: #17263c;
         border-color: #354961;
         color: #cbd7e7;
     }
 
-    html[data-produccion-theme="dark"] .prox-time-danger {
+    html[data-nsq-theme="dark"] .prox-time-danger {
         background: #35191e;
         border-color: #78323d;
         color: #ff9ca8;
     }
 
-    html[data-produccion-theme="dark"] .prox-time-overdue,
-    html[data-produccion-theme="dark"] .prox-time-now {
+    html[data-nsq-theme="dark"] .prox-time-overdue,
+    html[data-nsq-theme="dark"] .prox-time-now {
         background: #312312;
         border-color: #745420;
         color: #ffd27b;
     }
 
-    html[data-produccion-theme="dark"] .prox-time-soon {
+    html[data-nsq-theme="dark"] .prox-time-soon {
         background: #242315;
         border-color: #534c29;
         color: #e8d37b;
+    }
+
+
+
+    /* DARK V2: tarjetas neutras; el estado se comunica con borde y badges. */
+    html[data-nsq-theme="dark"] .prox-header,
+    html[data-nsq-theme="dark"] .prox-card,
+    html[data-nsq-theme="dark"] .prox-empty {
+        background: #162133;
+        border-color: #2d3d54;
+    }
+
+    html[data-nsq-theme="dark"] .prox-card {
+        box-shadow: 0 7px 18px rgba(0,0,0,.13);
+    }
+
+    html[data-nsq-theme="dark"] .prox-card-danger,
+    html[data-nsq-theme="dark"] .prox-card-overdue,
+    html[data-nsq-theme="dark"] .prox-card-now,
+    html[data-nsq-theme="dark"] .prox-card-soon {
+        background: #162133;
+        border-color: #2d3d54;
+    }
+
+    html[data-nsq-theme="dark"] .prox-card-danger {
+        border-left-color: #f87171;
+    }
+
+    html[data-nsq-theme="dark"] .prox-card-overdue {
+        border-left-color: #f59e0b;
+    }
+
+    html[data-nsq-theme="dark"] .prox-card-now {
+        border-left-color: #fbbf24;
+    }
+
+    html[data-nsq-theme="dark"] .prox-card-soon {
+        border-left-color: #d8b84d;
+    }
+
+    html[data-nsq-theme="dark"] .prox-card.is-machine-busy {
+        box-shadow: inset 0 0 0 1px rgba(248,113,113,.35), 0 7px 18px rgba(0,0,0,.13);
+    }
+
+    html[data-nsq-theme="dark"] .prox-machine,
+    html[data-nsq-theme="dark"] .prox-operator,
+    html[data-nsq-theme="dark"] .prox-summary-pill {
+        background: #1c2a40;
+        border-color: #38506c;
+    }
+
+    html[data-nsq-theme="dark"] .prox-machine.is-busy,
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-blocked {
+        background: rgba(239,68,68,.10);
+        border-color: rgba(248,113,113,.35);
+        color: #ffabb3;
+    }
+
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-ready {
+        background: rgba(34,197,94,.09);
+        border-color: rgba(74,222,128,.30);
+        color: #83e6a8;
+    }
+
+    html[data-nsq-theme="dark"] .prox-time-danger {
+        background: rgba(239,68,68,.11);
+        border-color: rgba(248,113,113,.36);
+        color: #ffabb3;
+    }
+
+    html[data-nsq-theme="dark"] .prox-time-overdue,
+    html[data-nsq-theme="dark"] .prox-time-now {
+        background: rgba(245,158,11,.10);
+        border-color: rgba(251,191,36,.34);
+        color: #ffd27a;
+    }
+
+    html[data-nsq-theme="dark"] .prox-time-soon {
+        background: rgba(217,184,75,.09);
+        border-color: rgba(217,184,75,.30);
+        color: #e8d58b;
+    }
+
+    html[data-nsq-theme="dark"] .prox-blocked-note {
+        background: transparent;
+        border: 0;
+        color: #ff9ba7;
     }
 
 </style>

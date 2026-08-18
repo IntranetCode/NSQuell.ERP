@@ -594,6 +594,281 @@
             .grid, .quantity-box, .snapshot-grid { grid-template-columns: 1fr; }
             .full, .data-wide { grid-column: auto; }
         }
+
+        /* ======================================================
+           TEMA GLOBAL ERP - GP12 / CREAR
+           El modo claro conserva los estilos originales.
+           ====================================================== */
+
+        html[data-nsq-theme="dark"] .page {
+            --panel: #111c2d;
+            --text: #f4f7fb;
+            --muted: #9fb0c5;
+            --border: #2b3c53;
+            --line: #223248;
+            --shadow: 0 18px 45px rgba(0, 0, 0, .22);
+
+            color: var(--text);
+        }
+
+        html[data-nsq-theme="dark"] body {
+            background: transparent !important;
+        }
+
+        /* Pasos superiores */
+        html[data-nsq-theme="dark"] .step {
+            background:
+                linear-gradient(
+                    180deg,
+                    #121f33 0%,
+                    #0f1a2a 100%
+                );
+            border-color: var(--border);
+            box-shadow: 0 8px 22px rgba(0, 0, 0, .18);
+        }
+
+        html[data-nsq-theme="dark"] .step strong {
+            color: #f4f7fb;
+        }
+
+        html[data-nsq-theme="dark"] .step span {
+            color: var(--muted);
+        }
+
+        html[data-nsq-theme="dark"] .step-number {
+            border: 1px solid rgba(255, 255, 255, .08);
+            box-shadow: 0 5px 14px rgba(0, 0, 0, .22);
+        }
+
+        /* Paneles principales */
+        html[data-nsq-theme="dark"] .panel {
+            background:
+                linear-gradient(
+                    180deg,
+                    #121f33 0%,
+                    #0f1a2a 100%
+                );
+            border-color: var(--border);
+            box-shadow: var(--shadow);
+        }
+
+        html[data-nsq-theme="dark"] .panel-head {
+            background:
+                linear-gradient(
+                    180deg,
+                    #16243a 0%,
+                    #111d2f 100%
+                );
+            border-color: var(--line);
+        }
+
+        html[data-nsq-theme="dark"] .panel-title {
+            color: #f4f7fb;
+        }
+
+        html[data-nsq-theme="dark"] .panel-subtitle {
+            color: var(--muted);
+        }
+
+        /* Nota informativa */
+        html[data-nsq-theme="dark"] .of-note {
+            background: rgba(37, 99, 235, .12);
+            border-left-color: #3b82f6;
+            color: #c7d6e8;
+        }
+
+        html[data-nsq-theme="dark"] .of-note strong {
+            color: #93c5fd;
+        }
+
+        html[data-nsq-theme="dark"] .of-note code {
+            color: #fda4af;
+            background: rgba(244, 63, 94, .10);
+            border-radius: 5px;
+            padding: 1px 4px;
+        }
+
+        /* Validaciones */
+        html[data-nsq-theme="dark"] .validation {
+            border-color: rgba(248, 113, 113, .30);
+            background: rgba(239, 68, 68, .11);
+            color: #fecaca;
+        }
+
+        html[data-nsq-theme="dark"] .field-validation-error {
+            color: #fca5a5;
+        }
+
+        html[data-nsq-theme="dark"] .required {
+            color: #fb7185;
+        }
+
+        /* Etiquetas y controles */
+        html[data-nsq-theme="dark"] .field label {
+            color: #dbe7f4;
+        }
+
+        html[data-nsq-theme="dark"] .control {
+            background: #0b1626;
+            border-color: #334861;
+            color: #edf5ff;
+            color-scheme: dark;
+        }
+
+        html[data-nsq-theme="dark"] .control::placeholder {
+            color: #71839a;
+            opacity: 1;
+        }
+
+        html[data-nsq-theme="dark"] .control:hover {
+            border-color: #49627f;
+        }
+
+        html[data-nsq-theme="dark"] .control:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, .13);
+        }
+
+        html[data-nsq-theme="dark"] .control option {
+            background: #0b1626;
+            color: #edf5ff;
+        }
+
+        html[data-nsq-theme="dark"] .control:disabled {
+            background: #101c2d;
+            border-color: #26384e;
+            color: #8294aa;
+            opacity: 1;
+        }
+
+        html[data-nsq-theme="dark"] .loading {
+            color: #60a5fa;
+        }
+
+        /* Resumen de datos de la OF */
+        html[data-nsq-theme="dark"] .snapshot {
+            background: #0d1828;
+            border-color: var(--border);
+        }
+
+        html[data-nsq-theme="dark"] .snapshot-head strong {
+            color: #f4f7fb;
+        }
+
+        html[data-nsq-theme="dark"] .source-chip {
+            background: rgba(99, 102, 241, .16);
+            border: 1px solid rgba(129, 140, 248, .22);
+            color: #c7d2fe;
+        }
+
+        html[data-nsq-theme="dark"] .data {
+            background: #121f33;
+            border-color: #2a3c53;
+        }
+
+        html[data-nsq-theme="dark"] .data small {
+            color: #8295ac;
+        }
+
+        html[data-nsq-theme="dark"] .data strong {
+            color: #edf5ff;
+        }
+
+        /* Clasificación de material */
+        html[data-nsq-theme="dark"] .classification-box {
+            background:
+                linear-gradient(
+                    180deg,
+                    #111d2f 0%,
+                    #0d1828 100%
+                );
+            border-color: #2b3c53;
+        }
+
+        html[data-nsq-theme="dark"] .classification-head strong,
+        html[data-nsq-theme="dark"] .classification-name {
+            color: #edf5ff;
+        }
+
+        html[data-nsq-theme="dark"] .classification-head span {
+            color: var(--muted);
+        }
+
+        html[data-nsq-theme="dark"] .classification-card {
+            background: #121f33;
+            border-color: #2b3c53;
+        }
+
+        html[data-nsq-theme="dark"] .classification-card.yellow {
+            background:
+                linear-gradient(
+                    90deg,
+                    rgba(245, 158, 11, .08),
+                    #121f33 18%
+                );
+        }
+
+        html[data-nsq-theme="dark"] .classification-card.red {
+            background:
+                linear-gradient(
+                    90deg,
+                    rgba(220, 38, 38, .08),
+                    #121f33 18%
+                );
+        }
+
+        html[data-nsq-theme="dark"] .label-dot {
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, .05);
+        }
+
+        html[data-nsq-theme="dark"] .classification-summary > div {
+            background: #0b1626;
+            border-color: #26384e;
+        }
+
+        html[data-nsq-theme="dark"] .classification-summary small {
+            color: #8295ac;
+        }
+
+        html[data-nsq-theme="dark"] .classification-summary strong {
+            color: #f4f7fb;
+        }
+
+        html[data-nsq-theme="dark"] .classification-error {
+            color: #fecaca;
+            background: rgba(239, 68, 68, .11);
+            border-color: rgba(248, 113, 113, .28);
+        }
+
+        /* Notas y estados */
+        html[data-nsq-theme="dark"] .quantity-note {
+            background: rgba(245, 158, 11, .10);
+            border-color: rgba(251, 191, 36, .24);
+            color: #fde68a;
+        }
+
+        html[data-nsq-theme="dark"] .empty-of {
+            background: rgba(245, 158, 11, .09);
+            border-color: rgba(245, 158, 11, .50);
+            color: #fde68a;
+        }
+
+        /* Acciones */
+        html[data-nsq-theme="dark"] .btn-cancel {
+            background: #18283e;
+            color: #dbe7f4;
+            border: 1px solid #334861;
+        }
+
+        html[data-nsq-theme="dark"] .btn-cancel:hover {
+            background: #20334c;
+            color: #ffffff;
+        }
+
+        html[data-nsq-theme="dark"] .btn-submit {
+            color: #ffffff;
+        }
+
     </style>
 </head>
 <body>
