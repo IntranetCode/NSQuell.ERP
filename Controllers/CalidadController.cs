@@ -50,318 +50,173 @@ namespace ERP.NSQuell.Controllers
                 "No se encontró la cadena de conexión DefaultConnection."
             );
 
-        // =========================================================
-        // BANDEJA PRINCIPAL
-        // =========================================================
-
         [HttpGet]
-        public async Task<IActionResult> Index(
-            string? busqueda,
-            string? estadoFiltro)
+        public async Task<IActionResult> Index(string? busqueda, string? estadoFiltro, string? grupo)
         {
             busqueda = busqueda?.Trim();
-            estadoFiltro = estadoFiltro?
-                .Trim()
-                .ToUpperInvariant();
+            estadoFiltro = estadoFiltro?.Trim().ToUpperInvariant();
+            grupo = string.IsNullOrWhiteSpace(grupo) ? "PENDIENTES" : grupo.Trim().ToUpperInvariant();
 
-            var baseQuery = _context.CalidadInspecciones
-                .AsNoTracking();
+            var gruposValidos = new[] { "PENDIENTES", "PROCESO", "CAJAS", "GP12", "HISTORIAL" };
+            if (!gruposValidos.Contains(grupo)) grupo = "PENDIENTES";
 
+            var baseQuery = _context.CalidadInspecciones.AsNoTracking();
             var query = baseQuery;
 
             if (!string.IsNullOrWhiteSpace(busqueda))
             {
                 query = query.Where(x =>
-                    (x.CodigoBarras != null &&
-                     x.CodigoBarras.Contains(busqueda)) ||
-
-                    (x.OrdenTrabajo != null &&
-                     x.OrdenTrabajo.Contains(busqueda)) ||
-
-                    (x.ClienteNombre != null &&
-                     x.ClienteNombre.Contains(busqueda)) ||
-
-                    (x.NumeroParte != null &&
-                     x.NumeroParte.Contains(busqueda)) ||
-
-                    (x.Material != null &&
-                     x.Material.Contains(busqueda)) ||
-
-                    (x.Proceso != null &&
-                     x.Proceso.Contains(busqueda)) ||
-
-                    (x.Maquina != null &&
-                     x.Maquina.Contains(busqueda)) ||
-
-                    (x.Molde != null &&
-                     x.Molde.Contains(busqueda)) ||
-
-                    (x.OperadorPrincipalNombre != null &&
-                     x.OperadorPrincipalNombre.Contains(busqueda))
-                );
+                    (x.CodigoBarras != null && x.CodigoBarras.Contains(busqueda)) ||
+                    (x.OrdenTrabajo != null && x.OrdenTrabajo.Contains(busqueda)) ||
+                    (x.ClienteNombre != null && x.ClienteNombre.Contains(busqueda)) ||
+                    (x.NumeroParte != null && x.NumeroParte.Contains(busqueda)) ||
+                    (x.Material != null && x.Material.Contains(busqueda)) ||
+                    (x.Proceso != null && x.Proceso.Contains(busqueda)) ||
+                    (x.Maquina != null && x.Maquina.Contains(busqueda)) ||
+                    (x.Molde != null && x.Molde.Contains(busqueda)) ||
+                    (x.OperadorPrincipalNombre != null && x.OperadorPrincipalNombre.Contains(busqueda)));
             }
 
-            if (!string.IsNullOrWhiteSpace(estadoFiltro) &&
-                estadoFiltro != CalidadEstados.PendienteLiberacionCaja)
+            if (!string.IsNullOrWhiteSpace(estadoFiltro) && estadoFiltro != CalidadEstados.PendienteLiberacionCaja)
             {
-                query = query.Where(x =>
-                    x.Estado == estadoFiltro);
+                query = query.Where(x => x.Estado == estadoFiltro);
+            }
+            else
+            {
+                switch (grupo)
+                {
+                    case "PENDIENTES":
+                        query = query.Where(x =>
+                            x.Estado == CalidadEstados.PendientePrearranque ||
+                            x.Estado == CalidadEstados.DevueltoPrearranque ||
+                            x.Estado == CalidadEstados.PendientePrimerasPiezas ||
+                            x.Estado == CalidadEstados.AjustesSolicitados ||
+                            x.Estado == CalidadEstados.PendienteReliberacion ||
+                            x.Estado == CalidadEstados.LegacyAbierta ||
+                            x.Estado == CalidadEstados.LegacyDetenida);
+                        break;
+
+                    case "PROCESO":
+                        query = query.Where(x =>
+                            x.Estado == CalidadEstados.ArranqueAutorizado ||
+                            x.Estado == CalidadEstados.ProduccionLiberada ||
+                            x.Estado == CalidadEstados.MonitoreoActivo);
+                        break;
+
+                    case "CAJAS":
+                        query = query.Where(x => false);
+                        break;
+
+                    case "GP12":
+                        query = query.Where(x =>
+                            x.Estado == CalidadEstados.PendienteGP12 ||
+                            x.Estado == CalidadEstados.EnGP12 ||
+                            x.Estado == CalidadEstados.LegacyGPI2);
+                        break;
+
+                    case "HISTORIAL":
+                        query = query.Where(x =>
+                            x.Estado == CalidadEstados.MaterialLiberado ||
+                            x.Estado == CalidadEstados.MaterialNoConforme ||
+                            x.Estado == CalidadEstados.Cerrada ||
+                            x.Estado == CalidadEstados.LegacyLiberada ||
+                            x.Estado == CalidadEstados.LegacyContencion ||
+                            x.Estado == CalidadEstados.LegacyScrap);
+                        break;
+                }
             }
 
             var model = new CalidadIndexViewModel
             {
                 Busqueda = busqueda,
                 EstadoFiltro = estadoFiltro,
-
-                TotalPendientePrearranque =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.PendientePrearranque),
-
-                TotalDevueltoPrearranque =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.DevueltoPrearranque),
-
-                TotalArranqueAutorizado =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.ArranqueAutorizado),
-
-                TotalPendientePrimerasPiezas =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.PendientePrimerasPiezas),
-
-                TotalAjustesSolicitados =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.AjustesSolicitados),
-
-                TotalProduccionLiberada =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.ProduccionLiberada),
-
-                TotalMonitoreoActivo =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.MonitoreoActivo),
-
-                // Este total se carga desde Produccion_Cajas, no desde
-                // el estado general de Calidad_Inspecciones.
+                TotalPendientePrearranque = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.PendientePrearranque),
+                TotalDevueltoPrearranque = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.DevueltoPrearranque),
+                TotalArranqueAutorizado = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.ArranqueAutorizado),
+                TotalPendientePrimerasPiezas = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.PendientePrimerasPiezas),
+                TotalAjustesSolicitados = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.AjustesSolicitados),
+                TotalProduccionLiberada = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.ProduccionLiberada),
+                TotalMonitoreoActivo = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.MonitoreoActivo),
                 TotalPendienteLiberacionCaja = 0,
-
-                TotalPendienteReliberacion =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.PendienteReliberacion),
-
-                TotalPendienteGP12 =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.PendienteGP12),
-
-                TotalEnGP12 =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.EnGP12),
-
-                TotalMaterialNoConforme =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.MaterialNoConforme),
-
-                TotalCerradas =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                        CalidadEstados.Cerrada),
-
-                /*
-                 * Totales de compatibilidad para el Index anterior.
-                 */
-                TotalAbiertas =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                            CalidadEstados.LegacyAbierta ||
-                        x.Estado ==
-                            CalidadEstados.PendientePrearranque ||
-                        x.Estado ==
-                            CalidadEstados.DevueltoPrearranque ||
-                        x.Estado ==
-                            CalidadEstados.ArranqueAutorizado ||
-                        x.Estado ==
-                            CalidadEstados.PendientePrimerasPiezas ||
-                        x.Estado ==
-                            CalidadEstados.AjustesSolicitados ||
-                        x.Estado ==
-                            CalidadEstados.ProduccionLiberada ||
-                        x.Estado ==
-                            CalidadEstados.MonitoreoActivo ||
-                        x.Estado ==
-                            CalidadEstados.PendienteLiberacionCaja ||
-                        x.Estado ==
-                            CalidadEstados.PendienteReliberacion),
-
-                TotalLiberadas =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                            CalidadEstados.LegacyLiberada ||
-                        x.Estado ==
-                            CalidadEstados.ProduccionLiberada ||
-                        x.Estado ==
-                            CalidadEstados.MaterialLiberado),
-
-                TotalGPI2 =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                            CalidadEstados.LegacyGPI2 ||
-                        x.Estado ==
-                            CalidadEstados.PendienteGP12 ||
-                        x.Estado ==
-                            CalidadEstados.EnGP12),
-
-                TotalContencion =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                            CalidadEstados.LegacyContencion ||
-                        x.Estado ==
-                            CalidadEstados.MaterialNoConforme ||
-                        x.EnContencion),
-
-                TotalScrap =
-                    await baseQuery.CountAsync(x =>
-                        x.Estado ==
-                            CalidadEstados.LegacyScrap ||
-                        x.EsScrap)
+                TotalPendienteReliberacion = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.PendienteReliberacion),
+                TotalPendienteGP12 = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.PendienteGP12),
+                TotalEnGP12 = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.EnGP12),
+                TotalMaterialNoConforme = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.MaterialNoConforme),
+                TotalCerradas = await baseQuery.CountAsync(x => x.Estado == CalidadEstados.Cerrada),
+                TotalAbiertas = await baseQuery.CountAsync(x =>
+                    x.Estado == CalidadEstados.LegacyAbierta ||
+                    x.Estado == CalidadEstados.PendientePrearranque ||
+                    x.Estado == CalidadEstados.DevueltoPrearranque ||
+                    x.Estado == CalidadEstados.ArranqueAutorizado ||
+                    x.Estado == CalidadEstados.PendientePrimerasPiezas ||
+                    x.Estado == CalidadEstados.AjustesSolicitados ||
+                    x.Estado == CalidadEstados.ProduccionLiberada ||
+                    x.Estado == CalidadEstados.MonitoreoActivo ||
+                    x.Estado == CalidadEstados.PendienteLiberacionCaja ||
+                    x.Estado == CalidadEstados.PendienteReliberacion),
+                TotalLiberadas = await baseQuery.CountAsync(x =>
+                    x.Estado == CalidadEstados.LegacyLiberada ||
+                    x.Estado == CalidadEstados.ProduccionLiberada ||
+                    x.Estado == CalidadEstados.MaterialLiberado),
+                TotalGPI2 = await baseQuery.CountAsync(x =>
+                    x.Estado == CalidadEstados.LegacyGPI2 ||
+                    x.Estado == CalidadEstados.PendienteGP12 ||
+                    x.Estado == CalidadEstados.EnGP12),
+                TotalContencion = await baseQuery.CountAsync(x =>
+                    x.Estado == CalidadEstados.LegacyContencion ||
+                    x.Estado == CalidadEstados.MaterialNoConforme ||
+                    x.EnContencion),
+                TotalScrap = await baseQuery.CountAsync(x =>
+                    x.Estado == CalidadEstados.LegacyScrap ||
+                    x.EsScrap)
             };
 
             model.Inspecciones = await query
-                .OrderByDescending(x =>
-                    x.FechaNotificacionCalidad ??
-                    x.FechaCreacion)
-                .Select(x =>
-                    new CalidadListadoItemViewModel
-                    {
-                        InspeccionID =
-                            x.InspeccionID,
-
-                        ProgramaProduccionID =
-                            x.ProgramaProduccionID,
-
-                        EjecucionProduccionID =
-                            x.EjecucionProduccionID,
-
-                        ChecklistArranqueID =
-                            x.ChecklistArranqueID,
-
-                        SolicitudProduccionID =
-                            x.SolicitudProduccionID,
-
-                        SolicitudProduccionDetalleID =
-                            x.SolicitudProduccionDetalleID,
-
-                        ReleaseID =
-                            x.ReleaseID,
-
-                        ReleaseDetalleID =
-                            x.ReleaseDetalleID,
-
-                        CodigoBarras =
-                            x.CodigoBarras,
-
-                        OrdenTrabajo =
-                            x.OrdenTrabajo,
-
-                        ClienteNombre =
-                            x.ClienteNombre,
-
-                        NumeroParte =
-                            x.NumeroParte,
-
-                        Material =
-                            x.Material,
-
-                        Proceso =
-                            x.Proceso,
-
-                        Maquina =
-                            x.Maquina,
-
-                        Molde =
-                            x.Molde,
-
-                        OperadorPrincipalNombre =
-                            x.OperadorPrincipalNombre,
-
-                        OperadorAuxiliarNombre =
-                            x.OperadorAuxiliarNombre,
-
-                        TecnicoInyeccionNombre =
-                            x.TecnicoInyeccionNombre,
-
-                        CantidadTotal =
-                            x.CantidadTotal,
-
-                        CantidadRevisada =
-                            x.CantidadRevisada,
-
-                        CantidadPendiente =
-                            x.CantidadPendiente,
-
-                        FechaInicioProgramada =
-                            x.FechaInicioProgramada,
-
-                        FechaFinProgramada =
-                            x.FechaFinProgramada,
-
-                        FechaNotificacionCalidad =
-                            x.FechaNotificacionCalidad,
-
-                        FechaLiberacionProduccion =
-                            x.FechaLiberacionProduccion,
-
-                        ResultadoCalidad =
-                            x.ResultadoCalidad,
-
-                        Etiqueta =
-                            x.Etiqueta,
-
-                        Estado =
-                            x.Estado,
-
-                        RequiereReliberacion =
-                            x.RequiereReliberacion,
-
-                        ConfiguracionInvalidada =
-                            x.ConfiguracionInvalidada,
-
-                        MotivoInvalidacion =
-                            x.MotivoInvalidacion,
-
-                        FechaCreacion =
-                            x.FechaCreacion
-                    }
-                )
+                .OrderByDescending(x => x.FechaNotificacionCalidad ?? x.FechaCreacion)
+                .Select(x => new CalidadListadoItemViewModel
+                {
+                    InspeccionID = x.InspeccionID,
+                    ProgramaProduccionID = x.ProgramaProduccionID,
+                    EjecucionProduccionID = x.EjecucionProduccionID,
+                    ChecklistArranqueID = x.ChecklistArranqueID,
+                    SolicitudProduccionID = x.SolicitudProduccionID,
+                    SolicitudProduccionDetalleID = x.SolicitudProduccionDetalleID,
+                    ReleaseID = x.ReleaseID,
+                    ReleaseDetalleID = x.ReleaseDetalleID,
+                    CodigoBarras = x.CodigoBarras,
+                    OrdenTrabajo = x.OrdenTrabajo,
+                    ClienteNombre = x.ClienteNombre,
+                    NumeroParte = x.NumeroParte,
+                    Material = x.Material,
+                    Proceso = x.Proceso,
+                    Maquina = x.Maquina,
+                    Molde = x.Molde,
+                    OperadorPrincipalNombre = x.OperadorPrincipalNombre,
+                    OperadorAuxiliarNombre = x.OperadorAuxiliarNombre,
+                    TecnicoInyeccionNombre = x.TecnicoInyeccionNombre,
+                    CantidadTotal = x.CantidadTotal,
+                    CantidadRevisada = x.CantidadRevisada,
+                    CantidadPendiente = x.CantidadPendiente,
+                    FechaInicioProgramada = x.FechaInicioProgramada,
+                    FechaFinProgramada = x.FechaFinProgramada,
+                    FechaNotificacionCalidad = x.FechaNotificacionCalidad,
+                    FechaLiberacionProduccion = x.FechaLiberacionProduccion,
+                    ResultadoCalidad = x.ResultadoCalidad,
+                    Etiqueta = x.Etiqueta,
+                    Estado = x.Estado,
+                    RequiereReliberacion = x.RequiereReliberacion,
+                    ConfiguracionInvalidada = x.ConfiguracionInvalidada,
+                    MotivoInvalidacion = x.MotivoInvalidacion,
+                    FechaCreacion = x.FechaCreacion
+                })
                 .ToListAsync();
 
-            model.TotalMostrados =
-                model.Inspecciones.Count;
+            model.CajasPendientes = await CargarCajasPendientesCalidadAsync(busqueda);
+            model.TotalCajasPendientes = model.CajasPendientes.Count;
+            model.TotalPendienteLiberacionCaja = model.TotalCajasPendientes;
+            model.TotalMostrados = grupo == "CAJAS" ? model.TotalCajasPendientes : model.Inspecciones.Count;
 
-            model.CajasPendientes =
-                await CargarCajasPendientesCalidadAsync(busqueda);
-
-            model.TotalCajasPendientes =
-                model.CajasPendientes.Count;
-
-            model.TotalPendienteLiberacionCaja =
-                model.TotalCajasPendientes;
-
-            if (estadoFiltro == CalidadEstados.PendienteLiberacionCaja)
-            {
-                model.TotalMostrados =
-                    model.TotalCajasPendientes;
-            }
+            ViewBag.GrupoCalidad = grupo;
 
             return View(model);
         }
@@ -3209,6 +3064,85 @@ ORDER BY
                     break;
             }
         }
+
+        private async Task<(int CantidadOK, int CantidadSospechosa, int CantidadScrap)> ObtenerCantidadesProduccionMonitoreoAsync(int registroHoraId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT
+    ISNULL(CantidadOK,0) AS CantidadOK,
+    ISNULL(CantidadSospechosa,0) AS CantidadSospechosa,
+    ISNULL(CantidadScrap,0) AS CantidadScrap
+FROM dbo.Produccion_RegistroHora WITH(UPDLOCK,HOLDLOCK)
+WHERE RegistroHoraID=@RegistroHoraID
+  AND Activo=1;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync()) throw new InvalidOperationException("No se encontró la captura horaria de Producción relacionada con el monitoreo.");
+            return (Convert.ToInt32(rd["CantidadOK"]), Convert.ToInt32(rd["CantidadSospechosa"]), Convert.ToInt32(rd["CantidadScrap"]));
+        }
+
+        private async Task RegistrarDisposicionMonitoreoAsync(int inspeccionId, int monitoreoId, int registroHoraId, string origenHallazgo, string tipoMaterial, int cantidad, string disposicion, string etiqueta, string? observaciones, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            if (cantidad <= 0) return;
+            const string sql = @"
+INSERT INTO dbo.Calidad_DisposicionesMaterial
+(
+    InspeccionID,
+    MonitoreoID,
+    RegistroHoraID,
+    OrigenHallazgo,
+    TipoMaterial,
+    CantidadAfectada,
+    Etiqueta,
+    Disposicion,
+    Responsable,
+    EstadoTratamiento,
+    FechaInicio,
+    ResultadoFinal,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+VALUES
+(
+    @InspeccionID,
+    @MonitoreoID,
+    @RegistroHoraID,
+    @OrigenHallazgo,
+    @TipoMaterial,
+    @CantidadAfectada,
+    @Etiqueta,
+    @Disposicion,
+    NULL,
+    @EstadoTratamiento,
+    @FechaInicio,
+    @ResultadoFinal,
+    @Observaciones,
+    @UsuarioID,
+    @Ahora,
+    1
+);";
+            var ahora = DateTime.Now;
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+            cmd.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = monitoreoId;
+            cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
+            cmd.Parameters.Add("@OrigenHallazgo", SqlDbType.NVarChar, 20).Value = origenHallazgo;
+            cmd.Parameters.Add("@TipoMaterial", SqlDbType.NVarChar, 30).Value = tipoMaterial;
+            cmd.Parameters.Add("@CantidadAfectada", SqlDbType.Int).Value = cantidad;
+            cmd.Parameters.Add("@Etiqueta", SqlDbType.NVarChar, 20).Value = etiqueta;
+            cmd.Parameters.Add("@Disposicion", SqlDbType.NVarChar, 30).Value = disposicion;
+            cmd.Parameters.Add("@EstadoTratamiento", SqlDbType.NVarChar, 30).Value = CalidadEstadoTratamiento.PendienteAsignacion;
+            cmd.Parameters.Add("@FechaInicio", SqlDbType.DateTime2).Value = ahora;
+            cmd.Parameters.Add("@ResultadoFinal", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Pendiente;
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones.Trim();
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
 
         private static void MarcarModificacion(
             CalidadInspeccion inspeccion,

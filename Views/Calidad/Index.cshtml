@@ -220,6 +220,22 @@
     var totalGP12 =
         Model.TotalPendienteGP12 +
         Model.TotalEnGP12;
+
+    var grupoCalidad = (ViewBag.GrupoCalidad as string ?? "PENDIENTES")
+        .Trim()
+        .ToUpperInvariant();
+
+    var totalPendientes =
+        Model.TotalPendientePrearranque +
+        Model.TotalDevueltoPrearranque +
+        Model.TotalPendientePrimerasPiezas +
+        Model.TotalAjustesSolicitados +
+        Model.TotalPendienteReliberacion;
+
+    var totalProceso =
+        Model.TotalArranqueAutorizado +
+        Model.TotalProduccionLiberada +
+        Model.TotalMonitoreoActivo;
 }
 
 <style>
@@ -232,7 +248,6 @@
         --quality-border: #dfe5ec;
         --quality-card: #ffffff;
         --quality-background: #f4f6f8;
-
         min-height: calc(100vh - 80px);
         padding: 25px 12px 55px;
         color: var(--quality-text);
@@ -379,22 +394,19 @@
         color: inherit;
         text-decoration: none;
         box-shadow: 0 8px 24px rgba(15, 23, 42, .045);
-        transition:
-            transform .16s ease,
-            border-color .16s ease,
-            box-shadow .16s ease;
+        transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
     }
 
-    .quality-summary-card:hover {
-        transform: translateY(-2px);
-        border-color: rgba(249, 115, 22, .48);
-        box-shadow: 0 14px 30px rgba(15, 23, 42, .08);
-    }
+        .quality-summary-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(249, 115, 22, .48);
+            box-shadow: 0 14px 30px rgba(15, 23, 42, .08);
+        }
 
-    .quality-summary-card.is-active {
-        border-color: var(--quality-orange);
-        box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
-    }
+        .quality-summary-card.is-active {
+            border-color: var(--quality-orange);
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
+        }
 
     .quality-summary-icon {
         width: 48px;
@@ -406,51 +418,51 @@
         font-size: 20px;
     }
 
-    .quality-summary-icon.warning {
-        background: #fff7dc;
-        color: #b45309;
-    }
+        .quality-summary-icon.warning {
+            background: #fff7dc;
+            color: #b45309;
+        }
 
-    .quality-summary-icon.danger {
-        background: #fff0f0;
-        color: #b91c1c;
-    }
+        .quality-summary-icon.danger {
+            background: #fff0f0;
+            color: #b91c1c;
+        }
 
-    .quality-summary-icon.info {
-        background: #eaf5ff;
-        color: #0369a1;
-    }
+        .quality-summary-icon.info {
+            background: #eaf5ff;
+            color: #0369a1;
+        }
 
-    .quality-summary-icon.success {
-        background: #eafbf1;
-        color: #15803d;
-    }
+        .quality-summary-icon.success {
+            background: #eafbf1;
+            color: #15803d;
+        }
 
-    .quality-summary-icon.dark {
-        background: #e5e7eb;
-        color: #334155;
-    }
+        .quality-summary-icon.dark {
+            background: #e5e7eb;
+            color: #334155;
+        }
 
     .quality-summary-content {
         min-width: 0;
     }
 
-    .quality-summary-content span {
-        display: block;
-        color: var(--quality-muted);
-        font-size: .72rem;
-        font-weight: 850;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-    }
+        .quality-summary-content span {
+            display: block;
+            color: var(--quality-muted);
+            font-size: .72rem;
+            font-weight: 850;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
 
-    .quality-summary-content strong {
-        display: block;
-        margin-top: 4px;
-        color: var(--quality-navy);
-        font-size: 1.7rem;
-        font-weight: 900;
-    }
+        .quality-summary-content strong {
+            display: block;
+            margin-top: 4px;
+            color: var(--quality-navy);
+            font-size: 1.7rem;
+            font-weight: 900;
+        }
 
     .quality-toolbar {
         padding: 18px;
@@ -471,14 +483,14 @@
         position: relative;
     }
 
-    .quality-search-wrap i {
-        position: absolute;
-        top: 50%;
-        left: 15px;
-        color: #94a3b8;
-        transform: translateY(-50%);
-        pointer-events: none;
-    }
+        .quality-search-wrap i {
+            position: absolute;
+            top: 50%;
+            left: 15px;
+            color: #94a3b8;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
 
     .quality-search-input,
     .quality-filter-select {
@@ -499,11 +511,11 @@
         padding: 10px 12px;
     }
 
-    .quality-search-input:focus,
-    .quality-filter-select:focus {
-        border-color: var(--quality-orange);
-        box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
-    }
+        .quality-search-input:focus,
+        .quality-filter-select:focus {
+            border-color: var(--quality-orange);
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
+        }
 
     .quality-toolbar-actions {
         display: flex;
@@ -527,9 +539,9 @@
         transition: transform .15s ease;
     }
 
-    .quality-btn:hover {
-        transform: translateY(-1px);
-    }
+        .quality-btn:hover {
+            transform: translateY(-1px);
+        }
 
     .quality-btn-primary {
         background: var(--quality-orange);
@@ -561,19 +573,19 @@
         background: #fbfcfd;
     }
 
-    .quality-list-header h2 {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0;
-        color: var(--quality-navy);
-        font-size: 1.03rem;
-        font-weight: 850;
-    }
+        .quality-list-header h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            color: var(--quality-navy);
+            font-size: 1.03rem;
+            font-weight: 850;
+        }
 
-    .quality-list-header h2 i {
-        color: var(--quality-orange);
-    }
+            .quality-list-header h2 i {
+                color: var(--quality-orange);
+            }
 
     .quality-result-count {
         display: inline-flex;
@@ -597,39 +609,39 @@
         border-collapse: collapse;
     }
 
-    .quality-table th,
-    .quality-table td {
-        padding: 14px 15px;
-        border-bottom: 1px solid #e8edf2;
-        text-align: left;
-        vertical-align: middle;
-    }
+        .quality-table th,
+        .quality-table td {
+            padding: 14px 15px;
+            border-bottom: 1px solid #e8edf2;
+            text-align: left;
+            vertical-align: middle;
+        }
 
-    .quality-table th {
-        background: #f7f9fb;
-        color: #475569;
-        font-size: .7rem;
-        font-weight: 900;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-    }
+        .quality-table th {
+            background: #f7f9fb;
+            color: #475569;
+            font-size: .7rem;
+            font-weight: 900;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
 
-    .quality-table td {
-        color: #334155;
-        font-size: .83rem;
-    }
+        .quality-table td {
+            color: #334155;
+            font-size: .83rem;
+        }
 
-    .quality-table tbody tr {
-        transition: background .14s ease;
-    }
+        .quality-table tbody tr {
+            transition: background .14s ease;
+        }
 
-    .quality-table tbody tr:hover {
-        background: #fffaf5;
-    }
+            .quality-table tbody tr:hover {
+                background: #fffaf5;
+            }
 
-    .quality-table tbody tr:last-child td {
-        border-bottom: 0;
-    }
+            .quality-table tbody tr:last-child td {
+                border-bottom: 0;
+            }
 
     .quality-primary-text {
         display: block;
@@ -659,11 +671,11 @@
         font-weight: 800;
     }
 
-    .quality-program-badge.legacy {
-        border-color: #fed7aa;
-        background: #fff7ed;
-        color: #9a3412;
-    }
+        .quality-program-badge.legacy {
+            border-color: #fed7aa;
+            background: #fff7ed;
+            color: #9a3412;
+        }
 
     .quality-status {
         display: inline-flex;
@@ -755,6 +767,109 @@
         line-height: 1.55;
     }
 
+
+    .quality-area-nav {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .quality-area-btn {
+        position: relative;
+        min-height: 92px;
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 11px;
+        padding: 14px;
+        border: 1px solid var(--quality-border);
+        border-radius: 15px;
+        background: var(--quality-card);
+        color: var(--quality-text);
+        text-decoration: none;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, .045);
+        transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+    }
+
+        .quality-area-btn:hover {
+            transform: translateY(-2px);
+            color: inherit;
+            border-color: rgba(249, 115, 22, .48);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
+        }
+
+        .quality-area-btn.is-active {
+            border-color: var(--quality-orange);
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, .11);
+        }
+
+    .quality-area-icon {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        font-size: 18px;
+    }
+
+    .quality-area-info {
+        min-width: 0;
+    }
+
+        .quality-area-info strong {
+            display: block;
+            color: var(--quality-navy);
+            font-size: .88rem;
+            font-weight: 900;
+        }
+
+        .quality-area-info small {
+            display: block;
+            margin-top: 3px;
+            color: var(--quality-muted);
+            font-size: .69rem;
+            line-height: 1.25;
+        }
+
+    .quality-area-count {
+        min-width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        padding: 0 7px;
+        border-radius: 999px;
+        background: #f8fafc;
+        color: #334155;
+        font-size: .76rem;
+        font-weight: 900;
+    }
+
+    .quality-area-btn.pending .quality-area-icon {
+        background: #fff7dc;
+        color: #b45309;
+    }
+
+    .quality-area-btn.process .quality-area-icon {
+        background: #eaf5ff;
+        color: #0369a1;
+    }
+
+    .quality-area-btn.boxes .quality-area-icon {
+        background: #f3e8ff;
+        color: #7e22ce;
+    }
+
+    .quality-area-btn.gp12 .quality-area-icon {
+        background: #fff1e6;
+        color: #ea580c;
+    }
+
+    .quality-area-btn.history .quality-area-icon {
+        background: #e5e7eb;
+        color: #475569;
+    }
+
     html[data-nsq-theme="dark"] .quality-index-page {
         --quality-text: #e5e7eb;
         --quality-muted: #94a3b8;
@@ -779,14 +894,14 @@
         border-color: rgba(255, 255, 255, .08);
     }
 
-    html[data-nsq-theme="dark"] .quality-hero h1,
-    html[data-nsq-theme="dark"] .quality-hero-side strong,
-    html[data-nsq-theme="dark"] .quality-summary-content strong,
-    html[data-nsq-theme="dark"] .quality-list-header h2,
-    html[data-nsq-theme="dark"] .quality-primary-text,
-    html[data-nsq-theme="dark"] .quality-empty h3 {
-        color: #f8fafc;
-    }
+        html[data-nsq-theme="dark"] .quality-hero h1,
+        html[data-nsq-theme="dark"] .quality-hero-side strong,
+        html[data-nsq-theme="dark"] .quality-summary-content strong,
+        html[data-nsq-theme="dark"] .quality-list-header h2,
+        html[data-nsq-theme="dark"] .quality-primary-text,
+        html[data-nsq-theme="dark"] .quality-empty h3 {
+            color: #f8fafc;
+        }
 
     html[data-nsq-theme="dark"] .quality-search-input,
     html[data-nsq-theme="dark"] .quality-filter-select {
@@ -817,12 +932,32 @@
         border-color: rgba(255, 255, 255, .10);
     }
 
+
+    html[data-nsq-theme="dark"] .quality-area-btn {
+        background: #111c2d;
+        border-color: rgba(255, 255, 255, .10);
+        color: #e5e7eb;
+    }
+
+    html[data-nsq-theme="dark"] .quality-area-info strong {
+        color: #f8fafc;
+    }
+
+    html[data-nsq-theme="dark"] .quality-area-count {
+        background: #0e1828;
+        color: #e5e7eb;
+    }
+
     @@media (max-width: 1200px) {
         .quality-hero {
             grid-template-columns: 1fr;
         }
 
         .quality-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .quality-area-nav {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
@@ -845,6 +980,10 @@
             grid-template-columns: 1fr;
         }
 
+        .quality-area-nav {
+            grid-template-columns: 1fr;
+        }
+
         .quality-filter-form {
             grid-template-columns: 1fr;
         }
@@ -853,9 +992,9 @@
             flex-direction: column;
         }
 
-        .quality-toolbar-actions .quality-btn {
-            width: 100%;
-        }
+            .quality-toolbar-actions .quality-btn {
+                width: 100%;
+            }
 
         .quality-list-header {
             align-items: flex-start;
@@ -912,15 +1051,88 @@
                 </div>
             </div>
 
-            
+
         </section>
 
+        <nav class="quality-area-nav" aria-label="Apartados de Calidad">
+            <a asp-controller="Calidad"
+               asp-action="Index"
+               asp-route-grupo="PENDIENTES"
+               class="quality-area-btn pending @(grupoCalidad == "PENDIENTES" ? "is-active" : string.Empty)">
+                <span class="quality-area-icon">
+                    <i class="fa-solid fa-list-check"></i>
+                </span>
+                <span class="quality-area-info">
+                    <strong>Pendientes</strong>
+                    <small>Prearranque, primeras piezas, ajustes y reliberaciones</small>
+                </span>
+                <span class="quality-area-count">@totalPendientes</span>
+            </a>
+
+            <a asp-controller="Calidad"
+               asp-action="Index"
+               asp-route-grupo="PROCESO"
+               class="quality-area-btn process @(grupoCalidad == "PROCESO" ? "is-active" : string.Empty)">
+                <span class="quality-area-icon">
+                    <i class="fa-solid fa-microscope"></i>
+                </span>
+                <span class="quality-area-info">
+                    <strong>En proceso</strong>
+                    <small>Arranque autorizado, producción liberada y monitoreo</small>
+                </span>
+                <span class="quality-area-count">@totalProceso</span>
+            </a>
+
+            <a asp-controller="Calidad"
+               asp-action="Index"
+               asp-route-grupo="CAJAS"
+               class="quality-area-btn boxes @(grupoCalidad == "CAJAS" ? "is-active" : string.Empty)">
+                <span class="quality-area-icon">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </span>
+                <span class="quality-area-info">
+                    <strong>Cajas</strong>
+                    <small>Cajas pendientes de liberación por Calidad</small>
+                </span>
+                <span class="quality-area-count">@Model.TotalCajasPendientes</span>
+            </a>
+
+            <a asp-controller="Calidad"
+               asp-action="Index"
+               asp-route-grupo="GP12"
+               class="quality-area-btn gp12 @(grupoCalidad == "GP12" ? "is-active" : string.Empty)">
+                <span class="quality-area-icon">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </span>
+                <span class="quality-area-info">
+                    <strong>GP12</strong>
+                    <small>Contención, pendiente GP12 y seguimiento activo</small>
+                </span>
+                <span class="quality-area-count">@totalGP12</span>
+            </a>
+
+            <a asp-controller="Calidad"
+               asp-action="Index"
+               asp-route-grupo="HISTORIAL"
+               class="quality-area-btn history @(grupoCalidad == "HISTORIAL" ? "is-active" : string.Empty)">
+                <span class="quality-area-icon">
+                    <i class="fa-solid fa-box-archive"></i>
+                </span>
+                <span class="quality-area-info">
+                    <strong>Historial</strong>
+                    <small>Material liberado, no conforme y registros cerrados</small>
+                </span>
+                <span class="quality-area-count">@Model.TotalCerradas</span>
+            </a>
+        </nav>
 
         <section class="quality-toolbar">
             <form asp-controller="Calidad"
                   asp-action="Index"
                   method="get"
                   class="quality-filter-form">
+
+                <input type="hidden" name="grupo" value="@grupoCalidad" />
 
                 <div class="quality-search-wrap">
                     <i class="fa-solid fa-magnifying-glass"></i>
@@ -1030,6 +1242,7 @@
 
                     <a asp-controller="Calidad"
                        asp-action="Index"
+                       asp-route-grupo="@grupoCalidad"
                        class="quality-btn quality-btn-light">
                         <i class="fa-solid fa-eraser"></i>
                         Limpiar
@@ -1044,8 +1257,7 @@
             </form>
         </section>
 
-        @if (Model.CajasPendientes.Any() ||
-             estadoFiltro == CalidadEstados.PendienteLiberacionCaja)
+        @if (grupoCalidad == "CAJAS")
         {
             <section class="quality-list-card mb-4" id="cajas-pendientes-calidad">
                 <div class="quality-list-header">
@@ -1178,201 +1390,204 @@
             </section>
         }
 
-        <section class="quality-list-card">
-            <div class="quality-list-header">
-                <h2>
-                    <i class="fa-solid fa-list-check"></i>
-                    Liberaciones e inspecciones
-                </h2>
+        @if (grupoCalidad != "CAJAS")
+        {
+            <section class="quality-list-card">
+                <div class="quality-list-header">
+                    <h2>
+                        <i class="fa-solid fa-list-check"></i>
+                        Liberaciones e inspecciones
+                    </h2>
 
-                <span class="quality-result-count">
-                    <i class="fa-solid fa-database"></i>
-                    @Model.TotalMostrados registro(s)
-                </span>
-            </div>
-
-            @if (Model.Inspecciones == null ||
-                 !Model.Inspecciones.Any())
-            {
-                <div class="quality-empty">
-                    <div class="quality-empty-icon">
-                        <i class="fa-regular fa-folder-open"></i>
-                    </div>
-
-                    <h3>No se encontraron registros</h3>
-
-                    <p>
-                        No existen liberaciones que coincidan con los filtros
-                        seleccionados. Las nuevas solicitudes aparecerán cuando
-                        Producción envíe una corrida a Calidad.
-                    </p>
+                    <span class="quality-result-count">
+                        <i class="fa-solid fa-database"></i>
+                        @Model.TotalMostrados registro(s)
+                    </span>
                 </div>
-            }
-            else
-            {
-                <div class="quality-table-wrap">
-                    <table class="quality-table">
-                        <thead>
-                            <tr>
-                                <th>OF / programa</th>
-                                <th>Cliente / parte</th>
-                                <th>Material</th>
-                                <th>Máquina / molde</th>
-                                <th>Operador</th>
-                                <th>Programación</th>
-                                <th>Cantidad</th>
-                                <th>Estado</th>
-                                <th>Notificación</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
 
-                        <tbody>
-                            @foreach (var item in Model.Inspecciones)
-                            {
-                                var esRegistroAnterior =
+                @if (Model.Inspecciones == null ||
+                            !Model.Inspecciones.Any())
+                {
+                    <div class="quality-empty">
+                        <div class="quality-empty-icon">
+                            <i class="fa-regular fa-folder-open"></i>
+                        </div>
+
+                        <h3>No se encontraron registros</h3>
+
+                        <p>
+                            No existen liberaciones que coincidan con los filtros
+                            seleccionados. Las nuevas solicitudes aparecerán cuando
+                            Producción envíe una corrida a Calidad.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    <div class="quality-table-wrap">
+                        <table class="quality-table">
+                            <thead>
+                                <tr>
+                                    <th>OF / programa</th>
+                                    <th>Cliente / parte</th>
+                                    <th>Material</th>
+                                    <th>Máquina / molde</th>
+                                    <th>Operador</th>
+                                    <th>Programación</th>
+                                    <th>Cantidad</th>
+                                    <th>Estado</th>
+                                    <th>Notificación</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var item in Model.Inspecciones)
+                                {
+                                    var esRegistroAnterior =
                                     !item.ProgramaProduccionID.HasValue;
 
-                                var fechaReferencia =
+                                    var fechaReferencia =
                                     item.FechaNotificacionCalidad ??
                                     item.FechaCreacion;
 
-                                <tr>
-                                    <td>
-                                        <span class="quality-primary-text">
-                                            @Mostrar(item.OrdenTrabajo)
-                                        </span>
-
-                                        @if (item.ProgramaProduccionID.HasValue)
-                                        {
-                                            <span class="quality-program-badge">
-                                                <i class="fa-solid fa-gears"></i>
-                                                Programa @item.ProgramaProduccionID
+                                    <tr>
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(item.OrdenTrabajo)
                                             </span>
-                                        }
-                                        else
-                                        {
-                                            <span class="quality-program-badge legacy">
-                                                <i class="fa-solid fa-box-archive"></i>
-                                                Registro anterior
+
+                                            @if (item.ProgramaProduccionID.HasValue)
+                                            {
+                                                <span class="quality-program-badge">
+                                                    <i class="fa-solid fa-gears"></i>
+                                                    Programa @item.ProgramaProduccionID
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="quality-program-badge legacy">
+                                                    <i class="fa-solid fa-box-archive"></i>
+                                                    Registro anterior
+                                                </span>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(item.NumeroParte)
                                             </span>
-                                        }
-                                    </td>
 
-                                    <td>
-                                        <span class="quality-primary-text">
-                                            @Mostrar(item.NumeroParte)
-                                        </span>
-
-                                        <span class="quality-secondary-text">
-                                            @Mostrar(item.ClienteNombre)
-                                        </span>
-                                    </td>
-
-                                    <td>
-                                        <span class="quality-primary-text">
-                                            @Mostrar(item.Material)
-                                        </span>
-
-                                        <span class="quality-secondary-text">
-                                            @Mostrar(item.Proceso)
-                                        </span>
-                                    </td>
-
-                                    <td>
-                                        <span class="quality-primary-text">
-                                            @Mostrar(item.Maquina)
-                                        </span>
-
-                                        <span class="quality-secondary-text">
-                                            Molde: @Mostrar(item.Molde)
-                                        </span>
-                                    </td>
-
-                                    <td>
-                                        <span class="quality-primary-text">
-                                            @Mostrar(item.OperadorPrincipalNombre)
-                                        </span>
-
-                                        @if (!string.IsNullOrWhiteSpace(
-                                            item.OperadorAuxiliarNombre))
-                                        {
                                             <span class="quality-secondary-text">
-                                                Auxiliar:
-                                                @item.OperadorAuxiliarNombre
+                                                @Mostrar(item.ClienteNombre)
                                             </span>
-                                        }
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(item.Material)
+                                            </span>
+
+                                            <span class="quality-secondary-text">
+                                                @Mostrar(item.Proceso)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(item.Maquina)
+                                            </span>
+
+                                            <span class="quality-secondary-text">
+                                                Molde: @Mostrar(item.Molde)
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @Mostrar(item.OperadorPrincipalNombre)
+                                            </span>
+
+                                            @if (!string.IsNullOrWhiteSpace(
+                                                                            item.OperadorAuxiliarNombre))
+                                            {
+                                                <span class="quality-secondary-text">
+                                                    Auxiliar:
+                                                    @item.OperadorAuxiliarNombre
+                                                </span>
+                                            }
                                     </td>
 
                                     <td>
                                         <span class="quality-primary-text">
                                             @(item.FechaInicioProgramada?.ToString(
-                                                "dd/MM/yyyy HH:mm"
-                                            ) ?? "—")
-                                        </span>
+                                                                                "dd/MM/yyyy HH:mm"
+                                                                                ) ?? "—")
+                                                                                     </span>
 
                                         <span class="quality-secondary-text">
                                             Fin:
                                             @(item.FechaFinProgramada?.ToString(
-                                                "dd/MM/yyyy HH:mm"
-                                            ) ?? "—")
-                                        </span>
-                                    </td>
+                                                                                "dd/MM/yyyy HH:mm"
+                                                                                ) ?? "—")
+                                </span>
+                            </td>
 
-                                    <td>
-                                        <span class="quality-primary-text">
-                                            @item.CantidadTotal.ToString("N0")
-                                        </span>
-
-                                        <span class="quality-secondary-text">
-                                            Pendiente:
-                                            @item.CantidadPendiente.ToString("N0")
-                                        </span>
-                                    </td>
-
-                                    <td>
-                                        <span class="quality-status @EstadoClase(item.Estado)">
-                                            <i class="fa-solid @EstadoIcono(item.Estado)"></i>
-                                            @EstadoTexto(item.Estado)
-                                        </span>
-
-                                        @if (item.ConfiguracionInvalidada)
-                                        {
-                                            <span class="quality-invalidated"
-                                                  title="@item.MotivoInvalidacion">
-                                                <i class="fa-solid fa-triangle-exclamation"></i>
-                                                Configuración invalidada
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @item.CantidadTotal.ToString("N0")
                                             </span>
-                                        }
-                                    </td>
 
-                                    <td>
-                                        <span class="quality-primary-text">
-                                            @fechaReferencia.ToString(
+                                            <span class="quality-secondary-text">
+                                                Pendiente:
+                                                @item.CantidadPendiente.ToString("N0")
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-status @EstadoClase(item.Estado)">
+                                                <i class="fa-solid @EstadoIcono(item.Estado)"></i>
+                                                @EstadoTexto(item.Estado)
+                                            </span>
+
+                                @if (item.ConfiguracionInvalidada)
+                                            {
+                                                <span class="quality-invalidated"
+                                                      title="@item.MotivoInvalidacion">
+                                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                                    Configuración invalidada
+                                                </span>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            <span class="quality-primary-text">
+                                                @fechaReferencia.ToString(
                                                 "dd/MM/yyyy"
-                                            )
-                                        </span>
+                                                                        )
+                                </span>
 
-                                        <span class="quality-secondary-text">
-                                            @fechaReferencia.ToString("HH:mm")
-                                        </span>
-                                    </td>
+                                <span class="quality-secondary-text">
+                                    @fechaReferencia.ToString("HH:mm")
+                                </span>
+                            </td>
 
-                                    <td>
-                                        <a asp-controller="Calidad"
-                                           asp-action="Detalle"
-                                           asp-route-id="@item.InspeccionID"
-                                           class="quality-btn quality-btn-light">
-                                            <i class="fa-regular fa-eye"></i>
-                                            Ver detalle
-                                        </a>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </section>
+                            <td>
+                                <a asp-controller="Calidad"
+                                   asp-action="Detalle"
+                                   asp-route-id="@item.InspeccionID"
+                                   class="quality-btn quality-btn-light">
+                                    <i class="fa-regular fa-eye"></i>
+                                    Ver detalle
+                                </a>
+                            </td>
+                        </tr>
+                                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
     </div>
 </div>

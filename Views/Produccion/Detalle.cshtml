@@ -789,8 +789,8 @@
                                     {
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-primary fw-bold"
-                                                title="La acción de cambio de operadores se implementará en el siguiente paso."
-                                                disabled>
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#modalCambiarOperador">
                                             <i class="bi bi-people me-1"></i>
                                             Cambiar
                                         </button>
@@ -1390,6 +1390,190 @@
         </div>
     }
 
+    @if (e.PuedePausar || Model.TieneParoAbierto)
+    {
+        <div class="modal fade"
+             id="modalCambiarOperador"
+             tabindex="-1"
+             aria-labelledby="modalCambiarOperadorLabel"
+             aria-hidden="true">
+
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+
+                    <form method="post"
+                          action="@Url.Action("CambiarOperadores","Produccion")"
+                          id="formCambiarOperador">
+
+                        @Html.AntiForgeryToken()
+
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title fw-bold"
+                                    id="modalCambiarOperadorLabel">
+                                    <i class="bi bi-people me-1"></i>
+                                    Cambiar operador
+                                </h5>
+
+                                <div class="text-muted small mt-1">
+                                    Selecciona qué asignación deseas modificar.
+                                </div>
+                            </div>
+
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Cerrar">
+                            </button>
+                        </div>
+
+                        <div class="modal-body">
+
+                            <input type="hidden"
+                                   name="ejecucionProduccionId"
+                                   value="@e.EjecucionProduccionID" />
+
+                            <div class="soft-box mb-3">
+                                <div class="row g-2">
+
+                                    <div class="col-12">
+                                        <div class="data-label">
+                                            Operador principal actual
+                                        </div>
+
+                                        <div class="data-value">
+                                            @Txt(e.OperadorNombre)
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <div class="data-label">
+                                            Auxiliar actual
+                                        </div>
+
+                                        <div class="data-value">
+                                            @(string.IsNullOrWhiteSpace(
+                                                                                    e.OperadorAuxiliarNombre)
+                                                                                    ? "Sin auxiliar"
+                                                                                    : e.OperadorAuxiliarNombre)
+                                    </div>
+                                </div>
+
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    ¿Qué deseas cambiar?
+                                </label>
+
+                                <div class="d-flex gap-3 flex-wrap">
+
+                                    <div class="form-check">
+                                        <input class="form-check-input"
+                                               type="radio"
+                                               name="tipoCambio"
+                                               id="tipoCambioPrincipal"
+                                               value="PRINCIPAL"
+                                               checked />
+
+                                        <label class="form-check-label fw-bold"
+                                               for="tipoCambioPrincipal">
+                                            Operador principal
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check">
+                                        <input class="form-check-input"
+                                               type="radio"
+                                               name="tipoCambio"
+                                               id="tipoCambioAuxiliar"
+                                               value="AUXILIAR" />
+
+                                        <label class="form-check-label fw-bold"
+                                               for="tipoCambioAuxiliar">
+                                            Auxiliar
+                                        </label>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label"
+                                       for="personaNuevaId">
+                                    Nueva persona
+                                </label>
+
+                                <select name="personaNuevaId"
+                                        id="personaNuevaId"
+                                        class="form-select"
+                                        required>
+
+                                    <option value="">
+                                        -- Seleccionar persona --
+                                    </option>
+
+                                @if (ViewBag.OperadoresProduccion
+                                                                is IEnumerable<SelectListItem> operadores)
+                                    {
+                                        foreach (var operador in operadores)
+                                        {
+                                            if (!string.IsNullOrWhiteSpace(
+                                            operador.Value))
+                                            {
+                                                <option value="@operador.Value">
+                                                    @operador.Text
+                                                </option>
+                                            }
+                                        }
+                                    }
+
+                                </select>
+                            </div>
+
+                            <div class="mb-0">
+                                <label class="form-label"
+                                       for="motivoCambio">
+                                    Motivo del cambio *
+                                </label>
+
+                                <textarea name="motivoCambio"
+                                      id="motivoCambio"
+                                      class="form-control"
+                                      rows="3"
+                                      maxlength="1000"
+                                      required
+                                      placeholder="Ej. cambio de puesto, cobertura de descanso, ajuste de asignación, ausencia, etc."></textarea>
+
+                                <div class="form-text">
+                                    El motivo es obligatorio y quedará registrado
+                                    en la bitácora de la ejecución.
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button"
+                                    class="btn btn-light fw-bold"
+                                    data-bs-dismiss="modal">
+                                Cancelar
+                            </button>
+
+                            <button type="submit"
+                                    class="btn btn-primary fw-bold">
+                                <i class="bi bi-check2-circle me-1"></i>
+                                Guardar cambio
+                            </button>
+                        </div>
+
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    }
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {

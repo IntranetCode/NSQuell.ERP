@@ -94,19 +94,15 @@ namespace ERP.NSQuell.Controllers
                 await ObtenerMaquinasOcupadasAsync(
                     cn);
 
+            ViewBag.MaquinasOcupadas =
+                maquinasOcupadas;
+
             vm.ProximosAIniciar =
                 vm.ProgramasDisponibles
                     .Where(x =>
                         x.PuedeIniciar &&
-
                         x.MaquinaID.HasValue &&
-
-                        !maquinasOcupadas.Contains(
-                            x.MaquinaID.Value) &&
-
                         x.FechaInicioProgramada.HasValue &&
-
-
                         x.FechaInicioProgramada.Value <=
                             limiteProximos)
                     .OrderBy(x =>
@@ -1167,17 +1163,36 @@ ORDER BY
         }
 
 
-        private async Task CrearOActualizarSolicitudCalidadAsync(int checklistArranqueId, int ejecucionProduccionId, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        private async Task CrearOActualizarSolicitudCalidadAsync(
+        int checklistArranqueId,
+        int ejecucionProduccionId,
+        int usuarioId,
+        SqlConnection cn,
+        SqlTransaction tx)
         {
-            var origen = await ObtenerOrigenSolicitudCalidadAsync(checklistArranqueId, ejecucionProduccionId, cn, tx);
-            if (origen == null) throw new InvalidOperationException("No se encontró la información de la ejecución y el checklist para enviar a Calidad.");
+            var origen = await ObtenerOrigenSolicitudCalidadAsync(
+                checklistArranqueId,
+                ejecucionProduccionId,
+                cn,
+                tx);
+            if (origen == null)
+                throw new InvalidOperationException(
+                    "No se encontró la información de la ejecución y el checklist para enviar a Calidad.");
+            if (!origen.SolicitudProduccionID.HasValue ||
+               origen.SolicitudProduccionID.Value <= 0)
+                throw new InvalidOperationException(
+                    "La ejecución no tiene una OF válida relacionada.");
+            if (!origen.SolicitudProduccionDetalleID.HasValue ||
+               origen.SolicitudProduccionDetalleID.Value <= 0)
+                throw new InvalidOperationException(
+                    "La ejecución no tiene un detalle de OF válido relacionado.");
             const string sqlInspeccionExistente = @"
 SELECT TOP (1)
     InspeccionID,
     ChecklistArranqueID,
     Estado,
     ISNULL(ConfiguracionInvalidada,0) AS ConfiguracionInvalidada
-FROM dbo.Calidad_Inspecciones WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Calidad_Inspecciones WITH(UPDLOCK,HOLDLOCK)
 WHERE EjecucionProduccionID=@EjecucionProduccionID
   AND ISNULL(Estado,N'')<>N'CERRADA'
 ORDER BY
@@ -1194,17 +1209,26 @@ ORDER BY
                 if (await rd.ReadAsync())
                 {
                     inspeccionId = Convert.ToInt32(rd["InspeccionID"]);
-                    checklistExistenteId = rd["ChecklistArranqueID"] == DBNull.Value ? null : Convert.ToInt32(rd["ChecklistArranqueID"]);
-                    estadoExistente = rd["Estado"] == DBNull.Value ? null : rd["Estado"].ToString();
-                    configuracionInvalidada = rd["ConfiguracionInvalidada"] != DBNull.Value && Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
+                    checklistExistenteId = rd["ChecklistArranqueID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(rd["ChecklistArranqueID"]);
+                    estadoExistente = rd["Estado"] == DBNull.Value
+                        ? null
+                        : rd["Estado"]?.ToString()?.Trim();
+                    configuracionInvalidada =
+                        rd["ConfiguracionInvalidada"] != DBNull.Value &&
+                        Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
                 }
             }
             if (inspeccionId.HasValue)
             {
-                if (configuracionInvalidada) throw new InvalidOperationException("La inspección actual fue invalidada y requiere un proceso de reliberación. No debe generarse una inspección nueva.");
+                if (configuracionInvalidada)
+                    throw new InvalidOperationException(
+                        "La inspección actual fue invalidada y requiere un proceso de reliberación. No debe generarse una inspección nueva.");
                 const string sqlActualizar = @"
 UPDATE dbo.Calidad_Inspecciones
-SET ProgramaProduccionID=@ProgramaProduccionID,
+SET
+    ProgramaProduccionID=@ProgramaProduccionID,
     ChecklistArranqueID=@ChecklistArranqueID,
     SolicitudProduccionID=@SolicitudProduccionID,
     SolicitudProduccionDetalleID=@SolicitudProduccionDetalleID,
@@ -1229,19 +1253,34 @@ SET ProgramaProduccionID=@ProgramaProduccionID,
     OperadorAuxiliarPersonaID=@OperadorAuxiliarPersonaID,
     OperadorAuxiliarNombre=@OperadorAuxiliarNombre,
     CantidadTotal=@CantidadTotal,
-    CantidadPendiente=CASE WHEN ISNULL(CantidadRevisada,0)>=@CantidadTotal THEN 0 ELSE @CantidadTotal-ISNULL(CantidadRevisada,0) END,
+    CantidadPendiente=
+        CASE
+            WHEN ISNULL(CantidadRevisada,0)>=@CantidadTotal THEN 0
+            ELSE @CantidadTotal-ISNULL(CantidadRevisada,0)
+        END,
     ChecklistValidado=1,
     FechaNotificacionCalidad=GETDATE(),
     UsuarioNotificoID=@UsuarioID,
     MotivoDevolucion=NULL,
-    Estado=CASE
-        WHEN Estado IN(N'PENDIENTE_PREARRANQUE',N'DEVUELTO_PREARRANQUE',N'ARRANQUE_AUTORIZADO') THEN N'PENDIENTE_PREARRANQUE'
-        ELSE Estado
-    END,
-    Observaciones=CASE
-        WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN N'Producción envió el checklist de prearranque a Calidad.'
-        ELSE Observaciones+CHAR(13)+CHAR(10)+N'Producción actualizó y reenvió el checklist de prearranque.'
-    END,
+    Estado=
+        CASE
+            WHEN Estado IN
+            (
+                N'PENDIENTE_PREARRANQUE',
+                N'DEVUELTO_PREARRANQUE',
+                N'ARRANQUE_AUTORIZADO'
+            )
+                THEN N'PENDIENTE_PREARRANQUE'
+            ELSE Estado
+        END,
+    Observaciones=
+        CASE
+            WHEN Observaciones IS NULL
+              OR LTRIM(RTRIM(Observaciones))=N''
+                THEN N'Producción envió el checklist de prearranque a Calidad.'
+            ELSE Observaciones+CHAR(13)+CHAR(10)+
+                 N'Producción actualizó y reenvió el checklist de prearranque.'
+        END,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=GETDATE()
 WHERE InspeccionID=@InspeccionID
@@ -1252,10 +1291,27 @@ WHERE InspeccionID=@InspeccionID
                     AgregarParametrosOrigenCalidad(cmd, origen, usuarioId);
                     cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId.Value;
                     var filasActualizadas = await cmd.ExecuteNonQueryAsync();
-                    if (filasActualizadas <= 0) throw new InvalidOperationException("No fue posible actualizar la inspección existente de Calidad.");
+                    if (filasActualizadas <= 0)
+                        throw new InvalidOperationException(
+                            "No fue posible actualizar la inspección existente de Calidad.");
                 }
-                var estadoNuevo = estadoExistente is "PENDIENTE_PREARRANQUE" or "DEVUELTO_PREARRANQUE" or "ARRANQUE_AUTORIZADO" ? "PENDIENTE_PREARRANQUE" : estadoExistente ?? "PENDIENTE_PREARRANQUE";
-                await RegistrarHistorialEnvioCalidadAsync(inspeccionId.Value, estadoExistente, estadoNuevo, checklistExistenteId == checklistArranqueId ? "Producción reenvió el checklist de prearranque a Calidad." : "Producción actualizó el checklist asociado y envió nuevamente la solicitud a Calidad.", usuarioId, cn, tx);
+                var estadoNuevo =
+                    estadoExistente is
+                        "PENDIENTE_PREARRANQUE" or
+                        "DEVUELTO_PREARRANQUE" or
+                        "ARRANQUE_AUTORIZADO"
+                        ? "PENDIENTE_PREARRANQUE"
+                        : estadoExistente ?? "PENDIENTE_PREARRANQUE";
+                await RegistrarHistorialEnvioCalidadAsync(
+                    inspeccionId.Value,
+                    estadoExistente,
+                    estadoNuevo,
+                    checklistExistenteId == checklistArranqueId
+                        ? "Producción reenvió el checklist de prearranque a Calidad."
+                        : "Producción actualizó el checklist asociado y envió nuevamente la solicitud a Calidad.",
+                    usuarioId,
+                    cn,
+                    tx);
                 return;
             }
             const string sqlInsertar = @"
@@ -1377,10 +1433,19 @@ VALUES
             {
                 AgregarParametrosOrigenCalidad(cmd, origen, usuarioId);
                 var resultado = await cmd.ExecuteScalarAsync();
-                if (resultado == null || resultado == DBNull.Value) throw new InvalidOperationException("No fue posible crear la inspección de Calidad.");
+                if (resultado == null || resultado == DBNull.Value)
+                    throw new InvalidOperationException(
+                        "No fue posible crear la inspección de Calidad.");
                 nuevaInspeccionId = Convert.ToInt32(resultado);
             }
-            await RegistrarHistorialEnvioCalidadAsync(nuevaInspeccionId, null, "PENDIENTE_PREARRANQUE", "Producción envió la corrida a Calidad para revisión de prearranque.", usuarioId, cn, tx);
+            await RegistrarHistorialEnvioCalidadAsync(
+                nuevaInspeccionId,
+                null,
+                "PENDIENTE_PREARRANQUE",
+                "Producción envió la corrida a Calidad para revisión de prearranque.",
+                usuarioId,
+                cn,
+                tx);
         }
 
         [HttpPost]
@@ -4658,14 +4723,13 @@ ORDER BY FechaInicioParo DESC;";
         }
 
         private async Task<List<ProduccionProgramaDisponibleVm>> ObtenerProgramasDisponiblesAsync(
-          string? busqueda,
-          int? maquinaId,
-          DateTime? fechaDesde,
-          DateTime? fechaHasta,
-          SqlConnection cn)
+     string? busqueda,
+     int? maquinaId,
+     DateTime? fechaDesde,
+     DateTime? fechaHasta,
+     SqlConnection cn)
         {
             var lista = new List<ProduccionProgramaDisponibleVm>();
-
             const string sql = @"
 SELECT
     pp.ProgramaProduccionID,
@@ -4673,92 +4737,82 @@ SELECT
     pp.SolicitudProduccionDetalleID,
     pp.ReleaseDetalleID,
     rd.ReleaseID,
-
     s.FolioSolicitud,
     s.NumeroOFRecibida,
-
     pp.MaquinaID,
-    COALESCE(NULLIF(pp.MaquinaCodigo, ''), maq.Codigo) AS MaquinaCodigo,
-    COALESCE(NULLIF(pp.MaquinaNombre, ''), maq.Nombre) AS MaquinaNombre,
-
+    COALESCE(NULLIF(pp.MaquinaCodigo,N''),maq.Codigo) AS MaquinaCodigo,
+    COALESCE(NULLIF(pp.MaquinaNombre,N''),maq.Nombre) AS MaquinaNombre,
     pp.ParteID,
     pp.NumeroParte,
     pp.ReferenciaSAP,
     pp.DesignacionDescripcionSAP AS DescripcionParte,
-
     pp.MoldeID,
     pp.MoldeCodigo,
-
-    CONVERT(INT, ISNULL(pp.CantidadProgramada, 0)) AS CantidadProgramada,
-
-pp.FechaInicioProgramada,
-pp.FechaFinProgramada,
-ISNULL(pp.SecuenciaMaquina, 999999) AS SecuenciaMaquina,
-ISNULL(pp.EstatusID, 1) AS EstatusID,
-
+    CONVERT(INT,ISNULL(pp.CantidadProgramada,0)) AS CantidadProgramada,
+    pp.FechaInicioProgramada,
+    pp.FechaFinProgramada,
+    ISNULL(pp.SecuenciaMaquina,999999) AS SecuenciaMaquina,
+    ISNULL(pp.EstatusID,1) AS EstatusID,
     escala.OperadorSugeridoID,
     escala.OperadorSugeridoNombre,
     escala.TurnoSugeridoNombre,
     escala.TurnoSugeridoColor,
     escala.EscalaAsignacionID
-
 FROM dbo.Planeacion_ProgramaProduccion pp
-
-LEFT JOIN dbo.SolicitudesProduccion s
-    ON s.SolicitudProduccionID = pp.SolicitudProduccionID
-
+INNER JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=pp.SolicitudProduccionID
+   AND s.Activo=1
 LEFT JOIN dbo.Planeacion_ReleaseDetalle rd
-    ON rd.ReleaseDetalleID = pp.ReleaseDetalleID
-
+    ON rd.ReleaseDetalleID=pp.ReleaseDetalleID
 LEFT JOIN dbo.ERP_Maquinas maq
-    ON maq.MaquinaID = pp.MaquinaID
-
+    ON maq.MaquinaID=pp.MaquinaID
 OUTER APPLY
 (
     SELECT TOP (1)
         a.AsignacionID AS EscalaAsignacionID,
         a.PersonalID AS OperadorSugeridoID,
         LTRIM(RTRIM(
-            ISNULL(p.Nombre, '') + ' ' +
-            ISNULL(p.ApellidoPaterno, '') + ' ' +
-            ISNULL(p.ApellidoMaterno, '')
+            ISNULL(p.Nombre,N'')+N' '+
+            ISNULL(p.ApellidoPaterno,N'')+N' '+
+            ISNULL(p.ApellidoMaterno,N'')
         )) AS OperadorSugeridoNombre,
         et.Nombre AS TurnoSugeridoNombre,
         et.Color AS TurnoSugeridoColor
     FROM dbo.RRHH_EscalaAsignaciones a
     INNER JOIN dbo.RRHH_EscalasPersonal esc
-        ON esc.EscalaID = a.EscalaID
-       AND esc.Activo = 1
-       AND esc.Estado = N'Publicada'
+        ON esc.EscalaID=a.EscalaID
+       AND esc.Activo=1
+       AND esc.Estado=N'Publicada'
     INNER JOIN dbo.Persona p
-        ON p.PersonaID = a.PersonalID
+        ON p.PersonaID=a.PersonalID
+       AND ISNULL(p.EsColaboradorActivo,1)=1
     INNER JOIN dbo.RRHH_EscalaTurnos et
-        ON et.EscalaID = a.EscalaID
-       AND et.EscalaTurnoID = a.EscalaTurnoID
+        ON et.EscalaID=a.EscalaID
+       AND et.EscalaTurnoID=a.EscalaTurnoID
     WHERE pp.MaquinaID IS NOT NULL
       AND pp.FechaInicioProgramada IS NOT NULL
-      AND a.Activo = 1
-      AND a.MaquinaID = pp.MaquinaID
-      AND CAST(pp.FechaInicioProgramada AS date) >= CAST(a.FechaInicio AS date)
-      AND CAST(pp.FechaInicioProgramada AS date) <= CAST(a.FechaFin AS date)
+      AND a.Activo=1
+      AND a.MaquinaID=pp.MaquinaID
+      AND CAST(pp.FechaInicioProgramada AS date)>=CAST(a.FechaInicio AS date)
+      AND CAST(pp.FechaInicioProgramada AS date)<=CAST(a.FechaFin AS date)
       AND
       (
-            ISNULL(et.EsFlexible, 0) = 1
+            ISNULL(et.EsFlexible,0)=1
          OR et.HoraInicio IS NULL
          OR et.HoraFin IS NULL
          OR
          (
-                ISNULL(et.CruzaDiaSiguiente, 0) = 0
-            AND CAST(pp.FechaInicioProgramada AS time) >= et.HoraInicio
-            AND CAST(pp.FechaInicioProgramada AS time) < et.HoraFin
+                ISNULL(et.CruzaDiaSiguiente,0)=0
+            AND CAST(pp.FechaInicioProgramada AS time)>=et.HoraInicio
+            AND CAST(pp.FechaInicioProgramada AS time)<et.HoraFin
          )
          OR
          (
-                ISNULL(et.CruzaDiaSiguiente, 0) = 1
+                ISNULL(et.CruzaDiaSiguiente,0)=1
             AND
             (
-                   CAST(pp.FechaInicioProgramada AS time) >= et.HoraInicio
-                OR CAST(pp.FechaInicioProgramada AS time) < et.HoraFin
+                   CAST(pp.FechaInicioProgramada AS time)>=et.HoraInicio
+                OR CAST(pp.FechaInicioProgramada AS time)<et.HoraFin
             )
          )
       )
@@ -4766,69 +4820,57 @@ OUTER APPLY
       (
           SELECT 1
           FROM dbo.RRHH_NovedadesPersonal n
-          WHERE n.EscalaID = a.EscalaID
-            AND n.PersonalID = a.PersonalID
-            AND n.Activo = 1
-            AND n.TipoNovedad IN (N'Baja', N'Incapacidad', N'Vacaciones')
-            AND CAST(pp.FechaInicioProgramada AS date) >= CAST(n.FechaInicio AS date)
-            AND CAST(pp.FechaInicioProgramada AS date) <= CAST(ISNULL(n.FechaFin, n.FechaInicio) AS date)
+          WHERE n.EscalaID=a.EscalaID
+            AND n.PersonalID=a.PersonalID
+            AND n.Activo=1
+            AND n.TipoNovedad IN(N'Baja',N'Incapacidad',N'Vacaciones')
+            AND CAST(pp.FechaInicioProgramada AS date)>=CAST(n.FechaInicio AS date)
+            AND CAST(pp.FechaInicioProgramada AS date)<=CAST(ISNULL(n.FechaFin,n.FechaInicio) AS date)
       )
-    ORDER BY
-        et.Orden,
-        a.AsignacionID DESC
+    ORDER BY et.Orden,a.AsignacionID DESC
 ) escala
-
-WHERE pp.Activo = 1
-  AND ISNULL(pp.EstatusID, 1) NOT IN (3, 4, 5, 9, 99)
+WHERE pp.Activo=1
+  AND pp.SolicitudProduccionID IS NOT NULL
+  AND pp.SolicitudProduccionID>0
+  AND pp.SolicitudProduccionDetalleID IS NOT NULL
+  AND pp.SolicitudProduccionDetalleID>0
+  AND ISNULL(pp.EstatusID,1) NOT IN(3,4,5,9,99)
   AND NOT EXISTS
   (
       SELECT 1
       FROM dbo.Produccion_Ejecucion e
-      WHERE e.ProgramaProduccionID = pp.ProgramaProduccionID
-        AND e.Activo = 1
-        AND e.EstatusID NOT IN (9, 99)
+      WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID
+        AND e.Activo=1
+        AND e.EstatusID NOT IN(9,99)
   )
-  AND (@MaquinaID IS NULL OR pp.MaquinaID = @MaquinaID)
-  AND (@FechaDesde IS NULL OR CONVERT(DATE, pp.FechaInicioProgramada) >= @FechaDesde)
-  AND (@FechaHasta IS NULL OR CONVERT(DATE, pp.FechaInicioProgramada) <= @FechaHasta)
+  AND (@MaquinaID IS NULL OR pp.MaquinaID=@MaquinaID)
+  AND (@FechaDesde IS NULL OR CONVERT(date,pp.FechaInicioProgramada)>=@FechaDesde)
+  AND (@FechaHasta IS NULL OR CONVERT(date,pp.FechaInicioProgramada)<=@FechaHasta)
   AND
   (
         @Busqueda IS NULL
-     OR CONVERT(NVARCHAR(30), pp.ProgramaProduccionID) LIKE '%' + @Busqueda + '%'
-     OR s.FolioSolicitud LIKE '%' + @Busqueda + '%'
-     OR s.NumeroOFRecibida LIKE '%' + @Busqueda + '%'
-     OR pp.NumeroParte LIKE '%' + @Busqueda + '%'
-     OR pp.ReferenciaSAP LIKE '%' + @Busqueda + '%'
-     OR pp.DesignacionDescripcionSAP LIKE '%' + @Busqueda + '%'
-     OR pp.MaquinaCodigo LIKE '%' + @Busqueda + '%'
-     OR pp.MaquinaNombre LIKE '%' + @Busqueda + '%'
-     OR pp.MoldeCodigo LIKE '%' + @Busqueda + '%'
-     OR escala.OperadorSugeridoNombre LIKE '%' + @Busqueda + '%'
+     OR CONVERT(NVARCHAR(30),pp.ProgramaProduccionID) LIKE N'%'+@Busqueda+N'%'
+     OR s.FolioSolicitud LIKE N'%'+@Busqueda+N'%'
+     OR s.NumeroOFRecibida LIKE N'%'+@Busqueda+N'%'
+     OR pp.NumeroParte LIKE N'%'+@Busqueda+N'%'
+     OR pp.ReferenciaSAP LIKE N'%'+@Busqueda+N'%'
+     OR pp.DesignacionDescripcionSAP LIKE N'%'+@Busqueda+N'%'
+     OR pp.MaquinaCodigo LIKE N'%'+@Busqueda+N'%'
+     OR pp.MaquinaNombre LIKE N'%'+@Busqueda+N'%'
+     OR pp.MoldeCodigo LIKE N'%'+@Busqueda+N'%'
+     OR escala.OperadorSugeridoNombre LIKE N'%'+@Busqueda+N'%'
   )
 ORDER BY
-    COALESCE(NULLIF(pp.MaquinaCodigo, ''), maq.Codigo),
+    COALESCE(NULLIF(pp.MaquinaCodigo,N''),maq.Codigo),
     pp.FechaInicioProgramada,
-    ISNULL(pp.SecuenciaMaquina, 999999),
+    ISNULL(pp.SecuenciaMaquina,999999),
     pp.ProgramaProduccionID;";
-
             await using var cmd = new SqlCommand(sql, cn);
-
-            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value =
-                (object?)maquinaId ?? DBNull.Value;
-
-            cmd.Parameters.Add("@FechaDesde", SqlDbType.Date).Value =
-                (object?)fechaDesde?.Date ?? DBNull.Value;
-
-            cmd.Parameters.Add("@FechaHasta", SqlDbType.Date).Value =
-                (object?)fechaHasta?.Date ?? DBNull.Value;
-
-            cmd.Parameters.Add("@Busqueda", SqlDbType.NVarChar, 200).Value =
-                string.IsNullOrWhiteSpace(busqueda)
-                    ? DBNull.Value
-                    : busqueda.Trim();
-
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)maquinaId ?? DBNull.Value;
+            cmd.Parameters.Add("@FechaDesde", SqlDbType.Date).Value = (object?)fechaDesde?.Date ?? DBNull.Value;
+            cmd.Parameters.Add("@FechaHasta", SqlDbType.Date).Value = (object?)fechaHasta?.Date ?? DBNull.Value;
+            cmd.Parameters.Add("@Busqueda", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(busqueda) ? DBNull.Value : busqueda.Trim();
             await using var rd = await cmd.ExecuteReaderAsync();
-
             while (await rd.ReadAsync())
             {
                 lista.Add(new ProduccionProgramaDisponibleVm
@@ -4838,29 +4880,21 @@ ORDER BY
                     SolicitudProduccionDetalleID = NullableEntero(rd, "SolicitudProduccionDetalleID"),
                     ReleaseID = NullableEntero(rd, "ReleaseID"),
                     ReleaseDetalleID = NullableEntero(rd, "ReleaseDetalleID"),
-
                     FolioSolicitud = TextoNullable(rd, "FolioSolicitud"),
                     NumeroOFRecibida = TextoNullable(rd, "NumeroOFRecibida"),
-
                     MaquinaID = NullableEntero(rd, "MaquinaID"),
                     MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
                     MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
-
                     ParteID = NullableEntero(rd, "ParteID"),
                     NumeroParte = TextoNullable(rd, "NumeroParte"),
                     ReferenciaSAP = TextoNullable(rd, "ReferenciaSAP"),
                     DescripcionParte = TextoNullable(rd, "DescripcionParte"),
-
                     MoldeID = NullableEntero(rd, "MoldeID"),
                     MoldeCodigo = TextoNullable(rd, "MoldeCodigo"),
-
                     CantidadProgramada = NullableEntero(rd, "CantidadProgramada"),
-
                     FechaInicioProgramada = NullableFecha(rd, "FechaInicioProgramada"),
                     FechaFinProgramada = NullableFecha(rd, "FechaFinProgramada"),
-
                     EstatusID = Entero(rd, "EstatusID"),
-
                     OperadorSugeridoID = NullableEntero(rd, "OperadorSugeridoID"),
                     OperadorSugeridoNombre = TextoNullable(rd, "OperadorSugeridoNombre"),
                     TurnoSugeridoNombre = TextoNullable(rd, "TurnoSugeridoNombre"),
@@ -4868,10 +4902,8 @@ ORDER BY
                     EscalaAsignacionID = NullableEntero(rd, "EscalaAsignacionID")
                 });
             }
-
             return lista;
         }
-
         private sealed class ProgramaParaProduccion
         {
             public int ProgramaProduccionID { get; set; }
@@ -4997,26 +5029,32 @@ WHERE RecepcionOFID = @RecepcionOFID
             return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
         }
 
-        private async Task<int>
-    ObtenerOCrearChecklistsInicialesAsync(
-        ProduccionEjecucionVm ejecucion,
-        int usuarioId,
-        SqlConnection cn,
-        SqlTransaction tx)
+        private async Task<int> ObtenerOCrearChecklistsInicialesAsync(
+      ProduccionEjecucionVm ejecucion,
+      int usuarioId,
+      SqlConnection cn,
+      SqlTransaction tx)
         {
+            if (ejecucion == null)
+                throw new ArgumentNullException(nameof(ejecucion));
+            await SincronizarOFEnEjecucionDesdeProgramaAsync(
+                ejecucion,
+                usuarioId,
+                cn,
+                tx);
             if (!ejecucion.SolicitudProduccionID.HasValue ||
-                ejecucion.SolicitudProduccionID.Value <= 0)
+               ejecucion.SolicitudProduccionID.Value <= 0)
             {
                 throw new InvalidOperationException(
-                    "La ejecución no está relacionada con una OF.");
+                    "La ejecución no tiene una OF válida relacionada.");
             }
-
+            if (!ejecucion.SolicitudProduccionDetalleID.HasValue ||
+               ejecucion.SolicitudProduccionDetalleID.Value <= 0)
+            {
+                throw new InvalidOperationException(
+                    "La ejecución no tiene un detalle de OF válido relacionado.");
+            }
             var fechaOperacion = DateTime.Today;
-
-            /*
-             * 1. Siempre se crea el checklist de arranque
-             *    y liberación de máquina.
-             */
             var checklistArranqueId =
                 await ObtenerOCrearChecklistFormatoAsync(
                     ejecucion: ejecucion,
@@ -5033,11 +5071,6 @@ WHERE RecepcionOFID = @RecepcionOFID
                     usuarioId: usuarioId,
                     cn: cn,
                     tx: tx);
-
-            /*
-             * 2. Solo se crea cuando Planeación indicó
-             *    que existe cambio de molde.
-             */
             if (ejecucion.EsCambioMolde)
             {
                 await ObtenerOCrearChecklistFormatoAsync(
@@ -5056,11 +5089,6 @@ WHERE RecepcionOFID = @RecepcionOFID
                     cn: cn,
                     tx: tx);
             }
-
-            /*
-             * 3. El monitoreo de parámetros se realiza
-             *    una vez al inicio de la OF.
-             */
             await ObtenerOCrearChecklistFormatoAsync(
                 ejecucion: ejecucion,
                 codigoFormato: "GQ-F-PR01-05",
@@ -5076,21 +5104,14 @@ WHERE RecepcionOFID = @RecepcionOFID
                 usuarioId: usuarioId,
                 cn: cn,
                 tx: tx);
-
-            /*
-             * 4. El monitoreo de periféricos se genera
-             *    para el turno vigente.
-             */
             await ObtenerOCrearChecklistPerifericosTurnoAsync(
                 ejecucion,
                 DateTime.Now,
                 usuarioId,
                 cn,
                 tx);
-
             return checklistArranqueId;
         }
-
         private async Task<int>   ObtenerOCrearChecklistFormatoAsync( ProduccionEjecucionVm ejecucion,  string codigoFormato,
         string versionFormato,
         string tipoChecklist,
@@ -5517,22 +5538,20 @@ VALUES
 
 
         private async Task CrearDetalleChecklistFormatoAsync(
-    int checklistArranqueId,
-    string codigoFormato,
-    string versionFormato,
-    int usuarioId,
-    SqlConnection cn,
-    SqlTransaction tx)
+       int checklistArranqueId,
+       string codigoFormato,
+       string versionFormato,
+       int usuarioId,
+       SqlConnection cn,
+       SqlTransaction tx)
         {
             const string sql = @"
 INSERT INTO dbo.Produccion_ChecklistArranqueDetalle
 (
     ChecklistArranqueID,
     PreguntaID,
-
     Resultado,
     Confirmado,
-
     UsuarioCreacionID,
     FechaCreacion,
     Activo
@@ -5542,17 +5561,40 @@ SELECT
     p.PreguntaID,
 
     CASE
+        /* =========================================================
+           PREGUNTAS DE CALIDAD / AUDITOR
+           NUNCA deben nacer respondidas.
+           ========================================================= */
+        WHEN ISNULL(p.EsPreguntaCalidad,0)=1
+          OR UPPER(LTRIM(RTRIM(ISNULL(p.GrupoResponsable,N'')))) IN
+             (
+                 N'CALIDAD',
+                 N'AUDITOR',
+                 N'AUDITOR DE CALIDAD'
+             )
+          OR UPPER(ISNULL(p.Seccion,N'')) LIKE N'%CALIDAD%'
+          OR UPPER(ISNULL(p.Seccion,N'')) LIKE N'%AUDITOR%'
+          OR UPPER(ISNULL(p.ResponsableSugerido,N'')) LIKE N'%CALIDAD%'
+          OR UPPER(ISNULL(p.ResponsableSugerido,N'')) LIKE N'%AUDITOR%'
+            THEN NULL
+
+        /* =========================================================
+           PREGUNTAS DE PRODUCCION
+           Conservan el estado predeterminado para la interfaz,
+           pero siguen sin estar confirmadas.
+           ========================================================= */
         WHEN NULLIF(
-            LTRIM(RTRIM(p.EstadoPredeterminado)),
+            LTRIM(RTRIM(ISNULL(p.EstadoPredeterminado,N''))),
             N''
         ) IS NULL
             THEN N'OK'
+
         ELSE UPPER(
             LTRIM(RTRIM(p.EstadoPredeterminado))
         )
-    END,
+    END AS Resultado,
 
-    0,
+    0 AS Confirmado,
 
     @UsuarioID,
     GETDATE(),
@@ -5560,30 +5602,25 @@ SELECT
 
 FROM dbo.ERP_ChecklistArranquePreguntas p
 
-WHERE p.CodigoFormato = @CodigoFormato
-  AND p.VersionFormato = @VersionFormato
-  AND p.Activo = 1
+WHERE p.CodigoFormato=@CodigoFormato
+  AND ISNULL(p.VersionFormato,N'')=ISNULL(@VersionFormato,N'')
+  AND p.Activo=1
 
   AND NOT EXISTS
   (
       SELECT 1
       FROM dbo.Produccion_ChecklistArranqueDetalle d
-      WHERE d.ChecklistArranqueID =
-            @ChecklistArranqueID
-        AND d.PreguntaID = p.PreguntaID
-        AND d.Activo = 1
+      WHERE d.ChecklistArranqueID=@ChecklistArranqueID
+        AND d.PreguntaID=p.PreguntaID
+        AND d.Activo=1
   )
 
 ORDER BY
-    p.OrdenSeccion,
-    p.OrdenPregunta,
+    ISNULL(p.OrdenSeccion,0),
+    ISNULL(p.OrdenPregunta,0),
     p.PreguntaID;";
 
-            await using var cmd =
-                new SqlCommand(
-                    sql,
-                    cn,
-                    tx);
+            await using var cmd = new SqlCommand(sql, cn, tx);
 
             cmd.Parameters.Add(
                 "@ChecklistArranqueID",
@@ -6499,7 +6536,10 @@ ORDER BY EjecucionProduccionID DESC;";
                 : Convert.ToInt32(result);
         }
 
-        private async Task<ProgramaParaProduccion?> ObtenerProgramaParaIniciarAsync(int programaProduccionId, SqlConnection cn, SqlTransaction tx)
+        private async Task<ProgramaParaProduccion?> ObtenerProgramaParaIniciarAsync(
+     int programaProduccionId,
+     SqlConnection cn,
+     SqlTransaction tx)
         {
             const string sql = @"
 SELECT TOP (1)
@@ -6533,7 +6573,14 @@ SELECT TOP (1)
     opPrincipal.NombreCompleto AS OperadorPrincipalPlaneadoNombre,
     opAuxiliar.PersonaID AS OperadorAuxiliarID,
     opAuxiliar.NombreCompleto AS OperadorAuxiliarNombre
-FROM dbo.Planeacion_ProgramaProduccion pp
+FROM dbo.Planeacion_ProgramaProduccion pp WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=pp.SolicitudProduccionID
+   AND s.Activo=1
+INNER JOIN dbo.SolicitudesProduccionDetalle sd
+    ON sd.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+   AND sd.SolicitudProduccionID=pp.SolicitudProduccionID
+   AND sd.Activo=1
 LEFT JOIN dbo.Planeacion_ReleaseDetalle rd
     ON rd.ReleaseDetalleID=pp.ReleaseDetalleID
 LEFT JOIN dbo.ERP_Maquinas maq
@@ -6578,11 +6625,16 @@ OUTER APPLY
 ) opAuxiliar
 WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
   AND pp.Activo=1
+  AND pp.SolicitudProduccionID IS NOT NULL
+  AND pp.SolicitudProduccionID>0
+  AND pp.SolicitudProduccionDetalleID IS NOT NULL
+  AND pp.SolicitudProduccionDetalleID>0
   AND ISNULL(pp.EstatusID,1) NOT IN(3,4,5,8,9,99);";
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
             await using var rd = await cmd.ExecuteReaderAsync();
-            if (!await rd.ReadAsync()) return null;
+            if (!await rd.ReadAsync())
+                return null;
             return new ProgramaParaProduccion
             {
                 ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
@@ -6612,89 +6664,205 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
             };
         }
 
+        private async Task SincronizarOFEnEjecucionDesdeProgramaAsync(
+    ProduccionEjecucionVm ejecucion,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            if (ejecucion == null)
+                throw new ArgumentNullException(nameof(ejecucion));
+            if (ejecucion.EjecucionProduccionID <= 0)
+                throw new InvalidOperationException("La ejecución de producción no es válida.");
+            if (ejecucion.ProgramaProduccionID <= 0)
+                throw new InvalidOperationException("La ejecución no tiene un programa de producción válido.");
+            const string sql = @"
+DECLARE @SolicitudProduccionID INT;
+DECLARE @SolicitudProduccionDetalleID INT;
+DECLARE @ReleaseID INT;
+DECLARE @ReleaseDetalleID INT;
+
+SELECT TOP (1)
+    @SolicitudProduccionID=pp.SolicitudProduccionID,
+    @SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID,
+    @ReleaseID=COALESCE(pp.ReleaseID,rd.ReleaseID),
+    @ReleaseDetalleID=pp.ReleaseDetalleID
+FROM dbo.Planeacion_ProgramaProduccion pp WITH(UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.Planeacion_ReleaseDetalle rd
+    ON rd.ReleaseDetalleID=pp.ReleaseDetalleID
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;
+
+IF @SolicitudProduccionID IS NULL OR @SolicitudProduccionID<=0
+BEGIN
+    THROW 51501,
+        'El programa todavía no tiene una OF generada. Genera la OF desde Planeación antes de continuar en Producción.',
+        1;
+END;
+
+IF @SolicitudProduccionDetalleID IS NULL OR @SolicitudProduccionDetalleID<=0
+BEGIN
+    THROW 51502,
+        'El programa tiene OF, pero no tiene un detalle de OF relacionado. Revisa la generación de la OF desde Planeación.',
+        1;
+END;
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.SolicitudesProduccion s
+    WHERE s.SolicitudProduccionID=@SolicitudProduccionID
+      AND s.Activo=1
+)
+BEGIN
+    THROW 51503,
+        'La OF relacionada con el programa no existe o ya no está activa.',
+        1;
+END;
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.SolicitudesProduccionDetalle d
+    WHERE d.SolicitudProduccionDetalleID=@SolicitudProduccionDetalleID
+      AND d.SolicitudProduccionID=@SolicitudProduccionID
+      AND d.Activo=1
+)
+BEGIN
+    THROW 51504,
+        'El detalle relacionado con la OF no existe, no pertenece a la OF o ya no está activo.',
+        1;
+END;
+
+UPDATE dbo.Produccion_Ejecucion
+SET
+    SolicitudProduccionID=@SolicitudProduccionID,
+    SolicitudProduccionDetalleID=@SolicitudProduccionDetalleID,
+    ReleaseID=COALESCE(ReleaseID,@ReleaseID),
+    ReleaseDetalleID=COALESCE(ReleaseDetalleID,@ReleaseDetalleID),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND ProgramaProduccionID=@ProgramaProduccionID
+  AND Activo=1
+  AND
+  (
+       SolicitudProduccionID IS NULL
+    OR SolicitudProduccionID<>@SolicitudProduccionID
+    OR SolicitudProduccionDetalleID IS NULL
+    OR SolicitudProduccionDetalleID<>@SolicitudProduccionDetalleID
+  );
+
+SELECT
+    @SolicitudProduccionID AS SolicitudProduccionID,
+    @SolicitudProduccionDetalleID AS SolicitudProduccionDetalleID,
+    @ReleaseID AS ReleaseID,
+    @ReleaseDetalleID AS ReleaseDetalleID;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = ejecucion.ProgramaProduccionID;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                throw new InvalidOperationException("No fue posible sincronizar la OF de la ejecución.");
+            ejecucion.SolicitudProduccionID =
+                rd["SolicitudProduccionID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["SolicitudProduccionID"]);
+            ejecucion.SolicitudProduccionDetalleID =
+                rd["SolicitudProduccionDetalleID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]);
+            ejecucion.ReleaseID =
+                rd["ReleaseID"] == DBNull.Value
+                    ? ejecucion.ReleaseID
+                    : Convert.ToInt32(rd["ReleaseID"]);
+            ejecucion.ReleaseDetalleID =
+                rd["ReleaseDetalleID"] == DBNull.Value
+                    ? ejecucion.ReleaseDetalleID
+                    : Convert.ToInt32(rd["ReleaseDetalleID"]);
+        }
+
+
         private async Task<int> InsertarEjecucionAsync(ProgramaParaProduccion programa, int? operadorId, string? operadorNombre, int? operadorAuxiliarId, string? operadorAuxiliarNombre, string? observaciones, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
-DECLARE @Ids TABLE
-(
-    EjecucionProduccionID INT NOT NULL
-);
-
+DECLARE @Ids TABLE(EjecucionProduccionID INT NOT NULL);
 INSERT INTO dbo.Produccion_Ejecucion
-(
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    SolicitudProduccionDetalleID,
-    ReleaseID,
-    ReleaseDetalleID,
-    MaquinaID,
-    MaquinaCodigo,
-    MaquinaNombre,
-    ParteID,
-    NumeroParte,
-    ReferenciaSAP,
-    DescripcionParte,
-    MoldeID,
-    MoldeCodigo,
-    OperadorID,
-    OperadorNombre,
-    OperadorAuxiliarID,
-    OperadorAuxiliarNombre,
-    EsCambioMolde,
-    FechaCambioMoldeProgramada,
-    FechaArranqueProgramada,
-    FechaInicioReal,
-    CantidadPlaneada,
-    CantidadOKTotal,
-    CantidadSospechosaTotal,
-    CantidadScrapTotal,
-    EstatusID,
-    Observaciones,
-    UsuarioCreacionID,
-    FechaCreacion,
-    Activo
-)
-OUTPUT INSERTED.EjecucionProduccionID
-INTO @Ids(EjecucionProduccionID)
+(ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,MaquinaID,MaquinaCodigo,MaquinaNombre,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,MoldeID,MoldeCodigo,OperadorID,OperadorNombre,OperadorAuxiliarID,OperadorAuxiliarNombre,EsCambioMolde,FechaCambioMoldeProgramada,FechaArranqueProgramada,FechaInicioReal,CantidadPlaneada,CantidadOKTotal,CantidadSospechosaTotal,CantidadScrapTotal,EstatusID,Observaciones,UsuarioCreacionID,FechaCreacion,Activo)
+OUTPUT INSERTED.EjecucionProduccionID INTO @Ids(EjecucionProduccionID)
 VALUES
+(@ProgramaProduccionID,@SolicitudProduccionID,@SolicitudProduccionDetalleID,@ReleaseID,@ReleaseDetalleID,@MaquinaID,@MaquinaCodigo,@MaquinaNombre,@ParteID,@NumeroParte,@ReferenciaSAP,@DescripcionParte,@MoldeID,@MoldeCodigo,@OperadorID,@OperadorNombre,@OperadorAuxiliarID,@OperadorAuxiliarNombre,@EsCambioMolde,@FechaCambioMoldeProgramada,@FechaArranqueProgramada,GETDATE(),@CantidadPlaneada,0,0,0,@EstatusID,@Observaciones,@UsuarioID,GETDATE(),1);
+
+DECLARE @EjecucionProduccionID INT=(SELECT TOP(1)EjecucionProduccionID FROM @Ids);
+DECLARE @ApartadosEsperados INT=
 (
-    @ProgramaProduccionID,
-    @SolicitudProduccionID,
-    @SolicitudProduccionDetalleID,
-    @ReleaseID,
-    @ReleaseDetalleID,
-    @MaquinaID,
-    @MaquinaCodigo,
-    @MaquinaNombre,
-    @ParteID,
-    @NumeroParte,
-    @ReferenciaSAP,
-    @DescripcionParte,
-    @MoldeID,
-    @MoldeCodigo,
-    @OperadorID,
-    @OperadorNombre,
-    @OperadorAuxiliarID,
-    @OperadorAuxiliarNombre,
-    @EsCambioMolde,
-    @FechaCambioMoldeProgramada,
-    @FechaArranqueProgramada,
-    GETDATE(),
-    @CantidadPlaneada,
-    0,
-    0,
-    0,
-    @EstatusID,
-    @Observaciones,
-    @UsuarioID,
-    GETDATE(),
-    1
+    SELECT COUNT(1)
+    FROM dbo.Planeacion_ProductoIncompletoApartado a WITH(UPDLOCK,HOLDLOCK)
+    WHERE a.ProgramaProduccionID=@ProgramaProduccionID
+      AND a.Activo=1
+      AND a.EstatusID=3
 );
 
-SELECT TOP (1) EjecucionProduccionID
-FROM @Ids;";
-            await using var cmd = new SqlCommand(sql, cn, tx);
+IF @ApartadosEsperados>0
+BEGIN
+    IF EXISTS
+    (
+        SELECT 1
+        FROM dbo.Planeacion_ProductoIncompletoApartado a WITH(UPDLOCK,HOLDLOCK)
+        LEFT JOIN dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK) ON c.CajaProduccionID=a.CajaProduccionID
+        WHERE a.ProgramaProduccionID=@ProgramaProduccionID
+          AND a.Activo=1
+          AND a.EstatusID=3
+          AND
+          (
+              c.CajaProduccionID IS NULL
+              OR c.Activo<>1
+              OR ISNULL(c.EsProductoIncompleto,0)<>1
+              OR UPPER(LTRIM(RTRIM(ISNULL(c.EstadoProductoIncompleto,N'')))) NOT IN(N'RESERVADA',N'EN_COMPLETADO')
+              OR ISNULL(c.ProgramaReservaID,0)<>@ProgramaProduccionID
+              OR ISNULL(c.SolicitudReservaID,0)<>ISNULL(@SolicitudProduccionID,0)
+              OR ISNULL(c.SolicitudDetalleReservaID,0)<>ISNULL(@SolicitudProduccionDetalleID,0)
+              OR(c.EjecucionReservaID IS NOT NULL AND c.EjecucionReservaID<>@EjecucionProduccionID)
+          )
+    )
+        THROW 51610,'Una o más etiquetas blancas asignadas al programa ya no están disponibles o no corresponden a esta OF.',1;
 
+    UPDATE dbo.Planeacion_ProductoIncompletoApartado
+    SET EjecucionProduccionID=@EjecucionProduccionID,EstatusID=4,
+        Observaciones=LEFT(COALESCE(NULLIF(Observaciones,N'')+N' | ',N'')+N'Asignada a ejecución de Producción '+CONVERT(NVARCHAR(20),@EjecucionProduccionID)+N'.',500)
+    WHERE ProgramaProduccionID=@ProgramaProduccionID
+      AND Activo=1
+      AND EstatusID=3;
+
+    IF @@ROWCOUNT<>@ApartadosEsperados
+        THROW 51611,'Cambió la asignación de producto incompleto mientras se iniciaba Producción.',1;
+
+    UPDATE c
+    SET c.EstadoProductoIncompleto=N'RESERVADA',
+        c.EjecucionReservaID=@EjecucionProduccionID,
+        c.ProgramaReservaID=@ProgramaProduccionID,
+        c.SolicitudReservaID=@SolicitudProduccionID,
+        c.SolicitudDetalleReservaID=@SolicitudProduccionDetalleID,
+        c.FechaReservaIncompleto=COALESCE(c.FechaReservaIncompleto,SYSDATETIME()),
+        c.UsuarioReservaIncompletoID=COALESCE(c.UsuarioReservaIncompletoID,@UsuarioID),
+        c.UsuarioModificacionID=@UsuarioID,
+        c.FechaModificacion=SYSDATETIME()
+    FROM dbo.Produccion_Cajas c
+    INNER JOIN dbo.Planeacion_ProductoIncompletoApartado a ON a.CajaProduccionID=c.CajaProduccionID
+    WHERE a.EjecucionProduccionID=@EjecucionProduccionID
+      AND a.ProgramaProduccionID=@ProgramaProduccionID
+      AND a.Activo=1
+      AND a.EstatusID=4
+      AND c.Activo=1
+      AND ISNULL(c.EsProductoIncompleto,0)=1;
+
+    IF @@ROWCOUNT<>@ApartadosEsperados
+        THROW 51612,'No fue posible vincular todas las etiquetas blancas asignadas con la ejecución de Producción.',1;
+END;
+
+SELECT @EjecucionProduccionID;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programa.ProgramaProduccionID;
             cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)programa.SolicitudProduccionID ?? DBNull.Value;
             cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value = (object?)programa.SolicitudProduccionDetalleID ?? DBNull.Value;
@@ -6714,59 +6882,22 @@ FROM @Ids;";
             cmd.Parameters.Add("@OperadorAuxiliarID", SqlDbType.Int).Value = (object?)operadorAuxiliarId ?? DBNull.Value;
             cmd.Parameters.Add("@OperadorAuxiliarNombre", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(operadorAuxiliarNombre) ? DBNull.Value : operadorAuxiliarNombre.Trim();
             cmd.Parameters.Add("@EsCambioMolde", SqlDbType.Bit).Value = programa.EsCambioMolde;
-
             DateTime? fechaCambioMoldeProgramada = null;
             DateTime? fechaArranqueProgramada = null;
             var fechaBase = programa.FechaInicioProgramada?.Date ?? DateTime.Today;
-
-            if (programa.Cambio.HasValue)
-                fechaCambioMoldeProgramada = fechaBase.Add(programa.Cambio.Value);
-
-            if (programa.Arranque.HasValue)
-                fechaArranqueProgramada = fechaBase.Add(programa.Arranque.Value);
-            else if (programa.FechaInicioProgramada.HasValue)
-                fechaArranqueProgramada = programa.FechaInicioProgramada.Value;
-
+            if (programa.Cambio.HasValue) fechaCambioMoldeProgramada = fechaBase.Add(programa.Cambio.Value);
+            if (programa.Arranque.HasValue) fechaArranqueProgramada = fechaBase.Add(programa.Arranque.Value);
+            else if (programa.FechaInicioProgramada.HasValue) fechaArranqueProgramada = programa.FechaInicioProgramada.Value;
             cmd.Parameters.Add("@FechaCambioMoldeProgramada", SqlDbType.DateTime).Value = fechaCambioMoldeProgramada.HasValue ? fechaCambioMoldeProgramada.Value : DBNull.Value;
             cmd.Parameters.Add("@FechaArranqueProgramada", SqlDbType.DateTime).Value = fechaArranqueProgramada.HasValue ? fechaArranqueProgramada.Value : DBNull.Value;
             cmd.Parameters.Add("@CantidadPlaneada", SqlDbType.Int).Value = (object?)programa.CantidadPlaneada ?? DBNull.Value;
             cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = ProduccionEstatus.EnPreparacion;
             cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = (object?)observaciones ?? DBNull.Value;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-
             var resultado = await cmd.ExecuteScalarAsync();
-
-            if (resultado == null || resultado == DBNull.Value)
-                throw new InvalidOperationException("La ejecución fue creada, pero no fue posible recuperar EjecucionProduccionID.");
-
+            if (resultado == null || resultado == DBNull.Value) throw new InvalidOperationException("La ejecución fue creada, pero no fue posible recuperar EjecucionProduccionID.");
             return Convert.ToInt32(resultado);
-        }        private static async Task<string?> ObtenerNombrePersonaActivaProduccionAsync(
-            int personaId,
-            SqlConnection cn,
-            SqlTransaction tx)
-        {
-            if (personaId <= 0)
-                return null;
-
-            const string sql = @"
-SELECT TOP (1)
-    LTRIM(RTRIM(CONCAT(
-        ISNULL(p.Nombre,N''),N' ',
-        ISNULL(p.ApellidoPaterno,N''),N' ',
-        ISNULL(p.ApellidoMaterno,N''))))
-FROM dbo.Persona p
-WHERE p.PersonaID=@PersonaID
-  AND ISNULL(p.EsColaboradorActivo,1)=1;";
-
-            await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId;
-
-            var value = await cmd.ExecuteScalarAsync();
-            return value == null || value == DBNull.Value
-                ? null
-                : value.ToString()?.Trim();
         }
-
 
 
         private static async Task<string?> ObtenerNombreOperadorProduccionAsync(int personaId, SqlConnection cn, SqlTransaction tx)
@@ -8777,79 +8908,55 @@ ORDER BY
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CambiarOperadores(
-     int ejecucionProduccionId,
-     int operadorPrincipalPersonaId,
-     int? operadorAuxiliarPersonaId,
-     string? motivoCambio)
+       int ejecucionProduccionId,
+       string? tipoCambio,
+       int? personaNuevaId,
+       string? motivoCambio)
         {
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
 
             if (ejecucionProduccionId <= 0)
             {
-                TempData["Error"] =
-                    "No se recibió una ejecución válida.";
-
+                TempData["Error"] = "No se recibió una ejecución válida.";
                 return RedirectToAction(nameof(Index));
             }
 
-            if (operadorPrincipalPersonaId <= 0)
-            {
-                TempData["Error"] =
-                    "Selecciona al operador principal.";
+            tipoCambio = tipoCambio?.Trim().ToUpperInvariant();
 
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = ejecucionProduccionId });
+            if (tipoCambio != "PRINCIPAL" && tipoCambio != "AUXILIAR")
+            {
+                TempData["Error"] = "Selecciona si deseas cambiar al operador principal o al auxiliar.";
+                return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
             }
 
-            if (operadorAuxiliarPersonaId.HasValue &&
-                operadorAuxiliarPersonaId.Value <= 0)
-            {
-                operadorAuxiliarPersonaId = null;
-            }
-
-            if (operadorAuxiliarPersonaId.HasValue &&
-                operadorAuxiliarPersonaId.Value ==
-                operadorPrincipalPersonaId)
+            if (!personaNuevaId.HasValue || personaNuevaId.Value <= 0)
             {
                 TempData["Error"] =
-                    "El operador principal y el operador auxiliar " +
-                    "no pueden ser la misma persona.";
+                    tipoCambio == "PRINCIPAL"
+                        ? "Selecciona el nuevo operador principal."
+                        : "Selecciona el nuevo auxiliar.";
 
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = ejecucionProduccionId });
+                return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
             }
 
             motivoCambio = motivoCambio?.Trim();
 
             if (string.IsNullOrWhiteSpace(motivoCambio))
             {
-                TempData["Error"] =
-                    "Captura el motivo del cambio de operadores.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = ejecucionProduccionId });
+                TempData["Error"] = "El motivo del cambio es obligatorio.";
+                return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
             }
 
             if (motivoCambio.Length > 1000)
             {
-                TempData["Error"] =
-                    "El motivo del cambio no puede superar " +
-                    "1000 caracteres.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = ejecucionProduccionId });
+                TempData["Error"] = "El motivo del cambio no puede superar 1000 caracteres.";
+                return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
             }
 
             var usuarioId = ObtenerUsuarioID();
 
-            await using var cn =
-                new SqlConnection(ConnectionString);
-
+            await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
             await using var tx =
@@ -8858,22 +8965,17 @@ ORDER BY
 
             try
             {
-                
                 const string sqlEjecucion = @"
 SELECT TOP (1)
     e.ProgramaProduccionID,
-    ISNULL(e.EstatusID, 0) AS EstatusID,
-
+    e.EstatusID,
     e.OperadorID,
     e.OperadorNombre,
-
     e.OperadorAuxiliarID,
     e.OperadorAuxiliarNombre
-
-FROM dbo.Produccion_Ejecucion e WITH (UPDLOCK, HOLDLOCK)
-
-WHERE e.EjecucionProduccionID = @EjecucionProduccionID
-  AND e.Activo = 1;";
+FROM dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
+WHERE e.EjecucionProduccionID=@EjecucionProduccionID
+  AND e.Activo=1;";
 
                 int programaProduccionId;
                 int estatusId;
@@ -8884,26 +8986,20 @@ WHERE e.EjecucionProduccionID = @EjecucionProduccionID
                 string operadorPrincipalAnteriorNombre;
                 string operadorAuxiliarAnteriorNombre;
 
-                await using (
-                    var cmd = new SqlCommand(
-                        sqlEjecucion,
-                        cn,
-                        tx))
+                await using (var cmd = new SqlCommand(sqlEjecucion, cn, tx))
                 {
                     cmd.Parameters.Add(
                         "@EjecucionProduccionID",
                         SqlDbType.Int).Value =
                         ejecucionProduccionId;
 
-                    await using var rd =
-                        await cmd.ExecuteReaderAsync();
+                    await using var rd = await cmd.ExecuteReaderAsync();
 
                     if (!await rd.ReadAsync())
                     {
                         await tx.RollbackAsync();
 
-                        TempData["Error"] =
-                            "No se encontró la ejecución activa.";
+                        TempData["Error"] = "No se encontró la ejecución activa.";
 
                         return RedirectToAction(
                             nameof(Detalle),
@@ -8933,194 +9029,261 @@ WHERE e.EjecucionProduccionID = @EjecucionProduccionID
                     operadorPrincipalAnteriorNombre =
                         rd["OperadorNombre"] == DBNull.Value
                             ? "Sin asignar"
-                            : rd["OperadorNombre"]
-                                .ToString()?
-                                .Trim()
+                            : rd["OperadorNombre"]?.ToString()?.Trim()
                               ?? "Sin asignar";
 
                     operadorAuxiliarAnteriorNombre =
                         rd["OperadorAuxiliarNombre"] == DBNull.Value
                             ? "Sin asignar"
-                            : rd["OperadorAuxiliarNombre"]
-                                .ToString()?
-                                .Trim()
+                            : rd["OperadorAuxiliarNombre"]?.ToString()?.Trim()
                               ?? "Sin asignar";
                 }
 
-                /*
-                 * No se bloquea por estatus.
-                 *
-                 * El operador puede actualizarse mientras la ejecución
-                 * continúe activa, sin importar si está en preparación,
-                 * producción, pausa o ya fue terminada.
-                 */
-
-                /*
-                 * ============================================================
-                 * VALIDAR OPERADOR PRINCIPAL
-                 * ============================================================
-                 */
-                var operadorPrincipalNombre =
-                    await ObtenerPersonaNombreAsync(
-                        operadorPrincipalPersonaId,
-                        cn,
-                        tx);
-
-                if (string.IsNullOrWhiteSpace(
-                    operadorPrincipalNombre))
+                if (estatusId != ProduccionEstatus.EnPreparacion &&
+                   estatusId != ProduccionEstatus.EnProduccion &&
+                   estatusId != ProduccionEstatus.Pausado)
                 {
                     await tx.RollbackAsync();
 
                     TempData["Error"] =
-                        "No se encontró al operador principal seleccionado.";
+                        "Solo puedes cambiar operadores mientras la ejecución esté en preparación, producción o pausa.";
 
                     return RedirectToAction(
                         nameof(Detalle),
                         new { id = ejecucionProduccionId });
                 }
 
-                /*
-                 * ============================================================
-                 * VALIDAR OPERADOR AUXILIAR
-                 * ============================================================
-                 */
-                string? operadorAuxiliarNombre = null;
+                var personaNuevaNombre =
+                    await ObtenerPersonaNombreAsync(
+                        personaNuevaId.Value,
+                        cn,
+                        tx);
 
-                if (operadorAuxiliarPersonaId.HasValue)
+                if (string.IsNullOrWhiteSpace(personaNuevaNombre))
                 {
-                    operadorAuxiliarNombre =
-                        await ObtenerPersonaNombreAsync(
-                            operadorAuxiliarPersonaId.Value,
-                            cn,
-                            tx);
+                    await tx.RollbackAsync();
 
-                    if (string.IsNullOrWhiteSpace(
-                        operadorAuxiliarNombre))
+                    TempData["Error"] =
+                        "La persona seleccionada no existe o ya no está activa.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = ejecucionProduccionId });
+                }
+
+                int? operadorPrincipalNuevoId =
+                    operadorPrincipalAnteriorId;
+
+                string operadorPrincipalNuevoNombre =
+                    operadorPrincipalAnteriorNombre;
+
+                int? operadorAuxiliarNuevoId =
+                    operadorAuxiliarAnteriorId;
+
+                string? operadorAuxiliarNuevoNombre =
+                    operadorAuxiliarAnteriorId.HasValue
+                        ? operadorAuxiliarAnteriorNombre
+                        : null;
+
+                if (tipoCambio == "PRINCIPAL")
+                {
+                    if (operadorPrincipalAnteriorId ==
+                       personaNuevaId.Value)
                     {
-                        await tx.RollbackAsync();
+                        await tx.CommitAsync();
 
-                        TempData["Error"] =
-                            "No se encontró al operador auxiliar seleccionado.";
+                        TempData["Info"] =
+                            "La persona seleccionada ya es el operador principal.";
 
                         return RedirectToAction(
                             nameof(Detalle),
                             new { id = ejecucionProduccionId });
                     }
+
+                    if (operadorAuxiliarAnteriorId.HasValue &&
+                       operadorAuxiliarAnteriorId.Value ==
+                       personaNuevaId.Value)
+                    {
+                        await tx.RollbackAsync();
+
+                        TempData["Error"] =
+                            "La persona seleccionada actualmente está asignada como auxiliar. Principal y auxiliar no pueden ser la misma persona.";
+
+                        return RedirectToAction(
+                            nameof(Detalle),
+                            new { id = ejecucionProduccionId });
+                    }
+
+                    var ejecucion =
+                        await ObtenerEjecucionAsync(
+                            ejecucionProduccionId,
+                            cn,
+                            tx);
+
+                    if (ejecucion == null)
+                    {
+                        await tx.RollbackAsync();
+
+                        TempData["Error"] =
+                            "No fue posible recuperar la ejecución.";
+
+                        return RedirectToAction(
+                            nameof(Detalle),
+                            new { id = ejecucionProduccionId });
+                    }
+
+                    var partePolivalencia =
+                        await ResolverPartePolivalenciaProgramaAsync(
+                            programaProduccionId,
+                            ejecucion.ParteID,
+                            cn,
+                            tx);
+
+                    var tieneMatriz =
+                        partePolivalencia.HasValue &&
+                        await ParteTienePolivalenciaProduccionAsync(
+                            partePolivalencia.Value,
+                            cn,
+                            tx);
+
+                    if (tieneMatriz)
+                    {
+                        var nivel =
+                            await ObtenerNivelPolivalenciaProduccionAsync(
+                                partePolivalencia!.Value,
+                                personaNuevaId.Value,
+                                cn,
+                                tx);
+
+                        if (!nivel.HasValue ||
+                           nivel.Value < 1 ||
+                           nivel.Value > 4)
+                        {
+                            await tx.RollbackAsync();
+
+                            TempData["Error"] =
+                                "El nuevo operador principal debe estar evaluado N1-N4 para esta pieza.";
+
+                            return RedirectToAction(
+                                nameof(Detalle),
+                                new { id = ejecucionProduccionId });
+                        }
+                    }
+                    else if (!await PersonaEsOperadorActivoProduccionAsync(
+                                personaNuevaId.Value,
+                                cn,
+                                tx))
+                    {
+                        await tx.RollbackAsync();
+
+                        TempData["Error"] =
+                            "Selecciona una persona activa del catálogo de operadores.";
+
+                        return RedirectToAction(
+                            nameof(Detalle),
+                            new { id = ejecucionProduccionId });
+                    }
+
+                    operadorPrincipalNuevoId =
+                        personaNuevaId.Value;
+
+                    operadorPrincipalNuevoNombre =
+                        personaNuevaNombre.Trim();
                 }
-
-                /*
-                 * ============================================================
-                 * EVITAR ACTUALIZACIÓN INNECESARIA
-                 * ============================================================
-                 */
-                var principalSinCambio =
-                    operadorPrincipalAnteriorId ==
-                    operadorPrincipalPersonaId;
-
-                var auxiliarSinCambio =
-                    operadorAuxiliarAnteriorId ==
-                    operadorAuxiliarPersonaId;
-
-                if (principalSinCambio &&
-                    auxiliarSinCambio)
+                else
                 {
-                    await tx.CommitAsync();
+                    if (operadorAuxiliarAnteriorId ==
+                       personaNuevaId.Value)
+                    {
+                        await tx.CommitAsync();
 
-                    TempData["Info"] =
-                        "Los operadores seleccionados ya se encuentran " +
-                        "asignados a la ejecución.";
+                        TempData["Info"] =
+                            "La persona seleccionada ya está asignada como auxiliar.";
 
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = ejecucionProduccionId });
+                        return RedirectToAction(
+                            nameof(Detalle),
+                            new { id = ejecucionProduccionId });
+                    }
+
+                    if (operadorPrincipalAnteriorId.HasValue &&
+                       operadorPrincipalAnteriorId.Value ==
+                       personaNuevaId.Value)
+                    {
+                        await tx.RollbackAsync();
+
+                        TempData["Error"] =
+                            "El operador principal y el auxiliar no pueden ser la misma persona.";
+
+                        return RedirectToAction(
+                            nameof(Detalle),
+                            new { id = ejecucionProduccionId });
+                    }
+
+                    if (!await PersonaEsAuxiliarActivoProduccionAsync(
+                            personaNuevaId.Value,
+                            cn,
+                            tx))
+                    {
+                        await tx.RollbackAsync();
+
+                        TempData["Error"] =
+                            "Selecciona una persona activa del catálogo de auxiliares.";
+
+                        return RedirectToAction(
+                            nameof(Detalle),
+                            new { id = ejecucionProduccionId });
+                    }
+
+                    operadorAuxiliarNuevoId =
+                        personaNuevaId.Value;
+
+                    operadorAuxiliarNuevoNombre =
+                        personaNuevaNombre.Trim();
                 }
-
-                /*
-                 * ============================================================
-                 * TEXTO PARA BITÁCORA
-                 * ============================================================
-                 */
-                var auxiliarNuevoTexto =
-                    string.IsNullOrWhiteSpace(
-                        operadorAuxiliarNombre)
-                        ? "Sin asignar"
-                        : operadorAuxiliarNombre;
 
                 var observacionCambio =
-                    "Cambio manual de operadores. " +
-                    $"Principal: {operadorPrincipalAnteriorNombre} " +
-                    $"→ {operadorPrincipalNombre}. " +
-                    $"Auxiliar: {operadorAuxiliarAnteriorNombre} " +
-                    $"→ {auxiliarNuevoTexto}. " +
-                    $"Motivo: {motivoCambio}";
+                    tipoCambio == "PRINCIPAL"
+                        ? $"Cambio manual de operador principal. {operadorPrincipalAnteriorNombre} → {operadorPrincipalNuevoNombre}. Motivo: {motivoCambio}"
+                        : $"Cambio manual de auxiliar. {operadorAuxiliarAnteriorNombre} → {operadorAuxiliarNuevoNombre}. Motivo: {motivoCambio}";
 
                 if (observacionCambio.Length > 1000)
-                {
-                    observacionCambio =
-                        observacionCambio[..1000];
-                }
+                    observacionCambio = observacionCambio[..1000];
 
-                /*
-                 * ============================================================
-                 * ACTUALIZAR EJECUCIÓN
-                 * ============================================================
-                 */
                 const string sqlActualizarEjecucion = @"
 UPDATE dbo.Produccion_Ejecucion
 SET
-    OperadorID =
-        @OperadorPrincipalPersonaID,
-
-    OperadorNombre =
-        @OperadorPrincipalNombre,
-
-    OperadorAuxiliarID =
-        @OperadorAuxiliarPersonaID,
-
-    OperadorAuxiliarNombre =
-        @OperadorAuxiliarNombre,
-
-    OperadoresModificadosManual = 1,
-
-    MotivoCambioOperadores =
-        @MotivoCambio,
-
-    UsuarioModificacionID =
-        @UsuarioID,
-
-    FechaModificacion =
-        GETDATE(),
-
-    Observaciones =
+    OperadorID=@OperadorPrincipalPersonaID,
+    OperadorNombre=@OperadorPrincipalNombre,
+    OperadorAuxiliarID=@OperadorAuxiliarPersonaID,
+    OperadorAuxiliarNombre=@OperadorAuxiliarNombre,
+    OperadoresModificadosManual=1,
+    MotivoCambioOperadores=@MotivoCambio,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE(),
+    Observaciones=
         CASE
             WHEN Observaciones IS NULL
-              OR LTRIM(RTRIM(Observaciones)) = N''
+              OR LTRIM(RTRIM(Observaciones))=N''
                 THEN @ObservacionCambio
-
             ELSE
-                Observaciones
-                + CHAR(13)
-                + CHAR(10)
-                + @ObservacionCambio
+                Observaciones+
+                CHAR(13)+CHAR(10)+
+                @ObservacionCambio
         END
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND ProgramaProduccionID=@ProgramaProduccionID
+  AND Activo=1
+  AND EstatusID=@EstatusID;
 
-WHERE EjecucionProduccionID =
-      @EjecucionProduccionID
-
-  AND ProgramaProduccionID =
-      @ProgramaProduccionID
-
-  AND Activo = 1;
-
-IF @@ROWCOUNT <> 1
+IF @@ROWCOUNT<>1
 BEGIN
     THROW 51300,
-          'La ejecución cambió mientras se actualizaban los operadores.',
+          'La ejecución cambió mientras se actualizaba el operador.',
           1;
 END;";
 
-                await using (
-                    var cmd = new SqlCommand(
+                await using (var cmd =
+                    new SqlCommand(
                         sqlActualizarEjecucion,
                         cn,
                         tx))
@@ -9136,31 +9299,39 @@ END;";
                         programaProduccionId;
 
                     cmd.Parameters.Add(
+                        "@EstatusID",
+                        SqlDbType.Int).Value =
+                        estatusId;
+
+                    cmd.Parameters.Add(
                         "@OperadorPrincipalPersonaID",
                         SqlDbType.Int).Value =
-                        operadorPrincipalPersonaId;
+                        (object?)operadorPrincipalNuevoId
+                        ?? DBNull.Value;
 
                     cmd.Parameters.Add(
                         "@OperadorPrincipalNombre",
                         SqlDbType.NVarChar,
                         200).Value =
-                        operadorPrincipalNombre.Trim();
+                        string.IsNullOrWhiteSpace(
+                            operadorPrincipalNuevoNombre)
+                            ? DBNull.Value
+                            : operadorPrincipalNuevoNombre.Trim();
 
                     cmd.Parameters.Add(
                         "@OperadorAuxiliarPersonaID",
                         SqlDbType.Int).Value =
-                        operadorAuxiliarPersonaId.HasValue
-                            ? operadorAuxiliarPersonaId.Value
-                            : DBNull.Value;
+                        (object?)operadorAuxiliarNuevoId
+                        ?? DBNull.Value;
 
                     cmd.Parameters.Add(
                         "@OperadorAuxiliarNombre",
                         SqlDbType.NVarChar,
                         200).Value =
                         string.IsNullOrWhiteSpace(
-                            operadorAuxiliarNombre)
+                            operadorAuxiliarNuevoNombre)
                             ? DBNull.Value
-                            : operadorAuxiliarNombre.Trim();
+                            : operadorAuxiliarNuevoNombre.Trim();
 
                     cmd.Parameters.Add(
                         "@MotivoCambio",
@@ -9182,96 +9353,64 @@ END;";
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                /*
-                 * ============================================================
-                 * SINCRONIZAR PLANEACIÓN
-                 * ============================================================
-                 */
-                await SincronizarOperadorProgramaAsync(
-                    programaProduccionId,
-                    operadorPrincipalPersonaId,
-                    "PRINCIPAL",
-                    usuarioId,
-                    cn,
-                    tx);
+                if (tipoCambio == "PRINCIPAL")
+                {
+                    await SincronizarOperadorProgramaAsync(
+                        programaProduccionId,
+                        operadorPrincipalNuevoId,
+                        "PRINCIPAL",
+                        usuarioId,
+                        cn,
+                        tx);
+                }
+                else
+                {
+                    await SincronizarOperadorProgramaAsync(
+                        programaProduccionId,
+                        operadorAuxiliarNuevoId,
+                        "AUXILIAR",
+                        usuarioId,
+                        cn,
+                        tx);
+                }
 
-                await SincronizarOperadorProgramaAsync(
-                    programaProduccionId,
-                    operadorAuxiliarPersonaId,
-                    "AUXILIAR",
-                    usuarioId,
-                    cn,
-                    tx);
-
-                /*
-                 * ============================================================
-                 * ACTUALIZAR INFORMACIÓN DE CALIDAD SIN INVALIDAR
-                 * ============================================================
-                 *
-                 * Solo se actualizan los nombres y los IDs.
-                 *
-                 * No se modifica:
-                 * - ConfiguracionInvalidada
-                 * - FechaInvalidacion
-                 * - UsuarioInvalidacionID
-                 * - MotivoInvalidacion
-                 * - Liberado
-                 * - ResultadoCalidad
-                 * - Etiqueta
-                 * - Estado
-                 */
                 const string sqlActualizarCalidad = @"
 DECLARE @InspeccionID INT;
 DECLARE @EstadoActual NVARCHAR(50);
 
 SELECT TOP (1)
-    @InspeccionID =
-        i.InspeccionID,
-
-    @EstadoActual =
+    @InspeccionID=i.InspeccionID,
+    @EstadoActual=
         UPPER(
             LTRIM(
                 RTRIM(
-                    ISNULL(i.Estado, N'')
+                    ISNULL(i.Estado,N'')
                 )
             )
         )
-
 FROM dbo.Calidad_Inspecciones i
-    WITH (UPDLOCK, HOLDLOCK)
-
-WHERE i.EjecucionProduccionID =
-      @EjecucionProduccionID
-
-  AND ISNULL(i.Estado, N'') <>
-      N'CERRADA'
-
-ORDER BY
-    i.InspeccionID DESC;
+WITH(UPDLOCK,HOLDLOCK)
+WHERE i.EjecucionProduccionID=@EjecucionProduccionID
+  AND ISNULL(i.Estado,N'')<>N'CERRADA'
+ORDER BY i.InspeccionID DESC;
 
 IF @InspeccionID IS NOT NULL
 BEGIN
     UPDATE dbo.Calidad_Inspecciones
     SET
-        OperadorPrincipalPersonaID =
+        OperadorPrincipalPersonaID=
             @OperadorPrincipalPersonaID,
-
-        OperadorPrincipalNombre =
+        OperadorPrincipalNombre=
             @OperadorPrincipalNombre,
-
-        OperadorAuxiliarPersonaID =
+        OperadorAuxiliarPersonaID=
             @OperadorAuxiliarPersonaID,
-
-        OperadorAuxiliarNombre =
+        OperadorAuxiliarNombre=
             @OperadorAuxiliarNombre,
-
-        UsuarioModificacionID =
+        UsuarioModificacionID=
             @UsuarioID,
-
-        FechaModificacion =
+        FechaModificacion=
             GETDATE()
-
-    WHERE InspeccionID =
+    WHERE InspeccionID=
           @InspeccionID;
 
     INSERT INTO dbo.Calidad_InspeccionHistorial
@@ -9300,8 +9439,8 @@ BEGIN
     );
 END;";
 
-                await using (
-                    var cmd = new SqlCommand(
+                await using (var cmd =
+                    new SqlCommand(
                         sqlActualizarCalidad,
                         cn,
                         tx))
@@ -9314,29 +9453,32 @@ END;";
                     cmd.Parameters.Add(
                         "@OperadorPrincipalPersonaID",
                         SqlDbType.Int).Value =
-                        operadorPrincipalPersonaId;
+                        (object?)operadorPrincipalNuevoId
+                        ?? DBNull.Value;
 
                     cmd.Parameters.Add(
                         "@OperadorPrincipalNombre",
                         SqlDbType.NVarChar,
                         200).Value =
-                        operadorPrincipalNombre.Trim();
+                        string.IsNullOrWhiteSpace(
+                            operadorPrincipalNuevoNombre)
+                            ? DBNull.Value
+                            : operadorPrincipalNuevoNombre.Trim();
 
                     cmd.Parameters.Add(
                         "@OperadorAuxiliarPersonaID",
                         SqlDbType.Int).Value =
-                        operadorAuxiliarPersonaId.HasValue
-                            ? operadorAuxiliarPersonaId.Value
-                            : DBNull.Value;
+                        (object?)operadorAuxiliarNuevoId
+                        ?? DBNull.Value;
 
                     cmd.Parameters.Add(
                         "@OperadorAuxiliarNombre",
                         SqlDbType.NVarChar,
                         200).Value =
                         string.IsNullOrWhiteSpace(
-                            operadorAuxiliarNombre)
+                            operadorAuxiliarNuevoNombre)
                             ? DBNull.Value
-                            : operadorAuxiliarNombre.Trim();
+                            : operadorAuxiliarNuevoNombre.Trim();
 
                     cmd.Parameters.Add(
                         "@Comentario",
@@ -9355,15 +9497,16 @@ END;";
                 await tx.CommitAsync();
 
                 TempData["Success"] =
-                    "Operadores actualizados correctamente. " +
-                    "El cambio no afecta la liberación ni el estado de Calidad.";
+                    tipoCambio == "PRINCIPAL"
+                        ? "Operador principal actualizado correctamente."
+                        : "Auxiliar actualizado correctamente.";
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
 
                 TempData["Error"] =
-                    "No fue posible cambiar los operadores: " +
+                    "No fue posible cambiar el operador: " +
                     ex.Message;
             }
 
@@ -9440,6 +9583,23 @@ END;";
             cmd.Parameters.Add("@RolOperador", SqlDbType.NVarChar, 30).Value = rolOperador;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
+        }
+
+        private static async Task<string?> ObtenerNombrePersonaActivaProduccionAsync(int personaId, SqlConnection cn, SqlTransaction tx)
+        {
+            if (personaId <= 0) return null;
+            const string sql = @"
+SELECT TOP (1)
+    NULLIF(LTRIM(RTRIM(ISNULL(Nombre,N'')+N' '+ISNULL(ApellidoPaterno,N'')+N' '+ISNULL(ApellidoMaterno,N''))),N'') AS NombreCompleto
+FROM dbo.Persona WITH(UPDLOCK,HOLDLOCK)
+WHERE PersonaID=@PersonaID
+  AND ISNULL(EsColaboradorActivo,1)=1;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId;
+            var resultado = await cmd.ExecuteScalarAsync();
+            if (resultado == null || resultado == DBNull.Value) return null;
+            var nombre = resultado.ToString()?.Trim();
+            return string.IsNullOrWhiteSpace(nombre) ? null : nombre;
         }
 
         private static int? ObtenerEnteroNullable(

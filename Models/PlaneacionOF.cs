@@ -85,6 +85,8 @@ namespace ERP.NSQuell.Models
 
         public List<SelectListItem> Clientes { get; set; } = new();
         public List<SelectListItem> Partes { get; set; } = new();
+        // LITZI_OF_ENSAMBLES_V1: catalogo real para OF tipo ENSAMBLE.
+        public List<SelectListItem> Ensambles { get; set; } = new();
         public List<SelectListItem> Moldes { get; set; } = new();
         public List<SelectListItem> Maquinas { get; set; } = new();
     }
@@ -94,6 +96,8 @@ namespace ERP.NSQuell.Models
         public int Renglon { get; set; }
 
         public int? ParteID { get; set; }
+        // LITZI_OF_ENSAMBLES_V1: FK de OF hacia ERP_Ensambles cuando TipoOF = ENSAMBLE.
+        public int? EnsambleID { get; set; }
         public int? MoldeID { get; set; }
 
         public string ReferenciaSAP { get; set; } = string.Empty;

@@ -57,6 +57,14 @@
     var listos = embarques.Count(x => x.Estatus == "Preparado" || x.Estatus == "Cargado");
     var enRuta = embarques.Count(x => x.Estatus == "En ruta");
     var entregados = embarques.Count(x => x.Estatus == "Entregado");
+    var preparados = embarques.Count(x => x.Estatus == "Preparado");
+    var cargados = embarques.Count(x => x.Estatus == "Cargado");
+    var conIncidenciaTotal = embarques.Count(x => x.TieneIncidencia);
+    var cajasMovilizadas = embarques
+        .Where(x => x.Estatus is "Cargado" or "En ruta" or "Entregado")
+        .Sum(x => (long)x.TotalCajas);
+    var piezasMovilizadas = embarques.Sum(x => (long)x.TotalPiezasDespachadas);
+    var resumenClientes = Model.ResumenClientes ?? new List<LogisticaResumenClienteVm>();
 
     DateTime? Combinar(DateTime? fecha, TimeSpan? hora)
         => fecha?.Date.Add(hora ?? TimeSpan.Zero);
@@ -833,6 +841,87 @@
         .log-nav-btn {
             flex: 0 0 auto
         }
+
+        .log-table-wrap {
+            overflow-x: visible
+        }
+
+        .log-table {
+            min-width: 0;
+            table-layout: fixed
+        }
+
+            .log-table th,
+            .log-table td {
+                padding: 8px 6px;
+                white-space: normal;
+                overflow-wrap: anywhere;
+                word-break: normal;
+                vertical-align: top
+            }
+
+            .log-table th {
+                font-size: .61rem;
+                letter-spacing: .02em
+            }
+
+            .log-table td {
+                font-size: .72rem
+            }
+
+        .log-btn {
+            padding: 7px 8px;
+            white-space: nowrap
+        }
+
+        #panelPendientes .log-table th:nth-child(1),
+        #panelPendientes .log-table td:nth-child(1),
+        #panelPendientes .log-table th:nth-child(4),
+        #panelPendientes .log-table td:nth-child(4),
+        #panelPendientes .log-table th:nth-child(6),
+        #panelPendientes .log-table td:nth-child(6),
+        #panelPreparacion .log-table th:nth-child(2),
+        #panelPreparacion .log-table td:nth-child(2),
+        #panelPreparacion .log-table th:nth-child(5),
+        #panelPreparacion .log-table td:nth-child(5),
+        #panelPreparacion .log-table th:nth-child(6),
+        #panelPreparacion .log-table td:nth-child(6),
+        #panelListos .log-table th:nth-child(2),
+        #panelListos .log-table td:nth-child(2),
+        #panelListos .log-table th:nth-child(5),
+        #panelListos .log-table td:nth-child(5),
+        #panelRuta .log-table th:nth-child(2),
+        #panelRuta .log-table td:nth-child(2),
+        #panelRuta .log-table th:nth-child(6),
+        #panelRuta .log-table td:nth-child(6),
+        #panelEntregados .log-table th:nth-child(3),
+        #panelEntregados .log-table td:nth-child(3),
+        #panelEntregados .log-table th:nth-child(5),
+        #panelEntregados .log-table td:nth-child(5),
+        #panelTodos .log-table th:nth-child(2),
+        #panelTodos .log-table td:nth-child(2),
+        #panelTodos .log-table th:nth-child(5),
+        #panelTodos .log-table td:nth-child(5),
+        #panelTodos .log-table th:nth-child(6),
+        #panelTodos .log-table td:nth-child(6),
+        #panelTodos .log-table th:nth-child(9),
+        #panelTodos .log-table td:nth-child(9),
+        #panelResumenClientes .log-table th:nth-child(3),
+        #panelResumenClientes .log-table td:nth-child(3),
+        #panelResumenClientes .log-table th:nth-child(4),
+        #panelResumenClientes .log-table td:nth-child(4),
+        #panelResumenClientes .log-table th:nth-child(5),
+        #panelResumenClientes .log-table td:nth-child(5),
+        #panelResumenClientes .log-table th:nth-child(7),
+        #panelResumenClientes .log-table td:nth-child(7),
+        #panelResumenClientes .log-table th:nth-child(8),
+        #panelResumenClientes .log-table td:nth-child(8),
+        #panelResumenClientes .log-table th:nth-child(10),
+        #panelResumenClientes .log-table td:nth-child(10),
+        #panelResumenClientes .log-table th:nth-child(11),
+        #panelResumenClientes .log-table td:nth-child(11) {
+            display: none
+        }
     }
 </style>
 
@@ -873,136 +962,19 @@
         </div>
     }
 
-    <section class="log-control-grid">
-        <article class="log-control-card info">
-            <div class="icon"><i class="fa-solid fa-truck"></i></div>
-            <span>Embarques activos</span>
-            <strong>@activos.Count</strong>
-            <small>Operaciones todavía abiertas</small>
-        </article>
-
-        <article class="log-control-card success">
-            <div class="icon"><i class="fa-solid fa-circle-check"></i></div>
-            <span>En tiempo</span>
-            <strong>@enTiempo</strong>
-            <small>Sin riesgo operativo detectado</small>
-        </article>
-
-        <article class="log-control-card warning">
-            <div class="icon"><i class="fa-solid fa-clock"></i></div>
-            <span>En riesgo</span>
-            <strong>@enRiesgo</strong>
-            <small>Requieren atención preventiva</small>
-        </article>
-
-        <article class="log-control-card danger">
-            <div class="icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-            <span>Atrasados</span>
-            <strong>@atrasados</strong>
-            <small>Compromiso de carga o entrega vencido</small>
-        </article>
-
-        <article class="log-control-card purple">
-            <div class="icon"><i class="fa-solid fa-circle-exclamation"></i></div>
-            <span>Con incidencia</span>
-            <strong>@conIncidencia</strong>
-            <small>Embarques activos con seguimiento abierto</small>
-        </article>
-
-        <article class="log-control-card info">
-            <div class="icon"><i class="fa-solid fa-calendar-day"></i></div>
-            <span>Cargas hoy</span>
-            <strong>@Model.CargasHoy</strong>
-            <small>Programadas para el día</small>
-        </article>
-    </section>
-
-    @{
-        var prioridades = activos
-        .Where(x => RiesgoTexto(x) is "Atrasado" or "En riesgo")
-        .OrderBy(x => RiesgoTexto(x) == "Atrasado" ? 0 : 1)
-        .ThenBy(x => Combinar(x.FechaEntregaProgramada, x.HoraEntregaProgramada) ?? DateTime.MaxValue)
-        .Take(6)
-        .ToList();
-    }
-
-    @if (prioridades.Any())
-    {
-        <section class="log-panel log-priority-panel">
-            <div class="log-panel-head">
-                <div class="log-panel-title">
-                    <i class="fa-solid fa-tower-broadcast"></i>
-                    <div>
-                        <h2>Atención operativa</h2>
-                        <small>Embarques que necesitan intervención primero.</small>
-                    </div>
-                </div>
-            </div>
-            <div class="log-priority-list">
-                @foreach (var e in prioridades)
-                {
-                    <a class="log-priority-item" asp-action="Detalle" asp-route-id="@e.EmbarqueID">
-                        <div class="log-priority-top">
-                            <div>
-                                <h3>@e.Folio · @e.Cliente</h3>
-                                <p>@e.Destino</p>
-                            </div>
-                            <span class="log-risk @RiesgoClase(e)">
-                                <i class="fa-solid @RiesgoIcono(e)"></i>@RiesgoTexto(e)
-                            </span>
-                        </div>
-                        <div class="log-priority-meta">
-                            <span><i class="fa-solid fa-boxes-packing me-1"></i>@e.Estatus</span>
-                            <span><i class="fa-solid fa-calendar-days me-1"></i>Entrega @Fecha(e.FechaEntregaProgramada) @Hora(e.HoraEntregaProgramada)</span>
-                            @if (e.TieneIncidencia)
-                            {
-                                <span style="color:#b42318"><i class="fa-solid fa-circle-exclamation me-1"></i>Incidencia abierta</span>
-                            }
-                        </div>
-                    </a>
-                }
-            </div>
-        </section>
-    }
-
-    <form method="get" class="log-toolbar">
-        <div class="log-field">
-            <label>Buscar</label>
-            <div class="log-search">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input class="log-input" name="q" value="@Model.Busqueda" placeholder="Cliente, destino, parte, OF, Release o embarque" />
-            </div>
-        </div>
-
-        <div class="log-field">
-            <label>Desde</label>
-            <input class="log-input" type="date" name="fechaDesde" value="@Model.FechaDesde?.ToString("yyyy-MM-dd")" />
-        </div>
-
-        <div class="log-field">
-            <label>Hasta</label>
-            <input class="log-input" type="date" name="fechaHasta" value="@Model.FechaHasta?.ToString("yyyy-MM-dd")" />
-        </div>
-
-        <div class="log-field">
-            <label>Estatus</label>
-            <select class="log-select" name="estatus">
-                <option value="">Todos</option>
-                @foreach (var estado in new[] { "Programado", "Preparando", "Preparado", "Cargado", "En ruta", "Entregado", "Cancelado" })
-                {
-                    <option value="@estado" selected="@(string.Equals(Model.Estatus, estado, StringComparison.OrdinalIgnoreCase))">@estado</option>
-                }
-            </select>
-        </div>
-
-        <button class="log-btn log-btn-primary" type="submit">
-            <i class="fa-solid fa-filter"></i>Aplicar
-        </button>
-
-        <a class="log-btn" asp-action="Index">
-            <i class="fa-solid fa-rotate-left"></i>Limpiar
-        </a>
-    </form>
+    <div class="log-strip" style="padding:8px 3px 2px;gap:16px 24px">
+        <span><strong>@preparados</strong> preparados</span>
+        <span><strong>@cargados</strong> cargados</span>
+        <span><strong>@enRuta</strong> en ruta</span>
+        <span><strong>@entregados</strong> entregados</span>
+        <span><strong>@conIncidenciaTotal</strong> con incidencia</span>
+        <span><strong>@cajasMovilizadas.ToString("N0")</strong> cajas movilizadas</span>
+        <span><strong>@piezasMovilizadas.ToString("N0")</strong> piezas movilizadas</span>
+        @if (Model.EntregasAtrasadas > 0)
+        {
+            <span class="danger"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>@Model.EntregasAtrasadas</strong> entrega(s) atrasada(s)</span>
+        }
+    </div>
 
     <div class="log-operational-nav">
         <button type="button" class="log-nav-btn active" data-panel="pendientes">
@@ -1040,16 +1012,6 @@
             Todos
             <span class="log-nav-count">@embarques.Count</span>
         </button>
-    </div>
-
-    <div class="log-strip">
-        <span><strong>@Model.PiezasPendientes.ToString("N0")</strong> piezas pendientes por programar</span>
-        <span><strong>@Model.PiezasPTListas.ToString("N0")</strong> piezas PT disponibles para demandas abiertas</span>
-        <span><strong>@Model.CargasHoy</strong> carga(s) programada(s) hoy</span>
-        @if (Model.EntregasAtrasadas > 0)
-        {
-            <span class="danger"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>@Model.EntregasAtrasadas</strong> entrega(s) atrasada(s)</span>
-        }
     </div>
 
     <section class="log-panel" id="panelPendientes">
@@ -1146,7 +1108,7 @@
         {
             <div class="log-empty">
                 <i class="fa-solid fa-circle-check text-success"></i>
-                No hay releases pendientes con los filtros actuales.
+                No hay releases pendientes de programación.
             </div>
         }
     </section>
@@ -1385,7 +1347,7 @@
         }
         else
         {
-            <div class="log-empty"><i class="fa-solid fa-box-archive"></i>No hay entregas confirmadas con los filtros actuales.</div>
+            <div class="log-empty"><i class="fa-solid fa-box-archive"></i>No hay entregas confirmadas.</div>
         }
     </section>
 
@@ -1444,7 +1406,78 @@
                 }
                 else
         {
-            <div class="log-empty"><i class="fa-solid fa-inbox"></i>No hay embarques con los filtros actuales.</div>
+            <div class="log-empty"><i class="fa-solid fa-inbox"></i>No hay embarques registrados.</div>
+        }
+    </section>
+
+    <section class="log-panel" id="panelResumenClientes">
+        <div class="log-panel-head">
+            <div class="log-panel-title">
+                <i class="fa-solid fa-building"></i>
+                <div>
+                    <h2>Resumen por cliente</h2>
+                    <small>Movimientos y cumplimiento acumulados del tablero logístico.</small>
+                </div>
+            </div>
+        </div>
+
+        @if (resumenClientes.Any())
+        {
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Embarques</th>
+                            <th>Preparados</th>
+                            <th>Cargados</th>
+                            <th>En ruta</th>
+                            <th>Entregados</th>
+                            <th>Incidencias</th>
+                            <th>Cajas</th>
+                            <th>Piezas</th>
+                            <th>A tiempo</th>
+                            <th>Atrasadas</th>
+                            <th>Cumplimiento</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in resumenClientes)
+                        {
+                            <tr>
+                                <td><span class="log-main">@r.Cliente</span></td>
+                                <td>@r.TotalEmbarques</td>
+                                <td>@r.Preparados</td>
+                                <td>@r.Cargados</td>
+                                <td>@r.EnRuta</td>
+                                <td>@r.Entregados</td>
+                                <td>
+                                    @if (r.ConIncidencia > 0)
+                                    {
+                                        <span class="log-incidence" style="margin-top:0"><i class="fa-solid fa-circle-exclamation me-1"></i>@r.ConIncidencia</span>
+                                    }
+                                    else
+                                    {
+                                        <span>0</span>
+                                    }
+                                </td>
+                                <td>@r.TotalCajas.ToString("N0")</td>
+                                <td>@r.TotalPiezas.ToString("N0")</td>
+                                <td>@r.EntregasATiempo</td>
+                                <td>@r.EntregasAtrasadas</td>
+                                <td><strong>@r.PorcentajeCumplimiento.ToString("N1")%</strong></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="log-empty">
+                <i class="fa-solid fa-chart-simple"></i>
+                El resumen por cliente aparecerá cuando el controlador cargue los indicadores logísticos.
+            </div>
         }
     </section>
 </div>

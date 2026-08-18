@@ -117,7 +117,7 @@
 
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(6,minmax(0,1fr));
+            grid-template-columns: repeat(4,minmax(0,1fr));
             gap: 10px;
             margin-bottom: 14px
         }
@@ -1140,22 +1140,136 @@
         }
 
         <section class="summary-grid">
-            <div class="summary"><div class="k">Máquina</div><div class="v">@Txt(Model.MaquinaCodigo)</div><div class="text-muted small">@Txt(Model.MaquinaNombre)</div></div>
-            <div class="summary"><div class="k">Parte</div><div class="v">@Txt(Model.ReferenciaSAP ?? Model.NumeroParte)</div><div class="text-muted small">@Txt(Model.DescripcionParte)</div></div>
-            <div class="summary"><div class="k">OK</div><div class="v text-success">@Numero(Model.CantidadOKTotal)</div></div>
-            <div class="summary"><div class="k">Sospechosos</div><div class="v text-warning">@Numero(Model.CantidadSospechosaTotal)</div></div>
-            <div class="summary"><div class="k">Scrap</div><div class="v text-danger">@Numero(Model.CantidadScrapTotal)</div></div>
+
+            <div class="summary">
+                <div class="k">Máquina</div>
+                <div class="v">
+                    @Txt(Model.MaquinaCodigo)
+                </div>
+                <div class="text-muted small">
+                    @Txt(Model.MaquinaNombre)
+                </div>
+            </div>
+
+            <div class="summary">
+                <div class="k">Parte</div>
+                <div class="v">
+                    @Txt(
+                    Model.ReferenciaSAP
+                    ?? Model.NumeroParte)
+                </div>
+                <div class="text-muted small">
+                    @Txt(Model.DescripcionParte)
+                </div>
+            </div>
+
             <div class="summary objective-summary">
-                <div class="k">Objetivo por hora</div><div class="v">@(objetivoHora.HasValue && objetivoHora.Value > 0 ? Numero(objetivoHora.Value) : "-")</div><div class="text-muted small">
-                    @(objetivoHora.HasValue && objetivoHora.Value > 0 ? "PZA / H" : "Sin objetivo configurado")@if(Model.Ciclo.HasValue){
-                    <span> · Ciclo @Model.Ciclo.Value.ToString("0.##")</span>
-                                        }
+                <div class="k">
+                    Meta de la OF
+                </div>
+
+                <div class="v">
+                    @(planeada > 0
+                                        ? Numero(planeada)
+                                        : "-")
+                </div>
+
+                <div class="text-muted small">
+                    @(planeada > 0
+                                        ? "Piezas requeridas"
+                                        : "Sin cantidad planeada")
+                </div>
+            </div>
+
+            <div class="summary">
+                <div class="k">
+                    OK acumulado
+                </div>
+
+                <div class="v text-success">
+                    @Numero(Model.CantidadOKTotal)
+                </div>
+
+                <div class="text-muted small">
+                    @avance.ToString("0.##")% de la OF
+                </div>
+            </div>
+
+            <div class="summary">
+                <div class="k">
+                    Pendiente OF
+                </div>
+
+                <div class="v @(pendiente > 0
+                                 ? "text-primary"
+                                 : "text-success")">
+                    @Numero(pendiente)
+                </div>
+
+                <div class="text-muted small">
+                    @(pendiente > 0
+                                        ? "Piezas OK por producir"
+                                        : "Meta alcanzada")
+                </div>
+            </div>
+
+            <div class="summary">
+                <div class="k">
+                    Sospechosos
+                </div>
+
+                <div class="v text-warning">
+                    @Numero(
+                                        Model.CantidadSospechosaTotal)
+                </div>
+            </div>
+
+            <div class="summary">
+                <div class="k">
+                    Scrap
+                </div>
+
+                <div class="v text-danger">
+                    @Numero(
+                                        Model.CantidadScrapTotal)
+                </div>
+            </div>
+
+            <div class="summary objective-summary">
+                <div class="k">
+                    Objetivo por hora
+                </div>
+
+                <div class="v">
+                    @(objetivoHora.HasValue &&
+                                        objetivoHora.Value > 0
+                                        ? Numero(objetivoHora.Value)
+                                        : "-")
+                </div>
+
+                <div class="text-muted small">
+                    @(objetivoHora.HasValue &&
+                                        objetivoHora.Value > 0
+                                        ? "PZA / H"
+                                        : "Sin objetivo configurado")
+
+                    @if (Model.Ciclo.HasValue)
+                    {
+                        <span>
+                            · Ciclo
+                            @Model.Ciclo.Value.ToString("0.##")
+                        </span>
+                    }
+
                     @if (Model.Cavidades.HasValue)
                     {
-                        <span> · @Model.Cavidades.Value cav.</span>
+                        <span>
+                            · @Model.Cavidades.Value cav.
+                        </span>
                     }
                 </div>
             </div>
+
         </section>
 
         <section class="turn-toolbar">
@@ -1222,7 +1336,14 @@
         </section>
 
         <section class="panel">
-            <div class="panel-head d-flex justify-content-between align-items-center flex-wrap gap-2"><span><i class="fa-solid fa-clock me-2"></i>Registro por horas</span><span class="badge bg-primary">Avance @avance.ToString("0.##")% · Pendiente @Numero(pendiente)</span></div>
+            <div class="panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span><i class="fa-solid fa-clock me-2"></i>Registro por horas</span><span class="badge bg-primary">
+                    OF @Numero(Model.CantidadOKTotal)
+                    / @Numero(planeada)
+                    · @avance.ToString("0.##")%
+                    · Faltan @Numero(pendiente)
+                </span>
+            </div>
             <div class="panel-body">
                 @if (Model.TieneParoAbierto)
                 {

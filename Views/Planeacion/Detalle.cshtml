@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.PlaneacionOFDetalleVm
+@model ERP.NSQuell.Models.PlaneacionOFDetalleVm
 
 @{
     Layout = null;
@@ -1069,7 +1069,13 @@
                 </div>
             }
 
-            <div class="row g-3 mb-3">
+                        @* NSQ_52_PLANEACION_OEE_V1 *@
+            @if (ViewBag.IndicadoresProduccion is ERP.NSQuell.Models.ProduccionIndicadoresVm indicadoresOF &&
+                 indicadoresOF.TieneDatos)
+            {
+                @await Html.PartialAsync("_ProduccionIndicadores", indicadoresOF)
+            }
+<div class="row g-3 mb-3">
                 <div class="col-md-3">
                     <div class="metric-card">
                         <div class="metric-icon">

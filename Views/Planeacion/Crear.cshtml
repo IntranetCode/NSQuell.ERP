@@ -5,11 +5,14 @@
 
     var clientesData = Model.Clientes.Select(x => new { value = x.Value, text = x.Text }).ToList();
     var partesData = Model.Partes.Select(x => new { value = x.Value, text = x.Text }).ToList();
+    // LITZI_OF_ENSAMBLES_V1
+    var ensamblesData = Model.Ensambles.Select(x => new { value = x.Value, text = x.Text }).ToList();
     var moldesData = Model.Moldes.Select(x => new { value = x.Value, text = x.Text }).ToList();
     var maquinasData = Model.Maquinas.Select(x => new { value = x.Value, text = x.Text }).ToList();
 
     var clientesJson = System.Text.Json.JsonSerializer.Serialize(clientesData);
     var partesJson = System.Text.Json.JsonSerializer.Serialize(partesData);
+    var ensamblesJson = System.Text.Json.JsonSerializer.Serialize(ensamblesData);
     var moldesJson = System.Text.Json.JsonSerializer.Serialize(moldesData);
     var maquinasJson = System.Text.Json.JsonSerializer.Serialize(maquinasData);
 
@@ -388,7 +391,7 @@
                     <p>
                         @(Model.EsEdicion
                                                 ? "Modifica la OF antes de que tenga movimientos reales de almacén."
-                                                : "Captura la OF recibida por Dirección. Los datos técnicos se autollenan desde catálogo maestro y quedan protegidos.")
+                                                : "Captura la OF recibida por Dirección. Al elegir una parte, sus datos vinculados se autollenan desde el catálogo maestro y puedes ajustarlos antes de guardar.")
                     </p>
                 </div>
 
@@ -565,7 +568,7 @@
                             </select>
                             <input asp-for="ClienteNombre" type="hidden" id="ClienteNombre" />
                             <div class="small-help">
-                                Al seleccionar cliente se cargarán solo sus partes.
+                                Sin cliente se muestran todas las partes activas. Al seleccionar cliente se filtran solo sus partes.
                             </div>
                         </div>
 
@@ -602,7 +605,7 @@
                             Renglones de producción
                         </h2>
                         <div class="erp-muted">
-                            Selecciona cliente y parte. Los datos técnicos se autollenan desde BD.
+                            Para Release, Prueba y MP extra selecciona la parte: SAP, descripción, molde, máquina, color, cavidades, objetivo, material, secado, peso y embalaje se autollenan desde BD y permanecen editables.
                         </div>
                     </div>
 
@@ -647,12 +650,34 @@
                                                    class="form-control erp-input mb-2 buscador-parte-input"
                                                    placeholder="Buscar número de parte, referencia o descripción..." /> *@
 
-                                            <label class="erp-label">Parte</label>
-                                            <select name="Detalles[@i].ParteID"
-                                                    class="form-select erp-select parte-select"
-                                                    data-valor-actual="@Model.Detalles[i].ParteID">
-                                                <option value="">-- Selecciona cliente primero --</option>
-                                            </select>
+                                            <div class="parte-selector">
+                                                <label class="erp-label">Parte</label>
+                                                <select name="Detalles[@i].ParteID"
+                                                        class="form-select erp-select parte-select"
+                                                        data-valor-actual="@Model.Detalles[i].ParteID">
+                                                    <option value="">-- Selecciona cliente primero --</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="ensamble-selector d-none">
+                                                <label class="erp-label">Ensamble</label>
+                                                <select name="Detalles[@i].EnsambleID"
+                                                        class="form-select erp-select ensamble-select"
+                                                        data-valor-actual="@Model.Detalles[i].EnsambleID">
+                                                    <option value="">-- Selecciona ensamble --</option>
+                                                    @foreach (var ensamble in Model.Ensambles)
+                                                    {
+                                                        if (ensamble.Value == Model.Detalles[i].EnsambleID?.ToString())
+                                                        {
+                                                            <option value="@ensamble.Value" selected>@ensamble.Text</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@ensamble.Value">@ensamble.Text</option>
+                                                        }
+                                                    }
+                                                </select>
+                                            </div>
                                         </div>
 
                                         <div class="col-md-3">
@@ -926,12 +951,15 @@
     <script>
                 const clientesData = @Html.Raw(clientesJson);
                 const partesData = @Html.Raw(partesJson);
+                const ensamblesData = @Html.Raw(ensamblesJson);
                 const moldesData = @Html.Raw(moldesJson);
                 const maquinasData = @Html.Raw(maquinasJson);
 
                 let partesFiltradasData = [];
 
                 const urlParteInfo = '@Url.Action("ObtenerParteInfo", "Planeacion")';
+                // NSQ_56_AUTORELLENO_ENSAMBLE_V2
+                const urlEnsambleInfo = '@Url.Action("ObtenerEnsambleInfo", "Planeacion")';
                 const urlCalcular = '@Url.Action("CalcularDatosOF", "Planeacion")';
                 const urlValidarAlmacen = '@Url.Action("ValidarDisponibilidadAlmacen", "Planeacion")';
                 const urlPartesPorCliente = '@Url.Action("ObtenerPartesPorCliente", "Planeacion")';
@@ -974,6 +1002,22 @@
                 function aplicarVisualTipoOF() {
                     const tipo = getTipoOFSeleccionado();
                     const requiereMotivo = tipoOFRequiereMotivo(tipo);
+                    const esEnsamble = tipo === 'ENSAMBLE';
+
+                    document.querySelectorAll('.parte-selector').forEach(x => x.classList.toggle('d-none', esEnsamble));
+                    document.querySelectorAll('.ensamble-selector').forEach(x => x.classList.toggle('d-none', !esEnsamble));
+
+                    document.querySelectorAll('.renglon-item').forEach(card => {
+                        const parte = card.querySelector('.parte-select');
+                        const ensamble = card.querySelector('.ensamble-select');
+
+                        if (esEnsamble && parte) {
+                            parte.value = '';
+                        }
+                        if (!esEnsamble && ensamble) {
+                            ensamble.value = '';
+                        }
+                    });
 
                     if (motivoTipoOFBox) {
                         motivoTipoOFBox.classList.toggle('visible', requiereMotivo || !!motivoTipoOFInput?.value?.trim());
@@ -1004,8 +1048,152 @@
                     return true;
                 }
 
+                // NSQ_55_LIMPIAR_CAMBIO_TIPO_OF_V1
+                function limpiarFormularioAlCambiarTipoOF() {
+                    const contenedor = document.getElementById('contenedorRenglones');
+
+                    // Limpia campos generales que dependen del tipo de OF.
+                    const cliente = document.getElementById('ClienteID');
+                    const clienteNombre = document.getElementById('ClienteNombre');
+
+                    if (cliente) {
+                        cliente.value = '';
+                    }
+
+                    if (clienteNombre) {
+                        clienteNombre.value = '';
+                    }
+
+                    if (motivoTipoOFInput) {
+                        motivoTipoOFInput.value = '';
+                    }
+
+                    [
+                        'FechaRequerida',
+                        'FechaInicioPlaneada',
+                        'FechaFinPlaneada',
+                        'NotasGenerales'
+                    ].forEach(function (id) {
+                        const campo = document.getElementById(id);
+
+                        if (campo) {
+                            campo.value = '';
+                        }
+                    });
+
+                    if (!contenedor) {
+                        return;
+                    }
+
+                    // Al cambiar de tipo dejamos un solo renglon limpio.
+                    const renglones = [...contenedor.querySelectorAll('.renglon-item')];
+
+                    renglones.slice(1).forEach(function (card) {
+                        card.remove();
+                    });
+
+                    const card = contenedor.querySelector('.renglon-item');
+
+                    if (!card) {
+                        return;
+                    }
+
+                    card.querySelectorAll('input, select, textarea').forEach(function (campo) {
+                        // El numero de renglon se restaura abajo.
+                        if (campo.classList.contains('input-renglon')) {
+                            return;
+                        }
+
+                        if (campo.type === 'hidden') {
+                            campo.value = '';
+                            return;
+                        }
+
+                        if (campo.tagName === 'SELECT') {
+                            campo.selectedIndex = 0;
+                            return;
+                        }
+
+                        if (
+                            campo.type === 'checkbox' ||
+                            campo.type === 'radio'
+                        ) {
+                            campo.checked = false;
+                            return;
+                        }
+
+                        campo.value = '';
+                    });
+
+                    const inputRenglon = card.querySelector('.input-renglon');
+                    if (inputRenglon) {
+                        inputRenglon.value = '1';
+                    }
+
+                    const numeroRenglon = card.querySelector('.numero-renglon');
+                    if (numeroRenglon) {
+                        numeroRenglon.textContent = '1';
+                    }
+
+                    // El listado de partes vuelve al catalogo completo.
+                    // Si despues se selecciona cliente, se filtrara normalmente.
+                    limpiarPartesDeTodosLosRenglones();
+
+                    // El selector de ensamble queda en blanco.
+                    card.querySelectorAll('.ensamble-select').forEach(function (select) {
+                        select.value = '';
+                    });
+
+                    // Restablece selectores y campos que no forman parte
+                    // de limpiarDatosParte().
+                    card.querySelectorAll('.molde-select').forEach(function (select) {
+                        select.value = '';
+                    });
+
+                    card.querySelectorAll('.maquina-select').forEach(function (select) {
+                        select.value = '';
+                    });
+
+                    card.querySelectorAll('.cantidad-input, .cantidad-asignada-input, .horas-input').forEach(function (campo) {
+                        campo.value = '';
+                    });
+
+                    card.querySelectorAll(
+                        'input[name*="FechaProgramadaTentativa"],' +
+                        'input[name*="HoraInicioTentativa"],' +
+                        'input[name*="HoraFinTentativa"],' +
+                        'input[name*="Observaciones"],' +
+                        'textarea[name*=".Notas"]'
+                    ).forEach(function (campo) {
+                        campo.value = '';
+                    });
+
+                    card.querySelectorAll(
+                        'select[name*="CondicionProduccion"]'
+                    ).forEach(function (select) {
+                        select.value = '';
+                    });
+
+                    const secuencia = card.querySelector(
+                        'input[name*="AsignacionesMaquina"][name*=".Secuencia"]'
+                    );
+
+                    if (secuencia) {
+                        secuencia.value = '1';
+                    }
+
+                    if (typeof limpiarValidacionAlmacen === 'function') {
+                        limpiarValidacionAlmacen(card);
+                    }
+
+                    renumerarRenglones();
+                }
+
                 tipoOFInputs.forEach(input => {
-                    input.addEventListener('change', aplicarVisualTipoOF);
+                    input.addEventListener('change', function () {
+                        limpiarFormularioAlCambiarTipoOF();
+                        aplicarVisualTipoOF();
+                    });
                 });
 
                 motivoTipoOFInput?.addEventListener('input', aplicarVisualTipoOF);
@@ -1013,6 +1201,7 @@
 
                 const moldesOptions = crearOptions(moldesData, '-- Selecciona molde --');
                 const maquinasOptions = crearOptions(maquinasData, '-- Selecciona máquina --');
+                const ensamblesOptions = crearOptions(ensamblesData, '-- Selecciona ensamble --');
 
                 function agregarRenglon() {
                     const contenedor = document.getElementById('contenedorRenglones');
@@ -1020,9 +1209,10 @@
 
                     contenedor.insertAdjacentHTML('beforeend', crearHtmlRenglon(index));
                     renumerarRenglones();
+                    aplicarVisualTipoOF();
 
                     const clienteId = document.getElementById('ClienteID')?.value;
-                    if (clienteId && partesFiltradasData.length) {
+                    if (partesFiltradasData.length) {
                         const nuevo = contenedor.querySelector('.renglon-item:last-child');
                         const select = nuevo.querySelector('.parte-select');
                         if (select) {
@@ -1062,10 +1252,19 @@
                                class="form-control erp-input mb-2 buscador-parte-input"
                                placeholder="Buscar número de parte, referencia o descripción..." />
 
-                        <label class="erp-label">Parte</label>
-                        <select name="Detalles[${i}].ParteID" class="form-select erp-select parte-select">
-                            <option value="">-- Selecciona cliente primero --</option>
-                        </select>
+                        <div class="parte-selector">
+                            <label class="erp-label">Parte</label>
+                            <select name="Detalles[${i}].ParteID" class="form-select erp-select parte-select">
+                                <option value="">-- Selecciona cliente primero --</option>
+                            </select>
+                        </div>
+
+                        <div class="ensamble-selector d-none">
+                            <label class="erp-label">Ensamble</label>
+                            <select name="Detalles[${i}].EnsambleID" class="form-select erp-select ensamble-select">
+                                ${ensamblesOptions}
+                            </select>
+                        </div>
                     </div>
 
                     <div class="col-md-3">
@@ -1293,6 +1492,11 @@
                 document.addEventListener('change', async function (e) {
                     if (e.target.classList.contains('parte-select')) {
                         await cargarInfoParte(e.target);
+                        return;
+                    }
+
+                    if (e.target.classList.contains('ensamble-select')) {
+                        await cargarInfoEnsamble(e.target);
                     }
                 });
 
@@ -1353,6 +1557,290 @@
             timersValidacionAlmacen.set(card, nuevoTimer);
         }
 
+                // NSQ_56_AUTORELLENO_ENSAMBLE_V2
+                async function cargarInfoEnsamble(select) {
+                    const ensambleId = select.value;
+                    const card = select.closest('.renglon-item');
+
+                    if (!card) {
+                        return;
+                    }
+
+                    if (!ensambleId) {
+                        limpiarDatosParte(card);
+
+                        const moldeSelect = card.querySelector('.molde-select');
+                        if (moldeSelect) moldeSelect.value = '';
+
+                        const maquinaSelect = card.querySelector('.maquina-select');
+                        if (maquinaSelect) maquinaSelect.value = '';
+
+                        return;
+                    }
+
+                    try {
+                        const resp = await fetch(
+                            `${urlEnsambleInfo}?ensambleId=${encodeURIComponent(ensambleId)}`
+                        );
+
+                        if (!resp.ok) {
+                            alert(
+                                'No se pudo consultar el ensamble. Respuesta del servidor: '
+                                + resp.status
+                            );
+                            return;
+                        }
+
+                        const data = await resp.json();
+
+                        if (!data.ok) {
+                            alert(
+                                data.mensaje
+                                || 'No se encontro la informacion del ensamble.'
+                            );
+                            return;
+                        }
+
+                        // Quita cualquier dato residual de Parte y despues
+                        // carga solamente datos reales existentes en ERP_Ensambles.
+                        limpiarDatosParte(card);
+
+                        setValue(
+                            card,
+                            '.referencia-input',
+                            data.referenciaSAP
+                        );
+
+                        setValue(
+                            card,
+                            '.designacion-input',
+                            data.designacionDescripcionSAP
+                        );
+
+                        setValue(
+                            card,
+                            '.ciclo-input',
+                            data.tiempoCiclo
+                        );
+
+                        // Si no existe PesoBrutoPieza se usa PesoNetoPieza
+                        // como valor disponible del catalogo del ensamble.
+                        setValue(
+                            card,
+                            '.peso-input',
+                            data.pesoParaOF
+                        );
+
+                        // Estos datos no existen como atributos maestros del
+                        // ensamble y por eso no se inventan.
+                        setValue(card, '.color-input', '');
+                        setValue(card, '.cavidades-input', '');
+                        setValue(card, '.objetivo-input', '');
+                        setValue(card, '.piezas-caja-input', '');
+                        setValue(card, '.tipo-secado-input', '');
+                        setValue(card, '.horas-secado-input', '');
+                        setValue(card, '.piezas-embalaje-input', '');
+                        setValue(card, '.cantidad-embalajes-input', '');
+                        setValue(card, '.cantidad-mp-input', '');
+                        setValue(card, '.material-codigo-input', '');
+                        setValue(card, '.material-desc-input', '');
+                        setValue(card, '.material-id-input', '');
+                        setValue(card, '.embalaje-codigo-input', '');
+                        setValue(card, '.embalaje-desc-input', '');
+
+                        setValue(
+                            card,
+                            '.origen-surtido-input',
+                            'ENSAMBLE'
+                        );
+
+                        setValue(card, '.pt-disponible-input', '');
+                        setValue(card, '.mp-disponible-input', '');
+                        setValue(card, '.almacen-validado-input', 'false');
+
+                        const moldeSelect =
+                            card.querySelector('.molde-select');
+
+                        if (moldeSelect) {
+                            moldeSelect.value = '';
+                        }
+
+                        const maquinaSelect =
+                            card.querySelector('.maquina-select');
+
+                        if (maquinaSelect) {
+                            maquinaSelect.value = '';
+                        }
+
+                        // El ensamble ya conoce a su cliente.
+                        const clienteSelect =
+                            document.getElementById('ClienteID');
+
+                        const clienteNombre =
+                            document.getElementById('ClienteNombre');
+
+                        if (
+                            clienteSelect
+                            && data.clienteID !== null
+                            && data.clienteID !== undefined
+                        ) {
+                            clienteSelect.value = String(data.clienteID);
+                        }
+
+                        if (clienteNombre) {
+                            clienteNombre.value =
+                                data.clienteNombre || '';
+                        }
+
+                        const componentes =
+                            Array.isArray(data.componentes)
+                                ? data.componentes
+                                : [];
+
+                        const resumenComponentes =
+                            componentes.length
+                                ? componentes.map(function (c) {
+                                    const numero = escapeHtml(
+                                        c.numeroComponente || 'SIN NUMERO'
+                                    );
+
+                                    const descripcion = escapeHtml(
+                                        c.descripcionComponente || ''
+                                    );
+
+                                    const cantidad = escapeHtml(
+                                        c.cantidadPorEnsamble ?? 0
+                                    );
+
+                                    const unidad = escapeHtml(
+                                        c.unidad || ''
+                                    );
+
+                                    return `
+                                        <div class="mb-1">
+                                            <strong>${numero}</strong>
+                                            ${descripcion ? ` - ${descripcion}` : ''}
+                                            <span class="ms-1">
+                                                x ${cantidad} ${unidad}
+                                            </span>
+                                        </div>`;
+                                }).join('')
+                                : '<div>Sin componentes activos registrados.</div>';
+
+                        const tipoEnsamble =
+                            escapeHtml(data.tipoEnsamble || '-');
+
+                        const tipoProceso =
+                            escapeHtml(data.tipoProceso || '-');
+
+                        const pesoNeto =
+                            data.pesoNetoPieza === null
+                            || data.pesoNetoPieza === undefined
+                                ? '-'
+                                : escapeHtml(data.pesoNetoPieza);
+
+                        const pesoBruto =
+                            data.pesoBrutoPieza === null
+                            || data.pesoBrutoPieza === undefined
+                                ? '-'
+                                : escapeHtml(data.pesoBrutoPieza);
+
+                        const ciclo =
+                            data.tiempoCiclo === null
+                            || data.tiempoCiclo === undefined
+                                ? '-'
+                                : escapeHtml(data.tiempoCiclo);
+
+                        const requerimiento =
+                            data.requerimientoAnual === null
+                            || data.requerimientoAnual === undefined
+                                ? '-'
+                                : escapeHtml(data.requerimientoAnual);
+
+                        const box =
+                            card.querySelector('.almacen-status');
+
+                        const title =
+                            card.querySelector('.almacen-status-title');
+
+                        const text =
+                            card.querySelector('.almacen-status-text');
+
+                        if (title) {
+                            title.innerHTML =
+                                '<i class="fa-solid fa-layer-group me-1"></i>'
+                                + ' Datos del ensamble / BOM';
+                        }
+
+                        if (box && text) {
+                            box.classList.remove(
+                                'pt',
+                                'mp',
+                                'error'
+                            );
+
+                            box.classList.add(
+                                'visible',
+                                'pt'
+                            );
+
+                            text.innerHTML = `
+                                <div class="fw-bold mb-2">
+                                    ${escapeHtml(data.numeroEnsamble || '')}
+                                    ${data.nombreEnsamble
+                                        ? ` - ${escapeHtml(data.nombreEnsamble)}`
+                                        : ''}
+                                </div>
+
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-3">
+                                        <strong>Tipo:</strong>
+                                        ${tipoEnsamble}
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Proceso:</strong>
+                                        ${tipoProceso}
+                                    </div>
+                                    <div class="col-md-2">
+                                        <strong>Ciclo:</strong>
+                                        ${ciclo}
+                                    </div>
+                                    <div class="col-md-2">
+                                        <strong>Peso neto:</strong>
+                                        ${pesoNeto}
+                                    </div>
+                                    <div class="col-md-2">
+                                        <strong>Peso bruto:</strong>
+                                        ${pesoBruto}
+                                    </div>
+                                </div>
+
+                                <div class="small mb-2">
+                                    <strong>Requerimiento anual:</strong>
+                                    ${requerimiento}
+                                </div>
+
+                                <div>
+                                    <strong>Componentes:</strong>
+                                    <div class="mt-1">
+                                        ${resumenComponentes}
+                                    </div>
+                                </div>`;
+                        }
+
+                        setValue(
+                            card,
+                            '.mensaje-almacen-input',
+                            `OF ENSAMBLE ligada a ERP_Ensambles ID ${data.ensambleID}. Componentes activos: ${componentes.length}.`
+                        );
+                    } catch (err) {
+                        console.error(err);
+
+                        alert(
+                            'No se pudo cargar la informacion del ensamble.'
+                        );
+                    }
+                }
                 async function cargarInfoParte(select) {
                     const parteId = select.value;
                     const card = select.closest('.renglon-item');
@@ -1549,12 +2037,22 @@
 
                     select.innerHTML = crearOptions(filtradas, '-- Selecciona parte --');
                 }
-
+                // NSQ_54_LISTADO_PARTES_OF_MANUALES_V1
                 function limpiarPartesDeTodosLosRenglones() {
-                    partesFiltradasData = [];
+                    // En OF manuales, si no hay cliente seleccionado se muestran
+                    // todas las partes activas. Si se elige cliente, el endpoint
+                    // existente las filtra por ClienteID.
+                    partesFiltradasData = Array.isArray(partesData)
+                        ? [...partesData]
+                        : [];
 
-                    document.querySelectorAll('.parte-select').forEach(select => {
-                        select.innerHTML = '<option value="">-- Selecciona cliente primero --</option>';
+                    const options = crearOptions(
+                        partesFiltradasData,
+                        '-- Selecciona parte --'
+                    );
+
+                    document.querySelectorAll('.parte-select').forEach(function (select) {
+                        select.innerHTML = options;
                         select.value = '';
                     });
 
@@ -1690,10 +2188,17 @@
                     setValue(card, '.almacen-validado-input', 'false');
 
                     const box = card.querySelector('.almacen-status');
+                    const title = card.querySelector('.almacen-status-title');
                     const text = card.querySelector('.almacen-status-text');
 
                     if (box) {
                         box.classList.remove('pt', 'mp', 'error', 'visible');
+                    }
+
+                    if (title) {
+                        title.innerHTML =
+                            '<i class="fa-solid fa-boxes-stacked me-1"></i>'
+                            + ' Validación de almacén';
                     }
 
                     if (text) {
@@ -1906,14 +2411,23 @@
                             alert('Debes capturar al menos un renglón.');
                             return;
                         }
+                        const tipoOFGuardar = getTipoOFSeleccionado();
 
                         for (const card of renglones) {
                             const parteId = getValue(card, '.parte-select');
+                            const ensambleId = getValue(card, '.ensamble-select');
                             const cantidad = getValue(card, '.cantidad-input');
 
-                            if (!parteId || Number(parteId) <= 0) {
-                                alert('Todos los renglones deben tener una parte seleccionada.');
-                                return;
+                            if (tipoOFGuardar === 'ENSAMBLE') {
+                                if (!ensambleId || Number(ensambleId) <= 0) {
+                                    alert('Todos los renglones de una OF de ENSAMBLE deben tener un ensamble seleccionado.');
+                                    return;
+                                }
+                            } else {
+                                if (!parteId || Number(parteId) <= 0) {
+                                    alert('Todos los renglones deben tener una parte seleccionada.');
+                                    return;
+                                }
                             }
 
                             if (!cantidad || Number(cantidad) <= 0) {
@@ -1935,6 +2449,48 @@
                 limpiarPartesDeTodosLosRenglones();
             }
         });
-    </script>
+                    // NSQ_52_AUTOFILL_EDITABLE_V1
+                function nsqHabilitarAutorrellenoEditable(card) {
+                    if (!card) return;
+
+                    const campos = [
+                        '.referencia-input',
+                        '.designacion-input',
+                        '.color-input',
+                        '.cavidades-input',
+                        '.objetivo-input',
+                        '.piezas-caja-input',
+                        '.horas-input',
+                        '.ciclo-input',
+                        '.tipo-secado-input',
+                        '.horas-secado-input',
+                        '.peso-input',
+                        '.piezas-embalaje-input',
+                        '.material-codigo-input',
+                        '.material-desc-input',
+                        '.embalaje-codigo-input',
+                        '.embalaje-desc-input'
+                    ];
+
+                    campos.forEach(function (selector) {
+                        card.querySelectorAll(selector).forEach(function (el) {
+                            el.removeAttribute('readonly');
+                        });
+                    });
+                }
+
+                document.querySelectorAll('.renglon-item').forEach(function (card) {
+                    nsqHabilitarAutorrellenoEditable(card);
+                });
+
+                document.addEventListener('change', function (e) {
+                    if (e.target && e.target.classList.contains('parte-select')) {
+                        const card = e.target.closest('.renglon-item');
+                        window.setTimeout(function () {
+                            nsqHabilitarAutorrellenoEditable(card);
+                        }, 0);
+                    }
+                });
+</script>
 </body>
 </html>

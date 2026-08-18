@@ -352,38 +352,34 @@
         font-weight: 750;
         line-height: 1.4
     }
-    @@media(max - width:1050px) {
-        .cat-grid
 
-    {
-        grid-template-columns: 1fr
+    @@media(max-width:1050px) {
+        .cat-grid {
+            grid-template-columns: 1fr
+        }
     }
 
-    }
-    @@media(max - width:620px) {
-        .cat-hero
+    @@media(max-width:620px) {
+        .cat-hero {
+            padding: 18px
+        }
 
-    {
-        padding: 18px
-    }
+            .cat-hero h1 {
+                font-size: 1.5rem
+            }
 
-    .cat-hero h1 {
-        font-size: 1.5rem
-    }
+        .cat-form {
+            grid-template-columns: 1fr
+        }
 
-    .cat-form {
-        grid-template-columns: 1fr
-    }
+        .cat-span-2, .cat-form-actions {
+            grid-column: span 1
+        }
 
-    .cat-span-2, .cat-form-actions {
-        grid-column: span 1
-    }
-
-    .cat-item {
-        align-items: flex-start;
-        flex-direction: column
-    }
-
+        .cat-item {
+            align-items: flex-start;
+            flex-direction: column
+        }
     }
 </style>
 
@@ -486,10 +482,11 @@
 
                         <div class="cat-item">
                             <div class="cat-item-main">
-                                <strong>@u.NumeroEconomico @if(!string.IsNullOrWhiteSpace(u.Placas)){
-                                <text> · @u.Placas</text>
-                            }
-</strong>
+                                <strong>
+                                    @u.NumeroEconomico @if(!string.IsNullOrWhiteSpace(u.Placas)){
+                                    <text> · @u.Placas</text>
+                                }
+                            </strong>
                             <small>@(string.IsNullOrWhiteSpace(descripcionUnidad) ? "Sin información adicional" : descripcionUnidad)</small>
                         </div>
                         <span class="cat-status @(u.Activo ? "active" : "inactive")">

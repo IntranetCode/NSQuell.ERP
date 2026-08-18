@@ -154,6 +154,10 @@ namespace ERP.NSQuell.Models
         public int? OperadorPrincipalID { get; set; }
         public int? OperadorAuxiliarID { get; set; }
 
+        public int ProductoIncompletoApartado { get; set; }
+        public int CantidadOriginalAProducir { get; set; }
+        public List<PlaneacionProductoIncompletoDisponibleVm> ProductoIncompletoDisponible { get; set; } = new();
+
         public List<SelectListItem> Operadores { get; set; } = new();
 
 
@@ -273,6 +277,8 @@ namespace ERP.NSQuell.Models
         public int? ProgramaProduccionID { get; set; }
         public int? SolicitudProduccionID { get; set; }
         public int? SolicitudProduccionDetalleID { get; set; }
+        public int ProductoIncompletoDisponible { get; set; }
+        public int ProductoIncompletoApartado { get; set; }
 
         public int EstatusID { get; set; }
 
@@ -314,6 +320,24 @@ namespace ERP.NSQuell.Models
         public int TotalPiezasProgramadas => Maquinas.Sum(x => x.Programas.Sum(p => p.CantidadProgramada));
         public int TotalPiezasPendientes => Maquinas.Sum(x => x.Programas.Sum(p => p.CantidadPendiente));
         public decimal TotalHorasProgramadas => Maquinas.Sum(x => x.Programas.Sum(p => p.HorasProgramadas ?? 0));
+    }
+
+    public class PlaneacionProductoIncompletoDisponibleVm
+    {
+        public long CajaProduccionID { get; set; }
+        public string? EtiquetaBlanca { get; set; }
+        public string? FolioCaja { get; set; }
+        public int CantidadPiezas { get; set; }
+        public int CapacidadObjetivoCaja { get; set; }
+        public int CantidadPendienteCompletar { get; set; }
+        public DateTime? FechaFormacion { get; set; }
+        public bool ApartadaEstaNecesidad { get; set; }
+        public string TextoCantidad => $"{CantidadPiezas:N0} pieza(s)";
+    }
+    public class PlaneacionProductoIncompletoSeleccionVm
+    {
+        public int ReleaseDetalleID { get; set; }
+        public List<long> CajasProduccionID { get; set; } = new();
     }
 
     public static class PlaneacionProgramaEstatus

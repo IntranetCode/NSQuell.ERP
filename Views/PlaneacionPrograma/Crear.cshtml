@@ -4,6 +4,9 @@
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Programar Molde | ERP QUELL";
+    var productoIncompleto = Model.ProductoIncompletoDisponible ?? new List<ERP.NSQuell.Models.PlaneacionProductoIncompletoDisponibleVm>();
+    var productoIncompletoApartado = Model.ProductoIncompletoApartado;
+    var cantidadBase = Model.CantidadOriginalAProducir > 0 ? Model.CantidadOriginalAProducir : Model.PiezasAProducir + Model.ProductoIncompletoApartado;
 }
 
 @functions {
@@ -229,6 +232,251 @@
             background: #f4ebff;
             color: #53389e;
             font-weight: 750;
+        }
+
+        .white-product-card {
+            margin-bottom: 20px;
+            border: 2px solid #d0d5dd;
+            border-radius: 24px;
+            background: linear-gradient(180deg,#fff,#f9fafb);
+            box-shadow: var(--shadow);
+            overflow: hidden
+        }
+
+        .white-product-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            padding: 20px 22px;
+            border-bottom: 1px solid #eaecf0
+        }
+
+        .white-product-title {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 950;
+            color: #344054
+        }
+
+        .white-product-sub {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: .88rem;
+            font-weight: 650
+        }
+
+        .white-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 11px;
+            border: 1px solid #d0d5dd;
+            border-radius: 999px;
+            background: #fff;
+            color: #344054;
+            font-size: .78rem;
+            font-weight: 950
+        }
+
+        .white-product-body {
+            padding: 20px 22px
+        }
+
+        .white-summary {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 12px;
+            margin-bottom: 16px
+        }
+
+        .white-summary-item {
+            padding: 13px 14px;
+            border: 1px solid #eaecf0;
+            border-radius: 16px;
+            background: #fff
+        }
+
+            .white-summary-item .k {
+                font-size: .7rem;
+                font-weight: 950;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                color: var(--muted)
+            }
+
+            .white-summary-item .v {
+                margin-top: 3px;
+                font-size: 1.12rem;
+                font-weight: 950;
+                color: #344054
+            }
+
+            .white-summary-item.selected {
+                border-color: #b7ebc6;
+                background: #f0fff4
+            }
+
+        .white-list {
+            display: grid;
+            gap: 10px
+        }
+
+        .white-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px;
+            border: 1px solid #d0d5dd;
+            border-radius: 16px;
+            background: #fff
+        }
+
+            .white-option.selected {
+                border-color: #73c38d;
+                background: #f3fff6
+            }
+
+        .white-check {
+            width: 20px;
+            height: 20px;
+            margin-top: 2px
+        }
+
+        .white-option-main {
+            flex: 1;
+            min-width: 0
+        }
+
+        .white-option-title {
+            font-weight: 950;
+            color: #344054
+        }
+
+        .white-option-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 6px
+        }
+
+        .white-meta {
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: #f2f4f7;
+            color: #475467;
+            font-size: .75rem;
+            font-weight: 850
+        }
+
+        .white-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            margin-top: 16px
+        }
+
+        .btn-white-use {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: 1px solid #107c41;
+            border-radius: 14px;
+            background: #107c41;
+            color: #fff;
+            font-weight: 950
+        }
+
+            .btn-white-use:hover {
+                background: #0b6333;
+                color: #fff
+            }
+
+        .btn-white-full {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: 1px solid #d0d5dd;
+            border-radius: 14px;
+            background: #fff;
+            color: #344054;
+            font-weight: 950
+        }
+
+            .btn-white-full:hover {
+                background: #f2f4f7;
+                color: #344054
+            }
+
+        .white-info {
+            padding: 12px 14px;
+            border: 1px solid #d0d5dd;
+            border-radius: 15px;
+            background: #f9fafb;
+            color: #475467;
+            font-size: .86rem;
+            font-weight: 700
+        }
+
+        .white-empty {
+            padding: 16px;
+            border: 1px dashed #d0d5dd;
+            border-radius: 16px;
+            background: #fff;
+            color: #667085
+        }
+
+        .qty-breakdown {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px;
+            margin-top: 12px
+        }
+
+            .qty-breakdown .item {
+                padding: 12px;
+                border-radius: 15px;
+                border: 1px solid var(--border);
+                background: #fbfdff
+            }
+
+                .qty-breakdown .item.white {
+                    background: #fff;
+                    border-color: #d0d5dd
+                }
+
+                .qty-breakdown .item.net {
+                    background: #eff8ff;
+                    border-color: #b2ddff
+                }
+
+            .qty-breakdown .k {
+                font-size: .68rem;
+                text-transform: uppercase;
+                font-weight: 950;
+                color: var(--muted)
+            }
+
+            .qty-breakdown .v {
+                font-size: 1.05rem;
+                font-weight: 950;
+                margin-top: 2px
+            }
+        @@media(max - width:900px)
+
+        {
+            .white-summary,.qty-breakdown
+
+        {
+            grid-template-columns: 1fr
+        }
+
         }
 
         .layout {
@@ -458,13 +706,259 @@
         }
 
         @@media (max-width: 1100px) {
-            .layout {
-                grid-template-columns: 1fr;
+            .white-product-card {
+                margin-bottom: 20px;
+                border: 2px solid #d0d5dd;
+                border-radius: 24px;
+                background: linear-gradient(180deg,#fff,#f9fafb);
+                box-shadow: var(--shadow);
+                overflow: hidden
             }
 
-            .decision-box {
-                position: static;
+            .white-product-head {
+                display: flex;
+                justify-content: space-between;
+                gap: 14px;
+                align-items: flex-start;
+                flex-wrap: wrap;
+                padding: 20px 22px;
+                border-bottom: 1px solid #eaecf0
             }
+
+            .white-product-title {
+                margin: 0;
+                font-size: 1.1rem;
+                font-weight: 950;
+                color: #344054
+            }
+
+            .white-product-sub {
+                margin-top: 4px;
+                color: var(--muted);
+                font-size: .88rem;
+                font-weight: 650
+            }
+
+            .white-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                padding: 7px 11px;
+                border: 1px solid #d0d5dd;
+                border-radius: 999px;
+                background: #fff;
+                color: #344054;
+                font-size: .78rem;
+                font-weight: 950
+            }
+
+            .white-product-body {
+                padding: 20px 22px
+            }
+
+            .white-summary {
+                display: grid;
+                grid-template-columns: repeat(3,minmax(0,1fr));
+                gap: 12px;
+                margin-bottom: 16px
+            }
+
+            .white-summary-item {
+                padding: 13px 14px;
+                border: 1px solid #eaecf0;
+                border-radius: 16px;
+                background: #fff
+            }
+
+                .white-summary-item .k {
+                    font-size: .7rem;
+                    font-weight: 950;
+                    text-transform: uppercase;
+                    letter-spacing: .04em;
+                    color: var(--muted)
+                }
+
+                .white-summary-item .v {
+                    margin-top: 3px;
+                    font-size: 1.12rem;
+                    font-weight: 950;
+                    color: #344054
+                }
+
+                .white-summary-item.selected {
+                    border-color: #b7ebc6;
+                    background: #f0fff4
+                }
+
+            .white-list {
+                display: grid;
+                gap: 10px
+            }
+
+            .white-option {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 14px;
+                border: 1px solid #d0d5dd;
+                border-radius: 16px;
+                background: #fff
+            }
+
+                .white-option.selected {
+                    border-color: #73c38d;
+                    background: #f3fff6
+                }
+
+            .white-check {
+                width: 20px;
+                height: 20px;
+                margin-top: 2px
+            }
+
+            .white-option-main {
+                flex: 1;
+                min-width: 0
+            }
+
+            .white-option-title {
+                font-weight: 950;
+                color: #344054
+            }
+
+            .white-option-meta {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin-top: 6px
+            }
+
+            .white-meta {
+                padding: 5px 8px;
+                border-radius: 999px;
+                background: #f2f4f7;
+                color: #475467;
+                font-size: .75rem;
+                font-weight: 850
+            }
+
+            .white-actions {
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                margin-top: 16px
+            }
+
+            .btn-white-use {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                padding: 10px 16px;
+                border: 1px solid #107c41;
+                border-radius: 14px;
+                background: #107c41;
+                color: #fff;
+                font-weight: 950
+            }
+
+                .btn-white-use:hover {
+                    background: #0b6333;
+                    color: #fff
+                }
+
+            .btn-white-full {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                padding: 10px 16px;
+                border: 1px solid #d0d5dd;
+                border-radius: 14px;
+                background: #fff;
+                color: #344054;
+                font-weight: 950
+            }
+
+                .btn-white-full:hover {
+                    background: #f2f4f7;
+                    color: #344054
+                }
+
+            .white-info {
+                padding: 12px 14px;
+                border: 1px solid #d0d5dd;
+                border-radius: 15px;
+                background: #f9fafb;
+                color: #475467;
+                font-size: .86rem;
+                font-weight: 700
+            }
+
+            .white-empty {
+                padding: 16px;
+                border: 1px dashed #d0d5dd;
+                border-radius: 16px;
+                background: #fff;
+                color: #667085
+            }
+
+            .qty-breakdown {
+                display: grid;
+                grid-template-columns: repeat(3,minmax(0,1fr));
+                gap: 10px;
+                margin-top: 12px
+            }
+
+                .qty-breakdown .item {
+                    padding: 12px;
+                    border-radius: 15px;
+                    border: 1px solid var(--border);
+                    background: #fbfdff
+                }
+
+                    .qty-breakdown .item.white {
+                        background: #fff;
+                        border-color: #d0d5dd
+                    }
+
+                    .qty-breakdown .item.net {
+                        background: #eff8ff;
+                        border-color: #b2ddff
+                    }
+
+                .qty-breakdown .k {
+                    font-size: .68rem;
+                    text-transform: uppercase;
+                    font-weight: 950;
+                    color: var(--muted)
+                }
+
+                .qty-breakdown .v {
+                    font-size: 1.05rem;
+                    font-weight: 950;
+                    margin-top: 2px
+                }
+        @@media(max - width:900px)
+
+        {
+            .white-summary,.qty-breakdown
+
+        {
+            grid-template-columns: 1fr
+        }
+
+        }
+
+        .layout {
+            grid-template-columns: 1fr;
+        }
+
+        .decision-box {
+            position: static;
+        }
+
         }
 
         @@media (max-width: 768px) {
@@ -531,11 +1025,89 @@
             <div>
                 <div class="fw-bold">Aquí se decide el cambio de molde.</div>
                 <div class="small">
-                    Los datos de parte, material, molde, máquina, cavidades, ciclo, objetivo y horas vienen desde Programa de Planeación.
-                    En esta salida, el stock de almacén solo se calcula como referencia; no bloquea ni descuenta automáticamente.
+                    Planeación define aquí la cantidad real a fabricar. Si existe producto incompleto con etiqueta blanca para la misma pieza, puede apartarlo para esta necesidad o decidir producir la cantidad completa. La OF heredará esta decisión; no volverá a elegir el producto incompleto.
                 </div>
             </div>
         </div>
+
+        <section class="white-product-card">
+            <div class="white-product-head">
+                <div>
+                    <h2 class="white-product-title"><i class="fa-regular fa-square me-2"></i>Producto incompleto / etiqueta blanca</h2>
+                    <div class="white-product-sub">Planeación decide si estas piezas se utilizan para esta necesidad antes de generar el programa y la OF.</div>
+                </div>
+                @if (productoIncompletoApartado > 0)
+                {
+                    <span class="white-pill"><i class="fa-solid fa-lock text-success"></i>@productoIncompletoApartado.ToString("N0") pzas apartadas</span>
+                }
+                else if (productoIncompleto.Any(x => !x.ApartadaEstaNecesidad))
+                {
+                    <span class="white-pill"><i class="fa-solid fa-box-open"></i>Producto disponible</span>
+                }
+                else
+                {
+                    <span class="white-pill"><i class="fa-solid fa-minus"></i>Sin producto disponible</span>
+                }
+            </div>
+            <div class="white-product-body">
+                <div class="white-summary">
+                    <div class="white-summary-item"><div class="k">Pendiente sin etiqueta blanca</div><div class="v">@cantidadBase.ToString("N0")</div></div>
+                    <div class="white-summary-item selected"><div class="k">Etiqueta blanca seleccionada</div><div class="v">@productoIncompletoApartado.ToString("N0")</div></div>
+                    <div class="white-summary-item"><div class="k">Producción real</div><div class="v">@Model.PiezasAProducir.ToString("N0")</div></div>
+                </div>
+                @if (productoIncompleto.Count > 0)
+                {
+                    <form asp-controller="PlaneacionPrograma" asp-action="AplicarProductoIncompleto" method="post" id="formProductoIncompleto">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="ReleaseDetalleID" value="@Model.ReleaseDetalleID" />
+                        <div class="white-list">
+                            @foreach (var caja in productoIncompleto)
+                            {
+                                var etiqueta = string.IsNullOrWhiteSpace(caja.EtiquetaBlanca) ? (string.IsNullOrWhiteSpace(caja.FolioCaja) ? $"Caja {caja.CajaProduccionID}" : caja.FolioCaja) : caja.EtiquetaBlanca;
+                                <label class="white-option @(caja.ApartadaEstaNecesidad ? "selected" : "")">
+                                    <input class="form-check-input white-check" type="checkbox" name="CajasProduccionID" value="@caja.CajaProduccionID" checked="@caja.ApartadaEstaNecesidad" />
+                                    <span class="white-option-main">
+                                        <span class="white-option-title">@etiqueta</span>
+                                        <span class="white-option-meta">
+                                            <span class="white-meta">Disponible: @caja.CantidadPiezas.ToString("N0") pzas</span>
+                                            @if (caja.CapacidadObjetivoCaja > 0)
+                                            {
+                                                <span class="white-meta">Caja: @caja.CantidadPiezas.ToString("N0") / @caja.CapacidadObjetivoCaja.ToString("N0")</span>
+                                            }
+                                            @if (caja.CantidadPendienteCompletar > 0)
+                                            {
+                                                <span class="white-meta">Faltan para completar: @caja.CantidadPendienteCompletar.ToString("N0")</span>
+                                            }
+                                            @if (caja.FechaFormacion.HasValue)
+                                            {
+                                                <span class="white-meta">Desde: @caja.FechaFormacion.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                            }
+                                            @if (caja.ApartadaEstaNecesidad)
+                                            {
+                                                <span class="white-meta"><i class="fa-solid fa-lock me-1"></i>Apartada para esta necesidad</span>
+                                            }
+                                        </span>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                        <div class="white-info mt-3"><i class="fa-solid fa-circle-info me-2"></i>La selección toma la etiqueta completa; no se divide una misma etiqueta blanca entre diferentes necesidades. Las piezas seleccionadas se restan de la cantidad a producir y recalculan MP, embalajes y horas.</div>
+                        <div class="white-actions">
+                            <button type="submit" class="btn-white-use"><i class="fa-solid fa-check"></i>Usar producto seleccionado</button>
+                        </div>
+                    </form>
+                    <form asp-controller="PlaneacionPrograma" asp-action="ProducirCantidadCompleta" method="post" class="mt-2 text-end">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="releaseDetalleId" value="@Model.ReleaseDetalleID" />
+                        <button type="submit" class="btn-white-full"><i class="fa-solid fa-industry"></i>Producir cantidad completa</button>
+                    </form>
+                }
+                else
+                {
+                    <div class="white-empty"><i class="fa-regular fa-square me-2"></i>No existe producto incompleto disponible para esta pieza. La necesidad continuará con la cantidad completa pendiente de producir.</div>
+                }
+            </div>
+        </section>
 
         <form asp-controller="PlaneacionPrograma" asp-action="Crear" method="post" id="formPrograma">
             @Html.AntiForgeryToken()
@@ -649,6 +1221,8 @@
             <input type="hidden" asp-for="PTApartadoOtros" />
             <input type="hidden" asp-for="PTDisponibleNeto" />
             <input type="hidden" asp-for="PiezasAProducir" />
+            <input type="hidden" asp-for="CantidadOriginalAProducir" />
+            <input type="hidden" asp-for="ProductoIncompletoApartado" />
 
             <input type="hidden" asp-for="MaquinaCodigo" />
             <input type="hidden" asp-for="MaquinaNombre" />
@@ -731,30 +1305,18 @@
                             </div>
 
                             <div class="metric-grid">
-                                <div class="metric">
-                                    <div class="k">Requerido (pzas)</div>
-                                    <div class="v">@Model.CantidadRequerida.ToString("N0")</div>
-                                </div>
-
-                                <div class="metric">
-                                    <div class="k">A producir (pzas)</div>
-                                    <div class="v">@Model.PiezasAProducir.ToString("N0")</div>
-                                </div>
-
-                                <div class="metric">
-                                    <div class="k">MP requerida (kg)</div>
-                                    <div class="v">@Decimal4(Model.CantidadMpKg) kg</div>
-                                </div>
-
-                                <div class="metric">
-                                    <div class="k">Embalajes (pzas)</div>
-                                    <div class="v">@Decimal2(Model.CantidadEmbalajes)</div>
-                                </div>
-
-                                <div class="metric">
-                                    <div class="k">Horas fórmula (hrs)</div>
-                                    <div class="v">@Decimal2(Model.HorasProgramadas)</div>
-                                </div>
+                                <div class="metric"><div class="k">Requerido release</div><div class="v">@Model.CantidadRequerida.ToString("N0")</div></div>
+                                <div class="metric"><div class="k">Pendiente base</div><div class="v">@cantidadBase.ToString("N0")</div></div>
+                                <div class="metric"><div class="k">Etiqueta blanca</div><div class="v">@Model.ProductoIncompletoApartado.ToString("N0")</div></div>
+                                <div class="metric"><div class="k">A producir</div><div class="v">@Model.PiezasAProducir.ToString("N0")</div></div>
+                                <div class="metric"><div class="k">MP requerida</div><div class="v">@Decimal4(Model.CantidadMpKg) kg</div></div>
+                                <div class="metric"><div class="k">Embalajes</div><div class="v">@Decimal2(Model.CantidadEmbalajes)</div></div>
+                                <div class="metric"><div class="k">Horas fórmula</div><div class="v">@Decimal2(Model.HorasProgramadas)</div></div>
+                            </div>
+                            <div class="qty-breakdown">
+                                <div class="item"><div class="k">Cantidad pendiente original</div><div class="v">@cantidadBase.ToString("N0") pzas</div></div>
+                                <div class="item white"><div class="k">Tomadas de etiqueta blanca</div><div class="v">@Model.ProductoIncompletoApartado.ToString("N0") pzas</div></div>
+                                <div class="item net"><div class="k">Producción que ejecutará la OF</div><div class="v">@Model.PiezasAProducir.ToString("N0") pzas</div></div>
                             </div>
                         </div>
                     </section>
@@ -947,7 +1509,7 @@
                                        class="form-control"
                                        id="CantidadProgramada" />
                                 <div class="small text-muted mt-1">
-                                    Máximo pendiente: <strong>@Model.PiezasAProducir.ToString("N0")</strong>
+                                    Producción neta después de producto incompleto: <strong>@Model.PiezasAProducir.ToString("N0")</strong>
                                 </div>
                                 <span asp-validation-for="CantidadProgramada" class="text-danger small"></span>
                             </div>

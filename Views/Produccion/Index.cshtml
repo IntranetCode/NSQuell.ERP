@@ -418,17 +418,6 @@
             border-radius: 999px;
         }
 
-        /* ============================================================
-                                                   COLORES SUAVES POR ESTADO OPERATIVO
-
-                                                   Amarillo = preparación / esperando Calidad
-                                                   Azul     = producción activa
-                                                   Rosa     = paro / pausado
-                                                   Verde    = terminado
-
-                                                   Se aplica sobre las celdas para que Bootstrap no tape
-                                                   el color de la fila.
-                                                   ============================================================ */
         .production-row.row-preparacion > td {
             background: #fff9e8 !important;
         }
@@ -875,8 +864,8 @@
 
 
         /* ============================================================
-                                           NAVEGACION OPERATIVA / CONTENIDO AJAX
-                                           ============================================================ */
+                                                   NAVEGACION OPERATIVA / CONTENIDO AJAX
+                                                   ============================================================ */
         .production-nav {
             display: flex;
             gap: 8px;
@@ -970,9 +959,9 @@
 
 
         /* =========================================================
-                                   AJUSTE VISUAL AMIGABLE - PRODUCCION
-                                   Mantiene la estructura y la logica original.
-                                   ========================================================= */
+                                           AJUSTE VISUAL AMIGABLE - PRODUCCION
+                                           Mantiene la estructura y la logica original.
+                                           ========================================================= */
 
         body {
             background: radial-gradient(circle at 12% 2%, rgba(25, 76, 155, .055), transparent 27%), var(--bg);
@@ -1290,9 +1279,9 @@
 
 
         /* =========================================================
-                                   REFINAMIENTO PROFESIONAL - PRODUCCION
-                                   Ajustes de jerarquia, espaciado y consistencia visual.
-                                   ========================================================= */
+                                           REFINAMIENTO PROFESIONAL - PRODUCCION
+                                           Ajustes de jerarquia, espaciado y consistencia visual.
+                                           ========================================================= */
 
         .page {
             max-width: 1660px;
@@ -1502,11 +1491,11 @@
 
 
         /* ==========================================================
-                                   TEMA OSCURO INTERACTIVO - PRODUCCION
-                                   Se activa con html[data-produccion-theme="dark"].
-                                   El script al final sincroniza esta vista con el switch
-                                   Claro/Oscuro existente en _Layout.
-                                   ========================================================== */
+                                           TEMA OSCURO INTERACTIVO - PRODUCCION
+                                           Se activa con html[data-produccion-theme="dark"].
+                                           El script al final sincroniza esta vista con el switch
+                                           Claro/Oscuro existente en _Layout.
+                                           ========================================================== */
         html[data-produccion-theme="dark"] {
             color-scheme: dark;
             --azul: #7db7ff;
@@ -1817,12 +1806,8 @@
         }
 
 
-        /* =========================================================
-                           MODALES INTEGRADOS CON EL LAYOUT GLOBAL
-                           - El backdrop cubre también el navbar.
-                           - El modal siempre queda por encima del layout.
-                           - Los modales altos hacen scroll internamente.
-                           ========================================================= */
+
+
         #modalIniciarPreparacion .modal-dialog {
             width: min(760px, calc(100vw - 32px));
             max-width: 760px;
@@ -1919,10 +1904,18 @@
                     Centro operativo de Producción: ejecución, próximos inicios y cola programada.
                 </div>
             </div>
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <a class="production-nav-btn"
+                   asp-controller="Produccion"
+                   asp-action="Preparacion">
+                    <i class="bi bi-tools"></i>
+                    Preparación próxima
+                </a>
 
-            <div class="text-end">
-                <div class="small opacity-75">Fecha</div>
-                <div class="fw-bold">@DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+                <div class="text-end">
+                    <div class="small opacity-75">Fecha</div>
+                    <div class="fw-bold">@DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
             </div>
         </div>
     </header>
@@ -2064,12 +2057,7 @@
             <span class="production-nav-count">@Model.TotalDisponibles</span>
         </button>
 
-        <a class="production-nav-btn"
-           asp-controller="Produccion"
-           asp-action="Preparacion">
-            <i class="bi bi-tools"></i>
-            Preparación próxima
-        </a>
+
     </nav>
 
     <section class="production-content-shell" id="contenidoProduccion" aria-live="polite">
@@ -2387,7 +2375,9 @@
                     </button>
                 </div>
 
+
             </form>
+
 
         </div>
     </div>
@@ -2395,573 +2385,577 @@
 
 @section Scripts {
     <script>
-        (() => {
-            const contenidoProduccion = document.getElementById('contenidoProduccion');
-            const formFiltros = document.getElementById('formFiltrosProduccion');
-            const navButtons = Array.from(document.querySelectorAll('[data-production-panel]'));
+                (() => {
+                    const contenidoProduccion = document.getElementById('contenidoProduccion');
+                    const formFiltros = document.getElementById('formFiltrosProduccion');
+                    const navButtons = Array.from(document.querySelectorAll('[data-production-panel]'));
 
-            const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
-            const modalProgramaTexto = document.getElementById('modalProgramaTexto');
-            const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
-            const modalParteTexto = document.getElementById('modalParteTexto');
-            const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
-            const modalMoldeTexto = document.getElementById('modalMoldeTexto');
-            const modalCantidadTexto = document.getElementById('modalCantidadTexto');
-            const modalInicioTexto = document.getElementById('modalInicioTexto');
-            const modalFinTexto = document.getElementById('modalFinTexto');
+                    const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
+                    const modalProgramaTexto = document.getElementById('modalProgramaTexto');
+                    const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
+                    const modalParteTexto = document.getElementById('modalParteTexto');
+                    const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
+                    const modalMoldeTexto = document.getElementById('modalMoldeTexto');
+                    const modalCantidadTexto = document.getElementById('modalCantidadTexto');
+                    const modalInicioTexto = document.getElementById('modalInicioTexto');
+                    const modalFinTexto = document.getElementById('modalFinTexto');
 
-            const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
-            const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
-            const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
+                    const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
+                    const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
+                    const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
 
-            const modalOperadorId = document.getElementById('modalOperadorId');
-            const modalOperadorNombre = document.getElementById('modalOperadorNombre');
-            const modalOperadorManual = document.getElementById('modalOperadorManual');
-            const modalOperadorAuxiliarId = document.getElementById('modalOperadorAuxiliarId');
-            const modalOperadorAuxiliarNombre = document.getElementById('modalOperadorAuxiliarNombre');
-            const modalOperadorAuxiliarManual = document.getElementById('modalOperadorAuxiliarManual');
-            const modalPolivalenciaInfo = document.getElementById('modalPolivalenciaInfo');
-            const opcionesOperadorBase = modalOperadorId?.innerHTML || '';
-            const opcionesAuxiliarBase = modalOperadorAuxiliarId?.innerHTML || '';
-            const modalObservaciones = document.getElementById('modalObservaciones');
-            const mensajeValidacionOperadores = document.getElementById('mensajeValidacionOperadores');
-            const textoValidacionOperadores = document.getElementById('textoValidacionOperadores');
+                    const modalOperadorId = document.getElementById('modalOperadorId');
+                    const modalOperadorNombre = document.getElementById('modalOperadorNombre');
+                    const modalOperadorManual = document.getElementById('modalOperadorManual');
+                    const modalOperadorAuxiliarId = document.getElementById('modalOperadorAuxiliarId');
+                    const modalOperadorAuxiliarNombre = document.getElementById('modalOperadorAuxiliarNombre');
+                    const modalOperadorAuxiliarManual = document.getElementById('modalOperadorAuxiliarManual');
+                    const modalPolivalenciaInfo = document.getElementById('modalPolivalenciaInfo');
+                    const opcionesOperadorBase = modalOperadorId?.innerHTML || '';
+                    const opcionesAuxiliarBase = modalOperadorAuxiliarId?.innerHTML || '';
+                    const modalObservaciones = document.getElementById('modalObservaciones');
+                    const mensajeValidacionOperadores = document.getElementById('mensajeValidacionOperadores');
+                    const textoValidacionOperadores = document.getElementById('textoValidacionOperadores');
 
-            const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
-            const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
+                    const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
+                    const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
 
-            let panelActivo = 'proximos';
-            let controladorCarga = null;
+                    let panelActivo = 'proximos';
+                    let controladorCarga = null;
 
-            function texto(value) {
-                if (!value || !value.trim()) return '-';
-                return value.trim();
-            }
-
-            function seleccionarPersonaSiExiste(select, personaId) {
-                if (!select) return false;
-                const id = personaId || '';
-                for (const option of select.options) {
-                    if (option.value === id) {
-                        select.value = id;
-                        return true;
+                    function texto(value) {
+                        if (!value || !value.trim()) return '-';
+                        return value.trim();
                     }
-                }
-                select.value = '';
-                return false;
-            }
 
-            function obtenerTextoSeleccionado(select) {
-                if (!select || !select.value) return '';
-                const selected = select.options[select.selectedIndex];
-                return selected ? (selected.textContent || '').trim() : '';
-            }
-
-            function limpiarSelectEscala(select, placeholder) {
-                if (!select) return;
-                select.innerHTML = '';
-                const vacio = document.createElement('option');
-                vacio.value = '';
-                vacio.textContent = placeholder;
-                select.appendChild(vacio);
-            }
-
-            function textoPersonaEscala(x, mostrarNivel) {
-                const sep = ' \u00B7 ';
-                const partes = [];
-
-                if (mostrarNivel && x.nivel) partes.push(`N${x.nivel}`);
-                partes.push(x.nombre || '');
-                if (x.numeroControl) partes.push(`Ctrl ${x.numeroControl}`);
-                if (x.enEscala) partes.push('EN ESCALA');
-                if (x.turnoNombre) partes.push(x.turnoNombre);
-                if (x.maquinaCodigo) partes.push(x.maquinaCodigo);
-
-                return partes.filter(Boolean).join(sep);
-            }
-
-
-            function sincronizarModoManual(select, manual) {
-                if (!manual) return;
-
-                const haySeleccion = !!select?.value;
-                manual.disabled = haySeleccion;
-
-                if (haySeleccion) {
-                    manual.value = '';
-                    manual.placeholder = 'Bloqueado: ya seleccionaste un operador';
-                }
-                else {
-                    manual.placeholder = 'Escribe el nombre si no seleccionas operador';
-                }
-            }
-
-            async function cargarOperadoresPolivalencia(programaId, parteId, maquinaId, operadorPreferido, auxiliarPreferido) {
-                limpiarSelectEscala(modalOperadorId, '-- Cargando operadores --');
-                limpiarSelectEscala(modalOperadorAuxiliarId, '-- Cargando auxiliares --');
-
-                if (modalOperadorManual) {
-                    modalOperadorManual.disabled = false;
-                    modalOperadorManual.placeholder = 'Escribe el nombre si no seleccionas operador';
-                }
-                if (modalOperadorAuxiliarManual) {
-                    modalOperadorAuxiliarManual.value = '';
-                    modalOperadorAuxiliarManual.disabled = true;
-                }
-
-                try {
-                    const params = new URLSearchParams();
-                    if (programaId) params.set('programaId', programaId);
-                    if (parteId) params.set('parteId', parteId);
-                    if (maquinaId) params.set('maquinaId', maquinaId);
-
-                    const url = '@Url.Action("OperadoresPolivalenciaParte", "Produccion")' + '?' + params.toString();
-                    const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const data = await response.json();
-
-                    if (!data?.configurado) {
-                        limpiarSelectEscala(modalOperadorId, '-- Polivalencia no configurada --');
-                        limpiarSelectEscala(modalOperadorAuxiliarId, '-- Auxiliares no disponibles --');
-                        if (modalPolivalenciaInfo) {
-                            modalPolivalenciaInfo.textContent = 'No esta disponible la configuracion de Polivalencia.';
-                            modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+                    function seleccionarPersonaSiExiste(select, personaId) {
+                        if (!select) return false;
+                        const id = personaId || '';
+                        for (const option of select.options) {
+                            if (option.value === id) {
+                                select.value = id;
+                                return true;
+                            }
                         }
-                        return;
+                        select.value = '';
+                        return false;
                     }
 
-                    const operadores = Array.isArray(data.operadores) ? data.operadores : [];
-                    const auxiliares = Array.isArray(data.auxiliares) ? data.auxiliares : [];
-                    const tieneMatriz = data.tieneMatriz === true;
-                    const numeroParte = data.numeroParte || '';
-                    const etiquetaEscala = data.escalaEncontrada
-                        ? `${data.escalaFolio || 'Escala'} - ${data.escalaEstado || ''}`
-                        : 'Sin Escala aplicable';
+                    function obtenerTextoSeleccionado(select) {
+                        if (!select || !select.value) return '';
+                        const selected = select.options[select.selectedIndex];
+                        return selected ? (selected.textContent || '').trim() : '';
+                    }
 
-                    limpiarSelectEscala(
-                        modalOperadorId,
-                        tieneMatriz
-                            ? (operadores.length > 0
-                                ? '-- Seleccionar operador evaluado N1-N4 --'
-                                : '-- Sin operadores evaluados N1-N4 --')
-                            : '-- Seleccionar operador --');
+                    function limpiarSelectEscala(select, placeholder) {
+                        if (!select) return;
+                        select.innerHTML = '';
+                        const vacio = document.createElement('option');
+                        vacio.value = '';
+                        vacio.textContent = placeholder;
+                        select.appendChild(vacio);
+                    }
 
-                    operadores.forEach(x => {
-                        const op = document.createElement('option');
-                        op.value = String(x.personaID);
-                        op.textContent = textoPersonaEscala(x, tieneMatriz);
-                        if (x.nivel) op.dataset.nivel = String(x.nivel);
-                        modalOperadorId?.appendChild(op);
-                    });
+                    function textoPersonaEscala(x, mostrarNivel) {
+                        const sep = ' \u00B7 ';
+                        const partes = [];
 
-                    // Solo conserva el sugerido si tambien esta dentro del listado permitido.
-                    seleccionarPersonaSiExiste(modalOperadorId, operadorPreferido);
-                    sincronizarModoManual(modalOperadorId, modalOperadorManual);
+                        if (mostrarNivel && x.nivel) partes.push(`N${x.nivel}`);
+                        partes.push(x.nombre || '');
+                        if (x.numeroControl) partes.push(`Ctrl ${x.numeroControl}`);
+                        if (x.enEscala) partes.push('EN ESCALA');
+                        if (x.turnoNombre) partes.push(x.turnoNombre);
+                        if (x.maquinaCodigo) partes.push(x.maquinaCodigo);
 
-                    limpiarSelectEscala(
-                        modalOperadorAuxiliarId,
-                        auxiliares.length > 0
-                            ? '-- Seleccionar auxiliar --'
-                            : '-- Sin auxiliares activos --');
+                        return partes.filter(Boolean).join(sep);
+                    }
+                    function sincronizarModoManual(select, manual, tipo = 'principal') {
+                        if (!manual) return;
 
-                    auxiliares.forEach(x => {
-                        const op = document.createElement('option');
-                        op.value = String(x.personaID);
-                        op.textContent = textoPersonaEscala(x, false);
-                        modalOperadorAuxiliarId?.appendChild(op);
-                    });
-                    seleccionarPersonaSiExiste(modalOperadorAuxiliarId, auxiliarPreferido);
+                        const haySeleccion = !!select?.value;
+                        manual.disabled = haySeleccion;
 
-                    if (modalPolivalenciaInfo) {
-                        if (tieneMatriz) {
-                            modalPolivalenciaInfo.textContent = operadores.length > 0
-                                ? `Parte ${numeroParte || ''} enlazada a Polivalencia: ${operadores.length} operador(es) evaluados N1-N4. Los asignados en ${etiquetaEscala} aparecen primero; despues N4 -> N1.`
-                                : `Parte ${numeroParte || ''} tiene matriz, pero no hay operadores activos evaluados N1-N4.`;
-                            modalPolivalenciaInfo.className = operadores.length > 0
-                                ? 'small text-success fw-semibold mt-1'
-                                : 'small text-danger fw-semibold mt-1';
-                        } else {
-                            modalPolivalenciaInfo.textContent =
-                                `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; puedes seleccionar del catalogo general o capturar un nombre manual.`;
-                            modalPolivalenciaInfo.className = 'small text-warning fw-semibold mt-1';
+                        if (haySeleccion) {
+                            manual.value = '';
+                            manual.placeholder = tipo === 'auxiliar'
+                                ? 'Bloqueado: ya seleccionaste un auxiliar'
+                                : 'Bloqueado: ya seleccionaste un operador';
+                        }
+                        else {
+                            manual.placeholder = tipo === 'auxiliar'
+                                ? 'Escribe el nombre si no seleccionas auxiliar'
+                                : 'Escribe el nombre si no seleccionas operador';
                         }
                     }
+        async function cargarOperadoresPolivalencia(programaId, parteId, maquinaId, operadorPreferido, auxiliarPreferido) {
+                        limpiarSelectEscala(modalOperadorId, '-- Cargando operadores --');
+                        limpiarSelectEscala(modalOperadorAuxiliarId, '-- Cargando auxiliares --');
 
-                    if (tieneMatriz) {
-                        if (operadores.length > 0) {
+                        if (modalOperadorManual) {
+                            modalOperadorManual.disabled = false;
+                            modalOperadorManual.placeholder = 'Escribe el nombre si no seleccionas operador';
+                        }
+                        if (modalOperadorAuxiliarManual) {
+                            modalOperadorAuxiliarManual.disabled = false;
+                            modalOperadorAuxiliarManual.placeholder = 'Escribe el nombre si no seleccionas auxiliar';
+                        }
+
+                        try {
+                            const params = new URLSearchParams();
+                            if (programaId) params.set('programaId', programaId);
+                            if (parteId) params.set('parteId', parteId);
+                            if (maquinaId) params.set('maquinaId', maquinaId);
+
+                            const url = '@Url.Action("OperadoresPolivalenciaParte", "Produccion")' + '?' + params.toString();
+                            const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                            const data = await response.json();
+
+                            if (!data?.configurado) {
+                                limpiarSelectEscala(modalOperadorId, '-- Polivalencia no configurada --');
+                                limpiarSelectEscala(modalOperadorAuxiliarId, '-- Auxiliares no disponibles --');
+                                if (modalPolivalenciaInfo) {
+                                    modalPolivalenciaInfo.textContent = 'No esta disponible la configuracion de Polivalencia.';
+                                    modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+                                }
+                                return;
+                            }
+
+                            const operadores = Array.isArray(data.operadores) ? data.operadores : [];
+                            const auxiliares = Array.isArray(data.auxiliares) ? data.auxiliares : [];
+                            const tieneMatriz = data.tieneMatriz === true;
+                            const numeroParte = data.numeroParte || '';
+                            const etiquetaEscala = data.escalaEncontrada
+                                ? `${data.escalaFolio || 'Escala'} - ${data.escalaEstado || ''}`
+                                : 'Sin Escala aplicable';
+
+                            limpiarSelectEscala(
+                                modalOperadorId,
+                                tieneMatriz
+                                    ? (operadores.length > 0
+                                        ? '-- Seleccionar operador evaluado N1-N4 --'
+                                        : '-- Sin operadores evaluados N1-N4 --')
+                                    : '-- Seleccionar operador --');
+
+                            operadores.forEach(x => {
+                                const op = document.createElement('option');
+                                op.value = String(x.personaID);
+                                op.textContent = textoPersonaEscala(x, tieneMatriz);
+                                if (x.nivel) op.dataset.nivel = String(x.nivel);
+                                modalOperadorId?.appendChild(op);
+                            });
+
+                            // Solo conserva el sugerido si tambien esta dentro del listado permitido.
+                            seleccionarPersonaSiExiste(modalOperadorId, operadorPreferido);
+                            sincronizarModoManual(modalOperadorId, modalOperadorManual);
+
+                            limpiarSelectEscala(
+                                modalOperadorAuxiliarId,
+                                auxiliares.length > 0
+                                    ? '-- Seleccionar auxiliar --'
+                                    : '-- Sin auxiliares activos --');
+
+                            auxiliares.forEach(x => {
+                                const op = document.createElement('option');
+                                op.value = String(x.personaID);
+                                op.textContent = textoPersonaEscala(x, false);
+                                modalOperadorAuxiliarId?.appendChild(op);
+                            });
+                            seleccionarPersonaSiExiste(modalOperadorAuxiliarId, auxiliarPreferido);
+                            sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
+
+                            if (modalPolivalenciaInfo) {
+                                if (tieneMatriz) {
+                                    modalPolivalenciaInfo.textContent = operadores.length > 0
+                                        ? `Parte ${numeroParte || ''} enlazada a Polivalencia: ${operadores.length} operador(es) evaluados N1-N4. Los asignados en ${etiquetaEscala} aparecen primero; despues N4 -> N1.`
+                                        : `Parte ${numeroParte || ''} tiene matriz, pero no hay operadores activos evaluados N1-N4.`;
+                                    modalPolivalenciaInfo.className = operadores.length > 0
+                                        ? 'small text-success fw-semibold mt-1'
+                                        : 'small text-danger fw-semibold mt-1';
+                                } else {
+                                    modalPolivalenciaInfo.textContent =
+                                        `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; puedes seleccionar del catalogo general o capturar un nombre manual.`;
+                                    modalPolivalenciaInfo.className = 'small text-warning fw-semibold mt-1';
+                                }
+                            }
+
+                            if (tieneMatriz) {
+                                if (operadores.length > 0) {
+                                    boxOperadorSugerido?.classList.remove('warn');
+                                    if (tituloOperadorSugerido) {
+                                        tituloOperadorSugerido.textContent = 'Operadores evaluados para la pieza';
+                                        tituloOperadorSugerido.className = 'operator-title';
+                                    }
+                                    if (detalleOperadorSugerido) {
+                                        detalleOperadorSugerido.textContent =
+                                            `${operadores.length} operador(es) con nivel N1-N4 para ${numeroParte || 'esta pieza'}. No se muestran personas sin nivel. Auxiliares disponibles: ${auxiliares.length}.`;
+                                    }
+                                } else {
+                                    boxOperadorSugerido?.classList.add('warn');
+                                    if (tituloOperadorSugerido) {
+                                        tituloOperadorSugerido.textContent = 'Sin operadores evaluados';
+                                        tituloOperadorSugerido.className = 'operator-title warn';
+                                    }
+                                    if (detalleOperadorSugerido) {
+                                        detalleOperadorSugerido.textContent =
+                                            `La pieza ${numeroParte || ''} tiene matriz, pero no hay personas activas con N1-N4.`;
+                                    }
+                                }
+                            } else {
+                                boxOperadorSugerido?.classList.add('warn');
+                                if (tituloOperadorSugerido) {
+                                    tituloOperadorSugerido.textContent = 'Pieza sin matriz de polivalencia';
+                                    tituloOperadorSugerido.className = 'operator-title warn';
+                                }
+                                if (detalleOperadorSugerido) {
+                                    detalleOperadorSugerido.textContent =
+                                        'Se habilita el catalogo general. Si la persona no aparece, tambien puedes capturar el nombre manualmente.';
+                                }
+                            }
+                        }
+                        catch (error) {
+                            console.error('Polivalencia:', error);
+                            limpiarSelectEscala(modalOperadorId, '-- Error al cargar operadores --');
+                            limpiarSelectEscala(modalOperadorAuxiliarId, '-- Error al cargar auxiliares --');
+                            if (modalPolivalenciaInfo) {
+                                modalPolivalenciaInfo.textContent = 'No fue posible consultar Polivalencia.';
+                                modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+                            }
+                        }
+                    }
+
+                    function limpiarValidacionOperadores() {
+                        mensajeValidacionOperadores?.classList.remove('show', 'is-success');
+                        if (textoValidacionOperadores) textoValidacionOperadores.textContent = '';
+                        [modalOperadorId, modalOperadorManual, modalOperadorAuxiliarId, modalOperadorAuxiliarManual]
+                            .forEach(x => x?.classList.remove('operator-field-invalid'));
+                    }
+
+                    function mostrarValidacionOperadores(mensaje, campos = [], exito = false) {
+                        limpiarValidacionOperadores();
+                        if (textoValidacionOperadores) textoValidacionOperadores.textContent = mensaje;
+                        mensajeValidacionOperadores?.classList.add('show');
+                        if (exito) mensajeValidacionOperadores?.classList.add('is-success');
+                        campos.forEach(x => x?.classList.add('operator-field-invalid'));
+                        campos.find(x => x)?.focus();
+                    }
+
+                    function marcarPanelActivo(panel) {
+                        panelActivo = panel || 'proximos';
+
+                        navButtons.forEach(btn => {
+                            btn.classList.toggle(
+                                'is-active',
+                                btn.dataset.productionPanel === panelActivo);
+                        });
+                    }
+
+                    function parametrosFiltros(panel, maquinaForzada = null) {
+                        const params = new URLSearchParams();
+
+                        if (!formFiltros) {
+                            if (maquinaForzada) params.set('maquinaId', maquinaForzada);
+                            return params;
+                        }
+
+                        const data = new FormData(formFiltros);
+
+                        const busqueda = (data.get('busqueda') || '').toString().trim();
+                        const maquinaId = maquinaForzada ?? (data.get('maquinaId') || '').toString();
+                        const estatusId = (data.get('estatusId') || '').toString();
+                        const fechaDesde = (data.get('fechaDesde') || '').toString();
+                        const fechaHasta = (data.get('fechaHasta') || '').toString();
+
+                        if (busqueda) params.set('busqueda', busqueda);
+                        if (maquinaId) params.set('maquinaId', maquinaId);
+                        if (fechaDesde) params.set('fechaDesde', fechaDesde);
+                        if (fechaHasta) params.set('fechaHasta', fechaHasta);
+
+                        if (panel === 'ejecuciones' && estatusId) {
+                            params.set('estatusId', estatusId);
+                        }
+
+                        return params;
+                    }
+
+                    function urlPanel(panel, maquinaForzada = null) {
+                        const btn = navButtons.find(x => x.dataset.productionPanel === panel);
+                        const baseUrl = btn?.dataset.url;
+
+                        if (!baseUrl) return null;
+
+                        const params = parametrosFiltros(panel, maquinaForzada);
+                        const query = params.toString();
+
+                        return query ? `${baseUrl}?${query}` : baseUrl;
+                    }
+
+                    async function cargarPanel(panel, url = null, maquinaForzada = null) {
+                        if (!contenidoProduccion) return;
+
+                        const destino = url || urlPanel(panel, maquinaForzada);
+                        if (!destino) return;
+
+                        marcarPanelActivo(panel);
+
+                        if (controladorCarga) {
+                            controladorCarga.abort();
+                        }
+
+                        controladorCarga = new AbortController();
+
+                        contenidoProduccion.innerHTML = `
+                            <div class="panel-loading">
+                                <div class="spinner-border" role="status" aria-hidden="true"></div>
+                                <div>Cargando ${panel === 'cola' ? 'cola' : panel === 'proximos' ? 'próximos inicios' : 'ejecuciones'}...</div>
+                            </div>`;
+
+                        try {
+                            const response = await fetch(destino, {
+                                method: 'GET',
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                },
+                                signal: controladorCarga.signal
+                            });
+
+                            if (response.status === 401) {
+                                window.location.href = '@Url.Action("Login", "Login")';
+                                return;
+                            }
+
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}`);
+                            }
+
+                            contenidoProduccion.innerHTML = await response.text();
+                        }
+                        catch (error) {
+                            if (error?.name === 'AbortError') return;
+
+                            console.error(error);
+
+                            contenidoProduccion.innerHTML = `
+                                <div class="panel-error">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <div>No fue posible cargar el panel de Producción.</div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="btnReintentarPanel">
+                                        <i class="bi bi-arrow-clockwise me-1"></i>
+                                        Reintentar
+                                    </button>
+                                </div>`;
+                        }
+                    }
+
+                    navButtons.forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            cargarPanel(btn.dataset.productionPanel || 'proximos');
+                        });
+                    });
+
+                    formFiltros?.addEventListener('submit', event => {
+                        event.preventDefault();
+                        cargarPanel(panelActivo);
+                    });
+
+                    document.addEventListener('click', event => {
+                        const reintentar = event.target.closest('#btnReintentarPanel');
+                        if (reintentar) {
+                            cargarPanel(panelActivo);
+                            return;
+                        }
+
+                        const linkPanel = event.target.closest('a.js-panel-produccion');
+                        if (linkPanel && contenidoProduccion?.contains(linkPanel)) {
+                            event.preventDefault();
+                            cargarPanel('ejecuciones', linkPanel.href);
+                            return;
+                        }
+
+                        const maquinaCola = event.target.closest('[data-panel-cola-maquina]');
+                        if (maquinaCola && contenidoProduccion?.contains(maquinaCola)) {
+                            const maquinaId = maquinaCola.getAttribute('data-panel-cola-maquina');
+                            cargarPanel('cola', null, maquinaId);
+                            return;
+                        }
+
+                        const btnInicio = event.target.closest('.btn-iniciar-preparacion');
+                        if (!btnInicio) return;
+
+                        const programaId = btnInicio.dataset.programaId || '';
+                        const titulo = btnInicio.dataset.titulo || '';
+                        const maquina = btnInicio.dataset.maquina || '';
+                        const maquinaId = btnInicio.dataset.maquinaId || '';
+                        const parteId = btnInicio.dataset.parteId || '';
+                        const parte = btnInicio.dataset.parte || '';
+                        const descripcion = btnInicio.dataset.descripcion || '';
+                        const molde = btnInicio.dataset.molde || '';
+                        const cantidad = btnInicio.dataset.cantidad || '';
+                        const inicio = btnInicio.dataset.inicio || '';
+                        const fin = btnInicio.dataset.fin || '';
+                        const operadorId = btnInicio.dataset.operadorId || '';
+                        const operadorNombre = btnInicio.dataset.operadorNombre || '';
+                        const operadorAuxiliarId = btnInicio.dataset.operadorAuxiliarId || '';
+                        const operadorAuxiliarNombre = btnInicio.dataset.operadorAuxiliarNombre || '';
+                        const turno = btnInicio.dataset.turno || '';
+
+                        if (modalProgramaProduccionId) modalProgramaProduccionId.value = programaId;
+                        if (modalProgramaTexto) modalProgramaTexto.textContent = 'Programa ' + texto(programaId) + ' · ' + texto(titulo);
+                        if (modalMaquinaTexto) modalMaquinaTexto.textContent = texto(maquina);
+                        if (modalParteTexto) modalParteTexto.textContent = texto(parte);
+                        if (modalDescripcionTexto) modalDescripcionTexto.textContent = texto(descripcion);
+                        if (modalMoldeTexto) modalMoldeTexto.textContent = texto(molde);
+                        if (modalCantidadTexto) modalCantidadTexto.textContent = texto(cantidad);
+                        if (modalInicioTexto) modalInicioTexto.textContent = texto(inicio);
+                        if (modalFinTexto) modalFinTexto.textContent = texto(fin);
+
+                        if (modalObservaciones) modalObservaciones.value = '';
+                        if (modalOperadorManual) modalOperadorManual.value = '';
+                        if (modalOperadorNombre) modalOperadorNombre.value = '';
+                        if (modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
+                        if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = '';
+                        if (modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
+                        limpiarValidacionOperadores();
+
+                        const pudoSeleccionar = seleccionarPersonaSiExiste(modalOperadorId, operadorId);
+                        const pudoSeleccionarAuxiliar = seleccionarPersonaSiExiste(modalOperadorAuxiliarId, operadorAuxiliarId);
+
+                        if (operadorAuxiliarNombre && !pudoSeleccionarAuxiliar && modalOperadorAuxiliarManual) {
+                            modalOperadorAuxiliarManual.value = operadorAuxiliarNombre;
+                        }
+
+                        if (operadorNombre) {
                             boxOperadorSugerido?.classList.remove('warn');
+
                             if (tituloOperadorSugerido) {
-                                tituloOperadorSugerido.textContent = 'Operadores evaluados para la pieza';
+                                tituloOperadorSugerido.textContent = 'Operador principal sugerido desde RRHH';
                                 tituloOperadorSugerido.className = 'operator-title';
                             }
+
                             if (detalleOperadorSugerido) {
                                 detalleOperadorSugerido.textContent =
-                                    `${operadores.length} operador(es) con nivel N1-N4 para ${numeroParte || 'esta pieza'}. No se muestran personas sin nivel. Auxiliares disponibles: ${auxiliares.length}.`;
+                                    operadorNombre +
+                                    (turno ? ' · Turno: ' + turno : '') +
+                                    (pudoSeleccionar ? '' : ' · No aparece en el catálogo, se puede capturar manual.');
                             }
-                        } else {
+
+                            if (!pudoSeleccionar && modalOperadorManual) {
+                                modalOperadorManual.value = operadorNombre;
+                            }
+                        }
+                        else {
                             boxOperadorSugerido?.classList.add('warn');
+
                             if (tituloOperadorSugerido) {
-                                tituloOperadorSugerido.textContent = 'Sin operadores evaluados';
+                                tituloOperadorSugerido.textContent = 'Sin operador sugerido';
                                 tituloOperadorSugerido.className = 'operator-title warn';
                             }
+
                             if (detalleOperadorSugerido) {
                                 detalleOperadorSugerido.textContent =
-                                    `La pieza ${numeroParte || ''} tiene matriz, pero no hay personas activas con N1-N4.`;
+                                    'No hay operador principal sugerido en la escala RRHH para este horario. Debes seleccionar un operador del catálogo o capturar su nombre manual antes de iniciar.';
                             }
                         }
-                    } else {
-                        boxOperadorSugerido?.classList.add('warn');
-                        if (tituloOperadorSugerido) {
-                            tituloOperadorSugerido.textContent = 'Pieza sin matriz de polivalencia';
-                            tituloOperadorSugerido.className = 'operator-title warn';
-                        }
-                        if (detalleOperadorSugerido) {
-                            detalleOperadorSugerido.textContent =
-                                'Se habilita el catalogo general. Si la persona no aparece, tambien puedes capturar el nombre manualmente.';
-                        }
-                    }
-                }
-                catch (error) {
-                    console.error('Polivalencia:', error);
-                    limpiarSelectEscala(modalOperadorId, '-- Error al cargar operadores --');
-                    limpiarSelectEscala(modalOperadorAuxiliarId, '-- Error al cargar auxiliares --');
-                    if (modalPolivalenciaInfo) {
-                        modalPolivalenciaInfo.textContent = 'No fue posible consultar Polivalencia.';
-                        modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
-                    }
-                }
-            }
 
-            function limpiarValidacionOperadores() {
-                mensajeValidacionOperadores?.classList.remove('show', 'is-success');
-                if (textoValidacionOperadores) textoValidacionOperadores.textContent = '';
-                [modalOperadorId, modalOperadorManual, modalOperadorAuxiliarId, modalOperadorAuxiliarManual]
-                    .forEach(x => x?.classList.remove('operator-field-invalid'));
-            }
-
-            function mostrarValidacionOperadores(mensaje, campos = [], exito = false) {
-                limpiarValidacionOperadores();
-                if (textoValidacionOperadores) textoValidacionOperadores.textContent = mensaje;
-                mensajeValidacionOperadores?.classList.add('show');
-                if (exito) mensajeValidacionOperadores?.classList.add('is-success');
-                campos.forEach(x => x?.classList.add('operator-field-invalid'));
-                campos.find(x => x)?.focus();
-            }
-
-            function marcarPanelActivo(panel) {
-                panelActivo = panel || 'proximos';
-
-                navButtons.forEach(btn => {
-                    btn.classList.toggle(
-                        'is-active',
-                        btn.dataset.productionPanel === panelActivo);
-                });
-            }
-
-            function parametrosFiltros(panel, maquinaForzada = null) {
-                const params = new URLSearchParams();
-
-                if (!formFiltros) {
-                    if (maquinaForzada) params.set('maquinaId', maquinaForzada);
-                    return params;
-                }
-
-                const data = new FormData(formFiltros);
-
-                const busqueda = (data.get('busqueda') || '').toString().trim();
-                const maquinaId = maquinaForzada ?? (data.get('maquinaId') || '').toString();
-                const estatusId = (data.get('estatusId') || '').toString();
-                const fechaDesde = (data.get('fechaDesde') || '').toString();
-                const fechaHasta = (data.get('fechaHasta') || '').toString();
-
-                if (busqueda) params.set('busqueda', busqueda);
-                if (maquinaId) params.set('maquinaId', maquinaId);
-                if (fechaDesde) params.set('fechaDesde', fechaDesde);
-                if (fechaHasta) params.set('fechaHasta', fechaHasta);
-
-                if (panel === 'ejecuciones' && estatusId) {
-                    params.set('estatusId', estatusId);
-                }
-
-                return params;
-            }
-
-            function urlPanel(panel, maquinaForzada = null) {
-                const btn = navButtons.find(x => x.dataset.productionPanel === panel);
-                const baseUrl = btn?.dataset.url;
-
-                if (!baseUrl) return null;
-
-                const params = parametrosFiltros(panel, maquinaForzada);
-                const query = params.toString();
-
-                return query ? `${baseUrl}?${query}` : baseUrl;
-            }
-
-            async function cargarPanel(panel, url = null, maquinaForzada = null) {
-                if (!contenidoProduccion) return;
-
-                const destino = url || urlPanel(panel, maquinaForzada);
-                if (!destino) return;
-
-                marcarPanelActivo(panel);
-
-                if (controladorCarga) {
-                    controladorCarga.abort();
-                }
-
-                controladorCarga = new AbortController();
-
-                contenidoProduccion.innerHTML = `
-                    <div class="panel-loading">
-                        <div class="spinner-border" role="status" aria-hidden="true"></div>
-                        <div>Cargando ${panel === 'cola' ? 'cola' : panel === 'proximos' ? 'próximos inicios' : 'ejecuciones'}...</div>
-                    </div>`;
-
-                try {
-                    const response = await fetch(destino, {
-                        method: 'GET',
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        signal: controladorCarga.signal
+                        cargarOperadoresPolivalencia(
+                            programaId,
+                            parteId,
+                            maquinaId,
+                            operadorId,
+                            operadorAuxiliarId);
                     });
 
-                    if (response.status === 401) {
-                        window.location.href = '@Url.Action("Login", "Login")';
-                        return;
-                    }
+                    modalOperadorId?.addEventListener('change', () => {
+                        if (modalOperadorId.value && modalOperadorManual) modalOperadorManual.value = '';
+                        sincronizarModoManual(modalOperadorId, modalOperadorManual);
+                        limpiarValidacionOperadores();
+                    });
 
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
+                    modalOperadorManual?.addEventListener('input', () => {
+                        if (modalOperadorManual.value.trim() && modalOperadorId) modalOperadorId.value = '';
+                        sincronizarModoManual(modalOperadorId, modalOperadorManual);
+                        limpiarValidacionOperadores();
+                    });
 
-                    contenidoProduccion.innerHTML = await response.text();
-                }
-                catch (error) {
-                    if (error?.name === 'AbortError') return;
+                    modalOperadorAuxiliarId?.addEventListener('change', () => {
+                        if (modalOperadorAuxiliarId.value && modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
+                        sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
+                        limpiarValidacionOperadores();
+                    });
 
-                    console.error(error);
+                    modalOperadorAuxiliarManual?.addEventListener('input', () => {
+                        if (modalOperadorAuxiliarManual.value.trim() && modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
+                        sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
+                        limpiarValidacionOperadores();
+                    });
 
-                    contenidoProduccion.innerHTML = `
-                        <div class="panel-error">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <div>No fue posible cargar el panel de Producción.</div>
-                            <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="btnReintentarPanel">
-                                <i class="bi bi-arrow-clockwise me-1"></i>
-                                Reintentar
-                            </button>
-                        </div>`;
-                }
-            }
+                    formIniciarPreparacion?.addEventListener('submit', event => {
+                        event.preventDefault();
+                        limpiarValidacionOperadores();
 
-            navButtons.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    cargarPanel(btn.dataset.productionPanel || 'proximos');
-                });
-            });
+                        const principalId = modalOperadorId?.value || '';
+                        const principalManual = modalOperadorManual?.value.trim() || '';
+                        const auxiliarId = modalOperadorAuxiliarId?.value || '';
+                        const auxiliarManual = modalOperadorAuxiliarManual?.value.trim() || '';
 
-            formFiltros?.addEventListener('submit', event => {
-                event.preventDefault();
-                cargarPanel(panelActivo);
-            });
+                        if (!principalId && !principalManual) {
+                            mostrarValidacionOperadores(
+                                'Falta confirmar el operador principal. Selecciona un OPERADOR de la lista o captura su nombre manual antes de iniciar la preparación.',
+                                [modalOperadorId, modalOperadorManual]);
+                            return;
+                        }
 
-            document.addEventListener('click', event => {
-                const reintentar = event.target.closest('#btnReintentarPanel');
-                if (reintentar) {
-                    cargarPanel(panelActivo);
-                    return;
-                }
+                        if (principalId && principalManual) {
+                            mostrarValidacionOperadores(
+                                'Para el operador principal usa solamente una opción: selección del catálogo o nombre manual.',
+                                [modalOperadorId, modalOperadorManual]);
+                            return;
+                        }
 
-                const linkPanel = event.target.closest('a.js-panel-produccion');
-                if (linkPanel && contenidoProduccion?.contains(linkPanel)) {
-                    event.preventDefault();
-                    cargarPanel('ejecuciones', linkPanel.href);
-                    return;
-                }
+                        if (auxiliarId && auxiliarManual) {
+                            mostrarValidacionOperadores(
+                                'Para el operador auxiliar usa solamente una opción: selección del catálogo o nombre manual.',
+                                [modalOperadorAuxiliarId, modalOperadorAuxiliarManual]);
+                            return;
+                        }
 
-                const maquinaCola = event.target.closest('[data-panel-cola-maquina]');
-                if (maquinaCola && contenidoProduccion?.contains(maquinaCola)) {
-                    const maquinaId = maquinaCola.getAttribute('data-panel-cola-maquina');
-                    cargarPanel('cola', null, maquinaId);
-                    return;
-                }
+                        const nombrePrincipal = principalId
+                            ? obtenerTextoSeleccionado(modalOperadorId)
+                            : principalManual;
 
-                const btnInicio = event.target.closest('.btn-iniciar-preparacion');
-                if (!btnInicio) return;
+                        const nombreAuxiliar = auxiliarId
+                            ? obtenerTextoSeleccionado(modalOperadorAuxiliarId)
+                            : auxiliarManual;
 
-                const programaId = btnInicio.dataset.programaId || '';
-                const titulo = btnInicio.dataset.titulo || '';
-                const maquina = btnInicio.dataset.maquina || '';
-                const maquinaId = btnInicio.dataset.maquinaId || '';
-                const parteId = btnInicio.dataset.parteId || '';
-                const parte = btnInicio.dataset.parte || '';
-                const descripcion = btnInicio.dataset.descripcion || '';
-                const molde = btnInicio.dataset.molde || '';
-                const cantidad = btnInicio.dataset.cantidad || '';
-                const inicio = btnInicio.dataset.inicio || '';
-                const fin = btnInicio.dataset.fin || '';
-                const operadorId = btnInicio.dataset.operadorId || '';
-                const operadorNombre = btnInicio.dataset.operadorNombre || '';
-                const operadorAuxiliarId = btnInicio.dataset.operadorAuxiliarId || '';
-                const operadorAuxiliarNombre = btnInicio.dataset.operadorAuxiliarNombre || '';
-                const turno = btnInicio.dataset.turno || '';
+                        if (principalId && auxiliarId && principalId === auxiliarId) {
+                            mostrarValidacionOperadores(
+                                'El operador principal y el auxiliar no pueden ser la misma persona.',
+                                [modalOperadorId, modalOperadorAuxiliarId]);
+                            return;
+                        }
 
-                if (modalProgramaProduccionId) modalProgramaProduccionId.value = programaId;
-                if (modalProgramaTexto) modalProgramaTexto.textContent = 'Programa ' + texto(programaId) + ' · ' + texto(titulo);
-                if (modalMaquinaTexto) modalMaquinaTexto.textContent = texto(maquina);
-                if (modalParteTexto) modalParteTexto.textContent = texto(parte);
-                if (modalDescripcionTexto) modalDescripcionTexto.textContent = texto(descripcion);
-                if (modalMoldeTexto) modalMoldeTexto.textContent = texto(molde);
-                if (modalCantidadTexto) modalCantidadTexto.textContent = texto(cantidad);
-                if (modalInicioTexto) modalInicioTexto.textContent = texto(inicio);
-                if (modalFinTexto) modalFinTexto.textContent = texto(fin);
+                        if (nombrePrincipal && nombreAuxiliar &&
+                            nombrePrincipal.localeCompare(nombreAuxiliar, 'es', { sensitivity: 'base' }) === 0) {
+                            mostrarValidacionOperadores(
+                                'El operador principal y el auxiliar no pueden tener el mismo nombre.',
+                                [modalOperadorManual, modalOperadorAuxiliarManual]);
+                            return;
+                        }
 
-                if (modalObservaciones) modalObservaciones.value = '';
-                if (modalOperadorManual) modalOperadorManual.value = '';
-                if (modalOperadorNombre) modalOperadorNombre.value = '';
-                if (modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
-                if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = '';
-                if (modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
-                limpiarValidacionOperadores();
+                        if (modalOperadorNombre) modalOperadorNombre.value = nombrePrincipal;
+                        if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = nombreAuxiliar;
 
-                const pudoSeleccionar = seleccionarPersonaSiExiste(modalOperadorId, operadorId);
-                const pudoSeleccionarAuxiliar = seleccionarPersonaSiExiste(modalOperadorAuxiliarId, operadorAuxiliarId);
+                        if (btnConfirmarInicio) {
+                            btnConfirmarInicio.disabled = true;
+                            btnConfirmarInicio.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
+                        }
 
-                if (operadorAuxiliarNombre && !pudoSeleccionarAuxiliar && modalOperadorAuxiliarManual) {
-                    modalOperadorAuxiliarManual.value = operadorAuxiliarNombre;
-                }
+                        formIniciarPreparacion.submit();
+                    });
 
-                if (operadorNombre) {
-                    boxOperadorSugerido?.classList.remove('warn');
-
-                    if (tituloOperadorSugerido) {
-                        tituloOperadorSugerido.textContent = 'Operador principal sugerido desde RRHH';
-                        tituloOperadorSugerido.className = 'operator-title';
-                    }
-
-                    if (detalleOperadorSugerido) {
-                        detalleOperadorSugerido.textContent =
-                            operadorNombre +
-                            (turno ? ' · Turno: ' + turno : '') +
-                            (pudoSeleccionar ? '' : ' · No aparece en el catálogo, se puede capturar manual.');
-                    }
-
-                    if (!pudoSeleccionar && modalOperadorManual) {
-                        modalOperadorManual.value = operadorNombre;
-                    }
-                }
-                else {
-                    boxOperadorSugerido?.classList.add('warn');
-
-                    if (tituloOperadorSugerido) {
-                        tituloOperadorSugerido.textContent = 'Sin operador sugerido';
-                        tituloOperadorSugerido.className = 'operator-title warn';
-                    }
-
-                    if (detalleOperadorSugerido) {
-                        detalleOperadorSugerido.textContent =
-                            'No hay operador principal sugerido en la escala RRHH para este horario. Debes seleccionar un operador del catálogo o capturar su nombre manual antes de iniciar.';
-                    }
-                }
-
-                cargarOperadoresPolivalencia(
-                    programaId,
-                    parteId,
-                    maquinaId,
-                    operadorId,
-                    operadorAuxiliarId);
-            });
-
-            modalOperadorId?.addEventListener('change', () => {
-                if (modalOperadorId.value && modalOperadorManual) modalOperadorManual.value = '';
-                sincronizarModoManual(modalOperadorId, modalOperadorManual);
-                limpiarValidacionOperadores();
-            });
-
-            modalOperadorManual?.addEventListener('input', () => {
-                if (modalOperadorManual.value.trim() && modalOperadorId) modalOperadorId.value = '';
-                sincronizarModoManual(modalOperadorId, modalOperadorManual);
-                limpiarValidacionOperadores();
-            });
-
-            modalOperadorAuxiliarId?.addEventListener('change', () => {
-                if (modalOperadorAuxiliarId.value && modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
-                limpiarValidacionOperadores();
-            });
-
-            modalOperadorAuxiliarManual?.addEventListener('input', () => {
-                if (modalOperadorAuxiliarManual.value.trim() && modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
-                limpiarValidacionOperadores();
-            });
-
-            formIniciarPreparacion?.addEventListener('submit', event => {
-                event.preventDefault();
-                limpiarValidacionOperadores();
-
-                const principalId = modalOperadorId?.value || '';
-                const principalManual = modalOperadorManual?.value.trim() || '';
-                const auxiliarId = modalOperadorAuxiliarId?.value || '';
-                const auxiliarManual = modalOperadorAuxiliarManual?.value.trim() || '';
-
-                if (!principalId && !principalManual) {
-                    mostrarValidacionOperadores(
-                        'Falta confirmar el operador principal. Selecciona un OPERADOR de la lista o captura su nombre manual antes de iniciar la preparación.',
-                        [modalOperadorId, modalOperadorManual]);
-                    return;
-                }
-
-                if (principalId && principalManual) {
-                    mostrarValidacionOperadores(
-                        'Para el operador principal usa solamente una opción: selección del catálogo o nombre manual.',
-                        [modalOperadorId, modalOperadorManual]);
-                    return;
-                }
-
-                if (auxiliarId && auxiliarManual) {
-                    mostrarValidacionOperadores(
-                        'Para el operador auxiliar usa solamente una opción: selección del catálogo o nombre manual.',
-                        [modalOperadorAuxiliarId, modalOperadorAuxiliarManual]);
-                    return;
-                }
-
-                const nombrePrincipal = principalId
-                    ? obtenerTextoSeleccionado(modalOperadorId)
-                    : principalManual;
-
-                const nombreAuxiliar = auxiliarId
-                    ? obtenerTextoSeleccionado(modalOperadorAuxiliarId)
-                    : auxiliarManual;
-
-                if (principalId && auxiliarId && principalId === auxiliarId) {
-                    mostrarValidacionOperadores(
-                        'El operador principal y el auxiliar no pueden ser la misma persona.',
-                        [modalOperadorId, modalOperadorAuxiliarId]);
-                    return;
-                }
-
-                if (nombrePrincipal && nombreAuxiliar &&
-                    nombrePrincipal.localeCompare(nombreAuxiliar, 'es', { sensitivity: 'base' }) === 0) {
-                    mostrarValidacionOperadores(
-                        'El operador principal y el auxiliar no pueden tener el mismo nombre.',
-                        [modalOperadorManual, modalOperadorAuxiliarManual]);
-                    return;
-                }
-
-                if (modalOperadorNombre) modalOperadorNombre.value = nombrePrincipal;
-                if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = nombreAuxiliar;
-
-                if (btnConfirmarInicio) {
-                    btnConfirmarInicio.disabled = true;
-                    btnConfirmarInicio.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
-                }
-
-                formIniciarPreparacion.submit();
-            });
-
-            // Panel inicial: pendientes / próximos.
-            cargarPanel('proximos');
-        })();
+                    // Panel inicial: pendientes / próximos.
+                    cargarPanel('proximos');
+                })();
     </script>
 
     <script>

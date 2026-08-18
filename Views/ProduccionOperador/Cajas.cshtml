@@ -5,9 +5,10 @@
     Layout = null;
 
     var cajas = Model.Cajas ?? new List<ERP.NSQuell.Models.ProduccionOperadorCajaVm>();
+    var cajasAsignadas = Model.CajasIncompletasDisponibles ?? new List<ERP.NSQuell.Models.ProduccionCajaIncompletaDisponibleVm>();
 
     var totalCapturado = Model.CantidadOKTotal + Model.CantidadSospechosaTotal + Model.CantidadScrapTotal;
-    var totalEnCajas = cajas.Sum(x => x.CantidadPiezas);
+    var totalEnCajas = Model.CantidadOKEnCajas + Model.CantidadSospechosaEnCajas + Model.CantidadScrapEnCajas + Model.CantidadRetencionEnCajas;
 
     var pendientesCalidad = cajas.Count(x => x.EstadoCajaID == 2);
     var liberadasCalidad = cajas.Count(x => x.EstadoCajaID >= 3 && x.EtiquetaVerde);
@@ -35,7 +36,8 @@
     }
 
     var avanceTexto = avanceCajas.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-    var avanceEmbalajes = Model.CajasEsperadas > 0 ? Math.Min(100m, Math.Round((decimal)Model.CajasOKFormadas * 100m / Model.CajasEsperadas, 2)) : 0m;
+    var cajasOKNuevasFormadas = cajas.Count(x => string.Equals(x.TipoCaja, "OK", StringComparison.OrdinalIgnoreCase) && !x.FechaCompletadoIncompleto.HasValue);
+    var avanceEmbalajes = Model.CajasEsperadas > 0 ? Math.Min(100m, Math.Round((decimal)cajasOKNuevasFormadas * 100m / Model.CajasEsperadas, 2)) : 0m;
     var avanceEmbalajesTexto = avanceEmbalajes.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     var piezasPlaneadasPendientes = Math.Max(0, Model.CantidadPlaneada - Model.PiezasOKEmpacadas);
 }
@@ -135,6 +137,9 @@
 
         if (t == "RETENCION")
             return "type-ret";
+
+        if (t == "INCOMPLETA" || t == "INCOMPLETO")
+            return "type-white";
 
         return "type-default";
     }
@@ -595,11 +600,120 @@
             border-color: #fde68a;
         }
 
+        .type-white {
+            color: #344054;
+            background: #fff;
+            border-color: #98a2b3;
+            box-shadow: inset 0 0 0 1px #fff;
+        }
+
         .type-default {
             color: #344054;
             background: #f2f4f7;
             border-color: #d0d5dd;
         }
+
+        .white-card {
+            border: 2px solid #d0d5dd;
+            border-radius: 18px;
+            padding: 15px;
+            background: linear-gradient(180deg,#fff,#f8fafc);
+            margin-bottom: 12px;
+        }
+
+            .white-card:last-child {
+                margin-bottom: 0;
+            }
+
+        .white-title {
+            font-size: 1.05rem;
+            font-weight: 950;
+            color: #344054;
+        }
+
+        .white-grid {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px;
+            margin: 12px 0;
+        }
+
+        .white-data {
+            border: 1px solid #e4e7ec;
+            border-radius: 13px;
+            padding: 10px;
+            background: #fff;
+        }
+
+            .white-data .n {
+                margin-top: 3px;
+                font-weight: 950;
+                color: #101828;
+            }
+
+        .form-message {
+            display: none;
+            margin-top: 12px;
+            border-radius: 14px;
+            padding: 10px 12px;
+            font-weight: 800;
+        }
+
+            .form-message.error {
+                display: block;
+                color: #b42318;
+                background: #fef3f2;
+                border: 1px solid #fecdca;
+            }
+
+        .confirm-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(15,23,42,.55);
+        }
+
+            .confirm-backdrop.show {
+                display: flex;
+            }
+
+        .confirm-box {
+            width: min(460px,100%);
+            border-radius: 22px;
+            background: #fff;
+            box-shadow: 0 28px 80px rgba(15,23,42,.28);
+            overflow: hidden;
+        }
+
+        .confirm-head {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
+            color: var(--blue-dark);
+            font-weight: 950;
+            font-size: 1.05rem;
+        }
+
+        .confirm-body {
+            padding: 20px;
+            color: #344054;
+            font-weight: 700;
+        }
+
+        .confirm-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 0 20px 20px;
+        }
+
+            .confirm-actions button {
+                width: auto;
+                min-width: 120px;
+            }
 
         .actions-grid {
             display: grid;
@@ -678,6 +792,10 @@
             .scan-row {
                 flex-direction: column;
                 align-items: stretch;
+            }
+
+            .white-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -791,7 +909,7 @@
         <section class="metrics">
             <div class="metric"><div class="k">Piezas por embalaje</div><div class="num text-primary">@Numero(Model.PiezasPorCajaSugeridas)</div><div class="sub">Capacidad estándar</div></div>
             <div class="metric"><div class="k">Cajas esperadas</div><div class="num text-primary">@Numero(Model.CajasEsperadas)</div><div class="sub">Según Planeación</div></div>
-            <div class="metric"><div class="k">Cajas OK formadas</div><div class="num text-success">@Numero(Model.CajasOKFormadas)</div><div class="sub">Pendientes: @Numero(Model.CajasPendientes)</div></div>
+            <div class="metric"><div class="k">Cajas nuevas OK</div><div class="num text-success">@Numero(cajasOKNuevasFormadas)</div><div class="sub">Pendientes de embalaje nuevo: @Numero(Math.Max(0, Model.CajasEsperadas - cajasOKNuevasFormadas))</div></div>
             <div class="metric"><div class="k">OK empacado</div><div class="num text-success">@Numero(Model.PiezasOKEmpacadas)</div><div class="sub">Pendiente planeado: @Numero(piezasPlaneadasPendientes)</div></div>
             <div class="metric"><div class="k">Siguiente sugerida</div><div class="num text-warning">@Numero(Model.CantidadSugeridaSiguienteCaja)</div><div class="sub">Última puede ser parcial</div></div>
             <div class="metric"><div class="k">Embalaje</div><div class="num" style="font-size:1rem">@TxtNullable(Model.EmbalajeCodigo)</div><div class="sub">@TxtNullable(Model.EmbalajeDescripcion)</div></div>
@@ -802,7 +920,7 @@
             <div class="warn-note mb-3"><i class="fa-solid fa-triangle-exclamation me-1"></i>Esta ejecución no tiene configuración completa de embalaje. Podrás formar cajas con piezas capturadas, pero no se podrá validar automáticamente la cantidad esperada de cajas ni su capacidad estándar.</div>
         }
 
-       
+
         <div class="layout">
 
             <aside>
@@ -851,9 +969,10 @@
                                     <option value="SOSPECHOSO" data-disponible="@Model.CantidadSospechosaDisponible">Sospechoso</option>
                                     <option value="SCRAP" data-disponible="@Model.CantidadScrapDisponible">Scrap</option>
                                     <option value="RETENCION" data-disponible="@Model.CantidadSospechosaDisponible">Retención</option>
+                                    <option value="INCOMPLETA" data-disponible="@Model.CantidadOKExcedentePendienteResguardo">Producto incompleto / etiqueta blanca</option>
                                 </select>
                                 <div class="sub mt-1">
-                                    OK disponible: @Numero(Model.CantidadOKDisponible) · Sospechoso: @Numero(Model.CantidadSospechosaDisponible) · Scrap: @Numero(Model.CantidadScrapDisponible)
+                                    OK disponible: @Numero(Model.CantidadOKDisponible) · Sospechoso: @Numero(Model.CantidadSospechosaDisponible) · Scrap: @Numero(Model.CantidadScrapDisponible) · Sobreproducción sin resguardar: @Numero(Model.CantidadOKExcedentePendienteResguardo)
                                 </div>
                             </div>
 
@@ -866,7 +985,7 @@
                             <div class="success-note mb-3" id="sugerenciaCaja">
                                 <div class="k">Siguiente caja sugerida</div>
                                 <div style="font-size:1.45rem;font-weight:950"><span id="cantidadSugerida">@Numero(Model.CantidadSugeridaSiguienteCaja)</span> pieza(s)</div>
-                                <div class="sub">Para producto OK se respeta la capacidad del embalaje. La última caja puede ser parcial.</div>
+                                <div class="sub" id="textoSugerenciaCaja">Para producto OK se respeta la capacidad del embalaje. La última caja puede ser parcial.</div>
                             </div>
 
                             <div class="mb-3">
@@ -893,11 +1012,72 @@
                                 <i class="fa-solid fa-box"></i>
                                 Formar caja
                             </button>
+                            <div class="form-message" id="mensajeFormarCaja"></div>
                         </form>
                     </div>
                 </section>
 
-
+                <section class="panel">
+                    <div class="panel-head">
+                        <i class="fa-solid fa-tag me-2"></i>
+                        Producto incompleto asignado por Planeación
+                    </div>
+                    <div class="panel-body">
+                        @if (!cajasAsignadas.Any())
+                        {
+                            <div class="empty">
+                                <i class="fa-solid fa-tag fa-2x mb-3 d-block"></i>
+                                Esta OF no tiene etiquetas blancas asignadas por Planeación. Producción no puede tomar producto incompleto libre.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="note mb-3">
+                                <i class="fa-solid fa-circle-info me-1"></i>
+                                Estas etiquetas ya fueron elegidas en Planeación para esta OF. Las piezas que agregues salen de la producción OK de esta ejecución; el origen anterior se conserva en trazabilidad.
+                            </div>
+                            @foreach (var blanca in cajasAsignadas)
+                            {
+                                var maximoCompletar = Math.Min(blanca.CantidadPendienteCompletar, Model.CantidadOKDisponible);
+                                var puedeCompletarBlanca = Model.PuedeFormarCaja && maximoCompletar > 0;
+                                <div class="white-card">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                        <div>
+                                            <div class="k">Etiqueta blanca asignada</div>
+                                            <div class="white-title">@TxtNullable(blanca.EtiquetaBlanca)</div>
+                                            <div class="sub">Origen: @TxtNullable(blanca.FolioCaja) · Ejecución @blanca.EjecucionProduccionID</div>
+                                        </div>
+                                        <span class="badge-flow badge-neutral"><i class="fa-solid fa-lock"></i>@blanca.TextoEstado</span>
+                                    </div>
+                                    <div class="white-grid">
+                                        <div class="white-data"><div class="k">Piezas existentes</div><div class="n">@Numero(blanca.CantidadPiezas)</div></div>
+                                        <div class="white-data"><div class="k">Capacidad caja</div><div class="n">@Numero(blanca.CapacidadObjetivoCaja)</div></div>
+                                        <div class="white-data"><div class="k">Faltan para completar</div><div class="n text-primary">@Numero(blanca.CantidadPendienteCompletar)</div></div>
+                                    </div>
+                                    <form method="post" action="@Url.Action("CompletarCajaIncompleta", "ProduccionOperador")" class="form-completar-blanca">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                                        <input type="hidden" name="CajaProduccionID" value="@blanca.CajaProduccionID" />
+                                        <div class="mb-3">
+                                            <label class="form-label">Piezas nuevas a agregar</label>
+                                            <input type="number" name="CantidadPiezas" min="1" max="@Math.Max(1, maximoCompletar)" step="1" inputmode="numeric" class="form-control cantidad-completar-blanca" data-pendiente="@blanca.CantidadPendienteCompletar" data-disponible="@Model.CantidadOKDisponible" value="@(maximoCompletar > 0 ? maximoCompletar : null)" disabled="@(!puedeCompletarBlanca ? "disabled" : null)" required />
+                                            <div class="sub mt-1">OK disponible de esta OF: @Numero(Model.CantidadOKDisponible). Puedes completar en una sola captura o parcialmente.</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Observaciones</label>
+                                            <textarea name="Observaciones" rows="2" maxlength="500" class="form-control" placeholder="Opcional..."></textarea>
+                                        </div>
+                                        <button type="submit" class="btn-main" disabled="@(!puedeCompletarBlanca ? "disabled" : null)">
+                                            <i class="fa-solid fa-box-open"></i>
+                                            @(!Model.PuedeFormarCaja ? "Disponible al estar en producción" : maximoCompletar <= 0 ? "Sin piezas OK disponibles" : "Agregar piezas a etiqueta blanca")
+                                        </button>
+                                        <div class="form-message"></div>
+                                    </form>
+                                </div>
+                            }
+                        }
+                    </div>
+                </section>
             </aside>
 
             <main>
@@ -1143,6 +1323,17 @@
         </div>
     </div>
 
+    <div class="confirm-backdrop" id="confirmBackdrop" aria-hidden="true">
+        <div class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+            <div class="confirm-head" id="confirmTitle"><i class="fa-solid fa-circle-question me-2"></i>Confirmar operación</div>
+            <div class="confirm-body" id="confirmText">¿Deseas continuar?</div>
+            <div class="confirm-actions">
+                <button type="button" class="btn-mutedx" id="confirmCancelar">Cancelar</button>
+                <button type="button" class="btn-main" id="confirmAceptar">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         (() => {
             const formFormarCaja=document.getElementById('formFormarCaja');
@@ -1151,16 +1342,26 @@
             const cantidadDisponible=document.getElementById('cantidadDisponible');
             const cantidadSugerida=document.getElementById('cantidadSugerida');
             const sugerenciaCaja=document.getElementById('sugerenciaCaja');
+            const textoSugerenciaCaja=document.getElementById('textoSugerenciaCaja');
             const ayudaCantidad=document.getElementById('ayudaCantidad');
             const btnFormarCaja=document.getElementById('btnFormarCaja');
-            const disponibles={OK:@Model.CantidadOKDisponible,SOSPECHOSO:@Model.CantidadSospechosaDisponible,SCRAP:@Model.CantidadScrapDisponible,RETENCION:@Model.CantidadSospechosaDisponible};
+            const mensajeFormarCaja=document.getElementById('mensajeFormarCaja');
+            const disponibles={OK:@Model.CantidadOKDisponible,SOSPECHOSO:@Model.CantidadSospechosaDisponible,SCRAP:@Model.CantidadScrapDisponible,RETENCION:@Model.CantidadSospechosaDisponible,INCOMPLETA:@Model.CantidadOKExcedentePendienteResguardo};
             const piezasPorEmbalaje=@Model.PiezasPorCajaSugeridas;
             const sugeridaOk=@Model.CantidadSugeridaSiguienteCaja;
-            function datos(){const tipo=tipoCaja?.value||'OK';const disponible=Number(disponibles[tipo]||0);let maximo=disponible;let sugerida=disponible;if(tipo==='OK'&&piezasPorEmbalaje>0){maximo=Math.min(disponible,piezasPorEmbalaje);sugerida=Math.min(sugeridaOk>0?sugeridaOk:disponible,maximo);}return{tipo,disponible,maximo,sugerida};}
-            function actualizar(){if(!tipoCaja||!cantidadPiezas||!cantidadDisponible||!btnFormarCaja)return;const d=datos();cantidadDisponible.textContent=d.disponible.toLocaleString('es-MX');cantidadPiezas.max=String(Math.max(0,d.maximo));if(cantidadSugerida)cantidadSugerida.textContent=d.sugerida.toLocaleString('es-MX');if(sugerenciaCaja)sugerenciaCaja.style.display=d.tipo==='OK'?'':'none';if(ayudaCantidad)ayudaCantidad.textContent=d.tipo==='OK'&&piezasPorEmbalaje>0?'Máximo por embalaje OK: '+piezasPorEmbalaje.toLocaleString('es-MX')+' pieza(s).':'Máximo disponible para '+d.tipo+': '+d.disponible.toLocaleString('es-MX')+' pieza(s).';if(d.disponible<=0){cantidadPiezas.value='';cantidadPiezas.disabled=true;btnFormarCaja.disabled=true;return;}cantidadPiezas.disabled=false;btnFormarCaja.disabled=false;const actual=Number(cantidadPiezas.value||0);if(actual<=0||actual>d.maximo)cantidadPiezas.value=d.sugerida>0?String(d.sugerida):String(d.maximo);}
+            function mostrarError(elemento,mensaje){if(!elemento)return;elemento.textContent=mensaje;elemento.className='form-message error';}
+            function limpiarError(elemento){if(!elemento)return;elemento.textContent='';elemento.className='form-message';}
+            function datos(){const tipo=tipoCaja?.value||'OK';const disponible=Number(disponibles[tipo]||0);let maximo=disponible;let sugerida=disponible;if((tipo==='OK'||tipo==='INCOMPLETA')&&piezasPorEmbalaje>0){maximo=Math.min(disponible,tipo==='INCOMPLETA'?Math.max(0,piezasPorEmbalaje-1):piezasPorEmbalaje);sugerida=tipo==='OK'?Math.min(sugeridaOk>0?sugeridaOk:disponible,maximo):maximo;}return{tipo,disponible,maximo,sugerida};}
+            function actualizar(){if(!tipoCaja||!cantidadPiezas||!cantidadDisponible||!btnFormarCaja)return;limpiarError(mensajeFormarCaja);const d=datos();cantidadDisponible.textContent=d.disponible.toLocaleString('es-MX');cantidadPiezas.max=String(Math.max(0,d.maximo));if(cantidadSugerida)cantidadSugerida.textContent=d.sugerida.toLocaleString('es-MX');if(sugerenciaCaja){sugerenciaCaja.style.display=(d.tipo==='OK'||d.tipo==='INCOMPLETA')?'':'none';if(textoSugerenciaCaja)textoSugerenciaCaja.textContent=d.tipo==='INCOMPLETA'?'La etiqueta blanca solo puede formarse con sobreproducción OK y siempre debe quedar por debajo de la capacidad completa del embalaje.':'Para producto OK se respeta la capacidad del embalaje. La última caja puede ser parcial.';}if(ayudaCantidad){if(d.tipo==='OK'&&piezasPorEmbalaje>0)ayudaCantidad.textContent='Máximo por embalaje OK: '+piezasPorEmbalaje.toLocaleString('es-MX')+' pieza(s).';else if(d.tipo==='INCOMPLETA'&&piezasPorEmbalaje>0)ayudaCantidad.textContent='Producto incompleto: máximo '+Math.max(0,piezasPorEmbalaje-1).toLocaleString('es-MX')+' pieza(s); solo sobreproducción OK.';else ayudaCantidad.textContent='Máximo disponible para '+d.tipo+': '+d.disponible.toLocaleString('es-MX')+' pieza(s).';}if(d.disponible<=0||d.maximo<=0){cantidadPiezas.value='';cantidadPiezas.disabled=true;btnFormarCaja.disabled=true;return;}cantidadPiezas.disabled=false;btnFormarCaja.disabled=false;const actual=Number(cantidadPiezas.value||0);if(actual<=0||actual>d.maximo)cantidadPiezas.value=d.sugerida>0?String(d.sugerida):String(d.maximo);}
             tipoCaja?.addEventListener('change',actualizar);actualizar();
-            formFormarCaja?.addEventListener('submit',e=>{const d=datos();const cantidad=Number(cantidadPiezas?.value||0);if(cantidad<=0){e.preventDefault();alert('La cantidad de piezas debe ser mayor a cero.');return;}if(cantidad>d.disponible){e.preventDefault();alert('La cantidad excede lo disponible para '+d.tipo+'. Disponible: '+d.disponible.toLocaleString('es-MX')+'.');return;}if(d.tipo==='OK'&&piezasPorEmbalaje>0&&cantidad>piezasPorEmbalaje){e.preventDefault();alert('La caja excede la capacidad del embalaje. Máximo: '+piezasPorEmbalaje.toLocaleString('es-MX')+' pieza(s).');return;}btnFormarCaja.disabled=true;btnFormarCaja.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';});
-            document.querySelectorAll('.accion-form').forEach(form=>{form.addEventListener('submit',e=>{const mensaje=form.dataset.confirm;if(mensaje&&!window.confirm(mensaje)){e.preventDefault();return;}const btn=form.querySelector('button[type="submit"]');if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';}});});
+            formFormarCaja?.addEventListener('submit',e=>{limpiarError(mensajeFormarCaja);const d=datos();const cantidad=Number(cantidadPiezas?.value||0);let mensaje='';if(cantidad<=0)mensaje='La cantidad de piezas debe ser mayor a cero.';else if(cantidad>d.disponible)mensaje='La cantidad excede lo disponible para '+d.tipo+'. Disponible: '+d.disponible.toLocaleString('es-MX')+'.';else if(d.tipo==='OK'&&piezasPorEmbalaje>0&&cantidad>piezasPorEmbalaje)mensaje='La caja excede la capacidad del embalaje. Máximo: '+piezasPorEmbalaje.toLocaleString('es-MX')+' pieza(s).';else if(d.tipo==='INCOMPLETA'&&piezasPorEmbalaje>0&&cantidad>=piezasPorEmbalaje)mensaje='Una etiqueta blanca debe quedar incompleta. Captura menos de '+piezasPorEmbalaje.toLocaleString('es-MX')+' pieza(s).';if(mensaje){e.preventDefault();mostrarError(mensajeFormarCaja,mensaje);return;}btnFormarCaja.disabled=true;btnFormarCaja.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Formando caja...';});
+            document.querySelectorAll('.form-completar-blanca').forEach(form=>{form.addEventListener('submit',e=>{const input=form.querySelector('.cantidad-completar-blanca');const mensaje=form.querySelector('.form-message');const btn=form.querySelector('button[type="submit"]');limpiarError(mensaje);const cantidad=Number(input?.value||0);const pendiente=Number(input?.dataset.pendiente||0);const disponible=Number(input?.dataset.disponible||0);if(cantidad<=0){e.preventDefault();mostrarError(mensaje,'Captura una cantidad mayor a cero.');return;}if(cantidad>pendiente){e.preventDefault();mostrarError(mensaje,'La cantidad supera las piezas pendientes para completar esta etiqueta blanca.');return;}if(cantidad>disponible){e.preventDefault();mostrarError(mensaje,'La cantidad supera las piezas OK disponibles de esta OF.');return;}if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Aplicando piezas...';}});});
+            const backdrop=document.getElementById('confirmBackdrop');const confirmText=document.getElementById('confirmText');const btnAceptar=document.getElementById('confirmAceptar');const btnCancelar=document.getElementById('confirmCancelar');let formPendiente=null;
+            function cerrarConfirmacion(){backdrop?.classList.remove('show');backdrop?.setAttribute('aria-hidden','true');formPendiente=null;}
+            document.querySelectorAll('.accion-form').forEach(form=>{form.addEventListener('submit',e=>{if(form.dataset.confirmado==='1'){form.dataset.confirmado='';const btn=form.querySelector('button[type="submit"]');if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';}return;}const mensaje=form.dataset.confirm;if(!mensaje)return;e.preventDefault();formPendiente=form;if(confirmText)confirmText.textContent=mensaje;backdrop?.classList.add('show');backdrop?.setAttribute('aria-hidden','false');});});
+            btnCancelar?.addEventListener('click',cerrarConfirmacion);backdrop?.addEventListener('click',e=>{if(e.target===backdrop)cerrarConfirmacion();});
+            btnAceptar?.addEventListener('click',()=>{if(!formPendiente){cerrarConfirmacion();return;}const form=formPendiente;form.dataset.confirmado='1';backdrop?.classList.remove('show');backdrop?.setAttribute('aria-hidden','true');form.requestSubmit();});
+            document.addEventListener('keydown',e=>{if(e.key==='Escape'&&backdrop?.classList.contains('show'))cerrarConfirmacion();});
         })();
     </script>
 </body>

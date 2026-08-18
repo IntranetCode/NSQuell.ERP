@@ -494,42 +494,49 @@ ORDER BY
         private async Task<CajaProduccionCalidadOrigen?> ObtenerCajaParaDecisionAsync(long cajaProduccionId, int inspeccionId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
-SELECT TOP (1)
-    pc.CajaProduccionID,
-    ci.InspeccionID,
-    pc.EjecucionProduccionID,
-    ISNULL(pc.ProgramaProduccionID, ISNULL(ci.ProgramaProduccionID, 0)) AS ProgramaProduccionID,
-    ci.SolicitudProduccionID,
-    ci.SolicitudProduccionDetalleID,
-    ci.ReleaseID,
-    ci.ReleaseDetalleID,
-    ci.ClienteID,
-    ci.ClienteNombre,
-    ci.ParteID,
-    ci.NumeroParte,
-    COALESCE(NULLIF(d.DesignacionDescripcionSAP,N''),NULLIF(p.Designacion,N''),NULLIF(p.Descripcion,N''),NULLIF(ci.NumeroParte,N''),N'Sin descripción') AS DescripcionParte,
-    ci.MaterialID,
-    COALESCE(NULLIF(d.MaterialCodigo,N''),NULLIF(ci.Material,N'')) AS MaterialCodigo,
-    COALESCE(NULLIF(d.MaterialDescripcion,N''),NULLIF(ci.Material,N'')) AS MaterialDescripcion,
-    ci.OrdenTrabajo AS OrdenFabricacion,
-    ISNULL(pc.NumeroCaja,0) AS NumeroCaja,
-    COALESCE(NULLIF(pc.FolioCaja,N''),NULLIF(pc.Etiqueta,N''),CONVERT(NVARCHAR(100),pc.CajaProduccionID)) AS FolioCaja,
-    ISNULL(pc.CantidadPiezas,ISNULL(pc.Cantidad,0)) AS CantidadPiezas,
-    ISNULL(pc.TipoCaja,N'OK') AS TipoCaja,
-    pc.LoteMaterial,
-    COALESCE(NULLIF(pc.EtiquetaFolio,N''),NULLIF(pc.Etiqueta,N'')) AS EtiquetaFolio,
-    ISNULL(pc.EstadoCajaID,1) AS EstadoCajaID,
-    ISNULL(pc.EstadoCajaNombre,N'Formada en Producción') AS EstadoCajaNombre,
-    pc.EstatusCalidad,
-    ISNULL(pc.FechaFormacion,pc.FechaCreacion) AS FechaFormacion,
-    pc.UsuarioFormacionID,
-    ci.Estado AS EstadoInspeccion,
-    ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada,
-    (SELECT COUNT(1) FROM dbo.Calidad_DisposicionesMaterial dpm WHERE dpm.InspeccionID=ci.InspeccionID AND dpm.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(dpm.ResultadoFinal,N''))))=N'PENDIENTE') AS DisposicionesPendientes
-FROM dbo.Produccion_Cajas pc WITH (UPDLOCK,HOLDLOCK)
+SELECT TOP(1)
+pc.CajaProduccionID,
+ci.InspeccionID,
+pc.EjecucionProduccionID,
+ISNULL(pc.ProgramaProduccionID,ISNULL(ci.ProgramaProduccionID,0)) AS ProgramaProduccionID,
+COALESCE(pc.SolicitudProduccionID,ci.SolicitudProduccionID) AS SolicitudProduccionID,
+COALESCE(pc.SolicitudProduccionDetalleID,ci.SolicitudProduccionDetalleID) AS SolicitudProduccionDetalleID,
+COALESCE(pc.ReleaseID,ci.ReleaseID) AS ReleaseID,
+COALESCE(pc.ReleaseDetalleID,ci.ReleaseDetalleID) AS ReleaseDetalleID,
+ci.ClienteID,
+ci.ClienteNombre,
+COALESCE(e.ParteID,ci.ParteID) AS ParteID,
+COALESCE(NULLIF(e.NumeroParte,N''),NULLIF(ci.NumeroParte,N'')) AS NumeroParte,
+COALESCE(NULLIF(d.DesignacionDescripcionSAP,N''),NULLIF(p.Designacion,N''),NULLIF(p.Descripcion,N''),NULLIF(e.DescripcionParte,N''),NULLIF(ci.NumeroParte,N''),N'Sin descripción') AS DescripcionParte,
+COALESCE(d.MaterialID,ci.MaterialID) AS MaterialID,
+COALESCE(NULLIF(d.MaterialCodigo,N''),NULLIF(ci.Material,N'')) AS MaterialCodigo,
+COALESCE(NULLIF(d.MaterialDescripcion,N''),NULLIF(ci.Material,N'')) AS MaterialDescripcion,
+COALESCE(
+    NULLIF(LTRIM(RTRIM(sp.NumeroOFRecibida)),N''),
+    NULLIF(LTRIM(RTRIM(sp.FolioSolicitud)),N''),
+    NULLIF(LTRIM(RTRIM(ci.OrdenTrabajo)),N''),
+    CASE WHEN sp.SolicitudProduccionID IS NOT NULL THEN CONCAT(N'OF-ID-',sp.SolicitudProduccionID) ELSE NULL END
+) AS OrdenFabricacion,
+ISNULL(pc.NumeroCaja,0) AS NumeroCaja,
+COALESCE(NULLIF(pc.FolioCaja,N''),NULLIF(pc.Etiqueta,N''),CONVERT(NVARCHAR(100),pc.CajaProduccionID)) AS FolioCaja,
+ISNULL(pc.CantidadPiezas,ISNULL(pc.Cantidad,0)) AS CantidadPiezas,
+ISNULL(pc.TipoCaja,N'OK') AS TipoCaja,
+pc.LoteMaterial,
+COALESCE(NULLIF(pc.EtiquetaFolio,N''),NULLIF(pc.Etiqueta,N'')) AS EtiquetaFolio,
+ISNULL(pc.EstadoCajaID,1) AS EstadoCajaID,
+ISNULL(pc.EstadoCajaNombre,N'Formada en Producción') AS EstadoCajaNombre,
+pc.EstatusCalidad,
+ISNULL(pc.FechaFormacion,pc.FechaCreacion) AS FechaFormacion,
+pc.UsuarioFormacionID,
+ci.Estado AS EstadoInspeccion,
+ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada,
+(SELECT COUNT(1) FROM dbo.Calidad_DisposicionesMaterial dpm WHERE dpm.InspeccionID=ci.InspeccionID AND dpm.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(dpm.ResultadoFinal,N''))))=N'PENDIENTE') AS DisposicionesPendientes
+FROM dbo.Produccion_Cajas pc WITH(UPDLOCK,HOLDLOCK)
 INNER JOIN dbo.Calidad_Inspecciones ci ON ci.InspeccionID=@InspeccionID AND ci.EjecucionProduccionID=pc.EjecucionProduccionID
-LEFT JOIN dbo.SolicitudesProduccionDetalle d ON d.SolicitudProduccionDetalleID=ci.SolicitudProduccionDetalleID AND d.Activo=1
-LEFT JOIN dbo.ERP_Partes p ON p.ParteID=ci.ParteID
+LEFT JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=pc.EjecucionProduccionID AND e.Activo=1
+LEFT JOIN dbo.SolicitudesProduccionDetalle d ON d.SolicitudProduccionDetalleID=COALESCE(pc.SolicitudProduccionDetalleID,ci.SolicitudProduccionDetalleID) AND d.Activo=1
+LEFT JOIN dbo.SolicitudesProduccion sp ON sp.SolicitudProduccionID=COALESCE(pc.SolicitudProduccionID,ci.SolicitudProduccionID) AND sp.Activo=1
+LEFT JOIN dbo.ERP_Partes p ON p.ParteID=COALESCE(e.ParteID,ci.ParteID)
 WHERE pc.CajaProduccionID=@CajaProduccionID AND pc.Activo=1;";
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;

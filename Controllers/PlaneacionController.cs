@@ -316,6 +316,7 @@ ORDER BY
                     d.CantidadPiezas > 0 &&
                     (
                         d.ParteID.HasValue ||
+                        d.EnsambleID.HasValue ||
                         !string.IsNullOrWhiteSpace(d.ReferenciaSAP) ||
                         !string.IsNullOrWhiteSpace(d.DesignacionDescripcionSAP)
                     ))
@@ -386,7 +387,24 @@ ORDER BY
 
                 foreach (var d in vm.Detalles)
                 {
-                    await CompletarDetalleDesdeParteAsync(d, cn, (SqlTransaction)tx);
+                    if (vm.TipoOF == "ENSAMBLE")
+                    {
+                        if (!d.EnsambleID.HasValue)
+                            throw new InvalidOperationException("Para una OF de ENSAMBLE debes seleccionar un ensamble de ERP_Ensambles.");
+
+                        await CompletarDetalleDesdeEnsambleAsync(
+                            d,
+                            vm.ClienteID,
+                            cn,
+                            (SqlTransaction)tx
+                        );
+                    }
+                    else
+                    {
+                        d.EnsambleID = null;
+                        await CompletarDetalleDesdeParteAsync(d, cn, (SqlTransaction)tx);
+                    }
+
                     CalcularDatosTecnicos(d);
 
                     await CalcularCostosDetalleAsync(d, cn, (SqlTransaction)tx);
@@ -522,7 +540,11 @@ ORDER BY
             }
 
             vm.Historial = await ObtenerHistorialAsync(id, cn);
-
+            // NSQ_52_PLANEACION_INDICADORES_V1
+            ViewBag.IndicadoresProduccion =
+                await ERP.NSQuell.Services.ProduccionIndicadoresService.ObtenerPorSolicitudAsync(
+                    id,
+                    cn);
             var permisoEdicion = await ObtenerPermisoEdicionOFAsync(
     vm.SolicitudProduccionID,
     vm.FolioSolicitud,
@@ -709,6 +731,204 @@ WHERE p.ParteID = @ParteID
             });
         }
 
+        // NSQ_56_AUTORELLENO_ENSAMBLE_V2
+        // Informacion maestra de ERP_Ensambles para autorrelleno de OF.
+        [HttpGet]
+        public async Task<IActionResult> ObtenerEnsambleInfo(int ensambleId)
+        {
+            if (ensambleId <= 0)
+            {
+                return Json(new
+                {
+                    ok = false,
+                    mensaje = "Ensamble invalido."
+                });
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            int id;
+            int? clienteId;
+            string? clienteNombre;
+            string numeroEnsamble;
+            string? referenciaSap;
+            string? designacionSap;
+            string? nombreEnsamble;
+            string? tipoEnsamble;
+            string? tipoProceso;
+            decimal? pesoNetoPieza;
+            decimal? pesoBrutoPieza;
+            decimal? tiempoCiclo;
+            decimal? requerimientoAnual;
+
+            const string sqlEnsamble = @"
+SELECT
+    e.EnsambleID,
+    e.ClienteID,
+    c.Nombre AS ClienteNombre,
+    e.NumeroEnsamble,
+    e.ReferenciaSAP,
+    e.DesignacionSAP,
+    e.NombreEnsamble,
+    e.TipoEnsamble,
+    e.TipoProceso,
+    e.PesoNetoPieza,
+    e.PesoBrutoPieza,
+    e.TiempoCiclo,
+    e.RequerimientoAnual
+FROM dbo.ERP_Ensambles e
+LEFT JOIN dbo.ERP_Clientes c
+    ON c.ClienteID = e.ClienteID
+WHERE e.EnsambleID = @EnsambleID
+  AND e.Activo = 1;";
+
+            await using (var cmd = new SqlCommand(sqlEnsamble, cn))
+            {
+                cmd.Parameters.Add("@EnsambleID", SqlDbType.Int).Value = ensambleId;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (!await rd.ReadAsync())
+                {
+                    return Json(new
+                    {
+                        ok = false,
+                        mensaje = "No se encontro el ensamble activo."
+                    });
+                }
+
+                id = Convert.ToInt32(rd["EnsambleID"]);
+                clienteId = rd["ClienteID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["ClienteID"]);
+                clienteNombre = rd["ClienteNombre"] == DBNull.Value
+                    ? null
+                    : rd["ClienteNombre"].ToString();
+
+                numeroEnsamble = rd["NumeroEnsamble"]?.ToString() ?? "";
+                referenciaSap = rd["ReferenciaSAP"] == DBNull.Value
+                    ? null
+                    : rd["ReferenciaSAP"].ToString();
+                designacionSap = rd["DesignacionSAP"] == DBNull.Value
+                    ? null
+                    : rd["DesignacionSAP"].ToString();
+                nombreEnsamble = rd["NombreEnsamble"] == DBNull.Value
+                    ? null
+                    : rd["NombreEnsamble"].ToString();
+                tipoEnsamble = rd["TipoEnsamble"] == DBNull.Value
+                    ? null
+                    : rd["TipoEnsamble"].ToString();
+                tipoProceso = rd["TipoProceso"] == DBNull.Value
+                    ? null
+                    : rd["TipoProceso"].ToString();
+
+                pesoNetoPieza = rd["PesoNetoPieza"] == DBNull.Value
+                    ? null
+                    : Convert.ToDecimal(rd["PesoNetoPieza"]);
+                pesoBrutoPieza = rd["PesoBrutoPieza"] == DBNull.Value
+                    ? null
+                    : Convert.ToDecimal(rd["PesoBrutoPieza"]);
+                tiempoCiclo = rd["TiempoCiclo"] == DBNull.Value
+                    ? null
+                    : Convert.ToDecimal(rd["TiempoCiclo"]);
+                requerimientoAnual = rd["RequerimientoAnual"] == DBNull.Value
+                    ? null
+                    : Convert.ToDecimal(rd["RequerimientoAnual"]);
+            }
+
+            var componentes = new List<object>();
+
+            const string sqlComponentes = @"
+SELECT
+    ec.EnsambleComponenteID,
+    ec.ParteID,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(ec.NumeroComponente)), ''),
+        NULLIF(LTRIM(RTRIM(p.NumeroParte)), ''),
+        ''
+    ) AS NumeroComponente,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(ec.DescripcionComponente)), ''),
+        NULLIF(LTRIM(RTRIM(p.Designacion)), ''),
+        NULLIF(LTRIM(RTRIM(p.Descripcion)), ''),
+        ''
+    ) AS DescripcionComponente,
+    ec.CantidadPorEnsamble,
+    ec.Unidad
+FROM dbo.ERP_EnsambleComponentes ec
+LEFT JOIN dbo.ERP_Partes p
+    ON p.ParteID = ec.ParteID
+WHERE ec.EnsambleID = @EnsambleID
+  AND ec.Activo = 1
+ORDER BY ec.EnsambleComponenteID;";
+
+            await using (var cmd = new SqlCommand(sqlComponentes, cn))
+            {
+                cmd.Parameters.Add("@EnsambleID", SqlDbType.Int).Value = ensambleId;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
+                {
+                    componentes.Add(new
+                    {
+                        ensambleComponenteID =
+                            Convert.ToInt32(rd["EnsambleComponenteID"]),
+
+                        parteID = rd["ParteID"] == DBNull.Value
+                            ? (int?)null
+                            : Convert.ToInt32(rd["ParteID"]),
+
+                        numeroComponente =
+                            rd["NumeroComponente"]?.ToString() ?? "",
+
+                        descripcionComponente =
+                            rd["DescripcionComponente"]?.ToString() ?? "",
+
+                        cantidadPorEnsamble =
+                            Convert.ToDecimal(rd["CantidadPorEnsamble"]),
+
+                        unidad = rd["Unidad"] == DBNull.Value
+                            ? null
+                            : rd["Unidad"].ToString()
+                    });
+                }
+            }
+
+            var pesoParaOF = pesoBrutoPieza ?? pesoNetoPieza;
+
+            return Json(new
+            {
+                ok = true,
+                ensambleID = id,
+                clienteID = clienteId,
+                clienteNombre,
+                numeroEnsamble,
+
+                referenciaSAP =
+                    string.IsNullOrWhiteSpace(referenciaSap)
+                        ? numeroEnsamble
+                        : referenciaSap,
+
+                designacionDescripcionSAP =
+                    !string.IsNullOrWhiteSpace(designacionSap)
+                        ? designacionSap
+                        : (!string.IsNullOrWhiteSpace(nombreEnsamble)
+                            ? nombreEnsamble
+                            : numeroEnsamble),
+
+                nombreEnsamble,
+                tipoEnsamble,
+                tipoProceso,
+                pesoNetoPieza,
+                pesoBrutoPieza,
+                pesoParaOF,
+                tiempoCiclo,
+                requerimientoAnual,
+                componentes
+            });
+        }
         // calcular datos
         [HttpGet]
         public IActionResult CalcularDatosOF(
@@ -1500,6 +1720,7 @@ INSERT INTO dbo.SolicitudesProduccionDetalle
     SolicitudProduccionID,
     Renglon,
     ParteID,
+    EnsambleID,
     MoldeID,
     DesignacionDescripcionSAP,
     ReferenciaSAP,
@@ -1553,6 +1774,7 @@ VALUES
     @SolicitudProduccionID,
     @Renglon,
     @ParteID,
+    @EnsambleID,
     @MoldeID,
     @DesignacionDescripcionSAP,
     @ReferenciaSAP,
@@ -1614,6 +1836,9 @@ FROM @Ids;";
 
             cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value =
                 (object?)d.ParteID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@EnsambleID", SqlDbType.Int).Value =
+                (object?)d.EnsambleID ?? DBNull.Value;
 
             cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value =
                 (object?)d.MoldeID ?? DBNull.Value;
@@ -1861,6 +2086,11 @@ VALUES
                 cn,
                 "SELECT ParteID AS Id, NumeroParte + ' | ' + ISNULL(NULLIF(ReferenciaSAP, ''), NumeroParte) + ' | ' + ISNULL(NULLIF(Designacion, ''), Descripcion) AS Texto FROM dbo.ERP_Partes WHERE Activo = 1 ORDER BY NumeroParte;"
             );
+            // LITZI_OF_ENSAMBLES_V1: ENSAMBLE debe leer ERP_Ensambles, nunca ERP_Partes.
+            vm.Ensambles = await CargarSelectAsync(
+                cn,
+                "SELECT EnsambleID AS Id, NumeroEnsamble + ' | ' + ISNULL(NULLIF(ReferenciaSAP, ''), 'S/SAP') + ' | ' + ISNULL(NULLIF(NombreEnsamble, ''), ISNULL(DesignacionSAP, 'Sin descripcion')) AS Texto FROM dbo.ERP_Ensambles WHERE Activo = 1 ORDER BY NumeroEnsamble;"
+            );
 
             vm.Moldes = await CargarSelectAsync(
                 cn,
@@ -1922,6 +2152,80 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID
             return Convert.ToInt32(result);
         }
 
+        // LITZI_OF_ENSAMBLES_V1
+        private async Task CompletarDetalleDesdeEnsambleAsync(
+            PlaneacionOFDetalleCrearVm d,
+            int? clienteId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            if (!d.EnsambleID.HasValue)
+                return;
+
+            const string sql = @"
+SELECT TOP (1)
+    e.EnsambleID,
+    e.ClienteID,
+    e.NumeroEnsamble,
+    e.ReferenciaSAP,
+    e.DesignacionSAP,
+    e.NombreEnsamble,
+    e.TiempoCiclo,
+    e.PesoNetoPieza,
+    e.PesoBrutoPieza
+FROM dbo.ERP_Ensambles e
+WHERE e.EnsambleID = @EnsambleID
+  AND e.Activo = 1
+  AND (@ClienteID IS NULL OR e.ClienteID = @ClienteID);";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EnsambleID", SqlDbType.Int).Value = d.EnsambleID.Value;
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = (object?)clienteId ?? DBNull.Value;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+            {
+                throw new InvalidOperationException(
+                    $"El ensamble {d.EnsambleID.Value} no existe, esta inactivo o no pertenece al cliente de la OF."
+                );
+            }
+
+            var numeroEnsamble = rd["NumeroEnsamble"] as string ?? string.Empty;
+            var referenciaSap = rd["ReferenciaSAP"] as string;
+            var designacionSap = rd["DesignacionSAP"] as string;
+            var nombreEnsamble = rd["NombreEnsamble"] as string;
+
+            // Para ENSAMBLE la relacion maestra es EnsambleID, no ParteID.
+            d.ParteID = null;
+
+            // NSQ_56_AUTORELLENO_ENSAMBLE_V2
+            // Igual que con Parte: autollenar solo cuando el usuario no capturo
+            // un valor manual. Asi Referencia y Descripcion siguen siendo editables.
+            if (string.IsNullOrWhiteSpace(d.ReferenciaSAP))
+            {
+                d.ReferenciaSAP = string.IsNullOrWhiteSpace(referenciaSap)
+                    ? numeroEnsamble
+                    : referenciaSap;
+            }
+
+            if (string.IsNullOrWhiteSpace(d.DesignacionDescripcionSAP))
+            {
+                d.DesignacionDescripcionSAP = !string.IsNullOrWhiteSpace(designacionSap)
+                    ? designacionSap
+                    : (!string.IsNullOrWhiteSpace(nombreEnsamble) ? nombreEnsamble : numeroEnsamble);
+            }
+
+            if (string.IsNullOrWhiteSpace(d.Ciclo) && rd["TiempoCiclo"] != DBNull.Value)
+                d.Ciclo = Convert.ToDecimal(rd["TiempoCiclo"]).ToString("0.####");
+
+            if (!d.PesoBrutoPieza.HasValue)
+            {
+                if (rd["PesoBrutoPieza"] != DBNull.Value)
+                    d.PesoBrutoPieza = Convert.ToDecimal(rd["PesoBrutoPieza"]);
+                else if (rd["PesoNetoPieza"] != DBNull.Value)
+                    d.PesoBrutoPieza = Convert.ToDecimal(rd["PesoNetoPieza"]);
+            }
+        }
         private async Task CompletarDetalleDesdeParteAsync(
      PlaneacionOFDetalleCrearVm d,
      SqlConnection cn,
@@ -2326,6 +2630,7 @@ ORDER BY NumeroParte;";
                     d.CantidadPiezas > 0 &&
                     (
                         d.ParteID.HasValue ||
+                        d.EnsambleID.HasValue ||
                         !string.IsNullOrWhiteSpace(d.ReferenciaSAP) ||
                         !string.IsNullOrWhiteSpace(d.DesignacionDescripcionSAP)
                     ))
@@ -2427,7 +2732,24 @@ ORDER BY NumeroParte;";
 
                 foreach (var d in vm.Detalles)
                 {
-                    await CompletarDetalleDesdeParteAsync(d, cn, (SqlTransaction)tx);
+                    if (vm.TipoOF == "ENSAMBLE")
+                    {
+                        if (!d.EnsambleID.HasValue)
+                            throw new InvalidOperationException("Para una OF de ENSAMBLE debes seleccionar un ensamble de ERP_Ensambles.");
+
+                        await CompletarDetalleDesdeEnsambleAsync(
+                            d,
+                            vm.ClienteID,
+                            cn,
+                            (SqlTransaction)tx
+                        );
+                    }
+                    else
+                    {
+                        d.EnsambleID = null;
+                        await CompletarDetalleDesdeParteAsync(d, cn, (SqlTransaction)tx);
+                    }
+
                     CalcularDatosTecnicos(d);
 
                     await CalcularCostosDetalleAsync(d, cn, (SqlTransaction)tx);
@@ -3034,6 +3356,7 @@ SELECT
     SolicitudProduccionDetalleID,
     Renglon,
     ParteID,
+    EnsambleID,
     MoldeID,
     DesignacionDescripcionSAP,
     ReferenciaSAP,
@@ -3081,6 +3404,7 @@ ORDER BY Renglon;";
                     {
                         Renglon = Convert.ToInt32(rd["Renglon"]),
                         ParteID = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]),
+                        EnsambleID = rd["EnsambleID"] == DBNull.Value ? null : Convert.ToInt32(rd["EnsambleID"]),
                         MoldeID = rd["MoldeID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeID"]),
                         DesignacionDescripcionSAP = rd["DesignacionDescripcionSAP"] as string,
                         ReferenciaSAP = rd["ReferenciaSAP"] as string,

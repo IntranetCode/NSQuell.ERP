@@ -59,6 +59,10 @@
         .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
         .ThenBy(x => x.ProgramaProduccionID)
         .ToList();
+
+    var maquinasOcupadas =
+ViewBag.MaquinasOcupadas as HashSet<int>
+?? new HashSet<int>();
 }
 
 <style>
@@ -562,10 +566,28 @@
 
                 @foreach (var item in programasSeleccionados)
                 {
-                    orden++;
-                    var operadorSugerido = string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre) ? "" : item.OperadorSugeridoNombre.Trim();
-                    var turnoSugerido = string.IsNullOrWhiteSpace(item.TurnoSugeridoNombre) ? "" : item.TurnoSugeridoNombre.Trim();
+                    var operadorSugerido=
+        string.IsNullOrWhiteSpace(
+            item.OperadorSugeridoNombre)
+            ? ""
+            : item.OperadorSugeridoNombre.Trim();
 
+    var turnoSugerido=
+        string.IsNullOrWhiteSpace(
+            item.TurnoSugeridoNombre)
+            ? ""
+            : item.TurnoSugeridoNombre.Trim();
+
+    var maquinaOcupada=
+        item.MaquinaID.HasValue &&
+        maquinasOcupadas.Contains(
+                    item.MaquinaID.Value);
+
+                    var puedeIniciarReal =
+                    item.PuedeIniciar &&
+                    item.MaquinaID.HasValue &&
+                    !maquinaOcupada;
+ 
                     <article class="cola-card">
                         <div><div class="cola-order">@orden</div></div>
 
@@ -613,7 +635,7 @@
                         </div>
 
                         <div class="cola-action">
-                            @if (item.PuedeIniciar)
+                            @if (puedeIniciarReal)
                             {
                                 <button type="button"
                                         class="btn btn-sm btn-success btn-iniciar-preparacion"
@@ -636,6 +658,20 @@
                                     <i class="bi bi-play-fill me-1"></i>
                                     Iniciar preparación
                                 </button>
+                            }
+                            else if (maquinaOcupada)
+                            {
+                                <span class="badge text-bg-danger">
+                                    <i class="bi bi-lock-fill me-1"></i>
+                                    Máquina ocupada
+                                </span>
+                            }
+                            else if (!item.MaquinaID.HasValue)
+                            {
+                                <span class="badge text-bg-warning">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    Sin máquina
+                                </span>
                             }
                             else
                             {

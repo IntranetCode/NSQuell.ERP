@@ -167,7 +167,39 @@ public static class ProduccionCajaEstatus
         };
     }
 }
-
+public static class ProduccionProductoIncompletoEstado
+{
+    public const string Disponible = "DISPONIBLE";
+    public const string Reservada = "RESERVADA";
+    public const string EnCompletado = "EN_COMPLETADO";
+    public const string Completa = "COMPLETA";
+    public const string Cancelada = "CANCELADA";
+    public static string Nombre(string? estado)
+    {
+        return estado?.Trim().ToUpperInvariant() switch
+        {
+            Disponible => "Disponible",
+            Reservada => "Reservada",
+            EnCompletado => "En completado",
+            Completa => "Completa",
+            Cancelada => "Cancelada",
+            _ => "Sin estado"
+        };
+    }
+}
+public static class ProduccionCajaTipo
+{
+    public const string Ok = "OK";
+    public const string Sospechoso = "SOSPECHOSO";
+    public const string Scrap = "SCRAP";
+    public const string Retencion = "RETENCION";
+    public const string Incompleta = "INCOMPLETA";
+}
+public static class ProduccionCajaOrigenMovimiento
+{
+    public const string Origen = "ORIGEN";
+    public const string Completado = "COMPLETADO";
+}
 public static class ProduccionTipoEstatus
 {
     public const string Programa = "PROGRAMA";
@@ -1666,6 +1698,46 @@ public class ProduccionEntregaTurnoPerifericosPostVm
     public string? TecnicoRecibeNombre { get; set; }
 }
 
+public sealed class ProduccionCajaIncompletaDisponibleVm
+{
+    public long CajaProduccionID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+    public int? SolicitudProduccionID { get; set; }
+    public int? SolicitudProduccionDetalleID { get; set; }
+    public int? ParteID { get; set; }
+    public string? NumeroParte { get; set; }
+    public string? ReferenciaSAP { get; set; }
+    public string? FolioCaja { get; set; }
+    public string? EtiquetaBlanca { get; set; }
+    public int CantidadPiezas { get; set; }
+    public int CapacidadObjetivoCaja { get; set; }
+    public int CantidadPendienteCompletar { get; set; }
+    public string EstadoProductoIncompleto { get; set; } = ProduccionProductoIncompletoEstado.Disponible;
+    public int? EjecucionReservaID { get; set; }
+    public int? ProgramaReservaID { get; set; }
+    public int? SolicitudReservaID { get; set; }
+    public int? SolicitudDetalleReservaID { get; set; }
+    public DateTime FechaFormacion { get; set; }
+    public DateTime? FechaReservaIncompleto { get; set; }
+    public string TextoEstado => ProduccionProductoIncompletoEstado.Nombre(EstadoProductoIncompleto);
+    public bool EstaDisponible => string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Disponible, StringComparison.OrdinalIgnoreCase) && !EjecucionReservaID.HasValue;
+    public bool EstaReservada => string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Reservada, StringComparison.OrdinalIgnoreCase);
+    public decimal PorcentajeLlenado => CapacidadObjetivoCaja > 0 ? Math.Round((decimal)CantidadPiezas * 100m / CapacidadObjetivoCaja, 1) : 0m;
+    public string TextoCantidad => $"{CantidadPiezas:N0} / {CapacidadObjetivoCaja:N0}";
+}
+public sealed class ProduccionReservarCajaIncompletaPostVm
+{
+    public long CajaProduccionID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+}
+public sealed class ProduccionCompletarCajaIncompletaPostVm
+{
+    public long CajaProduccionID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int CantidadPiezas { get; set; }
+    public string? Observaciones { get; set; }
+}
 
 public sealed class ProduccionOperadorCajasVm
 {
@@ -1673,12 +1745,15 @@ public sealed class ProduccionOperadorCajasVm
     public int ProgramaProduccionID { get; set; }
     public int? SolicitudProduccionID { get; set; }
 
+    public int? SolicitudProduccionDetalleID { get; set; }
     public string? FolioSolicitud { get; set; }
     public string? NumeroOFRecibida { get; set; }
     public string? ClienteNombre { get; set; }
 
     public string? MaquinaCodigo { get; set; }
     public string? MaquinaNombre { get; set; }
+
+    public int? ParteID { get; set; }
 
     public string? NumeroParte { get; set; }
     public string? ReferenciaSAP { get; set; }
@@ -1702,10 +1777,25 @@ public sealed class ProduccionOperadorCajasVm
 
     public List<ProduccionOperadorCajaVm> Cajas { get; set; } = new();
 
+    public List<ProduccionCajaIncompletaDisponibleVm> CajasIncompletasDisponibles { get; set; } = new();
+
     public int CantidadOKEnCajas { get; set; }
     public int CantidadSospechosaEnCajas { get; set; }
     public int CantidadScrapEnCajas { get; set; }
     public int CantidadRetencionEnCajas { get; set; }
+
+    public int CantidadOKPlaneadaEmpacada => Math.Min(CantidadPlaneada, CantidadOKEnCajas);
+    public int CantidadOKExcedenteProducida => Math.Max(0, CantidadOKTotal - CantidadPlaneada);
+    public int CantidadOKExcedentePendienteResguardo
+    {
+        get
+        {
+            var incompletoPropio = Cajas.Where(x => x.EsProductoIncompleto && x.ActivoParaCalculo).Sum(x => x.CantidadPiezas);
+            return Math.Max(0, CantidadOKTotal - CantidadPlaneada - incompletoPropio);
+        }
+    }
+    public bool TieneExcedentePendiente => CantidadOKExcedentePendienteResguardo > 0;
+    public bool TieneCajasIncompletasDisponibles => CajasIncompletasDisponibles.Count > 0;
 
     public int SiguienteNumeroCaja { get; set; } = 1;
     public bool PuedeFormarCaja { get; set; }
@@ -1753,15 +1843,7 @@ public sealed class ProduccionOperadorCajasVm
         }
     }
 
-    public int PiezasOKEmpacadas
-    {
-        get
-        {
-            return Cajas
-                .Where(x => string.Equals(x.TipoCaja, "OK", StringComparison.OrdinalIgnoreCase))
-                .Sum(x => x.CantidadPiezas);
-        }
-    }
+    public int PiezasOKEmpacadas => CantidadOKEnCajas;
 
     public int PiezasPendientesEmpacar
     {

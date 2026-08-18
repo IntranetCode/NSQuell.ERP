@@ -9,16 +9,27 @@ public sealed class LogisticaIndexVm
     public DateTime? FechaDesde { get; set; }
     public DateTime? FechaHasta { get; set; }
     public string? Estatus { get; set; }
+
     public int DemandasPendientes { get; set; }
     public int EmbarquesActivos { get; set; }
     public int CargasHoy { get; set; }
     public int EntregasAtrasadas { get; set; }
     public long PiezasPendientes { get; set; }
     public long PiezasPTListas { get; set; }
+
+    public int EmbarquesPreparados { get; set; }
+    public int EmbarquesCargados { get; set; }
+    public int EmbarquesEnRuta { get; set; }
+    public int EmbarquesEntregados { get; set; }
+    public int EmbarquesConIncidencia { get; set; }
+
+    public long CajasMovilizadas { get; set; }
+    public long PiezasMovilizadas { get; set; }
+
     public List<LogisticaDemandaVm> Demandas { get; set; } = new();
     public List<LogisticaEmbarqueResumenVm> Embarques { get; set; } = new();
+    public List<LogisticaResumenClienteVm> ResumenClientes { get; set; } = new();
 }
-
 public sealed class LogisticaDemandaVm
 {
     public int ReleaseDetalleID { get; set; }
@@ -59,6 +70,29 @@ public sealed class LogisticaEmbarqueResumenVm
     public int TotalPiezasDespachadas { get; set; }
 }
 
+public sealed class LogisticaResumenClienteVm
+{
+    public int ClienteID { get; set; }
+    public string Cliente { get; set; } = string.Empty;
+
+    public int TotalEmbarques { get; set; }
+    public int Preparados { get; set; }
+    public int Cargados { get; set; }
+    public int EnRuta { get; set; }
+    public int Entregados { get; set; }
+    public int ConIncidencia { get; set; }
+
+    public long TotalCajas { get; set; }
+    public long TotalPiezas { get; set; }
+
+    public int EntregasATiempo { get; set; }
+    public int EntregasAtrasadas { get; set; }
+
+    public decimal PorcentajeCumplimiento =>
+        Entregados <= 0
+            ? 0
+            : Math.Round((decimal)EntregasATiempo / Entregados * 100m, 1);
+}
 public sealed class LogisticaCrearVm
 {
     [Required]
@@ -137,11 +171,7 @@ public sealed class LogisticaDetalleVm
     public List<LogisticaCajaDisponibleVm> CajasDisponibles { get; set; } = new();
     public List<LogisticaDemandaVm> DemandasDisponibles { get; set; } = new();
     public List<LogisticaHistorialVm> Historial { get; set; } = new();
-
-
-    // =====================================================
-    // LOGISTICA CONTROL TOWER - FASE 1
-    // =====================================================
+    public List<LogisticaEvidenciaVm> Evidencias { get; set; } = new();
 
     // Estado ejecutivo
     public string EstadoGeneral { get; set; } = "En tiempo";
@@ -213,7 +243,62 @@ public sealed class LogisticaDetalleVm
     public List<LogisticaChecklistVm> Checklist { get; set; } = new();
     public List<LogisticaIncidenciaVm> Incidencias { get; set; } = new();
 
-    
+    public bool UnidadRetornada { get; set; }
+    public DateTime? FechaRetornoUnidad { get; set; }
+    public int? KilometrajeRetorno { get; set; }
+    public string ObservacionesRetorno { get; set; } = string.Empty;
+    public string UsuarioRetorno { get; set; } = string.Empty;
+
+
+}
+
+public sealed class LogisticaEvidenciaVm
+{
+    public int EvidenciaID { get; set; }
+    public int EmbarqueID { get; set; }
+    public string TipoEvidencia { get; set; } = string.Empty;
+    public string NombreOriginal { get; set; } = string.Empty;
+    public string TipoContenido { get; set; } = string.Empty;
+    public long TamanoBytes { get; set; }
+    public string Observaciones { get; set; } = string.Empty;
+    public int? UsuarioID { get; set; }
+    public string UsuarioNombre { get; set; } = string.Empty;
+    public DateTime FechaCarga { get; set; }
+
+    public bool EsImagen =>
+        TipoContenido.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+        || TipoContenido.Equals("image/pjpeg", StringComparison.OrdinalIgnoreCase)
+        || TipoContenido.Equals("image/png", StringComparison.OrdinalIgnoreCase);
+
+    public bool EsPdf =>
+        TipoContenido.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
+
+    public string Extension =>
+        Path.GetExtension(NombreOriginal)?.ToLowerInvariant() ?? string.Empty;
+
+    public string Icono => Extension switch
+    {
+        ".pdf" => "fa-file-pdf",
+        ".jpg" or ".jpeg" or ".png" => "fa-image",
+        _ => "fa-file"
+    };
+
+    public string TamanoTexto
+    {
+        get
+        {
+            if (TamanoBytes <= 0)
+                return "0 KB";
+
+            if (TamanoBytes < 1024)
+                return $"{TamanoBytes} B";
+
+            if (TamanoBytes < 1024 * 1024)
+                return $"{TamanoBytes / 1024d:N1} KB";
+
+            return $"{TamanoBytes / 1024d / 1024d:N1} MB";
+        }
+    }
 }
 
 public sealed class LogisticaReprogramarVm
@@ -383,6 +468,14 @@ public sealed class LogisticaHistorialVm
     public string EstadoNuevo { get; set; } = string.Empty;
     public string Observaciones { get; set; } = string.Empty;
     public string Usuario { get; set; } = string.Empty;
+}
+
+public sealed class LogisticaRetornoVm
+{
+    public int EmbarqueID { get; set; }
+    public DateTime FechaRetorno { get; set; } = DateTime.Now;
+    public int? KilometrajeRetorno { get; set; }
+    public string Observaciones { get; set; } = string.Empty;
 }
 
 public sealed class LogisticaAgregarDetalleVm

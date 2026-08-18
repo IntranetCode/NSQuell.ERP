@@ -40,21 +40,21 @@ namespace ERP.NSQuell.Controllers
 
 
         private async Task<OrigenSolicitudCalidad?> ObtenerOrigenSolicitudCalidadAsync(
-            int checklistArranqueId,
-            int ejecucionProduccionId,
-            SqlConnection cn,
-            SqlTransaction tx)
+      int checklistArranqueId,
+      int ejecucionProduccionId,
+      SqlConnection cn,
+      SqlTransaction tx)
         {
             const string sql = @"
 SELECT TOP (1)
     e.EjecucionProduccionID,
     e.ProgramaProduccionID,
     c.ChecklistArranqueID,
-    e.SolicitudProduccionID,
-    e.SolicitudProduccionDetalleID,
-    e.ReleaseID,
-    e.ReleaseDetalleID,
-    COALESCE(NULLIF(s.NumeroOFRecibida, ''), NULLIF(s.FolioSolicitud, '')) AS NumeroOF,
+    COALESCE(e.SolicitudProduccionID,pp.SolicitudProduccionID) AS SolicitudProduccionID,
+    COALESCE(e.SolicitudProduccionDetalleID,pp.SolicitudProduccionDetalleID) AS SolicitudProduccionDetalleID,
+    COALESCE(e.ReleaseID,pp.ReleaseID,rd.ReleaseID) AS ReleaseID,
+    COALESCE(e.ReleaseDetalleID,pp.ReleaseDetalleID) AS ReleaseDetalleID,
+    COALESCE(NULLIF(s.NumeroOFRecibida,N''),NULLIF(s.FolioSolicitud,N'')) AS NumeroOF,
     pp.ClienteID,
     pp.ClienteNombre,
     e.ParteID,
@@ -65,44 +65,48 @@ SELECT TOP (1)
     e.MaquinaNombre,
     e.MoldeID,
     e.MoldeCodigo,
-    COALESCE(pp.MaterialID, dt.MaterialID) AS MaterialID,
-    COALESCE(NULLIF(pp.MaterialCodigo, ''), dt.MaterialCodigo) AS MaterialCodigo,
-    COALESCE(NULLIF(pp.MaterialDescripcion, ''), dt.MaterialDescripcion) AS MaterialDescripcion,
-    CONVERT(INT, ISNULL(e.CantidadPlaneada, pp.CantidadProgramada)) AS CantidadPlaneada,
+    COALESCE(pp.MaterialID,dt.MaterialID) AS MaterialID,
+    COALESCE(NULLIF(pp.MaterialCodigo,N''),dt.MaterialCodigo) AS MaterialCodigo,
+    COALESCE(NULLIF(pp.MaterialDescripcion,N''),dt.MaterialDescripcion) AS MaterialDescripcion,
+    CONVERT(INT,ISNULL(e.CantidadPlaneada,pp.CantidadProgramada)) AS CantidadPlaneada,
     pp.FechaInicioProgramada,
     pp.FechaFinProgramada,
-    COALESCE(e.OperadorID, opPrincipal.PersonaID) AS OperadorPrincipalPersonaID,
-    COALESCE(NULLIF(e.OperadorNombre, ''), NULLIF(opPrincipal.NombreCompleto, '')) AS OperadorPrincipalNombre,
-    opAuxiliar.PersonaID AS OperadorAuxiliarPersonaID,
-    opAuxiliar.NombreCompleto AS OperadorAuxiliarNombre
+    COALESCE(e.OperadorID,opPrincipal.PersonaID) AS OperadorPrincipalPersonaID,
+    COALESCE(NULLIF(e.OperadorNombre,N''),NULLIF(opPrincipal.NombreCompleto,N'')) AS OperadorPrincipalNombre,
+    COALESCE(e.OperadorAuxiliarID,opAuxiliar.PersonaID) AS OperadorAuxiliarPersonaID,
+    COALESCE(NULLIF(e.OperadorAuxiliarNombre,N''),NULLIF(opAuxiliar.NombreCompleto,N'')) AS OperadorAuxiliarNombre
 FROM dbo.Produccion_Ejecucion e
 INNER JOIN dbo.Produccion_ChecklistArranque c
-    ON c.EjecucionProduccionID = e.EjecucionProduccionID
-   AND c.ChecklistArranqueID = @ChecklistArranqueID
-   AND c.Activo = 1
+    ON c.EjecucionProduccionID=e.EjecucionProduccionID
+   AND c.ChecklistArranqueID=@ChecklistArranqueID
+   AND c.Activo=1
 INNER JOIN dbo.Planeacion_ProgramaProduccion pp
-    ON pp.ProgramaProduccionID = e.ProgramaProduccionID
-   AND pp.Activo = 1
+    ON pp.ProgramaProduccionID=e.ProgramaProduccionID
+   AND pp.Activo=1
+LEFT JOIN dbo.Planeacion_ReleaseDetalle rd
+    ON rd.ReleaseDetalleID=COALESCE(e.ReleaseDetalleID,pp.ReleaseDetalleID)
 LEFT JOIN dbo.SolicitudesProduccion s
-    ON s.SolicitudProduccionID = e.SolicitudProduccionID
+    ON s.SolicitudProduccionID=
+       COALESCE(e.SolicitudProduccionID,pp.SolicitudProduccionID)
+   AND s.Activo=1
 LEFT JOIN dbo.ERP_ParteDatosTecnicos dt
-    ON dt.ParteID = e.ParteID
-   AND dt.Activo = 1
+    ON dt.ParteID=e.ParteID
+   AND dt.Activo=1
 OUTER APPLY
 (
     SELECT TOP (1)
         po.PersonaID,
         LTRIM(RTRIM(
-            ISNULL(p.Nombre, '') + ' ' +
-            ISNULL(p.ApellidoPaterno, '') + ' ' +
-            ISNULL(p.ApellidoMaterno, '')
+            ISNULL(p.Nombre,N'')+N' '+
+            ISNULL(p.ApellidoPaterno,N'')+N' '+
+            ISNULL(p.ApellidoMaterno,N'')
         )) AS NombreCompleto
     FROM dbo.Planeacion_ProgramaOperadores po
     LEFT JOIN dbo.Persona p
-        ON p.PersonaID = po.PersonaID
-    WHERE po.ProgramaProduccionID = e.ProgramaProduccionID
-      AND po.Activo = 1
-      AND UPPER(ISNULL(po.RolOperador, '')) = 'PRINCIPAL'
+        ON p.PersonaID=po.PersonaID
+    WHERE po.ProgramaProduccionID=e.ProgramaProduccionID
+      AND po.Activo=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))=N'PRINCIPAL'
     ORDER BY po.ProgramaOperadorID
 ) opPrincipal
 OUTER APPLY
@@ -110,36 +114,53 @@ OUTER APPLY
     SELECT TOP (1)
         po.PersonaID,
         LTRIM(RTRIM(
-            ISNULL(p.Nombre, '') + ' ' +
-            ISNULL(p.ApellidoPaterno, '') + ' ' +
-            ISNULL(p.ApellidoMaterno, '')
+            ISNULL(p.Nombre,N'')+N' '+
+            ISNULL(p.ApellidoPaterno,N'')+N' '+
+            ISNULL(p.ApellidoMaterno,N'')
         )) AS NombreCompleto
     FROM dbo.Planeacion_ProgramaOperadores po
     LEFT JOIN dbo.Persona p
-        ON p.PersonaID = po.PersonaID
-    WHERE po.ProgramaProduccionID = e.ProgramaProduccionID
-      AND po.Activo = 1
-      AND UPPER(ISNULL(po.RolOperador, '')) = 'AUXILIAR'
+        ON p.PersonaID=po.PersonaID
+    WHERE po.ProgramaProduccionID=e.ProgramaProduccionID
+      AND po.Activo=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))=N'AUXILIAR'
     ORDER BY po.ProgramaOperadorID
 ) opAuxiliar
-WHERE e.EjecucionProduccionID = @EjecucionProduccionID
-  AND e.Activo = 1;";
-
+WHERE e.EjecucionProduccionID=@EjecucionProduccionID
+  AND e.Activo=1;";
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = checklistArranqueId;
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-
             await using var rd = await cmd.ExecuteReaderAsync();
             if (!await rd.ReadAsync())
                 return null;
-
+            var solicitudProduccionId =
+                rd["SolicitudProduccionID"] == DBNull.Value
+                    ? (int?)null
+                    : Convert.ToInt32(rd["SolicitudProduccionID"]);
+            var solicitudProduccionDetalleId =
+                rd["SolicitudProduccionDetalleID"] == DBNull.Value
+                    ? (int?)null
+                    : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]);
+            if (!solicitudProduccionId.HasValue ||
+               solicitudProduccionId.Value <= 0)
+            {
+                throw new InvalidOperationException(
+                    "No existe una OF relacionada con esta ejecución. Genera la OF desde Planeación antes de enviarla a Calidad.");
+            }
+            if (!solicitudProduccionDetalleId.HasValue ||
+               solicitudProduccionDetalleId.Value <= 0)
+            {
+                throw new InvalidOperationException(
+                    "La OF relacionada no tiene un detalle válido asociado al programa.");
+            }
             return new OrigenSolicitudCalidad
             {
                 EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
                 ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
                 ChecklistArranqueID = Convert.ToInt32(rd["ChecklistArranqueID"]),
-                SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
-                SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
+                SolicitudProduccionID = solicitudProduccionId,
+                SolicitudProduccionDetalleID = solicitudProduccionDetalleId,
                 ReleaseID = rd["ReleaseID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseID"]),
                 ReleaseDetalleID = rd["ReleaseDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseDetalleID"]),
                 NumeroOF = rd["NumeroOF"] as string,

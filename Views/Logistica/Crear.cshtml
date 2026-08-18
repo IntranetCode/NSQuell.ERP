@@ -656,68 +656,59 @@
             margin-bottom: 13px
         }
 
-    @@media(max - width:1180px) {
-        .lc-layout
-
-    {
-        grid-template-columns: 1fr
-    }
-
-    .lc-aside {
-        position: static
-    }
-
-    }
-
-    @@media(max - width:850px) {
-        .lc-facts
-
-    {
-        grid-template-columns: 1fr 1fr
-    }
-
-    .lc-fact:nth-child(2) {
-        border-right: 0
-    }
-
-    .lc-fact:nth-child(-n+2) {
-        border-bottom: 1px solid var(--lg-line)
-    }
-
-    .lc-lot-grid {
-        grid-template-columns: 1fr
-    }
-
-    }
-
-    @@media(max - width:560px) {
-        .lc-titlebar
-
-    {
-        padding: 18px
-    }
-
-    .lc-titlebar h1 {
-        font-size: 1.45rem
-    }
-
-    .lc-big-date {
-        width: 100%
-    }
-
-    .lc-facts {
-        grid-template-columns: 1fr
-    }
-
-    .lc-fact {
-        border-right: 0 !important;
-        border-bottom: 1px solid var(--lg-line)
-    }
-
-        .lc-fact:last-child {
-            border-bottom: 0
+    @@media(max-width:1180px) {
+        .lc-layout {
+            grid-template-columns: 1fr
         }
 
+        .lc-aside {
+            position: static
+        }
+    }
+
+    @@media(max-width:850px) {
+        .lc-facts {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .lc-fact:nth-child(2) {
+            border-right: 0
+        }
+
+        .lc-fact:nth-child(-n+2) {
+            border-bottom: 1px solid var(--lg-line)
+        }
+
+        .lc-lot-grid {
+            grid-template-columns: 1fr
+        }
+    }
+
+    @@media(max-width:560px) {
+        .lc-titlebar {
+            padding: 18px
+        }
+
+            .lc-titlebar h1 {
+                font-size: 1.45rem
+            }
+
+        .lc-big-date {
+            width: 100%
+        }
+
+        .lc-facts {
+            grid-template-columns: 1fr
+        }
+
+        .lc-fact {
+            border-right: 0 !important;
+            border-bottom: 1px solid var(--lg-line)
+        }
+
+            .lc-fact:last-child {
+                border-bottom: 0
+            }
     }
 </style>
 

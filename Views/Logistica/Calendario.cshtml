@@ -560,37 +560,58 @@
     .cal-hidden {
         display: none !important
     }
-    @@media(max - width:1000px) {
-        .cal-toolbar
 
-    {
-        grid-template-columns: 1fr 1fr
+    @@media(max-width:1000px) {
+        .cal-toolbar {
+            grid-template-columns: 1fr 1fr
+        }
     }
 
-    }
-    @@media(max - width:760px) {
-        .cal-toolbar
-
-    {
-        grid-template-columns: 1fr
-    }
-
-    .cal-month {
-        overflow: auto
-    }
-
-    .cal-weekdays, .cal-month-grid {
-        min-width: 900px
-    }
-
-    .cal-hero {
-        padding: 18px
-    }
-
-        .cal-hero h1 {
-            font-size: 1.5rem
+    @@media(max-width:760px) {
+        .cal-toolbar {
+            grid-template-columns: 1fr
         }
 
+        .cal-month {
+            overflow: visible
+        }
+
+        .cal-weekdays, .cal-month-grid {
+            min-width: 0
+        }
+
+            .cal-weekdays > *, .cal-month-grid > * {
+                min-width: 0
+            }
+
+        .cal-day {
+            min-height: 82px;
+            padding: 4px
+        }
+
+        .cal-day-number {
+            font-size: .68rem
+        }
+
+        .cal-event {
+            padding: 4px 5px
+        }
+
+        .cal-event-title {
+            font-size: .6rem
+        }
+
+        .cal-event-sub {
+            display: none
+        }
+
+        .cal-hero {
+            padding: 18px
+        }
+
+            .cal-hero h1 {
+                font-size: 1.5rem
+            }
     }
 </style>
 

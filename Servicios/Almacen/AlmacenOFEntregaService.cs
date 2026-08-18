@@ -458,34 +458,40 @@ WHERE s.SolicitudProduccionID = @SolicitudID
 WITH Requerido AS
 (
     SELECT
-        d.SolicitudProduccionID,
-        SUM
+        s.SolicitudProduccionID,
+        CONVERT
         (
-            CONVERT
-            (
-                DECIMAL(18,4),
-                ISNULL(d.CantidadPiezas, 0)
-            )
+            DECIMAL(18,4),
+            CASE
+                WHEN rd.ReleaseDetalleID IS NOT NULL AND ISNULL(rd.CantidadRequerida,0)>0
+                    THEN rd.CantidadRequerida
+                ELSE ISNULL(SUM(CONVERT(BIGINT,ISNULL(d.CantidadPiezas,0))),0)
+            END
         ) AS Requerido
-    FROM dbo.SolicitudesProduccionDetalle d
-        WITH (UPDLOCK, HOLDLOCK)
-    INNER JOIN dbo.ERP_Partes catalogo
-        WITH (UPDLOCK, HOLDLOCK)
-        ON catalogo.ParteID = @CatalogoID
-       AND catalogo.Activo = 1
-       AND d.ParteID = catalogo.ParteID
-    WHERE d.SolicitudProduccionID = @SolicitudID
-      AND d.Activo = 1
-      AND ISNULL(d.CantidadPiezas, 0) > 0
-    GROUP BY d.SolicitudProduccionID
+    FROM dbo.SolicitudesProduccion s WITH(UPDLOCK,HOLDLOCK)
+    INNER JOIN dbo.SolicitudesProduccionDetalle d WITH(UPDLOCK,HOLDLOCK)
+        ON d.SolicitudProduccionID=s.SolicitudProduccionID
+       AND d.Activo=1
+       AND d.ParteID=@CatalogoID
+    LEFT JOIN dbo.Planeacion_ReleaseDetalle rd WITH(UPDLOCK,HOLDLOCK)
+        ON rd.ReleaseDetalleID=s.ReleaseDetalleID
+       AND rd.Activo=1
+       AND rd.ParteID=@CatalogoID
+    WHERE s.SolicitudProduccionID=@SolicitudID
+      AND s.Activo=1
+      AND ISNULL(d.CantidadPiezas,0)>0
+    GROUP BY
+        s.SolicitudProduccionID,
+        rd.ReleaseDetalleID,
+        rd.CantidadRequerida
 )
 SELECT
     s.SolicitudProduccionID,
     COALESCE
     (
-        NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)), ''),
-        NULLIF(LTRIM(RTRIM(s.FolioSolicitud)), ''),
-        ''
+        NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+        NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),
+        CONCAT(N'OF-ID-',s.SolicitudProduccionID)
     ) AS NumeroOF,
     catalogo.NumeroParte AS Codigo,
     N'PZS' AS Unidad,
@@ -499,53 +505,49 @@ SELECT
                 SELECT SUM
                 (
                     CASE
-                        WHEN movimiento.TipoMovimiento IN (N'Salida', N'Embarque')
+                        WHEN movimiento.TipoMovimiento=N'Entrada'
                             THEN movimiento.Cantidad
-                        WHEN movimiento.TipoMovimiento = N'Retorno'
+                        WHEN movimiento.TipoMovimiento=N'AjusteNegativo'
                             THEN -movimiento.Cantidad
                         ELSE 0
                     END
                 )
-                FROM dbo.AlmacenPT_Movimientos movimiento
-                    WITH (UPDLOCK, HOLDLOCK)
-                WHERE movimiento.Activo = 1
-                  AND movimiento.ParteID =
-                      catalogo.ParteID
+                FROM dbo.AlmacenPT_Movimientos movimiento WITH(UPDLOCK,HOLDLOCK)
+                LEFT JOIN dbo.AlmacenPT_Cajas caja WITH(UPDLOCK,HOLDLOCK)
+                    ON caja.CajaID=movimiento.CajaID
+                   AND caja.Activo=1
+                WHERE movimiento.Activo=1
+                  AND movimiento.ParteID=catalogo.ParteID
                   AND
                   (
-                      (
-                          NULLIF
-                          (
-                              LTRIM(RTRIM(s.FolioSolicitud)),
-                              ''
-                          ) IS NOT NULL
-                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                              LTRIM(RTRIM(s.FolioSolicitud))
-                      )
+                      caja.SolicitudProduccionID=s.SolicitudProduccionID
                       OR
                       (
-                          NULLIF
+                          caja.SolicitudProduccionID IS NULL
+                          AND
                           (
-                              LTRIM(RTRIM(s.NumeroOFRecibida)),
-                              ''
-                          ) IS NOT NULL
-                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                              LTRIM(RTRIM(s.NumeroOFRecibida))
+                              (
+                                  NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N'') IS NOT NULL
+                                  AND LTRIM(RTRIM(movimiento.NumeroOF))=LTRIM(RTRIM(s.NumeroOFRecibida))
+                              )
+                              OR
+                              (
+                                  NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'') IS NOT NULL
+                                  AND LTRIM(RTRIM(movimiento.NumeroOF))=LTRIM(RTRIM(s.FolioSolicitud))
+                              )
+                          )
                       )
                   )
             ),
             0
         )
     ) AS Entregado
-FROM dbo.SolicitudesProduccion s
-    WITH (UPDLOCK, HOLDLOCK)
+FROM dbo.SolicitudesProduccion s WITH(UPDLOCK,HOLDLOCK)
 INNER JOIN Requerido requerido
-    ON requerido.SolicitudProduccionID =
-       s.SolicitudProduccionID
-INNER JOIN dbo.ERP_Partes catalogo
-    WITH (UPDLOCK, HOLDLOCK)
-    ON catalogo.ParteID = @CatalogoID
-   AND catalogo.Activo = 1
-WHERE s.SolicitudProduccionID = @SolicitudID
-  AND s.Activo = 1;";
+    ON requerido.SolicitudProduccionID=s.SolicitudProduccionID
+INNER JOIN dbo.ERP_Partes catalogo WITH(UPDLOCK,HOLDLOCK)
+    ON catalogo.ParteID=@CatalogoID
+   AND catalogo.Activo=1
+WHERE s.SolicitudProduccionID=@SolicitudID
+  AND s.Activo=1;";
 }

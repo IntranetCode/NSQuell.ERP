@@ -513,35 +513,36 @@ namespace ERP.NSQuell.Models.ViewModels
     {
         [Range(1, int.MaxValue)]
         public int MonitoreoID { get; set; }
-
         [Range(1, int.MaxValue)]
         public int InspeccionID { get; set; }
-
+        public bool MaterialProduccionRevisado { get; set; }
+        [Range(0, int.MaxValue)]
+        public int CantidadProduccionLiberada { get; set; }
+        [Range(0, int.MaxValue)]
+        public int CantidadProduccionSeleccion { get; set; }
+        [Range(0, int.MaxValue)]
+        public int CantidadProduccionRetrabajo { get; set; }
+        [Range(0, int.MaxValue)]
+        public int CantidadProduccionScrapConfirmado { get; set; }
+        [StringLength(1000)]
+        public string? ObservacionesMaterialProduccion { get; set; }
         [Range(1, int.MaxValue, ErrorMessage = "La muestra revisada debe ser mayor a cero.")]
         public int CantidadRevisadaMuestra { get; set; }
-
         [Required]
         [StringLength(20)]
         public string Resultado { get; set; } = CalidadResultadoMonitoreo.Pendiente;
-
         [StringLength(20)]
         public string? DefectoCodigo { get; set; }
-
         [StringLength(500)]
         public string? DefectoDescripcion { get; set; }
-
         [Range(0, int.MaxValue)]
         public int CantidadSospechosa { get; set; }
-
         [Range(0, int.MaxValue)]
         public int CantidadNoRecuperable { get; set; }
-
         public bool RequiereSeleccion { get; set; }
         public bool RequiereRetrabajo { get; set; }
-
         [StringLength(20)]
         public string? ResponsableRetrabajo { get; set; }
-
         [StringLength(1000)]
         public string? Observaciones { get; set; }
     }
@@ -936,6 +937,9 @@ namespace ERP.NSQuell.Models.ViewModels
         public string EstadoTratamiento { get; set; } = CalidadEstadoTratamiento.PendienteAsignacion;
         public DateTime? FechaInicioTratamiento { get; set; }
         public DateTime? FechaFinTratamiento { get; set; }
+
+        public string OrigenHallazgo { get; set; } = "CALIDAD";
+        public int? RegistroHoraID { get; set; }
 
         public bool EsPendiente =>
             ResultadoFinal == CalidadResultadoDisposicion.Pendiente;

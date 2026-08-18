@@ -148,6 +148,8 @@ namespace ERP.NSQuell.Controllers
      {
          DisposicionID = x.DisposicionID,
          MonitoreoID = x.MonitoreoID,
+         OrigenHallazgo = x.OrigenHallazgo,
+         RegistroHoraID = x.RegistroHoraID,
          NumeroHora = x.Monitoreo == null ? (int?)null : x.Monitoreo.NumeroHora,
          FechaHoraRevision = x.Monitoreo != null ? x.Monitoreo.FechaHoraRevision : null,
          ResultadoMonitoreoOrigen = x.Monitoreo != null ? x.Monitoreo.Resultado : null,
@@ -1635,119 +1637,151 @@ WHERE NOT EXISTS
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RegistrarMonitoreo(
-            CalidadMonitoreoGuardarViewModel model)
+        public async Task<IActionResult> RegistrarMonitoreo(CalidadMonitoreoGuardarViewModel model)
         {
             if (!ModelState.IsValid)
             {
-                TempData["Error"] =
-                    "Los datos del monitoreo son incompletos o no son válidos.";
-
+                TempData["Error"] = "Los datos del monitoreo son incompletos o no son válidos.";
                 return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
             }
-
             var usuarioId = ObtenerUsuarioIdActual();
-            if (!usuarioId.HasValue || usuarioId.Value <= 0)
-                return Unauthorized();
-
+            if (!usuarioId.HasValue || usuarioId.Value <= 0) return Unauthorized();
             var resultado = NormalizarResultadoMonitoreo(model.Resultado);
             if (resultado == null)
             {
-                TempData["Error"] = "Selecciona un resultado válido para el monitoreo.";
+                TempData["Error"] = "Selecciona el resultado de la muestra revisada por Calidad.";
                 return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
             }
-
             model.DefectoCodigo = model.DefectoCodigo?.Trim().ToUpperInvariant();
             model.DefectoDescripcion = model.DefectoDescripcion?.Trim();
             model.Observaciones = model.Observaciones?.Trim();
-            model.ResponsableRetrabajo =
-                model.ResponsableRetrabajo?.Trim().ToUpperInvariant();
-
-            await using var tx = await _context.Database.BeginTransactionAsync();
-
+            model.ObservacionesMaterialProduccion = model.ObservacionesMaterialProduccion?.Trim();
+            model.ResponsableRetrabajo = model.ResponsableRetrabajo?.Trim().ToUpperInvariant();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
-                var monitor = await _context.CalidadMonitoreosProceso
-                    .FirstOrDefaultAsync(x =>
-                        x.MonitoreoID == model.MonitoreoID &&
-                        x.InspeccionID == model.InspeccionID &&
-                        x.Activo);
-
-                if (monitor == null)
-                    return NotFound();
-
-                var inspeccion = await _context.CalidadInspecciones
-                    .FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID);
-
-                if (inspeccion == null)
-                    return NotFound();
-
-                if (inspeccion.Estado != CalidadEstados.MonitoreoActivo)
+                const string sqlMonitor = @"
+SELECT MonitoreoID,InspeccionID,RegistroHoraID,Resultado,CantidadProducidaPeriodo
+FROM dbo.Calidad_MonitoreosProceso WITH(UPDLOCK,HOLDLOCK)
+WHERE MonitoreoID=@MonitoreoID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1;";
+                int registroHoraId;
+                int cantidadProducidaPeriodo;
+                string resultadoActual;
+                await using (var cmd = new SqlCommand(sqlMonitor, cn, tx))
                 {
-                    TempData["Error"] =
-                        "La inspección no se encuentra en monitoreo horario activo.";
-
+                    cmd.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = model.MonitoreoID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = model.InspeccionID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        return NotFound();
+                    }
+                    if (rd["RegistroHoraID"] == DBNull.Value)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Producción aún no ha registrado las cantidades de este periodo.";
+                        return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                    }
+                    registroHoraId = Convert.ToInt32(rd["RegistroHoraID"]);
+                    cantidadProducidaPeriodo = Convert.ToInt32(rd["CantidadProducidaPeriodo"]);
+                    resultadoActual = rd["Resultado"]?.ToString() ?? string.Empty;
+                }
+                if (!string.Equals(resultadoActual, CalidadResultadoMonitoreo.Pendiente, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Este monitoreo ya fue capturado y no puede sobrescribirse.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                if (monitor.Resultado != CalidadResultadoMonitoreo.Pendiente)
+                if (cantidadProducidaPeriodo <= 0)
                 {
-                    TempData["Error"] =
-                        "Este monitoreo ya fue capturado y no puede sobrescribirse.";
-
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El periodo vinculado no tiene piezas producidas para revisar.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                if (!monitor.RegistroHoraID.HasValue)
+                const string sqlInspeccion = @"
+SELECT Estado
+FROM dbo.Calidad_Inspecciones WITH(UPDLOCK,HOLDLOCK)
+WHERE InspeccionID=@InspeccionID;";
+                string estadoInspeccion;
+                await using (var cmd = new SqlCommand(sqlInspeccion, cn, tx))
                 {
-                    TempData["Error"] =
-                        "Producción aún no ha registrado las cantidades de este periodo.";
-
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = model.InspeccionID;
+                    var valor = await cmd.ExecuteScalarAsync();
+                    if (valor == null || valor == DBNull.Value)
+                    {
+                        await tx.RollbackAsync();
+                        return NotFound();
+                    }
+                    estadoInspeccion = valor.ToString() ?? string.Empty;
+                }
+                if (!string.Equals(estadoInspeccion, CalidadEstados.MonitoreoActivo, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La inspección no se encuentra en monitoreo horario activo.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                if (monitor.CantidadProducidaPeriodo <= 0)
+                var produccion = await ObtenerCantidadesProduccionMonitoreoAsync(registroHoraId, cn, tx);
+                var totalReportadoProduccion = produccion.CantidadSospechosa + produccion.CantidadScrap;
+                if (totalReportadoProduccion > 0)
                 {
-                    TempData["Error"] =
-                        "El periodo vinculado no tiene piezas producidas para revisar.";
-
-                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                    if (!model.MaterialProduccionRevisado)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"Producción reportó {totalReportadoProduccion} pieza(s) segregada(s). Confirma primero la revisión de ese material.";
+                        return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                    }
+                    if (model.CantidadProduccionLiberada < 0 || model.CantidadProduccionSeleccion < 0 || model.CantidadProduccionRetrabajo < 0 || model.CantidadProduccionScrapConfirmado < 0)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Las cantidades del material reportado por Producción no pueden ser negativas.";
+                        return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                    }
+                    var totalResultadoProduccion = model.CantidadProduccionLiberada + model.CantidadProduccionSeleccion + model.CantidadProduccionRetrabajo + model.CantidadProduccionScrapConfirmado;
+                    if (totalResultadoProduccion != totalReportadoProduccion)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"Producción reportó {totalReportadoProduccion} pieza(s) segregada(s). La suma de liberadas, selección, retrabajo y scrap confirmado debe ser exactamente {totalReportadoProduccion}.";
+                        return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                    }
                 }
-
+                else
+                {
+                    model.MaterialProduccionRevisado = false;
+                    model.CantidadProduccionLiberada = 0;
+                    model.CantidadProduccionSeleccion = 0;
+                    model.CantidadProduccionRetrabajo = 0;
+                    model.CantidadProduccionScrapConfirmado = 0;
+                }
                 if (model.CantidadRevisadaMuestra <= 0)
                 {
-                    TempData["Error"] =
-                        "La cantidad revisada como muestra debe ser mayor a cero.";
-
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Indica cuántas piezas revisó Calidad en su muestra.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                if (model.CantidadRevisadaMuestra > monitor.CantidadProducidaPeriodo)
+                if (model.CantidadRevisadaMuestra > cantidadProducidaPeriodo)
                 {
-                    TempData["Error"] =
-                        "La muestra no puede superar la cantidad producida en el periodo.";
-
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La muestra de Calidad no puede superar la cantidad producida en el periodo.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                if (model.CantidadSospechosa < 0 ||
-                    model.CantidadNoRecuperable < 0)
+                if (model.CantidadSospechosa < 0 || model.CantidadNoRecuperable < 0)
                 {
-                    TempData["Error"] = "Las cantidades afectadas no pueden ser negativas.";
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Las cantidades detectadas por Calidad no pueden ser negativas.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
-                var cantidadAfectada =
-                    model.CantidadSospechosa + model.CantidadNoRecuperable;
-
-                if (cantidadAfectada > monitor.CantidadProducidaPeriodo)
+                var cantidadAfectadaCalidad = model.CantidadSospechosa + model.CantidadNoRecuperable;
+                if (cantidadAfectadaCalidad > model.CantidadRevisadaMuestra)
                 {
-                    TempData["Error"] =
-                        "La cantidad afectada no puede superar lo producido en el periodo.";
-
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La cantidad afectada detectada por Calidad no puede superar la muestra revisada.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
-
                 if (resultado == CalidadResultadoMonitoreo.Conforme)
                 {
                     model.CantidadSospechosa = 0;
@@ -1757,173 +1791,230 @@ WHERE NOT EXISTS
                     model.ResponsableRetrabajo = null;
                     model.DefectoCodigo = null;
                     model.DefectoDescripcion = null;
-                    cantidadAfectada = 0;
+                    cantidadAfectadaCalidad = 0;
                 }
                 else
                 {
-                    if (cantidadAfectada <= 0)
+                    if (cantidadAfectadaCalidad <= 0)
                     {
-                        TempData["Error"] = "Captura la cantidad de material afectado.";
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Captura cuántas piezas de la muestra de Calidad resultaron afectadas.";
                         return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                     }
-
-                    if (string.IsNullOrWhiteSpace(model.DefectoCodigo) &&
-                        string.IsNullOrWhiteSpace(model.DefectoDescripcion))
+                    if (string.IsNullOrWhiteSpace(model.DefectoCodigo) && string.IsNullOrWhiteSpace(model.DefectoDescripcion))
                     {
-                        TempData["Error"] = "Selecciona o describe el defecto detectado.";
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Selecciona o describe el defecto detectado por Calidad.";
                         return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                     }
-
-                    /*
-                     * La tabla guarda una sola disposición principal. Por eso
-                     * no se permite seleccionar simultáneamente selección y
-                     * retrabajo para el mismo hallazgo.
-                     */
                     if (model.RequiereSeleccion == model.RequiereRetrabajo)
                     {
-                        TempData["Error"] =
-                            "Selecciona un solo tratamiento: selección o retrabajo.";
-
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Para el hallazgo de Calidad selecciona un solo tratamiento: selección o retrabajo.";
                         return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                     }
-
-                    if (model.RequiereRetrabajo &&
-                        model.ResponsableRetrabajo != CalidadResponsable.Produccion &&
-                        model.ResponsableRetrabajo != CalidadResponsable.Calidad)
+                    if (model.RequiereRetrabajo && model.ResponsableRetrabajo != CalidadResponsable.Produccion && model.ResponsableRetrabajo != CalidadResponsable.Calidad)
                     {
+                        await tx.RollbackAsync();
                         TempData["Error"] = "Selecciona al responsable del retrabajo.";
                         return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                     }
-
-                    if (resultado == CalidadResultadoMonitoreo.NoConforme &&
-                        string.IsNullOrWhiteSpace(model.Observaciones))
+                    if (resultado == CalidadResultadoMonitoreo.NoConforme && string.IsNullOrWhiteSpace(model.Observaciones))
                     {
-                        TempData["Error"] =
-                            "Describe el hallazgo antes de guardar un resultado no conforme.";
-
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Describe el hallazgo no conforme detectado por Calidad.";
                         return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                     }
                 }
-
                 var defectoDescripcion = model.DefectoDescripcion;
                 var defectoCodigo = model.DefectoCodigo;
-
                 if (!string.IsNullOrWhiteSpace(defectoCodigo))
                 {
-                    var catalogo = await _context.CalidadCatalogoDefectos
-                        .AsNoTracking()
-                        .FirstOrDefaultAsync(x =>
-                            x.Activo &&
-                            x.Codigo == defectoCodigo);
-
-                    if (catalogo == null)
+                    const string sqlDefecto = @"
+SELECT TOP(1) Nombre
+FROM dbo.Calidad_CatalogoDefectos
+WHERE Codigo=@Codigo
+  AND Activo=1;";
+                    await using var cmd = new SqlCommand(sqlDefecto, cn, tx);
+                    cmd.Parameters.Add("@Codigo", SqlDbType.NVarChar, 20).Value = defectoCodigo;
+                    var nombre = await cmd.ExecuteScalarAsync();
+                    if (nombre == null || nombre == DBNull.Value)
                     {
-                        TempData["Error"] =
-                            "El código de defecto seleccionado ya no se encuentra activo.";
-
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "El código de defecto seleccionado ya no se encuentra activo.";
                         return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                     }
-
-                    defectoDescripcion = string.IsNullOrWhiteSpace(defectoDescripcion)
-                        ? catalogo.Nombre
-                        : catalogo.Nombre + ". " + defectoDescripcion;
+                    var nombreDefecto = nombre.ToString()?.Trim();
+                    defectoDescripcion = string.IsNullOrWhiteSpace(defectoDescripcion) ? nombreDefecto : nombreDefecto + ". " + defectoDescripcion;
                 }
-
-                var ahora = DateTime.Now;
-
-                monitor.FechaHoraRevision = ahora;
-                monitor.CantidadRevisadaMuestra = model.CantidadRevisadaMuestra;
-                monitor.Resultado = resultado;
-                monitor.DefectoCodigo = defectoCodigo;
-                monitor.DefectoDescripcion = defectoDescripcion;
-                monitor.CantidadSospechosa = model.CantidadSospechosa;
-                monitor.CantidadNoRecuperable = model.CantidadNoRecuperable;
-                monitor.RequiereSeleccion = model.RequiereSeleccion;
-                monitor.RequiereRetrabajo = model.RequiereRetrabajo;
-                monitor.ResponsableRetrabajo = model.RequiereRetrabajo
-                    ? model.ResponsableRetrabajo
-                    : null;
-                monitor.Observaciones = model.Observaciones;
-                monitor.UsuarioCalidadID = usuarioId;
-                monitor.UsuarioModificacionID = usuarioId;
-                monitor.FechaModificacion = ahora;
-
-                if (resultado == CalidadResultadoMonitoreo.Sospechoso ||
-                    resultado == CalidadResultadoMonitoreo.NoConforme)
+                if (totalReportadoProduccion > 0)
                 {
-                    var disposicion = await _context.CalidadDisposicionesMaterial
-                        .FirstOrDefaultAsync(x =>
-                            x.MonitoreoID == monitor.MonitoreoID &&
-                            x.Activo &&
-                            x.ResultadoFinal == CalidadResultadoDisposicion.Pendiente);
-
-                    if (disposicion == null)
+                    if (model.CantidadProduccionSeleccion > 0)
+                        await RegistrarDisposicionMonitoreoAsync(model.InspeccionID, model.MonitoreoID, registroHoraId, "PRODUCCION", CalidadTipoMaterial.Sospechoso, model.CantidadProduccionSeleccion, CalidadTipoDisposicion.Seleccion, "AMARILLA", model.ObservacionesMaterialProduccion, usuarioId.Value, cn, tx);
+                    if (model.CantidadProduccionRetrabajo > 0)
+                        await RegistrarDisposicionMonitoreoAsync(model.InspeccionID, model.MonitoreoID, registroHoraId, "PRODUCCION", CalidadTipoMaterial.Sospechoso, model.CantidadProduccionRetrabajo, CalidadTipoDisposicion.Retrabajo, "AMARILLA", model.ObservacionesMaterialProduccion, usuarioId.Value, cn, tx);
+                    if (model.CantidadProduccionScrapConfirmado > 0)
                     {
-                        disposicion = new CalidadDisposicionMaterial
-                        {
-                            InspeccionID = inspeccion.InspeccionID,
-                            MonitoreoID = monitor.MonitoreoID,
-                            UsuarioCreacionID = usuarioId,
-                            FechaCreacion = ahora,
-                            FechaInicio = ahora,
-                            Activo = true
-                        };
-
-                        _context.CalidadDisposicionesMaterial.Add(disposicion);
+                        var ahoraScrap = DateTime.Now;
+                        var observacionScrap = $"Scrap confirmado por Calidad sobre material previamente segregado por Producción. RegistroHoraID: {registroHoraId}. Cantidad confirmada como scrap: {model.CantidadProduccionScrapConfirmado}.";
+                        if (!string.IsNullOrWhiteSpace(model.ObservacionesMaterialProduccion)) observacionScrap += " " + model.ObservacionesMaterialProduccion;
+                        if (observacionScrap.Length > 1000) observacionScrap = observacionScrap[..1000];
+                        const string sqlScrapProduccion = @"
+INSERT INTO dbo.Calidad_DisposicionesMaterial
+(
+    InspeccionID,
+    MonitoreoID,
+    RegistroHoraID,
+    OrigenHallazgo,
+    TipoMaterial,
+    CantidadAfectada,
+    Etiqueta,
+    Disposicion,
+    Responsable,
+    FechaInicio,
+    FechaFin,
+    CantidadLiberada,
+    CantidadScrap,
+    ResultadoFinal,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    UsuarioModificacionID,
+    FechaModificacion,
+    Activo,
+    EstadoTratamiento,
+    FechaInicioTratamiento,
+    FechaFinTratamiento
+)
+VALUES
+(
+    @InspeccionID,
+    @MonitoreoID,
+    @RegistroHoraID,
+    N'PRODUCCION',
+    @TipoMaterial,
+    @CantidadAfectada,
+    N'ROJA',
+    N'SCRAP_CONFIRMADO',
+    N'CALIDAD',
+    @Ahora,
+    @Ahora,
+    0,
+    @CantidadAfectada,
+    @ResultadoFinal,
+    @Observaciones,
+    @UsuarioID,
+    @Ahora,
+    @UsuarioID,
+    @Ahora,
+    1,
+    N'CONCLUIDA',
+    @Ahora,
+    @Ahora
+);";
+                        await using var cmdScrap = new SqlCommand(sqlScrapProduccion, cn, tx);
+                        cmdScrap.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = model.InspeccionID;
+                        cmdScrap.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = model.MonitoreoID;
+                        cmdScrap.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
+                        cmdScrap.Parameters.Add("@TipoMaterial", SqlDbType.NVarChar, 30).Value = CalidadTipoMaterial.NoConforme;
+                        cmdScrap.Parameters.Add("@CantidadAfectada", SqlDbType.Int).Value = model.CantidadProduccionScrapConfirmado;
+                        cmdScrap.Parameters.Add("@ResultadoFinal", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Scrap;
+                        cmdScrap.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = observacionScrap;
+                        cmdScrap.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                        cmdScrap.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahoraScrap;
+                        await cmdScrap.ExecuteNonQueryAsync();
                     }
-
-                    disposicion.TipoMaterial = resultado == CalidadResultadoMonitoreo.NoConforme ? CalidadTipoMaterial.NoConforme : CalidadTipoMaterial.Sospechoso;
-                    disposicion.CantidadAfectada = cantidadAfectada;
-                    disposicion.Etiqueta = resultado == CalidadResultadoMonitoreo.NoConforme ? "ROJA" : "AMARILLA";
-                    disposicion.Disposicion = model.RequiereRetrabajo ? CalidadTipoDisposicion.Retrabajo : CalidadTipoDisposicion.Seleccion;
-                    disposicion.Responsable = null;
-                    disposicion.DepartamentoResponsableID = null;
-                    disposicion.UsuarioResponsableID = null;
-                    disposicion.EstadoTratamiento = CalidadEstadoTratamiento.PendienteAsignacion;
-                    disposicion.FechaInicioTratamiento = null;
-                    disposicion.FechaFinTratamiento = null;
-                    disposicion.ResultadoFinal = CalidadResultadoDisposicion.Pendiente;
-                    disposicion.Observaciones = model.Observaciones;
-                    disposicion.UsuarioModificacionID = usuarioId;
-                    disposicion.FechaModificacion = ahora;
                 }
-
-                MarcarModificacion(inspeccion, usuarioId);
-
-                AgregarHistorial(
-                    inspeccion,
-                    CalidadMovimientos.MonitoreoRegistrado,
-                    inspeccion.Estado,
-                    inspeccion.Estado,
-                    resultado,
-                    resultado == CalidadResultadoMonitoreo.Conforme
-                        ? "VERDE"
-                        : resultado == CalidadResultadoMonitoreo.Sospechoso
-                            ? "AMARILLA"
-                            : "ROJA",
-                    $"Monitoreo hora {monitor.NumeroHora}. " +
-                    $"Muestra: {model.CantidadRevisadaMuestra}. " +
-                    $"Afectado: {cantidadAfectada}. " +
-                    (model.Observaciones ?? string.Empty),
-                    usuarioId);
-
-                await _context.SaveChangesAsync();
+                if (resultado == CalidadResultadoMonitoreo.Sospechoso || resultado == CalidadResultadoMonitoreo.NoConforme)
+                {
+                    var tratamiento = model.RequiereRetrabajo ? CalidadTipoDisposicion.Retrabajo : CalidadTipoDisposicion.Seleccion;
+                    var tipoMaterial = resultado == CalidadResultadoMonitoreo.NoConforme ? CalidadTipoMaterial.NoConforme : CalidadTipoMaterial.Sospechoso;
+                    var etiqueta = resultado == CalidadResultadoMonitoreo.NoConforme ? "ROJA" : "AMARILLA";
+                    await RegistrarDisposicionMonitoreoAsync(model.InspeccionID, model.MonitoreoID, registroHoraId, "CALIDAD", tipoMaterial, cantidadAfectadaCalidad, tratamiento, etiqueta, model.Observaciones, usuarioId.Value, cn, tx);
+                }
+                var ahora = DateTime.Now;
+                const string sqlActualizar = @"
+UPDATE dbo.Calidad_MonitoreosProceso
+SET FechaHoraRevision=@Ahora,
+    CantidadRevisadaMuestra=@CantidadRevisadaMuestra,
+    Resultado=@Resultado,
+    DefectoCodigo=@DefectoCodigo,
+    DefectoDescripcion=@DefectoDescripcion,
+    CantidadSospechosa=@CantidadSospechosaCalidad,
+    CantidadNoRecuperable=@CantidadNoRecuperableCalidad,
+    RequiereSeleccion=@RequiereSeleccion,
+    RequiereRetrabajo=@RequiereRetrabajo,
+    ResponsableRetrabajo=@ResponsableRetrabajo,
+    Observaciones=@Observaciones,
+    UsuarioCalidadID=@UsuarioID,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE MonitoreoID=@MonitoreoID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(Resultado,N''))))=N'PENDIENTE';
+IF @@ROWCOUNT<>1
+    THROW 51060,'El monitoreo cambió de estado mientras Calidad realizaba la revisión.',1;
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,Movimiento,EstadoAnterior,EstadoNuevo,ResultadoCalidad,Etiqueta,Comentario,UsuarioID,FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    N'MONITOREO_REGISTRADO',
+    N'MONITOREO_ACTIVO',
+    N'MONITOREO_ACTIVO',
+    @Resultado,
+    CASE WHEN @Resultado=N'NO_CONFORME' THEN N'ROJA' WHEN @Resultado=N'SOSPECHOSO' THEN N'AMARILLA' ELSE N'VERDE' END,
+    CONCAT(
+        N'Monitoreo de Calidad registrado. RegistroHoraID: ',@RegistroHoraID,
+        N'. Material reportado por Producción: ',@CantidadReportadaProduccion,
+        N'. Liberadas: ',@CantidadProduccionLiberada,
+        N'. Selección: ',@CantidadProduccionSeleccion,
+        N'. Retrabajo: ',@CantidadProduccionRetrabajo,
+        N'. Scrap confirmado: ',@CantidadProduccionScrapConfirmado,
+        N'. Muestra propia de Calidad: ',@CantidadRevisadaMuestra,
+        N'. Resultado: ',@Resultado,N'.'
+    ),
+    @UsuarioID,
+    @Ahora
+);";
+                await using (var cmd = new SqlCommand(sqlActualizar, cn, tx))
+                {
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@CantidadRevisadaMuestra", SqlDbType.Int).Value = model.CantidadRevisadaMuestra;
+                    cmd.Parameters.Add("@Resultado", SqlDbType.NVarChar, 20).Value = resultado;
+                    cmd.Parameters.Add("@DefectoCodigo", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(defectoCodigo) ? DBNull.Value : defectoCodigo;
+                    cmd.Parameters.Add("@DefectoDescripcion", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(defectoDescripcion) ? DBNull.Value : defectoDescripcion;
+                    cmd.Parameters.Add("@CantidadSospechosaCalidad", SqlDbType.Int).Value = model.CantidadSospechosa;
+                    cmd.Parameters.Add("@CantidadNoRecuperableCalidad", SqlDbType.Int).Value = model.CantidadNoRecuperable;
+                    cmd.Parameters.Add("@RequiereSeleccion", SqlDbType.Bit).Value = model.RequiereSeleccion;
+                    cmd.Parameters.Add("@RequiereRetrabajo", SqlDbType.Bit).Value = model.RequiereRetrabajo;
+                    cmd.Parameters.Add("@ResponsableRetrabajo", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(model.ResponsableRetrabajo) ? DBNull.Value : model.ResponsableRetrabajo;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(model.Observaciones) ? DBNull.Value : model.Observaciones;
+                    cmd.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = model.MonitoreoID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = model.InspeccionID;
+                    cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
+                    cmd.Parameters.Add("@CantidadReportadaProduccion", SqlDbType.Int).Value = totalReportadoProduccion;
+                    cmd.Parameters.Add("@CantidadProduccionLiberada", SqlDbType.Int).Value = model.CantidadProduccionLiberada;
+                    cmd.Parameters.Add("@CantidadProduccionSeleccion", SqlDbType.Int).Value = model.CantidadProduccionSeleccion;
+                    cmd.Parameters.Add("@CantidadProduccionRetrabajo", SqlDbType.Int).Value = model.CantidadProduccionRetrabajo;
+                    cmd.Parameters.Add("@CantidadProduccionScrapConfirmado", SqlDbType.Int).Value = model.CantidadProduccionScrapConfirmado;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    await cmd.ExecuteNonQueryAsync();
+                }
                 await tx.CommitAsync();
-
-                TempData["Mensaje"] =
-                    resultado == CalidadResultadoMonitoreo.Conforme
-                        ? "Monitoreo registrado como conforme."
-                        : "Monitoreo registrado y material separado para disposición.";
+                TempData["Mensaje"] = "Monitoreo registrado. Se revisó por separado el material reportado por Producción y la muestra propia de Calidad.";
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                TempData["Error"] =
-                    "No fue posible registrar el monitoreo: " + ex.Message;
+                TempData["Error"] = "No fue posible registrar el monitoreo de Calidad: " + ex.Message;
             }
-
             return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
         }
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]

@@ -144,6 +144,12 @@ namespace ERP.NSQuell.Models
         public CalidadInspeccion? Inspeccion { get; set; }
         [ForeignKey(nameof(MonitoreoID))]
         public CalidadMonitoreoProceso? Monitoreo { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string OrigenHallazgo { get; set; } = "CALIDAD";
+
+        public int? RegistroHoraID { get; set; }
     }
 
     public static class CalidadEstadoTratamiento

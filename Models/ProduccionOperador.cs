@@ -131,11 +131,27 @@ namespace ERP.NSQuell.Models
         public int EjecucionProduccionID { get; set; }
         public int ProgramaProduccionID { get; set; }
 
+        public int? SolicitudProduccionID { get; set; }
+        public int? SolicitudProduccionDetalleID { get; set; }
+
         public int NumeroCaja { get; set; }
         public string? FolioCaja { get; set; }
 
         public int CantidadPiezas { get; set; }
         public string TipoCaja { get; set; } = "OK";
+
+        public bool EsProductoIncompleto { get; set; }
+        public string? EstadoProductoIncompleto { get; set; }
+        public int? EjecucionReservaID { get; set; }
+        public int? ProgramaReservaID { get; set; }
+        public int? SolicitudReservaID { get; set; }
+        public int? SolicitudDetalleReservaID { get; set; }
+        public DateTime? FechaReservaIncompleto { get; set; }
+        public int? UsuarioReservaIncompletoID { get; set; }
+        public DateTime? FechaCompletadoIncompleto { get; set; }
+        public int? CapacidadObjetivoCaja { get; set; }
+        public int? CantidadPendienteCompletar { get; set; }
+        public string? EtiquetaBlanca { get; set; }
 
         public string? LoteMaterial { get; set; }
         public string? EtiquetaFolio { get; set; }
@@ -170,7 +186,15 @@ namespace ERP.NSQuell.Models
 
         public string? Observaciones { get; set; }
 
-
+        public bool ActivoParaCalculo { get; set; } = true;
+        public bool EsCajaIncompleta => EsProductoIncompleto || string.Equals(TipoCaja, ProduccionCajaTipo.Incompleta, StringComparison.OrdinalIgnoreCase);
+        public bool IncompletaDisponible => EsCajaIncompleta && string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Disponible, StringComparison.OrdinalIgnoreCase);
+        public bool IncompletaReservada => EsCajaIncompleta && string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Reservada, StringComparison.OrdinalIgnoreCase);
+        public bool IncompletaEnCompletado => EsCajaIncompleta && string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.EnCompletado, StringComparison.OrdinalIgnoreCase);
+        public bool IncompletaCompleta => EsCajaIncompleta && string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Completa, StringComparison.OrdinalIgnoreCase);
+        public string EstadoProductoIncompletoTexto => ProduccionProductoIncompletoEstado.Nombre(EstadoProductoIncompleto);
+        public int PiezasFaltantesIncompleto => CantidadPendienteCompletar ?? Math.Max(0, (CapacidadObjetivoCaja ?? 0) - CantidadPiezas);
+        public decimal PorcentajeLlenadoIncompleto => CapacidadObjetivoCaja.HasValue && CapacidadObjetivoCaja.Value > 0 ? Math.Round((decimal)CantidadPiezas * 100m / CapacidadObjetivoCaja.Value, 1) : 0m;
 
         public bool EstaFormada
         {
@@ -232,7 +256,7 @@ namespace ERP.NSQuell.Models
         {
             get
             {
-                return EstadoCajaID == ProduccionCajaEstatus.FormadaProduccion;
+                return EstadoCajaID == ProduccionCajaEstatus.FormadaProduccion && !EsCajaIncompleta;
             }
         }
 
