@@ -339,6 +339,101 @@ namespace ERP.NSQuell.Models.ViewModels
 
         public DateTime? FechaCierre => MovimientoCierre?.FechaMovimiento;
         public int? UsuarioCierreID => MovimientoCierre?.UsuarioID;
+
+        public List<CalidadScrapEntregaItemViewModel> ScrapEntregas { get; set; } = new();
+    }
+
+    public class CalidadScrapEntregaItemViewModel
+    {
+        public long ScrapEntregaID { get; set; }
+        public int InspeccionID { get; set; }
+        public int DisposicionID { get; set; }
+
+        public int? EjecucionProduccionID { get; set; }
+        public int? ProgramaProduccionID { get; set; }
+
+        public int? SolicitudProduccionID { get; set; }
+        public int? SolicitudProduccionDetalleID { get; set; }
+
+        public int? ReleaseID { get; set; }
+        public int? ReleaseDetalleID { get; set; }
+
+        public int? ParteID { get; set; }
+
+        public string? NumeroParte { get; set; }
+        public string? OrdenFabricacion { get; set; }
+
+        public int CantidadScrap { get; set; }
+
+        public string Estado { get; set; } =
+            CalidadEstadoScrap.PendienteRecepcion;
+
+        public int? UsuarioEntregaID { get; set; }
+        public DateTime? FechaEntrega { get; set; }
+
+        public int? UsuarioRecepcionID { get; set; }
+        public DateTime? FechaRecepcion { get; set; }
+
+        public string? UbicacionScrap { get; set; }
+
+        public int? UsuarioMoliendaID { get; set; }
+        public DateTime? FechaMolienda { get; set; }
+        public decimal? CantidadMolida { get; set; }
+
+        public string? Observaciones { get; set; }
+
+        public DateTime FechaCreacion { get; set; }
+
+        public bool EstaPendienteRecepcion =>
+            Estado == CalidadEstadoScrap.PendienteRecepcion;
+
+        public bool EstaRecibido =>
+            Estado == CalidadEstadoScrap.RecibidoAlmacen ||
+            Estado == CalidadEstadoScrap.PendienteMolienda ||
+            Estado == CalidadEstadoScrap.Molido;
+
+        public bool EstaMolido =>
+            Estado == CalidadEstadoScrap.Molido;
+
+        public string EstadoTexto => Estado switch
+        {
+            CalidadEstadoScrap.PendienteRecepcion =>
+                "Pendiente de recepción en Almacén",
+
+            CalidadEstadoScrap.RecibidoAlmacen =>
+                "Recibido por Almacén",
+
+            CalidadEstadoScrap.PendienteMolienda =>
+                "Pendiente de molienda",
+
+            CalidadEstadoScrap.Molido =>
+                "Molido",
+
+            CalidadEstadoScrap.Cancelado =>
+                "Cancelado",
+
+            _ => Estado.Replace("_", " ")
+        };
+
+        public string EstadoBadgeClase => Estado switch
+        {
+            CalidadEstadoScrap.PendienteRecepcion =>
+                "bg-warning text-dark",
+
+            CalidadEstadoScrap.RecibidoAlmacen =>
+                "bg-info text-dark",
+
+            CalidadEstadoScrap.PendienteMolienda =>
+                "bg-primary",
+
+            CalidadEstadoScrap.Molido =>
+                "bg-success",
+
+            CalidadEstadoScrap.Cancelado =>
+                "bg-secondary",
+
+            _ => "bg-secondary"
+        };
     }
 
     public class CalidadCorridaOrigenViewModel
@@ -940,6 +1035,7 @@ namespace ERP.NSQuell.Models.ViewModels
 
         public string OrigenHallazgo { get; set; } = "CALIDAD";
         public int? RegistroHoraID { get; set; }
+        public CalidadScrapEntregaItemViewModel? EntregaScrap { get; set; }
 
         public bool EsPendiente =>
             ResultadoFinal == CalidadResultadoDisposicion.Pendiente;

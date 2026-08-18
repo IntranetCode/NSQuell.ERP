@@ -381,6 +381,50 @@
                 display: block
             }
 
+
+        .quality-dispositions .quality-scrap-status {
+            margin-top: 12px;
+            padding: 12px 14px;
+            border: 1px solid var(--qd-border);
+            border-radius: 10px;
+            background: #fff7ed
+        }
+
+        .quality-dispositions .quality-scrap-status-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: #9a3412;
+            font-size: .82rem;
+            font-weight: 850
+        }
+
+        .quality-dispositions .quality-scrap-status-grid {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 10px
+        }
+
+        .quality-dispositions .quality-scrap-status-item {
+            min-width: 0;
+            padding: 9px 10px;
+            border: 1px solid rgba(249,115,22,.18);
+            border-radius: 8px;
+            background: rgba(255,255,255,.72)
+        }
+
+        .quality-dispositions .quality-scrap-missing {
+            margin-top: 12px;
+            padding: 11px 13px;
+            border: 1px solid #fecaca;
+            border-radius: 9px;
+            background: #fef2f2;
+            color: #991b1b;
+            font-size: .82rem;
+            font-weight: 750
+        }
+
     html[data-nsq-theme="dark"] .quality-dispositions {
         --qd-border: rgba(255,255,255,.10);
         --qd-text: #e5e7eb;
@@ -423,9 +467,34 @@
             border-color: rgba(255,255,255,.10)
         }
 
+
+        html[data-nsq-theme="dark"] .quality-dispositions .quality-scrap-status {
+            background: #1f1a14;
+            border-color: rgba(249,115,22,.28)
+        }
+
+        html[data-nsq-theme="dark"] .quality-dispositions .quality-scrap-status-title {
+            color: #fdba74
+        }
+
+        html[data-nsq-theme="dark"] .quality-dispositions .quality-scrap-status-item {
+            background: #111c2d;
+            border-color: rgba(249,115,22,.22)
+        }
+
+        html[data-nsq-theme="dark"] .quality-dispositions .quality-scrap-missing {
+            background: #2a1518;
+            border-color: rgba(248,113,113,.28);
+            color: #fecaca
+        }
+
     @@media(max-width:991.98px) {
         .quality-dispositions .quality-history-grid {
             grid-template-columns: repeat(3,minmax(0,1fr))
+        }
+
+        .quality-dispositions .quality-scrap-status-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr))
         }
     }
 
@@ -444,7 +513,8 @@
     }
 
     @@media(max-width:479.98px) {
-        .quality-dispositions .quality-history-grid {
+        .quality-dispositions .quality-history-grid,
+        .quality-dispositions .quality-scrap-status-grid {
             grid-template-columns: 1fr
         }
     }
@@ -1094,6 +1164,55 @@
                             </div>
                         }
 
+                        @if (!disposicion.EsPendiente && disposicion.CantidadScrap > 0)
+                        {
+                            if (disposicion.EntregaScrap == null)
+                            {
+                                <div class="quality-scrap-missing">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                    Scrap documentado sin entrega física generada. Revisa la trazabilidad de esta disposición.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="quality-scrap-status">
+                                    <div class="quality-scrap-status-title">
+                                        <i class="fa-solid fa-recycle"></i>
+                                        Trazabilidad física del scrap
+                                    </div>
+                                    <div class="quality-scrap-status-grid">
+                                        <div class="quality-scrap-status-item">
+                                            <span class="quality-data-label">Estado</span>
+                                            <span class="badge @disposicion.EntregaScrap.EstadoBadgeClase">@disposicion.EntregaScrap.EstadoTexto</span>
+                                        </div>
+                                        <div class="quality-scrap-status-item">
+                                            <span class="quality-data-label">Cantidad</span>
+                                            <div class="fw-bold text-danger">@disposicion.EntregaScrap.CantidadScrap pieza(s)</div>
+                                        </div>
+                                        <div class="quality-scrap-status-item">
+                                            <span class="quality-data-label">Recepción Almacén</span>
+                                            <div class="fw-semibold">@(disposicion.EntregaScrap.FechaRecepcion?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</div>
+                                        </div>
+                                        <div class="quality-scrap-status-item">
+                                            <span class="quality-data-label">Ubicación</span>
+                                            <div class="fw-semibold">@Mostrar(disposicion.EntregaScrap.UbicacionScrap)</div>
+                                        </div>
+                                    </div>
+                                    @if (disposicion.EntregaScrap.EstaMolido)
+                                    {
+                                        <div class="quality-help mt-2">
+                                            <i class="fa-solid fa-gears me-1"></i>
+                                            Molienda registrada: @(disposicion.EntregaScrap.FechaMolienda?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                            @if (disposicion.EntregaScrap.CantidadMolida.HasValue)
+                                            {
+                                                <span> · Cantidad molida: @disposicion.EntregaScrap.CantidadMolida.Value.ToString("0.####")</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+
                         @if (!string.IsNullOrWhiteSpace(disposicion.Observaciones))
                         {
                             <div class="alert alert-light border py-2 mb-0">
@@ -1174,6 +1293,18 @@
                                         <span class="badge @disposicion.ResultadoFinalBadgeClase">
                                             @disposicion.ResultadoFinalTexto
                                         </span>
+
+                                        @if (disposicion.CantidadScrap > 0)
+                                        {
+                                            if (disposicion.EntregaScrap == null)
+                                            {
+                                                <span class="badge bg-danger">Scrap sin entrega</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge @disposicion.EntregaScrap.EstadoBadgeClase">@disposicion.EntregaScrap.EstadoTexto</span>
+                                            }
+                                        }
                                     </div>
 
                                     <div class="quality-history-summary-bottom">
@@ -1282,6 +1413,40 @@
                                         </div>
                                     }
                                 </div>
+
+                                @if (disposicion.CantidadScrap > 0)
+                                {
+                                    if (disposicion.EntregaScrap == null)
+                                    {
+                                        <div class="quality-scrap-missing">
+                                            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                            Scrap documentado sin entrega física generada.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="quality-scrap-status">
+                                            <div class="quality-scrap-status-title">
+                                                <i class="fa-solid fa-recycle"></i>
+                                                Trazabilidad física del scrap
+                                            </div>
+                                            <div class="quality-scrap-status-grid">
+                                                <div class="quality-scrap-status-item"><span class="quality-data-label">Entrega Scrap</span><div class="fw-semibold">#@disposicion.EntregaScrap.ScrapEntregaID</div></div>
+                                                <div class="quality-scrap-status-item"><span class="quality-data-label">Estado</span><span class="badge @disposicion.EntregaScrap.EstadoBadgeClase">@disposicion.EntregaScrap.EstadoTexto</span></div>
+                                                <div class="quality-scrap-status-item"><span class="quality-data-label">Cantidad</span><div class="fw-bold text-danger">@disposicion.EntregaScrap.CantidadScrap pieza(s)</div></div>
+                                                <div class="quality-scrap-status-item"><span class="quality-data-label">Ubicación</span><div class="fw-semibold">@Mostrar(disposicion.EntregaScrap.UbicacionScrap)</div></div>
+                                                <div class="quality-scrap-status-item"><span class="quality-data-label">Fecha entrega</span><div class="fw-semibold">@(disposicion.EntregaScrap.FechaEntrega?.ToString("dd/MM/yyyy HH:mm") ?? "—")</div></div>
+                                                <div class="quality-scrap-status-item"><span class="quality-data-label">Fecha recepción</span><div class="fw-semibold">@(disposicion.EntregaScrap.FechaRecepcion?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</div></div>
+                                                <div class="quality-scrap-status-item"><span class="quality-data-label">Fecha molienda</span><div class="fw-semibold">@(disposicion.EntregaScrap.FechaMolienda?.ToString("dd/MM/yyyy HH:mm") ?? "—")</div></div>
+                                                <div class="quality-scrap-status-item"><span class="quality-data-label">Cantidad molida</span><div class="fw-semibold">@(disposicion.EntregaScrap.CantidadMolida?.ToString("0.####") ?? "—")</div></div>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(disposicion.EntregaScrap.Observaciones))
+                                            {
+                                                <div class="quality-help mt-2"><strong>Observaciones Scrap:</strong> @disposicion.EntregaScrap.Observaciones</div>
+                                            }
+                                        </div>
+                                    }
+                                }
 
                                 @if (!string.IsNullOrWhiteSpace(disposicion.Observaciones))
                                 {

@@ -9,16 +9,11 @@ namespace ERP.NSQuell.Controllers
 {
     public partial class CalidadController
     {
+
         private async Task<CalidadDetalleViewModel?> ConstruirDetalleFlujoAsync(int id)
         {
-            var inspeccion = await _context.CalidadInspecciones
-                .AsNoTracking()
-                .Include(x => x.Historial)
-                .FirstOrDefaultAsync(x => x.InspeccionID == id);
-
-            if (inspeccion == null)
-                return null;
-
+            var inspeccion = await _context.CalidadInspecciones.AsNoTracking().Include(x => x.Historial).FirstOrDefaultAsync(x => x.InspeccionID == id);
+            if (inspeccion == null) return null;
             var model = new CalidadDetalleViewModel
             {
                 InspeccionID = inspeccion.InspeccionID,
@@ -98,207 +93,246 @@ namespace ERP.NSQuell.Controllers
                 FechaCreacion = inspeccion.FechaCreacion,
                 UsuarioModificacionID = inspeccion.UsuarioModificacionID,
                 FechaModificacion = inspeccion.FechaModificacion,
-                Historial = inspeccion.Historial
-                    .OrderByDescending(x => x.FechaMovimiento)
-                    .Select(x => new CalidadHistorialItemViewModel
-                    {
-                        HistorialID = x.HistorialID,
-                        Movimiento = x.Movimiento,
-                        EstadoAnterior = x.EstadoAnterior,
-                        EstadoNuevo = x.EstadoNuevo,
-                        ResultadoCalidad = x.ResultadoCalidad,
-                        Etiqueta = x.Etiqueta,
-                        Comentario = x.Comentario,
-                        UsuarioID = x.UsuarioID,
-                        FechaMovimiento = x.FechaMovimiento
-                    })
-                    .ToList()
+                Historial = inspeccion.Historial.OrderByDescending(x => x.FechaMovimiento).Select(x => new CalidadHistorialItemViewModel
+                {
+                    HistorialID = x.HistorialID,
+                    Movimiento = x.Movimiento,
+                    EstadoAnterior = x.EstadoAnterior,
+                    EstadoNuevo = x.EstadoNuevo,
+                    ResultadoCalidad = x.ResultadoCalidad,
+                    Etiqueta = x.Etiqueta,
+                    Comentario = x.Comentario,
+                    UsuarioID = x.UsuarioID,
+                    FechaMovimiento = x.FechaMovimiento
+                }).ToList()
             };
-
-            model.IntentosPrimerasPiezas = await _context.CalidadPrimerasPiezasIntentos
-                .AsNoTracking()
-                .Where(x => x.InspeccionID == id && x.Activo)
-                .OrderByDescending(x => x.NumeroIntento)
-                .Select(x => new CalidadPrimeraPiezaIntentoItemViewModel
-                {
-                    IntentoID = x.IntentoID,
-                    NumeroIntento = x.NumeroIntento,
-                    FechaInicio = x.FechaInicio,
-                    FechaFin = x.FechaFin,
-                    CincoDisparosSegregados = x.CincoDisparosSegregados,
-                    CantidadDisparosPresentados = x.CantidadDisparosPresentados,
-                    ValidacionDimensional = x.ValidacionDimensional,
-                    ValidacionApariencia = x.ValidacionApariencia,
-                    ValidacionGauge = x.ValidacionGauge,
-                    ValidacionConductividad = x.ValidacionConductividad,
-                    Resultado = x.Resultado,
-                    AjusteSolicitado = x.AjusteSolicitado,
-                    Observaciones = x.Observaciones,
-                    UsuarioCalidadID = x.UsuarioCalidadID
-                })
-                .ToListAsync();
-
+            model.IntentosPrimerasPiezas = await _context.CalidadPrimerasPiezasIntentos.AsNoTracking().Where(x => x.InspeccionID == id && x.Activo).OrderByDescending(x => x.NumeroIntento).Select(x => new CalidadPrimeraPiezaIntentoItemViewModel
+            {
+                IntentoID = x.IntentoID,
+                NumeroIntento = x.NumeroIntento,
+                FechaInicio = x.FechaInicio,
+                FechaFin = x.FechaFin,
+                CincoDisparosSegregados = x.CincoDisparosSegregados,
+                CantidadDisparosPresentados = x.CantidadDisparosPresentados,
+                ValidacionDimensional = x.ValidacionDimensional,
+                ValidacionApariencia = x.ValidacionApariencia,
+                ValidacionGauge = x.ValidacionGauge,
+                ValidacionConductividad = x.ValidacionConductividad,
+                Resultado = x.Resultado,
+                AjusteSolicitado = x.AjusteSolicitado,
+                Observaciones = x.Observaciones,
+                UsuarioCalidadID = x.UsuarioCalidadID
+            }).ToListAsync();
             model.Monitoreos = await CargarMonitoreosDetalleAsync(id);
-
-            model.Disposiciones = await _context.CalidadDisposicionesMaterial
-     .AsNoTracking()
-     .Where(x => x.InspeccionID == id && x.Activo)
-     .OrderByDescending(x => x.FechaInicio)
-     .Select(x => new CalidadDisposicionItemViewModel
-     {
-         DisposicionID = x.DisposicionID,
-         MonitoreoID = x.MonitoreoID,
-         OrigenHallazgo = x.OrigenHallazgo,
-         RegistroHoraID = x.RegistroHoraID,
-         NumeroHora = x.Monitoreo == null ? (int?)null : x.Monitoreo.NumeroHora,
-         FechaHoraRevision = x.Monitoreo != null ? x.Monitoreo.FechaHoraRevision : null,
-         ResultadoMonitoreoOrigen = x.Monitoreo != null ? x.Monitoreo.Resultado : null,
-         DefectoCodigo = x.Monitoreo != null ? x.Monitoreo.DefectoCodigo : null,
-         DefectoDescripcion = x.Monitoreo != null ? x.Monitoreo.DefectoDescripcion : null,
-         TipoMaterial = x.TipoMaterial,
-         CantidadAfectada = x.CantidadAfectada,
-         Etiqueta = x.Etiqueta,
-         Disposicion = x.Disposicion,
-         Responsable = x.Responsable,
-         DepartamentoResponsableID = x.DepartamentoResponsableID,
-         UsuarioResponsableID = x.UsuarioResponsableID,
-         EstadoTratamiento = x.EstadoTratamiento,
-         FechaInicioTratamiento = x.FechaInicioTratamiento,
-         FechaFinTratamiento = x.FechaFinTratamiento,
-         FechaInicio = x.FechaInicio,
-         FechaFin = x.FechaFin,
-         CantidadLiberada = x.CantidadLiberada,
-         CantidadScrap = x.CantidadScrap,
-         ResultadoFinal = x.ResultadoFinal,
-         Observaciones = x.Observaciones
-     })
-     .ToListAsync();
-
-            model.Cajas = await _context.CalidadCajasLiberadas
-                .AsNoTracking()
-                .Where(x => x.InspeccionID == id && x.Activo)
-                .OrderByDescending(x => x.FechaCreacion)
-                .Select(x => new CalidadCajaItemViewModel
-                {
-                    CajaLiberadaID = x.CajaLiberadaID,
-                    CajaProduccionID = x.CajaProduccionID,
-                    FolioCaja = x.FolioCaja,
-                    CantidadPiezas = x.CantidadPiezas,
-                    EstandarPackCumple = x.EstandarPackCumple,
-                    EtiquetaProductoCorrecta = x.EtiquetaProductoCorrecta,
-                    NumeroOperadorEtiqueta = x.NumeroOperadorEtiqueta,
-                    TecnicoConfirmoInformacion = x.TecnicoConfirmoInformacion,
-                    FechaValidacionCalidad = x.FechaValidacionCalidad,
-                    Tarima = x.Tarima,
-                    Destino = x.Destino,
-                    Estado = x.Estado
-                })
-                .ToListAsync();
-
-            model.CajasProduccion = await CargarCajasProduccionInspeccionAsync(
-                id,
-                inspeccion.EjecucionProduccionID);
-
+            model.Disposiciones = await _context.CalidadDisposicionesMaterial.AsNoTracking().Where(x => x.InspeccionID == id && x.Activo).OrderByDescending(x => x.FechaInicio).Select(x => new CalidadDisposicionItemViewModel
+            {
+                DisposicionID = x.DisposicionID,
+                MonitoreoID = x.MonitoreoID,
+                OrigenHallazgo = x.OrigenHallazgo,
+                RegistroHoraID = x.RegistroHoraID,
+                NumeroHora = x.Monitoreo == null ? (int?)null : x.Monitoreo.NumeroHora,
+                FechaHoraRevision = x.Monitoreo != null ? x.Monitoreo.FechaHoraRevision : null,
+                ResultadoMonitoreoOrigen = x.Monitoreo != null ? x.Monitoreo.Resultado : null,
+                DefectoCodigo = x.Monitoreo != null ? x.Monitoreo.DefectoCodigo : null,
+                DefectoDescripcion = x.Monitoreo != null ? x.Monitoreo.DefectoDescripcion : null,
+                TipoMaterial = x.TipoMaterial,
+                CantidadAfectada = x.CantidadAfectada,
+                Etiqueta = x.Etiqueta,
+                Disposicion = x.Disposicion,
+                Responsable = x.Responsable,
+                DepartamentoResponsableID = x.DepartamentoResponsableID,
+                UsuarioResponsableID = x.UsuarioResponsableID,
+                EstadoTratamiento = x.EstadoTratamiento,
+                FechaInicioTratamiento = x.FechaInicioTratamiento,
+                FechaFinTratamiento = x.FechaFinTratamiento,
+                FechaInicio = x.FechaInicio,
+                FechaFin = x.FechaFin,
+                CantidadLiberada = x.CantidadLiberada,
+                CantidadScrap = x.CantidadScrap,
+                ResultadoFinal = x.ResultadoFinal,
+                Observaciones = x.Observaciones
+            }).ToListAsync();
+            model.ScrapEntregas = await CargarScrapEntregasAsync(id);
+            foreach (var disposicion in model.Disposiciones)
+                disposicion.EntregaScrap = model.ScrapEntregas.Where(x => x.DisposicionID == disposicion.DisposicionID).OrderByDescending(x => x.FechaCreacion).FirstOrDefault();
+            model.Cajas = await _context.CalidadCajasLiberadas.AsNoTracking().Where(x => x.InspeccionID == id && x.Activo).OrderByDescending(x => x.FechaCreacion).Select(x => new CalidadCajaItemViewModel
+            {
+                CajaLiberadaID = x.CajaLiberadaID,
+                CajaProduccionID = x.CajaProduccionID,
+                FolioCaja = x.FolioCaja,
+                CantidadPiezas = x.CantidadPiezas,
+                EstandarPackCumple = x.EstandarPackCumple,
+                EtiquetaProductoCorrecta = x.EtiquetaProductoCorrecta,
+                NumeroOperadorEtiqueta = x.NumeroOperadorEtiqueta,
+                TecnicoConfirmoInformacion = x.TecnicoConfirmoInformacion,
+                FechaValidacionCalidad = x.FechaValidacionCalidad,
+                Tarima = x.Tarima,
+                Destino = x.Destino,
+                Estado = x.Estado
+            }).ToListAsync();
+            model.CajasProduccion = await CargarCajasProduccionInspeccionAsync(id, inspeccion.EjecucionProduccionID);
             model.RegistrosGP12 = await CargarRegistrosGP12Async(id);
-
             model.Reliberaciones = await CargarReliberacionesDetalleAsync(id);
-
             model.MuestrasResguardo = await CargarMuestrasResguardoAsync(id);
             model.Cierre = await CargarEstadoCierreAsync(id);
-
-            model.PreguntasChecklistCalidad = await ObtenerPreguntasChecklistCalidadAsync(
-                inspeccion.ChecklistArranqueID);
-
-            model.CatalogoDefectos = await _context.CalidadCatalogoDefectos
-                .AsNoTracking()
-                .Where(x => x.Activo)
-                .OrderBy(x => x.Codigo)
-                .Select(x => new CalidadCatalogoDefectoItemViewModel
-                {
-                    CatalogoDefectoID = x.CatalogoDefectoID,
-                    Codigo = x.Codigo,
-                    Nombre = x.Nombre
-                })
-                .ToListAsync();
-
+            model.PreguntasChecklistCalidad = await ObtenerPreguntasChecklistCalidadAsync(inspeccion.ChecklistArranqueID);
+            model.CatalogoDefectos = await _context.CalidadCatalogoDefectos.AsNoTracking().Where(x => x.Activo).OrderBy(x => x.Codigo).Select(x => new CalidadCatalogoDefectoItemViewModel
+            {
+                CatalogoDefectoID = x.CatalogoDefectoID,
+                Codigo = x.Codigo,
+                Nombre = x.Nombre
+            }).ToListAsync();
             return model;
         }
 
-        private async Task<List<CalidadReliberacionItemViewModel>>
-            CargarReliberacionesDetalleAsync(int inspeccionId)
+        private async Task<List<CalidadScrapEntregaItemViewModel>> CargarScrapEntregasAsync(int inspeccionId)
         {
-            var lista = new List<CalidadReliberacionItemViewModel>();
-
+            var lista = new List<CalidadScrapEntregaItemViewModel>();
+            if (inspeccionId <= 0) return lista;
             const string sql = @"
 SELECT
-    r.ReliberacionID,
-    r.ParoID,
-    r.NumeroReliberacion,
-    r.Motivo,
-    r.FechaSolicitud,
-    r.FechaValidacion,
-    r.Resultado,
-    r.Observaciones,
-    r.UsuarioSolicitudID,
-    r.UsuarioCalidadID,
-    p.FechaInicioParo,
-    p.FechaFinParo,
-    ISNULL(p.DuracionMinutos, 0) AS DuracionMinutos,
-    p.MotivoParoTexto,
-    p.Descripcion AS DescripcionParo,
-    ISNULL(p.EsMayorA15Minutos, 0) AS EsMayorA15Minutos
-FROM dbo.Calidad_Reliberaciones r
-LEFT JOIN dbo.Produccion_Paros p
-    ON p.ParoID = r.ParoID
-   AND p.Activo = 1
-WHERE r.InspeccionID = @InspeccionID
-  AND r.Activo = 1
-ORDER BY r.NumeroReliberacion DESC, r.ReliberacionID DESC;";
-
+    ScrapEntregaID,
+    InspeccionID,
+    DisposicionID,
+    EjecucionProduccionID,
+    ProgramaProduccionID,
+    SolicitudProduccionID,
+    SolicitudProduccionDetalleID,
+    ReleaseID,
+    ReleaseDetalleID,
+    ParteID,
+    NumeroParte,
+    OrdenFabricacion,
+    CantidadScrap,
+    Estado,
+    UsuarioEntregaID,
+    FechaEntrega,
+    UsuarioRecepcionID,
+    FechaRecepcion,
+    UbicacionScrap,
+    UsuarioMoliendaID,
+    FechaMolienda,
+    CantidadMolida,
+    Observaciones,
+    FechaCreacion
+FROM dbo.Calidad_ScrapEntregas
+WHERE InspeccionID=@InspeccionID
+  AND Activo=1
+ORDER BY FechaCreacion DESC,ScrapEntregaID DESC;";
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
-
             await using var rd = await cmd.ExecuteReaderAsync();
-
             while (await rd.ReadAsync())
             {
-                lista.Add(new CalidadReliberacionItemViewModel
+                lista.Add(new CalidadScrapEntregaItemViewModel
                 {
-                    ReliberacionID = Convert.ToInt32(rd["ReliberacionID"]),
-                    ParoID = Convert.ToInt32(rd["ParoID"]),
-                    NumeroReliberacion = Convert.ToInt32(rd["NumeroReliberacion"]),
-                    Motivo = rd["Motivo"] as string,
-                    FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
-                    FechaValidacion = rd["FechaValidacion"] == DBNull.Value
-                        ? null
-                        : Convert.ToDateTime(rd["FechaValidacion"]),
-                    Resultado = rd["Resultado"] as string
-                        ?? CalidadResultadoReliberacion.Pendiente,
+                    ScrapEntregaID = Convert.ToInt64(rd["ScrapEntregaID"]),
+                    InspeccionID = Convert.ToInt32(rd["InspeccionID"]),
+                    DisposicionID = Convert.ToInt32(rd["DisposicionID"]),
+                    EjecucionProduccionID = rd["EjecucionProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["EjecucionProduccionID"]),
+                    ProgramaProduccionID = rd["ProgramaProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
+                    SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
+                    ReleaseID = rd["ReleaseID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseID"]),
+                    ReleaseDetalleID = rd["ReleaseDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseDetalleID"]),
+                    ParteID = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]),
+                    NumeroParte = rd["NumeroParte"] as string,
+                    OrdenFabricacion = rd["OrdenFabricacion"] as string,
+                    CantidadScrap = Convert.ToInt32(rd["CantidadScrap"]),
+                    Estado = rd["Estado"]?.ToString()?.Trim() ?? CalidadEstadoScrap.PendienteRecepcion,
+                    UsuarioEntregaID = rd["UsuarioEntregaID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioEntregaID"]),
+                    FechaEntrega = rd["FechaEntrega"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaEntrega"]),
+                    UsuarioRecepcionID = rd["UsuarioRecepcionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioRecepcionID"]),
+                    FechaRecepcion = rd["FechaRecepcion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaRecepcion"]),
+                    UbicacionScrap = rd["UbicacionScrap"] as string,
+                    UsuarioMoliendaID = rd["UsuarioMoliendaID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioMoliendaID"]),
+                    FechaMolienda = rd["FechaMolienda"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaMolienda"]),
+                    CantidadMolida = rd["CantidadMolida"] == DBNull.Value ? null : Convert.ToDecimal(rd["CantidadMolida"]),
                     Observaciones = rd["Observaciones"] as string,
-                    UsuarioSolicitudID = rd["UsuarioSolicitudID"] == DBNull.Value
-                        ? null
-                        : Convert.ToInt32(rd["UsuarioSolicitudID"]),
-                    UsuarioCalidadID = rd["UsuarioCalidadID"] == DBNull.Value
-                        ? null
-                        : Convert.ToInt32(rd["UsuarioCalidadID"]),
-                    FechaInicioParo = rd["FechaInicioParo"] == DBNull.Value
-                        ? null
-                        : Convert.ToDateTime(rd["FechaInicioParo"]),
-                    FechaFinParo = rd["FechaFinParo"] == DBNull.Value
-                        ? null
-                        : Convert.ToDateTime(rd["FechaFinParo"]),
-                    DuracionMinutos = Convert.ToInt32(rd["DuracionMinutos"]),
-                    MotivoParoTexto = rd["MotivoParoTexto"] as string,
-                    DescripcionParo = rd["DescripcionParo"] as string,
-                    EsMayorA15Minutos = Convert.ToBoolean(rd["EsMayorA15Minutos"])
+                    FechaCreacion = Convert.ToDateTime(rd["FechaCreacion"])
                 });
             }
-
             return lista;
         }
+
+        private static async Task<long> CrearEntregaScrapSqlAsync(int inspeccionId, int disposicionId, int cantidadScrap, string? observaciones, int usuarioId, DateTime ahora, SqlConnection cn, SqlTransaction tx)
+        {
+            if (inspeccionId <= 0) throw new InvalidOperationException("La inspección de Calidad no es válida.");
+            if (disposicionId <= 0) throw new InvalidOperationException("La disposición de scrap no es válida.");
+            if (cantidadScrap <= 0) throw new InvalidOperationException("La cantidad de scrap debe ser mayor que cero.");
+            const string sqlExiste = @"
+SELECT TOP(1) ScrapEntregaID
+FROM dbo.Calidad_ScrapEntregas WITH(UPDLOCK,HOLDLOCK)
+WHERE DisposicionID=@DisposicionID
+  AND Activo=1
+  AND Estado<>N'CANCELADO'
+ORDER BY ScrapEntregaID DESC;";
+            await using (var cmd = new SqlCommand(sqlExiste, cn, tx))
+            {
+                cmd.Parameters.Add("@DisposicionID", SqlDbType.Int).Value = disposicionId;
+                var existente = await cmd.ExecuteScalarAsync();
+                if (existente != null && existente != DBNull.Value) return Convert.ToInt64(existente);
+            }
+            const string sql = @"
+INSERT INTO dbo.Calidad_ScrapEntregas
+(
+    InspeccionID,
+    DisposicionID,
+    EjecucionProduccionID,
+    ProgramaProduccionID,
+    SolicitudProduccionID,
+    SolicitudProduccionDetalleID,
+    ReleaseID,
+    ReleaseDetalleID,
+    ParteID,
+    NumeroParte,
+    OrdenFabricacion,
+    CantidadScrap,
+    Estado,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+SELECT
+    i.InspeccionID,
+    @DisposicionID,
+    i.EjecucionProduccionID,
+    i.ProgramaProduccionID,
+    i.SolicitudProduccionID,
+    i.SolicitudProduccionDetalleID,
+    i.ReleaseID,
+    i.ReleaseDetalleID,
+    i.ParteID,
+    i.NumeroParte,
+    i.OrdenTrabajo,
+    @CantidadScrap,
+    @Estado,
+    @Observaciones,
+    @UsuarioID,
+    @Ahora,
+    1
+FROM dbo.Calidad_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
+WHERE i.InspeccionID=@InspeccionID;
+IF @@ROWCOUNT<>1
+    THROW 51300,'No fue posible relacionar el scrap con la inspección de Calidad.',1;
+SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
+            await using var cmdInsert = new SqlCommand(sql, cn, tx);
+            cmdInsert.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+            cmdInsert.Parameters.Add("@DisposicionID", SqlDbType.Int).Value = disposicionId;
+            cmdInsert.Parameters.Add("@CantidadScrap", SqlDbType.Int).Value = cantidadScrap;
+            cmdInsert.Parameters.Add("@Estado", SqlDbType.NVarChar, 30).Value = CalidadEstadoScrap.PendienteRecepcion;
+            cmdInsert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones.Trim();
+            cmdInsert.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmdInsert.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+            var result = await cmdInsert.ExecuteScalarAsync();
+            if (result == null || result == DBNull.Value) throw new InvalidOperationException("No fue posible crear la entrega de scrap.");
+            return Convert.ToInt64(result);
+        }
+
+    
 
         private async Task<List<CalidadMuestraResguardoItemViewModel>>
             CargarMuestrasResguardoAsync(int inspeccionId)
@@ -1862,67 +1896,30 @@ WHERE Codigo=@Codigo
                         const string sqlScrapProduccion = @"
 INSERT INTO dbo.Calidad_DisposicionesMaterial
 (
-    InspeccionID,
-    MonitoreoID,
-    RegistroHoraID,
-    OrigenHallazgo,
-    TipoMaterial,
-    CantidadAfectada,
-    Etiqueta,
-    Disposicion,
-    Responsable,
-    FechaInicio,
-    FechaFin,
-    CantidadLiberada,
-    CantidadScrap,
-    ResultadoFinal,
-    Observaciones,
-    UsuarioCreacionID,
-    FechaCreacion,
-    UsuarioModificacionID,
-    FechaModificacion,
-    Activo,
-    EstadoTratamiento,
-    FechaInicioTratamiento,
-    FechaFinTratamiento
+    InspeccionID,MonitoreoID,RegistroHoraID,OrigenHallazgo,TipoMaterial,CantidadAfectada,Etiqueta,Disposicion,Responsable,FechaInicio,FechaFin,CantidadLiberada,CantidadScrap,ResultadoFinal,Observaciones,UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion,Activo,EstadoTratamiento,FechaInicioTratamiento,FechaFinTratamiento
 )
+OUTPUT INSERTED.DisposicionID
 VALUES
 (
-    @InspeccionID,
-    @MonitoreoID,
-    @RegistroHoraID,
-    N'PRODUCCION',
-    @TipoMaterial,
-    @CantidadAfectada,
-    N'ROJA',
-    N'SCRAP_CONFIRMADO',
-    N'CALIDAD',
-    @Ahora,
-    @Ahora,
-    0,
-    @CantidadAfectada,
-    @ResultadoFinal,
-    @Observaciones,
-    @UsuarioID,
-    @Ahora,
-    @UsuarioID,
-    @Ahora,
-    1,
-    N'CONCLUIDA',
-    @Ahora,
-    @Ahora
+    @InspeccionID,@MonitoreoID,@RegistroHoraID,N'PRODUCCION',@TipoMaterial,@CantidadAfectada,N'ROJA',N'SCRAP_CONFIRMADO',N'CALIDAD',@Ahora,@Ahora,0,@CantidadAfectada,@ResultadoFinal,@Observaciones,@UsuarioID,@Ahora,@UsuarioID,@Ahora,1,N'CONCLUIDA',@Ahora,@Ahora
 );";
-                        await using var cmdScrap = new SqlCommand(sqlScrapProduccion, cn, tx);
-                        cmdScrap.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = model.InspeccionID;
-                        cmdScrap.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = model.MonitoreoID;
-                        cmdScrap.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
-                        cmdScrap.Parameters.Add("@TipoMaterial", SqlDbType.NVarChar, 30).Value = CalidadTipoMaterial.NoConforme;
-                        cmdScrap.Parameters.Add("@CantidadAfectada", SqlDbType.Int).Value = model.CantidadProduccionScrapConfirmado;
-                        cmdScrap.Parameters.Add("@ResultadoFinal", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Scrap;
-                        cmdScrap.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = observacionScrap;
-                        cmdScrap.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
-                        cmdScrap.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahoraScrap;
-                        await cmdScrap.ExecuteNonQueryAsync();
+                        int disposicionScrapId;
+                        await using (var cmdScrap = new SqlCommand(sqlScrapProduccion, cn, tx))
+                        {
+                            cmdScrap.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = model.InspeccionID;
+                            cmdScrap.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = model.MonitoreoID;
+                            cmdScrap.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
+                            cmdScrap.Parameters.Add("@TipoMaterial", SqlDbType.NVarChar, 30).Value = CalidadTipoMaterial.NoConforme;
+                            cmdScrap.Parameters.Add("@CantidadAfectada", SqlDbType.Int).Value = model.CantidadProduccionScrapConfirmado;
+                            cmdScrap.Parameters.Add("@ResultadoFinal", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Scrap;
+                            cmdScrap.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = observacionScrap;
+                            cmdScrap.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                            cmdScrap.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahoraScrap;
+                            var result = await cmdScrap.ExecuteScalarAsync();
+                            if (result == null || result == DBNull.Value) throw new InvalidOperationException("No fue posible crear la disposición del scrap confirmado por Calidad.");
+                            disposicionScrapId = Convert.ToInt32(result);
+                        }
+                        await CrearEntregaScrapSqlAsync(model.InspeccionID, disposicionScrapId, model.CantidadProduccionScrapConfirmado, observacionScrap, usuarioId.Value, ahoraScrap, cn, tx);
                     }
                 }
                 if (resultado == CalidadResultadoMonitoreo.Sospechoso || resultado == CalidadResultadoMonitoreo.NoConforme)
@@ -1967,16 +1964,7 @@ VALUES
     N'MONITOREO_ACTIVO',
     @Resultado,
     CASE WHEN @Resultado=N'NO_CONFORME' THEN N'ROJA' WHEN @Resultado=N'SOSPECHOSO' THEN N'AMARILLA' ELSE N'VERDE' END,
-    CONCAT(
-        N'Monitoreo de Calidad registrado. RegistroHoraID: ',@RegistroHoraID,
-        N'. Material reportado por Producción: ',@CantidadReportadaProduccion,
-        N'. Liberadas: ',@CantidadProduccionLiberada,
-        N'. Selección: ',@CantidadProduccionSeleccion,
-        N'. Retrabajo: ',@CantidadProduccionRetrabajo,
-        N'. Scrap confirmado: ',@CantidadProduccionScrapConfirmado,
-        N'. Muestra propia de Calidad: ',@CantidadRevisadaMuestra,
-        N'. Resultado: ',@Resultado,N'.'
-    ),
+    CONCAT(N'Monitoreo de Calidad registrado. RegistroHoraID: ',@RegistroHoraID,N'. Material reportado por Producción: ',@CantidadReportadaProduccion,N'. Liberadas: ',@CantidadProduccionLiberada,N'. Selección: ',@CantidadProduccionSeleccion,N'. Retrabajo: ',@CantidadProduccionRetrabajo,N'. Scrap confirmado: ',@CantidadProduccionScrapConfirmado,N'. Muestra propia de Calidad: ',@CantidadRevisadaMuestra,N'. Resultado: ',@Resultado,N'.'),
     @UsuarioID,
     @Ahora
 );";
@@ -2005,7 +1993,9 @@ VALUES
                     await cmd.ExecuteNonQueryAsync();
                 }
                 await tx.CommitAsync();
-                TempData["Mensaje"] = "Monitoreo registrado. Se revisó por separado el material reportado por Producción y la muestra propia de Calidad.";
+                TempData["Mensaje"] = model.CantidadProduccionScrapConfirmado > 0
+                    ? $"Monitoreo registrado. Se generó una entrega de {model.CantidadProduccionScrapConfirmado} pieza(s) scrap pendiente de recepción en Almacén."
+                    : "Monitoreo registrado. Se revisó por separado el material reportado por Producción y la muestra propia de Calidad.";
             }
             catch (Exception ex)
             {
@@ -2014,7 +2004,6 @@ VALUES
             }
             return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
         }
-
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -2027,14 +2016,12 @@ VALUES
             }
             model.Observaciones = model.Observaciones?.Trim();
             var usuarioId = ObtenerUsuarioIdActual();
-            if (!usuarioId.HasValue || usuarioId.Value <= 0)
-                return Unauthorized();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0) return Unauthorized();
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
                 var disposicion = await _context.CalidadDisposicionesMaterial.FirstOrDefaultAsync(x => x.DisposicionID == model.DisposicionID && x.InspeccionID == model.InspeccionID && x.Activo);
-                if (disposicion == null)
-                    return NotFound();
+                if (disposicion == null) return NotFound();
                 if (disposicion.ResultadoFinal != CalidadResultadoDisposicion.Pendiente)
                 {
                     TempData["Error"] = "Esta disposición ya fue resuelta.";
@@ -2087,8 +2074,7 @@ WHERE u.UsuarioID=@UsuarioID
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
                 var inspeccion = await _context.CalidadInspecciones.FirstOrDefaultAsync(x => x.InspeccionID == model.InspeccionID);
-                if (inspeccion == null)
-                    return NotFound();
+                if (inspeccion == null) return NotFound();
                 if (disposicion.CantidadAfectada <= 0)
                 {
                     TempData["Error"] = "La disposición no contiene una cantidad afectada válida.";
@@ -2103,8 +2089,10 @@ WHERE u.UsuarioID=@UsuarioID
                 disposicion.FechaFin = ahora;
                 disposicion.ResultadoFinal = model.CantidadLiberada > 0 ? CalidadResultadoDisposicion.Liberado : CalidadResultadoDisposicion.Scrap;
                 disposicion.Etiqueta = liberacionTotal ? "VERDE" : scrapTotal ? "ROJA" : "AMARILLA";
+                disposicion.EstadoTratamiento = CalidadEstadoTratamiento.Concluida;
+                disposicion.FechaFinTratamiento ??= ahora;
                 disposicion.Observaciones = UnirObservaciones(disposicion.Observaciones, model.Observaciones);
-                disposicion.UsuarioModificacionID = usuarioId;
+                disposicion.UsuarioModificacionID = usuarioId.Value;
                 disposicion.FechaModificacion = ahora;
                 if (disposicion.MonitoreoID.HasValue)
                 {
@@ -2113,16 +2101,57 @@ WHERE u.UsuarioID=@UsuarioID
                     {
                         monitor.Resultado = model.CantidadLiberada > 0 ? CalidadResultadoMonitoreo.Reinspeccion : CalidadResultadoMonitoreo.NoConforme;
                         monitor.Observaciones = UnirObservaciones(monitor.Observaciones, "Disposición concluida. Responsable: " + disposicion.Responsable + ". Material liberado: " + model.CantidadLiberada + ". Scrap: " + model.CantidadScrap + ". " + (model.Observaciones ?? string.Empty));
-                        monitor.UsuarioModificacionID = usuarioId;
+                        monitor.UsuarioModificacionID = usuarioId.Value;
                         monitor.FechaModificacion = ahora;
                     }
                 }
-                MarcarModificacion(inspeccion, usuarioId);
+                if (model.CantidadScrap > 0)
+                {
+                    var entregaExistente = await _context.CalidadScrapEntregas.FirstOrDefaultAsync(x => x.DisposicionID == disposicion.DisposicionID && x.Activo && x.Estado != CalidadEstadoScrap.Cancelado);
+                    if (entregaExistente == null)
+                    {
+                        var entrega = new CalidadScrapEntrega
+                        {
+                            InspeccionID = inspeccion.InspeccionID,
+                            DisposicionID = disposicion.DisposicionID,
+                            EjecucionProduccionID = inspeccion.EjecucionProduccionID,
+                            ProgramaProduccionID = inspeccion.ProgramaProduccionID,
+                            SolicitudProduccionID = inspeccion.SolicitudProduccionID,
+                            SolicitudProduccionDetalleID = inspeccion.SolicitudProduccionDetalleID,
+                            ReleaseID = inspeccion.ReleaseID,
+                            ReleaseDetalleID = inspeccion.ReleaseDetalleID,
+                            ParteID = inspeccion.ParteID,
+                            NumeroParte = inspeccion.NumeroParte,
+                            OrdenFabricacion = inspeccion.OrdenTrabajo,
+                            CantidadScrap = model.CantidadScrap,
+                            Estado = CalidadEstadoScrap.PendienteRecepcion,
+                            Observaciones = $"Scrap generado por Calidad desde la disposición {disposicion.DisposicionID}. Cantidad: {model.CantidadScrap}. {(model.Observaciones ?? string.Empty)}".Trim(),
+                            UsuarioCreacionID = usuarioId.Value,
+                            FechaCreacion = ahora,
+                            Activo = true
+                        };
+                        if (entrega.Observaciones?.Length > 1000) entrega.Observaciones = entrega.Observaciones[..1000];
+                        _context.CalidadScrapEntregas.Add(entrega);
+                    }
+                    else if (entregaExistente.CantidadScrap != model.CantidadScrap)
+                    {
+                        throw new InvalidOperationException($"Ya existe una entrega de scrap para esta disposición con una cantidad diferente ({entregaExistente.CantidadScrap}).");
+                    }
+                }
+                MarcarModificacion(inspeccion, usuarioId.Value);
                 var resultadoDisposicionTexto = liberacionTotal ? "Liberación total" : liberacionParcial ? "Liberación parcial con scrap" : "Scrap total";
-                AgregarHistorial(inspeccion, "DISPOSICION_RESUELTA", inspeccion.Estado, inspeccion.Estado, disposicion.ResultadoFinal, disposicion.Etiqueta, $"Disposición {disposicion.DisposicionID} resuelta: {resultadoDisposicionTexto}. Responsable: {disposicion.Responsable}. Tratamiento: {disposicion.Disposicion}. Liberado: {model.CantidadLiberada}. Scrap: {model.CantidadScrap}. " + (model.Observaciones ?? string.Empty), usuarioId);
+                var comentario = $"Disposición {disposicion.DisposicionID} resuelta: {resultadoDisposicionTexto}. Responsable: {disposicion.Responsable}. Tratamiento: {disposicion.Disposicion}. Liberado: {model.CantidadLiberada}. Scrap: {model.CantidadScrap}.";
+                if (model.CantidadScrap > 0) comentario += $" Se generó entrega de {model.CantidadScrap} pieza(s) a Almacén Scrap en estado PENDIENTE_RECEPCION.";
+                if (!string.IsNullOrWhiteSpace(model.Observaciones)) comentario += " " + model.Observaciones;
+                if (comentario.Length > 1000) comentario = comentario[..1000];
+                AgregarHistorial(inspeccion, "DISPOSICION_RESUELTA", inspeccion.Estado, inspeccion.Estado, disposicion.ResultadoFinal, disposicion.Etiqueta, comentario, usuarioId.Value);
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
-                TempData["Mensaje"] = liberacionTotal ? "La reinspección concluyó con liberación total del material." : liberacionParcial ? "La reinspección concluyó con liberación parcial y scrap documentado." : "La disposición concluyó como scrap total documentado.";
+                TempData["Mensaje"] = liberacionTotal
+                    ? "La reinspección concluyó con liberación total del material."
+                    : liberacionParcial
+                        ? $"La reinspección concluyó con liberación parcial. {model.CantidadScrap} pieza(s) quedaron pendientes de recepción en Almacén Scrap."
+                        : $"La disposición concluyó como scrap total. {model.CantidadScrap} pieza(s) quedaron pendientes de recepción en Almacén Scrap.";
             }
             catch (Exception ex)
             {
@@ -2131,6 +2160,9 @@ WHERE u.UsuarioID=@UsuarioID
             }
             return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
         }
+
+
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> GuardarMuestraResguardo(
@@ -3213,7 +3245,64 @@ WHERE d.ChecklistArranqueID = @ChecklistArranqueID
                 inspeccion.Observaciones = model.Observaciones.Trim();
         }
 
-      
+        private async Task<List<CalidadReliberacionItemViewModel>> CargarReliberacionesDetalleAsync(int inspeccionId)
+        {
+            var lista = new List<CalidadReliberacionItemViewModel>();
+            const string sql = @"
+SELECT
+    r.ReliberacionID,
+    r.ParoID,
+    r.NumeroReliberacion,
+    r.Motivo,
+    r.FechaSolicitud,
+    r.FechaValidacion,
+    r.Resultado,
+    r.Observaciones,
+    r.UsuarioSolicitudID,
+    r.UsuarioCalidadID,
+    p.FechaInicioParo,
+    p.FechaFinParo,
+    ISNULL(p.DuracionMinutos,0) AS DuracionMinutos,
+    p.MotivoParoTexto,
+    p.Descripcion AS DescripcionParo,
+    ISNULL(p.EsMayorA15Minutos,0) AS EsMayorA15Minutos
+FROM dbo.Calidad_Reliberaciones r
+LEFT JOIN dbo.Produccion_Paros p
+    ON p.ParoID=r.ParoID
+   AND p.Activo=1
+WHERE r.InspeccionID=@InspeccionID
+  AND r.Activo=1
+ORDER BY r.NumeroReliberacion DESC,r.ReliberacionID DESC;";
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new CalidadReliberacionItemViewModel
+                {
+                    ReliberacionID = Convert.ToInt32(rd["ReliberacionID"]),
+                    ParoID = Convert.ToInt32(rd["ParoID"]),
+                    NumeroReliberacion = Convert.ToInt32(rd["NumeroReliberacion"]),
+                    Motivo = rd["Motivo"] as string,
+                    FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
+                    FechaValidacion = rd["FechaValidacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaValidacion"]),
+                    Resultado = rd["Resultado"] as string ?? CalidadResultadoReliberacion.Pendiente,
+                    Observaciones = rd["Observaciones"] as string,
+                    UsuarioSolicitudID = rd["UsuarioSolicitudID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioSolicitudID"]),
+                    UsuarioCalidadID = rd["UsuarioCalidadID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioCalidadID"]),
+                    FechaInicioParo = rd["FechaInicioParo"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioParo"]),
+                    FechaFinParo = rd["FechaFinParo"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinParo"]),
+                    DuracionMinutos = Convert.ToInt32(rd["DuracionMinutos"]),
+                    MotivoParoTexto = rd["MotivoParoTexto"] as string,
+                    DescripcionParo = rd["DescripcionParo"] as string,
+                    EsMayorA15Minutos = Convert.ToBoolean(rd["EsMayorA15Minutos"])
+                });
+            }
+            return lista;
+        }
+
 
         private static string? NormalizarMomentoMuestra(string? momento)
         {

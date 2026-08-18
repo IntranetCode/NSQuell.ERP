@@ -61,6 +61,7 @@ namespace ERP.NSQuell.Models
         public DbSet<SubMenuAcciones> SubMenuAcciones { get; set; } = null!;
         public DbSet<Departamento> Departamentos { get; set; } = null!;
 
+        public DbSet<CalidadScrapEntrega> CalidadScrapEntregas { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

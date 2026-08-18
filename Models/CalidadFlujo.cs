@@ -150,6 +150,101 @@ namespace ERP.NSQuell.Models
         public string OrigenHallazgo { get; set; } = "CALIDAD";
 
         public int? RegistroHoraID { get; set; }
+
+        public ICollection<CalidadScrapEntrega> ScrapEntregas { get; set; } =
+    new List<CalidadScrapEntrega>();
+    }
+
+    [Table("Calidad_ScrapEntregas")]
+    public class CalidadScrapEntrega
+    {
+        [Key]
+        public long ScrapEntregaID { get; set; }
+
+        public int InspeccionID { get; set; }
+
+        public int? DisposicionID { get; set; }
+
+        public int? EjecucionProduccionID { get; set; }
+
+        public int? ProgramaProduccionID { get; set; }
+
+        public int? SolicitudProduccionID { get; set; }
+
+        public int? SolicitudProduccionDetalleID { get; set; }
+
+        public int? ReleaseID { get; set; }
+
+        public int? ReleaseDetalleID { get; set; }
+
+        public int? ParteID { get; set; }
+
+        [StringLength(150)]
+        public string? NumeroParte { get; set; }
+
+        [StringLength(120)]
+        public string? OrdenFabricacion { get; set; }
+
+        public int CantidadScrap { get; set; }
+
+        [Required]
+        [StringLength(30)]
+        public string Estado { get; set; } = CalidadEstadoScrap.PendienteRecepcion;
+
+        public int? UsuarioEntregaID { get; set; }
+
+        public DateTime? FechaEntrega { get; set; }
+
+        public int? UsuarioRecepcionID { get; set; }
+
+        public DateTime? FechaRecepcion { get; set; }
+
+        [StringLength(150)]
+        public string? UbicacionScrap { get; set; }
+
+        public int? UsuarioMoliendaID { get; set; }
+
+        public DateTime? FechaMolienda { get; set; }
+
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? CantidadMolida { get; set; }
+
+        [StringLength(1000)]
+        public string? Observaciones { get; set; }
+
+        public int UsuarioCreacionID { get; set; }
+
+        public DateTime FechaCreacion { get; set; } = DateTime.Now;
+
+        public int? UsuarioModificacionID { get; set; }
+
+        public DateTime? FechaModificacion { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string Origen { get; set; } = "CALIDAD";
+
+        public int? GP12SolicitudID { get; set; }
+
+        public int? GP12InspeccionID { get; set; }
+
+        public long? CajaProduccionID { get; set; }
+        public bool Activo { get; set; } = true;
+
+        [ForeignKey(nameof(InspeccionID))]
+        public CalidadInspeccion? Inspeccion { get; set; }
+
+        [ForeignKey(nameof(DisposicionID))]
+        public CalidadDisposicionMaterial? DisposicionMaterial { get; set; }
+    }
+
+    public static class CalidadEstadoScrap
+    {
+        public const string PendienteRecepcion = "PENDIENTE_RECEPCION";
+        public const string RecibidoAlmacen = "RECIBIDO_ALMACEN";
+        public const string PendienteMolienda = "PENDIENTE_MOLIENDA";
+        public const string Molido = "MOLIDO";
+        public const string Cancelado = "CANCELADO";
     }
 
     public static class CalidadEstadoTratamiento

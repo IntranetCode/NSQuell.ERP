@@ -21,10 +21,6 @@ namespace ERP.NSQuell.Models
         public int? ReleaseID { get; set; }
         public int? ReleaseDetalleID { get; set; }
 
-        // =========================================================
-        // IDENTIFICADORES DE LA CORRIDA
-        // =========================================================
-
         public int? ClienteID { get; set; }
 
         [StringLength(200)]
@@ -35,9 +31,6 @@ namespace ERP.NSQuell.Models
         public int? MoldeID { get; set; }
         public int? MaterialID { get; set; }
 
-        // =========================================================
-        // FOTOGRAFIA HISTORICA
-        // =========================================================
 
         [StringLength(150)]
         public string? CodigoBarras { get; set; }
@@ -63,11 +56,7 @@ namespace ERP.NSQuell.Models
         public DateTime? FechaInicioProgramada { get; set; }
         public DateTime? FechaFinProgramada { get; set; }
 
-        // =========================================================
-        // PERSONAL ASIGNADO
-        // =========================================================
-
-        public int? OperadorPrincipalPersonaID { get; set; }
+ public int? OperadorPrincipalPersonaID { get; set; }
 
         [StringLength(250)]
         public string? OperadorPrincipalNombre { get; set; }
@@ -82,9 +71,6 @@ namespace ERP.NSQuell.Models
         [StringLength(250)]
         public string? TecnicoInyeccionNombre { get; set; }
 
-        // =========================================================
-        // CANTIDADES DE LA OF
-        // =========================================================
 
         [Column(TypeName = "decimal(18,3)")]
         public decimal CantidadTotal { get; set; }
@@ -95,9 +81,6 @@ namespace ERP.NSQuell.Models
         [Column(TypeName = "decimal(18,3)")]
         public decimal CantidadPendiente { get; set; }
 
-        // =========================================================
-        // DOCUMENTACION Y PREARRANQUE
-        // =========================================================
 
         public bool ChecklistValidado { get; set; }
         public bool HojaInspeccionProducto { get; set; }
@@ -124,11 +107,6 @@ namespace ERP.NSQuell.Models
         [StringLength(1000)]
         public string? MotivoDevolucion { get; set; }
 
-        // =========================================================
-        // RESUMEN DE LA ULTIMA VALIDACION DE PRIMERAS PIEZAS
-        // El detalle completo se conserva en Calidad_PrimerasPiezasIntentos.
-        // =========================================================
-
         public bool CincoDisparosSegregados { get; set; }
 
         [Range(0, 5, ErrorMessage = "La cantidad de disparos conformes debe estar entre 0 y 5.")]
@@ -142,9 +120,6 @@ namespace ERP.NSQuell.Models
         public DateTime? FechaValidacionPrimerasPiezas { get; set; }
         public int? UsuarioValidacionPrimerasPiezasID { get; set; }
 
-        // =========================================================
-        // RESULTADO Y LIBERACION
-        // =========================================================
 
         [StringLength(30)]
         public string? ResultadoCalidad { get; set; }
@@ -168,15 +143,9 @@ namespace ERP.NSQuell.Models
         public DateTime? FechaLiberacionProduccion { get; set; }
         public int? UsuarioLiberacionProduccionID { get; set; }
 
-        // =========================================================
-        // RELIBERACION DESPUES DE PARO MAYOR A 15 MINUTOS
-        // =========================================================
 
         public bool RequiereReliberacion { get; set; }
 
-        // =========================================================
-        // INVALIDACION POR CAMBIOS DE PLANEACION
-        // =========================================================
 
         public bool ConfiguracionInvalidada { get; set; }
         public DateTime? FechaInvalidacion { get; set; }
@@ -184,10 +153,6 @@ namespace ERP.NSQuell.Models
 
         [StringLength(1000)]
         public string? MotivoInvalidacion { get; set; }
-
-        // =========================================================
-        // CONTROL GENERAL
-        // =========================================================
 
         [StringLength(1000)]
         public string? Observaciones { get; set; }
@@ -200,11 +165,6 @@ namespace ERP.NSQuell.Models
         public DateTime FechaCreacion { get; set; }
         public int? UsuarioModificacionID { get; set; }
         public DateTime? FechaModificacion { get; set; }
-
-        // =========================================================
-        // NAVEGACIONES DEL MODULO DE CALIDAD
-        // =========================================================
-
         public ICollection<CalidadInspeccionHistorial> Historial { get; set; } =
             new List<CalidadInspeccionHistorial>();
 
@@ -217,6 +177,8 @@ namespace ERP.NSQuell.Models
         public ICollection<CalidadDisposicionMaterial> DisposicionesMaterial { get; set; } =
             new List<CalidadDisposicionMaterial>();
 
+        public ICollection<CalidadScrapEntrega> ScrapEntregas { get; set; } =
+    new List<CalidadScrapEntrega>();
         public ICollection<CalidadCajaLiberada> CajasLiberadas { get; set; } =
             new List<CalidadCajaLiberada>();
 

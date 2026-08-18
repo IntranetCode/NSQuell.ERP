@@ -52,13 +52,12 @@ public sealed class LogisticaController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(string? periodo = "hoy", int? mes = null, int? anio = null, CancellationToken cancellationToken = default)
     {
         var acceso = await ValidarAccesoAsync("Tablero de Logística");
         if (acceso != null) return acceso;
 
         var vm = new LogisticaIndexVm();
-
         await using var cn = await AbrirAsync(cancellationToken);
 
         if (!await TieneFase1Async(cn, cancellationToken))
@@ -67,14 +66,58 @@ public sealed class LogisticaController : Controller
             return View(vm);
         }
 
-        vm.Demandas = await CargarDemandasAsync(
-            cn,
-            null,
-            null,
-            null,
-            true,
-            null,
-            cancellationToken);
+        var hoy = DateTime.Today;
+        periodo = (periodo ?? "hoy").Trim().ToLowerInvariant();
+        var periodosPermitidos = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "hoy","semana","mes","seleccionar_mes","vencidos"
+    };
+        if (!periodosPermitidos.Contains(periodo)) periodo = "hoy";
+
+        DateTime? fechaDesde;
+        DateTime? fechaHasta;
+        string tituloPeriodo;
+
+        switch (periodo)
+        {
+            case "vencidos":
+                fechaDesde = null;
+                fechaHasta = hoy.AddDays(-1);
+                tituloPeriodo = "Vencidos por programar";
+                break;
+
+            case "semana":
+                var diferenciaLunes = ((int)hoy.DayOfWeek + 6) % 7;
+                fechaDesde = hoy.AddDays(-diferenciaLunes);
+                fechaHasta = fechaDesde.Value.AddDays(6);
+                tituloPeriodo = $"Esta semana · {fechaDesde:dd/MM/yyyy} al {fechaHasta:dd/MM/yyyy}";
+                break;
+
+            case "mes":
+                fechaDesde = new DateTime(hoy.Year, hoy.Month, 1);
+                fechaHasta = fechaDesde.Value.AddMonths(1).AddDays(-1);
+                tituloPeriodo = $"Este mes · {fechaDesde:MMMM yyyy}";
+                break;
+
+            case "seleccionar_mes":
+                var anioSeleccionado = anio.HasValue && anio.Value >= 2020 && anio.Value <= 2100 ? anio.Value : hoy.Year;
+                var mesSeleccionado = mes.HasValue && mes.Value >= 1 && mes.Value <= 12 ? mes.Value : hoy.Month;
+                fechaDesde = new DateTime(anioSeleccionado, mesSeleccionado, 1);
+                fechaHasta = fechaDesde.Value.AddMonths(1).AddDays(-1);
+                mes = mesSeleccionado;
+                anio = anioSeleccionado;
+                tituloPeriodo = $"Programación · {fechaDesde:MMMM yyyy}";
+                break;
+
+            default:
+                periodo = "hoy";
+                fechaDesde = hoy;
+                fechaHasta = hoy;
+                tituloPeriodo = $"Próximos a programar hoy · {hoy:dd/MM/yyyy}";
+                break;
+        }
+
+        vm.Demandas = await CargarDemandasAsync(cn, null, fechaDesde, fechaHasta, true, null, cancellationToken);
 
         const string sqlEmbarques = @"
 SELECT TOP (300)
@@ -101,7 +144,6 @@ ORDER BY
         await using (var cmd = new SqlCommand(sqlEmbarques, cn))
         {
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
             while (await rd.ReadAsync(cancellationToken))
             {
                 vm.Embarques.Add(new LogisticaEmbarqueResumenVm
@@ -127,103 +169,35 @@ ORDER BY
         vm.DemandasPendientes = vm.Demandas.Count(x => x.PendienteProgramar > 0);
         vm.PiezasPendientes = vm.Demandas.Sum(x => (long)x.PendienteProgramar);
         vm.PiezasPTListas = vm.Demandas.Sum(x => x.PiezasPTDisponibles);
+        vm.EmbarquesActivos = vm.Embarques.Count(x => x.Estatus is not "Entregado" and not "Cancelado");
+        vm.CargasHoy = vm.Embarques.Count(x => x.FechaCargaProgramada?.Date == hoy);
+        vm.EntregasAtrasadas = vm.Embarques.Count(x => x.Estatus is not "Entregado" and not "Cancelado" && x.FechaEntregaProgramada.HasValue && x.FechaEntregaProgramada.Value.Date < hoy);
+        vm.EmbarquesPreparados = vm.Embarques.Count(x => x.Estatus == "Preparado");
+        vm.EmbarquesCargados = vm.Embarques.Count(x => x.Estatus == "Cargado");
+        vm.EmbarquesEnRuta = vm.Embarques.Count(x => x.Estatus == "En ruta");
+        vm.EmbarquesEntregados = vm.Embarques.Count(x => x.Estatus == "Entregado");
+        vm.EmbarquesConIncidencia = vm.Embarques.Count(x => x.TieneIncidencia);
+        vm.CajasMovilizadas = vm.Embarques.Where(x => x.Estatus is "Cargado" or "En ruta" or "Entregado").Sum(x => (long)x.TotalCajas);
+        vm.PiezasMovilizadas = vm.Embarques.Sum(x => (long)x.TotalPiezasDespachadas);
 
-        vm.EmbarquesActivos = vm.Embarques.Count(x =>
-            x.Estatus is not "Entregado" and not "Cancelado");
-
-        vm.CargasHoy = vm.Embarques.Count(x =>
-            x.FechaCargaProgramada?.Date == DateTime.Today);
-
-        vm.EntregasAtrasadas = vm.Embarques.Count(x =>
-            x.Estatus is not "Entregado" and not "Cancelado"
-            && x.FechaEntregaProgramada.HasValue
-            && x.FechaEntregaProgramada.Value.Date < DateTime.Today);
-
-        vm.EmbarquesPreparados = vm.Embarques.Count(x =>
-            x.Estatus == "Preparado");
-
-        vm.EmbarquesCargados = vm.Embarques.Count(x =>
-            x.Estatus == "Cargado");
-
-        vm.EmbarquesEnRuta = vm.Embarques.Count(x =>
-            x.Estatus == "En ruta");
-
-        vm.EmbarquesEntregados = vm.Embarques.Count(x =>
-            x.Estatus == "Entregado");
-
-        vm.EmbarquesConIncidencia = vm.Embarques.Count(x =>
-            x.TieneIncidencia);
-
-        vm.CajasMovilizadas = vm.Embarques
-            .Where(x => x.Estatus is "Cargado" or "En ruta" or "Entregado")
-            .Sum(x => (long)x.TotalCajas);
-
-        vm.PiezasMovilizadas = vm.Embarques
-            .Sum(x => (long)x.TotalPiezasDespachadas);
-
-        var inicioPeriodo = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        var inicioPeriodo = new DateTime(hoy.Year, hoy.Month, 1);
         var finPeriodo = inicioPeriodo.AddMonths(1);
 
         const string sqlResumenClientes = @"
 SELECT
     e.ClienteID,
     ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'Sin cliente') AS Cliente,
-
     COUNT_BIG(*) AS TotalEmbarques,
-
-    SUM(CASE
-        WHEN e.Estatus=N'Preparado'
-        THEN 1 ELSE 0
-    END) AS Preparados,
-
-    SUM(CASE
-        WHEN e.Estatus=N'Cargado'
-        THEN 1 ELSE 0
-    END) AS Cargados,
-
-    SUM(CASE
-        WHEN e.Estatus=N'En ruta'
-        THEN 1 ELSE 0
-    END) AS EnRuta,
-
-    SUM(CASE
-        WHEN e.Estatus=N'Entregado'
-        THEN 1 ELSE 0
-    END) AS Entregados,
-
-    SUM(CASE
-        WHEN ISNULL(e.TieneIncidencia,0)=1
-        THEN 1 ELSE 0
-    END) AS ConIncidencia,
-
-    ISNULL(SUM(
-        CASE
-            WHEN e.Estatus IN(N'Cargado',N'En ruta',N'Entregado')
-            THEN ISNULL(c.TotalCajas,0)
-            ELSE 0
-        END
-    ),0) AS TotalCajas,
-
+    SUM(CASE WHEN e.Estatus=N'Preparado' THEN 1 ELSE 0 END) AS Preparados,
+    SUM(CASE WHEN e.Estatus=N'Cargado' THEN 1 ELSE 0 END) AS Cargados,
+    SUM(CASE WHEN e.Estatus=N'En ruta' THEN 1 ELSE 0 END) AS EnRuta,
+    SUM(CASE WHEN e.Estatus=N'Entregado' THEN 1 ELSE 0 END) AS Entregados,
+    SUM(CASE WHEN ISNULL(e.TieneIncidencia,0)=1 THEN 1 ELSE 0 END) AS ConIncidencia,
+    ISNULL(SUM(CASE WHEN e.Estatus IN(N'Cargado',N'En ruta',N'Entregado') THEN ISNULL(c.TotalCajas,0) ELSE 0 END),0) AS TotalCajas,
     ISNULL(SUM(ISNULL(d.TotalPiezasDespachadas,0)),0) AS TotalPiezas,
-
-    SUM(CASE
-        WHEN e.Estatus=N'Entregado'
-         AND e.FechaEntrega IS NOT NULL
-         AND e.FechaEntregaProgramada IS NOT NULL
-         AND CAST(e.FechaEntrega AS date)<=e.FechaEntregaProgramada
-        THEN 1 ELSE 0
-    END) AS EntregasATiempo,
-
-    SUM(CASE
-        WHEN e.Estatus=N'Entregado'
-         AND e.FechaEntrega IS NOT NULL
-         AND e.FechaEntregaProgramada IS NOT NULL
-         AND CAST(e.FechaEntrega AS date)>e.FechaEntregaProgramada
-        THEN 1 ELSE 0
-    END) AS EntregasAtrasadas
-
+    SUM(CASE WHEN e.Estatus=N'Entregado' AND e.FechaEntrega IS NOT NULL AND e.FechaEntregaProgramada IS NOT NULL AND CAST(e.FechaEntrega AS date)<=e.FechaEntregaProgramada THEN 1 ELSE 0 END) AS EntregasATiempo,
+    SUM(CASE WHEN e.Estatus=N'Entregado' AND e.FechaEntrega IS NOT NULL AND e.FechaEntregaProgramada IS NOT NULL AND CAST(e.FechaEntrega AS date)>e.FechaEntregaProgramada THEN 1 ELSE 0 END) AS EntregasAtrasadas
 FROM dbo.Logistica_Embarques e
-
 OUTER APPLY
 (
     SELECT COUNT_BIG(*) AS TotalCajas
@@ -231,7 +205,6 @@ OUTER APPLY
     WHERE ec.EmbarqueID=e.EmbarqueID
       AND ec.EstatusSeleccion=N'Despachada'
 ) c
-
 OUTER APPLY
 (
     SELECT ISNULL(SUM(ed.CantidadDespachada),0) AS TotalPiezasDespachadas
@@ -239,24 +212,16 @@ OUTER APPLY
     WHERE ed.EmbarqueID=e.EmbarqueID
       AND ed.Activo=1
 ) d
-
 WHERE e.Activo=1
   AND COALESCE(e.FechaEntregaProgramada,e.FechaCargaProgramada,e.FechaProgramada)>=@InicioPeriodo
   AND COALESCE(e.FechaEntregaProgramada,e.FechaCargaProgramada,e.FechaProgramada)<@FinPeriodo
-
-GROUP BY
-    e.ClienteID,
-    ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'Sin cliente')
-
-ORDER BY
-    COUNT_BIG(*) DESC,
-    Cliente;";
+GROUP BY e.ClienteID,ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'Sin cliente')
+ORDER BY COUNT_BIG(*) DESC,Cliente;";
 
         await using (var cmd = new SqlCommand(sqlResumenClientes, cn))
         {
             cmd.Parameters.Add("@InicioPeriodo", SqlDbType.Date).Value = inicioPeriodo;
             cmd.Parameters.Add("@FinPeriodo", SqlDbType.Date).Value = finPeriodo;
-
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
 
             while (await rd.ReadAsync(cancellationToken))
@@ -279,6 +244,12 @@ ORDER BY
             }
         }
 
+        ViewBag.Periodo = periodo;
+        ViewBag.PeriodoProgramacion = tituloPeriodo;
+        ViewBag.FechaDesdeProgramacion = fechaDesde;
+        ViewBag.FechaHastaProgramacion = fechaHasta;
+        ViewBag.MesSeleccionado = mes ?? hoy.Month;
+        ViewBag.AnioSeleccionado = anio ?? hoy.Year;
         ViewBag.PeriodoResumen = inicioPeriodo.ToString("MMMM yyyy");
 
         return View(vm);
