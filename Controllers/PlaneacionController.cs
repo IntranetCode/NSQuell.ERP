@@ -540,21 +540,8 @@ ORDER BY
             }
 
             vm.Historial = await ObtenerHistorialAsync(id, cn);
-            // NSQ_52_PLANEACION_INDICADORES_V1
-            ViewBag.IndicadoresProduccion =
-                await ERP.NSQuell.Services.ProduccionIndicadoresService.ObtenerPorSolicitudAsync(
-                    id,
-                    cn);
-            var permisoEdicion = await ObtenerPermisoEdicionOFAsync(
-    vm.SolicitudProduccionID,
-    vm.FolioSolicitud,
-    vm.NumeroOFRecibida,
-    vm.EstatusID,
-    cn
-);
+           
 
-            vm.PuedeEditar = permisoEdicion.PuedeEditar;
-            vm.MotivoNoEditable = permisoEdicion.Motivo;
 
 
             return View(vm);
