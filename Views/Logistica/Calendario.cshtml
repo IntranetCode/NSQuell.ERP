@@ -361,14 +361,18 @@
 
     .cal-event {
         display: block;
-        text-decoration: none;
+        width: 100%;
+        text-align: left;
+        border: 0;
         border-left: 4px solid var(--cal-blue);
         background: #eef5fb;
         color: #17324d;
         border-radius: 7px;
         padding: 5px 6px;
         min-width: 0;
-        transition: .12s ease
+        transition: .12s ease;
+        cursor: pointer;
+        font-family: inherit
     }
 
         .cal-event:hover {
@@ -458,6 +462,151 @@
         overflow: hidden;
         text-overflow: ellipsis;
         opacity: .82
+    }
+
+    .cal-more {
+        width: 100%;
+        border: 1px dashed #b8c7d6;
+        background: #f8fafc;
+        color: #526579;
+        border-radius: 7px;
+        padding: 5px 6px;
+        font-size: .64rem;
+        font-weight: 950;
+        cursor: pointer;
+        text-align: left
+    }
+
+        .cal-more:hover {
+            border-color: #7fa6c1;
+            color: var(--cal-blue);
+            background: #f2f7fb
+        }
+
+    .cal-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1080;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(7,27,49,.48);
+        backdrop-filter: blur(3px)
+    }
+
+        .cal-modal-backdrop.open {
+            display: flex
+        }
+
+    .cal-modal {
+        width: min(620px,100%);
+        max-height: min(82vh,760px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: #fff;
+        border: 1px solid #d6e0ea;
+        border-radius: 18px;
+        box-shadow: 0 26px 70px rgba(7,27,49,.28)
+    }
+
+    .cal-modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--cal-line);
+        background: linear-gradient(180deg,#fff,#f8fbfd)
+    }
+
+        .cal-modal-head h3 {
+            margin: 0;
+            color: #0b1f3a;
+            font-size: 1.05rem;
+            font-weight: 950
+        }
+
+        .cal-modal-head small {
+            display: block;
+            margin-top: 3px;
+            color: #667085;
+            font-weight: 700
+        }
+
+    .cal-modal-close {
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #d6e0ea;
+        border-radius: 9px;
+        background: #fff;
+        color: #526579;
+        cursor: pointer
+    }
+
+    .cal-modal-body {
+        overflow: auto;
+        padding: 16px 18px
+    }
+
+    .cal-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 10px
+    }
+
+    .cal-detail-item {
+        min-width: 0;
+        padding: 10px 11px;
+        border: 1px solid #e1e8ef;
+        border-radius: 10px;
+        background: #fbfcfe
+    }
+
+        .cal-detail-item.full {
+            grid-column: 1 / -1
+        }
+
+    .cal-detail-label {
+        display: block;
+        margin-bottom: 3px;
+        color: #7b8797;
+        font-size: .63rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .045em
+    }
+
+    .cal-detail-value {
+        display: block;
+        color: #172033;
+        font-size: .82rem;
+        font-weight: 850;
+        overflow-wrap: anywhere
+    }
+
+    .cal-day-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px
+    }
+
+        .cal-day-list .cal-event {
+            padding: 8px 9px
+        }
+
+    .cal-modal-note {
+        margin-top: 12px;
+        padding: 9px 10px;
+        border-radius: 9px;
+        background: #f7fbfe;
+        color: #617286;
+        font-size: .72rem;
+        font-weight: 750
     }
 
     .cal-week-view {
@@ -605,6 +754,25 @@
             display: none
         }
 
+        .cal-modal-backdrop {
+            align-items: flex-end;
+            padding: 0
+        }
+
+        .cal-modal {
+            width: 100%;
+            max-height: 88vh;
+            border-radius: 18px 18px 0 0
+        }
+
+        .cal-detail-grid {
+            grid-template-columns: 1fr
+        }
+
+        .cal-detail-item.full {
+            grid-column: auto
+        }
+
         .cal-hero {
             padding: 18px
         }
@@ -704,6 +872,21 @@
             Un mismo embarque puede aparecer dos veces: una por su fecha de carga y otra por su fecha de entrega. Los releases sin embarque aparecen como pendientes de programación.
         </div>
     </section>
+
+    <div id="modalCalendario" class="cal-modal-backdrop" aria-hidden="true">
+        <div class="cal-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+            <div class="cal-modal-head">
+                <div>
+                    <h3 id="modalTitulo">Detalle de programación</h3>
+                    <small id="modalSubtitulo"></small>
+                </div>
+                <button type="button" id="btnCerrarModal" class="cal-modal-close" aria-label="Cerrar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="modalContenido" class="cal-modal-body"></div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -718,6 +901,10 @@
         const mensajeError=document.getElementById('mensajeError');
         const filtroQ=document.getElementById('filtroQ');
         const filtroEstatus=document.getElementById('filtroEstatus');
+        const modalCalendario=document.getElementById('modalCalendario');
+        const modalTitulo=document.getElementById('modalTitulo');
+        const modalSubtitulo=document.getElementById('modalSubtitulo');
+        const modalContenido=document.getElementById('modalContenido');
 
         let vista='month';
         let fechaReferencia=new Date();
@@ -797,12 +984,13 @@
             const clase=claseEstado(ev)+(ev.incidencia?' incident':'');
             const hora=ev.hora||'—';
             const destino=ev.destino?` · ${ev.destino}`:'';
+            const indice=eventos.indexOf(ev);
             return `
-                <a href="${ev.url||'#'}" class="cal-event ${clase}" title="${escapeHtml(ev.titulo||'')} | ${escapeHtml(ev.cliente||'')}">
-                    <div class="cal-event-top"><span>${hora}</span><span>${textoTipo(ev)}</span></div>
+                <button type="button" class="cal-event ${clase}" data-event-index="${indice}" title="${escapeHtml(ev.titulo||'')} | ${escapeHtml(ev.cliente||'')}">
+                    <div class="cal-event-top"><span>${escapeHtml(hora)}</span><span>${escapeHtml(textoTipo(ev))}</span></div>
                     <div class="cal-event-title">${escapeHtml(ev.titulo||'')}</div>
                     <div class="cal-event-sub">${escapeHtml((ev.cliente||'')+destino)}</div>
-                </a>`;
+                </button>`;
         }
 
         function escapeHtml(value){
@@ -812,6 +1000,79 @@
                 .replaceAll('>','&gt;')
                 .replaceAll('"','&quot;')
                 .replaceAll("'","&#039;");
+        }
+
+        function textoFecha(fecha){
+            const d=desdeIso(fecha);
+            if(!d)return '—';
+            return new Intl.DateTimeFormat('es-MX',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})
+                .format(d)
+                .replace(/^./,c=>c.toUpperCase());
+        }
+
+        function abrirModalEvento(ev){
+            if(!ev)return;
+            modalTitulo.textContent=ev.titulo||'Detalle de programación';
+            modalSubtitulo.textContent=`${textoTipo(ev)} · ${textoFecha(ev.fecha)}`;
+            modalContenido.innerHTML=`
+                <div class="cal-detail-grid">
+                    <div class="cal-detail-item">
+                        <span class="cal-detail-label">Fecha</span>
+                        <span class="cal-detail-value">${escapeHtml(textoFecha(ev.fecha))}</span>
+                    </div>
+                    <div class="cal-detail-item">
+                        <span class="cal-detail-label">Hora</span>
+                        <span class="cal-detail-value">${escapeHtml(ev.hora||'—')}</span>
+                    </div>
+                    <div class="cal-detail-item">
+                        <span class="cal-detail-label">Tipo</span>
+                        <span class="cal-detail-value">${escapeHtml(textoTipo(ev))}</span>
+                    </div>
+                    <div class="cal-detail-item">
+                        <span class="cal-detail-label">Estatus</span>
+                        <span class="cal-detail-value">${escapeHtml(ev.estatus||'Pendiente de programación')}</span>
+                    </div>
+                    <div class="cal-detail-item full">
+                        <span class="cal-detail-label">Cliente</span>
+                        <span class="cal-detail-value">${escapeHtml(ev.cliente||'—')}</span>
+                    </div>
+                    <div class="cal-detail-item full">
+                        <span class="cal-detail-label">Destino</span>
+                        <span class="cal-detail-value">${escapeHtml(ev.destino||'—')}</span>
+                    </div>
+                    ${ev.incidencia?`
+                    <div class="cal-detail-item full">
+                        <span class="cal-detail-label">Atención</span>
+                        <span class="cal-detail-value" style="color:#b42318">Este embarque tiene incidencia registrada.</span>
+                    </div>`:''}
+                </div>
+                <div class="cal-modal-note">
+                    <i class="fa-solid fa-circle-info me-1"></i>
+                    Este calendario es informativo. El clic ya no cambia de pantalla.
+                </div>`;
+            modalCalendario.classList.add('open');
+            modalCalendario.setAttribute('aria-hidden','false');
+            document.body.style.overflow='hidden';
+        }
+
+        function abrirModalDia(fecha,lista){
+            modalTitulo.textContent=`Programación del ${textoFecha(fecha)}`;
+            modalSubtitulo.textContent=`${lista.length} evento(s)`;
+            const contenido=lista
+                .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''))
+                .map(ev=>htmlEvento(ev))
+                .join('');
+            modalContenido.innerHTML=`<div class="cal-day-list">${contenido}</div>`;
+            modalCalendario.classList.add('open');
+            modalCalendario.setAttribute('aria-hidden','false');
+            document.body.style.overflow='hidden';
+        }
+
+        function cerrarModal(){
+            modalCalendario.classList.remove('open');
+            modalCalendario.setAttribute('aria-hidden','true');
+            modalContenido.innerHTML='';
+            document.body.style.overflow='';
         }
 
         function renderMes(){
@@ -837,10 +1098,17 @@
                 const lista=document.createElement('div');
                 lista.className='cal-events';
 
-                eventos
+                const eventosDia=eventos
                     .filter(x=>x.fecha===key)
-                    .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''))
-                    .forEach(ev=>lista.insertAdjacentHTML('beforeend',htmlEvento(ev)));
+                    .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+
+                eventosDia.slice(0,3).forEach(ev=>lista.insertAdjacentHTML('beforeend',htmlEvento(ev)));
+
+                if(eventosDia.length>3){
+                    const restantes=eventosDia.length-3;
+                    lista.insertAdjacentHTML('beforeend',
+                        `<button type="button" class="cal-more" data-day="${key}">+ ${restantes} más</button>`);
+                }
 
                 celda.appendChild(numero);
                 celda.appendChild(lista);
@@ -880,7 +1148,10 @@
                         .sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
 
                     html+='<div class="cal-week-cell">';
-                    evs.forEach(ev=>html+=htmlEvento(ev));
+                    evs.slice(0,3).forEach(ev=>html+=htmlEvento(ev));
+                    if(evs.length>3){
+                        html+=`<button type="button" class="cal-more" data-day="${key}">+ ${evs.length-3} más</button>`;
+                    }
                     html+='</div>';
                 });
                 html+='</div>';
@@ -900,6 +1171,32 @@
             if(vista==='month')renderMes();
             else renderSemana();
         }
+
+        document.addEventListener('click',e=>{
+            const eventoBtn=e.target.closest('[data-event-index]');
+            if(eventoBtn){
+                const indice=Number(eventoBtn.dataset.eventIndex);
+                if(Number.isInteger(indice)&&eventos[indice])abrirModalEvento(eventos[indice]);
+                return;
+            }
+
+            const masBtn=e.target.closest('[data-day]');
+            if(masBtn){
+                const fecha=masBtn.dataset.day;
+                const lista=eventos.filter(x=>x.fecha===fecha);
+                abrirModalDia(fecha,lista);
+            }
+        });
+
+        document.getElementById('btnCerrarModal')?.addEventListener('click',cerrarModal);
+
+        modalCalendario?.addEventListener('click',e=>{
+            if(e.target===modalCalendario)cerrarModal();
+        });
+
+        document.addEventListener('keydown',e=>{
+            if(e.key==='Escape'&&modalCalendario?.classList.contains('open'))cerrarModal();
+        });
 
         async function cargar(){
             const rango=rangoActual();

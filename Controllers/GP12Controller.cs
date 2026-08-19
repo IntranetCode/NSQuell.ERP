@@ -1024,9 +1024,105 @@ VALUES
             return View(model);
         }
 
-        // =========================================================
-        // RECEPCIÓN DE MATERIAL POR CLASIFICACIÓN
-        // =========================================================
+        private static async Task<long> CrearEntregaScrapDesdeGP12Async(int solicitudGP12ID, int inspeccionGP12ID, decimal cantidadScrap, string? observaciones, int usuarioID, SqlConnection cn, SqlTransaction tx)
+        {
+            if (solicitudGP12ID <= 0) throw new InvalidOperationException("La solicitud GP12 no es válida.");
+            if (inspeccionGP12ID <= 0) throw new InvalidOperationException("La inspección GP12 no es válida.");
+            if (cantidadScrap <= 0) throw new InvalidOperationException("La cantidad de scrap debe ser mayor que cero.");
+            const string sqlExistente = @"
+SELECT TOP(1)
+    ScrapEntregaID,
+    CantidadScrap,
+    Estado
+FROM dbo.Calidad_ScrapEntregas WITH(UPDLOCK,HOLDLOCK)
+WHERE Origen=N'GP12'
+  AND GP12InspeccionID=@GP12InspeccionID
+  AND Activo=1
+  AND Estado<>N'CANCELADO'
+ORDER BY ScrapEntregaID DESC;";
+            await using (var cmd = new SqlCommand(sqlExistente, cn, tx))
+            {
+                cmd.Parameters.Add("@GP12InspeccionID", SqlDbType.Int).Value = inspeccionGP12ID;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (await rd.ReadAsync())
+                {
+                    var scrapEntregaID = Convert.ToInt64(rd["ScrapEntregaID"]);
+                    var cantidadExistente = Convert.ToDecimal(rd["CantidadScrap"]);
+                    if (cantidadExistente != cantidadScrap) throw new InvalidOperationException($"La inspección GP12 ya tiene una entrega de scrap por {cantidadExistente:N4} pieza(s), diferente a las {cantidadScrap:N4} capturadas.");
+                    return scrapEntregaID;
+                }
+            }
+            const string sqlInsert = @"
+INSERT INTO dbo.Calidad_ScrapEntregas
+(
+    InspeccionID,
+    DisposicionID,
+    EjecucionProduccionID,
+    ProgramaProduccionID,
+    SolicitudProduccionID,
+    SolicitudProduccionDetalleID,
+    ReleaseID,
+    ReleaseDetalleID,
+    ParteID,
+    NumeroParte,
+    OrdenFabricacion,
+    CantidadScrap,
+    Estado,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo,
+    Origen,
+    GP12SolicitudID,
+    GP12InspeccionID,
+    CajaProduccionID
+)
+SELECT
+    s.CalidadInspeccionID,
+    NULL,
+    s.EjecucionProduccionID,
+    s.ProgramaProduccionID,
+    s.SolicitudProduccionID,
+    s.SolicitudProduccionDetalleID,
+    NULL,
+    NULL,
+    s.ParteID,
+    s.NumeroParte,
+    s.OrdenFabricacion,
+    @CantidadScrap,
+    N'PENDIENTE_ENTREGA_GP12',
+    @Observaciones,
+    @UsuarioID,
+    SYSDATETIME(),
+    1,
+    N'GP12',
+    s.SolicitudGP12ID,
+    @GP12InspeccionID,
+    s.CajaProduccionID
+FROM dbo.GP12_Solicitudes s WITH(UPDLOCK,HOLDLOCK)
+WHERE s.SolicitudGP12ID=@SolicitudGP12ID
+  AND s.Activo=1;
+IF @@ROWCOUNT<>1
+    THROW 51310,'No fue posible relacionar el scrap con la solicitud GP12.',1;
+SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
+            var comentario = $"Scrap determinado por GP12. Solicitud GP12: {solicitudGP12ID}. Inspección GP12: {inspeccionGP12ID}. Cantidad: {cantidadScrap:N4}.";
+            if (!string.IsNullOrWhiteSpace(observaciones)) comentario += " " + observaciones.Trim();
+            if (comentario.Length > 1000) comentario = comentario[..1000];
+            await using var cmdInsert = new SqlCommand(sqlInsert, cn, tx);
+            cmdInsert.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+            cmdInsert.Parameters.Add("@GP12InspeccionID", SqlDbType.Int).Value = inspeccionGP12ID;
+            var parametroCantidad = cmdInsert.Parameters.Add("@CantidadScrap", SqlDbType.Decimal);
+            parametroCantidad.Precision = 18;
+            parametroCantidad.Scale = 4;
+            parametroCantidad.Value = cantidadScrap;
+            cmdInsert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = comentario;
+            cmdInsert.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID;
+            var resultado = await cmdInsert.ExecuteScalarAsync();
+            if (resultado == null || resultado == DBNull.Value) throw new InvalidOperationException("No fue posible generar la entrega de scrap desde GP12.");
+            return Convert.ToInt64(resultado);
+        }
+
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RegistrarRecepcion(
@@ -2640,12 +2736,181 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
             await CargarProgramacionesAsync(model);
             await CargarAsignacionesAsync(model);
             await CargarInspeccionesAsync(model);
+            await CargarScrapEntregasAsync(model);
             await CargarHistorialAsync(model);
             await CargarPersonalDisponibleAsync(model);
             await CargarCatalogoDefectosAsync(model);
             return model;
         }
 
+        private async Task CargarScrapEntregasAsync(GP12DetalleViewModel model)
+        {
+            if (model.SolicitudGP12ID <= 0) return;
+            const string sql = @"
+SELECT
+    e.ScrapEntregaID,
+    e.GP12SolicitudID,
+    e.GP12InspeccionID,
+    e.CajaProduccionID,
+    ISNULL(e.CantidadScrap,0) AS CantidadScrap,
+    ISNULL(e.Estado,N'') AS Estado,
+    e.UsuarioEntregaID,
+    e.FechaEntrega,
+    e.UsuarioRecepcionID,
+    e.FechaRecepcion,
+    e.UbicacionScrap,
+    e.UsuarioMoliendaID,
+    e.FechaMolienda,
+    e.CantidadMolida,
+    e.Observaciones,
+    e.FechaCreacion
+FROM dbo.Calidad_ScrapEntregas e
+WHERE e.GP12SolicitudID=@SolicitudGP12ID
+  AND e.Origen=N'GP12'
+  AND e.Activo=1
+ORDER BY e.FechaCreacion DESC,e.ScrapEntregaID DESC;";
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = model.SolicitudGP12ID;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                model.ScrapEntregas.Add(new GP12ScrapEntregaItemViewModel
+                {
+                    ScrapEntregaID = Convert.ToInt64(rd["ScrapEntregaID"]),
+                    GP12SolicitudID = LeerIntNullable(rd["GP12SolicitudID"]),
+                    GP12InspeccionID = LeerIntNullable(rd["GP12InspeccionID"]),
+                    CajaProduccionID = rd["CajaProduccionID"] == DBNull.Value ? null : Convert.ToInt64(rd["CajaProduccionID"]),
+                    CantidadScrap = Convert.ToDecimal(rd["CantidadScrap"]),
+                    Estado = rd["Estado"]?.ToString()?.Trim() ?? string.Empty,
+                    UsuarioEntregaID = LeerIntNullable(rd["UsuarioEntregaID"]),
+                    FechaEntrega = LeerFechaNullable(rd["FechaEntrega"]),
+                    UsuarioRecepcionID = LeerIntNullable(rd["UsuarioRecepcionID"]),
+                    FechaRecepcion = LeerFechaNullable(rd["FechaRecepcion"]),
+                    UbicacionScrap = rd["UbicacionScrap"] as string,
+                    UsuarioMoliendaID = LeerIntNullable(rd["UsuarioMoliendaID"]),
+                    FechaMolienda = LeerFechaNullable(rd["FechaMolienda"]),
+                    CantidadMolida = rd["CantidadMolida"] == DBNull.Value ? null : Convert.ToDecimal(rd["CantidadMolida"]),
+                    Observaciones = rd["Observaciones"] as string,
+                    FechaCreacion = Convert.ToDateTime(rd["FechaCreacion"])
+                });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EntregarScrapAlmacen(long scrapEntregaID)
+        {
+            if (scrapEntregaID <= 0)
+            {
+                TempData["Error"] = "La entrega de scrap no es válida.";
+                return RedirectToAction(nameof(Index));
+            }
+            var usuarioID = ObtenerUsuarioIdActual();
+            if (!usuarioID.HasValue || usuarioID.Value <= 0) return Unauthorized();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            int solicitudGP12ID = 0;
+            try
+            {
+                const string sqlEntrega = @"
+SELECT
+    e.ScrapEntregaID,
+    e.GP12SolicitudID,
+    e.GP12InspeccionID,
+    ISNULL(e.CantidadScrap,0) AS CantidadScrap,
+    ISNULL(e.Estado,N'') AS Estado,
+    s.EstatusID,
+    ISNULL
+    (
+        (
+            SELECT SUM
+            (
+                CASE
+                    WHEN m.TipoMovimiento IN(N'ENTRADA',N'AJUSTE_ENTRADA') THEN ISNULL(m.Cantidad,0)
+                    WHEN m.TipoMovimiento IN(N'SALIDA',N'AJUSTE_SALIDA') THEN -ISNULL(m.Cantidad,0)
+                    ELSE 0
+                END
+            )
+            FROM dbo.GP12_InventarioMovimientos m WITH(UPDLOCK,HOLDLOCK)
+            WHERE m.SolicitudGP12ID=e.GP12SolicitudID
+              AND m.Activo=1
+        ),0
+    ) AS SaldoInventario
+FROM dbo.Calidad_ScrapEntregas e WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.GP12_Solicitudes s WITH(UPDLOCK,HOLDLOCK)
+    ON s.SolicitudGP12ID=e.GP12SolicitudID
+   AND s.Activo=1
+WHERE e.ScrapEntregaID=@ScrapEntregaID
+  AND e.Origen=N'GP12'
+  AND e.Activo=1;";
+                int? inspeccionGP12ID;
+                decimal cantidadScrap;
+                decimal saldoInventario;
+                string estado;
+                await using (var cmd = new SqlCommand(sqlEntrega, cn, tx))
+                {
+                    cmd.Parameters.Add("@ScrapEntregaID", SqlDbType.BigInt).Value = scrapEntregaID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "No se encontró la entrega de scrap GP12.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                    solicitudGP12ID = LeerIntNullable(rd["GP12SolicitudID"]) ?? 0;
+                    inspeccionGP12ID = LeerIntNullable(rd["GP12InspeccionID"]);
+                    cantidadScrap = Convert.ToDecimal(rd["CantidadScrap"]);
+                    estado = rd["Estado"]?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty;
+                    saldoInventario = Convert.ToDecimal(rd["SaldoInventario"]);
+                }
+                if (solicitudGP12ID <= 0) throw new InvalidOperationException("La entrega no tiene una solicitud GP12 relacionada.");
+                if (!inspeccionGP12ID.HasValue || inspeccionGP12ID.Value <= 0) throw new InvalidOperationException("La entrega no tiene una inspección GP12 relacionada.");
+                if (estado == "PENDIENTE_RECEPCION")
+                {
+                    await tx.CommitAsync();
+                    TempData["Mensaje"] = "El scrap ya fue entregado y está pendiente de recepción por Almacén.";
+                    return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+                }
+                if (estado == "RECIBIDO_ALMACEN" || estado == "PENDIENTE_MOLIENDA" || estado == "MOLIDO") throw new InvalidOperationException("El scrap ya fue recibido por Almacén y no puede volver a entregarse.");
+                if (estado == "CANCELADO") throw new InvalidOperationException("La entrega de scrap está cancelada.");
+                if (estado != "PENDIENTE_ENTREGA_GP12") throw new InvalidOperationException($"La entrega de scrap no está disponible para entregar. Estado actual: {estado}.");
+                if (cantidadScrap <= 0) throw new InvalidOperationException("La cantidad de scrap no es válida.");
+                if (saldoInventario < cantidadScrap) throw new InvalidOperationException($"No existe inventario suficiente en GP12 para respaldar esta entrega. Disponible: {saldoInventario:N4}; Scrap: {cantidadScrap:N4}.");
+                const string sqlUpdate = @"
+UPDATE dbo.Calidad_ScrapEntregas
+SET Estado=N'PENDIENTE_RECEPCION',
+    UsuarioEntregaID=@UsuarioID,
+    FechaEntrega=SYSDATETIME(),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE ScrapEntregaID=@ScrapEntregaID
+  AND Origen=N'GP12'
+  AND Estado=N'PENDIENTE_ENTREGA_GP12'
+  AND Activo=1;
+IF @@ROWCOUNT<>1
+    THROW 51311,'La entrega de scrap cambió de estado mientras se procesaba.',1;";
+                await using (var cmd = new SqlCommand(sqlUpdate, cn, tx))
+                {
+                    cmd.Parameters.Add("@ScrapEntregaID", SqlDbType.BigInt).Value = scrapEntregaID;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                await AgregarHistorialAsync(cn, tx, solicitudGP12ID, "SCRAP_ENTREGADO_ALMACEN", null, null, GP12EntidadHistorial.Inspeccion, inspeccionGP12ID.Value, $"GP12 entregó {cantidadScrap:N4} pieza(s) scrap a Almacén. ScrapEntregaID: {scrapEntregaID}. Estado: PENDIENTE_RECEPCION. El inventario permanece en GP12 hasta la confirmación física de Almacén.", usuarioID.Value);
+                await tx.CommitAsync();
+                TempData["Mensaje"] = $"Se entregaron {cantidadScrap:N4} pieza(s) scrap a Almacén. Quedaron pendientes de recepción.";
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible entregar el scrap a Almacén: " + ex.Message;
+            }
+            return solicitudGP12ID > 0
+                ? RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID })
+                : RedirectToAction(nameof(Index));
+        }
         private async Task<GP12DetalleViewModel?> CargarEncabezadoAsync(int solicitudGP12ID)
         {
             const string sql = @"
@@ -2975,9 +3240,14 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
                 TempData["Error"] = "La suma de cantidad OK y NOK debe ser igual a la cantidad revisada.";
                 return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
             }
-            if (cantidadRetrabajada > cantidadRevisada || cantidadScrap > cantidadRevisada)
+            if (cantidadRetrabajada > cantidadNOK || cantidadScrap > cantidadNOK)
             {
-                TempData["Error"] = "Retrabajo o scrap no pueden superar la cantidad revisada.";
+                TempData["Error"] = "Retrabajo y scrap no pueden superar la cantidad NOK.";
+                return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+            }
+            if (cantidadRetrabajada + cantidadScrap > cantidadNOK)
+            {
+                TempData["Error"] = "La suma de retrabajo y scrap no puede superar la cantidad NOK.";
                 return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
             }
             var usuarioID = ObtenerUsuarioIdActual();
@@ -2988,7 +3258,7 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
             try
             {
                 const string sqlInspeccion = @"
-SELECT TOP (1)
+SELECT TOP(1)
     i.AsignacionGP12ID,
     i.FechaFin,
     a.CantidadAsignada,
@@ -2996,12 +3266,12 @@ SELECT TOP (1)
     s.EstatusID,
     ISNULL(s.CantidadSolicitada,0) AS CantidadSolicitada,
     ISNULL(s.CantidadRecibida,0) AS CantidadRecibida
-FROM dbo.GP12_Inspecciones i WITH (UPDLOCK,HOLDLOCK)
-INNER JOIN dbo.GP12_Asignaciones a WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.GP12_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.GP12_Asignaciones a WITH(UPDLOCK,HOLDLOCK)
     ON a.AsignacionGP12ID=i.AsignacionGP12ID
 INNER JOIN dbo.GP12_Programacion p
     ON p.ProgramacionGP12ID=a.ProgramacionGP12ID
-INNER JOIN dbo.GP12_Solicitudes s WITH (UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.GP12_Solicitudes s WITH(UPDLOCK,HOLDLOCK)
     ON s.SolicitudGP12ID=i.SolicitudGP12ID
 WHERE i.InspeccionGP12ID=@InspeccionGP12ID
   AND i.SolicitudGP12ID=@SolicitudGP12ID
@@ -3074,25 +3344,29 @@ IF @@ROWCOUNT<>1
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
                     await cmd.ExecuteNonQueryAsync();
                 }
+                if (cantidadScrap > 0)
+                {
+                    await CrearEntregaScrapDesdeGP12Async(solicitudGP12ID, inspeccionGP12ID, cantidadScrap, observaciones, usuarioID.Value, cn, tx);
+                }
                 if (solicitudEtiquetaID.HasValue)
                 {
                     const string sqlEtiqueta = @"
 UPDATE dbo.GP12_SolicitudEtiquetas
 SET CantidadProcesada=
-    (
-        SELECT ISNULL(SUM(i.CantidadRevisada),0)
-        FROM dbo.GP12_Inspecciones i
-        INNER JOIN dbo.GP12_Asignaciones a ON a.AsignacionGP12ID=i.AsignacionGP12ID
-        INNER JOIN dbo.GP12_Programacion p ON p.ProgramacionGP12ID=a.ProgramacionGP12ID
-        WHERE i.SolicitudGP12ID=@SolicitudGP12ID
-          AND p.SolicitudEtiquetaID=@SolicitudEtiquetaID
-          AND i.FechaFin IS NOT NULL
-          AND i.Activo=1
-          AND a.Activo=1
-          AND p.Activo=1
-    ),
-    UsuarioModificacionID=@UsuarioID,
-    FechaModificacion=SYSDATETIME()
+(
+    SELECT ISNULL(SUM(i.CantidadRevisada),0)
+    FROM dbo.GP12_Inspecciones i
+    INNER JOIN dbo.GP12_Asignaciones a ON a.AsignacionGP12ID=i.AsignacionGP12ID
+    INNER JOIN dbo.GP12_Programacion p ON p.ProgramacionGP12ID=a.ProgramacionGP12ID
+    WHERE i.SolicitudGP12ID=@SolicitudGP12ID
+      AND p.SolicitudEtiquetaID=@SolicitudEtiquetaID
+      AND i.FechaFin IS NOT NULL
+      AND i.Activo=1
+      AND a.Activo=1
+      AND p.Activo=1
+),
+UsuarioModificacionID=@UsuarioID,
+FechaModificacion=SYSDATETIME()
 WHERE SolicitudEtiquetaID=@SolicitudEtiquetaID
   AND SolicitudGP12ID=@SolicitudGP12ID
   AND Activo=1;";
@@ -3106,7 +3380,7 @@ WHERE SolicitudEtiquetaID=@SolicitudEtiquetaID
 DECLARE @ProcesadoAsignacion DECIMAL(18,4);
 DECLARE @Asignado DECIMAL(18,4);
 SELECT @Asignado=ISNULL(CantidadAsignada,0)
-FROM dbo.GP12_Asignaciones WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.GP12_Asignaciones WITH(UPDLOCK,HOLDLOCK)
 WHERE AsignacionGP12ID=@AsignacionGP12ID
   AND Activo=1;
 SELECT @ProcesadoAsignacion=ISNULL(SUM(CantidadRevisada),0)
@@ -3176,13 +3450,24 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
                     cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
                     await cmd.ExecuteNonQueryAsync();
                 }
-                await AgregarHistorialAsync(cn, tx, solicitudGP12ID, GP12Movimientos.InspeccionTerminada, estatusAnterior, nuevoEstatus, GP12EntidadHistorial.Inspeccion, inspeccionGP12ID, $"Inspección GP12 terminada. Revisadas: {cantidadRevisada:N4}; OK: {cantidadOK:N4}; NOK: {cantidadNOK:N4}; retrabajadas: {cantidadRetrabajada:N4}; scrap: {cantidadScrap:N4}.", usuarioID.Value);
+                var mensajeHistorial = $"Inspección GP12 terminada. Revisadas: {cantidadRevisada:N4}; OK: {cantidadOK:N4}; NOK: {cantidadNOK:N4}; retrabajadas: {cantidadRetrabajada:N4}; scrap: {cantidadScrap:N4}.";
+                if (cantidadScrap > 0) mensajeHistorial += $" Se generó una entrega de scrap por {cantidadScrap:N4} pieza(s) en estado PENDIENTE_ENTREGA_GP12.";
+                await AgregarHistorialAsync(cn, tx, solicitudGP12ID, GP12Movimientos.InspeccionTerminada, estatusAnterior, nuevoEstatus, GP12EntidadHistorial.Inspeccion, inspeccionGP12ID, mensajeHistorial, usuarioID.Value);
                 await tx.CommitAsync();
-                TempData["Mensaje"] = procesoCompleto
-                    ? totalNOK == 0 && totalScrap == 0
-                        ? "Inspección GP12 terminada. El material queda en el almacén GP12 listo para retiro de Almacén; no se genera ninguna salida automática."
-                        : "Inspección GP12 terminada con material NOK o scrap. El material permanece dentro del almacén GP12."
-                    : "Inspección GP12 registrada. Aún existe material pendiente por procesar.";
+                if (cantidadScrap > 0)
+                {
+                    TempData["Mensaje"] = procesoCompleto
+                        ? $"Inspección GP12 terminada. Se identificaron {cantidadScrap:N4} pieza(s) scrap. El material quedó pendiente de entrega a Almacén."
+                        : $"Inspección registrada. Se identificaron {cantidadScrap:N4} pieza(s) scrap pendientes de entrega a Almacén y aún existe material por procesar.";
+                }
+                else
+                {
+                    TempData["Mensaje"] = procesoCompleto
+                        ? totalNOK == 0
+                            ? "Inspección GP12 terminada. El material liberado queda disponible para el flujo de Almacén PT."
+                            : "Inspección GP12 terminada con material NOK pendiente de resolución dentro de GP12."
+                        : "Inspección GP12 registrada. Aún existe material pendiente por procesar.";
+                }
             }
             catch (Exception ex)
             {
@@ -3191,9 +3476,6 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
             }
             return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
         }
-
-        // Las decisiones posteriores a la inspección permanecen dentro de GP12.
-        // No se sincronizan estados hacia Calidad o Producción desde este controlador.
 
         private async Task CargarEtiquetasAsync(
             GP12DetalleViewModel model)

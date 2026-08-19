@@ -66,6 +66,17 @@
     var piezasMovilizadas = embarques.Sum(x => (long)x.TotalPiezasDespachadas);
     var resumenClientes = Model.ResumenClientes ?? new List<LogisticaResumenClienteVm>();
 
+    var periodoProgramacion = (ViewBag.Periodo as string ?? "hoy").Trim().ToLowerInvariant();
+    var tituloPeriodoProgramacion = ViewBag.PeriodoProgramacion as string ?? "Próximos a programar";
+    var mesSeleccionado = ViewBag.MesSeleccionado != null ? Convert.ToInt32(ViewBag.MesSeleccionado) : DateTime.Today.Month;
+    var anioSeleccionado = ViewBag.AnioSeleccionado != null ? Convert.ToInt32(ViewBag.AnioSeleccionado) : DateTime.Today.Year;
+    var mesesProgramacion = new[]
+    {
+        "Enero","Febrero","Marzo","Abril","Mayo","Junio",
+        "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+    };
+    var aniosProgramacion = Enumerable.Range(DateTime.Today.Year - 2, 5).ToList();
+
     DateTime? Combinar(DateTime? fecha, TimeSpan? hora)
         => fecha?.Date.Add(hora ?? TimeSpan.Zero);
 
@@ -371,6 +382,96 @@
 
         .log-strip .danger {
             color: var(--lg-red)
+        }
+
+    .log-period-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        background: #fbfcfe;
+        border-bottom: 1px solid var(--lg-line)
+    }
+
+    .log-period-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap
+    }
+
+    .log-period-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 36px;
+        padding: 7px 11px;
+        border: 1px solid #d6e0ea;
+        border-radius: 10px;
+        background: #fff;
+        color: #506176;
+        text-decoration: none;
+        font-size: .75rem;
+        font-weight: 900;
+        transition: .15s ease;
+        white-space: nowrap
+    }
+
+        .log-period-btn:hover {
+            color: var(--lg-blue);
+            border-color: #9fbdd4;
+            background: #f5f9fc
+        }
+
+        .log-period-btn.active {
+            color: #fff;
+            background: var(--lg-blue);
+            border-color: var(--lg-blue);
+            box-shadow: 0 6px 14px rgba(15,76,129,.16)
+        }
+
+            .log-period-btn.active.danger {
+                background: var(--lg-red);
+                border-color: var(--lg-red)
+            }
+
+    .log-month-form {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap
+    }
+
+        .log-month-form .log-select {
+            width: auto;
+            min-width: 130px;
+            height: 36px;
+            padding: 0 9px;
+            font-size: .75rem
+        }
+
+            .log-month-form .log-select.year {
+                min-width: 92px
+            }
+
+    .log-period-summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 9px 16px;
+        background: #fff;
+        border-bottom: 1px solid #edf1f6;
+        color: #667085;
+        font-size: .75rem;
+        font-weight: 750
+    }
+
+        .log-period-summary strong {
+            color: #0b1f3a
         }
 
     .log-panel {
@@ -838,6 +939,35 @@
             flex-wrap: nowrap
         }
 
+        .log-period-wrap {
+            align-items: stretch
+        }
+
+        .log-period-left,
+        .log-month-form {
+            width: 100%
+        }
+
+        .log-period-left {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .log-period-btn {
+            width: 100%
+        }
+
+        .log-month-form {
+            display: grid;
+            grid-template-columns: minmax(0,1fr) 100px auto
+        }
+
+            .log-month-form .log-select,
+            .log-month-form .log-select.year {
+                width: 100%;
+                min-width: 0
+            }
+
         .log-nav-btn {
             flex: 0 0 auto
         }
@@ -1020,7 +1150,7 @@
                 <i class="fa-solid fa-clipboard-list"></i>
                 <div>
                     <h2>Releases pendientes de programación</h2>
-                    <small>Demanda todavía no cubierta por un embarque logístico.</small>
+                    <small>@tituloPeriodoProgramacion</small>
                 </div>
             </div>
             <div class="log-panel-actions">
@@ -1028,6 +1158,51 @@
                     <i class="fa-solid fa-file-lines"></i>Ver releases
                 </a>
             </div>
+        </div>
+
+        <div class="log-period-wrap">
+            <div class="log-period-left">
+                <a asp-action="Index" asp-route-periodo="vencidos" class="log-period-btn @(periodoProgramacion == "vencidos" ? "active danger" : "")">
+                    <i class="fa-solid fa-triangle-exclamation"></i>Vencidos
+                </a>
+                <a asp-action="Index" asp-route-periodo="hoy" class="log-period-btn @(periodoProgramacion == "hoy" ? "active" : "")">
+                    <i class="fa-solid fa-calendar-day"></i>Hoy
+                </a>
+                <a asp-action="Index" asp-route-periodo="semana" class="log-period-btn @(periodoProgramacion == "semana" ? "active" : "")">
+                    <i class="fa-solid fa-calendar-week"></i>Esta semana
+                </a>
+                <a asp-action="Index" asp-route-periodo="mes" class="log-period-btn @(periodoProgramacion == "mes" ? "active" : "")">
+                    <i class="fa-solid fa-calendar"></i>Este mes
+                </a>
+            </div>
+            <form asp-action="Index" method="get" class="log-month-form">
+                <input type="hidden" name="periodo" value="seleccionar_mes" />
+                <select class="log-select" name="mes" aria-label="Mes">
+                    @for (var i = 1; i <= 12; i++)
+                    {
+                        <option value="@i" selected="@(i == mesSeleccionado ? "selected" : null)">@mesesProgramacion[i - 1]</option>
+                    }
+                </select>
+                <select class="log-select year" name="anio" aria-label="Año">
+                    @foreach (var year in aniosProgramacion)
+                    {
+                        <option value="@year" selected="@(year == anioSeleccionado ? "selected" : null)">@year</option>
+                    }
+                </select>
+                <button type="submit" class="log-btn @(periodoProgramacion == "seleccionar_mes" ? "log-btn-primary" : "")">
+                    <i class="fa-solid fa-magnifying-glass"></i>Ver mes
+                </button>
+            </form>
+        </div>
+
+        <div class="log-period-summary">
+            <span><i class="fa-solid fa-filter me-1"></i><strong>@tituloPeriodoProgramacion</strong></span>
+            <span>·</span>
+            <span><strong>@porProgramar.ToString("N0")</strong> release(s) pendiente(s)</span>
+            <span>·</span>
+            <span><strong>@Model.PiezasPendientes.ToString("N0")</strong> PZA por programar</span>
+            <span>·</span>
+            <span><strong>@Model.PiezasPTListas.ToString("N0")</strong> PZA disponibles en PT</span>
         </div>
 
         @if (demandasPendientes.Any())
@@ -1108,7 +1283,8 @@
         {
             <div class="log-empty">
                 <i class="fa-solid fa-circle-check text-success"></i>
-                No hay releases pendientes de programación.
+                No hay releases pendientes para el periodo seleccionado.
+                <span class="log-sub">@tituloPeriodoProgramacion</span>
             </div>
         }
     </section>

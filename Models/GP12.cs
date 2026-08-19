@@ -661,6 +661,7 @@ namespace ERP.NSQuell.Models
         public List<GP12CatalogoDefectoItemViewModel>
             CatalogoDefectos { get; set; } = new();
 
+        public List<GP12ScrapEntregaItemViewModel> ScrapEntregas { get; set; } = new();
         public bool TieneRecepcion =>
             FechaRecepcion.HasValue &&
             CantidadRecibida > 0;
@@ -709,7 +710,50 @@ namespace ERP.NSQuell.Models
                     : -x.Cantidad);
     }
 
-
+    public class GP12ScrapEntregaItemViewModel
+    {
+        public long ScrapEntregaID { get; set; }
+        public int? GP12SolicitudID { get; set; }
+        public int? GP12InspeccionID { get; set; }
+        public long? CajaProduccionID { get; set; }
+        public decimal CantidadScrap { get; set; }
+        public string Estado { get; set; } = string.Empty;
+        public int? UsuarioEntregaID { get; set; }
+        public DateTime? FechaEntrega { get; set; }
+        public int? UsuarioRecepcionID { get; set; }
+        public DateTime? FechaRecepcion { get; set; }
+        public string? UbicacionScrap { get; set; }
+        public int? UsuarioMoliendaID { get; set; }
+        public DateTime? FechaMolienda { get; set; }
+        public decimal? CantidadMolida { get; set; }
+        public string? Observaciones { get; set; }
+        public DateTime FechaCreacion { get; set; }
+        public bool PendienteEntregaGP12 => Estado == "PENDIENTE_ENTREGA_GP12";
+        public bool PendienteRecepcionAlmacen => Estado == "PENDIENTE_RECEPCION";
+        public bool RecibidoAlmacen => Estado == "RECIBIDO_ALMACEN" || Estado == "PENDIENTE_MOLIENDA" || Estado == "MOLIDO";
+        public bool Molido => Estado == "MOLIDO";
+        public bool PuedeEntregar => PendienteEntregaGP12;
+        public string EstadoTexto => Estado switch
+        {
+            "PENDIENTE_ENTREGA_GP12" => "Pendiente de entregar a Almacén",
+            "PENDIENTE_RECEPCION" => "Pendiente de recepción en Almacén",
+            "RECIBIDO_ALMACEN" => "Recibido por Almacén",
+            "PENDIENTE_MOLIENDA" => "Pendiente de molienda",
+            "MOLIDO" => "Molido",
+            "CANCELADO" => "Cancelado",
+            _ => string.IsNullOrWhiteSpace(Estado) ? "Sin estado" : Estado.Replace("_", " ")
+        };
+        public string BadgeClase => Estado switch
+        {
+            "PENDIENTE_ENTREGA_GP12" => "bg-danger",
+            "PENDIENTE_RECEPCION" => "bg-warning text-dark",
+            "RECIBIDO_ALMACEN" => "bg-info text-dark",
+            "PENDIENTE_MOLIENDA" => "bg-primary",
+            "MOLIDO" => "bg-success",
+            "CANCELADO" => "bg-secondary",
+            _ => "bg-secondary"
+        };
+    }
 
     public class GP12CrearViewModel
     {
