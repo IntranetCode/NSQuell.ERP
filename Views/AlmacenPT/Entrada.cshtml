@@ -1,12 +1,25 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTEntradaLoteVm
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTEntradaLoteVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = Model.EsEntregaOF
         ? "Recepción PT por escáner"
         : "Entrada PT por escáner";
 }
 
-<link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero">
     <div>
@@ -471,4 +484,5 @@
             }, 100);
         })();
     </script>
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
 }

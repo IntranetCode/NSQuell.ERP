@@ -1,0 +1,370 @@
+﻿:root {
+            --erp-blue: #004AAD;
+            --erp-blue-dark: #00347a;
+            --erp-gray: #f3f5f8;
+            --erp-border: #d9e1ec;
+            --erp-text: #263238;
+            --erp-muted: #667085;
+            --erp-green: #107c41;
+            --erp-red: #b42318;
+            --erp-orange: #b54708;
+            --erp-purple: #6941c6;
+        }
+
+        body {
+            margin: 0;
+            background: var(--erp-gray);
+            color: var(--erp-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .erp-shell {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .erp-header {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+            color: white;
+            border-radius: 22px;
+            padding: 28px 32px;
+            box-shadow: 0 16px 36px rgba(0, 74, 173, .23);
+            margin-bottom: 22px;
+        }
+
+        .erp-header::after {
+            content: "";
+            position: absolute;
+            right: -75px;
+            top: -105px;
+            width: 270px;
+            height: 270px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.09);
+            pointer-events: none;
+        }
+
+        .erp-header > * {
+            position: relative;
+            z-index: 2;
+        }
+
+        .erp-header h1 {
+            font-size: 1.65rem;
+            margin: 0;
+            font-weight: 900;
+        }
+
+        .erp-header p {
+            margin: 7px 0 0 0;
+            opacity: .92;
+        }
+
+        .header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: rgba(255,255,255,.16);
+            color: white;
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: .82rem;
+            font-weight: 800;
+            margin-top: 12px;
+            margin-right: 6px;
+        }
+
+        .btn-erp-primary,
+        .btn-erp-light {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            font-weight: 850;
+            border-radius: 13px;
+            padding: 10px 15px;
+            text-decoration: none;
+        }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border: 1px solid var(--erp-blue);
+            color: white;
+        }
+
+        .btn-erp-primary:hover {
+            background: var(--erp-blue-dark);
+            border-color: var(--erp-blue-dark);
+            color: white;
+        }
+
+        .btn-erp-light {
+            background: white;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+        }
+
+        .btn-erp-light:hover {
+            background: #eef4ff;
+            color: var(--erp-blue-dark);
+        }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 22px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .erp-card-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            background: linear-gradient(180deg, #fff, #f8fbff);
+        }
+
+        .erp-card-body {
+            padding: 22px;
+        }
+
+        .erp-label {
+            font-weight: 850;
+            color: #33465f;
+            font-size: .76rem;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+            margin-bottom: 4px;
+        }
+
+        .erp-value {
+            color: #263238;
+            font-weight: 650;
+            min-height: 24px;
+        }
+
+        .suggestion-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .suggestion-card {
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            padding: 14px;
+            background: #fbfdff;
+            min-height: 112px;
+        }
+
+        .suggestion-card.ok {
+            border-color: #abefc6;
+            background: #ecfdf3;
+            color: #027a48;
+        }
+
+        .suggestion-card.warn {
+            border-color: #fed7aa;
+            background: #fff7ed;
+            color: #b54708;
+        }
+
+        .suggestion-card.info {
+            border-color: #b2ccff;
+            background: #eef4ff;
+            color: #00347a;
+        }
+
+        .suggestion-card.week {
+            border-color: #d6bbfb;
+            background: #f4ebff;
+            color: var(--erp-purple);
+        }
+
+        .suggestion-card .k {
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            opacity: .75;
+        }
+
+        .suggestion-card .v {
+            margin-top: 5px;
+            font-size: 1.08rem;
+            font-weight: 950;
+        }
+
+        .suggestion-card .s {
+            margin-top: 6px;
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+        .renglon-card {
+            border: 1px solid var(--erp-border);
+            border-radius: 24px;
+            background: #fff;
+            overflow: hidden;
+            margin-bottom: 18px;
+            box-shadow: 0 14px 34px rgba(31, 63, 104, .09);
+        }
+
+        .renglon-header {
+            padding: 20px 22px;
+            background:
+                radial-gradient(circle at 92% 10%, rgba(0,74,173,.10), transparent 26%),
+                linear-gradient(135deg, #eef5ff, #ffffff);
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .renglon-title {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            font-size: 1rem;
+        }
+
+        .renglon-body {
+            padding: 22px;
+        }
+
+        .summary-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 11px;
+            border: 1px solid var(--erp-border);
+            border-radius: 999px;
+            background: white;
+            color: #475467;
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+        .suggestion-strip {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 13px 15px;
+            margin-bottom: 16px;
+            border: 1px solid #b2ccff;
+            border-radius: 16px;
+            background: #eef4ff;
+            color: #00347a;
+            font-weight: 750;
+        }
+
+        .table-responsive {
+            border: 1px solid #dbe4f0;
+            border-radius: 16px;
+            box-shadow: 0 8px 20px rgba(31, 63, 104, .05);
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead th {
+            padding: 13px 10px;
+            background: linear-gradient(135deg, #e8f1ff, #eef4fd);
+            border-bottom: 2px solid #c9d8eb;
+            color: #00347a;
+            font-size: .76rem;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            vertical-align: middle;
+        }
+
+        .table tbody td {
+            padding: 12px 9px;
+            font-size: .84rem;
+            vertical-align: middle;
+        }
+
+        .table tbody tr:nth-child(even) td {
+            background: #f9fbfe;
+        }
+
+        .table tbody tr:hover td {
+            background: #eef6ff;
+        }
+
+        .table tfoot td {
+            padding: 13px 9px;
+            background: #eaf3ff;
+            color: #00347a;
+        }
+
+        .badge-soft {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: .76rem;
+            font-weight: 850;
+            border: 1px solid #dbe4f0;
+            background: #fff;
+            color: #475467;
+            white-space: nowrap;
+        }
+
+        .badge-week {
+            background: #f4ebff;
+            color: var(--erp-purple);
+            border-color: #d6bbfb;
+        }
+
+        .small-muted {
+            color: var(--erp-muted);
+            font-size: .78rem;
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 0;
+            background: rgba(243, 245, 248, .92);
+            backdrop-filter: blur(10px);
+            padding: 14px 0;
+            z-index: 20;
+        }
+
+        @media (max-width: 1100px) {
+            .suggestion-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .erp-shell {
+                padding: 16px;
+            }
+
+            .erp-header {
+                padding: 22px;
+                border-radius: 18px;
+            }
+
+            .erp-card-body {
+                padding: 17px;
+            }
+
+            .suggestion-grid {
+                grid-template-columns: 1fr;
+            }
+        }

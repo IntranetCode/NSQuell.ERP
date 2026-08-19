@@ -1,0 +1,20 @@
+﻿<nav class="log-modulebar" aria-label="Navegación de Logística">
+    <a class="log-module-brand" asp-controller="Logistica" asp-action="Index">
+        <span><i class="fa-solid fa-truck-fast"></i></span>
+        <div><strong>LOGÍSTICA</strong><small>Release → PT → salida</small></div>
+    </a>
+    <div class="log-module-links">
+        <a asp-controller="Logistica" asp-action="Index"><i class="fa-solid fa-calendar-check"></i> Programación</a>
+        <a asp-controller="Logistica" asp-action="Catalogos"><i class="fa-solid fa-route"></i> Rutas y unidades</a>
+        <a asp-controller="AlmacenPT" asp-action="Cajas"><i class="fa-solid fa-box"></i> Lotes PT</a>
+    </div>
+</nav>
+
+@if (TempData["LogisticaOk"] is string ok)
+{
+    <div class="log-alert log-alert-ok">@ok</div>
+}
+@if (TempData["LogisticaError"] is string error)
+{
+    <div class="log-alert log-alert-error">@error</div>
+}

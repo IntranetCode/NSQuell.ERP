@@ -1,0 +1,169 @@
+﻿/*
+ * Navegación propia del módulo Almacén.
+ * El layout global sigue siendo Views/Shared/_Layout.cshtml.
+ * Este archivo conserva únicamente la navegación del módulo.
+ */
+
+.alm-module-nav {
+    width: min(1680px, calc(100% - 32px));
+    margin: 16px auto 18px;
+    display: grid;
+    gap: 10px;
+}
+
+.alm-module-nav__bar,
+.alm-module-route {
+    border: 1px solid var(--nsq-border, #d9e2ec);
+    border-radius: 16px;
+    background: var(--nsq-surface, #fff);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+}
+
+.alm-module-nav__bar {
+    min-height: 58px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.alm-module-nav__brand {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    font-weight: 800;
+    color: var(--nsq-text, #172033);
+    background: var(--nsq-surface-soft, #f3f6fa);
+}
+
+.alm-module-nav__links {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.alm-module-nav__link {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 0 13px;
+    border-radius: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: .9rem;
+    color: var(--nsq-muted, #627083);
+    border: 1px solid transparent;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.alm-module-nav__link:hover {
+    color: var(--nsq-primary, #004aad);
+    background: var(--nsq-surface-soft, #f3f6fa);
+}
+
+.alm-module-nav__link.active {
+    color: var(--nsq-primary, #004aad);
+    border-color: color-mix(in srgb, var(--nsq-primary, #004aad) 24%, transparent);
+    background: color-mix(in srgb, var(--nsq-primary, #004aad) 10%, transparent);
+}
+
+.alm-module-route {
+    min-height: 48px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.alm-module-route__back {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 11px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    text-decoration: none;
+    font-weight: 750;
+    color: var(--nsq-text, #172033);
+    background: var(--nsq-surface-soft, #f3f6fa);
+}
+
+.alm-module-route__back:hover {
+    color: var(--nsq-primary, #004aad);
+}
+
+.alm-module-route__trail {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+    font-size: .88rem;
+    color: var(--nsq-muted, #627083);
+    overflow: hidden;
+}
+
+.alm-module-route__trail li {
+    flex: 0 0 auto;
+}
+
+.alm-module-route__trail li.current {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nsq-text, #172033);
+    font-weight: 700;
+}
+
+.alm-module-route__trail a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.alm-module-route__trail a:hover {
+    color: var(--nsq-primary, #004aad);
+}
+
+@media (max-width: 900px) {
+    .alm-module-nav {
+        width: min(100% - 20px, 1680px);
+        margin-top: 10px;
+    }
+
+    .alm-module-nav__bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .alm-module-nav__brand {
+        align-self: flex-start;
+    }
+
+    .alm-module-nav__links {
+        width: 100%;
+    }
+
+    .alm-module-route {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .alm-module-route__trail {
+        width: 100%;
+    }
+}

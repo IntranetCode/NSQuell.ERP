@@ -1,13 +1,32 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFDetalleVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = $"Detalle {Model.NumeroOFClave}";
     var numeroOf = !string.IsNullOrWhiteSpace(Model.NumeroOFRecibida)
         ? Model.NumeroOFRecibida
         : Model.FolioSolicitud;
 }
 
-<link rel="stylesheet" href="~/css/Almacen/almacen-of-v4.css" asp-append-version="true" />
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-of-v4.css" asp-append-version="true" />
+}
+
+
+@section Scripts {
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
+    <script src="~/js/shared/nsq-dynamic-style.js" asp-append-version="true"></script>
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero of4-detail-hero">
     <div>
@@ -81,7 +100,7 @@
                                 }
                             </div>
                             <strong>@row.MaterialCodigo</strong><small>@row.MaterialDescripcion</small>
-                            <div class="of4-detail-flow"><span><b>@row.MpEntregada.ToString("N3") / @row.MpRequerida.ToString("N3") KG</b><em>Pendiente @row.MpPendiente.ToString("N3") KG</em></span><i><b style="width:@mpPercent%"></b></i></div>
+                            <div class="of4-detail-flow"><span><b>@row.MpEntregada.ToString("N3") / @row.MpRequerida.ToString("N3") KG</b><em>Pendiente @row.MpPendiente.ToString("N3") KG</em></span><i><b data-nsq-style="width:@mpPercent%"></b></i></div>
                         </div>
                     }
 
@@ -97,7 +116,7 @@
                                 }
                             </div>
                             <strong>@row.EmbalajeCodigo</strong><small>@row.EmbalajeDescripcion</small>
-                            <div class="of4-detail-flow"><span><b>@row.EmbalajeEntregado.ToString("N0") / @row.EmbalajeRequerido.ToString("N0") PZA</b><em>Pendiente @row.EmbalajePendiente.ToString("N0") PZA</em></span><i><b style="width:@packagingPercent%"></b></i></div>
+                            <div class="of4-detail-flow"><span><b>@row.EmbalajeEntregado.ToString("N0") / @row.EmbalajeRequerido.ToString("N0") PZA</b><em>Pendiente @row.EmbalajePendiente.ToString("N0") PZA</em></span><i><b data-nsq-style="width:@packagingPercent%"></b></i></div>
                         </div>
                     }
 
@@ -115,7 +134,7 @@
                             </div>
                             <strong>@row.NumeroParte</strong>
                             <small>Disponible actual: @row.PtDisponible.ToString("N0") PZA</small>
-                            <div class="of4-detail-flow"><span><b>@row.PtEntregada.ToString("N0") / @row.PtRequerida.ToString("N0") PZA</b><em>Pendiente @row.PtPendiente.ToString("N0") PZA</em></span><i><b style="width:@ptPercent%"></b></i></div>
+                            <div class="of4-detail-flow"><span><b>@row.PtEntregada.ToString("N0") / @row.PtRequerida.ToString("N0") PZA</b><em>Pendiente @row.PtPendiente.ToString("N0") PZA</em></span><i><b data-nsq-style="width:@ptPercent%"></b></i></div>
                             @if (row.PtPendiente > 0 && row.PtDisponible <= 0)
                             {
                                 <div class="of5-no-stock"><i class="fa-solid fa-triangle-exclamation"></i> Sin PT disponible para surtir.</div>

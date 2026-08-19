@@ -1,0 +1,329 @@
+﻿:root {
+            --erp-blue: #004AAD;
+            --erp-blue-dark: #00347a;
+            --erp-gray: #f3f5f8;
+            --erp-border: #d9e1ec;
+            --erp-text: #263238;
+        }
+
+        body {
+            background: var(--erp-gray);
+            color: var(--erp-text);
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        .erp-shell {
+            max-width: 1550px;
+            margin: 0 auto;
+            padding: 28px;
+        }
+
+        .erp-header {
+            background: linear-gradient(135deg, var(--erp-blue), var(--erp-blue-dark));
+            color: white;
+            border-radius: 20px;
+            padding: 26px 30px;
+            box-shadow: 0 14px 34px rgba(0, 74, 173, .22);
+            margin-bottom: 22px;
+        }
+
+            .erp-header h1 {
+                font-size: 1.55rem;
+                margin: 0;
+                font-weight: 800;
+            }
+
+            .erp-header p {
+                margin: 6px 0 0 0;
+                opacity: .92;
+            }
+
+        .erp-card {
+            background: white;
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            box-shadow: 0 10px 24px rgba(30, 55, 90, .08);
+            margin-bottom: 20px;
+        }
+
+        .erp-card-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .erp-card-body {
+            padding: 20px;
+        }
+
+        .erp-title {
+            font-weight: 800;
+            color: var(--erp-blue-dark);
+            margin: 0;
+        }
+
+        .erp-muted {
+            color: #687789;
+            font-size: .88rem;
+        }
+
+        .erp-label {
+            font-weight: 700;
+            color: #33465f;
+            font-size: .86rem;
+            margin-bottom: 6px;
+        }
+
+        .erp-input,
+        .erp-select,
+        .erp-textarea {
+            border-radius: 12px;
+            border: 1px solid var(--erp-border);
+            padding: 10px 12px;
+        }
+
+            .erp-input:focus,
+            .erp-select:focus,
+            .erp-textarea:focus {
+                border-color: var(--erp-blue);
+                box-shadow: 0 0 0 .2rem rgba(0, 74, 173, .13);
+            }
+
+        .btn-erp-primary {
+            background: var(--erp-blue);
+            border-color: var(--erp-blue);
+            color: white;
+            font-weight: 700;
+            border-radius: 12px;
+            padding: 10px 16px;
+        }
+
+            .btn-erp-primary:hover {
+                background: var(--erp-blue-dark);
+                border-color: var(--erp-blue-dark);
+                color: white;
+            }
+
+        .btn-erp-light {
+            background: #fff;
+            border: 1px solid var(--erp-border);
+            color: var(--erp-blue-dark);
+            font-weight: 700;
+            border-radius: 12px;
+        }
+
+        .btn-erp-danger {
+            background: #fff;
+            border: 1px solid #f2b8b5;
+            color: #b42318;
+            font-weight: 700;
+            border-radius: 12px;
+        }
+
+        .renglon-card {
+            border: 1px solid var(--erp-border);
+            border-radius: 18px;
+            overflow: hidden;
+            margin-bottom: 18px;
+            background: #fff;
+        }
+
+        .renglon-header {
+            background: #eef3fb;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--erp-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .renglon-body {
+            padding: 18px;
+        }
+
+        .badge-renglon {
+            background: var(--erp-blue);
+            color: white;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-weight: 800;
+        }
+
+        .section-title {
+            font-size: .9rem;
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin: 18px 0 12px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #edf1f6;
+        }
+
+        .asignacion-box {
+            background: #f8fafc;
+            border: 1px dashed #cdd8e7;
+            border-radius: 14px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+
+        .almacen-status-box {
+            border: 1px solid #d9e1ec;
+            border-radius: 14px;
+            padding: 14px;
+            margin-top: 14px;
+            background: #f8fafc;
+            display: none;
+        }
+
+            .almacen-status-box.visible {
+                display: block;
+            }
+
+            .almacen-status-box.pt {
+                border-color: #9fd8b6;
+                background: #ecfff3;
+            }
+
+            .almacen-status-box.mp {
+                border-color: #9dc4ff;
+                background: #eef6ff;
+            }
+
+            .almacen-status-box.error {
+                border-color: #f0aaa6;
+                background: #fff3f2;
+            }
+
+        .almacen-status-title {
+            font-weight: 900;
+            margin-bottom: 4px;
+        }
+
+        .almacen-status-detail {
+            font-size: .86rem;
+            color: #536579;
+        }
+
+        .sticky-actions {
+            position: sticky;
+            bottom: 0;
+            background: rgba(243, 245, 248, .92);
+            backdrop-filter: blur(10px);
+            padding: 14px 0;
+            z-index: 20;
+        }
+
+        .small-help {
+            font-size: .78rem;
+            color: #758397;
+        }
+
+        .tipo-of-panel {
+            border: 1px solid #d9e1ec;
+            border-radius: 18px;
+            padding: 16px;
+            background: linear-gradient(180deg, #ffffff, #f8fbff);
+        }
+
+        .tipo-of-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .tipo-of-option {
+            position: relative;
+        }
+
+            .tipo-of-option input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none;
+            }
+
+        .tipo-of-card {
+            height: 100%;
+            min-height: 112px;
+            border: 1px solid #d9e1ec;
+            border-radius: 16px;
+            background: #fff;
+            padding: 14px;
+            cursor: pointer;
+            transition: all .18s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+        }
+
+            .tipo-of-card:hover {
+                border-color: #9dbce4;
+                box-shadow: 0 10px 20px rgba(30, 55, 90, .08);
+                transform: translateY(-1px);
+            }
+
+        .tipo-of-option input:checked + .tipo-of-card {
+            border-color: var(--erp-blue);
+            background: #edf5ff;
+            box-shadow: 0 0 0 4px rgba(0, 74, 173, .10);
+        }
+
+        .tipo-of-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 11px;
+            display: grid;
+            place-items: center;
+            background: #edf5ff;
+            color: var(--erp-blue);
+        }
+
+        .tipo-of-name {
+            font-weight: 900;
+            color: var(--erp-blue-dark);
+        }
+
+        .tipo-of-desc {
+            color: #687789;
+            font-size: .78rem;
+            line-height: 1.25;
+        }
+
+        .motivo-tipo-box {
+            margin-top: 14px;
+            display: none;
+        }
+
+            .motivo-tipo-box.visible {
+                display: block;
+            }
+
+        .required-hint {
+            color: #b42318;
+            font-weight: 800;
+        }
+
+        @media (max-width: 768px) {
+            .erp-shell {
+                padding: 16px;
+            }
+
+            .erp-header {
+                padding: 20px;
+            }
+
+            .tipo-of-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .erp-header h1 {
+                font-size: 1.25rem;
+            }
+        }

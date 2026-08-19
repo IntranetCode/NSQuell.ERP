@@ -1,10 +1,29 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPHistorialVm
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPHistorialVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Historial MP";
     var anterior = Math.Max(1, Model.Pagina - 1);
     var siguiente = Math.Min(Model.TotalPaginas, Model.Pagina + 1);
 }
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+}
+
+
+@section Scripts {
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero">
     <div>

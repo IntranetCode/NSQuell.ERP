@@ -1,0 +1,6 @@
+﻿@if (TempData["AlmacenMensaje"] != null)
+{
+    <div class="alm-alert @TempData["AlmacenMensajeTipo"]" role="status">
+        @TempData["AlmacenMensaje"]
+    </div>
+}

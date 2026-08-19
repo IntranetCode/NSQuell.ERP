@@ -9,1624 +9,7 @@
     var cantidadBase = Model.CantidadOriginalAProducir > 0 ? Model.CantidadOriginalAProducir : Model.PiezasAProducir + Model.ProductoIncompletoApartado;
 }
 
-@functions {
-    public static string Valor(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? "-" : value;
-    }
-
-    public static string Entero(int? value)
-    {
-        return value.HasValue ? value.Value.ToString("N0") : "0";
-    }
-
-    public static string Decimal2(decimal? value)
-    {
-        return value.HasValue ? value.Value.ToString("N2") : "0.00";
-    }
-
-    public static string Decimal4(decimal? value)
-    {
-        return value.HasValue ? value.Value.ToString("N4") : "0.0000";
-    }
-
-    public static string TimeValue(TimeSpan? value)
-    {
-        return value.HasValue ? value.Value.ToString(@"hh\:mm") : "";
-    }
-
-    public static string DateTimeLocal(DateTime? value)
-    {
-        return value.HasValue ? value.Value.ToString("yyyy-MM-ddTHH:mm") : "";
-    }
-
-    public static bool TieneValor(string value)
-    {
-        return !string.IsNullOrWhiteSpace(value);
-    }
-
-    public static bool TieneValor(int? value)
-    {
-        return value.HasValue && value.Value > 0;
-    }
-
-    public static bool TieneValor(decimal? value)
-    {
-        return value.HasValue && value.Value > 0;
-    }
-}
-
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="utf-8" />
-    <title>Programa Cambio de Molde | Planeación</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-
-    <style>
-        :root {
-            --blue: #004AAD;
-            --blue-dark: #00347a;
-            --purple: #6650a4;
-            --purple-dark: #4e3a85;
-            --green: #107c41;
-            --orange: #b54708;
-            --red: #b42318;
-            --bg: #f4f7fb;
-            --card: #ffffff;
-            --border: #d9e3f1;
-            --text: #1f2937;
-            --muted: #667085;
-            --shadow: 0 16px 38px rgba(15, 23, 42, .09);
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: radial-gradient(circle at 0% 0%, rgba(102, 80, 164, .12), transparent 32%), radial-gradient(circle at 95% 10%, rgba(0, 74, 173, .10), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #edf2f8 100%);
-            color: var(--text);
-            font-family: "Segoe UI", Arial, sans-serif;
-        }
-
-        .page {
-            max-width: 1680px;
-            margin: 0 auto;
-            padding: 26px;
-        }
-
-        .hero {
-            position: relative;
-            overflow: hidden;
-            border-radius: 28px;
-            padding: 30px 32px;
-            margin-bottom: 20px;
-            color: #fff;
-            background: linear-gradient(135deg, rgba(102,80,164,.98), rgba(78,58,133,.98)), url("data:image/svg+xml,%3Csvg width='900' height='300' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='rgba(255,255,255,.15)' stroke-width='2'%3E%3Cpath d='M0 235 C170 90 260 275 430 120 S710 70 900 180'/%3E%3Cpath d='M0 75 C210 190 280 20 500 100 S660 250 900 105'/%3E%3C/g%3E%3C/svg%3E");
-            background-size: cover;
-            box-shadow: 0 24px 58px rgba(78, 58, 133, .28);
-        }
-
-            .hero::after {
-                content: "";
-                position: absolute;
-                right: -115px;
-                top: -135px;
-                width: 340px;
-                height: 340px;
-                border-radius: 999px;
-                background: rgba(255,255,255,.11);
-            }
-
-        .stage {
-            position: relative;
-            z-index: 2;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 7px 12px;
-            margin-bottom: 12px;
-            border: 1px solid rgba(255,255,255,.35);
-            border-radius: 999px;
-            background: rgba(255,255,255,.14);
-            font-size: .76rem;
-            font-weight: 950;
-            text-transform: uppercase;
-            letter-spacing: .05em;
-        }
-
-        .hero h1 {
-            position: relative;
-            z-index: 2;
-            margin: 0;
-            font-size: 2rem;
-            font-weight: 950;
-        }
-
-        .hero p {
-            position: relative;
-            z-index: 2;
-            max-width: 970px;
-            margin: 8px 0 0;
-            color: rgba(255,255,255,.90);
-        }
-
-        .hero-actions {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 16px;
-        }
-
-        .btn-glass {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 7px;
-            padding: 10px 15px;
-            border: 1px solid rgba(255,255,255,.36);
-            border-radius: 14px;
-            background: rgba(255,255,255,.14);
-            color: #fff;
-            font-weight: 900;
-            text-decoration: none;
-            backdrop-filter: blur(10px);
-        }
-
-            .btn-glass:hover {
-                background: #fff;
-                color: var(--purple);
-            }
-
-        .btn-main {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 10px 16px;
-            border: 1px solid var(--purple);
-            border-radius: 14px;
-            background: var(--purple);
-            color: #fff;
-            font-weight: 950;
-            text-decoration: none;
-        }
-
-            .btn-main:hover {
-                background: var(--purple-dark);
-                border-color: var(--purple-dark);
-                color: #fff;
-            }
-
-        .btn-light-main {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 10px 16px;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            background: #fff;
-            color: var(--purple-dark);
-            font-weight: 950;
-            text-decoration: none;
-        }
-
-            .btn-light-main:hover {
-                background: #f4f0ff;
-                color: var(--purple-dark);
-            }
-
-        .flow-note {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 20px;
-            padding: 15px 17px;
-            border: 1px solid #d6bbfb;
-            border-radius: 18px;
-            background: #f4ebff;
-            color: #53389e;
-            font-weight: 750;
-        }
-
-        .white-product-card {
-            margin-bottom: 20px;
-            border: 2px solid #d0d5dd;
-            border-radius: 24px;
-            background: linear-gradient(180deg,#fff,#f9fafb);
-            box-shadow: var(--shadow);
-            overflow: hidden
-        }
-
-        .white-product-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 14px;
-            align-items: flex-start;
-            flex-wrap: wrap;
-            padding: 20px 22px;
-            border-bottom: 1px solid #eaecf0
-        }
-
-        .white-product-title {
-            margin: 0;
-            font-size: 1.1rem;
-            font-weight: 950;
-            color: #344054
-        }
-
-        .white-product-sub {
-            margin-top: 4px;
-            color: var(--muted);
-            font-size: .88rem;
-            font-weight: 650
-        }
-
-        .white-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            padding: 7px 11px;
-            border: 1px solid #d0d5dd;
-            border-radius: 999px;
-            background: #fff;
-            color: #344054;
-            font-size: .78rem;
-            font-weight: 950
-        }
-
-        .white-product-body {
-            padding: 20px 22px
-        }
-
-        .white-summary {
-            display: grid;
-            grid-template-columns: repeat(3,minmax(0,1fr));
-            gap: 12px;
-            margin-bottom: 16px
-        }
-
-        .white-summary-item {
-            padding: 13px 14px;
-            border: 1px solid #eaecf0;
-            border-radius: 16px;
-            background: #fff
-        }
-
-            .white-summary-item .k {
-                font-size: .7rem;
-                font-weight: 950;
-                text-transform: uppercase;
-                letter-spacing: .04em;
-                color: var(--muted)
-            }
-
-            .white-summary-item .v {
-                margin-top: 3px;
-                font-size: 1.12rem;
-                font-weight: 950;
-                color: #344054
-            }
-
-            .white-summary-item.selected {
-                border-color: #b7ebc6;
-                background: #f0fff4
-            }
-
-        .white-list {
-            display: grid;
-            gap: 10px
-        }
-
-        .white-option {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 14px;
-            border: 1px solid #d0d5dd;
-            border-radius: 16px;
-            background: #fff
-        }
-
-            .white-option.selected {
-                border-color: #73c38d;
-                background: #f3fff6
-            }
-
-        .white-check {
-            width: 20px;
-            height: 20px;
-            margin-top: 2px
-        }
-
-        .white-option-main {
-            flex: 1;
-            min-width: 0
-        }
-
-        .white-option-title {
-            font-weight: 950;
-            color: #344054
-        }
-
-        .white-option-meta {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 6px
-        }
-
-        .white-meta {
-            padding: 5px 8px;
-            border-radius: 999px;
-            background: #f2f4f7;
-            color: #475467;
-            font-size: .75rem;
-            font-weight: 850
-        }
-
-        .white-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            margin-top: 16px
-        }
-
-        .btn-white-use {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 10px 16px;
-            border: 1px solid #107c41;
-            border-radius: 14px;
-            background: #107c41;
-            color: #fff;
-            font-weight: 950
-        }
-
-            .btn-white-use:hover {
-                background: #0b6333;
-                color: #fff
-            }
-
-        .btn-white-full {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 10px 16px;
-            border: 1px solid #d0d5dd;
-            border-radius: 14px;
-            background: #fff;
-            color: #344054;
-            font-weight: 950
-        }
-
-            .btn-white-full:hover {
-                background: #f2f4f7;
-                color: #344054
-            }
-
-        .white-info {
-            padding: 12px 14px;
-            border: 1px solid #d0d5dd;
-            border-radius: 15px;
-            background: #f9fafb;
-            color: #475467;
-            font-size: .86rem;
-            font-weight: 700
-        }
-
-        .white-empty {
-            padding: 16px;
-            border: 1px dashed #d0d5dd;
-            border-radius: 16px;
-            background: #fff;
-            color: #667085
-        }
-
-        .qty-breakdown {
-            display: grid;
-            grid-template-columns: repeat(3,minmax(0,1fr));
-            gap: 10px;
-            margin-top: 12px
-        }
-
-            .qty-breakdown .item {
-                padding: 12px;
-                border-radius: 15px;
-                border: 1px solid var(--border);
-                background: #fbfdff
-            }
-
-                .qty-breakdown .item.white {
-                    background: #fff;
-                    border-color: #d0d5dd
-                }
-
-                .qty-breakdown .item.net {
-                    background: #eff8ff;
-                    border-color: #b2ddff
-                }
-
-            .qty-breakdown .k {
-                font-size: .68rem;
-                text-transform: uppercase;
-                font-weight: 950;
-                color: var(--muted)
-            }
-
-            .qty-breakdown .v {
-                font-size: 1.05rem;
-                font-weight: 950;
-                margin-top: 2px
-            }
-        @@media(max - width:900px)
-
-        {
-            .white-summary,.qty-breakdown
-
-        {
-            grid-template-columns: 1fr
-        }
-
-        }
-
-        .layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1.1fr) minmax(420px, .9fr);
-            gap: 20px;
-            align-items: start;
-        }
-
-        .cardx {
-            overflow: hidden;
-            margin-bottom: 20px;
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            background: var(--card);
-            box-shadow: var(--shadow);
-        }
-
-        .cardx-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-            padding: 18px 22px;
-            border-bottom: 1px solid var(--border);
-            background: linear-gradient(180deg, #ffffff, #f8fbff);
-        }
-
-        .cardx-title {
-            margin: 0;
-            color: var(--purple-dark);
-            font-size: 1.12rem;
-            font-weight: 950;
-        }
-
-        .cardx-sub {
-            margin-top: 4px;
-            color: var(--muted);
-            font-size: .88rem;
-            font-weight: 650;
-        }
-
-        .cardx-body {
-            padding: 22px;
-        }
-
-        .field-label {
-            margin-bottom: 5px;
-            color: #344054;
-            font-size: .76rem;
-            font-weight: 950;
-            letter-spacing: .04em;
-            text-transform: uppercase;
-        }
-
-        .field-value {
-            min-height: 26px;
-            color: #152033;
-            font-weight: 850;
-        }
-
-        .form-control,
-        .form-select {
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 10px 12px;
-            box-shadow: none;
-        }
-
-            .form-control:focus,
-            .form-select:focus {
-                border-color: rgba(102,80,164,.48);
-                box-shadow: 0 0 0 .20rem rgba(102,80,164,.12);
-            }
-
-        .metric-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
-        }
-
-        .metric {
-            padding: 13px;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            background: #fbfdff;
-        }
-
-            .metric .k {
-                color: var(--muted);
-                font-size: .70rem;
-                font-weight: 950;
-                letter-spacing: .04em;
-                text-transform: uppercase;
-            }
-
-            .metric .v {
-                margin-top: 3px;
-                color: var(--blue-dark);
-                font-size: 1.12rem;
-                font-weight: 950;
-            }
-
-        .tech-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 11px;
-        }
-
-        .tech-item {
-            padding: 12px;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            background: #fbfdff;
-        }
-
-        .tech-k {
-            color: var(--muted);
-            font-size: .70rem;
-            font-weight: 950;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
-        .tech-v {
-            margin-top: 3px;
-            color: #182437;
-            font-weight: 900;
-        }
-
-        .badge-ok,
-        .badge-warn,
-        .badge-muted {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 7px 10px;
-            border-radius: 999px;
-            font-size: .76rem;
-            font-weight: 950;
-            white-space: nowrap;
-        }
-
-        .badge-ok {
-            color: var(--green);
-            background: #ecfdf3;
-            border: 1px solid #abefc6;
-        }
-
-        .badge-warn {
-            color: var(--orange);
-            background: #fff7ed;
-            border: 1px solid #fed7aa;
-        }
-
-        .badge-muted {
-            color: #475467;
-            background: #f2f4f7;
-            border: 1px solid #d0d5dd;
-        }
-
-        .decision-box {
-            border: 1px solid #d6bbfb;
-            border-radius: 24px;
-            background: linear-gradient(180deg, #ffffff, #fbf8ff);
-            box-shadow: var(--shadow);
-            position: sticky;
-            top: 18px;
-        }
-
-        .decision-head {
-            padding: 20px 22px;
-            border-bottom: 1px solid #e9d7fe;
-            background: linear-gradient(135deg, #f4ebff, #ffffff);
-        }
-
-        .decision-title {
-            margin: 0;
-            color: var(--purple-dark);
-            font-size: 1.18rem;
-            font-weight: 950;
-        }
-
-        .decision-body {
-            padding: 22px;
-        }
-
-        .step-line {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 14px;
-        }
-
-        .step-number {
-            width: 30px;
-            height: 30px;
-            flex: 0 0 30px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            background: var(--purple);
-            color: #fff;
-            font-weight: 950;
-            font-size: .82rem;
-        }
-
-        .formula-box {
-            padding: 13px 14px;
-            border: 1px dashed #b692f6;
-            border-radius: 16px;
-            background: #f9f5ff;
-            color: #53389e;
-            font-weight: 750;
-        }
-
-        .sticky-actions {
-            position: sticky;
-            bottom: 0;
-            z-index: 30;
-            margin-top: 20px;
-            padding: 13px 0;
-            background: rgba(244,247,251,.92);
-            border-top: 1px solid rgba(217,227,241,.85);
-            backdrop-filter: blur(10px);
-        }
-
-        @@media (max-width: 1100px) {
-            .white-product-card {
-                margin-bottom: 20px;
-                border: 2px solid #d0d5dd;
-                border-radius: 24px;
-                background: linear-gradient(180deg,#fff,#f9fafb);
-                box-shadow: var(--shadow);
-                overflow: hidden
-            }
-
-            .white-product-head {
-                display: flex;
-                justify-content: space-between;
-                gap: 14px;
-                align-items: flex-start;
-                flex-wrap: wrap;
-                padding: 20px 22px;
-                border-bottom: 1px solid #eaecf0
-            }
-
-            .white-product-title {
-                margin: 0;
-                font-size: 1.1rem;
-                font-weight: 950;
-                color: #344054
-            }
-
-            .white-product-sub {
-                margin-top: 4px;
-                color: var(--muted);
-                font-size: .88rem;
-                font-weight: 650
-            }
-
-            .white-pill {
-                display: inline-flex;
-                align-items: center;
-                gap: 7px;
-                padding: 7px 11px;
-                border: 1px solid #d0d5dd;
-                border-radius: 999px;
-                background: #fff;
-                color: #344054;
-                font-size: .78rem;
-                font-weight: 950
-            }
-
-            .white-product-body {
-                padding: 20px 22px
-            }
-
-            .white-summary {
-                display: grid;
-                grid-template-columns: repeat(3,minmax(0,1fr));
-                gap: 12px;
-                margin-bottom: 16px
-            }
-
-            .white-summary-item {
-                padding: 13px 14px;
-                border: 1px solid #eaecf0;
-                border-radius: 16px;
-                background: #fff
-            }
-
-                .white-summary-item .k {
-                    font-size: .7rem;
-                    font-weight: 950;
-                    text-transform: uppercase;
-                    letter-spacing: .04em;
-                    color: var(--muted)
-                }
-
-                .white-summary-item .v {
-                    margin-top: 3px;
-                    font-size: 1.12rem;
-                    font-weight: 950;
-                    color: #344054
-                }
-
-                .white-summary-item.selected {
-                    border-color: #b7ebc6;
-                    background: #f0fff4
-                }
-
-            .white-list {
-                display: grid;
-                gap: 10px
-            }
-
-            .white-option {
-                display: flex;
-                align-items: flex-start;
-                gap: 12px;
-                padding: 14px;
-                border: 1px solid #d0d5dd;
-                border-radius: 16px;
-                background: #fff
-            }
-
-                .white-option.selected {
-                    border-color: #73c38d;
-                    background: #f3fff6
-                }
-
-            .white-check {
-                width: 20px;
-                height: 20px;
-                margin-top: 2px
-            }
-
-            .white-option-main {
-                flex: 1;
-                min-width: 0
-            }
-
-            .white-option-title {
-                font-weight: 950;
-                color: #344054
-            }
-
-            .white-option-meta {
-                display: flex;
-                gap: 8px;
-                flex-wrap: wrap;
-                margin-top: 6px
-            }
-
-            .white-meta {
-                padding: 5px 8px;
-                border-radius: 999px;
-                background: #f2f4f7;
-                color: #475467;
-                font-size: .75rem;
-                font-weight: 850
-            }
-
-            .white-actions {
-                display: flex;
-                gap: 10px;
-                flex-wrap: wrap;
-                justify-content: flex-end;
-                margin-top: 16px
-            }
-
-            .btn-white-use {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                padding: 10px 16px;
-                border: 1px solid #107c41;
-                border-radius: 14px;
-                background: #107c41;
-                color: #fff;
-                font-weight: 950
-            }
-
-                .btn-white-use:hover {
-                    background: #0b6333;
-                    color: #fff
-                }
-
-            .btn-white-full {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                padding: 10px 16px;
-                border: 1px solid #d0d5dd;
-                border-radius: 14px;
-                background: #fff;
-                color: #344054;
-                font-weight: 950
-            }
-
-                .btn-white-full:hover {
-                    background: #f2f4f7;
-                    color: #344054
-                }
-
-            .white-info {
-                padding: 12px 14px;
-                border: 1px solid #d0d5dd;
-                border-radius: 15px;
-                background: #f9fafb;
-                color: #475467;
-                font-size: .86rem;
-                font-weight: 700
-            }
-
-            .white-empty {
-                padding: 16px;
-                border: 1px dashed #d0d5dd;
-                border-radius: 16px;
-                background: #fff;
-                color: #667085
-            }
-
-            .qty-breakdown {
-                display: grid;
-                grid-template-columns: repeat(3,minmax(0,1fr));
-                gap: 10px;
-                margin-top: 12px
-            }
-
-                .qty-breakdown .item {
-                    padding: 12px;
-                    border-radius: 15px;
-                    border: 1px solid var(--border);
-                    background: #fbfdff
-                }
-
-                    .qty-breakdown .item.white {
-                        background: #fff;
-                        border-color: #d0d5dd
-                    }
-
-                    .qty-breakdown .item.net {
-                        background: #eff8ff;
-                        border-color: #b2ddff
-                    }
-
-                .qty-breakdown .k {
-                    font-size: .68rem;
-                    text-transform: uppercase;
-                    font-weight: 950;
-                    color: var(--muted)
-                }
-
-                .qty-breakdown .v {
-                    font-size: 1.05rem;
-                    font-weight: 950;
-                    margin-top: 2px
-                }
-        @@media(max - width:900px)
-
-        {
-            .white-summary,.qty-breakdown
-
-        {
-            grid-template-columns: 1fr
-        }
-
-        }
-
-        .layout {
-            grid-template-columns: 1fr;
-        }
-
-        .decision-box {
-            position: static;
-        }
-
-        }
-
-        @@media (max-width: 768px) {
-            .page {
-                padding: 15px;
-            }
-
-            .hero {
-                padding: 22px;
-                border-radius: 22px;
-            }
-
-                .hero h1 {
-                    font-size: 1.55rem;
-                }
-
-            .metric-grid,
-            .tech-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-</head>
-
-<body>
-    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
-    @await Html.PartialAsync("_PlaneacionNavbar")
-    <div class="page">
-
-        <section class="hero">
-            <div class="stage">
-                <i class="fa-solid fa-arrows-rotate"></i>
-                Etapa 3 · Programa Cambio de Molde
-            </div>
-
-            <h1>
-                <i class="fa-solid fa-gears me-2"></i>
-                Programa Cambio de Molde
-            </h1>
-
-            <p>
-                Confirma máquina y molde final, define la condición operativa, hora de cambio, hora de arranque y producción programada antes de mandar a OF.
-            </p>
-
-            <div class="hero-actions">
-                <a asp-controller="PlaneacionPrograma"
-                   asp-action="Index"
-                   class="btn-glass">
-                    <i class="fa-solid fa-arrow-left"></i>
-                    Volver a Programa de Planeación
-                </a>
-
-                <a asp-controller="PlaneacionPrograma"
-                   asp-action="Maquinas"
-                   class="btn-glass">
-                    <i class="fa-solid fa-industry"></i>
-                    Ver máquinas
-                </a>
-            </div>
-        </section>
-
-        <div class="flow-note">
-            <i class="fa-solid fa-circle-info mt-1"></i>
-            <div>
-                <div class="fw-bold">Aquí se decide el cambio de molde.</div>
-                <div class="small">
-                    Planeación define aquí la cantidad real a fabricar. Si existe producto incompleto con etiqueta blanca para la misma pieza, puede apartarlo para esta necesidad o decidir producir la cantidad completa. La OF heredará esta decisión; no volverá a elegir el producto incompleto.
-                </div>
-            </div>
-        </div>
-
-        <section class="white-product-card">
-            <div class="white-product-head">
-                <div>
-                    <h2 class="white-product-title"><i class="fa-regular fa-square me-2"></i>Producto incompleto / etiqueta blanca</h2>
-                    <div class="white-product-sub">Planeación decide si estas piezas se utilizan para esta necesidad antes de generar el programa y la OF.</div>
-                </div>
-                @if (productoIncompletoApartado > 0)
-                {
-                    <span class="white-pill"><i class="fa-solid fa-lock text-success"></i>@productoIncompletoApartado.ToString("N0") pzas apartadas</span>
-                }
-                else if (productoIncompleto.Any(x => !x.ApartadaEstaNecesidad))
-                {
-                    <span class="white-pill"><i class="fa-solid fa-box-open"></i>Producto disponible</span>
-                }
-                else
-                {
-                    <span class="white-pill"><i class="fa-solid fa-minus"></i>Sin producto disponible</span>
-                }
-            </div>
-            <div class="white-product-body">
-                <div class="white-summary">
-                    <div class="white-summary-item"><div class="k">Pendiente sin etiqueta blanca</div><div class="v">@cantidadBase.ToString("N0")</div></div>
-                    <div class="white-summary-item selected"><div class="k">Etiqueta blanca seleccionada</div><div class="v">@productoIncompletoApartado.ToString("N0")</div></div>
-                    <div class="white-summary-item"><div class="k">Producción real</div><div class="v">@Model.PiezasAProducir.ToString("N0")</div></div>
-                </div>
-                @if (productoIncompleto.Count > 0)
-                {
-                    <form asp-controller="PlaneacionPrograma" asp-action="AplicarProductoIncompleto" method="post" id="formProductoIncompleto">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="ReleaseDetalleID" value="@Model.ReleaseDetalleID" />
-                        <div class="white-list">
-                            @foreach (var caja in productoIncompleto)
-                            {
-                                var etiqueta = string.IsNullOrWhiteSpace(caja.EtiquetaBlanca) ? (string.IsNullOrWhiteSpace(caja.FolioCaja) ? $"Caja {caja.CajaProduccionID}" : caja.FolioCaja) : caja.EtiquetaBlanca;
-                                <label class="white-option @(caja.ApartadaEstaNecesidad ? "selected" : "")">
-                                    <input class="form-check-input white-check" type="checkbox" name="CajasProduccionID" value="@caja.CajaProduccionID" checked="@caja.ApartadaEstaNecesidad" />
-                                    <span class="white-option-main">
-                                        <span class="white-option-title">@etiqueta</span>
-                                        <span class="white-option-meta">
-                                            <span class="white-meta">Disponible: @caja.CantidadPiezas.ToString("N0") pzas</span>
-                                            @if (caja.CapacidadObjetivoCaja > 0)
-                                            {
-                                                <span class="white-meta">Caja: @caja.CantidadPiezas.ToString("N0") / @caja.CapacidadObjetivoCaja.ToString("N0")</span>
-                                            }
-                                            @if (caja.CantidadPendienteCompletar > 0)
-                                            {
-                                                <span class="white-meta">Faltan para completar: @caja.CantidadPendienteCompletar.ToString("N0")</span>
-                                            }
-                                            @if (caja.FechaFormacion.HasValue)
-                                            {
-                                                <span class="white-meta">Desde: @caja.FechaFormacion.Value.ToString("dd/MM/yyyy HH:mm")</span>
-                                            }
-                                            @if (caja.ApartadaEstaNecesidad)
-                                            {
-                                                <span class="white-meta"><i class="fa-solid fa-lock me-1"></i>Apartada para esta necesidad</span>
-                                            }
-                                        </span>
-                                    </span>
-                                </label>
-                            }
-                        </div>
-                        <div class="white-info mt-3"><i class="fa-solid fa-circle-info me-2"></i>La selección toma la etiqueta completa; no se divide una misma etiqueta blanca entre diferentes necesidades. Las piezas seleccionadas se restan de la cantidad a producir y recalculan MP, embalajes y horas.</div>
-                        <div class="white-actions">
-                            <button type="submit" class="btn-white-use"><i class="fa-solid fa-check"></i>Usar producto seleccionado</button>
-                        </div>
-                    </form>
-                    <form asp-controller="PlaneacionPrograma" asp-action="ProducirCantidadCompleta" method="post" class="mt-2 text-end">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="releaseDetalleId" value="@Model.ReleaseDetalleID" />
-                        <button type="submit" class="btn-white-full"><i class="fa-solid fa-industry"></i>Producir cantidad completa</button>
-                    </form>
-                }
-                else
-                {
-                    <div class="white-empty"><i class="fa-regular fa-square me-2"></i>No existe producto incompleto disponible para esta pieza. La necesidad continuará con la cantidad completa pendiente de producir.</div>
-                }
-            </div>
-        </section>
-
-        <form asp-controller="PlaneacionPrograma" asp-action="Crear" method="post" id="formPrograma">
-            @Html.AntiForgeryToken()
-
-            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-4 fw-semibold"></div>
-
-            @if (ViewBag.MostrarModalMaquinaOcupada == true)
-            {
-                <div class="modal fade" id="modalMaquinaOcupada" tabindex="-1" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered modal-lg">
-                        <div class="modal-content" style="border-radius:26px; overflow:hidden; border:0; box-shadow:0 24px 70px rgba(15,23,42,.25);">
-                            <div class="modal-header" style="background:linear-gradient(135deg,#4e3a85,#6650a4); color:white; border:0;">
-                                <div>
-                                    <h5 class="modal-title" style="font-weight:950;">
-                                        <i class="fa-solid fa-industry me-2"></i>
-                                        @ViewBag.MaquinaOcupadaTitulo
-                                    </h5>
-                                    <div class="small opacity-75 mt-1">
-                                        No se puede programar T.P. en ese horario porque la máquina debe respetar la cola.
-                                    </div>
-                                </div>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                            </div>
-
-                            <div class="modal-body p-4">
-                                <div class="alert alert-warning rounded-4 fw-semibold">
-                                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
-                                    @ViewBag.MaquinaOcupadaMensaje
-                                </div>
-
-                                <div class="row g-3 mb-3">
-                                    <div class="col-md-6">
-                                        <div class="p-3 rounded-4 border bg-light">
-                                            <div class="text-muted small fw-bold text-uppercase">Siguiente hora de cambio disponible</div>
-                                            <div class="fs-4 fw-bold text-primary mt-1">
-                                                @ViewBag.MaquinaOcupadaCambio
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <div class="p-3 rounded-4 border bg-light">
-                                            <div class="text-muted small fw-bold text-uppercase">Hora de arranque sugerida</div>
-                                            <div class="fs-4 fw-bold text-success mt-1">
-                                                @ViewBag.MaquinaOcupadaArranque
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="p-3 rounded-4 border" style="background:#fbfdff;">
-                                    <div class="fw-bold mb-3">
-                                        <i class="fa-solid fa-timeline me-2 text-primary"></i>
-                                        Línea de tiempo sugerida
-                                    </div>
-
-                                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                                        <div class="px-3 py-2 rounded-pill bg-secondary text-white fw-bold">
-                                            Solicitud actual
-                                        </div>
-
-                                        <div class="flex-grow-1 border-top border-3"></div>
-
-                                        <div class="px-3 py-2 rounded-pill bg-primary text-white fw-bold">
-                                            Cambio @ViewBag.MaquinaOcupadaCambio
-                                        </div>
-
-                                        <div class="flex-grow-1 border-top border-3"></div>
-
-                                        <div class="px-3 py-2 rounded-pill bg-success text-white fw-bold">
-                                            Arranque @ViewBag.MaquinaOcupadaArranque
-                                        </div>
-                                    </div>
-
-                                    <div class="small text-muted mt-3">
-                                        @ViewBag.MaquinaOcupadaMotivo
-                                    </div>
-                                </div>
-
-                                <div class="alert alert-info rounded-4 fw-semibold mt-3 mb-0">
-                                    <i class="fa-solid fa-circle-info me-2"></i>
-                                    @ViewBag.MaquinaOcupadaEsIP
-                                </div>
-                            </div>
-
-                            <div class="modal-footer border-0 p-4 pt-0">
-                                <button type="button" class="btn btn-light rounded-4 fw-bold" data-bs-dismiss="modal">
-                                    Revisar horario
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
-
-            <input type="hidden" asp-for="ReleaseDetalleID" />
-            <input type="hidden" asp-for="ReleaseID" />
-            <input type="hidden" asp-for="FolioRelease" />
-
-            <input type="hidden" asp-for="ClienteID" />
-            <input type="hidden" asp-for="ClienteNombre" />
-
-            <input type="hidden" asp-for="ParteID" />
-            <input type="hidden" asp-for="NumeroParte" />
-            <input type="hidden" asp-for="ReferenciaSAP" />
-            <input type="hidden" asp-for="DesignacionDescripcionSAP" />
-
-            <input type="hidden" asp-for="CantidadRequerida" />
-            <input type="hidden" asp-for="PiezasDesdePT" />
-            <input type="hidden" asp-for="PTDisponibleAlCalcular" />
-            <input type="hidden" asp-for="PTApartadoOtros" />
-            <input type="hidden" asp-for="PTDisponibleNeto" />
-            <input type="hidden" asp-for="PiezasAProducir" />
-            <input type="hidden" asp-for="CantidadOriginalAProducir" />
-            <input type="hidden" asp-for="ProductoIncompletoApartado" />
-
-            <input type="hidden" asp-for="MaquinaCodigo" />
-            <input type="hidden" asp-for="MaquinaNombre" />
-            <input type="hidden" asp-for="MoldeCodigo" />
-
-            <input type="hidden" asp-for="ObjetivoHora" />
-            <input type="hidden" asp-for="Ciclo" />
-            <input type="hidden" asp-for="Cavidades" />
-            <input type="hidden" asp-for="PesoBrutoPieza" />
-
-            <input type="hidden" asp-for="MaterialID" />
-            <input type="hidden" asp-for="MaterialCodigo" />
-            <input type="hidden" asp-for="MaterialDescripcion" />
-            <input type="hidden" asp-for="CantidadMpKg" />
-
-            <input type="hidden" asp-for="EmbalajeCodigo" />
-            <input type="hidden" asp-for="EmbalajeDescripcion" />
-            <input type="hidden" asp-for="PiezasPorEmbalaje" />
-            <input type="hidden" asp-for="CantidadEmbalajes" />
-
-            <input type="hidden" asp-for="PiezasPorCaja" />
-            <input type="hidden" asp-for="QtyPorDia" />
-            <input type="hidden" asp-for="MaquinaSustitutaID" />
-            <input type="hidden" asp-for="MaquinaSustitutaCodigo" />
-            <input type="hidden" asp-for="MaquinaSustitutaNombre" />
-            <input type="hidden" asp-for="TipoSecado" />
-            <input type="hidden" asp-for="HorasSecado" />
-            <input type="hidden" asp-for="HorasSecadoTexto" />
-
-            <div class="layout">
-
-                <div>
-                    <section class="cardx">
-                        <div class="cardx-header">
-                            <div>
-                                <h2 class="cardx-title">
-                                    <i class="fa-solid fa-file-lines me-2"></i>
-                                    Necesidad origen
-                                </h2>
-                                <div class="cardx-sub">
-                                    Datos heredados desde Programa de Planeación.
-                                </div>
-                            </div>
-
-                            <span class="badge-ok">
-                                <i class="fa-solid fa-circle-check"></i>
-                                Listo para cambio
-                            </span>
-                        </div>
-
-                        <div class="cardx-body">
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-3">
-                                    <div class="field-label">Release</div>
-                                    <div class="field-value">@Valor(Model.FolioRelease)</div>
-                                </div>
-
-                                <div class="col-md-3">
-                                    <div class="field-label">Cliente</div>
-                                    <div class="field-value">@Valor(Model.ClienteNombre)</div>
-                                </div>
-
-                                <div class="col-md-3">
-                                    <div class="field-label">No. parte</div>
-                                    <div class="field-value">@Valor(Model.NumeroParte ?? Model.ReferenciaSAP)</div>
-                                </div>
-
-                                <div class="col-md-3">
-                                    <div class="field-label">Color</div>
-                                    <input asp-for="Color"
-                                           class="form-control"
-                                           maxlength="100"
-                                           placeholder="Ej. Natural, Negro, Azul..." />
-                                </div>
-
-                                <div class="col-12">
-                                    <div class="field-label">Designación / descripción</div>
-                                    <div class="field-value">@Valor(Model.DesignacionDescripcionSAP)</div>
-                                </div>
-                            </div>
-
-                            <div class="metric-grid">
-                                <div class="metric"><div class="k">Requerido release</div><div class="v">@Model.CantidadRequerida.ToString("N0")</div></div>
-                                <div class="metric"><div class="k">Pendiente base</div><div class="v">@cantidadBase.ToString("N0")</div></div>
-                                <div class="metric"><div class="k">Etiqueta blanca</div><div class="v">@Model.ProductoIncompletoApartado.ToString("N0")</div></div>
-                                <div class="metric"><div class="k">A producir</div><div class="v">@Model.PiezasAProducir.ToString("N0")</div></div>
-                                <div class="metric"><div class="k">MP requerida</div><div class="v">@Decimal4(Model.CantidadMpKg) kg</div></div>
-                                <div class="metric"><div class="k">Embalajes</div><div class="v">@Decimal2(Model.CantidadEmbalajes)</div></div>
-                                <div class="metric"><div class="k">Horas fórmula</div><div class="v">@Decimal2(Model.HorasProgramadas)</div></div>
-                            </div>
-                            <div class="qty-breakdown">
-                                <div class="item"><div class="k">Cantidad pendiente original</div><div class="v">@cantidadBase.ToString("N0") pzas</div></div>
-                                <div class="item white"><div class="k">Tomadas de etiqueta blanca</div><div class="v">@Model.ProductoIncompletoApartado.ToString("N0") pzas</div></div>
-                                <div class="item net"><div class="k">Producción que ejecutará la OF</div><div class="v">@Model.PiezasAProducir.ToString("N0") pzas</div></div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="cardx">
-                        <div class="cardx-header">
-                            <div>
-                                <h2 class="cardx-title">
-                                    <i class="fa-solid fa-microchip me-2"></i>
-                                    Datos técnicos de planeación
-                                </h2>
-                                <div class="cardx-sub">
-                                    Información que alimenta el Programa Cambio de Molde.
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="cardx-body">
-                            <div class="tech-grid">
-                                <div class="tech-item">
-                                    <div class="tech-k">Molde</div>
-                                    <div class="tech-v">@Valor(Model.MoldeCodigo)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Material / Resina</div>
-                                    <div class="tech-v">@Valor(Model.MaterialCodigo)</div>
-                                    <div class="text-muted small">@Valor(Model.MaterialDescripcion)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Cavidades (pzas)</div>
-                                    <div class="tech-v">@Entero(Model.Cavidades)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Ciclo (seg)</div>
-                                    <div class="tech-v">@Valor(Model.Ciclo)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Máquina asignada</div>
-                                    <div class="tech-v">@Valor(Model.MaquinaCodigo)</div>
-                                    <div class="text-muted small">@Valor(Model.MaquinaNombre)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Máquinas sustitutas configuradas</div>
-                                    <div class="tech-v">@Valor(Model.MaquinaSustitutaCodigo)</div>
-                                    <div class="text-muted small">@Valor(Model.MaquinaSustitutaNombre)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Qty por día (pzas)</div>
-                                    <div class="tech-v">@Entero(Model.QtyPorDia)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Peso pza bruto (g/pza)</div>
-                                    <div class="tech-v">@Decimal4(Model.PesoBrutoPieza)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Objetivo / hr (pzas)</div>
-                                    <div class="tech-v">@Entero(Model.ObjetivoHora)</div>
-                                </div>
-
-                                <div class="tech-item">
-                                    <div class="tech-k">Piezas por embalaje (pzas)</div>
-                                    <div class="tech-v">@Decimal2(Model.PiezasPorEmbalaje)</div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-
-                <aside class="decision-box">
-                    <div class="decision-head">
-                        <h2 class="decision-title">
-                            <i class="fa-solid fa-sliders me-2"></i>
-                            Decisión de Cambio de Molde
-                        </h2>
-                        <div class="cardx-sub">
-                            Confirma los datos operativos antes de guardar.
-                        </div>
-                    </div>
-
-                    <div class="decision-body">
-                        <div class="step-line">
-                            <div class="step-number">1</div>
-                            <div class="w-100">
-                                <label class="field-label">Condición</label>
-                                <select asp-for="CondicionProduccion"
-                                        asp-items="Model.Condiciones"
-                                        class="form-select">
-                                </select>
-                                <span asp-validation-for="CondicionProduccion" class="text-danger small"></span>
-                            </div>
-                        </div>
-
-                        <div class="step-line">
-                            <div class="step-number">2</div>
-                            <div class="w-100">
-                                <label class="field-label">Máquina final</label>
-                                <select asp-for="MaquinaID"
-                                        asp-items="Model.Maquinas"
-                                        class="form-select">
-                                    <option value="">-- Selecciona máquina --</option>
-                                </select>
-                                <span asp-validation-for="MaquinaID" class="text-danger small"></span>
-
-                                @if (TieneValor(Model.MaquinaSustitutaCodigo))
-                                {
-                                    <div class="small text-muted mt-1">
-                                        Alternativas configuradas: <strong>@Model.MaquinaSustitutaCodigo</strong>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-
-                        <div class="step-line">
-                            <div class="step-number">3</div>
-                            <div class="w-100">
-                                <label class="field-label">Molde final</label>
-                                <select asp-for="MoldeID"
-                                        asp-items="Model.Moldes"
-                                        class="form-select">
-                                    <option value="">-- Selecciona molde --</option>
-                                </select>
-                                <span asp-validation-for="MoldeID" class="text-danger small"></span>
-                            </div>
-                        </div>
-
-                        <input type="hidden" asp-for="OperadorPrincipalID" id="OperadorPrincipalID" />
-                        <input type="hidden" asp-for="OperadorAuxiliarID" id="OperadorAuxiliarID" />
-
-                        <div class="step-line">
-                            <div class="step-number">4</div>
-                            <div class="w-100">
-                                <label class="field-label">
-                                    Operador por turno RRHH
-                                </label>
-
-                                <div id="operadorTurnoBox"
-                                     class="p-3 rounded-4 border"
-                                     style="background:#f8fbff;">
-                                    <div class="d-flex align-items-start gap-3">
-                                        <div class="fs-4 text-primary">
-                                            <i class="fa-solid fa-user-clock"></i>
-                                        </div>
-
-                                        <div class="w-100">
-                                            <div class="fw-bold text-primary" id="operadorTurnoTitulo">
-                                                Se asignará automáticamente desde la escala de RRHH
-                                            </div>
-
-                                            <div class="small text-muted mt-1" id="operadorTurnoDetalle">
-                                                Selecciona máquina, fecha y hora de cambio para consultar el operador del turno.
-                                            </div>
-
-                                            <div class="mt-2 d-flex gap-2 flex-wrap">
-                                                <span class="badge-muted" id="operadorPrincipalBadge">
-                                                    Principal: pendiente
-                                                </span>
-
-                                                <span class="badge-muted" id="operadorAuxiliarBadge">
-                                                    Auxiliar: sin validar
-                                                </span>
-
-                                                <span class="badge-muted" id="turnoBadge">
-                                                    Turno: pendiente
-                                                </span>
-                                            </div>
-
-                                            <span asp-validation-for="OperadorPrincipalID" class="text-danger small"></span>
-                                            <span asp-validation-for="OperadorAuxiliarID" class="text-danger small"></span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="step-line">
-                            <div class="step-number">6</div>
-                            <div class="w-100">
-                                <label class="field-label">Cantidad programada (pzas)</label>
-                                <input asp-for="CantidadProgramada"
-                                       type="number"
-                                       min="1"
-                                       max="@Model.PiezasAProducir"
-                                       class="form-control"
-                                       id="CantidadProgramada" />
-                                <div class="small text-muted mt-1">
-                                    Producción neta después de producto incompleto: <strong>@Model.PiezasAProducir.ToString("N0")</strong>
-                                </div>
-                                <span asp-validation-for="CantidadProgramada" class="text-danger small"></span>
-                            </div>
-                        </div>
-
-                        <div class="formula-box mb-3">
-                            <div class="fw-bold">
-                                <i class="fa-solid fa-square-root-variable me-1"></i>
-                                Fórmula horas programadas
-                            </div>
-                            <div class="small">
-                                Cantidad programada ÷ Objetivo por hora, redondeado hacia arriba =
-                                <strong id="formulaHoras">@Decimal2(Model.HorasProgramadas)</strong> hrs
-                            </div>
-                        </div>
-
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <label class="field-label">Inicio programado</label>
-                                <input asp-for="FechaInicioProgramada"
-                                       type="datetime-local"
-                                       value="@DateTimeLocal(Model.FechaInicioProgramada)"
-                                       class="form-control"
-                                       id="FechaInicioProgramada"
-                                       step="3600" />
-                                <span asp-validation-for="FechaInicioProgramada" class="text-danger small"></span>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="field-label">Hora cambio</label>
-                                <input asp-for="Cambio"
-                                       type="time"
-                                       value="@TimeValue(Model.Cambio)"
-                                       class="form-control"
-                                       id="Cambio"
-                                       step="3600" />
-                                <span asp-validation-for="Cambio" class="text-danger small"></span>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="field-label">Hora arranque</label>
-                                <input asp-for="Arranque"
-                                       type="time"
-                                       value="@TimeValue(Model.Arranque)"
-                                       class="form-control"
-                                       id="Arranque"
-                                       step="3600" />
-                                <span asp-validation-for="Arranque" class="text-danger small"></span>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="field-label">Horas programadas (hrs redondeadas)</label>
-                                <input asp-for="HorasProgramadas"
-                                       type="number"
-                                       step="0.01"
-                                       min="0.01"
-                                       class="form-control"
-                                       id="HorasProgramadas" />
-                                <span asp-validation-for="HorasProgramadas" class="text-danger small"></span>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="field-label">Fin estimado</label>
-                                <input asp-for="FechaFinProgramada"
-                                       type="datetime-local"
-                                       value="@DateTimeLocal(Model.FechaFinProgramada)"
-                                       class="form-control"
-                                       id="FechaFinProgramada"
-                                       readonly />
-                            </div>
-
-                            <div class="col-12">
-                                <div class="form-check p-3 rounded-4 border" style="background:#fbfdff;">
-                                    <input class="form-check-input"
-                                           type="checkbox"
-                                           value="true"
-                                           id="TrabajarDomingo"
-                                           name="TrabajarDomingo" />
-                                    <label class="form-check-label fw-bold" for="TrabajarDomingo">
-                                        Considerar domingo como día operativo
-                                    </label>
-                                    <div class="small text-muted mt-1">
-                                        Si no se marca, el cálculo corta el sábado a las 22:30 y continúa el lunes a las 07:00.
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-12">
-                                <label class="field-label">Observaciones</label>
-                                <textarea asp-for="Observaciones"
-                                          rows="4"
-                                          class="form-control"
-                                          placeholder="Comentarios de planeación, prioridad, restricciones, paro, cambio de molde, etc."></textarea>
-                            </div>
-                        </div>
-                    </div>
-                </aside>
-            </div>
-
-            <section class="sticky-actions">
-                <div class="d-flex justify-content-between gap-2 flex-wrap">
-                    <a asp-controller="PlaneacionPrograma"
-                       asp-action="Index"
-                       class="btn-light-main">
-                        <i class="fa-solid fa-arrow-left"></i>
-                        Cancelar
-                    </a>
-
-                    <button type="submit" class="btn-main" id="btnGuardar">
-                        <i class="fa-solid fa-floppy-disk"></i>
-                        <span class="btn-label">Guardar Programa Cambio de Molde</span>
-                    </button>
-                </div>
-            </section>
-        </form>
-    </div>
-
+@section Scripts {
     <script>
         const objetivoHora = Number('@(Model.ObjetivoHora ?? 0)');
         const cantidadInput = document.getElementById('CantidadProgramada');
@@ -2167,6 +550,700 @@
             }
         });
     </script>
+}
 
-</body>
-</html>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/PlaneacionPrograma/crear.css" asp-append-version="true" />
+}
+
+
+@functions {
+    public static string Valor(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    public static string Entero(int? value)
+    {
+        return value.HasValue ? value.Value.ToString("N0") : "0";
+    }
+
+    public static string Decimal2(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N2") : "0.00";
+    }
+
+    public static string Decimal4(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N4") : "0.0000";
+    }
+
+    public static string TimeValue(TimeSpan? value)
+    {
+        return value.HasValue ? value.Value.ToString(@"hh\:mm") : "";
+    }
+
+    public static string DateTimeLocal(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("yyyy-MM-ddTHH:mm") : "";
+    }
+
+    public static bool TieneValor(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value);
+    }
+
+    public static bool TieneValor(int? value)
+    {
+        return value.HasValue && value.Value > 0;
+    }
+
+    public static bool TieneValor(decimal? value)
+    {
+        return value.HasValue && value.Value > 0;
+    }
+}
+
+    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
+    @await Html.PartialAsync("_PlaneacionNavbar")
+    <div class="page">
+
+        <section class="hero">
+            <div class="stage">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                Etapa 3 · Programa Cambio de Molde
+            </div>
+
+            <h1>
+                <i class="fa-solid fa-gears me-2"></i>
+                Programa Cambio de Molde
+            </h1>
+
+            <p>
+                Confirma máquina y molde final, define la condición operativa, hora de cambio, hora de arranque y producción programada antes de mandar a OF.
+            </p>
+
+            <div class="hero-actions">
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Index"
+                   class="btn-glass">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Volver a Programa de Planeación
+                </a>
+
+                <a asp-controller="PlaneacionPrograma"
+                   asp-action="Maquinas"
+                   class="btn-glass">
+                    <i class="fa-solid fa-industry"></i>
+                    Ver máquinas
+                </a>
+            </div>
+        </section>
+
+        <div class="flow-note">
+            <i class="fa-solid fa-circle-info mt-1"></i>
+            <div>
+                <div class="fw-bold">Aquí se decide el cambio de molde.</div>
+                <div class="small">
+                    Planeación define aquí la cantidad real a fabricar. Si existe producto incompleto con etiqueta blanca para la misma pieza, puede apartarlo para esta necesidad o decidir producir la cantidad completa. La OF heredará esta decisión; no volverá a elegir el producto incompleto.
+                </div>
+            </div>
+        </div>
+
+        <section class="white-product-card">
+            <div class="white-product-head">
+                <div>
+                    <h2 class="white-product-title"><i class="fa-regular fa-square me-2"></i>Producto incompleto / etiqueta blanca</h2>
+                    <div class="white-product-sub">Planeación decide si estas piezas se utilizan para esta necesidad antes de generar el programa y la OF.</div>
+                </div>
+                @if (productoIncompletoApartado > 0)
+                {
+                    <span class="white-pill"><i class="fa-solid fa-lock text-success"></i>@productoIncompletoApartado.ToString("N0") pzas apartadas</span>
+                }
+                else if (productoIncompleto.Any(x => !x.ApartadaEstaNecesidad))
+                {
+                    <span class="white-pill"><i class="fa-solid fa-box-open"></i>Producto disponible</span>
+                }
+                else
+                {
+                    <span class="white-pill"><i class="fa-solid fa-minus"></i>Sin producto disponible</span>
+                }
+            </div>
+            <div class="white-product-body">
+                <div class="white-summary">
+                    <div class="white-summary-item"><div class="k">Pendiente sin etiqueta blanca</div><div class="v">@cantidadBase.ToString("N0")</div></div>
+                    <div class="white-summary-item selected"><div class="k">Etiqueta blanca seleccionada</div><div class="v">@productoIncompletoApartado.ToString("N0")</div></div>
+                    <div class="white-summary-item"><div class="k">Producción real</div><div class="v">@Model.PiezasAProducir.ToString("N0")</div></div>
+                </div>
+                @if (productoIncompleto.Count > 0)
+                {
+                    <form asp-controller="PlaneacionPrograma" asp-action="AplicarProductoIncompleto" method="post" id="formProductoIncompleto">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="ReleaseDetalleID" value="@Model.ReleaseDetalleID" />
+                        <div class="white-list">
+                            @foreach (var caja in productoIncompleto)
+                            {
+                                var etiqueta = string.IsNullOrWhiteSpace(caja.EtiquetaBlanca) ? (string.IsNullOrWhiteSpace(caja.FolioCaja) ? $"Caja {caja.CajaProduccionID}" : caja.FolioCaja) : caja.EtiquetaBlanca;
+                                <label class="white-option @(caja.ApartadaEstaNecesidad ? "selected" : "")">
+                                    <input class="form-check-input white-check" type="checkbox" name="CajasProduccionID" value="@caja.CajaProduccionID" checked="@caja.ApartadaEstaNecesidad" />
+                                    <span class="white-option-main">
+                                        <span class="white-option-title">@etiqueta</span>
+                                        <span class="white-option-meta">
+                                            <span class="white-meta">Disponible: @caja.CantidadPiezas.ToString("N0") pzas</span>
+                                            @if (caja.CapacidadObjetivoCaja > 0)
+                                            {
+                                                <span class="white-meta">Caja: @caja.CantidadPiezas.ToString("N0") / @caja.CapacidadObjetivoCaja.ToString("N0")</span>
+                                            }
+                                            @if (caja.CantidadPendienteCompletar > 0)
+                                            {
+                                                <span class="white-meta">Faltan para completar: @caja.CantidadPendienteCompletar.ToString("N0")</span>
+                                            }
+                                            @if (caja.FechaFormacion.HasValue)
+                                            {
+                                                <span class="white-meta">Desde: @caja.FechaFormacion.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                            }
+                                            @if (caja.ApartadaEstaNecesidad)
+                                            {
+                                                <span class="white-meta"><i class="fa-solid fa-lock me-1"></i>Apartada para esta necesidad</span>
+                                            }
+                                        </span>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                        <div class="white-info mt-3"><i class="fa-solid fa-circle-info me-2"></i>La selección toma la etiqueta completa; no se divide una misma etiqueta blanca entre diferentes necesidades. Las piezas seleccionadas se restan de la cantidad a producir y recalculan MP, embalajes y horas.</div>
+                        <div class="white-actions">
+                            <button type="submit" class="btn-white-use"><i class="fa-solid fa-check"></i>Usar producto seleccionado</button>
+                        </div>
+                    </form>
+                    <form asp-controller="PlaneacionPrograma" asp-action="ProducirCantidadCompleta" method="post" class="mt-2 text-end">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="releaseDetalleId" value="@Model.ReleaseDetalleID" />
+                        <button type="submit" class="btn-white-full"><i class="fa-solid fa-industry"></i>Producir cantidad completa</button>
+                    </form>
+                }
+                else
+                {
+                    <div class="white-empty"><i class="fa-regular fa-square me-2"></i>No existe producto incompleto disponible para esta pieza. La necesidad continuará con la cantidad completa pendiente de producir.</div>
+                }
+            </div>
+        </section>
+
+        <form asp-controller="PlaneacionPrograma" asp-action="Crear" method="post" id="formPrograma">
+            @Html.AntiForgeryToken()
+
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger rounded-4 fw-semibold"></div>
+
+            @if (ViewBag.MostrarModalMaquinaOcupada == true)
+            {
+                <div class="modal fade" id="modalMaquinaOcupada" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-lg">
+                        <div class="modal-content" data-nsq-style-id="nsq-si-cd37b9ea03">
+                            <div class="modal-header" data-nsq-style-id="nsq-si-51ef73956e">
+                                <div>
+                                    <h5 class="modal-title" data-nsq-style-id="nsq-si-18d3c52ab6">
+                                        <i class="fa-solid fa-industry me-2"></i>
+                                        @ViewBag.MaquinaOcupadaTitulo
+                                    </h5>
+                                    <div class="small opacity-75 mt-1">
+                                        No se puede programar T.P. en ese horario porque la máquina debe respetar la cola.
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            </div>
+
+                            <div class="modal-body p-4">
+                                <div class="alert alert-warning rounded-4 fw-semibold">
+                                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                                    @ViewBag.MaquinaOcupadaMensaje
+                                </div>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="p-3 rounded-4 border bg-light">
+                                            <div class="text-muted small fw-bold text-uppercase">Siguiente hora de cambio disponible</div>
+                                            <div class="fs-4 fw-bold text-primary mt-1">
+                                                @ViewBag.MaquinaOcupadaCambio
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="p-3 rounded-4 border bg-light">
+                                            <div class="text-muted small fw-bold text-uppercase">Hora de arranque sugerida</div>
+                                            <div class="fs-4 fw-bold text-success mt-1">
+                                                @ViewBag.MaquinaOcupadaArranque
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="p-3 rounded-4 border" data-nsq-style-id="nsq-si-eb95cdbc6f">
+                                    <div class="fw-bold mb-3">
+                                        <i class="fa-solid fa-timeline me-2 text-primary"></i>
+                                        Línea de tiempo sugerida
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <div class="px-3 py-2 rounded-pill bg-secondary text-white fw-bold">
+                                            Solicitud actual
+                                        </div>
+
+                                        <div class="flex-grow-1 border-top border-3"></div>
+
+                                        <div class="px-3 py-2 rounded-pill bg-primary text-white fw-bold">
+                                            Cambio @ViewBag.MaquinaOcupadaCambio
+                                        </div>
+
+                                        <div class="flex-grow-1 border-top border-3"></div>
+
+                                        <div class="px-3 py-2 rounded-pill bg-success text-white fw-bold">
+                                            Arranque @ViewBag.MaquinaOcupadaArranque
+                                        </div>
+                                    </div>
+
+                                    <div class="small text-muted mt-3">
+                                        @ViewBag.MaquinaOcupadaMotivo
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-info rounded-4 fw-semibold mt-3 mb-0">
+                                    <i class="fa-solid fa-circle-info me-2"></i>
+                                    @ViewBag.MaquinaOcupadaEsIP
+                                </div>
+                            </div>
+
+                            <div class="modal-footer border-0 p-4 pt-0">
+                                <button type="button" class="btn btn-light rounded-4 fw-bold" data-bs-dismiss="modal">
+                                    Revisar horario
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <input type="hidden" asp-for="ReleaseDetalleID" />
+            <input type="hidden" asp-for="ReleaseID" />
+            <input type="hidden" asp-for="FolioRelease" />
+
+            <input type="hidden" asp-for="ClienteID" />
+            <input type="hidden" asp-for="ClienteNombre" />
+
+            <input type="hidden" asp-for="ParteID" />
+            <input type="hidden" asp-for="NumeroParte" />
+            <input type="hidden" asp-for="ReferenciaSAP" />
+            <input type="hidden" asp-for="DesignacionDescripcionSAP" />
+
+            <input type="hidden" asp-for="CantidadRequerida" />
+            <input type="hidden" asp-for="PiezasDesdePT" />
+            <input type="hidden" asp-for="PTDisponibleAlCalcular" />
+            <input type="hidden" asp-for="PTApartadoOtros" />
+            <input type="hidden" asp-for="PTDisponibleNeto" />
+            <input type="hidden" asp-for="PiezasAProducir" />
+            <input type="hidden" asp-for="CantidadOriginalAProducir" />
+            <input type="hidden" asp-for="ProductoIncompletoApartado" />
+
+            <input type="hidden" asp-for="MaquinaCodigo" />
+            <input type="hidden" asp-for="MaquinaNombre" />
+            <input type="hidden" asp-for="MoldeCodigo" />
+
+            <input type="hidden" asp-for="ObjetivoHora" />
+            <input type="hidden" asp-for="Ciclo" />
+            <input type="hidden" asp-for="Cavidades" />
+            <input type="hidden" asp-for="PesoBrutoPieza" />
+
+            <input type="hidden" asp-for="MaterialID" />
+            <input type="hidden" asp-for="MaterialCodigo" />
+            <input type="hidden" asp-for="MaterialDescripcion" />
+            <input type="hidden" asp-for="CantidadMpKg" />
+
+            <input type="hidden" asp-for="EmbalajeCodigo" />
+            <input type="hidden" asp-for="EmbalajeDescripcion" />
+            <input type="hidden" asp-for="PiezasPorEmbalaje" />
+            <input type="hidden" asp-for="CantidadEmbalajes" />
+
+            <input type="hidden" asp-for="PiezasPorCaja" />
+            <input type="hidden" asp-for="QtyPorDia" />
+            <input type="hidden" asp-for="MaquinaSustitutaID" />
+            <input type="hidden" asp-for="MaquinaSustitutaCodigo" />
+            <input type="hidden" asp-for="MaquinaSustitutaNombre" />
+            <input type="hidden" asp-for="TipoSecado" />
+            <input type="hidden" asp-for="HorasSecado" />
+            <input type="hidden" asp-for="HorasSecadoTexto" />
+
+            <div class="layout">
+
+                <div>
+                    <section class="cardx">
+                        <div class="cardx-header">
+                            <div>
+                                <h2 class="cardx-title">
+                                    <i class="fa-solid fa-file-lines me-2"></i>
+                                    Necesidad origen
+                                </h2>
+                                <div class="cardx-sub">
+                                    Datos heredados desde Programa de Planeación.
+                                </div>
+                            </div>
+
+                            <span class="badge-ok">
+                                <i class="fa-solid fa-circle-check"></i>
+                                Listo para cambio
+                            </span>
+                        </div>
+
+                        <div class="cardx-body">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-3">
+                                    <div class="field-label">Release</div>
+                                    <div class="field-value">@Valor(Model.FolioRelease)</div>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <div class="field-label">Cliente</div>
+                                    <div class="field-value">@Valor(Model.ClienteNombre)</div>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <div class="field-label">No. parte</div>
+                                    <div class="field-value">@Valor(Model.NumeroParte ?? Model.ReferenciaSAP)</div>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <div class="field-label">Color</div>
+                                    <input asp-for="Color"
+                                           class="form-control"
+                                           maxlength="100"
+                                           placeholder="Ej. Natural, Negro, Azul..." />
+                                </div>
+
+                                <div class="col-12">
+                                    <div class="field-label">Designación / descripción</div>
+                                    <div class="field-value">@Valor(Model.DesignacionDescripcionSAP)</div>
+                                </div>
+                            </div>
+
+                            <div class="metric-grid">
+                                <div class="metric"><div class="k">Requerido release</div><div class="v">@Model.CantidadRequerida.ToString("N0")</div></div>
+                                <div class="metric"><div class="k">Pendiente base</div><div class="v">@cantidadBase.ToString("N0")</div></div>
+                                <div class="metric"><div class="k">Etiqueta blanca</div><div class="v">@Model.ProductoIncompletoApartado.ToString("N0")</div></div>
+                                <div class="metric"><div class="k">A producir</div><div class="v">@Model.PiezasAProducir.ToString("N0")</div></div>
+                                <div class="metric"><div class="k">MP requerida</div><div class="v">@Decimal4(Model.CantidadMpKg) kg</div></div>
+                                <div class="metric"><div class="k">Embalajes</div><div class="v">@Decimal2(Model.CantidadEmbalajes)</div></div>
+                                <div class="metric"><div class="k">Horas fórmula</div><div class="v">@Decimal2(Model.HorasProgramadas)</div></div>
+                            </div>
+                            <div class="qty-breakdown">
+                                <div class="item"><div class="k">Cantidad pendiente original</div><div class="v">@cantidadBase.ToString("N0") pzas</div></div>
+                                <div class="item white"><div class="k">Tomadas de etiqueta blanca</div><div class="v">@Model.ProductoIncompletoApartado.ToString("N0") pzas</div></div>
+                                <div class="item net"><div class="k">Producción que ejecutará la OF</div><div class="v">@Model.PiezasAProducir.ToString("N0") pzas</div></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="cardx">
+                        <div class="cardx-header">
+                            <div>
+                                <h2 class="cardx-title">
+                                    <i class="fa-solid fa-microchip me-2"></i>
+                                    Datos técnicos de planeación
+                                </h2>
+                                <div class="cardx-sub">
+                                    Información que alimenta el Programa Cambio de Molde.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="cardx-body">
+                            <div class="tech-grid">
+                                <div class="tech-item">
+                                    <div class="tech-k">Molde</div>
+                                    <div class="tech-v">@Valor(Model.MoldeCodigo)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Material / Resina</div>
+                                    <div class="tech-v">@Valor(Model.MaterialCodigo)</div>
+                                    <div class="text-muted small">@Valor(Model.MaterialDescripcion)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Cavidades (pzas)</div>
+                                    <div class="tech-v">@Entero(Model.Cavidades)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Ciclo (seg)</div>
+                                    <div class="tech-v">@Valor(Model.Ciclo)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Máquina asignada</div>
+                                    <div class="tech-v">@Valor(Model.MaquinaCodigo)</div>
+                                    <div class="text-muted small">@Valor(Model.MaquinaNombre)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Máquinas sustitutas configuradas</div>
+                                    <div class="tech-v">@Valor(Model.MaquinaSustitutaCodigo)</div>
+                                    <div class="text-muted small">@Valor(Model.MaquinaSustitutaNombre)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Qty por día (pzas)</div>
+                                    <div class="tech-v">@Entero(Model.QtyPorDia)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Peso pza bruto (g/pza)</div>
+                                    <div class="tech-v">@Decimal4(Model.PesoBrutoPieza)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Objetivo / hr (pzas)</div>
+                                    <div class="tech-v">@Entero(Model.ObjetivoHora)</div>
+                                </div>
+
+                                <div class="tech-item">
+                                    <div class="tech-k">Piezas por embalaje (pzas)</div>
+                                    <div class="tech-v">@Decimal2(Model.PiezasPorEmbalaje)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="decision-box">
+                    <div class="decision-head">
+                        <h2 class="decision-title">
+                            <i class="fa-solid fa-sliders me-2"></i>
+                            Decisión de Cambio de Molde
+                        </h2>
+                        <div class="cardx-sub">
+                            Confirma los datos operativos antes de guardar.
+                        </div>
+                    </div>
+
+                    <div class="decision-body">
+                        <div class="step-line">
+                            <div class="step-number">1</div>
+                            <div class="w-100">
+                                <label class="field-label">Condición</label>
+                                <select asp-for="CondicionProduccion"
+                                        asp-items="Model.Condiciones"
+                                        class="form-select">
+                                </select>
+                                <span asp-validation-for="CondicionProduccion" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="step-line">
+                            <div class="step-number">2</div>
+                            <div class="w-100">
+                                <label class="field-label">Máquina final</label>
+                                <select asp-for="MaquinaID"
+                                        asp-items="Model.Maquinas"
+                                        class="form-select">
+                                    <option value="">-- Selecciona máquina --</option>
+                                </select>
+                                <span asp-validation-for="MaquinaID" class="text-danger small"></span>
+
+                                @if (TieneValor(Model.MaquinaSustitutaCodigo))
+                                {
+                                    <div class="small text-muted mt-1">
+                                        Alternativas configuradas: <strong>@Model.MaquinaSustitutaCodigo</strong>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="step-line">
+                            <div class="step-number">3</div>
+                            <div class="w-100">
+                                <label class="field-label">Molde final</label>
+                                <select asp-for="MoldeID"
+                                        asp-items="Model.Moldes"
+                                        class="form-select">
+                                    <option value="">-- Selecciona molde --</option>
+                                </select>
+                                <span asp-validation-for="MoldeID" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <input type="hidden" asp-for="OperadorPrincipalID" id="OperadorPrincipalID" />
+                        <input type="hidden" asp-for="OperadorAuxiliarID" id="OperadorAuxiliarID" />
+
+                        <div class="step-line">
+                            <div class="step-number">4</div>
+                            <div class="w-100">
+                                <label class="field-label">
+                                    Operador por turno RRHH
+                                </label>
+
+                                <div id="operadorTurnoBox"
+                                     class="p-3 rounded-4 border"
+                                     data-nsq-style-id="nsq-si-f913737969">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="fs-4 text-primary">
+                                            <i class="fa-solid fa-user-clock"></i>
+                                        </div>
+
+                                        <div class="w-100">
+                                            <div class="fw-bold text-primary" id="operadorTurnoTitulo">
+                                                Se asignará automáticamente desde la escala de RRHH
+                                            </div>
+
+                                            <div class="small text-muted mt-1" id="operadorTurnoDetalle">
+                                                Selecciona máquina, fecha y hora de cambio para consultar el operador del turno.
+                                            </div>
+
+                                            <div class="mt-2 d-flex gap-2 flex-wrap">
+                                                <span class="badge-muted" id="operadorPrincipalBadge">
+                                                    Principal: pendiente
+                                                </span>
+
+                                                <span class="badge-muted" id="operadorAuxiliarBadge">
+                                                    Auxiliar: sin validar
+                                                </span>
+
+                                                <span class="badge-muted" id="turnoBadge">
+                                                    Turno: pendiente
+                                                </span>
+                                            </div>
+
+                                            <span asp-validation-for="OperadorPrincipalID" class="text-danger small"></span>
+                                            <span asp-validation-for="OperadorAuxiliarID" class="text-danger small"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="step-line">
+                            <div class="step-number">6</div>
+                            <div class="w-100">
+                                <label class="field-label">Cantidad programada (pzas)</label>
+                                <input asp-for="CantidadProgramada"
+                                       type="number"
+                                       min="1"
+                                       max="@Model.PiezasAProducir"
+                                       class="form-control"
+                                       id="CantidadProgramada" />
+                                <div class="small text-muted mt-1">
+                                    Producción neta después de producto incompleto: <strong>@Model.PiezasAProducir.ToString("N0")</strong>
+                                </div>
+                                <span asp-validation-for="CantidadProgramada" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="formula-box mb-3">
+                            <div class="fw-bold">
+                                <i class="fa-solid fa-square-root-variable me-1"></i>
+                                Fórmula horas programadas
+                            </div>
+                            <div class="small">
+                                Cantidad programada ÷ Objetivo por hora, redondeado hacia arriba =
+                                <strong id="formulaHoras">@Decimal2(Model.HorasProgramadas)</strong> hrs
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="field-label">Inicio programado</label>
+                                <input asp-for="FechaInicioProgramada"
+                                       type="datetime-local"
+                                       value="@DateTimeLocal(Model.FechaInicioProgramada)"
+                                       class="form-control"
+                                       id="FechaInicioProgramada"
+                                       step="3600" />
+                                <span asp-validation-for="FechaInicioProgramada" class="text-danger small"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="field-label">Hora cambio</label>
+                                <input asp-for="Cambio"
+                                       type="time"
+                                       value="@TimeValue(Model.Cambio)"
+                                       class="form-control"
+                                       id="Cambio"
+                                       step="3600" />
+                                <span asp-validation-for="Cambio" class="text-danger small"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="field-label">Hora arranque</label>
+                                <input asp-for="Arranque"
+                                       type="time"
+                                       value="@TimeValue(Model.Arranque)"
+                                       class="form-control"
+                                       id="Arranque"
+                                       step="3600" />
+                                <span asp-validation-for="Arranque" class="text-danger small"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="field-label">Horas programadas (hrs redondeadas)</label>
+                                <input asp-for="HorasProgramadas"
+                                       type="number"
+                                       step="0.01"
+                                       min="0.01"
+                                       class="form-control"
+                                       id="HorasProgramadas" />
+                                <span asp-validation-for="HorasProgramadas" class="text-danger small"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="field-label">Fin estimado</label>
+                                <input asp-for="FechaFinProgramada"
+                                       type="datetime-local"
+                                       value="@DateTimeLocal(Model.FechaFinProgramada)"
+                                       class="form-control"
+                                       id="FechaFinProgramada"
+                                       readonly />
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check p-3 rounded-4 border" data-nsq-style-id="nsq-si-eb95cdbc6f">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           value="true"
+                                           id="TrabajarDomingo"
+                                           name="TrabajarDomingo" />
+                                    <label class="form-check-label fw-bold" for="TrabajarDomingo">
+                                        Considerar domingo como día operativo
+                                    </label>
+                                    <div class="small text-muted mt-1">
+                                        Si no se marca, el cálculo corta el sábado a las 22:30 y continúa el lunes a las 07:00.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="field-label">Observaciones</label>
+                                <textarea asp-for="Observaciones"
+                                          rows="4"
+                                          class="form-control"
+                                          placeholder="Comentarios de planeación, prioridad, restricciones, paro, cambio de molde, etc."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+
+            <section class="sticky-actions">
+                <div class="d-flex justify-content-between gap-2 flex-wrap">
+                    <a asp-controller="PlaneacionPrograma"
+                       asp-action="Index"
+                       class="btn-light-main">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        Cancelar
+                    </a>
+
+                    <button type="submit" class="btn-main" id="btnGuardar">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span class="btn-label">Guardar Programa Cambio de Molde</span>
+                    </button>
+                </div>
+            </section>
+        </form>
+    </div>

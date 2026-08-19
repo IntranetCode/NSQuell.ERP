@@ -1,46 +1,14 @@
 ﻿@model ERP.NSQuell.Models.PolivalenciaOperadorDetalleVm
 @{
     ViewData["Title"] = "Detalle de Polivalencia";
-    Layout = "_Layout";
+    Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-<style>
-    .pd-page { max-width: 1580px; margin: 0 auto; padding: 22px; }
-    .pd-back { color: #17324d; text-decoration: none; font-weight: 780; }
-    .pd-hero { margin-top: 12px; background: linear-gradient(135deg,#17324d,#244f73); color:#fff; border-radius:18px; padding:20px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:center; }
-    .pd-kicker { font-size:.72rem; letter-spacing:.09em; text-transform:uppercase; opacity:.72; font-weight:850; }
-    .pd-title { font-size:1.55rem; font-weight:900; margin:3px 0 0; }
-    .pd-meta { margin-top:6px; opacity:.86; font-size:.84rem; }
-    .pd-level-big { min-width:76px; height:76px; border-radius:50%; display:grid; place-items:center; font-size:1.35rem; font-weight:950; background:#fff; color:#17324d; }
-    .pd-stats { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:9px; margin:14px 0; }
-    .pd-stat { background:#fff; border:1px solid #dfe6ed; border-radius:13px; padding:12px 13px; }
-    .pd-stat small { display:block; color:#6b7a8c; font-weight:700; }
-    .pd-stat strong { display:block; color:#17324d; font-size:1.25rem; margin-top:3px; }
-    .pd-scale { background:#f6faff; border:1px solid #cfe0f4; border-radius:14px; padding:13px 15px; margin-bottom:14px; }
-    .pd-scale strong { color:#17324d; }
-    .pd-panel { background:#fff; border:1px solid #dfe6ed; border-radius:16px; overflow:hidden; margin-bottom:16px; }
-    .pd-head { padding:14px 16px; background:#f7f9fb; border-bottom:1px solid #dfe6ed; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
-    .pd-head h2 { margin:0; color:#17324d; font-size:1rem; font-weight:900; }
-    .pd-head small { color:#667085; }
-    .pd-filter { display:flex; gap:8px; flex-wrap:wrap; }
-    .pd-filter input,.pd-filter select { min-height:40px; border:1px solid #d3dde7; border-radius:10px; padding:7px 10px; }
-    .pd-table { width:100%; border-collapse:collapse; }
-    .pd-table th { background:#f8fafc; color:#667085; font-size:.7rem; text-transform:uppercase; padding:10px; border-bottom:1px solid #e4e9ef; white-space:nowrap; }
-    .pd-table td { padding:10px; border-bottom:1px solid #edf1f4; font-size:.8rem; vertical-align:top; }
-    .pd-part { min-width:245px; }
-    .pd-part strong { color:#17324d; font-size:.86rem; }
-    .pd-muted { color:#667085; font-size:.7rem; margin-top:2px; }
-    .pd-level { display:inline-flex; align-items:center; justify-content:center; min-width:42px; height:30px; border-radius:999px; font-weight:900; }
-    .n4 { background:#e5f6ec; color:#18764b; }
-    .n3 { background:#e9f1ff; color:#245b9f; }
-    .n2 { background:#fff2d8; color:#9a5a00; }
-    .n1 { background:#eef0f3; color:#586474; }
-    .pd-prod { display:inline-flex; border:1px solid #bfd3f2; background:#eef4ff; color:#194185; border-radius:9px; padding:6px 8px; text-decoration:none; font-size:.72rem; font-weight:850; white-space:nowrap; }
-    .pd-empty { padding:28px; text-align:center; color:#667085; }
-    .pd-source { margin:0 0 14px; padding:10px 13px; border:1px solid #cfe0f4; border-radius:12px; background:#f6faff; color:#365c82; font-size:.78rem; }
-    @@media(max-width:1000px){ .pd-stats{grid-template-columns:repeat(3,1fr);} }
-    @@media(max-width:700px){ .pd-page{padding:14px;} .pd-hero{grid-template-columns:1fr;} .pd-level-big{width:64px;height:64px;} .pd-stats{grid-template-columns:repeat(2,1fr);} }
-</style>
+@section Styles {
+    <link rel="stylesheet" href="~/css/EscalaPersonal/escala-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/EscalaPersonal/polivalenciadetalle.css" asp-append-version="true" />
+}
+
 
 <div class="pd-page">
     <partial name="_EscalaNavegacion" />

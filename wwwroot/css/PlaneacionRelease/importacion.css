@@ -1,0 +1,17 @@
+﻿:root { --blue:#004AAD; --blue-dark:#063875; --bg:#f3f6fa; --border:#d9e2ee; }
+        body { background:var(--bg); font-family:"Segoe UI",Arial,sans-serif; color:#263238; }
+        .shell { max-width:1540px; margin:0 auto; padding:28px; }
+        .hero { border-radius:24px; padding:26px 30px; color:#fff; background:linear-gradient(135deg,var(--blue),var(--blue-dark)); box-shadow:0 18px 45px rgba(0,74,173,.22); }
+        .card-modern { border:1px solid var(--border); border-radius:20px; box-shadow:0 10px 25px rgba(30,55,90,.07); }
+        .metric { border:1px solid var(--border); border-radius:18px; padding:16px; background:#fff; height:100%; }
+        .metric strong { display:block; color:var(--blue-dark); font-size:1.55rem; }
+        .metric span { color:#667085; font-size:.78rem; font-weight:800; text-transform:uppercase; }
+        .table th { white-space:nowrap; background:#eef4ff; color:var(--blue-dark); }
+        .file-name { max-width:300px; overflow-wrap:anywhere; }
+        .btn-main { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:800; border-radius:12px; }
+        .btn-main:hover { background:var(--blue-dark); border-color:var(--blue-dark); color:#fff; }
+        .saved-file { max-width:360px; overflow-wrap:anywhere; }
+
+/* Estilos inline estaticos migrados desde la vista. */
+[data-nsq-style-id="nsq-si-6b5702acfe"] { min-width: 310px !important; }
+[data-nsq-style-id="nsq-si-01c44e3b6d"] { min-width: 170px !important; }

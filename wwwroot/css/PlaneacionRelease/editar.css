@@ -1,0 +1,167 @@
+﻿:root {
+            --blue:#004aad;
+            --blue-dark:#063875;
+            --bg:#eef3f9;
+            --border:#d8e2ee;
+            --text:#1f2937;
+            --muted:#667085;
+            --warning:#b54708;
+        }
+
+        * { box-sizing:border-box; }
+
+        body {
+            margin:0;
+            min-height:100vh;
+            font-family:"Segoe UI",Arial,sans-serif;
+            color:var(--text);
+            background:
+                radial-gradient(circle at top left,rgba(0,74,173,.12),transparent 28%),
+                linear-gradient(180deg,#f8fbff,var(--bg));
+        }
+
+        .page {
+            max-width:1600px;
+            margin:0 auto;
+            padding:26px;
+        }
+
+        .hero {
+            padding:28px 30px;
+            border-radius:28px;
+            color:#fff;
+            background:linear-gradient(135deg,var(--blue),var(--blue-dark));
+            box-shadow:0 22px 55px rgba(0,74,173,.23);
+        }
+
+        .hero h1 {
+            margin:0;
+            font-size:1.8rem;
+            font-weight:950;
+        }
+
+        .hero p {
+            margin:7px 0 0;
+            color:rgba(255,255,255,.85);
+        }
+
+        .btn-glass {
+            display:inline-flex;
+            align-items:center;
+            gap:7px;
+            padding:10px 14px;
+            border:1px solid rgba(255,255,255,.35);
+            border-radius:14px;
+            background:rgba(255,255,255,.14);
+            color:#fff;
+            text-decoration:none;
+            font-weight:850;
+        }
+
+        .btn-glass:hover {
+            background:#fff;
+            color:var(--blue);
+        }
+
+        .card-main {
+            margin-top:20px;
+            border:1px solid var(--border);
+            border-radius:24px;
+            background:#fff;
+            box-shadow:0 14px 38px rgba(16,24,40,.08);
+            overflow:hidden;
+        }
+
+        .card-head {
+            padding:18px 22px;
+            border-bottom:1px solid var(--border);
+            background:linear-gradient(135deg,#fff,#f7fbff);
+        }
+
+        .card-body-modern {
+            padding:22px;
+        }
+
+        .form-control,
+        .form-select {
+            min-height:45px;
+            border-radius:13px;
+            border-color:var(--border);
+        }
+
+        .label {
+            margin-bottom:6px;
+            color:#344054;
+            font-size:.8rem;
+            font-weight:850;
+        }
+
+        .row-card {
+            margin-bottom:18px;
+            border:1px solid var(--border);
+            border-radius:20px;
+            background:#fff;
+            overflow:hidden;
+            box-shadow:0 8px 22px rgba(16,24,40,.05);
+        }
+
+        .row-head {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:12px;
+            flex-wrap:wrap;
+            padding:14px 17px;
+            background:#eef5ff;
+            border-bottom:1px solid var(--border);
+        }
+
+        .row-body { padding:18px; }
+
+        .delivery {
+            padding:13px;
+            margin-bottom:10px;
+            border:1px solid var(--border);
+            border-radius:15px;
+            background:#fbfdff;
+        }
+
+        .btn-main {
+            border:0;
+            border-radius:13px;
+            background:var(--blue);
+            color:#fff;
+            font-weight:850;
+        }
+
+        .btn-main:hover {
+            background:var(--blue-dark);
+            color:#fff;
+        }
+
+        .sticky-actions {
+            position:sticky;
+            bottom:0;
+            z-index:20;
+            margin-top:20px;
+            padding:13px;
+            border:1px solid var(--border);
+            border-radius:18px;
+            background:rgba(255,255,255,.94);
+            backdrop-filter:blur(12px);
+            box-shadow:0 14px 34px rgba(16,24,40,.10);
+        }
+
+        .impact {
+            border:1px solid #fed7aa;
+            background:#fff7ed;
+            color:#9a3412;
+            border-radius:18px;
+            padding:16px;
+            font-weight:700;
+        }
+
+        @media(max-width:768px) {
+            .page { padding:14px; }
+            .hero { border-radius:22px; }
+        }

@@ -1,3 +1,23 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTStockFormVm
-@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Niveles PT"; }
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTStockFormVm
+@{ Layout = "~/Views/Shared/_Layout.cshtml"; ViewData["Title"] = "Niveles PT"; }
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+}
+
+
+@section Scripts {
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
+
 <section class="alm-hero"><div><small>@Model.NumeroParte</small><h1>Niveles de stock PT</h1><p>@Model.Descripcion</p></div></section><section class="alm-card"><form method="post" class="alm-form"><input asp-for="ParteID" type="hidden"/><input asp-for="NumeroParte" type="hidden"/><input asp-for="Descripcion" type="hidden"/><div asp-validation-summary="ModelOnly" class="alm-field full"></div><div class="alm-field"><label asp-for="StockMinimo"></label><input asp-for="StockMinimo" class="alm-input"/></div><div class="alm-field"><label asp-for="StockAviso"></label><input asp-for="StockAviso" class="alm-input"/></div><div class="alm-field full"><button class="alm-btn">Guardar niveles</button></div></form></section>

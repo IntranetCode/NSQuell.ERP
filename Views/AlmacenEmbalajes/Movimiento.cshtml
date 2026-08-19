@@ -1,7 +1,7 @@
-@using System.Globalization
+﻿@using System.Globalization
 @model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPMovimientoFormVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = Model.EsEntregaOF ? "Entrega de embalaje a OF" : "Movimiento de embalajes";
     var maximo = Model.CantidadPendienteOF.ToString("0.###", CultureInfo.InvariantCulture);
     var embalajeSolicitadoID = Convert.ToInt32(ViewData["EmbalajeSolicitadoID"] ?? 0);
@@ -21,7 +21,20 @@
         ?? System.Linq.Enumerable.Empty<ERP.NSQuell.Models.ViewModels.Almacen.AlmacenSelectVm>();
 }
 
-<link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero emb-movement-hero">
     <div>
@@ -515,4 +528,5 @@
             actualizarTipo();
         })();
     </script>
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
 }
