@@ -1,0 +1,10 @@
+@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+<section class="ind-kpis">
+    <article class="ind-kpi ind-kpi--featured"><span>Cumplimiento del plan</span><strong>@Model.Planeacion.CumplimientoPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Planeacion.CumplimientoPct,0m,100m)))"></progress><small>Producido contra cantidad programada</small></article>
+    <article class="ind-kpi"><span>Arranques a tiempo</span><strong>@Model.Planeacion.ArranqueATiempoPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Planeacion.ArranqueATiempoPct,0m,100m)))"></progress><small>@Model.Planeacion.ArranquesATiempo de @Model.Planeacion.ArranquesRegistrados arranques registrados</small></article>
+    <article class="ind-kpi"><span>Programado</span><strong>@Model.Planeacion.Programado.ToString("N0")</strong><small>Piezas programadas en @Model.Planeacion.Programas programas</small></article>
+    <article class="ind-kpi"><span>Producido</span><strong>@Model.Planeacion.Producido.ToString("N0")</strong><small>Piezas reportadas como producidas</small></article>
+    <article class="ind-kpi"><span>Pendiente</span><strong>@Model.Planeacion.Pendiente.ToString("N0")</strong><small>@Model.Planeacion.ProgramasConPendiente programas aún con saldo</small></article>
+    <article class="ind-kpi"><span>Reprogramados</span><strong>@Model.Planeacion.Reprogramados.ToString("N0")</strong><small>Programas con movimiento de reprogramación en el periodo</small></article>
+</section>
+<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>El cumplimiento usa CantidadProgramada y CantidadProducida. La puntualidad de arranque compara FechaInicioReal contra FechaInicioProgramada únicamente cuando existe arranque real.</span></div>

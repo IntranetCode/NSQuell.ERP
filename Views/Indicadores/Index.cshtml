@@ -1,0 +1,238 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+@using System.Globalization
+@{
+    ViewData["Title"] = "Indicadores de Gestión";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    string SemanaIso(DateTime fecha)
+    {
+        var year = ISOWeek.GetYear(fecha);
+        var week = ISOWeek.GetWeekOfYear(fecha);
+        return $"{year:0000}-W{week:00}";
+    }
+
+    var semana = SemanaIso(Model.Desde);
+    var numeroSemana = ISOWeek.GetWeekOfYear(Model.Desde);
+    var anioSemana = ISOWeek.GetYear(Model.Desde);
+    var mes = Model.Desde.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+    var fecha = Model.Desde.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    var desde = Model.Desde.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    var hasta = Model.Hasta.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    string QueryPeriodo(DateTime inicio, DateTime fin)
+    {
+        return Model.Periodo switch
+        {
+            "dia" => $"periodo=dia&fecha={inicio:yyyy-MM-dd}",
+            "mes" => $"periodo=mes&mes={inicio:yyyy-MM}",
+            "rango" => $"periodo=rango&desde={inicio:yyyy-MM-dd}&hasta={fin:yyyy-MM-dd}",
+            _ => $"periodo=semana&semana={SemanaIso(inicio)}"
+        };
+    }
+
+    (DateTime Inicio, DateTime Fin) MoverPeriodo(int direccion)
+    {
+        if (Model.Periodo == "dia")
+            return (Model.Desde.AddDays(direccion), Model.Desde.AddDays(direccion));
+
+        if (Model.Periodo == "mes")
+        {
+            var inicioMes = new DateTime(Model.Desde.Year, Model.Desde.Month, 1).AddMonths(direccion);
+            return (inicioMes, inicioMes.AddMonths(1).AddDays(-1));
+        }
+
+        if (Model.Periodo == "rango")
+        {
+            var desplazamiento = Model.DiasPeriodo * direccion;
+            return (Model.Desde.AddDays(desplazamiento), Model.Hasta.AddDays(desplazamiento));
+        }
+
+        return (Model.Desde.AddDays(7 * direccion), Model.Hasta.AddDays(7 * direccion));
+    }
+
+    string UrlArea(string area) => $"/Indicadores/Index?area={area}&{QueryPeriodo(Model.Desde, Model.Hasta)}";
+    string UrlPeriodo(DateTime inicio, DateTime fin) => $"/Indicadores/Index?area={Model.Seccion}&{QueryPeriodo(inicio, fin)}";
+
+    var anterior = MoverPeriodo(-1);
+    var siguiente = MoverPeriodo(1);
+
+    string EtiquetaPeriodo() => Model.Periodo switch
+    {
+        "dia" => $"Día · {Model.Desde:dd MMM yyyy}",
+        "mes" => $"{Model.Desde.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("es-MX"))}",
+        "rango" => $"Rango · {Model.Desde:dd MMM yyyy} — {Model.Hasta:dd MMM yyyy}",
+        _ => $"Semana {numeroSemana} · {anioSemana}"
+    };
+
+    string DetallePeriodo() => Model.Periodo switch
+    {
+        "dia" => Model.Desde.ToString("dddd dd 'de' MMMM 'de' yyyy", CultureInfo.GetCultureInfo("es-MX")),
+        "mes" => $"{Model.Desde:dd MMM yyyy} — {Model.Hasta:dd MMM yyyy}",
+        "rango" => $"{Model.DiasPeriodo} día(s) · {Model.Desde:dd MMM yyyy} — {Model.Hasta:dd MMM yyyy}",
+        _ => $"Lunes {Model.Desde:dd MMM} — domingo {Model.Hasta:dd MMM yyyy}"
+    };
+
+    string? UrlActual() => Model.Periodo switch
+    {
+        "dia" => $"/Indicadores/Index?area={Model.Seccion}&periodo=dia&fecha={DateTime.Today:yyyy-MM-dd}",
+        "mes" => $"/Indicadores/Index?area={Model.Seccion}&periodo=mes&mes={DateTime.Today:yyyy-MM}",
+        "semana" => $"/Indicadores/Index?area={Model.Seccion}&periodo=semana&semana={SemanaIso(DateTime.Today)}",
+        _ => null
+    };
+
+    string TextoActual() => Model.Periodo switch
+    {
+        "dia" => "Hoy",
+        "mes" => "Este mes",
+        _ => "Esta semana"
+    };
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Indicadores/indicadores.css" asp-append-version="true" />
+}
+
+<div class="ind-shell">
+    <header class="ind-hero">
+        <div class="ind-hero__title">
+            <a href="/Menu/Grupo/14" class="ind-back-btn">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                <span>Regresar al menú</span>
+            </a>
+            <span class="ind-eyebrow">CENTRO DE DESEMPEÑO</span>
+            <h1>Indicadores de Gestión</h1>
+            <p>Lectura general y por departamento con información operativa del ERP.</p>
+        </div>
+
+        <div class="ind-period-tools" data-period-filter>
+            <div class="ind-period-mode" aria-label="Tipo de periodo">
+                <span>Consultar por</span>
+                <div class="ind-period-mode__options">
+                    <button type="button" data-period-mode="dia" class="@(Model.Periodo == "dia" ? "active" : string.Empty)">Día</button>
+                    <button type="button" data-period-mode="semana" class="@(Model.Periodo == "semana" ? "active" : string.Empty)">Semana</button>
+                    <button type="button" data-period-mode="mes" class="@(Model.Periodo == "mes" ? "active" : string.Empty)">Mes</button>
+                    <button type="button" data-period-mode="rango" class="@(Model.Periodo == "rango" ? "active" : string.Empty)">Rango</button>
+                </div>
+            </div>
+
+            <div class="ind-period-tools__nav">
+                <a href="@UrlPeriodo(anterior.Inicio, anterior.Fin)" class="ind-period-btn" title="Periodo anterior">
+                    <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                    <span>Anterior</span>
+                </a>
+
+                <form method="get" action="/Indicadores/Index" class="ind-filter" data-period-form>
+                    <input type="hidden" name="area" value="@Model.Seccion" />
+                    <input type="hidden" name="periodo" value="@Model.Periodo" data-period-value />
+
+                    <label data-period-panel="dia" class="ind-period-panel @(Model.Periodo == "dia" ? string.Empty : "is-hidden")">
+                        <span>Día</span>
+                        <input type="date" name="fecha" value="@fecha" />
+                    </label>
+
+                    <label data-period-panel="semana" class="ind-period-panel @(Model.Periodo == "semana" ? string.Empty : "is-hidden")">
+                        <span>Semana</span>
+                        <input type="week" name="semana" value="@semana" />
+                    </label>
+
+                    <label data-period-panel="mes" class="ind-period-panel @(Model.Periodo == "mes" ? string.Empty : "is-hidden")">
+                        <span>Mes</span>
+                        <input type="month" name="mes" value="@mes" />
+                    </label>
+
+                    <div data-period-panel="rango" class="ind-period-panel ind-period-range @(Model.Periodo == "rango" ? string.Empty : "is-hidden")">
+                        <label>
+                            <span>Desde</span>
+                            <input type="date" name="desde" value="@desde" />
+                        </label>
+                        <label>
+                            <span>Hasta</span>
+                            <input type="date" name="hasta" value="@hasta" />
+                        </label>
+                    </div>
+
+                    <button type="submit">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        Consultar
+                    </button>
+                </form>
+
+                <a href="@UrlPeriodo(siguiente.Inicio, siguiente.Fin)" class="ind-period-btn" title="Periodo siguiente">
+                    <span>Siguiente</span>
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                </a>
+            </div>
+
+            <div class="ind-period-tools__meta">
+                <span class="ind-period-badge">@EtiquetaPeriodo()</span>
+                <span class="ind-period-detail">@DetallePeriodo()</span>
+                @if (UrlActual() is string urlActual)
+                {
+                    <a href="@urlActual" class="ind-period-current">
+                        <i class="fa-solid fa-calendar-day" aria-hidden="true"></i>
+                        @TextoActual()
+                    </a>
+                }
+            </div>
+
+            @if (Model.PeriodoLimitado)
+            {
+                <div class="ind-period-warning">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    El rango se limitó a 93 días para mantener el tablero ágil.
+                </div>
+            }
+        </div>
+    </header>
+
+    <nav class="ind-nav" aria-label="Departamentos de indicadores">
+        <a href="@UrlArea("general")" class="@(Model.Seccion == "general" ? "active" : string.Empty)"><i class="fa-solid fa-chart-pie"></i><span>General</span></a>
+        <a href="@UrlArea("produccion")" class="@(Model.Seccion == "produccion" ? "active" : string.Empty)"><i class="fa-solid fa-industry"></i><span>Producción</span></a>
+        <a href="@UrlArea("planeacion")" class="@(Model.Seccion == "planeacion" ? "active" : string.Empty)"><i class="fa-solid fa-calendar-check"></i><span>Planeación</span></a>
+        <a href="@UrlArea("calidad")" class="@(Model.Seccion == "calidad" ? "active" : string.Empty)"><i class="fa-solid fa-shield-halved"></i><span>Calidad</span></a>
+        <a href="@UrlArea("gp12")" class="@(Model.Seccion == "gp12" ? "active" : string.Empty)"><i class="fa-solid fa-magnifying-glass-chart"></i><span>GP12</span></a>
+        <a href="@UrlArea("almacen")" class="@(Model.Seccion == "almacen" ? "active" : string.Empty)"><i class="fa-solid fa-warehouse"></i><span>Almacén</span></a>
+        <a href="@UrlArea("logistica")" class="@(Model.Seccion == "logistica" ? "active" : string.Empty)"><i class="fa-solid fa-truck-fast"></i><span>Logística</span></a>
+        <a href="@UrlArea("compras")" class="@(Model.Seccion == "compras" ? "active" : string.Empty)"><i class="fa-solid fa-cart-shopping"></i><span>Compras</span></a>
+    </nav>
+
+    <section class="ind-section-head">
+        <div>
+            <span>@EtiquetaPeriodo() · @Model.Desde.ToString("dd MMM yyyy") — @Model.Hasta.ToString("dd MMM yyyy")</span>
+            <h2>@Model.TituloSeccion</h2>
+        </div>
+        <small>@DetallePeriodo() · actualizado @Model.GeneradoEn.ToString("dd/MM/yyyy HH:mm")</small>
+    </section>
+
+    @switch (Model.Seccion)
+    {
+        case "produccion":
+            @await Html.PartialAsync("_Produccion", Model)
+            break;
+        case "planeacion":
+            @await Html.PartialAsync("_Planeacion", Model)
+            break;
+        case "calidad":
+            @await Html.PartialAsync("_Calidad", Model)
+            break;
+        case "gp12":
+            @await Html.PartialAsync("_GP12", Model)
+            break;
+        case "almacen":
+            @await Html.PartialAsync("_Almacen", Model)
+            break;
+        case "logistica":
+            @await Html.PartialAsync("_Logistica", Model)
+            break;
+        case "compras":
+            @await Html.PartialAsync("_Compras", Model)
+            break;
+        default:
+            @await Html.PartialAsync("_General", Model)
+            break;
+    }
+</div>
+
+@section Scripts {
+    <script src="~/js/Indicadores/indicadores-filtros.js" asp-append-version="true"></script>
+}

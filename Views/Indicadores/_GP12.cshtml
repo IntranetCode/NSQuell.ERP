@@ -1,0 +1,10 @@
+@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+<section class="ind-kpis">
+    <article class="ind-kpi ind-kpi--featured"><span>Conformidad</span><strong>@Model.GP12.ConformidadPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.GP12.ConformidadPct,0m,100m)))"></progress><small>@Model.GP12.OK.ToString("N0") OK / @Model.GP12.Revisado.ToString("N0") revisado</small></article>
+    <article class="ind-kpi"><span>Avance de solicitudes</span><strong>@Model.GP12.AvancePct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.GP12.AvancePct,0m,100m)))"></progress><small>@Model.GP12.Procesado.ToString("N0") procesado / @Model.GP12.Solicitado.ToString("N0") solicitado</small></article>
+    <article class="ind-kpi"><span>Scrap GP12</span><strong>@Model.GP12.ScrapPct.ToString("N2")%</strong><small>@Model.GP12.Scrap.ToString("N0") PZA scrap</small></article>
+    <article class="ind-kpi"><span>Solicitudes</span><strong>@Model.GP12.Solicitudes.ToString("N0")</strong><small>@Model.GP12.SolicitudesPendientes solicitudes activas con pendiente</small></article>
+    <article class="ind-kpi"><span>Retrabajo</span><strong>@Model.GP12.Retrabajado.ToString("N0")</strong><small>@Model.GP12.NOK.ToString("N0") NOK detectadas</small></article>
+    <article class="ind-kpi"><span>Inspecciones</span><strong>@Model.GP12.Inspecciones.ToString("N0")</strong><small>@Model.GP12.Pendiente.ToString("N0") cantidad pendiente del periodo</small></article>
+</section>
+<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>GP12 combina solicitudes, cantidad procesada y resultados reales de inspección: OK, NOK, retrabajo y Scrap.</span></div>

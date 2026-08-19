@@ -1,0 +1,10 @@
+@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+<section class="ind-kpis">
+    <article class="ind-kpi ind-kpi--featured"><span>Monto de órdenes</span><strong>@Model.Compras.MontoOrdenes.ToString("C0")</strong><small>@Model.Compras.OrdenesCompra órdenes emitidas en el periodo</small></article>
+    <article class="ind-kpi"><span>Solicitudes nuevas</span><strong>@Model.Compras.Solicitudes.ToString("N0")</strong><small>Solicitudes generadas en el periodo</small></article>
+    <article class="ind-kpi"><span>Flujo abierto</span><strong>@Model.Compras.PendientesFlujo.ToString("N0")</strong><small>@Model.Compras.UrgentesPendientes de prioridad alta/urgente/crítica</small></article>
+    <article class="ind-kpi"><span>Antigüedad promedio</span><strong>@Model.Compras.PromedioDiasEnEstatus.ToString("N1") d</strong><small>Días en el estatus actual de solicitudes abiertas</small></article>
+    <article class="ind-kpi"><span>Recepciones</span><strong>@Model.Compras.Recepciones.ToString("N0")</strong><small>Recepciones registradas en el periodo</small></article>
+    <article class="ind-kpi"><span>Recepción a tiempo</span><strong>@Model.Compras.RecepcionATiempoPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Compras.RecepcionATiempoPct,0m,100m)))"></progress><small>@Model.Compras.RecepcionesATiempo recepciones dentro de fecha estimada</small></article>
+</section>
+<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>El seguimiento combina el flujo de solicitudes, órdenes emitidas, antigüedad del estatus y recepciones contra la fecha estimada de entrega.</span></div>

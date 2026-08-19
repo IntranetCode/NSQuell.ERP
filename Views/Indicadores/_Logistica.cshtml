@@ -1,0 +1,10 @@
+@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+<section class="ind-kpis">
+    <article class="ind-kpi ind-kpi--featured"><span>Embarques entregados</span><strong>@Model.Logistica.EntregaPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Logistica.EntregaPct,0m,100m)))"></progress><small>@Model.Logistica.Entregados de @Model.Logistica.Embarques embarques</small></article>
+    <article class="ind-kpi"><span>Puntualidad</span><strong>@Model.Logistica.PuntualidadPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Logistica.PuntualidadPct,0m,100m)))"></progress><small>@Model.Logistica.EntregadosATiempo entregas dentro de fecha</small></article>
+    <article class="ind-kpi"><span>Atrasados</span><strong>@Model.Logistica.Atrasados.ToString("N0")</strong><small>Programados y aún sin entrega</small></article>
+    <article class="ind-kpi"><span>Con incidencia</span><strong>@Model.Logistica.Incidencias.ToString("N0")</strong><small>Embarques del periodo marcados con incidencia</small></article>
+    <article class="ind-kpi"><span>Incidencias abiertas</span><strong>@Model.Logistica.IncidenciasAbiertas.ToString("N0")</strong><small>Casos que no están cerrados/resueltos/cancelados</small></article>
+    <article class="ind-kpi"><span>Críticas abiertas</span><strong>@Model.Logistica.CriticasAbiertas.ToString("N0")</strong><small>Severidad crítica o alta</small></article>
+</section>
+<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>La puntualidad compara la fecha real de entrega contra FechaEntregaProgramada y, cuando no existe, contra FechaProgramada.</span></div>
