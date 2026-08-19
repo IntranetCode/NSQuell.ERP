@@ -1,7 +1,7 @@
 ﻿@using ERP.NSQuell.Models.ViewModels.Logistica
 @model LogisticaIndexVm
 @{
-    Layout = "_LogisticaLayout";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Operación Logística";
 
     string Fecha(DateTime? value) => value?.ToString("dd/MM/yyyy") ?? "—";
@@ -124,52 +124,16 @@
     var conIncidencia = activos.Count(x => x.TieneIncidencia);
     var enTiempo = activos.Count(x => RiesgoTexto(x) == "En tiempo");
 }
-<style>
-    :root {
-        --lg-navy: #071b31;
-        --lg-blue: #0f4c81;
-        --lg-blue-2: #1f6fa6;
-        --lg-cyan: #4ba3c7;
-        --lg-bg: #f3f6fa;
-        --lg-panel: #ffffff;
-        --lg-line: #d9e3ee;
-        --lg-ink: #172033;
-        --lg-muted: #667085;
-        --lg-green: #117a4b;
-        --lg-amber: #b76e00;
-        --lg-red: #b42318;
-        --lg-purple: #6847c7;
-        --lg-shadow: 0 12px 32px rgba(15,23,42,.07)
-    }
 
-    .log-page {
-        display: flex;
-        flex-direction: column;
-        gap: 15px
-    }
+@section Styles {
+    <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Logistica/index.css" asp-append-version="true" />
+}
 
-    .log-hero {
-        position: relative;
-        overflow: hidden;
-        background: linear-gradient(118deg,var(--lg-navy),#103d64 72%,#175f8c);
-        color: #fff;
-        border-radius: 22px;
-        padding: 22px 24px;
-        box-shadow: 0 20px 45px rgba(7,27,49,.18)
-    }
 
-        .log-hero::after {
-            content: "";
-            position: absolute;
-            width: 340px;
-            height: 340px;
-            right: -120px;
-            top: -170px;
-            border-radius: 50%;
-            border: 1px solid rgba(255,255,255,.13);
-            box-shadow: 0 0 0 35px rgba(255,255,255,.025),0 0 0 75px rgba(255,255,255,.018)
-        }
+@await Html.PartialAsync("_LogisticaNavegacion")
 
+<<<<<<< HEAD
     .log-hero-row {
         position: relative;
         z-index: 1;
@@ -1054,6 +1018,8 @@
         }
     }
 </style>
+=======
+>>>>>>> origin/Rama_Adrian
 
 <div class="log-page">
     <section class="log-hero">
@@ -1092,7 +1058,7 @@
         </div>
     }
 
-    <div class="log-strip" style="padding:8px 3px 2px;gap:16px 24px">
+    <div class="log-strip" data-nsq-style-id="nsq-si-a3b88d64df">
         <span><strong>@preparados</strong> preparados</span>
         <span><strong>@cargados</strong> cargados</span>
         <span><strong>@enRuta</strong> en ruta</span>
@@ -1630,7 +1596,7 @@
                                 <td>
                                     @if (r.ConIncidencia > 0)
                                     {
-                                        <span class="log-incidence" style="margin-top:0"><i class="fa-solid fa-circle-exclamation me-1"></i>@r.ConIncidencia</span>
+                                        <span class="log-incidence" data-nsq-style-id="nsq-si-d462248a40"><i class="fa-solid fa-circle-exclamation me-1"></i>@r.ConIncidencia</span>
                                     }
                                     else
                                     {
