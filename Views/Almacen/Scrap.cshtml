@@ -1,0 +1,268 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenCalidadScrapBandejaVm
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Almacén Scrap";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-calidad-scrap.css" asp-append-version="true" />
+}
+
+@functions {
+    static string EstadoClase(string? estado) => (estado ?? string.Empty).ToUpperInvariant() switch
+    {
+        "PENDIENTE_RECEPCION" => "is-pending",
+        "RECIBIDO_ALMACEN" => "is-received",
+        "PENDIENTE_MOLIENDA" => "is-received",
+        "MOLIDO" => "is-ground",
+        _ => "is-neutral"
+    };
+}
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+
+<div class="qsr-page">
+    <section class="qsr-hero">
+        <div class="qsr-hero__copy">
+            <span class="qsr-eyebrow"><i class="fa-solid fa-recycle"></i> ALMACÉN · SCRAP DESDE CALIDAD</span>
+            <h1>Recepción física y molienda</h1>
+            <p>
+                La bandeja opera directamente sobre <strong>Calidad_ScrapEntregas</strong>. Calidad origina la entrega;
+                Almacén confirma la recepción y después registra la molienda que genera la entrada real de MP Molido.
+            </p>
+        </div>
+        <div class="qsr-hero__actions">
+            <a class="qsr-btn qsr-btn--secondary" href="/Menu/Grupo/1">
+                <i class="fa-solid fa-arrow-left"></i> Almacén
+            </a>
+            <a class="qsr-btn" asp-action="Scrap">
+                <i class="fa-solid fa-rotate"></i> Actualizar
+            </a>
+        </div>
+    </section>
+
+    @if (TempData["AlmacenMensaje"] is string mensaje)
+    {
+        var tipo = (TempData["AlmacenMensajeTipo"]?.ToString() ?? "info").ToLowerInvariant();
+        <div class="qsr-alert qsr-alert--@tipo" role="alert">
+            <i class="fa-solid @(tipo == "success" ? "fa-circle-check" : tipo == "warning" ? "fa-triangle-exclamation" : tipo == "danger" || tipo == "error" ? "fa-circle-xmark" : "fa-circle-info")"></i>
+            <strong>@mensaje</strong>
+        </div>
+    }
+
+    @if (!Model.Configurado)
+    {
+        <div class="qsr-alert qsr-alert--warning" role="alert">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div>
+                <strong>Almacén Scrap todavía no puede operar.</strong>
+                <span>@Model.MensajeConfiguracion</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <section class="qsr-kpis" aria-label="Resumen de Scrap">
+            <article class="qsr-kpi">
+                <small>Entregas activas</small>
+                <strong>@Model.Total.ToString("N0")</strong>
+                <span>fuente Calidad</span>
+            </article>
+            <article class="qsr-kpi">
+                <small>Por recibir</small>
+                <strong>@Model.PendientesRecepcion.ToString("N0")</strong>
+                <span>@Model.PiezasPendientes.ToString("N0") PZA</span>
+            </article>
+            <article class="qsr-kpi">
+                <small>En Almacén</small>
+                <strong>@Model.RecibidosAlmacen.ToString("N0")</strong>
+                <span>pendientes de molienda</span>
+            </article>
+            <article class="qsr-kpi">
+                <small>Molidos</small>
+                <strong>@Model.Molidos.ToString("N0")</strong>
+                <span>cerrados</span>
+            </article>
+            <article class="qsr-kpi">
+                <small>MP Molido</small>
+                <strong>@Model.KgMolidos.ToString("N3")</strong>
+                <span>KG registrados</span>
+            </article>
+        </section>
+
+        <section class="qsr-panel">
+            <header class="qsr-panel__header">
+                <div>
+                    <span class="qsr-eyebrow"><i class="fa-solid fa-inbox"></i> RECEPCIONES</span>
+                    <h2>Bandeja Almacén Scrap</h2>
+                </div>
+                <span class="qsr-caption">Máximo 500 registros</span>
+            </header>
+
+            <form method="get" class="qsr-filter">
+                <div class="qsr-field qsr-filter__search">
+                    <label for="q">Buscar</label>
+                    <input id="q" name="q" value="@Model.Busqueda"
+                           placeholder="Entrega, OF, parte, ubicación..." autocomplete="off" />
+                </div>
+                <div class="qsr-field">
+                    <label for="estado">Estado</label>
+                    <select id="estado" name="estado">
+                        <option value="">Todos</option>
+                        <option value="PENDIENTE_RECEPCION" selected="@(Model.Estado == "PENDIENTE_RECEPCION" ? "selected" : null)">Pendiente recepción</option>
+                        <option value="RECIBIDO_ALMACEN" selected="@(Model.Estado == "RECIBIDO_ALMACEN" ? "selected" : null)">Recibido Almacén</option>
+                        <option value="PENDIENTE_MOLIENDA" selected="@(Model.Estado == "PENDIENTE_MOLIENDA" ? "selected" : null)">Pendiente molienda</option>
+                        <option value="MOLIDO" selected="@(Model.Estado == "MOLIDO" ? "selected" : null)">Molido</option>
+                    </select>
+                </div>
+                <button class="qsr-btn" type="submit"><i class="fa-solid fa-filter"></i> Filtrar</button>
+                <a class="qsr-btn qsr-btn--secondary" asp-action="Scrap"><i class="fa-solid fa-xmark"></i> Limpiar</a>
+            </form>
+
+            @if (!Model.Registros.Any())
+            {
+                <div class="qsr-empty">
+                    <i class="fa-regular fa-folder-open"></i>
+                    <span>No hay entregas de Scrap para los filtros seleccionados.</span>
+                </div>
+            }
+            else
+            {
+                <div class="qsr-table-wrap">
+                    <table class="qsr-table">
+                        <thead>
+                            <tr>
+                                <th>Entrega</th>
+                                <th>Origen</th>
+                                <th>OF / Parte</th>
+                                <th>Cantidad</th>
+                                <th>Estado</th>
+                                <th>Recepción</th>
+                                <th>Molienda</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var item in Model.Registros)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>#@item.ScrapEntregaID</strong>
+                                    <small class="qsr-subtext">Inspección #@item.InspeccionID</small>
+                                    <small class="qsr-subtext">@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</small>
+                                </td>
+                                <td>
+                                    <span class="qsr-source"><i class="fa-solid fa-shield-halved"></i>@item.OrigenTexto</span>
+                                    @if (item.GP12SolicitudID.HasValue)
+                                    {
+                                        <small class="qsr-subtext">GP12 #@item.GP12SolicitudID</small>
+                                    }
+                                </td>
+                                <td>
+                                    <strong>@(string.IsNullOrWhiteSpace(item.OrdenFabricacion) ? "Sin OF" : item.OrdenFabricacion)</strong>
+                                    <small class="qsr-subtext">@(string.IsNullOrWhiteSpace(item.NumeroParte) ? "Sin parte" : item.NumeroParte)</small>
+                                    @if (!string.IsNullOrWhiteSpace(item.Observaciones))
+                                    {
+                                        <span class="qsr-row-note" title="@item.Observaciones">@item.Observaciones</span>
+                                    }
+                                </td>
+                                <td><strong>@item.CantidadScrap.ToString("N0") PZA</strong></td>
+                                <td><span class="qsr-status @EstadoClase(item.Estado)">@item.EstadoTexto</span></td>
+                                <td>
+                                    @if (item.FechaRecepcion.HasValue)
+                                    {
+                                        <strong>@item.FechaRecepcion.Value.ToString("dd/MM/yyyy HH:mm")</strong>
+                                        <small class="qsr-subtext">@item.UbicacionScrap</small>
+                                        <small class="qsr-subtext">@item.RecibidoPor</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="qsr-muted">Pendiente</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.FechaMolienda.HasValue)
+                                    {
+                                        <strong>@(item.CantidadMolida?.ToString("N3") ?? "0.000") KG</strong>
+                                        <small class="qsr-subtext">@item.FechaMolienda.Value.ToString("dd/MM/yyyy HH:mm")</small>
+                                        <small class="qsr-subtext">@item.MolidoPor</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="qsr-muted">Sin molienda</span>
+                                    }
+                                </td>
+                                <td class="qsr-action-cell">
+                                    @if (item.PuedeRecibir)
+                                    {
+                                        <form class="qsr-action-form" asp-action="RecibirScrap" method="post"
+                                              onsubmit="return confirm('¿Confirmar recepción física del Scrap #@item.ScrapEntregaID?');">
+                                            <input type="hidden" name="ScrapEntregaID" value="@item.ScrapEntregaID" />
+                                            <select name="UbicacionScrapID" required>
+                                                <option value="">Ubicación SCRAP...</option>
+                                                @foreach (var ubicacion in Model.UbicacionesScrap)
+                                                {
+                                                    <option value="@ubicacion.Id">@ubicacion.Texto</option>
+                                                }
+                                            </select>
+                                            @if (Model.UbicacionesScrap.Any())
+                                            {
+                                                <button class="qsr-btn qsr-btn--compact" type="submit"><i class="fa-solid fa-box-open"></i> Recibir</button>
+                                            }
+                                            else
+                                            {
+                                                <a class="qsr-btn qsr-btn--secondary qsr-btn--compact" href="/AlmacenUbicaciones/Editar">
+                                                    <i class="fa-solid fa-location-dot"></i> Crear ubicación SCRAP
+                                                </a>
+                                                <span class="qsr-note">No hay ubicaciones SCRAP activas en el catálogo compartido.</span>
+                                            }
+                                        </form>
+                                    }
+                                    else if (item.PuedeMoler)
+                                    {
+                                        <form class="qsr-action-form" asp-action="RegistrarMoliendaScrap" method="post"
+                                              onsubmit="return confirm('¿Registrar la molienda y generar la Entrada MP Molido?');">
+                                            <input type="hidden" name="ScrapEntregaID" value="@item.ScrapEntregaID" />
+                                            <input type="number" name="CantidadMolida" min="0.001" step="0.001" required placeholder="Peso molido KG" />
+                                            <select name="UbicacionMPID" required>
+                                                <option value="">Ubicación MP...</option>
+                                                @foreach (var ubicacion in Model.UbicacionesMP)
+                                                {
+                                                    <option value="@ubicacion.Id">@ubicacion.Texto</option>
+                                                }
+                                            </select>
+                                            <input name="Observaciones" maxlength="500" placeholder="Observación de molienda (opcional)" />
+                                            <button class="qsr-btn qsr-btn--compact" type="submit"><i class="fa-solid fa-gears"></i> Registrar molienda</button>
+                                            <span class="qsr-note">Al confirmar se crea una Entrada MP Tipo M y la entrega pasa a MOLIDO.</span>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="qsr-muted">Sin acción pendiente</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="qsr-info-grid">
+            <article class="qsr-info-card">
+                <span class="qsr-info-card__icon"><i class="fa-solid fa-arrow-right-arrow-left"></i></span>
+                <div><strong>Una sola fuente</strong><p>Almacén no duplica el Scrap. Opera directamente sobre la entrega creada por Calidad.</p></div>
+            </article>
+            <article class="qsr-info-card">
+                <span class="qsr-info-card__icon"><i class="fa-solid fa-location-dot"></i></span>
+                <div><strong>Recepción física</strong><p>La recepción registra usuario, fecha, ubicación y cambia la entrega a RECIBIDO_ALMACEN.</p></div>
+            </article>
+            <article class="qsr-info-card">
+                <span class="qsr-info-card__icon"><i class="fa-solid fa-industry"></i></span>
+                <div><strong>Inventario solo al moler</strong><p>El stock MP aumenta únicamente cuando se registra el peso real de la molienda.</p></div>
+            </article>
+        </section>
+    }
+</div>

@@ -1,0 +1,62 @@
+@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+
+<section class="ind-kpis">
+    <article class="ind-kpi ind-kpi--featured"><span>OEE</span><strong>@Model.Produccion.OeePct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.OeePct,0m,100m)))"></progress><small>Rendimiento × calidad × disponibilidad</small></article>
+    <article class="ind-kpi"><span>Cumplimiento</span><strong>@Model.Produccion.CumplimientoPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.CumplimientoPct,0m,100m)))"></progress><small>@Model.Produccion.PiezasOK.ToString("N0") OK / @Model.Produccion.Objetivo.ToString("N0") objetivo</small></article>
+    <article class="ind-kpi"><span>Calidad</span><strong>@Model.Produccion.CalidadPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.CalidadPct,0m,100m)))"></progress><small>@Model.Produccion.ScrapPct.ToString("N2")% scrap</small></article>
+    <article class="ind-kpi"><span>Disponibilidad</span><strong>@Model.Produccion.DisponibilidadPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.DisponibilidadPct,0m,100m)))"></progress><small>@Model.Produccion.MinutosParo.ToString("N0") min de paro</small></article>
+    <article class="ind-kpi"><span>Piezas OK</span><strong>@Model.Produccion.PiezasOK.ToString("N0")</strong><small>@Model.Produccion.Operadores operadores · @Model.Produccion.RegistrosHora registros/hora</small></article>
+</section>
+
+<section class="ind-grid ind-grid--wide">
+    <article class="ind-panel">
+        <header class="ind-panel__head"><div><span>PERSONAL</span><h3>Rendimiento por operador</h3></div><small>Top 12 por OEE</small></header>
+        @if (!Model.Operadores.Any())
+        {
+            <div class="ind-empty">No hay producción por operador en el periodo.</div>
+        }
+        else
+        {
+            <div class="ind-table-wrap"><table class="ind-table"><thead><tr><th>#</th><th>Operador</th><th>OEE</th><th>Cumpl.</th><th>Calidad</th><th>Dispon.</th><th>OK</th></tr></thead><tbody>
+            @{ var rank = 0; }
+            @foreach (var op in Model.Operadores)
+            {
+                rank++;
+                <tr><td><span class="ind-rank">@rank</span></td><td><strong>@op.Operador</strong><small>@(string.IsNullOrWhiteSpace(op.NumeroControl) ? $"Persona #{op.OperadorID}" : $"Control {op.NumeroControl}")</small></td><td><strong>@op.OeePct.ToString("N1")%</strong></td><td>@op.CumplimientoPct.ToString("N1")%</td><td>@op.CalidadPct.ToString("N1")%<small>@op.ScrapPct.ToString("N2")% scrap</small></td><td>@op.DisponibilidadPct.ToString("N1")%</td><td>@op.PiezasOK.ToString("N0")</td></tr>
+            }
+            </tbody></table></div>
+        }
+    </article>
+</section>
+
+<section class="ind-grid ind-grid--two">
+    <article class="ind-panel">
+        <header class="ind-panel__head"><div><span>ACTIVOS</span><h3>Máquinas con mejor OEE</h3></div><small>Top 8</small></header>
+        @if (!Model.Maquinas.Any()) { <div class="ind-empty">Sin datos por máquina.</div> }
+        else
+        {
+            <div class="ind-list">
+            @foreach (var maquina in Model.Maquinas)
+            {
+                <div class="ind-list-row"><div><strong>@maquina.Maquina</strong><small>@maquina.PiezasOK.ToString("N0") PZA OK · @maquina.ScrapPct.ToString("N2")% scrap</small></div><div class="ind-list-metric"><strong>@maquina.OeePct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(maquina.OeePct,0m,100m)))"></progress></div></div>
+            }
+            </div>
+        }
+    </article>
+
+    <article class="ind-panel">
+        <header class="ind-panel__head"><div><span>TENDENCIA</span><h3>OEE diario</h3></div><small>Últimos 14 días con datos</small></header>
+        @if (!Model.Tendencia.Any()) { <div class="ind-empty">Sin tendencia disponible.</div> }
+        else
+        {
+            <div class="ind-list">
+            @foreach (var dia in Model.Tendencia.TakeLast(14))
+            {
+                <div class="ind-list-row"><div><strong>@dia.Fecha.ToString("dd MMM")</strong><small>@dia.PiezasOK.ToString("N0") PZA OK</small></div><div class="ind-list-metric"><strong>@dia.OeePct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(dia.OeePct,0m,100m)))"></progress></div></div>
+            }
+            </div>
+        }
+    </article>
+</section>
+
+<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>OEE: rendimiento (OK / objetivo) × calidad (1 − scrap) × disponibilidad (1 − paro), acotados a 0–100%.</span></div>

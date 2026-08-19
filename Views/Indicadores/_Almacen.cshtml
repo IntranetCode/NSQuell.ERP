@@ -1,0 +1,10 @@
+@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+<section class="ind-kpis">
+    <article class="ind-kpi ind-kpi--featured"><span>Actividad de almacén</span><strong>@Model.Almacen.MovimientosTotales.ToString("N0")</strong><small>Movimientos MP + PT + embalajes del periodo</small></article>
+    <article class="ind-kpi"><span>MP</span><strong>@Model.Almacen.MovimientosMP.ToString("N0")</strong><small>@Model.Almacen.EntradasMP entradas · @Model.Almacen.SalidasMP salidas/consumos</small></article>
+    <article class="ind-kpi"><span>PT</span><strong>@Model.Almacen.MovimientosPT.ToString("N0")</strong><small>@Model.Almacen.EntradasPT entradas · @Model.Almacen.SalidasPT salidas/embarques</small></article>
+    <article class="ind-kpi"><span>Embalajes</span><strong>@Model.Almacen.MovimientosEmbalajes.ToString("N0")</strong><small>Movimientos registrados en el periodo</small></article>
+    <article class="ind-kpi"><span>Alertas de inventario</span><strong>@Model.Almacen.AlertasInventario.ToString("N0")</strong><small>@Model.Almacen.MPBajoMinimo MP bajo mínimo · @Model.Almacen.PTEnRojo PT rojo · @Model.Almacen.EmbalajesEnRojo embalajes rojo</small></article>
+    <article class="ind-kpi"><span>Flujo Scrap</span><strong>@Model.Almacen.ScrapPendienteRecepcion.ToString("N0")</strong><small>por recibir · @Model.Almacen.ScrapRecibidoPendienteMolienda recibido(s) por moler</small></article>
+</section>
+<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>El estado de inventario usa las vistas vigentes de MP, PT y embalajes; Scrap conserva su trazabilidad desde Calidad hasta recepción y molienda.</span></div>

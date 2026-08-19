@@ -1,0 +1,10 @@
+@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+<section class="ind-kpis">
+    <article class="ind-kpi ind-kpi--featured"><span>Liberación</span><strong>@Model.Calidad.LiberacionPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Calidad.LiberacionPct,0m,100m)))"></progress><small>@Model.Calidad.Liberadas liberadas de @Model.Calidad.Inspecciones inspecciones</small></article>
+    <article class="ind-kpi"><span>Cobertura de revisión</span><strong>@Model.Calidad.CoberturaPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Calidad.CoberturaPct,0m,100m)))"></progress><small>@Model.Calidad.CantidadRevisada.ToString("N0") revisado / @Model.Calidad.CantidadTotal.ToString("N0") total</small></article>
+    <article class="ind-kpi"><span>Tiempo objetivo</span><strong>@Model.Calidad.CumplimientoTiempoPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Calidad.CumplimientoTiempoPct,0m,100m)))"></progress><small>@Model.Calidad.MinutosLiberacionPromedio.ToString("N1") min promedio de liberación inicial</small></article>
+    <article class="ind-kpi"><span>Contenciones</span><strong>@Model.Calidad.Contenciones.ToString("N0")</strong><small>Inspecciones marcadas en contención</small></article>
+    <article class="ind-kpi"><span>Scrap</span><strong>@Model.Calidad.Scrap.ToString("N0")</strong><small>Inspecciones con disposición Scrap</small></article>
+    <article class="ind-kpi"><span>Pendiente de revisión</span><strong>@Model.Calidad.CantidadPendiente.ToString("N0")</strong><small>@Model.Calidad.RequierenGP12 requieren GP12 · @Model.Calidad.RequierenReliberacion reliberación</small></article>
+</section>
+<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>Las métricas se basan en la trazabilidad de Calidad_Inspecciones: revisión, liberación, contención, Scrap, GP12 y tiempo de liberación inicial.</span></div>
