@@ -1,7 +1,7 @@
 ﻿@using ERP.NSQuell.Models
 @model ProduccionPreparacionIndexVm
 @{
-    Layout = null;
+    Layout = "_Layout";
     ViewData["Title"] = "Preparación de producción";
     var tareas = Model.Tareas ?? new List<ProduccionPreparacionTareaVm>();
     var secados = tareas.Where(x => x.EsSecadoMaterial && !x.EstaConfirmada).OrderBy(x => x.FechaAviso).ToList();
@@ -23,6 +23,36 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+        (function () {
+            const STORAGE_KEY = 'nsq-theme';
+
+            function applyStoredTheme(value) {
+                const theme = value === 'light' ? 'light' : 'dark';
+                const root = document.documentElement;
+
+                root.setAttribute('data-nsq-theme', theme);
+                root.setAttribute('data-bs-theme', theme);
+                root.style.colorScheme = theme;
+            }
+
+            let savedTheme = 'dark';
+
+            try {
+                savedTheme = localStorage.getItem(STORAGE_KEY) || 'dark';
+            } catch (_) {
+                savedTheme = 'dark';
+            }
+
+            applyStoredTheme(savedTheme);
+
+            window.addEventListener('storage', function (event) {
+                if (event.key === STORAGE_KEY) {
+                    applyStoredTheme(event.newValue || 'dark');
+                }
+            });
+        })();
+    </script>
     <title>@ViewData["Title"]</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
@@ -854,6 +884,174 @@
                 width: 100%
             }
 
+        }
+    
+
+        /* =====================================================
+           TEMA GLOBAL ERP
+           Esta pantalla es standalone (Layout = null), por eso
+           lee nsq-theme desde localStorage al cargar.
+           ===================================================== */
+        html[data-nsq-theme="dark"] {
+            --line: #2d3e55;
+            --bg: #0b1220;
+            --text: #e7eef9;
+            --muted: #9aa9bd;
+            --redbg: #351719;
+            --orangebg: #2b2313;
+            --greenbg: #102a20;
+            --shadow: 0 12px 30px rgba(0,0,0,.16);
+        }
+
+        html[data-nsq-theme="dark"] body {
+            background: #0b1220;
+            color: #e7eef9;
+        }
+
+        html[data-nsq-theme="dark"] .filters,
+        html[data-nsq-theme="dark"] .type-btn,
+        html[data-nsq-theme="dark"] .machine-group,
+        html[data-nsq-theme="dark"] .task,
+        html[data-nsq-theme="dark"] .empty {
+            background: #111b2d;
+            border-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"] .btnx:not(.btnx-light):not(.btnx-primary),
+        html[data-nsq-theme="dark"] .urgency-btn {
+            background: #17263c;
+            border-color: #354961;
+            color: #dce7f6;
+        }
+
+        html[data-nsq-theme="dark"] .btnx:not(.btnx-light):not(.btnx-primary):hover,
+        html[data-nsq-theme="dark"] .urgency-btn:hover {
+            background: #1d2d45;
+            border-color: #58779e;
+            color: #fff;
+        }
+
+        html[data-nsq-theme="dark"] .field label,
+        html[data-nsq-theme="dark"] .task-sub,
+        html[data-nsq-theme="dark"] .task-date,
+        html[data-nsq-theme="dark"] .section-head p,
+        html[data-nsq-theme="dark"] .machine-group-title small,
+        html[data-nsq-theme="dark"] .task-info span,
+        html[data-nsq-theme="dark"] .detail span {
+            color: #9aa9bd;
+        }
+
+        html[data-nsq-theme="dark"] .field input,
+        html[data-nsq-theme="dark"] .field select,
+        html[data-nsq-theme="dark"] .confirm-form input[type=text] {
+            background: #0d1727;
+            border-color: #354961;
+            color: #eaf2ff;
+        }
+
+        html[data-nsq-theme="dark"] .field input::placeholder,
+        html[data-nsq-theme="dark"] .confirm-form input[type=text]::placeholder {
+            color: #75869d;
+        }
+
+        html[data-nsq-theme="dark"] .field input:focus,
+        html[data-nsq-theme="dark"] .field select:focus,
+        html[data-nsq-theme="dark"] .confirm-form input[type=text]:focus {
+            border-color: #5da6ff;
+            box-shadow: 0 0 0 3px rgba(93,166,255,.14);
+            outline: none;
+        }
+
+        html[data-nsq-theme="dark"] .type-btn:hover {
+            border-color: #58779e;
+        }
+
+        html[data-nsq-theme="dark"] .type-btn.active {
+            border-color: #7f8cff;
+            box-shadow: 0 12px 28px rgba(79,92,255,.16);
+        }
+
+        html[data-nsq-theme="dark"] .type-icon.secado,
+        html[data-nsq-theme="dark"] .machine-group-icon.secado,
+        html[data-nsq-theme="dark"] .tipo-secado .task-icon {
+            background: #2b2313;
+        }
+
+        html[data-nsq-theme="dark"] .type-icon.embalaje,
+        html[data-nsq-theme="dark"] .machine-group-icon.embalaje,
+        html[data-nsq-theme="dark"] .tipo-embalaje .task-icon {
+            background: #102b4c;
+        }
+
+        html[data-nsq-theme="dark"] .type-icon.molde,
+        html[data-nsq-theme="dark"] .machine-group-icon.molde,
+        html[data-nsq-theme="dark"] .tipo-molde .task-icon {
+            background: #241b38;
+        }
+
+        html[data-nsq-theme="dark"] .type-icon.ok,
+        html[data-nsq-theme="dark"] .machine-group-icon.completa,
+        html[data-nsq-theme="dark"] .tipo-completa .task-icon {
+            background: #102a20;
+        }
+
+        html[data-nsq-theme="dark"] .mini.blue {
+            background: #102b4c;
+            color: #9dcaff;
+        }
+
+        html[data-nsq-theme="dark"] .machine-group summary {
+            background: #152238;
+        }
+
+        html[data-nsq-theme="dark"] .machine-group[open] summary {
+            border-bottom-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"] .machine-group summary::after {
+            color: #9aa9bd;
+        }
+
+        html[data-nsq-theme="dark"] .machine-group-title strong,
+        html[data-nsq-theme="dark"] .task h3,
+        html[data-nsq-theme="dark"] .task-info b,
+        html[data-nsq-theme="dark"] .detail strong,
+        html[data-nsq-theme="dark"] .empty strong {
+            color: #eaf2ff;
+        }
+
+        html[data-nsq-theme="dark"] .machine-group-count,
+        html[data-nsq-theme="dark"] .section-count,
+        html[data-nsq-theme="dark"] .chip {
+            background: #17263c;
+            color: #cbd7e7;
+        }
+
+        html[data-nsq-theme="dark"] .machine-group-body {
+            background: #0f1828;
+        }
+
+        html[data-nsq-theme="dark"] .task-details {
+            background: #101a2b;
+            border-top-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"] .detail {
+            border-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"] .big-number {
+            color: #d9ebff !important;
+        }
+
+        html[data-nsq-theme="dark"] .warn {
+            background: #351719;
+            border-color: #7f2b32;
+            color: #ff9ca8;
+        }
+
+        html[data-nsq-theme="dark"] .empty {
+            color: #9aa9bd;
         }
     </style>
 </head>

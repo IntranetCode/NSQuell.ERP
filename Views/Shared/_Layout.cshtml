@@ -12,15 +12,29 @@
 
     <script>
         (function () {
-            const savedTheme = localStorage.getItem('nsq-theme') || 'dark';
+            const STORAGE_KEY = 'nsq-theme';
+            const savedTheme = localStorage.getItem(STORAGE_KEY) || 'dark';
             const theme = savedTheme === 'light' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-nsq-theme', theme);
+            const root = document.documentElement;
+
+            // Tema oficial del ERP.
+            root.setAttribute('data-nsq-theme', theme);
+
+            // Puente de compatibilidad para vistas/componentes Bootstrap 5.3+.
+            root.setAttribute('data-bs-theme', theme);
+
+            // Ayuda a que controles nativos del navegador acompañen el tema.
+            root.style.colorScheme = theme;
+
+            // Disponible durante la carga inicial antes de DOMContentLoaded.
+            window.__NSQ_INITIAL_THEME__ = theme;
         })();
     </script>
 
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/ERP.NSQuell.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
 
     @RenderSection("Styles", required: false)
@@ -40,21 +54,15 @@
             font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
+        /* El fondo oficial Claro/Oscuro lo define nsquell-erp-theme.css,
+           exactamente igual que en Menu/Index. Este Layout no compite con él. */
         body {
-            background:
-                radial-gradient(circle at 7% 6%, rgba(255, 130, 0, .12), transparent 28%),
-                radial-gradient(circle at 93% 12%, rgba(0, 83, 155, .10), transparent 28%),
-                linear-gradient(135deg, #f4f6f9 0%, #eef4fa 48%, #e8f0fb 100%);
-            color: #0d1929;
+            color: var(--ink, #0d1929);
             overflow-x: hidden;
         }
 
         html[data-nsq-theme="dark"] body {
-            background:
-                radial-gradient(circle at 6% 8%, rgba(244, 123, 32, .20), transparent 27%),
-                radial-gradient(circle at 92% 14%, rgba(56, 189, 248, .10), transparent 30%),
-                linear-gradient(135deg, #070b12 0%, #0b1220 48%, #101827 100%);
-            color: #f8fafc;
+            color: var(--ink, #f8fafc);
         }
 
         .global-layout-shell {
@@ -147,10 +155,53 @@
                 padding: .85rem;
             }
         }
+    
+
+        /* El fondo global pertenece exclusivamente al body definido por
+           nsquell-erp-theme.css. Ningún host del Layout debe cubrirlo. */
+        .global-layout-shell,
+        .global-navbar-host,
+        .global-render-host,
+        #main-content {
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+
+        html[data-nsq-theme="light"] .global-layout-shell,
+        html[data-nsq-theme="light"] .global-navbar-host,
+        html[data-nsq-theme="light"] .global-render-host,
+        html[data-nsq-theme="light"] #main-content,
+        html[data-nsq-theme="dark"] .global-layout-shell,
+        html[data-nsq-theme="dark"] .global-navbar-host,
+        html[data-nsq-theme="dark"] .global-render-host,
+        html[data-nsq-theme="dark"] #main-content {
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+
     </style>
 </head>
 
 <body>
+    <script>
+        (function () {
+            const theme = document.documentElement.getAttribute('data-nsq-theme') || 'dark';
+
+            document.body.classList.remove(
+                'nsq-theme-dark',
+                'nsq-theme-light',
+                'dark-mode',
+                'light-mode'
+            );
+
+            if (theme === 'light') {
+                document.body.classList.add('nsq-theme-light', 'light-mode');
+            } else {
+                document.body.classList.add('nsq-theme-dark', 'dark-mode');
+            }
+        })();
+    </script>
+
     @await Html.PartialAsync("_Overlay")
 
     <div class="global-layout-shell">

@@ -569,6 +569,231 @@
                     text-align: left;
                 }
     }
+
+    /* ======================================================
+       TEMA GLOBAL ERP - GP12 / ALMACEN
+       El modo claro conserva los estilos originales.
+       ====================================================== */
+
+    html[data-nsq-theme="dark"] .gp12-store-page {
+        color: #f4f7fb;
+    }
+
+    html[data-nsq-theme="dark"] body {
+        background: transparent !important;
+    }
+
+    /* Métricas */
+    html[data-nsq-theme="dark"] .metric {
+        border-color: #2b3c53;
+        background:
+            linear-gradient(
+                180deg,
+                #121f33 0%,
+                #0f1a2a 100%
+            );
+        box-shadow: 0 10px 26px rgba(0, 0, 0, .18);
+    }
+
+    html[data-nsq-theme="dark"] .metric-label {
+        color: #8fa2b9;
+    }
+
+    html[data-nsq-theme="dark"] .metric strong {
+        color: #f4f7fb;
+    }
+
+    html[data-nsq-theme="dark"] .metric small {
+        color: #9fb0c5;
+    }
+
+    /* Panel principal */
+    html[data-nsq-theme="dark"] .store-panel {
+        border-color: #2b3c53;
+        background:
+            linear-gradient(
+                180deg,
+                #121f33 0%,
+                #0f1a2a 100%
+            );
+        box-shadow: 0 18px 42px rgba(0, 0, 0, .20);
+    }
+
+    html[data-nsq-theme="dark"] .panel-head {
+        border-color: #223248;
+    }
+
+    html[data-nsq-theme="dark"] .panel-head h2 {
+        color: #f4f7fb;
+    }
+
+    html[data-nsq-theme="dark"] .panel-head p {
+        color: #9fb0c5;
+    }
+
+    html[data-nsq-theme="dark"] .result-chip {
+        background: rgba(37, 99, 235, .16);
+        color: #93c5fd;
+        border: 1px solid rgba(96, 165, 250, .20);
+    }
+
+    /* Filtros */
+    html[data-nsq-theme="dark"] .filters {
+        background: #101c2d;
+        border-color: #223248;
+    }
+
+    html[data-nsq-theme="dark"] .control {
+        border-color: #334861;
+        background: #0b1626;
+        color: #edf5ff;
+        color-scheme: dark;
+    }
+
+    html[data-nsq-theme="dark"] .control::placeholder {
+        color: #71839a;
+        opacity: 1;
+    }
+
+    html[data-nsq-theme="dark"] .control:hover {
+        border-color: #49627f;
+    }
+
+    html[data-nsq-theme="dark"] .control:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .13);
+    }
+
+    html[data-nsq-theme="dark"] .control option {
+        background: #0b1626;
+        color: #edf5ff;
+    }
+
+    /* Tabla */
+    html[data-nsq-theme="dark"] .store-table th {
+        border-color: #223248;
+        background: #0b1626;
+        color: #91a5bc;
+    }
+
+    html[data-nsq-theme="dark"] .store-table td {
+        border-color: #1f2e42;
+        color: #dce7f4;
+    }
+
+    html[data-nsq-theme="dark"] .store-table tbody tr:hover {
+        background: rgba(59, 130, 246, .07);
+    }
+
+    html[data-nsq-theme="dark"] .primary-line {
+        color: #f4f7fb;
+    }
+
+    html[data-nsq-theme="dark"] .secondary-line {
+        color: #91a4bb;
+    }
+
+    html[data-nsq-theme="dark"] .origin-chip {
+        border-color: rgba(96, 165, 250, .22);
+        color: #93c5fd;
+        background: rgba(37, 99, 235, .14);
+    }
+
+    html[data-nsq-theme="dark"] .qty {
+        color: #f4f7fb;
+    }
+
+    /* Estados */
+    html[data-nsq-theme="dark"] .state-pending {
+        color: #fcd34d;
+        background: rgba(245, 158, 11, .14);
+        border-color: rgba(251, 191, 36, .22);
+    }
+
+    html[data-nsq-theme="dark"] .state-stock {
+        color: #93c5fd;
+        background: rgba(37, 99, 235, .16);
+        border-color: rgba(96, 165, 250, .22);
+    }
+
+    html[data-nsq-theme="dark"] .state-ready {
+        color: #6ee7b7;
+        background: rgba(16, 185, 129, .14);
+        border-color: rgba(52, 211, 153, .22);
+    }
+
+    html[data-nsq-theme="dark"] .state-out {
+        color: #c4b5fd;
+        background: rgba(139, 92, 246, .16);
+        border-color: rgba(167, 139, 250, .22);
+    }
+
+    html[data-nsq-theme="dark"] .state-neutral {
+        color: #cbd5e1;
+        background: rgba(148, 163, 184, .12);
+        border-color: rgba(148, 163, 184, .18);
+    }
+
+    html[data-nsq-theme="dark"] .open-btn {
+        border-color: #315071;
+        color: #eef6ff;
+        background: #183253;
+    }
+
+    html[data-nsq-theme="dark"] .open-btn:hover {
+        color: #fff;
+        border-color: #3b82f6;
+        background: #1769b8;
+    }
+
+    /* Estado vacío */
+    html[data-nsq-theme="dark"] .empty-state {
+        color: #9fb0c5;
+        background:
+            radial-gradient(
+                circle at 50% 35%,
+                rgba(37, 99, 235, .07),
+                transparent 38%
+            );
+    }
+
+    html[data-nsq-theme="dark"] .empty-state i {
+        color: #7f93aa;
+    }
+
+    /* Nota inferior */
+    html[data-nsq-theme="dark"] .integration-note {
+        border-color: #2b3c53;
+        background: #111d2f;
+        color: #9fb0c5;
+    }
+
+    html[data-nsq-theme="dark"] .integration-note strong {
+        color: #e6eef8;
+    }
+
+    html[data-nsq-theme="dark"] .integration-note code {
+        color: #fda4af;
+        background: rgba(244, 63, 94, .10);
+        border-radius: 5px;
+        padding: 1px 4px;
+    }
+
+    html[data-nsq-theme="dark"] .integration-note i {
+        color: #7fb7ff;
+    }
+
+    /* Responsive: etiquetas de tabla */
+    @@media (max-width: 720px) {
+        html[data-nsq-theme="dark"] .store-table tr {
+            border-color: #223248;
+        }
+
+        html[data-nsq-theme="dark"] .store-table td::before {
+            color: #8fa2b9;
+        }
+    }
+
 </style>
 
 <div class="gp12-store-page">

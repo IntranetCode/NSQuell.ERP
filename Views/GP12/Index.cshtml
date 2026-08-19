@@ -1799,6 +1799,277 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* ======================================================
+           TEMA GLOBAL ERP - MODO OSCURO
+           El tema claro conserva los estilos originales.
+           ====================================================== */
+
+        html[data-nsq-theme="dark"] .page {
+            --panel: #111c2d;
+            --text: #f4f7fb;
+            --muted: #9fb0c5;
+            --border: #2b3c53;
+            --line: #223248;
+            --shadow:
+                0 18px 45px rgba(0, 0, 0, .22);
+
+            color: var(--text);
+        }
+
+        html[data-nsq-theme="dark"] body {
+            background: transparent !important;
+        }
+
+        html[data-nsq-theme="dark"] .flow-shell,
+        html[data-nsq-theme="dark"] .panel {
+            background:
+                linear-gradient(
+                    180deg,
+                    #121f33 0%,
+                    #0f1a2a 100%
+                );
+
+            border-color: var(--border);
+
+            box-shadow:
+                0 18px 45px rgba(0, 0, 0, .20);
+        }
+
+        html[data-nsq-theme="dark"] .flow-header,
+        html[data-nsq-theme="dark"] .panel-header,
+        html[data-nsq-theme="dark"] .side-section {
+            border-color: var(--line);
+        }
+
+        html[data-nsq-theme="dark"] .section-title,
+        html[data-nsq-theme="dark"] .panel-title,
+        html[data-nsq-theme="dark"] .side-title,
+        html[data-nsq-theme="dark"] .flow-step strong,
+        html[data-nsq-theme="dark"] .empty strong,
+        html[data-nsq-theme="dark"] .focus-item strong,
+        html[data-nsq-theme="dark"] .part,
+        html[data-nsq-theme="dark"] .number,
+        html[data-nsq-theme="dark"] td {
+            color: #f4f7fb;
+        }
+
+        html[data-nsq-theme="dark"] .flow-note,
+        html[data-nsq-theme="dark"] .flow-step span,
+        html[data-nsq-theme="dark"] .panel-description,
+        html[data-nsq-theme="dark"] .description,
+        html[data-nsq-theme="dark"] .table-date span,
+        html[data-nsq-theme="dark"] .focus-item span,
+        html[data-nsq-theme="dark"] .empty {
+            color: var(--muted);
+        }
+
+        html[data-nsq-theme="dark"] .flow-node {
+            border-color: #111c2d;
+
+            box-shadow:
+                0 0 0 1px #38506d,
+                0 8px 18px rgba(0, 0, 0, .28);
+        }
+
+        html[data-nsq-theme="dark"] .results-count {
+            background: rgba(37, 99, 235, .16);
+            color: #93c5fd;
+            border: 1px solid rgba(96, 165, 250, .22);
+        }
+
+        html[data-nsq-theme="dark"] .control {
+            border-color: #334861;
+            background: #0b1626;
+            color: #edf5ff;
+            color-scheme: dark;
+        }
+
+        html[data-nsq-theme="dark"] .control::placeholder {
+            color: #71839a;
+            opacity: 1;
+        }
+
+        html[data-nsq-theme="dark"] .control:hover {
+            border-color: #49627f;
+        }
+
+        html[data-nsq-theme="dark"] .control:focus {
+            border-color: #3b82f6;
+
+            box-shadow:
+                0 0 0 4px
+                rgba(59, 130, 246, .14);
+        }
+
+        html[data-nsq-theme="dark"] .control option {
+            background: #0b1626;
+            color: #edf5ff;
+        }
+
+        html[data-nsq-theme="dark"] .btn-search {
+            background:
+                linear-gradient(
+                    135deg,
+                    #1769b8,
+                    #238de3
+                );
+
+            box-shadow:
+                0 8px 20px rgba(15, 108, 189, .18);
+        }
+
+        html[data-nsq-theme="dark"] .btn-search:hover {
+            background:
+                linear-gradient(
+                    135deg,
+                    #1d78cf,
+                    #2899ef
+                );
+        }
+
+        html[data-nsq-theme="dark"] .table-wrap {
+            border-color: var(--line);
+            background: rgba(9, 19, 33, .28);
+        }
+
+        html[data-nsq-theme="dark"] .table-wrap th {
+            background: #0b1626;
+            color: #91a5bc;
+            border-color: var(--line);
+        }
+
+        html[data-nsq-theme="dark"] .table-wrap td {
+            border-color: #1f2e42;
+        }
+
+        html[data-nsq-theme="dark"] .table-wrap tbody tr:hover {
+            background: rgba(59, 130, 246, .07);
+        }
+
+        html[data-nsq-theme="dark"] .request-id {
+            color: #69adff;
+        }
+
+        html[data-nsq-theme="dark"] .btn-open {
+            background: #183253;
+            color: #eef6ff;
+            border: 1px solid #315071;
+        }
+
+        html[data-nsq-theme="dark"] .btn-open:hover {
+            background: #1769b8;
+            border-color: #3b82f6;
+        }
+
+        html[data-nsq-theme="dark"] .empty-icon {
+            background:
+                linear-gradient(
+                    145deg,
+                    rgba(37, 99, 235, .18),
+                    rgba(124, 58, 237, .12)
+                );
+
+            color: #69adff;
+
+            border: 1px solid rgba(96, 165, 250, .16);
+        }
+
+        html[data-nsq-theme="dark"] .focus-item {
+            background: #15243a;
+            border: 1px solid rgba(148, 163, 184, .08);
+        }
+
+        html[data-nsq-theme="dark"] .focus-item:hover {
+            background: #1a2b43;
+        }
+
+        /* Orígenes */
+        html[data-nsq-theme="dark"] .origen-planeacion {
+            background: rgba(37, 99, 235, .16);
+            color: #93c5fd;
+            border: 1px solid rgba(96, 165, 250, .20);
+        }
+
+        html[data-nsq-theme="dark"] .origen-produccion {
+            background: rgba(249, 115, 22, .14);
+            color: #fdba74;
+            border: 1px solid rgba(251, 146, 60, .20);
+        }
+
+        html[data-nsq-theme="dark"] .origen-calidad {
+            background: rgba(139, 92, 246, .16);
+            color: #c4b5fd;
+            border: 1px solid rgba(167, 139, 250, .20);
+        }
+
+        html[data-nsq-theme="dark"] .origen-manual,
+        html[data-nsq-theme="dark"] .origen-default {
+            background: rgba(148, 163, 184, .12);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, .18);
+        }
+
+        /* Estatus GP12 */
+        html[data-nsq-theme="dark"] .st-recibido,
+        html[data-nsq-theme="dark"] .st-terminada,
+        html[data-nsq-theme="dark"] .st-salida {
+            background: rgba(37, 99, 235, .16);
+            color: #93c5fd;
+            border: 1px solid rgba(96, 165, 250, .20);
+        }
+
+        html[data-nsq-theme="dark"] .st-pendiente {
+            background: rgba(245, 158, 11, .14);
+            color: #fcd34d;
+            border: 1px solid rgba(251, 191, 36, .20);
+        }
+
+        html[data-nsq-theme="dark"] .st-programado,
+        html[data-nsq-theme="dark"] .st-asignado {
+            background: rgba(139, 92, 246, .16);
+            color: #c4b5fd;
+            border: 1px solid rgba(167, 139, 250, .20);
+        }
+
+        html[data-nsq-theme="dark"] .st-inspeccion {
+            background: rgba(8, 145, 178, .16);
+            color: #67e8f9;
+            border: 1px solid rgba(34, 211, 238, .20);
+        }
+
+        html[data-nsq-theme="dark"] .st-pausada,
+        html[data-nsq-theme="dark"] .st-cancelado {
+            background: rgba(239, 68, 68, .14);
+            color: #fca5a5;
+            border: 1px solid rgba(248, 113, 113, .20);
+        }
+
+        html[data-nsq-theme="dark"] .st-tarima {
+            background: rgba(249, 115, 22, .14);
+            color: #fdba74;
+            border: 1px solid rgba(251, 146, 60, .20);
+        }
+
+        html[data-nsq-theme="dark"] .st-cerrado,
+        html[data-nsq-theme="dark"] .st-default {
+            background: rgba(148, 163, 184, .12);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, .18);
+        }
+
+        html[data-nsq-theme="dark"] .alert-success {
+            color: #bfdbfe;
+            background: rgba(37, 99, 235, .13);
+            border-color: rgba(96, 165, 250, .24);
+        }
+
+        html[data-nsq-theme="dark"] .alert-error {
+            color: #fecaca;
+            background: rgba(239, 68, 68, .12);
+            border-color: rgba(248, 113, 113, .24);
+        }
+
     </style>
 
 <div class="page">
