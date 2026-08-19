@@ -1141,12 +1141,31 @@
 
         function applyTheme(theme) {
             const selectedTheme = normalizeTheme(theme);
+            const root = document.documentElement;
 
-            document.documentElement.setAttribute('data-nsq-theme', selectedTheme);
+            // 1) Tema oficial del ERP.
+            root.setAttribute('data-nsq-theme', selectedTheme);
 
+            // 2) Compatibilidad con vistas/componentes que usan el tema de Bootstrap.
+            root.setAttribute('data-bs-theme', selectedTheme);
+
+            // 3) Controles nativos del navegador.
+            root.style.colorScheme = selectedTheme;
+
+            // 4) Compatibilidad con vistas antiguas que dependen de clases en <body>.
             if (document.body) {
-                document.body.classList.remove('nsq-theme-dark', 'nsq-theme-light');
-                document.body.classList.add(selectedTheme === 'light' ? 'nsq-theme-light' : 'nsq-theme-dark');
+                document.body.classList.remove(
+                    'nsq-theme-dark',
+                    'nsq-theme-light',
+                    'dark-mode',
+                    'light-mode'
+                );
+
+                if (selectedTheme === 'light') {
+                    document.body.classList.add('nsq-theme-light', 'light-mode');
+                } else {
+                    document.body.classList.add('nsq-theme-dark', 'dark-mode');
+                }
             }
 
             localStorage.setItem(STORAGE_KEY, selectedTheme);
@@ -1167,6 +1186,11 @@
             if (text) {
                 text.textContent = selectedTheme === 'light' ? 'Oscuro' : 'Claro';
             }
+
+            // Permite que una vista con JS escuche el cambio sin crear otro botón o storage.
+            window.dispatchEvent(new CustomEvent('nsq:themechange', {
+                detail: { theme: selectedTheme }
+            }));
         }
 
         function initThemeToggle() {
@@ -1183,6 +1207,19 @@
                 applyTheme(currentTheme === 'light' ? 'dark' : 'light');
             });
         }
+
+        // API global para que cualquier vista pueda consultar o aplicar el mismo tema
+        // sin duplicar la lógica del Layout/Navbar.
+        window.NSQTheme = {
+            apply: applyTheme,
+            get: function () {
+                return normalizeTheme(
+                    document.documentElement.getAttribute('data-nsq-theme') ||
+                    localStorage.getItem(STORAGE_KEY) ||
+                    'dark'
+                );
+            }
+        };
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initThemeToggle);

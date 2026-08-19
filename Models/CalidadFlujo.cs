@@ -245,6 +245,7 @@ namespace ERP.NSQuell.Models
         public const string PendienteMolienda = "PENDIENTE_MOLIENDA";
         public const string Molido = "MOLIDO";
         public const string Cancelado = "CANCELADO";
+        public const string PendienteEntregaGP12 = "PENDIENTE_ENTREGA_GP12";
     }
 
     public static class CalidadEstadoTratamiento
