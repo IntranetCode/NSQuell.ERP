@@ -1,6 +1,6 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Material OF Solicitados";
 
     string BuildPageUrl(int page)
@@ -31,7 +31,26 @@
         .Count();
 }
 
-<link rel="stylesheet" href="~/css/Almacen/almacen-of-v4.css" asp-append-version="true" />
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-of-v4.css" asp-append-version="true" />
+}
+
+
+@section Scripts {
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
+    <script src="~/js/shared/nsq-dynamic-style.js" asp-append-version="true"></script>
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero of4-hero">
     <div>
@@ -195,7 +214,7 @@ else
                                             : null;
                                         <a class="of4-item @item.Clase @(!puedeEntregar ? "disabled" : string.Empty)" href="@url" aria-disabled="@(!puedeEntregar)">
                                             <span class="of4-item-copy"><strong>@item.Codigo</strong><small title="@item.Descripcion">@item.Descripcion</small></span>
-                                            <span class="of4-item-progress"><span><strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong><em>@item.Estado</em></span><i><b style="width:@item.Porcentaje%"></b></i></span>
+                                            <span class="of4-item-progress"><span><strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong><em>@item.Estado</em></span><i><b data-nsq-style="width:@item.Porcentaje%"></b></i></span>
                                         </a>
                                     }
                                 </div>
@@ -218,7 +237,7 @@ else
                                             : null;
                                         <a class="of4-item @item.Clase @(!puedeEntregar ? "disabled" : string.Empty)" href="@url" aria-disabled="@(!puedeEntregar)">
                                             <span class="of4-item-copy"><strong>@item.Codigo</strong><small title="@item.Descripcion">@item.Descripcion</small></span>
-                                            <span class="of4-item-progress"><span><strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong><em>@item.Estado</em></span><i><b style="width:@item.Porcentaje%"></b></i></span>
+                                            <span class="of4-item-progress"><span><strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong><em>@item.Estado</em></span><i><b data-nsq-style="width:@item.Porcentaje%"></b></i></span>
                                         </a>
                                     }
                                 </div>
@@ -244,7 +263,7 @@ else
                                             <span class="of4-item-copy"><strong>@item.Codigo</strong><small title="@item.Descripcion">@item.Descripcion</small></span>
                                             <span class="of4-item-progress">
                                                 <span><strong>@item.Entregado.ToString("0") / @item.Requerido.ToString("0") PZS</strong><em>@item.Estado</em></span>
-                                                <i><b style="width:@item.Porcentaje%"></b></i>
+                                                <i><b data-nsq-style="width:@item.Porcentaje%"></b></i>
                                                 <small class="of5-pt-available">Disponible en PT: @item.DisponibleInventario.ToString("N0") PZS</small>
                                             </span>
                                         </a>

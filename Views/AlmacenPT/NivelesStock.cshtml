@@ -1,5 +1,19 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenStockNivelesVm
-@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = "Niveles de stock PT"; }
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenStockNivelesVm
+@{ Layout = "~/Views/Shared/_Layout.cshtml"; ViewData["Title"] = "Niveles de stock PT"; }
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero">
     <div>
@@ -110,4 +124,5 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
 }

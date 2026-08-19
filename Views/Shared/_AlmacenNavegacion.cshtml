@@ -1,0 +1,158 @@
+﻿@{
+    var tituloAlmacen = ViewData["Title"]?.ToString() ?? "Almacén";
+    var controllerAlmacen = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var actionAlmacen = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+
+    var seccionAlmacen = controllerAlmacen switch
+    {
+        "Almacen" when actionAlmacen.Equals("Scrap", StringComparison.OrdinalIgnoreCase) => "Scrap",
+        "AlmacenMP" => "MP",
+        "AlmacenEmbalajes" => "Embalajes",
+        "AlmacenOF" => "OF",
+        "AlmacenPT" => "PT",
+        "AlmacenScrap" => "Scrap",
+        "AlmacenUbicaciones" => "Ubicaciones",
+        _ => "Almacenes"
+    };
+
+    var entregaOfAlmacen = string.Equals(
+        Context.Request.Query["entregaOF"].ToString(),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
+
+    var numeroOfAlmacen = Context.Request.Query["numeroOF"].ToString().Trim();
+    var tipoAlmacen = Context.Request.Query["tipo"].ToString().Trim();
+    var returnUrlAlmacen = Context.Request.Query["returnUrl"].ToString().Trim();
+
+    var returnUrlSeguroAlmacen =
+        !string.IsNullOrWhiteSpace(returnUrlAlmacen)
+        && returnUrlAlmacen.StartsWith("/", StringComparison.Ordinal)
+        && !returnUrlAlmacen.StartsWith("//", StringComparison.Ordinal)
+            ? returnUrlAlmacen
+            : null;
+
+    var regresarAlmacen = controllerAlmacen switch
+    {
+        "Almacen" => "/Menu/Grupo/1",
+        "AlmacenAlmacenes" => "/Menu/Grupo/1",
+
+        "AlmacenCompras" when
+            actionAlmacen.Equals("Confirmar", StringComparison.OrdinalIgnoreCase)
+            && returnUrlSeguroAlmacen is not null
+                => returnUrlSeguroAlmacen,
+        "AlmacenCompras" => "/Menu/Grupo/1",
+
+        "AlmacenMP" when actionAlmacen.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenMP" when actionAlmacen.Equals("Material", StringComparison.OrdinalIgnoreCase)
+            => "/AlmacenMP/Materiales",
+        "AlmacenMP" when
+            actionAlmacen.Equals("Movimiento", StringComparison.OrdinalIgnoreCase)
+            && entregaOfAlmacen
+                => "/AlmacenOF/Index",
+        "AlmacenMP" => "/AlmacenMP/Index",
+
+        "AlmacenEmbalajes" when actionAlmacen.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenEmbalajes" when actionAlmacen.Equals("Embalaje", StringComparison.OrdinalIgnoreCase)
+            => "/AlmacenEmbalajes/Embalajes",
+        "AlmacenEmbalajes" when
+            actionAlmacen.Equals("Movimiento", StringComparison.OrdinalIgnoreCase)
+            && entregaOfAlmacen
+                => "/AlmacenOF/Index",
+        "AlmacenEmbalajes" => "/AlmacenEmbalajes/Index",
+
+        "AlmacenPT" when actionAlmacen.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenPT" when actionAlmacen.Equals("Configurar", StringComparison.OrdinalIgnoreCase)
+            => "/AlmacenPT/NivelesStock",
+        "AlmacenPT" when
+            actionAlmacen.Equals("Entrada", StringComparison.OrdinalIgnoreCase)
+            && entregaOfAlmacen
+                => "/AlmacenOF/Index",
+        "AlmacenPT" when
+            actionAlmacen.Equals("Movimiento", StringComparison.OrdinalIgnoreCase)
+            && tipoAlmacen.Equals("Salida", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(numeroOfAlmacen)
+                => "/AlmacenOF/Index",
+        "AlmacenPT" => "/AlmacenPT/Index",
+
+        "AlmacenScrap" when actionAlmacen.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenScrap" => "/AlmacenScrap/Index",
+
+        "AlmacenOF" when actionAlmacen.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenOF" => "/AlmacenOF/Index",
+
+        "AlmacenUbicaciones" when actionAlmacen.Equals("Index", StringComparison.OrdinalIgnoreCase)
+            => "/Menu/Grupo/1",
+        "AlmacenUbicaciones" => "/AlmacenUbicaciones/Index",
+
+        _ => "/Menu/Grupo/1"
+    };
+}
+
+<div class="alm-module-nav" data-almacen-module-nav>
+    <div class="alm-module-nav__bar">
+        <a href="/Menu/Grupo/1"
+           class="alm-module-nav__brand"
+           aria-label="Ir al menú de Almacén">
+            <i class="fa-solid fa-warehouse" aria-hidden="true"></i>
+            <span>Almacén</span>
+        </a>
+
+        <nav class="alm-module-nav__links" aria-label="Navegación de Almacén">
+            <a href="/Menu/Grupo/1"
+               class="alm-module-nav__link @(seccionAlmacen == "Almacenes" ? "active" : string.Empty)"
+               aria-current="@(seccionAlmacen == "Almacenes" ? "page" : null)">
+                Almacenes
+            </a>
+            <a href="/AlmacenMP/Index"
+               class="alm-module-nav__link @(seccionAlmacen == "MP" ? "active" : string.Empty)"
+               aria-current="@(seccionAlmacen == "MP" ? "page" : null)">
+                MP
+            </a>
+            <a href="/AlmacenEmbalajes/Index"
+               class="alm-module-nav__link @(seccionAlmacen == "Embalajes" ? "active" : string.Empty)"
+               aria-current="@(seccionAlmacen == "Embalajes" ? "page" : null)">
+                Embalajes
+            </a>
+            <a href="/AlmacenOF/Index"
+               class="alm-module-nav__link @(seccionAlmacen == "OF" ? "active" : string.Empty)"
+               aria-current="@(seccionAlmacen == "OF" ? "page" : null)">
+                Material OF
+            </a>
+            <a href="/AlmacenPT/Index"
+               class="alm-module-nav__link @(seccionAlmacen == "PT" ? "active" : string.Empty)"
+               aria-current="@(seccionAlmacen == "PT" ? "page" : null)">
+                PT
+            </a>
+            <a href="/Almacen/Scrap"
+               class="alm-module-nav__link @(seccionAlmacen == "Scrap" ? "active" : string.Empty)"
+               aria-current="@(seccionAlmacen == "Scrap" ? "page" : null)">
+                Scrap
+            </a>
+            <a href="/AlmacenUbicaciones/Index"
+               class="alm-module-nav__link @(seccionAlmacen == "Ubicaciones" ? "active" : string.Empty)"
+               aria-current="@(seccionAlmacen == "Ubicaciones" ? "page" : null)">
+                Ubicaciones
+            </a>
+        </nav>
+    </div>
+
+    <nav class="alm-module-route" aria-label="Ruta de Almacén">
+        <a class="alm-module-route__back" href="@regresarAlmacen">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+            <span>Regresar</span>
+        </a>
+
+        <ol class="alm-module-route__trail">
+            <li><a href="/Menu/Index">Inicio</a></li>
+            <li aria-hidden="true">›</li>
+            <li><a href="/Menu/Grupo/1">Almacén</a></li>
+            <li aria-hidden="true">›</li>
+            <li class="current" aria-current="page">@tituloAlmacen</li>
+        </ol>
+    </nav>
+</div>

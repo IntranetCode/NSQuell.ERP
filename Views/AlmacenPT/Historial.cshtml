@@ -1,6 +1,6 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTHistorialVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Historial PT";
 
     var anterior = Math.Max(1, Model.Pagina - 1);
@@ -17,6 +17,20 @@
 
     periodo = periodo.Trim().ToUpperInvariant();
 }
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero pt-history-hero">
     <div>
@@ -512,4 +526,5 @@
                 });
         })();
     </script>
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
 }

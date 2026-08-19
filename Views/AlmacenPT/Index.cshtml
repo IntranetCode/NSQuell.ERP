@@ -1,6 +1,6 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenPTIndexVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Inventario PT";
 
     string NombreClienteCatalogo(string? nombre)
@@ -32,25 +32,20 @@
     var busquedaActiva = !string.IsNullOrWhiteSpace(Model.Busqueda);
 }
 
-<style>
-    .pt-search-result-card {
-        border: 2px solid #0d6efd;
-        box-shadow: 0 0 0 4px rgba(13, 110, 253, .10), 0 14px 30px rgba(15, 35, 65, .10);
-    }
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/AlmacenPT/index.css" asp-append-version="true" />
+}
 
-    .pt-search-result-card .pt-client-head {
-        background: linear-gradient(90deg, rgba(13, 110, 253, .10), rgba(255, 255, 255, .98));
-    }
 
-    .pt-search-result-row > td {
-        background: #fff8dc;
-    }
+@await Html.PartialAsync("_AlmacenNavegacion")
 
-    .pt-search-result-row .pt-part-link strong,
-    .pt-search-result-row .pt-truncate-link {
-        font-weight: 800;
-    }
-</style>
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero">
     <div>
@@ -352,4 +347,5 @@
             applyClientFilter();
         })();
     </script>
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
 }

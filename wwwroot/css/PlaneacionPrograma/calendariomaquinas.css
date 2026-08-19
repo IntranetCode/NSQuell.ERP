@@ -1,0 +1,224 @@
+﻿:root {
+            --blue: #004aad;
+            --blue-dark: #063875;
+            --border: #d7e1ee;
+            --bg: #eef3f9;
+            --text: #1f2937;
+            --muted: #667085;
+            --green: #10804c;
+            --orange: #f79009;
+            --red: #b42318;
+            --purple: #7f56d9;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(0,74,173,.13), transparent 28%),
+                linear-gradient(180deg, #f8fbff, var(--bg));
+        }
+
+        .page {
+            max-width: 1920px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .hero {
+            padding: 26px 28px;
+            border-radius: 28px;
+            color: white;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            box-shadow: 0 22px 58px rgba(0,74,173,.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 999px;
+            right: -110px;
+            top: -150px;
+            background: rgba(255,255,255,.11);
+        }
+
+        .hero-content { position: relative; z-index: 2; }
+        .hero h1 { margin: 0; font-size: 1.75rem; font-weight: 950; }
+        .hero p { margin: 8px 0 0; color: rgba(255,255,255,.86); }
+
+        .btn-glass {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.14);
+            color: white;
+            text-decoration: none;
+            font-weight: 850;
+        }
+
+        .btn-glass:hover { background: white; color: var(--blue); }
+
+        .toolbar {
+            margin-top: 18px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: rgba(255,255,255,.94);
+            box-shadow: 0 12px 32px rgba(16,24,40,.08);
+        }
+
+        .toolbar .btn {
+            border-radius: 12px;
+            font-weight: 800;
+        }
+
+        .calendar-card {
+            margin-top: 18px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 16px 42px rgba(16,24,40,.09);
+            overflow: hidden;
+        }
+
+        .calendar-head {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .calendar-head h2 { margin: 0; color: var(--blue-dark); font-weight: 950; }
+        .calendar-body { padding: 0; }
+        #machineTimeline { height: 690px; }
+
+        .legend {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: .8rem;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 4px; }
+
+        .status-box {
+            margin-top: 14px;
+            min-height: 48px;
+            padding: 12px 15px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--muted);
+            font-weight: 750;
+        }
+
+        .status-box.success { background: #ecfdf3; border-color: #abefc6; color: #067647; }
+        .status-box.error { background: #fef3f2; border-color: #fecdca; color: #b42318; }
+        .status-box.working { background: #eef6ff; border-color: #b2ddff; color: #175cd3; }
+
+        .grupo-maquina { min-width: 165px; display: grid; gap: 2px; }
+        .grupo-maquina strong { color: var(--blue-dark); font-size: .9rem; }
+        .grupo-maquina span { color: var(--muted); font-size: .72rem; }
+
+        .vis-timeline { border: none; font-family: inherit; }
+        .vis-panel.vis-left { border-right: 1px solid var(--border); }
+        .vis-labelset .vis-label { border-bottom: 1px solid #edf1f6; background: #fbfdff; }
+        .vis-labelset .vis-label .vis-inner { padding: 11px 14px; }
+        .vis-foreground .vis-group { border-bottom: 1px solid #edf1f6; }
+        .vis-time-axis .vis-text { color: #475467; font-size: .72rem; font-weight: 800; }
+        .vis-time-axis .vis-grid.vis-minor { border-color: #edf1f6; }
+        .vis-time-axis .vis-grid.vis-major { border-color: #cbd5e1; }
+        .vis-current-time { background-color: #f04438; width: 2px; }
+
+        .vis-item {
+            border: 0;
+            border-radius: 10px;
+            color: white;
+            font-size: .72rem;
+            font-weight: 850;
+            box-shadow: 0 7px 16px rgba(16,24,40,.15);
+        }
+
+        if (!maquinaCompatible) {
+            await tx.RollbackAsync();
+            return Json(new {
+                ok = false,
+                requiereConfirmacion = true,
+                mensaje = $"No puedes mover este programa a la máquina {maquinaNuevaCodigo}, porque no está configurada como máquina principal ni sustituta para esta parte."
+            });
+        }
+
+        .vis-item .vis-item-content { padding: 6px 9px; }
+        .vis-item.programa-programado { background: linear-gradient(90deg, #175cd3, #2e90fa); }
+        .vis-item.programa-preparacion { background: linear-gradient(90deg, #dc6803, #f79009); }
+        .vis-item.programa-produccion { background: linear-gradient(90deg, #067647, #12b76a); }
+        .vis-item.programa-pausado { background: linear-gradient(90deg, #b42318, #f04438); }
+        .vis-item.programa-terminado { background: linear-gradient(90deg, #667085, #98a2b3); }
+        .vis-item.vis-selected { outline: 3px solid rgba(127,86,217,.35); }
+
+        .vis-item.turno-1 { background: rgba(23,92,211,.055); border: 0; box-shadow: none; }
+        .vis-item.turno-2 { background: rgba(247,144,9,.055); border: 0; box-shadow: none; }
+        .vis-item.turno-3 { background: rgba(127,86,217,.055); border: 0; box-shadow: none; }
+
+        .vis-item.programa-programado,
+        .vis-item.programa-preparacion,
+        .vis-item.programa-pausado {
+            cursor: grab !important;
+            pointer-events: auto !important;
+        }
+
+            .vis-item.programa-programado:active,
+            .vis-item.programa-preparacion:active,
+            .vis-item.programa-pausado:active {
+                cursor: grabbing !important;
+            }
+
+        .vis-item.vis-readonly {
+            cursor: not-allowed !important;
+            opacity: .75;
+        }
+
+        .grupo-sin-asignar { background: #fff7ed !important; }
+
+        .closure-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border-radius: 999px;
+            padding: 7px 11px;
+            background: #f2f4f7;
+            color: #475467;
+            font-size: .78rem;
+            font-weight: 850;
+        }
+
+        @media (max-width: 900px) {
+            .page { padding: 14px; }
+            .hero { padding: 22px; border-radius: 22px; }
+            #machineTimeline { height: 620px; }
+        }
+
+/* Estilos inline estaticos migrados desde la vista. */
+[data-nsq-style-id="nsq-si-93d879e3cf"] { background: #175cd3 !important; }
+[data-nsq-style-id="nsq-si-340a40c9a4"] { background: #f79009 !important; }
+[data-nsq-style-id="nsq-si-3a47ee831d"] { background: #12b76a !important; }
+[data-nsq-style-id="nsq-si-a6577cfa6d"] { background: #f04438 !important; }
+[data-nsq-style-id="nsq-si-e5ee542f79"] { background: #98a2b3 !important; }

@@ -2,7 +2,7 @@
 @using ERP.NSQuell.Models.ViewModels.Almacen
 @model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPMovimientoFormVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = Model.EsEntregaOF ? "Entrega de MP a OF" : "Movimiento MP";
 
     var cantidadExacta = Model.Cantidad.ToString("0.###", CultureInfo.InvariantCulture);
@@ -31,62 +31,20 @@
     var materialSeleccionadoTexto = materialSeleccionado?.Texto ?? string.Empty;
 }
 
-<style>
-    .mp-split-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-        width: 100%;
-    }
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/AlmacenMP/movimiento.css" asp-append-version="true" />
+}
 
-    .mp-split-row {
-        border: 1px solid #dbe4ef;
-        border-radius: 14px;
-        padding: 14px;
-        background: #f8fbff;
-    }
 
-    .mp-split-row__head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 10px;
-    }
+@await Html.PartialAsync("_AlmacenNavegacion")
 
-    .mp-split-row__head strong {
-        font-size: 1rem;
-    }
+@await Html.PartialAsync("_AlmacenMensajes")
 
-    .mp-split-stock {
-        font-size: .82rem;
-        color: #5d6b7a;
-        font-weight: 700;
-    }
-
-    .mp-total-box {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        border-radius: 12px;
-        padding: 12px 14px;
-        background: #edf5ff;
-        border: 1px solid #cfe2ff;
-        margin-top: 12px;
-    }
-
-    .mp-required-note {
-        color: #9b3b00;
-        font-weight: 700;
-    }
-
-    @@media (max-width: 760px) {
-        .mp-split-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
 
 <section class="alm-hero mp-movement-hero">
     <div>
@@ -498,4 +456,5 @@
             updateTotal();
         })();
     </script>
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
 }

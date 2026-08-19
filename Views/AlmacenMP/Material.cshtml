@@ -1,3 +1,23 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMaterialFormVm
-@{ Layout = "~/Views/Shared/_AlmacenLayout.cshtml"; ViewData["Title"] = Model.MaterialID.HasValue ? "Editar material" : "Nuevo material"; }
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMaterialFormVm
+@{ Layout = "~/Views/Shared/_Layout.cshtml"; ViewData["Title"] = Model.MaterialID.HasValue ? "Editar material" : "Nuevo material"; }
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+}
+
+
+@section Scripts {
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
+
 <section class="alm-hero"><div><small>ERP_MATERIALES</small><h1>@ViewData["Title"]</h1><p>Este catálogo contiene únicamente materia prima. Los materiales de empaque se administran en Embalajes.</p></div></section><section class="alm-card"><form method="post" class="alm-form"><input asp-for="MaterialID" type="hidden"/><div asp-validation-summary="ModelOnly" class="alm-field full"></div><div class="alm-field"><label asp-for="Codigo"></label><input asp-for="Codigo" class="alm-input"/><span asp-validation-for="Codigo"></span></div><div class="alm-field"><label asp-for="Nombre"></label><input asp-for="Nombre" class="alm-input"/></div><div class="alm-field"><label asp-for="UnidadDefault"></label><input asp-for="UnidadDefault" class="alm-input"/></div><div class="alm-field"><label asp-for="Proveedor"></label><input asp-for="Proveedor" class="alm-input"/></div><div class="alm-field"><label><input asp-for="RequiereLote"/> Requiere lote</label></div><div class="alm-field"><label asp-for="StockMinimo"></label><input asp-for="StockMinimo" class="alm-input"/></div><div class="alm-field"><label asp-for="StockAviso"></label><input asp-for="StockAviso" class="alm-input"/></div><div class="alm-field"><label><input asp-for="Activo"/> Activo</label></div><div class="alm-field full"><button class="alm-btn">Guardar material</button></div></form></section>

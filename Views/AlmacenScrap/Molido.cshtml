@@ -1,13 +1,31 @@
 ﻿@using System.Globalization
 @model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenScrapMolidoVm
 @{
-    Layout = "~/Views/Shared/_AlmacenLayout.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Realizar MP Molido";
     var peso = Model.PesoMolidoKg.ToString("0.0000", CultureInfo.InvariantCulture);
 }
 
-<link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
-<link rel="stylesheet" href="~/css/Almacen/almacen-scrap.css" asp-append-version="true" />
+@section Styles {
+    <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-forms-v5.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Almacen/almacen-scrap.css" asp-append-version="true" />
+}
+
+
+@section Scripts {
+    <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
+}
+
+
+@await Html.PartialAsync("_AlmacenNavegacion")
+
+@await Html.PartialAsync("_AlmacenMensajes")
+
 
 <section class="alm-hero scrap-hero scrap-hero--molido">
     <div>

@@ -1,0 +1,702 @@
+﻿.turnos-page {
+        --ct-primary: #17324d;
+        --ct-primary-soft: #edf3f8;
+        --ct-accent: #e87524;
+        --ct-accent-dark: #c95d13;
+        --ct-text: #243447;
+        --ct-muted: #6c7b8c;
+        --ct-border: #dce4eb;
+        --ct-surface: #ffffff;
+        --ct-background: #f5f7fa;
+        --ct-success: #238657;
+        --ct-danger: #bd3b3b;
+        color: var(--ct-text);
+        padding: 1.5rem 0 2.5rem;
+    }
+
+        .turnos-page *,
+        .turnos-page *::before,
+        .turnos-page *::after {
+            box-sizing: border-box;
+        }
+
+        .turnos-page .ct-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+        }
+
+        .turnos-page .ct-eyebrow {
+            color: var(--ct-accent);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .12em;
+            margin-bottom: .25rem;
+            text-transform: uppercase;
+        }
+
+        .turnos-page .ct-title {
+            color: var(--ct-primary);
+            font-size: clamp(1.55rem, 2.5vw, 2.1rem);
+            font-weight: 780;
+            letter-spacing: -.025em;
+            margin: 0;
+        }
+
+        .turnos-page .ct-subtitle {
+            color: var(--ct-muted);
+            font-size: .93rem;
+            margin: .35rem 0 0;
+            max-width: 720px;
+        }
+
+        .turnos-page .ct-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .55rem;
+            justify-content: flex-end;
+        }
+
+        .turnos-page .ct-btn {
+            align-items: center;
+            border: 1px solid transparent;
+            border-radius: .65rem;
+            cursor: pointer;
+            display: inline-flex;
+            font: inherit;
+            font-size: .86rem;
+            font-weight: 750;
+            gap: .45rem;
+            justify-content: center;
+            min-height: 42px;
+            padding: .58rem .9rem;
+            text-decoration: none;
+            transition: .18s ease;
+        }
+
+            .turnos-page .ct-btn:hover {
+                transform: translateY(-1px);
+            }
+
+        .turnos-page .ct-btn-primary {
+            background: var(--ct-accent);
+            border-color: var(--ct-accent);
+            color: #fff;
+        }
+
+            .turnos-page .ct-btn-primary:hover {
+                background: var(--ct-accent-dark);
+                border-color: var(--ct-accent-dark);
+                color: #fff;
+            }
+
+        .turnos-page .ct-btn-secondary {
+            background: var(--ct-surface);
+            border-color: var(--ct-border);
+            color: var(--ct-primary);
+        }
+
+            .turnos-page .ct-btn-secondary:hover {
+                background: var(--ct-primary-soft);
+                color: var(--ct-primary);
+            }
+
+        .turnos-page .ct-btn-ghost {
+            background: transparent;
+            border-color: var(--ct-border);
+            color: var(--ct-muted);
+        }
+
+        .turnos-page .ct-btn-small {
+            min-height: 34px;
+            padding: .4rem .65rem;
+        }
+
+        .turnos-page .ct-mark {
+            align-items: center;
+            border: 1px solid currentColor;
+            border-radius: .35rem;
+            display: inline-flex;
+            font-size: .64rem;
+            font-weight: 850;
+            height: 22px;
+            justify-content: center;
+            letter-spacing: .04em;
+            width: 24px;
+        }
+
+        .turnos-page .ct-alert {
+            border: 0;
+            border-left: 4px solid;
+            border-radius: .65rem;
+            box-shadow: 0 5px 18px rgba(23, 50, 77, .07);
+            margin-bottom: 1rem;
+            padding: .8rem 1rem;
+        }
+
+        .turnos-page .ct-alert-success {
+            background: #edf8f2;
+            border-left-color: var(--ct-success);
+            color: #17613e;
+        }
+
+        .turnos-page .ct-alert-error {
+            background: #fff0f0;
+            border-left-color: var(--ct-danger);
+            color: #8b2929;
+        }
+
+        .turnos-page .ct-stats {
+            display: grid;
+            gap: .8rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-bottom: 1rem;
+        }
+
+        .turnos-page .ct-stat {
+            align-items: center;
+            background: var(--ct-surface);
+            border: 1px solid var(--ct-border);
+            border-radius: .8rem;
+            display: flex;
+            gap: .8rem;
+            min-height: 88px;
+            padding: .9rem 1rem;
+        }
+
+        .turnos-page .ct-stat-mark {
+            align-items: center;
+            background: var(--ct-primary-soft);
+            border-radius: .65rem;
+            color: var(--ct-primary);
+            display: flex;
+            flex: 0 0 auto;
+            font-size: .75rem;
+            font-weight: 850;
+            height: 46px;
+            justify-content: center;
+            letter-spacing: .05em;
+            width: 46px;
+        }
+
+        .turnos-page .ct-stat:nth-child(2) .ct-stat-mark {
+            background: #edf8f2;
+            color: var(--ct-success);
+        }
+
+        .turnos-page .ct-stat:nth-child(3) .ct-stat-mark {
+            background: #fff3e9;
+            color: var(--ct-accent-dark);
+        }
+
+        .turnos-page .ct-stat-value {
+            color: var(--ct-primary);
+            display: block;
+            font-size: 1.35rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .turnos-page .ct-stat-label {
+            color: var(--ct-muted);
+            display: block;
+            font-size: .78rem;
+            margin-top: .3rem;
+        }
+
+        .turnos-page .ct-panel {
+            background: var(--ct-surface);
+            border: 1px solid var(--ct-border);
+            border-radius: .9rem;
+            box-shadow: 0 8px 24px rgba(23, 50, 77, .055);
+            overflow: hidden;
+        }
+
+        .turnos-page .ct-toolbar {
+            align-items: center;
+            border-bottom: 1px solid var(--ct-border);
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: minmax(220px, 1fr) 190px 190px;
+            padding: .9rem;
+        }
+
+        .turnos-page .ct-control {
+            background: var(--ct-surface);
+            border: 1px solid var(--ct-border);
+            border-radius: .6rem;
+            color: var(--ct-text);
+            font: inherit;
+            font-size: .87rem;
+            min-height: 42px;
+            outline: none;
+            padding: .58rem .72rem;
+            width: 100%;
+        }
+
+            .turnos-page .ct-control:focus {
+                border-color: var(--ct-accent);
+                box-shadow: 0 0 0 3px rgba(232, 117, 36, .13);
+            }
+
+        .turnos-page .ct-table-wrap {
+            overflow-x: auto;
+        }
+
+        .turnos-page .ct-table {
+            border-collapse: collapse;
+            min-width: 920px;
+            width: 100%;
+        }
+
+            .turnos-page .ct-table th,
+            .turnos-page .ct-table td {
+                border-bottom: 1px solid var(--ct-border);
+                padding: .85rem .9rem;
+                text-align: left;
+                vertical-align: middle;
+            }
+
+            .turnos-page .ct-table th {
+                background: #f8fafc;
+                color: var(--ct-muted);
+                font-size: .7rem;
+                font-weight: 800;
+                letter-spacing: .065em;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }
+
+            .turnos-page .ct-table tbody tr {
+                transition: background .16s ease;
+            }
+
+                .turnos-page .ct-table tbody tr:hover {
+                    background: #fbfcfd;
+                }
+
+                .turnos-page .ct-table tbody tr:last-child td {
+                    border-bottom: 0;
+                }
+
+        .turnos-page .ct-name-wrap {
+            align-items: center;
+            display: flex;
+            gap: .7rem;
+            min-width: 210px;
+        }
+
+        .turnos-page .ct-color {
+            border: 3px solid #fff;
+            border-radius: .5rem;
+            box-shadow: 0 0 0 1px var(--ct-border);
+            flex: 0 0 auto;
+            height: 35px;
+            width: 35px;
+        }
+
+        .turnos-page .ct-name {
+            color: var(--ct-primary);
+            display: block;
+            font-size: .9rem;
+            font-weight: 780;
+        }
+
+        .turnos-page .ct-id {
+            color: var(--ct-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .15rem;
+        }
+
+        .turnos-page .ct-badge {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .7rem;
+            font-weight: 780;
+            padding: .3rem .55rem;
+            white-space: nowrap;
+        }
+
+        .turnos-page .ct-badge-type {
+            background: var(--ct-primary-soft);
+            color: var(--ct-primary);
+        }
+
+        .turnos-page .ct-badge-active {
+            background: #e9f7ef;
+            color: #17613e;
+        }
+
+        .turnos-page .ct-badge-inactive {
+            background: #f0f2f4;
+            color: #65717f;
+        }
+
+        .turnos-page .ct-time {
+            color: var(--ct-text);
+            font-size: .84rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .turnos-page .ct-feature-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .35rem;
+            min-width: 185px;
+        }
+
+        .turnos-page .ct-feature {
+            background: #f4f6f8;
+            border: 1px solid var(--ct-border);
+            border-radius: .4rem;
+            color: var(--ct-muted);
+            font-size: .68rem;
+            font-weight: 700;
+            padding: .25rem .4rem;
+        }
+
+        .turnos-page .ct-row-actions {
+            align-items: center;
+            display: flex;
+            gap: .4rem;
+            justify-content: flex-end;
+            white-space: nowrap;
+        }
+
+        .turnos-page .ct-state-form {
+            display: inline-flex;
+            margin: 0;
+        }
+
+        .turnos-page .ct-link-btn {
+            background: transparent;
+            border: 0;
+            color: var(--ct-primary);
+            cursor: pointer;
+            font: inherit;
+            font-size: .76rem;
+            font-weight: 780;
+            padding: .35rem;
+        }
+
+            .turnos-page .ct-link-btn:hover {
+                color: var(--ct-accent-dark);
+            }
+
+        .turnos-page .ct-link-danger {
+            color: var(--ct-danger);
+        }
+
+        .turnos-page .ct-empty {
+            padding: 3.5rem 1rem;
+            text-align: center;
+        }
+
+        .turnos-page .ct-empty-mark {
+            align-items: center;
+            background: var(--ct-primary-soft);
+            border-radius: 50%;
+            color: var(--ct-primary);
+            display: flex;
+            font-size: .8rem;
+            font-weight: 850;
+            height: 54px;
+            justify-content: center;
+            margin: 0 auto .85rem;
+            width: 54px;
+        }
+
+        .turnos-page .ct-empty-title {
+            color: var(--ct-primary);
+            font-size: 1rem;
+            font-weight: 780;
+            margin: 0;
+        }
+
+        .turnos-page .ct-empty-text {
+            color: var(--ct-muted);
+            font-size: .84rem;
+            margin: .35rem 0 0;
+        }
+
+        .turnos-page .ct-modal[hidden] {
+            display: none;
+        }
+
+        .turnos-page .ct-modal {
+            align-items: center;
+            background: rgba(10, 24, 38, .62);
+            display: flex;
+            inset: 0;
+            justify-content: center;
+            padding: 1rem;
+            position: fixed;
+            z-index: 1080;
+        }
+
+        .turnos-page .ct-modal-dialog {
+            background: var(--ct-surface);
+            border: 1px solid var(--ct-border);
+            border-radius: .9rem;
+            box-shadow: 0 24px 60px rgba(6, 19, 31, .3);
+            max-height: calc(100vh - 2rem);
+            max-width: 720px;
+            overflow: auto;
+            width: 100%;
+        }
+
+        .turnos-page .ct-modal-header {
+            align-items: flex-start;
+            border-bottom: 1px solid var(--ct-border);
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: 1rem 1.1rem;
+        }
+
+        .turnos-page .ct-modal-title {
+            color: var(--ct-primary);
+            font-size: 1.08rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .turnos-page .ct-modal-subtitle {
+            color: var(--ct-muted);
+            font-size: .8rem;
+            margin: .25rem 0 0;
+        }
+
+        .turnos-page .ct-modal-close {
+            align-items: center;
+            background: transparent;
+            border: 1px solid var(--ct-border);
+            border-radius: .5rem;
+            color: var(--ct-muted);
+            cursor: pointer;
+            display: flex;
+            flex: 0 0 auto;
+            font-size: 1.1rem;
+            height: 34px;
+            justify-content: center;
+            width: 34px;
+        }
+
+        .turnos-page .ct-modal-body {
+            padding: 1rem 1.1rem;
+        }
+
+        .turnos-page .ct-modal-footer {
+            align-items: center;
+            background: #f8fafc;
+            border-top: 1px solid var(--ct-border);
+            display: flex;
+            gap: .55rem;
+            justify-content: flex-end;
+            padding: .85rem 1.1rem;
+        }
+
+        .turnos-page .ct-form-grid {
+            display: grid;
+            gap: .9rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .turnos-page .ct-field-full {
+            grid-column: 1 / -1;
+        }
+
+        .turnos-page .ct-label {
+            color: var(--ct-primary);
+            display: block;
+            font-size: .76rem;
+            font-weight: 780;
+            margin-bottom: .35rem;
+        }
+
+        .turnos-page .ct-required::after {
+            color: var(--ct-danger);
+            content: " *";
+        }
+
+        .turnos-page .ct-help {
+            color: var(--ct-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .3rem;
+        }
+
+        .turnos-page .ct-validation {
+            color: var(--ct-danger);
+            display: block;
+            font-size: .72rem;
+            margin-top: .3rem;
+        }
+
+        .turnos-page .validation-summary-valid,
+        .turnos-page .field-validation-valid {
+            display: none;
+        }
+
+        .turnos-page .ct-validation-summary {
+            background: #fff0f0;
+            border-left: 4px solid var(--ct-danger);
+            border-radius: .55rem;
+            color: #8b2929;
+            font-size: .78rem;
+            margin-bottom: .9rem;
+            padding: .7rem .85rem;
+        }
+
+            .turnos-page .ct-validation-summary ul {
+                margin: .3rem 0 0;
+                padding-left: 1.1rem;
+            }
+
+        .turnos-page .ct-checks {
+            display: grid;
+            gap: .65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .turnos-page .ct-check-card {
+            align-items: flex-start;
+            background: #f8fafc;
+            border: 1px solid var(--ct-border);
+            border-radius: .65rem;
+            cursor: pointer;
+            display: flex;
+            gap: .65rem;
+            padding: .75rem;
+        }
+
+            .turnos-page .ct-check-card input {
+                accent-color: var(--ct-accent);
+                height: 17px;
+                margin-top: .1rem;
+                width: 17px;
+            }
+
+        .turnos-page .ct-check-title {
+            color: var(--ct-primary);
+            display: block;
+            font-size: .8rem;
+            font-weight: 780;
+        }
+
+        .turnos-page .ct-check-text {
+            color: var(--ct-muted);
+            display: block;
+            font-size: .7rem;
+            margin-top: .15rem;
+        }
+
+        .turnos-page .ct-color-row {
+            align-items: center;
+            display: grid;
+            gap: .55rem;
+            grid-template-columns: 52px minmax(0, 1fr);
+        }
+
+        .turnos-page .ct-color-input {
+            cursor: pointer;
+            height: 42px;
+            padding: .25rem;
+        }
+
+    body.ct-modal-open {
+        overflow: hidden;
+    }
+
+    html[data-bs-theme="dark"] .turnos-page,
+    body.dark-mode .turnos-page {
+        --ct-primary: #e3edf6;
+        --ct-primary-soft: #263b4f;
+        --ct-text: #d9e3ec;
+        --ct-muted: #9fb0bf;
+        --ct-border: #3a4d5f;
+        --ct-surface: #1e2d3a;
+        --ct-background: #17232e;
+    }
+
+        html[data-bs-theme="dark"] .turnos-page .ct-table th,
+        html[data-bs-theme="dark"] .turnos-page .ct-modal-footer,
+        html[data-bs-theme="dark"] .turnos-page .ct-check-card,
+        body.dark-mode .turnos-page .ct-table th,
+        body.dark-mode .turnos-page .ct-modal-footer,
+        body.dark-mode .turnos-page .ct-check-card {
+            background: #253746;
+        }
+
+        html[data-bs-theme="dark"] .turnos-page .ct-table tbody tr:hover,
+        body.dark-mode .turnos-page .ct-table tbody tr:hover {
+            background: #233442;
+        }
+
+        html[data-bs-theme="dark"] .turnos-page .ct-feature,
+        body.dark-mode .turnos-page .ct-feature {
+            background: #293b49;
+        }
+
+    @media (max-width: 900px) {
+        .turnos-page .ct-toolbar {
+            grid-template-columns: 1fr 1fr;
+        }
+
+            .turnos-page .ct-toolbar .ct-search {
+                grid-column: 1 / -1;
+            }
+    }
+
+    @media (max-width: 680px) {
+        .turnos-page {
+            padding-top: 1rem;
+        }
+
+            .turnos-page .ct-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .turnos-page .ct-actions {
+                justify-content: stretch;
+            }
+
+                .turnos-page .ct-actions .ct-btn {
+                    flex: 1 1 0;
+                }
+
+            .turnos-page .ct-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .turnos-page .ct-stat {
+                min-height: 74px;
+            }
+
+            .turnos-page .ct-toolbar,
+            .turnos-page .ct-form-grid,
+            .turnos-page .ct-checks {
+                grid-template-columns: 1fr;
+            }
+
+                .turnos-page .ct-toolbar .ct-search {
+                    grid-column: auto;
+                }
+
+            .turnos-page .ct-modal {
+                align-items: flex-end;
+                padding: 0;
+            }
+
+            .turnos-page .ct-modal-dialog {
+                border-bottom-left-radius: 0;
+                border-bottom-right-radius: 0;
+                max-height: 94vh;
+            }
+    }
