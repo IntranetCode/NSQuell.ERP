@@ -4,6 +4,7 @@
     Layout = "_Layout";
     var e = Model.Ejecucion;
     var monitoreoTurno = Model.MonitoreoTurnoActual;
+    var cambioTurnoTecnico = Model.CambioTurnoTecnico;
     var esReinicioSerie = ViewBag.EsReinicioSerie is bool reinicio && reinicio;
 
     var horaInicio = new TimeSpan(DateTime.Now.Hour, 0, 0);
@@ -28,6 +29,9 @@
 
     var esPreparacion =
         e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion;
+
+    var esProduccion =
+        e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion;
 
     var calidadRequiereAtencion =
         Model.CalidadResumen == null ||
@@ -449,6 +453,65 @@
             font-size: .88rem;
         }
 
+        .machine-release-card {
+            border: 1px solid #c7d7f2;
+            border-left: 6px solid #0d6efd;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #f4f8ff, #ffffff 72%);
+            box-shadow: 0 12px 28px rgba(15, 47, 99, .08);
+            padding: 18px 20px;
+        }
+
+            .machine-release-card.is-released {
+                border-color: #badbcc;
+                border-left-color: #198754;
+                background: linear-gradient(135deg, #f1fff7, #ffffff 72%);
+            }
+
+            .machine-release-card.is-blocked {
+                border-color: #ffe69c;
+                border-left-color: #ffc107;
+                background: linear-gradient(135deg, #fff9e8, #ffffff 72%);
+            }
+
+        .machine-release-icon {
+            width: 52px;
+            height: 52px;
+            flex: 0 0 52px;
+            display: grid;
+            place-items: center;
+            border-radius: 15px;
+            background: #ffffff;
+            color: #0d6efd;
+            font-size: 1.45rem;
+            box-shadow: 0 6px 16px rgba(15, 47, 99, .10);
+        }
+
+        .machine-release-card.is-released .machine-release-icon {
+            color: #198754;
+        }
+
+        .machine-release-card.is-blocked .machine-release-icon {
+            color: #b58100;
+        }
+
+        .machine-release-title {
+            margin: 0;
+            color: #102a56;
+            font-size: 1.05rem;
+            font-weight: 900;
+        }
+
+        .machine-release-text {
+            margin: 4px 0 0;
+            color: #667085;
+            font-size: .86rem;
+        }
+
+        .machine-release-form {
+            width: min(100%, 430px);
+        }
+
         .primary-series-action {
             border: 1px solid #badbcc;
             border-left: 6px solid #198754;
@@ -521,18 +584,100 @@
             gap: 10px;
         }
 
+        .turn-tech-card {
+            border: 1px solid #c7d7f2;
+            border-left: 5px solid #0d6efd;
+            border-radius: 16px;
+            background: linear-gradient(135deg,#f4f8ff,#ffffff 72%);
+            padding: 14px;
+        }
+
+        .turn-tech-current {
+            border: 1px solid #c4b5fd;
+            background: #f5f3ff;
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+            .turn-tech-current .data-value {
+                color: #5b21b6;
+            }
+
+        .turn-tech-list {
+            max-height: 260px;
+            overflow-y: auto;
+            border: 1px solid #e5eaf3;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        .turn-tech-list-item {
+            padding: 9px 11px;
+            border-bottom: 1px solid #eef2f7;
+            font-size: .82rem;
+        }
+
+            .turn-tech-list-item:last-child {
+                border-bottom: 0;
+            }
+
+        .objective-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 74px;
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: .76rem;
+            font-weight: 900;
+            background: #eef4ff;
+            color: #1d4ed8;
+        }
+
+        .objective-result {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            min-width: 110px;
+            border-radius: 10px;
+            padding: 7px 9px;
+            font-size: .76rem;
+            font-weight: 900;
+        }
+
+            .objective-result.ok {
+                background: #ecfdf3;
+                color: #067647;
+            }
+
+            .objective-result.fail {
+                background: #fef3f2;
+                color: #b42318;
+            }
+
+            .objective-result.neutral {
+                background: #f2f4f7;
+                color: #667085;
+            }
+
+            .objective-result small {
+                font-size: .68rem;
+                font-weight: 800;
+            }
+
         @@media (max-width: 992px) {
             .page-shell {
                 padding: 14px;
             }
         }
-    
+
 
         /* =====================================================
-           TEMA GLOBAL ERP
-           Esta pantalla es standalone (Layout = null), por eso
-           lee nsq-theme desde localStorage al cargar.
-           ===================================================== */
+                           TEMA GLOBAL ERP
+                           Esta pantalla es standalone (Layout = null), por eso
+                           lee nsq-theme desde localStorage al cargar.
+                           ===================================================== */
         html[data-nsq-theme="dark"] body {
             background: #0b1220;
             color: #e7eef9;
@@ -583,11 +728,11 @@
             --bs-table-hover-color: #fff;
         }
 
-        html[data-nsq-theme="dark"] .table thead th {
-            background: #101a2b;
-            border-bottom-color: #2d3e55;
-            color: #aebbd0;
-        }
+            html[data-nsq-theme="dark"] .table thead th {
+                background: #101a2b;
+                border-bottom-color: #2d3e55;
+                color: #aebbd0;
+            }
 
         html[data-nsq-theme="dark"] .mini-stat,
         html[data-nsq-theme="dark"] .soft-box {
@@ -613,17 +758,17 @@
             color: #eaf2ff;
         }
 
-        html[data-nsq-theme="dark"] .form-control::placeholder {
-            color: #75869d;
-        }
+            html[data-nsq-theme="dark"] .form-control::placeholder {
+                color: #75869d;
+            }
 
-        html[data-nsq-theme="dark"] .form-control:focus,
-        html[data-nsq-theme="dark"] .form-select:focus {
-            background-color: #101c2f;
-            border-color: #5da6ff;
-            color: #fff;
-            box-shadow: 0 0 0 .2rem rgba(93,166,255,.14);
-        }
+            html[data-nsq-theme="dark"] .form-control:focus,
+            html[data-nsq-theme="dark"] .form-select:focus {
+                background-color: #101c2f;
+                border-color: #5da6ff;
+                color: #fff;
+                box-shadow: 0 0 0 .2rem rgba(93,166,255,.14);
+            }
 
         html[data-nsq-theme="dark"] .movimiento-retorno {
             background: #2b2313;
@@ -640,6 +785,37 @@
             color: #f6cc6d;
         }
 
+        html[data-nsq-theme="dark"] .machine-release-card {
+            background: linear-gradient(135deg,#102b4c,#111b2d 72%);
+            border-color: #28598b;
+            border-left-color: #5ba6f5;
+        }
+
+            html[data-nsq-theme="dark"] .machine-release-card.is-released {
+                background: linear-gradient(135deg,#102a20,#111b2d 72%);
+                border-color: #286446;
+                border-left-color: #79e3a8;
+            }
+
+            html[data-nsq-theme="dark"] .machine-release-card.is-blocked {
+                background: linear-gradient(135deg,#2b2313,#111b2d 72%);
+                border-color: #76571e;
+                border-left-color: #f6cc6d;
+            }
+
+        html[data-nsq-theme="dark"] .machine-release-icon {
+            background: #17263c;
+            box-shadow: 0 6px 16px rgba(0,0,0,.18);
+        }
+
+        html[data-nsq-theme="dark"] .machine-release-title {
+            color: #eaf2ff;
+        }
+
+        html[data-nsq-theme="dark"] .machine-release-text {
+            color: #9aa9bd;
+        }
+
         html[data-nsq-theme="dark"] .next-action {
             background: linear-gradient(135deg,#102b4c,#111b2d 72%);
             border-color: #28598b;
@@ -647,30 +823,30 @@
             box-shadow: 0 12px 28px rgba(0,0,0,.14);
         }
 
-        html[data-nsq-theme="dark"] .next-action.is-danger {
-            background: linear-gradient(135deg,#351719,#111b2d 72%);
-            border-color: #7f2b32;
-            border-left-color: #ff6b78;
-        }
+            html[data-nsq-theme="dark"] .next-action.is-danger {
+                background: linear-gradient(135deg,#351719,#111b2d 72%);
+                border-color: #7f2b32;
+                border-left-color: #ff6b78;
+            }
 
-        html[data-nsq-theme="dark"] .next-action.is-warning {
-            background: linear-gradient(135deg,#2b2313,#111b2d 72%);
-            border-color: #76571e;
-            border-left-color: #f6cc6d;
-        }
+            html[data-nsq-theme="dark"] .next-action.is-warning {
+                background: linear-gradient(135deg,#2b2313,#111b2d 72%);
+                border-color: #76571e;
+                border-left-color: #f6cc6d;
+            }
 
-        html[data-nsq-theme="dark"] .next-action.is-success,
-        html[data-nsq-theme="dark"] .primary-series-action {
-            background: linear-gradient(135deg,#102a20,#111b2d 72%);
-            border-color: #286446;
-            border-left-color: #79e3a8;
-        }
+            html[data-nsq-theme="dark"] .next-action.is-success,
+            html[data-nsq-theme="dark"] .primary-series-action {
+                background: linear-gradient(135deg,#102a20,#111b2d 72%);
+                border-color: #286446;
+                border-left-color: #79e3a8;
+            }
 
-        html[data-nsq-theme="dark"] .primary-series-action.is-blocked {
-            background: linear-gradient(135deg,#2b2313,#111b2d 72%);
-            border-color: #76571e;
-            border-left-color: #f6cc6d;
-        }
+                html[data-nsq-theme="dark"] .primary-series-action.is-blocked {
+                    background: linear-gradient(135deg,#2b2313,#111b2d 72%);
+                    border-color: #76571e;
+                    border-left-color: #f6cc6d;
+                }
 
         html[data-nsq-theme="dark"] .next-action-icon {
             background: #17263c;
@@ -684,6 +860,36 @@
             --bs-btn-hover-color: #fff;
             --bs-btn-hover-bg: #1d2d45;
             --bs-btn-hover-border-color: #58779e;
+        }
+
+        html[data-nsq-theme="dark"] .turn-tech-card {
+            background: linear-gradient(135deg,#102b4c,#111b2d 72%);
+            border-color: #28598b;
+            border-left-color: #5ba6f5;
+        }
+
+        html[data-nsq-theme="dark"] .turn-tech-current {
+            background: #211a35;
+            border-color: #665191;
+        }
+
+            html[data-nsq-theme="dark"] .turn-tech-current .data-value {
+                color: #c4b5fd;
+            }
+
+        html[data-nsq-theme="dark"] .turn-tech-list {
+            background: #101a2b;
+            border-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"] .turn-tech-list-item {
+            border-bottom-color: #2d3e55;
+            color: #dce7f6;
+        }
+
+        html[data-nsq-theme="dark"] .objective-pill {
+            background: #17345c;
+            color: #9dcaff;
         }
     </style>
 </head>
@@ -862,6 +1068,68 @@
             </div>
         </section>
 
+        @if (esProduccion || e.MaquinaLiberada)
+        {
+            <section class="machine-release-card mb-4 @(e.MaquinaLiberada ? "is-released" : Model.TieneParoAbierto ? "is-blocked" : "")" id="panelLiberarMaquina">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div class="d-flex align-items-start gap-3 flex-grow-1">
+                        <div class="machine-release-icon">
+                            <i class="bi @(e.MaquinaLiberada ? "bi-check-circle-fill" : Model.TieneParoAbierto ? "bi-exclamation-triangle" : "bi-unlock")"></i>
+                        </div>
+                        <div>
+                            <div class="data-label">Disponibilidad física de máquina</div>
+                            @if (e.MaquinaLiberada)
+                            {
+                                <h2 class="machine-release-title">Máquina liberada para la siguiente OF</h2>
+                                <p class="machine-release-text">La ejecución continúa abierta para cajas, Calidad, GP12 y cierre documental, pero esta máquina ya no bloquea el siguiente programa.</p>
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-clock me-1"></i>
+                                        @(e.FechaLiberacionMaquina?.ToString("dd/MM/yyyy HH:mm") ?? "Liberada")
+                                    </span>
+                                    @if (e.UsuarioLiberacionMaquinaID.HasValue)
+                                    {
+                                        <span class="badge bg-secondary">Usuario @e.UsuarioLiberacionMaquinaID.Value</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(e.ObservacionesLiberacionMaquina))
+                                {
+                                    <div class="muted-small mt-2"><strong>Observaciones:</strong> @e.ObservacionesLiberacionMaquina</div>
+                                }
+                            }
+                            else if (Model.TieneParoAbierto)
+                            {
+                                <h2 class="machine-release-title">La máquina no puede liberarse con un paro abierto</h2>
+                                <p class="machine-release-text">Cierra primero el paro actual. Después podrás registrar el fin físico de la corrida sin esperar a que concluyan Calidad, cajas o GP12.</p>
+                            }
+                            else
+                            {
+                                <h2 class="machine-release-title">Liberar máquina al terminar la corrida física</h2>
+                                <p class="machine-release-text">Usa esta acción cuando ya salió la última pieza y no habrá más producción en esta máquina para la OF. El sistema validará las capturas horarias requeridas antes de liberar.</p>
+                            }
+                        </div>
+                    </div>
+                    @if (!e.MaquinaLiberada)
+                    {
+                        <form method="post" action="@Url.Action("LiberarMaquina", "Produccion")" class="machine-release-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+                            <label class="form-label" for="ObservacionesLiberacionMaquina">Observaciones de liberación</label>
+                            <textarea class="form-control mb-2" id="ObservacionesLiberacionMaquina" name="Observaciones" rows="2" maxlength="500" placeholder="Opcional: última pieza, entrega a siguiente OF, condición de máquina, etc." disabled="@Model.TieneParoAbierto"></textarea>
+                            <button type="submit" class="btn @(Model.TieneParoAbierto ? "btn-warning" : "btn-primary") w-100 btn-strong" disabled="@Model.TieneParoAbierto">
+                                <i class="bi bi-unlock me-1"></i>
+                                Liberar máquina
+                            </button>
+                            @if (!Model.TieneParoAbierto)
+                            {
+                                <div class="form-text mt-2">Esta acción no termina la ejecución ni cierra Calidad.</div>
+                            }
+                        </form>
+                    }
+                </div>
+            </section>
+        }
+
         @if (e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion && !Model.TieneParoAbierto)
         {
             <section class="primary-series-action mb-4 @(Model.CalidadResumen?.PuedeIniciarSerie == true ? "" : "is-blocked")" id="panelIniciarSerie">
@@ -1012,6 +1280,24 @@
                                 </div>
                             </div>
 
+                            <div class="col-12">
+                                <div class="data-label">Estado físico de máquina</div>
+                                @if (e.MaquinaLiberada)
+                                {
+                                    <div class="data-value text-success">
+                                        <i class="bi bi-unlock me-1"></i>
+                                        Liberada el @(e.FechaLiberacionMaquina?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="data-value text-primary">
+                                        <i class="bi bi-lock me-1"></i>
+                                        Ocupada por esta ejecución
+                                    </div>
+                                }
+                            </div>
+
                             <div class="col-6">
                                 <div class="data-label">Programa</div>
                                 <div class="data-value">@e.ProgramaProduccionID</div>
@@ -1024,6 +1310,124 @@
                         </div>
                     </div>
                 </div>
+
+                @if (cambioTurnoTecnico != null)
+                {
+                    <div class="panel mb-4" id="panelCambioTurnoTecnico" data-collapsible data-default-open="true">
+                        <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+                            <span>
+                                <i class="bi bi-person-badge me-1"></i>
+                                Sugerencia para cambio de turno
+                            </span>
+                            @if (cambioTurnoTecnico.TieneSugerencia)
+                            {
+                                <span class="badge bg-primary">Sugerencia activa</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Sin sugerencia</span>
+                            }
+                        </div>
+                        <div class="panel-body">
+                            <div class="turn-tech-card mb-3">
+                                <div class="data-label">Operador actual</div>
+                                <div class="data-value fs-5">@cambioTurnoTecnico.TextoOperadorActual</div>
+                                <div class="muted-small mt-1">
+                                    @cambioTurnoTecnico.TextoMaquina · @cambioTurnoTecnico.TextoParte
+                                </div>
+                            </div>
+
+                            @if (cambioTurnoTecnico.SugerenciaActual != null && cambioTurnoTecnico.SugerenciaActual.EstaVigente)
+                            {
+                                var sug = cambioTurnoTecnico.SugerenciaActual;
+                                <div class="turn-tech-current mb-3">
+                                    <div class="data-label">Sugerencia vigente</div>
+                                    <div class="data-value fs-5">@sug.TextoOperador</div>
+                                    <div class="muted-small mt-1">
+                                        @if (!string.IsNullOrWhiteSpace(sug.TurnoNombre))
+                                        {
+                                            <span>Turno @sug.TurnoNombre</span>
+                                        }
+                                        @if (sug.NivelPolivalencia.HasValue)
+                                        {
+                                            <span> · Nivel N@sug.NivelPolivalencia.Value</span>
+                                        }
+                                        <span> · @(sug.EnEscala ? "Programado en escala" : "Fuera de escala actual")</span>
+                                    </div>
+                                    <div class="muted-small mt-1">
+                                        Sugerida el @sug.TextoFecha
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(sug.Observaciones))
+                                    {
+                                        <div class="small mt-2">@sug.Observaciones</div>
+                                    }
+                                </div>
+                            }
+
+                            @if (cambioTurnoTecnico.Operadores != null && cambioTurnoTecnico.Operadores.Any())
+                            {
+                                <form method="post" action="@Url.Action("GuardarSugerenciaCambioTurno","Produccion")">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+
+                                    <div class="mb-3">
+                                        <label class="form-label" for="OperadorSugeridoID">Operador recomendado para el siguiente turno</label>
+                                        <select class="form-select" id="OperadorSugeridoID" name="OperadorSugeridoID" required>
+                                            <option value="">-- Seleccionar operador --</option>
+                                            @foreach (var op in cambioTurnoTecnico.Operadores)
+                                            {
+                                                var seleccionado = cambioTurnoTecnico.SugerenciaActual?.OperadorSugeridoID == op.PersonaID;
+                                                <option value="@op.PersonaID" selected="@seleccionado">
+                                                    @op.Nombre@(op.Nivel.HasValue ? $" · N{op.Nivel.Value}" : "")@(string.IsNullOrWhiteSpace(op.TurnoNombre) ? "" : $" · {op.TurnoNombre}")@(op.EnEscala ? " · ESCALA" : "")
+                                                </option>
+                                            }
+                                        </select>
+                                        <div class="form-text">
+                                            Esta selección es una sugerencia para el operador saliente. El operador podrá cambiarla al momento real de entregar el turno.
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ObservacionesSugerenciaTurno">Observaciones</label>
+                                        <textarea class="form-control"
+                                          id="ObservacionesSugerenciaTurno"
+                                          name="Observaciones"
+                                          rows="3"
+                                          maxlength="500"
+                                          placeholder="Ej. dejar a este operador por experiencia en la pieza, continuidad de máquina, cobertura del siguiente turno, etc.">@cambioTurnoTecnico.SugerenciaActual?.Observaciones</textarea>
+                                    </div>
+
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" class="btn btn-primary btn-strong">
+                                            <i class="bi bi-person-check me-1"></i>
+                                            @(cambioTurnoTecnico.TieneSugerencia ? "Actualizar sugerencia" : "Guardar sugerencia")
+                                        </button>
+                                    </div>
+                                </form>
+
+                                @if (cambioTurnoTecnico.TieneSugerencia)
+                                {
+                                    <form method="post" action="@Url.Action("CancelarSugerenciaCambioTurno","Produccion")" class="mt-2">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="ejecucionProduccionId" value="@e.EjecucionProduccionID" />
+                                        <button type="submit" class="btn btn-outline-secondary w-100 btn-strong">
+                                            <i class="bi bi-x-circle me-1"></i>
+                                            Retirar sugerencia
+                                        </button>
+                                    </form>
+                                }
+
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning mb-0">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    No existen operadores candidatos disponibles para sugerir en este momento.
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
 
                 <div class="panel mb-4" id="panelChecklist" data-collapsible data-default-open="@(esPreparacion || Model.ChecklistResumen == null ? "true" : "false")">
                     <div class="panel-header">
@@ -1441,7 +1845,7 @@
                 <div class="panel mb-4" id="panelCapturas" data-collapsible data-default-open="true">
                     <div class="panel-header">
                         <i class="bi bi-clock-history me-1"></i>
-                        Capturas por hora
+                        Capturas por hora y objetivos del operador
                     </div>
 
                     <div class="table-responsive">
@@ -1450,9 +1854,11 @@
                                 <tr>
                                     <th>Fecha</th>
                                     <th>Hora</th>
+                                    <th class="text-center">Objetivo</th>
                                     <th class="text-center">OK</th>
                                     <th class="text-center">Sospechoso</th>
                                     <th class="text-center">Scrap</th>
+                                    <th>Cumplimiento</th>
                                     <th>Observaciones</th>
                                 </tr>
                             </thead>
@@ -1460,7 +1866,7 @@
                                 @if (!Model.RegistrosHora.Any())
                                 {
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted py-4">
+                                        <td colspan="8" class="text-center text-muted py-4">
                                             Sin capturas por hora.
                                         </td>
                                     </tr>
@@ -1469,12 +1875,48 @@
                                 {
                                     foreach (var r in Model.RegistrosHora)
                                     {
+                                        var objetivoRegistro = r.ObjetivoBloque ?? r.ObjetivoHora;
+                                        var porcentajeRegistro = r.PorcentajeCumplimiento;
+                                        var cumplioRegistro = r.CumplioObjetivo;
                                         <tr>
                                             <td>@r.FechaProduccion.ToString("dd/MM/yyyy")</td>
                                             <td class="fw-bold">@r.RangoHora</td>
+                                            <td class="text-center">
+                                                @if (objetivoRegistro.HasValue && objetivoRegistro.Value > 0)
+                                                {
+                                                    <span class="objective-pill">@objetivoRegistro.Value.ToString("N0") PZA</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
                                             <td class="text-center fw-bold text-success">@r.CantidadOK.ToString("N0")</td>
                                             <td class="text-center fw-bold text-warning">@r.CantidadSospechosa.ToString("N0")</td>
                                             <td class="text-center fw-bold text-danger">@r.CantidadScrap.ToString("N0")</td>
+                                            <td>
+                                                @if (!objetivoRegistro.HasValue || objetivoRegistro.Value <= 0)
+                                                {
+                                                    <span class="objective-result neutral">
+                                                        Sin objetivo
+                                                        <small>No evaluable</small>
+                                                    </span>
+                                                }
+                                                else if (cumplioRegistro == true)
+                                                {
+                                                    <span class="objective-result ok">
+                                                        <span><i class="bi bi-check-circle me-1"></i>Cumplió</span>
+                                                        <small>@(porcentajeRegistro?.ToString("0.#") ?? "-")%</small>
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="objective-result fail">
+                                                        <span><i class="bi bi-x-circle me-1"></i>No cumplió</span>
+                                                        <small>@(porcentajeRegistro?.ToString("0.#") ?? "-")%</small>
+                                                    </span>
+                                                }
+                                            </td>
                                             <td>@r.Observaciones</td>
                                         </tr>
                                     }

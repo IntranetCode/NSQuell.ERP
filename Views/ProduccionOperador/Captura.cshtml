@@ -798,6 +798,41 @@
             color: #1d4ed8;
         }
 
+        .turn-person.suggested.technician {
+            border-color: #c4b5fd;
+            background: #f5f3ff;
+        }
+
+            .turn-person.suggested.technician .turn-person-label,
+            .turn-person.suggested.technician .turn-person-name {
+                color: #5b21b6;
+            }
+
+            .turn-person.suggested.technician .turn-source {
+                background: #ede9fe;
+                color: #6d28d9;
+            }
+
+        .turn-technician-meta {
+            margin-top: 9px;
+            padding-top: 9px;
+            border-top: 1px dashed #c4b5fd;
+            color: #5b21b6;
+            font-size: .78rem;
+            font-weight: 750;
+        }
+
+        .turn-technician-observation {
+            margin-top: 8px;
+            padding: 9px 10px;
+            border-radius: 10px;
+            background: rgba(109,40,217,.06);
+            color: #4c1d95;
+            font-size: .8rem;
+            font-weight: 700;
+            white-space: pre-wrap;
+        }
+
         .turn-box-state {
             display: flex;
             gap: 8px;
@@ -1201,8 +1236,8 @@
                 </div>
 
                 <div class="v @(pendiente > 0
-                                 ? "text-primary"
-                                 : "text-success")">
+                                                      ? "text-primary"
+                                                      : "text-success")">
                     @Numero(pendiente)
                 </div>
 
@@ -1529,34 +1564,40 @@
                                             <div class="fw-bold text-primary"><i class="fa-solid fa-arrow-right-arrow-left me-1"></i>Cambio #@cambio.CambioTurnoID</div>
                                             <div class="d-flex gap-2 flex-wrap">
                                                 <span class="status-pill @estadoClase">@Txt(cambio.Estado)</span>
-                                                <span class="status-pill status-future">@(string.Equals(cambio.OrigenOperadorEntrante, "ESCALA", StringComparison.OrdinalIgnoreCase) ? "Escala" : "Manual")</span>
-                                            </div>
-                                        </div>
-                                        <div class="turn-change-flow">
-                                            <div class="turn-change-person">
-                                                <div class="k">Entrega</div>
-                                                <div class="v">@Txt(cambio.OperadorSalienteNombre)</div>
-                                                <div class="small text-muted">@Txt(cambio.TurnoSalienteNombre)</div>
-                                            </div>
-                                            <div class="turn-change-arrow"><i class="fa-solid fa-arrow-right"></i></div>
-                                            <div class="turn-change-person">
-                                                <div class="k">Recibe</div>
-                                                <div class="v">@Txt(cambio.OperadorEntranteNombre)</div>
-                                                <div class="small text-muted">@Txt(cambio.TurnoEntranteNombre)</div>
-                                            </div>
-                                        </div>
-                                        <div class="turn-change-meta">
-                                            <div class="turn-card"><div class="label">Fecha entrega</div><div class="value">@cambio.FechaEntrega.ToString("dd/MM/yyyy HH:mm")</div></div>
-                                            <div class="turn-card"><div class="label">Fecha recepción</div><div class="value">@(cambio.FechaRecepcion.HasValue? cambio.FechaRecepcion.Value.ToString("dd/MM/yyyy HH:mm") : "Pendiente")</div></div>
-                                            <div class="turn-card"><div class="label">Producción entregada</div><div class="value">OK @Numero(cambio.CantidadOK)</div><div class="small text-muted">SOS @Numero(cambio.CantidadSospechosa) · Scrap @Numero(cambio.CantidadScrap)</div></div>
-                                            <div class="turn-card"><div class="label">Cajas</div><div class="value">@Numero(cambio.TotalCajasEntregadas) / @Numero(cambio.TotalCajas)</div><div class="small text-muted">Pendientes @Numero(cambio.TotalCajasPendientes)</div></div>
-                                        </div>
-                                        <div class="turn-change-obs">
-                                            <div><div class="k">Observaciones de entrega</div><div class="v">@Txt(cambio.ObservacionesEntrega)</div></div>
-                                            <div><div class="k">Observaciones de recepción</div><div class="v">@Txt(cambio.ObservacionesRecepcion)</div></div>
-                                        </div>
-                                    </div>
-                                }
+                                                <span class="status-pill status-future">
+                                                    @(string.Equals(cambio.OrigenOperadorEntrante, "TECNICO", StringComparison.OrdinalIgnoreCase)
+                                                                                            ? "Técnico"
+                                                                                            : string.Equals(cambio.OrigenOperadorEntrante, "ESCALA", StringComparison.OrdinalIgnoreCase)
+                                                                                            ? "Escala"
+                                                                                            : "Manual")
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="turn-change-flow">
+                                <div class="turn-change-person">
+                                    <div class="k">Entrega</div>
+                                    <div class="v">@Txt(cambio.OperadorSalienteNombre)</div>
+                                    <div class="small text-muted">@Txt(cambio.TurnoSalienteNombre)</div>
+                                </div>
+                                <div class="turn-change-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                                <div class="turn-change-person">
+                                    <div class="k">Recibe</div>
+                                    <div class="v">@Txt(cambio.OperadorEntranteNombre)</div>
+                                    <div class="small text-muted">@Txt(cambio.TurnoEntranteNombre)</div>
+                                </div>
+                            </div>
+                            <div class="turn-change-meta">
+                                <div class="turn-card"><div class="label">Fecha entrega</div><div class="value">@cambio.FechaEntrega.ToString("dd/MM/yyyy HH:mm")</div></div>
+                                <div class="turn-card"><div class="label">Fecha recepción</div><div class="value">@(cambio.FechaRecepcion.HasValue? cambio.FechaRecepcion.Value.ToString("dd/MM/yyyy HH:mm") : "Pendiente")</div></div>
+                                <div class="turn-card"><div class="label">Producción entregada</div><div class="value">OK @Numero(cambio.CantidadOK)</div><div class="small text-muted">SOS @Numero(cambio.CantidadSospechosa) · Scrap @Numero(cambio.CantidadScrap)</div></div>
+                                <div class="turn-card"><div class="label">Cajas</div><div class="value">@Numero(cambio.TotalCajasEntregadas) / @Numero(cambio.TotalCajas)</div><div class="small text-muted">Pendientes @Numero(cambio.TotalCajasPendientes)</div></div>
+                            </div>
+                            <div class="turn-change-obs">
+                                <div><div class="k">Observaciones de entrega</div><div class="v">@Txt(cambio.ObservacionesEntrega)</div></div>
+                                <div><div class="k">Observaciones de recepción</div><div class="v">@Txt(cambio.ObservacionesRecepcion)</div></div>
+                            </div>
+                        </div>
+                                                }
                             </div>
                         </div>
                     }
@@ -1645,12 +1686,14 @@
                                 La producción está lista para entregar el turno.
                             </div>
                             <div class="turn-person suggested d-none" id="turnSugeridoBox">
-                                <div class="turn-person-label">Operador sugerido según escala</div>
+                                <div class="turn-person-label" id="turnSugeridoLabel">Operador sugerido</div>
                                 <div class="turn-person-name" id="turnOperadorSugerido">-</div>
                                 <div class="turn-source">
-                                    <i class="fa-solid fa-calendar-check"></i>
+                                    <i class="fa-solid fa-calendar-check" id="turnSugeridoIcono"></i>
                                     <span id="turnSugeridoDetalle">Escala</span>
                                 </div>
+                                <div class="turn-technician-meta d-none" id="turnTecnicoMeta"></div>
+                                <div class="turn-technician-observation d-none" id="turnTecnicoObservacion"></div>
                             </div>
                             <div class="mb-3">
                                 <label for="operadorEntranteID" class="form-label fw-bold">
@@ -1663,7 +1706,7 @@
                                     <option value="">Selecciona operador</option>
                                 </select>
                                 <div class="turn-option-help" id="turnAyudaOperador">
-                                    El sistema mostrará primero al operador programado en la escala. También puedes seleccionar manualmente otro operador autorizado.
+                                    Si el técnico dejó una sugerencia, aparecerá preseleccionada. Puedes cambiarla por otro operador autorizado si las condiciones del turno cambiaron.
                                 </div>
                             </div>
                             <div id="turnInfoSeleccionado" class="turn-person d-none">
@@ -2017,7 +2060,15 @@
             }
             if(btnConfirmarCambioTurno)btnConfirmarCambioTurno.disabled=true;
             document.getElementById('turnInfoSeleccionado')?.classList.add('d-none');
-            document.getElementById('turnSugeridoBox')?.classList.add('d-none');
+            const sugeridoBox=document.getElementById('turnSugeridoBox');
+            sugeridoBox?.classList.add('d-none');
+            sugeridoBox?.classList.remove('technician');
+            document.getElementById('turnTecnicoMeta')?.classList.add('d-none');
+            document.getElementById('turnTecnicoObservacion')?.classList.add('d-none');
+            const tecnicoMeta=document.getElementById('turnTecnicoMeta');
+            const tecnicoObservacion=document.getElementById('turnTecnicoObservacion');
+            if(tecnicoMeta)tecnicoMeta.textContent='';
+            if(tecnicoObservacion)tecnicoObservacion.textContent='';
         }
         function obtenerOperadoresResumen(resumen){
             const lista=propiedad(resumen,'operadores','Operadores');
@@ -2045,11 +2096,17 @@
             const nivel=propiedad(operador,'nivel','Nivel');
             const turno=propiedad(operador,'turnoNombre','TurnoNombre');
             const enEscala=Boolean(propiedad(operador,'enEscala','EnEscala'));
+            const sugeridoPorTecnico=Boolean(propiedad(resumenCambioTurno,'sugeridoPorTecnico','SugeridoPorTecnico'));
+            const operadorSugeridoId=Number(propiedad(resumenCambioTurno,'operadorSugeridoID','OperadorSugeridoID')||0);
             nombre.textContent=textoSeguro(propiedad(operador,'nombre','Nombre'));
             const partes=[];
             if(nivel!==null&&nivel!==undefined)partes.push('Nivel N'+nivel);
             if(turno)partes.push('Turno '+turno);
-            partes.push(enEscala?'Programado en escala':'Selección manual autorizada');
+            if(sugeridoPorTecnico&&operadorSugeridoId===personaId){
+                partes.push('Sugerido por técnico');
+            }else{
+                partes.push(enEscala?'Programado en escala':'Selección manual autorizada');
+            }
             detalle.textContent=partes.join(' · ');
             box.classList.remove('d-none');
         }
@@ -2099,26 +2156,65 @@
             const turnoSugeridoNombre=propiedad(resumen,'turnoSugeridoNombre','TurnoSugeridoNombre');
             const escalaEncontrada=Boolean(propiedad(resumen,'escalaEncontrada','EscalaEncontrada'));
             const escalaFolio=propiedad(resumen,'escalaFolio','EscalaFolio');
+            const sugeridoPorTecnico=Boolean(propiedad(resumen,'sugeridoPorTecnico','SugeridoPorTecnico'));
+            const tecnicoNombre=propiedad(resumen,'tecnicoSugerenciaNombre','TecnicoSugerenciaNombre');
+            const fechaSugerenciaTecnico=propiedad(resumen,'fechaSugerenciaTecnico','FechaSugerenciaTecnico');
+            const observacionesSugerenciaTecnico=propiedad(resumen,'observacionesSugerenciaTecnico','ObservacionesSugerenciaTecnico');
             const sugeridoBox=document.getElementById('turnSugeridoBox');
+            const sugeridoLabel=document.getElementById('turnSugeridoLabel');
+            const sugeridoIcono=document.getElementById('turnSugeridoIcono');
+            const tecnicoMeta=document.getElementById('turnTecnicoMeta');
+            const tecnicoObservacion=document.getElementById('turnTecnicoObservacion');
             if(operadorSugeridoId&&sugeridoBox){
                 document.getElementById('turnOperadorSugerido').textContent=textoSeguro(operadorSugeridoNombre);
-                let detalle='Según escala';
+                sugeridoBox.classList.toggle('technician',sugeridoPorTecnico);
+                if(sugeridoLabel)sugeridoLabel.textContent=sugeridoPorTecnico?'Operador sugerido por el técnico':'Operador sugerido según escala';
+                if(sugeridoIcono)sugeridoIcono.className=sugeridoPorTecnico?'fa-solid fa-user-gear':'fa-solid fa-calendar-check';
+                let detalle=sugeridoPorTecnico?'Sugerencia del técnico':'Según escala';
                 if(turnoSugeridoNombre)detalle+=' · Turno '+turnoSugeridoNombre;
-                if(escalaFolio)detalle+=' · '+escalaFolio;
+                if(!sugeridoPorTecnico&&escalaFolio)detalle+=' · '+escalaFolio;
                 document.getElementById('turnSugeridoDetalle').textContent=detalle;
+                if(tecnicoMeta){
+                    if(sugeridoPorTecnico){
+                        let meta='Sugerido por '+textoSeguro(tecnicoNombre,'Técnico de Producción');
+                        if(fechaSugerenciaTecnico){
+                            const fecha=new Date(fechaSugerenciaTecnico);
+                            if(!Number.isNaN(fecha.getTime()))meta+=' · '+fecha.toLocaleString('es-MX',{dateStyle:'short',timeStyle:'short'});
+                        }
+                        tecnicoMeta.textContent=meta;
+                        tecnicoMeta.classList.remove('d-none');
+                    }else{
+                        tecnicoMeta.textContent='';
+                        tecnicoMeta.classList.add('d-none');
+                    }
+                }
+                if(tecnicoObservacion){
+                    if(sugeridoPorTecnico&&observacionesSugerenciaTecnico&&String(observacionesSugerenciaTecnico).trim()!==''){
+                        tecnicoObservacion.textContent='Observación del técnico: '+String(observacionesSugerenciaTecnico).trim();
+                        tecnicoObservacion.classList.remove('d-none');
+                    }else{
+                        tecnicoObservacion.textContent='';
+                        tecnicoObservacion.classList.add('d-none');
+                    }
+                }
                 sugeridoBox.classList.remove('d-none');
             }else if(sugeridoBox){
                 sugeridoBox.classList.add('d-none');
+                sugeridoBox.classList.remove('technician');
+                if(tecnicoMeta){tecnicoMeta.textContent='';tecnicoMeta.classList.add('d-none');}
+                if(tecnicoObservacion){tecnicoObservacion.textContent='';tecnicoObservacion.classList.add('d-none');}
             }
             const tieneMatriz=Boolean(propiedad(resumen,'tieneMatrizPolivalencia','TieneMatrizPolivalencia'));
             const ayuda=document.getElementById('turnAyudaOperador');
             if(ayuda){
-                if(operadorSugeridoId){
-                    ayuda.textContent='El operador sugerido fue encontrado en la escala y cumple con la regla de polivalencia. Puedes seleccionar otro operador autorizado si es necesario.';
+                if(operadorSugeridoId&&sugeridoPorTecnico){
+                    ayuda.textContent='El técnico recomienda a este operador para el cambio de turno. La selección sigue abierta: puedes elegir otro operador autorizado si al momento del relevo cambió la disponibilidad.';
+                }else if(operadorSugeridoId){
+                    ayuda.textContent='No existe una sugerencia vigente del técnico; el sistema propone al operador de escala más próximo. Puedes seleccionar otro operador autorizado si es necesario.';
                 }else if(escalaEncontrada&&tieneMatriz){
                     ayuda.textContent='Existe escala vigente, pero no se encontró un operador válido para sugerir. Selecciona manualmente un operador N1-N4 autorizado para esta parte.';
                 }else if(tieneMatriz){
-                    ayuda.textContent='No existe un operador sugerido por escala. Selecciona manualmente un operador N1-N4 autorizado para esta parte.';
+                    ayuda.textContent='No existe una sugerencia vigente. Selecciona manualmente un operador N1-N4 autorizado para esta parte.';
                 }else{
                     ayuda.textContent='La parte no tiene matriz de polivalencia configurada. Selecciona un operador activo del catálogo.';
                 }

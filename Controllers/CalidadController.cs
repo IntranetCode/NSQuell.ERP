@@ -3357,7 +3357,7 @@ VALUES
             }
             catch
             {
-                // Session no disponible.
+                
             }
 
             return null;

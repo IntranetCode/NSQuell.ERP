@@ -237,6 +237,19 @@ public sealed class ProduccionEjecucionVm
     public DateTime? FechaInicioReal { get; set; }
     public DateTime? FechaFinReal { get; set; }
 
+    public DateTime? FechaLiberacionMaquina { get; set; }
+
+    public int? UsuarioLiberacionMaquinaID { get; set; }
+
+    public string? ObservacionesLiberacionMaquina { get; set; }
+
+    public bool MaquinaLiberada =>
+        FechaLiberacionMaquina.HasValue;
+
+    public bool PuedeLiberarMaquina =>
+        EstatusID == ProduccionEstatus.EnProduccion &&
+        !FechaLiberacionMaquina.HasValue;
+
     public int? CantidadPlaneada { get; set; }
     public int CantidadOKTotal { get; set; }
     public int CantidadSospechosaTotal { get; set; }
@@ -277,6 +290,13 @@ public sealed class ProduccionEjecucionVm
 
             return Math.Max(0, CantidadPlaneada.Value - CantidadOKTotal);
         }
+    }
+
+    public sealed class ProduccionLiberarMaquinaPostVm
+    {
+        public int EjecucionProduccionID { get; set; }
+
+        public string? Observaciones { get; set; }
     }
 
     public decimal PorcentajeAvance
@@ -704,42 +724,21 @@ public sealed class ProduccionAlertaReprogramacionVm
 public sealed class ProduccionDetalleVm
 {
     public ProduccionEjecucionVm Ejecucion { get; set; } = new();
-
     public List<ProduccionRegistroHoraVm> RegistrosHora { get; set; } = new();
-
     public List<ProduccionParoVm> Paros { get; set; } = new();
-
     public List<SelectListItem> MotivosParo { get; set; } = new();
-
-    public int TotalOK =>
-        RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadOK);
-
-    public int TotalSospechoso =>
-        RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadSospechosa);
-
-    public int TotalScrap =>
-        RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadScrap);
-
-    public int TotalCapturado =>
-        TotalOK + TotalSospechoso + TotalScrap;
-
-    public bool TieneParoAbierto =>
-        Paros.Any(x => x.Activo && x.EstaAbierto);
-
-    public ProduccionParoVm? ParoAbierto =>
-        Paros.FirstOrDefault(x => x.Activo && x.EstaAbierto);
-
+    public int TotalOK => RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadOK);
+    public int TotalSospechoso => RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadSospechosa);
+    public int TotalScrap => RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadScrap);
+    public int TotalCapturado => TotalOK + TotalSospechoso + TotalScrap;
+    public bool TieneParoAbierto => Paros.Any(x => x.Activo && x.EstaAbierto);
+    public ProduccionParoVm? ParoAbierto => Paros.FirstOrDefault(x => x.Activo && x.EstaAbierto);
     public ProduccionChecklistResumenVm? ChecklistResumen { get; set; }
-
     public ProduccionCalidadResumenVm? CalidadResumen { get; set; }
-
     public List<ProduccionRecepcionOFVm> RecepcionesOF { get; set; } = new();
-
     public ProduccionMonitoreoTurnoAvisoVm? MonitoreoTurnoActual { get; set; }
-
-    public bool MostrarAvisoMonitoreoTurno =>
-        MonitoreoTurnoActual?.ChecklistPendiente == true;
-
+    public ProduccionCambioTurnoTecnicoVm? CambioTurnoTecnico { get; set; }
+    public bool MostrarAvisoMonitoreoTurno => MonitoreoTurnoActual?.ChecklistPendiente == true;
 }
 
 public sealed class ProduccionIniciarRequestVm
@@ -830,6 +829,11 @@ public sealed class ProduccionOperadorTabletVm
     public bool TieneParoAbierto { get; set; }
     public int? ParoAbiertoID { get; set; }
 
+    public DateTime? FechaLiberacionMaquina { get; set; }
+
+    public bool MaquinaLiberada =>
+        FechaLiberacionMaquina.HasValue;
+
     public List<ProduccionHistorialTurnoVm> HistorialTurnos { get; set; } = new();
     public List<ProduccionCambioTurnoHistorialVm> HistorialCambiosTurno { get; set; } = new();
 
@@ -859,7 +863,62 @@ public static class ProduccionCambioTurnoEstado
 public static class ProduccionCambioTurnoOrigen
 {
     public const string Escala = "ESCALA";
+    public const string Tecnico = "TECNICO";
     public const string Manual = "MANUAL";
+}
+
+public sealed class ProduccionCambioTurnoSugerenciaVm
+{
+    public int CambioTurnoSugerenciaID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+    public int OperadorSugeridoID { get; set; }
+    public string OperadorSugeridoNombre { get; set; } = string.Empty;
+    public int UsuarioTecnicoID { get; set; }
+    public string TecnicoNombre { get; set; } = string.Empty;
+    public DateTime FechaSugerencia { get; set; }
+    public string? Observaciones { get; set; }
+    public bool Utilizada { get; set; }
+    public bool Activo { get; set; } = true;
+    public int? UsuarioModificacionID { get; set; }
+    public DateTime? FechaModificacion { get; set; }
+    public string? TurnoNombre { get; set; }
+    public int? NivelPolivalencia { get; set; }
+    public bool EnEscala { get; set; }
+    public bool EstaVigente => Activo && !Utilizada;
+    public string TextoOrigen => "Sugerencia del técnico";
+    public string TextoOperador => string.IsNullOrWhiteSpace(OperadorSugeridoNombre) ? $"Operador {OperadorSugeridoID}" : OperadorSugeridoNombre;
+    public string TextoFecha => FechaSugerencia.ToString("dd/MM/yyyy HH:mm");
+}
+
+public sealed class ProduccionCambioTurnoSugerenciaPostVm
+{
+    public int EjecucionProduccionID { get; set; }
+    public int OperadorSugeridoID { get; set; }
+    public string? Observaciones { get; set; }
+}
+
+public sealed class ProduccionCambioTurnoTecnicoVm
+{
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+    public int? MaquinaID { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? MaquinaNombre { get; set; }
+    public int? ParteID { get; set; }
+    public string? NumeroParte { get; set; }
+    public string? ReferenciaSAP { get; set; }
+    public int? OperadorActualID { get; set; }
+    public string? OperadorActualNombre { get; set; }
+    public ProduccionCambioTurnoSugerenciaVm? SugerenciaActual { get; set; }
+    public List<ProduccionCambioTurnoCandidatoVm> Operadores { get; set; } = new();
+    public bool TieneMatrizPolivalencia { get; set; }
+    public bool EscalaEncontrada { get; set; }
+    public string? EscalaFolio { get; set; }
+    public bool TieneSugerencia => SugerenciaActual?.EstaVigente == true;
+    public string TextoMaquina => string.IsNullOrWhiteSpace(MaquinaCodigo) ? "Sin máquina" : string.IsNullOrWhiteSpace(MaquinaNombre) ? MaquinaCodigo : $"{MaquinaCodigo} - {MaquinaNombre}";
+    public string TextoParte => !string.IsNullOrWhiteSpace(ReferenciaSAP) ? ReferenciaSAP : !string.IsNullOrWhiteSpace(NumeroParte) ? NumeroParte : "Sin parte";
+    public string TextoOperadorActual => string.IsNullOrWhiteSpace(OperadorActualNombre) ? "Sin operador" : OperadorActualNombre;
 }
 public sealed class ProduccionCambioTurnoCandidatoVm
 {
@@ -900,9 +959,17 @@ public sealed class ProduccionCambioTurnoResumenVm
     public int? OperadorSugeridoID { get; set; }
     public string? OperadorSugeridoNombre { get; set; }
     public string? TurnoSugeridoNombre { get; set; }
+    public bool SugeridoPorTecnico { get; set; }
+    public int? CambioTurnoSugerenciaID { get; set; }
+    public int? UsuarioTecnicoSugerenciaID { get; set; }
+    public string? TecnicoSugerenciaNombre { get; set; }
+    public DateTime? FechaSugerenciaTecnico { get; set; }
+    public string? ObservacionesSugerenciaTecnico { get; set; }
     public bool PuedeEntregar { get; set; }
     public string? MotivoBloqueo { get; set; }
     public List<ProduccionCambioTurnoCandidatoVm> Operadores { get; set; } = new();
+    public bool TieneOperadorSugerido => OperadorSugeridoID.HasValue && OperadorSugeridoID.Value > 0;
+    public string OrigenSugerenciaTexto => SugeridoPorTecnico ? "Sugerido por técnico" : TieneOperadorSugerido ? "Sugerido por escala" : "Sin sugerencia";
 }
 public sealed class ProduccionCambioTurnoEntregaPostVm
 {
@@ -1077,6 +1144,107 @@ public sealed class ProduccionRecepcionOFVm
             return TipoRecepcion;
         }
     }
+}
+
+public sealed class ProduccionHistorialEjecucionVm
+{
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+
+    public int? SolicitudProduccionID { get; set; }
+
+    public int? MaquinaID { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? MaquinaNombre { get; set; }
+
+    public int? ParteID { get; set; }
+    public string? NumeroParte { get; set; }
+    public string? ReferenciaSAP { get; set; }
+    public string? DescripcionParte { get; set; }
+
+    public DateTime? FechaInicioReal { get; set; }
+    public DateTime? FechaFinReal { get; set; }
+
+    public int CantidadPlaneada { get; set; }
+    public int CantidadOK { get; set; }
+    public int CantidadSospechosa { get; set; }
+    public int CantidadScrap { get; set; }
+
+    public int ObjetivoAcumulado { get; set; }
+    public int HorasCapturadas { get; set; }
+
+    public decimal PorcentajeCumplimiento { get; set; }
+
+    public int EstatusID { get; set; }
+
+    public string? OperadorPrincipalNombre { get; set; }
+
+    public int TotalCambiosTurno { get; set; }
+    public int TotalParos { get; set; }
+
+    // Se utiliza en historial del operador.
+    public int? PersonaConsultaID { get; set; }
+    public int CantidadOKOperador { get; set; }
+    public int CantidadSospechosaOperador { get; set; }
+    public int CantidadScrapOperador { get; set; }
+    public int ObjetivoOperador { get; set; }
+    public int HorasOperador { get; set; }
+    public decimal PorcentajeCumplimientoOperador { get; set; }
+
+    public string EstatusNombre =>
+        ProduccionEstatus.Nombre(EstatusID);
+
+    public string EstatusClase =>
+        ProduccionEstatus.ClaseBadge(EstatusID);
+
+    public string TextoMaquina =>
+        string.IsNullOrWhiteSpace(MaquinaCodigo)
+            ? "Sin máquina"
+            : string.IsNullOrWhiteSpace(MaquinaNombre)
+                ? MaquinaCodigo
+                : $"{MaquinaCodigo} - {MaquinaNombre}";
+
+    public string TextoParte =>
+        !string.IsNullOrWhiteSpace(ReferenciaSAP)
+            ? ReferenciaSAP
+            : !string.IsNullOrWhiteSpace(NumeroParte)
+                ? NumeroParte
+                : $"Programa {ProgramaProduccionID}";
+
+    public bool CumplioObjetivo =>
+        ObjetivoAcumulado > 0 &&
+        CantidadOK >= ObjetivoAcumulado;
+
+    public bool CumplioObjetivoOperador =>
+        ObjetivoOperador > 0 &&
+        CantidadOKOperador >= ObjetivoOperador;
+}
+
+public sealed class ProduccionHistorialVm
+{
+    public string? Busqueda { get; set; }
+    public DateTime? FechaDesde { get; set; }
+    public DateTime? FechaHasta { get; set; }
+
+    public bool EsVistaOperador { get; set; }
+
+    public List<ProduccionHistorialEjecucionVm> Producciones { get; set; }
+        = new();
+
+    public int Total => Producciones.Count;
+
+    public int Cerradas =>
+        Producciones.Count(x =>
+            x.EstatusID == ProduccionEstatus.Cerrado);
+
+    public int Terminadas =>
+        Producciones.Count(x =>
+            x.EstatusID == ProduccionEstatus.Terminado ||
+            x.EstatusID == ProduccionEstatus.TerminadoParcial);
+
+    public int ListaCierre =>
+        Producciones.Count(x =>
+            x.EstatusID == ProduccionEstatus.ListaCierreDocumental);
 }
 public static class ProduccionChecklistEstatus
 {
@@ -1774,6 +1942,11 @@ public sealed class ProduccionOperadorCajasVm
 
     public int EstatusID { get; set; }
     public bool TieneParoAbierto { get; set; }
+
+    public DateTime? FechaLiberacionMaquina { get; set; }
+
+    public bool MaquinaLiberada =>
+        FechaLiberacionMaquina.HasValue;
 
     public List<ProduccionOperadorCajaVm> Cajas { get; set; } = new();
 

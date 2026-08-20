@@ -1120,157 +1120,582 @@ VALUES
             await cmd.ExecuteNonQueryAsync();
         }
 
-      
-
-        private async Task<List<CalidadGP12ItemViewModel>> CargarRegistrosGP12Async(int inspeccionId)
+        private async Task<List<CalidadGP12ItemViewModel>>
+    CargarRegistrosGP12Async(
+        int inspeccionId)
         {
-            var lista = new List<CalidadGP12ItemViewModel>();
+            var lista =
+                new List<CalidadGP12ItemViewModel>();
+
+            if (inspeccionId <= 0)
+                return lista;
+
             const string sql = @"
 SELECT
     s.SolicitudGP12ID AS GP12ID,
     s.CalidadInspeccionID AS InspeccionID,
     s.CajaLiberadaID,
     s.CajaProduccionID,
-    ISNULL(c.FolioCaja,N'') AS FolioCaja,
+
+    ISNULL(
+        c.FolioCaja,
+        N''
+    ) AS FolioCaja,
+
     s.FechaSolicitud AS FechaEntrada,
-    CAST(ISNULL(s.CantidadSolicitada,0) AS INT) AS CantidadEntrada,
+
+    CAST(
+        ISNULL(
+            s.CantidadSolicitada,
+            0
+        )
+        AS INT
+    ) AS CantidadEntrada,
+
     s.Motivo,
+
     CASE
-        WHEN s.EstatusID=1 THEN N'RECIBIDO'
-        WHEN s.EstatusID=2 THEN N'PENDIENTE_PROGRAMAR'
-        WHEN s.EstatusID=3 THEN N'PROGRAMADO'
-        WHEN s.EstatusID=4 THEN N'ASIGNADO'
-        WHEN s.EstatusID=5 THEN N'EN_INSPECCION'
-        WHEN s.EstatusID=6 THEN N'INSPECCION_PAUSADA'
-        WHEN s.EstatusID=7 THEN N'INSPECCION_TERMINADA'
-        WHEN s.EstatusID=8 THEN N'EN_TARIMA'
-        WHEN s.EstatusID=9 THEN N'SALIDA_REGISTRADA'
-        WHEN s.EstatusID=10 THEN N'CERRADO'
+        WHEN s.EstatusID = 1
+            THEN N'RECIBIDO'
+
+        WHEN s.EstatusID = 2
+            THEN N'PENDIENTE_PROGRAMAR'
+
+        WHEN s.EstatusID = 3
+            THEN N'PROGRAMADO'
+
+        WHEN s.EstatusID = 4
+            THEN N'ASIGNADO'
+
+        WHEN s.EstatusID = 5
+            THEN N'EN_INSPECCION'
+
+        WHEN s.EstatusID = 6
+            THEN N'INSPECCION_PAUSADA'
+
+        WHEN s.EstatusID = 7
+            THEN N'INSPECCION_TERMINADA'
+
+        WHEN s.EstatusID = 8
+            THEN N'EN_TARIMA'
+
+        WHEN s.EstatusID = 9
+            THEN N'SALIDA_REGISTRADA'
+
+        WHEN s.EstatusID = 10
+            THEN N'CERRADO'
+
         ELSE N'DESCONOCIDO'
     END AS Estado,
+
     s.FechaFin AS FechaSalida,
+
     CASE
-        WHEN s.FechaFin IS NULL THEN NULL
-        ELSE CAST(ISNULL(s.CantidadProcesada,0) AS INT)
+        WHEN s.FechaFin IS NULL
+            THEN NULL
+
+        ELSE
+            CAST(
+                ISNULL(
+                    s.CantidadProcesada,
+                    0
+                )
+                AS INT
+            )
     END AS CantidadSalida,
+
     s.Observaciones
+
 FROM dbo.GP12_Solicitudes s
+
 LEFT JOIN dbo.Calidad_CajasLiberadas c
-    ON c.CajaLiberadaID=s.CajaLiberadaID
-   AND c.Activo=1
-WHERE s.CalidadInspeccionID=@InspeccionID
-  AND UPPER(LTRIM(RTRIM(ISNULL(s.Origen,N''))))=N'CALIDAD'
-  AND s.Activo=1
-ORDER BY s.FechaSolicitud DESC,s.SolicitudGP12ID DESC;";
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
-            await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
-            await using var rd = await cmd.ExecuteReaderAsync();
-            while (await rd.ReadAsync())
+    ON c.CajaLiberadaID =
+       s.CajaLiberadaID
+
+   AND c.Activo = 1
+
+WHERE s.CalidadInspeccionID =
+      @InspeccionID
+
+  AND UPPER(
+        LTRIM(
+            RTRIM(
+                ISNULL(
+                    s.Origen,
+                    N''
+                )
+            )
+        )
+      ) = N'CALIDAD'
+
+  AND s.Activo = 1
+
+ORDER BY
+    s.FechaSolicitud DESC,
+    s.SolicitudGP12ID DESC;";
+
+
+            /*
+             * PRIMERA CONEXIÓN:
+             * solo obtiene las solicitudes GP12.
+             */
+            await using (
+                var cn =
+                    new SqlConnection(
+                        ConnectionString))
             {
-                lista.Add(new CalidadGP12ItemViewModel
+                await cn.OpenAsync();
+
+                await using (
+                    var cmd =
+                        new SqlCommand(
+                            sql,
+                            cn))
                 {
-                    GP12ID = Convert.ToInt32(rd["GP12ID"]),
-                    InspeccionID = Convert.ToInt32(rd["InspeccionID"]),
-                    CajaLiberadaID = rd["CajaLiberadaID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CajaLiberadaID"]),
-                    CajaProduccionID = rd["CajaProduccionID"] == DBNull.Value ? null : Convert.ToInt64(rd["CajaProduccionID"]),
-                    FolioCaja = rd["FolioCaja"]?.ToString()?.Trim() ?? string.Empty,
-                    FechaEntrada = Convert.ToDateTime(rd["FechaEntrada"]),
-                    CantidadEntrada = Convert.ToInt32(rd["CantidadEntrada"]),
-                    Motivo = rd["Motivo"] == DBNull.Value ? null : rd["Motivo"].ToString()?.Trim(),
-                    Estado = rd["Estado"]?.ToString()?.Trim() ?? string.Empty,
-                    FechaSalida = rd["FechaSalida"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaSalida"]),
-                    CantidadSalida = rd["CantidadSalida"] == DBNull.Value ? null : Convert.ToInt32(rd["CantidadSalida"]),
-                    Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"].ToString()?.Trim(),
-                    Revisiones = new List<CalidadGP12RevisionItemViewModel>()
-                });
+                    cmd.Parameters.Add(
+                        "@InspeccionID",
+                        SqlDbType.Int).Value =
+                        inspeccionId;
+
+                    await using (
+                        var rd =
+                            await cmd.ExecuteReaderAsync())
+                    {
+                        while (await rd.ReadAsync())
+                        {
+                            lista.Add(
+                                new CalidadGP12ItemViewModel
+                                {
+                                    GP12ID =
+                                        Convert.ToInt32(
+                                            rd["GP12ID"]),
+
+                                    InspeccionID =
+                                        Convert.ToInt32(
+                                            rd["InspeccionID"]),
+
+                                    CajaLiberadaID =
+                                        rd["CajaLiberadaID"]
+                                            == DBNull.Value
+                                            ? 0
+                                            : Convert.ToInt32(
+                                                rd[
+                                                    "CajaLiberadaID"]),
+
+                                    CajaProduccionID =
+                                        rd["CajaProduccionID"]
+                                            == DBNull.Value
+                                            ? null
+                                            : Convert.ToInt64(
+                                                rd[
+                                                    "CajaProduccionID"]),
+
+                                    FolioCaja =
+                                        rd["FolioCaja"]
+                                            ?.ToString()
+                                            ?.Trim()
+                                        ?? string.Empty,
+
+                                    FechaEntrada =
+                                        Convert.ToDateTime(
+                                            rd[
+                                                "FechaEntrada"]),
+
+                                    CantidadEntrada =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "CantidadEntrada"]),
+
+                                    Motivo =
+                                        rd["Motivo"]
+                                            == DBNull.Value
+                                            ? null
+                                            : rd["Motivo"]
+                                                ?.ToString()
+                                                ?.Trim(),
+
+                                    Estado =
+                                        rd["Estado"]
+                                            ?.ToString()
+                                            ?.Trim()
+                                        ?? string.Empty,
+
+                                    FechaSalida =
+                                        rd["FechaSalida"]
+                                            == DBNull.Value
+                                            ? null
+                                            : Convert.ToDateTime(
+                                                rd[
+                                                    "FechaSalida"]),
+
+                                    CantidadSalida =
+                                        rd["CantidadSalida"]
+                                            == DBNull.Value
+                                            ? null
+                                            : Convert.ToInt32(
+                                                rd[
+                                                    "CantidadSalida"]),
+
+                                    Observaciones =
+                                        rd["Observaciones"]
+                                            == DBNull.Value
+                                            ? null
+                                            : rd[
+                                                "Observaciones"]
+                                                ?.ToString()
+                                                ?.Trim(),
+
+                                    Revisiones =
+                                        new List<
+                                            CalidadGP12RevisionItemViewModel>()
+                                });
+                        }
+                    }
+                }
             }
+
+
+            /*
+             * Aquí la conexión anterior YA FUE CERRADA.
+             *
+             * Cada carga de revisiones utilizará
+             * una conexión independiente.
+             */
             foreach (var gp12 in lista)
-                gp12.Revisiones = await CargarRevisionesGP12Async(gp12.GP12ID, cn);
+            {
+                gp12.Revisiones =
+                    await CargarRevisionesGP12Async(
+                        gp12.GP12ID);
+            }
+
+
             return lista;
         }
 
-        private static async Task<List<CalidadGP12RevisionItemViewModel>> CargarRevisionesGP12Async(int solicitudGP12Id, SqlConnection cn)
+
+        private async Task<
+       List<CalidadGP12RevisionItemViewModel>>
+       CargarRevisionesGP12Async(
+           int solicitudGP12Id)
         {
-            var lista = new List<CalidadGP12RevisionItemViewModel>();
+            var lista =
+                new List<
+                    CalidadGP12RevisionItemViewModel>();
+
+            if (solicitudGP12Id <= 0)
+                return lista;
+
             const string sql = @"
 SELECT
-    i.InspeccionGP12ID AS RevisionGP12ID,
-    ROW_NUMBER() OVER(ORDER BY ISNULL(i.FechaInicio,i.FechaCreacion),i.InspeccionGP12ID) AS NumeroRevision,
-    ISNULL(i.FechaFin,ISNULL(i.FechaInicio,i.FechaCreacion)) AS FechaRevision,
-    CAST(ISNULL(i.CantidadRevisada,0) AS INT) AS CantidadRevisada,
-    CAST(ISNULL(i.CantidadOK,0) AS INT) AS CantidadOK,
-    CAST(ISNULL(i.CantidadNOK,0) AS INT) AS CantidadNOK,
+    i.InspeccionGP12ID
+        AS RevisionGP12ID,
+
+    ROW_NUMBER() OVER
+    (
+        ORDER BY
+            ISNULL(
+                i.FechaInicio,
+                i.FechaCreacion
+            ),
+            i.InspeccionGP12ID
+    ) AS NumeroRevision,
+
+    ISNULL(
+        i.FechaFin,
+        ISNULL(
+            i.FechaInicio,
+            i.FechaCreacion
+        )
+    ) AS FechaRevision,
+
+    CAST(
+        ISNULL(
+            i.CantidadRevisada,
+            0
+        )
+        AS INT
+    ) AS CantidadRevisada,
+
+    CAST(
+        ISNULL(
+            i.CantidadOK,
+            0
+        )
+        AS INT
+    ) AS CantidadOK,
+
+    CAST(
+        ISNULL(
+            i.CantidadNOK,
+            0
+        )
+        AS INT
+    ) AS CantidadNOK,
+
     CASE
-        WHEN i.FechaFin IS NULL THEN N'PENDIENTE'
-        WHEN ISNULL(i.CantidadNOK,0)=0 AND ISNULL(i.CantidadScrap,0)=0 THEN N'OK'
+        WHEN i.FechaFin IS NULL
+            THEN N'PENDIENTE'
+
+        WHEN ISNULL(
+                i.CantidadNOK,
+                0
+             ) = 0
+
+         AND ISNULL(
+                i.CantidadScrap,
+                0
+             ) = 0
+
+            THEN N'OK'
+
         ELSE N'NOK'
     END AS Resultado,
+
     i.Observaciones
+
 FROM dbo.GP12_Inspecciones i
-WHERE i.SolicitudGP12ID=@SolicitudGP12ID
-  AND i.Activo=1
-ORDER BY ISNULL(i.FechaInicio,i.FechaCreacion) DESC,i.InspeccionGP12ID DESC;";
-            await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12Id;
-            await using var rd = await cmd.ExecuteReaderAsync();
-            while (await rd.ReadAsync())
+
+WHERE i.SolicitudGP12ID =
+      @SolicitudGP12ID
+
+  AND i.Activo = 1
+
+ORDER BY
+    ISNULL(
+        i.FechaInicio,
+        i.FechaCreacion
+    ) DESC,
+
+    i.InspeccionGP12ID DESC;";
+
+
+            /*
+             * CONEXIÓN PROPIA DE REVISIONES.
+             */
+            await using (
+                var cn =
+                    new SqlConnection(
+                        ConnectionString))
             {
-                lista.Add(new CalidadGP12RevisionItemViewModel
+                await cn.OpenAsync();
+
+                await using (
+                    var cmd =
+                        new SqlCommand(
+                            sql,
+                            cn))
                 {
-                    RevisionGP12ID = Convert.ToInt32(rd["RevisionGP12ID"]),
-                    NumeroRevision = Convert.ToInt32(rd["NumeroRevision"]),
-                    FechaRevision = Convert.ToDateTime(rd["FechaRevision"]),
-                    CantidadRevisada = Convert.ToInt32(rd["CantidadRevisada"]),
-                    CantidadOK = Convert.ToInt32(rd["CantidadOK"]),
-                    CantidadNOK = Convert.ToInt32(rd["CantidadNOK"]),
-                    Resultado = rd["Resultado"]?.ToString()?.Trim() ?? string.Empty,
-                    Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"].ToString()?.Trim(),
-                    Defectos = new List<CalidadGP12DefectoItemViewModel>()
-                });
+                    cmd.Parameters.Add(
+                        "@SolicitudGP12ID",
+                        SqlDbType.Int).Value =
+                        solicitudGP12Id;
+
+                    await using (
+                        var rd =
+                            await cmd.ExecuteReaderAsync())
+                    {
+                        while (await rd.ReadAsync())
+                        {
+                            lista.Add(
+                                new CalidadGP12RevisionItemViewModel
+                                {
+                                    RevisionGP12ID =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "RevisionGP12ID"]),
+
+                                    NumeroRevision =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "NumeroRevision"]),
+
+                                    FechaRevision =
+                                        Convert.ToDateTime(
+                                            rd[
+                                                "FechaRevision"]),
+
+                                    CantidadRevisada =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "CantidadRevisada"]),
+
+                                    CantidadOK =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "CantidadOK"]),
+
+                                    CantidadNOK =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "CantidadNOK"]),
+
+                                    Resultado =
+                                        rd["Resultado"]
+                                            ?.ToString()
+                                            ?.Trim()
+                                        ?? string.Empty,
+
+                                    Observaciones =
+                                        rd["Observaciones"]
+                                            == DBNull.Value
+                                            ? null
+                                            : rd[
+                                                "Observaciones"]
+                                                ?.ToString()
+                                                ?.Trim(),
+
+                                    Defectos =
+                                        new List<
+                                            CalidadGP12DefectoItemViewModel>()
+                                });
+                        }
+                    }
+                }
             }
+
+
+            /*
+             * El reader y conexión anteriores
+             * ya están completamente cerrados.
+             */
             foreach (var revision in lista)
-                revision.Defectos = await CargarDefectosRevisionGP12Async(revision.RevisionGP12ID, cn);
+            {
+                revision.Defectos =
+                    await CargarDefectosRevisionGP12Async(
+                        revision.RevisionGP12ID);
+            }
+
+
             return lista;
         }
 
-        private static async Task<List<CalidadGP12DefectoItemViewModel>> CargarDefectosRevisionGP12Async(int inspeccionGP12Id, SqlConnection cn)
+        private async Task<
+     List<CalidadGP12DefectoItemViewModel>>
+     CargarDefectosRevisionGP12Async(
+         int inspeccionGP12Id)
         {
-            var lista = new List<CalidadGP12DefectoItemViewModel>();
+            var lista =
+                new List<
+                    CalidadGP12DefectoItemViewModel>();
+
+            if (inspeccionGP12Id <= 0)
+                return lista;
+
             const string sql = @"
 SELECT
-    d.InspeccionDefectoID AS DefectoGP12ID,
-    d.DefectoID AS CatalogoDefectoID,
-    ISNULL(c.Codigo,N'') AS Codigo,
-    ISNULL(c.Nombre,N'') AS Nombre,
-    CAST(ISNULL(d.Cantidad,0) AS INT) AS Cantidad,
+    d.InspeccionDefectoID
+        AS DefectoGP12ID,
+
+    d.DefectoID
+        AS CatalogoDefectoID,
+
+    ISNULL(
+        c.Codigo,
+        N''
+    ) AS Codigo,
+
+    ISNULL(
+        c.Nombre,
+        N''
+    ) AS Nombre,
+
+    CAST(
+        ISNULL(
+            d.Cantidad,
+            0
+        )
+        AS INT
+    ) AS Cantidad,
+
     d.Observaciones
+
 FROM dbo.GP12_InspeccionDefectos d
+
 INNER JOIN dbo.GP12_CatalogoDefectos c
-    ON c.DefectoID=d.DefectoID
-WHERE d.InspeccionGP12ID=@InspeccionGP12ID
-  AND d.Activo=1
-ORDER BY c.Orden,c.Codigo,d.InspeccionDefectoID;";
-            await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@InspeccionGP12ID", SqlDbType.Int).Value = inspeccionGP12Id;
-            await using var rd = await cmd.ExecuteReaderAsync();
-            while (await rd.ReadAsync())
+    ON c.DefectoID =
+       d.DefectoID
+
+WHERE d.InspeccionGP12ID =
+      @InspeccionGP12ID
+
+  AND d.Activo = 1
+
+ORDER BY
+    c.Orden,
+    c.Codigo,
+    d.InspeccionDefectoID;";
+
+
+            await using (
+                var cn =
+                    new SqlConnection(
+                        ConnectionString))
             {
-                lista.Add(new CalidadGP12DefectoItemViewModel
+                await cn.OpenAsync();
+
+                await using (
+                    var cmd =
+                        new SqlCommand(
+                            sql,
+                            cn))
                 {
-                    DefectoGP12ID = Convert.ToInt32(rd["DefectoGP12ID"]),
-                    CatalogoDefectoID = Convert.ToInt32(rd["CatalogoDefectoID"]),
-                    Codigo = rd["Codigo"]?.ToString()?.Trim() ?? string.Empty,
-                    Nombre = rd["Nombre"]?.ToString()?.Trim() ?? string.Empty,
-                    Cantidad = Convert.ToInt32(rd["Cantidad"]),
-                    Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"].ToString()?.Trim()
-                });
+                    cmd.Parameters.Add(
+                        "@InspeccionGP12ID",
+                        SqlDbType.Int).Value =
+                        inspeccionGP12Id;
+
+                    await using (
+                        var rd =
+                            await cmd.ExecuteReaderAsync())
+                    {
+                        while (await rd.ReadAsync())
+                        {
+                            lista.Add(
+                                new CalidadGP12DefectoItemViewModel
+                                {
+                                    DefectoGP12ID =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "DefectoGP12ID"]),
+
+                                    CatalogoDefectoID =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "CatalogoDefectoID"]),
+
+                                    Codigo =
+                                        rd["Codigo"]
+                                            ?.ToString()
+                                            ?.Trim()
+                                        ?? string.Empty,
+
+                                    Nombre =
+                                        rd["Nombre"]
+                                            ?.ToString()
+                                            ?.Trim()
+                                        ?? string.Empty,
+
+                                    Cantidad =
+                                        Convert.ToInt32(
+                                            rd[
+                                                "Cantidad"]),
+
+                                    Observaciones =
+                                        rd["Observaciones"]
+                                            == DBNull.Value
+                                            ? null
+                                            : rd[
+                                                "Observaciones"]
+                                                ?.ToString()
+                                                ?.Trim()
+                                });
+                        }
+                    }
+                }
             }
+
             return lista;
         }
-
-
         private static bool EstadoBloqueaRevisionCaja(string? estado)
         {
             if (string.IsNullOrWhiteSpace(estado))
