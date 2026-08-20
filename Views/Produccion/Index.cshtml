@@ -2446,7 +2446,7 @@
                             Confirmar inicio de preparación
                         </h5>
                         <div class="small opacity-75">
-                            Revisa el programa y confirma al operador principal y, si aplica, al auxiliar antes de tomar la OF.
+                            Revisa el programa y confirma al operador principal, al auxiliar de producción y, si aplica, al Técnico en Producción antes de tomar la OF.
                         </div>
                     </div>
 
@@ -2521,7 +2521,7 @@
                     </div>
 
                     <div class="row g-3 mb-3">
-                        <div class="col-lg-6">
+                        <div class="col-lg-4">
                             <div class="operator-role-card required">
                                 <div class="operator-role-head">
                                     <div class="operator-role-name"><i class="bi bi-person-badge me-1"></i>Operador principal</div>
@@ -2545,10 +2545,10 @@
                             </div>
                         </div>
 
-                        <div class="col-lg-6">
+                        <div class="col-lg-4">
                             <div class="operator-role-card">
                                 <div class="operator-role-head">
-                                    <div class="operator-role-name"><i class="bi bi-person-plus me-1"></i>Operador auxiliar</div>
+                                    <div class="operator-role-name"><i class="bi bi-person-plus me-1"></i>Auxiliar de producción</div>
                                     <span class="operator-optional-badge">Opcional</span>
                                 </div>
                                 <div class="mb-3">
@@ -2564,7 +2564,34 @@
                                 <div>
                                     <label class="form-label">Nombre manual auxiliar</label>
                                     <input type="text" id="modalOperadorAuxiliarManual" class="form-control" maxlength="200" placeholder="Se selecciona desde Escala de Personal" />
-                                    <div class="small text-muted mt-1">El auxiliar es opcional y no puede ser la misma persona que el operador principal.</div>
+                                    <div class="small text-muted mt-1">El auxiliar de producción es opcional y no puede ser la misma persona que el operador principal.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <div class="operator-role-card">
+                                <!-- NSQ_TECNICO_PRODUCCION_PREP_V2 -->
+                                <div class="operator-role-head">
+                                    <div class="operator-role-name"><i class="bi bi-tools me-1"></i>Técnico en Producción</div>
+                                    <span class="operator-optional-badge">Opcional</span>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Seleccionar técnico</label>
+                                    <select name="tecnicoProduccionId" id="modalTecnicoProduccionId" class="form-select">
+                                        <option value="">-- Seleccionar técnico --</option>
+                                    </select>
+                                    <div class="small text-muted mt-1">Se muestran colaboradores activos cuyo puesto corresponde a Técnico de Producción.</div>
+                                </div>
+                                <div>
+                                    <label class="form-label">Nombre manual técnico</label>
+                                    <input type="text"
+                                           name="tecnicoProduccionNombre"
+                                           id="modalTecnicoProduccionManual"
+                                           class="form-control"
+                                           maxlength="200"
+                                           placeholder="Escribe el nombre si no seleccionas técnico" />
+                                    <div class="small text-muted mt-1">Puedes seleccionar un técnico del listado o capturar el nombre manualmente.</div>
                                 </div>
                             </div>
                         </div>
@@ -2628,6 +2655,8 @@
                     const modalOperadorAuxiliarId = document.getElementById('modalOperadorAuxiliarId');
                     const modalOperadorAuxiliarNombre = document.getElementById('modalOperadorAuxiliarNombre');
                     const modalOperadorAuxiliarManual = document.getElementById('modalOperadorAuxiliarManual');
+                    const modalTecnicoProduccionId = document.getElementById('modalTecnicoProduccionId');
+                    const modalTecnicoProduccionManual = document.getElementById('modalTecnicoProduccionManual');
                     const modalPolivalenciaInfo = document.getElementById('modalPolivalenciaInfo');
                     const opcionesOperadorBase = modalOperadorId?.innerHTML || '';
                     const opcionesAuxiliarBase = modalOperadorAuxiliarId?.innerHTML || '';
@@ -2842,10 +2871,105 @@
                         }
                     }
 
+                    // NSQ_TECNICO_PRODUCCION_PREP_V2
+                    function sincronizarTecnicoProduccion() {
+                        if (!modalTecnicoProduccionManual) return;
+
+                        const haySeleccion = !!modalTecnicoProduccionId?.value;
+                        modalTecnicoProduccionManual.disabled = haySeleccion;
+
+                        if (haySeleccion) {
+                            modalTecnicoProduccionManual.value = '';
+                            modalTecnicoProduccionManual.placeholder =
+                                'Bloqueado: ya seleccionaste un técnico';
+                        }
+                        else {
+                            modalTecnicoProduccionManual.placeholder =
+                                'Escribe el nombre si no seleccionas técnico';
+                        }
+                    }
+
+                    async function cargarTecnicosProduccion() {
+                        if (!modalTecnicoProduccionId) return;
+
+                        limpiarSelectEscala(
+                            modalTecnicoProduccionId,
+                            '-- Cargando técnicos --');
+
+                        if (modalTecnicoProduccionManual) {
+                            modalTecnicoProduccionManual.value = '';
+                            modalTecnicoProduccionManual.disabled = false;
+                            modalTecnicoProduccionManual.placeholder =
+                                'Escribe el nombre si no seleccionas técnico';
+                        }
+
+                        try {
+                            const url =
+                                '@Url.Action("TecnicosProduccionActivos", "Produccion")';
+
+                            const response = await fetch(
+                                url,
+                                {
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest'
+                                    }
+                                });
+
+                            if (!response.ok)
+                                throw new Error(`HTTP ${response.status}`);
+
+                            const data = await response.json();
+                            const tecnicos =
+                                Array.isArray(data?.tecnicos)
+                                    ? data.tecnicos
+                                    : [];
+
+                            limpiarSelectEscala(
+                                modalTecnicoProduccionId,
+                                tecnicos.length > 0
+                                    ? '-- Seleccionar técnico --'
+                                    : '-- Sin técnicos activos --');
+
+                            tecnicos.forEach(x => {
+                                const option =
+                                    document.createElement('option');
+
+                                option.value =
+                                    String(x.personaID);
+
+                                const partes = [
+                                    x.nombre || ''
+                                ];
+
+                                if (x.numeroControl)
+                                    partes.push(`Ctrl ${x.numeroControl}`);
+
+                                if (x.puesto)
+                                    partes.push(x.puesto);
+
+                                option.textContent =
+                                    partes.filter(Boolean).join(' · ');
+
+                                modalTecnicoProduccionId
+                                    .appendChild(option);
+                            });
+                        }
+                        catch (error) {
+                            console.error(
+                                'TecnicosProduccion:',
+                                error);
+
+                            limpiarSelectEscala(
+                                modalTecnicoProduccionId,
+                                '-- Error al cargar técnicos --');
+                        }
+
+                        sincronizarTecnicoProduccion();
+                    }
                     function limpiarValidacionOperadores() {
                         mensajeValidacionOperadores?.classList.remove('show', 'is-success');
                         if (textoValidacionOperadores) textoValidacionOperadores.textContent = '';
-                        [modalOperadorId, modalOperadorManual, modalOperadorAuxiliarId, modalOperadorAuxiliarManual]
+                        [modalOperadorId, modalOperadorManual, modalOperadorAuxiliarId, modalOperadorAuxiliarManual, modalTecnicoProduccionId, modalTecnicoProduccionManual]
                             .forEach(x => x?.classList.remove('operator-field-invalid'));
                     }
 
@@ -3081,6 +3205,8 @@
                             maquinaId,
                             operadorId,
                             operadorAuxiliarId);
+
+                        cargarTecnicosProduccion();
                     });
 
                     modalOperadorId?.addEventListener('change', () => {
@@ -3104,6 +3230,22 @@
                     modalOperadorAuxiliarManual?.addEventListener('input', () => {
                         if (modalOperadorAuxiliarManual.value.trim() && modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
                         sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
+                        limpiarValidacionOperadores();
+                    });
+
+                    modalTecnicoProduccionId?.addEventListener('change', () => {
+                        if (modalTecnicoProduccionId.value && modalTecnicoProduccionManual) {
+                            modalTecnicoProduccionManual.value = '';
+                        }
+                        sincronizarTecnicoProduccion();
+                        limpiarValidacionOperadores();
+                    });
+
+                    modalTecnicoProduccionManual?.addEventListener('input', () => {
+                        if (modalTecnicoProduccionManual.value.trim() && modalTecnicoProduccionId) {
+                            modalTecnicoProduccionId.value = '';
+                        }
+                        sincronizarTecnicoProduccion();
                         limpiarValidacionOperadores();
                     });
 
@@ -3132,7 +3274,7 @@
 
                         if (auxiliarId && auxiliarManual) {
                             mostrarValidacionOperadores(
-                                'Para el operador auxiliar usa solamente una opción: selección del catálogo o nombre manual.',
+                                'Para el auxiliar de producción usa solamente una opción: selección del catálogo o nombre manual.',
                                 [modalOperadorAuxiliarId, modalOperadorAuxiliarManual]);
                             return;
                         }
