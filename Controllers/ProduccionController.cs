@@ -1805,7 +1805,7 @@ ORDER BY e.EjecucionProduccionID DESC;";
                     await tx.RollbackAsync();
 
                     TempData["Error"] =
-                        "El operador principal y el operador auxiliar no pueden ser la misma persona.";
+                        "El operador principal y el auxiliar de producción no pueden ser la misma persona.";
 
                     return RedirectToAction(nameof(Index));
                 }
@@ -1822,7 +1822,7 @@ ORDER BY e.EjecucionProduccionID DESC;";
                     await tx.RollbackAsync();
 
                     TempData["Error"] =
-                        "El operador principal y el operador auxiliar no pueden ser la misma persona.";
+                        "El operador principal y el auxiliar de producción no pueden ser la misma persona.";
 
                     return RedirectToAction(nameof(Index));
                 }
@@ -1899,6 +1899,121 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 }                // NSQ_PRODUCCION_AUXILIAR_MANUAL_V4
                 // Sin PersonaID se conserva el nombre manual; el auxiliar sigue siendo opcional.
                 // NSQ_ESCALA_OPERADORES_V5_END
+
+                // NSQ_TECNICO_PRODUCCION_PREP_V2
+                int? tecnicoProduccionFinalId = null;
+
+                var tecnicoProduccionIdTexto =
+                    Request.Form["tecnicoProduccionId"]
+                        .ToString()
+                        .Trim();
+
+                if (int.TryParse(
+                        tecnicoProduccionIdTexto,
+                        out var tecnicoProduccionIdParseado) &&
+                    tecnicoProduccionIdParseado > 0)
+                {
+                    tecnicoProduccionFinalId =
+                        tecnicoProduccionIdParseado;
+                }
+
+                string? tecnicoProduccionFinalNombre =
+                    Request.Form["tecnicoProduccionNombre"]
+                        .ToString()
+                        .Trim();
+
+                if (string.IsNullOrWhiteSpace(
+                        tecnicoProduccionFinalNombre))
+                {
+                    tecnicoProduccionFinalNombre = null;
+                }
+
+                if (tecnicoProduccionFinalId.HasValue)
+                {
+                    if (!await PersonaEsTecnicoProduccionActivoAsync(
+                            tecnicoProduccionFinalId.Value,
+                            cn,
+                            tx))
+                    {
+                        await tx.RollbackAsync();
+
+                        TempData["Error"] =
+                            "El Técnico en Producción seleccionado no pertenece al catálogo activo de Técnicos de Producción.";
+
+                        return RedirectToAction(
+                            nameof(Index));
+                    }
+
+                    tecnicoProduccionFinalNombre =
+                        await ObtenerNombreTecnicoProduccionAsync(
+                            tecnicoProduccionFinalId.Value,
+                            cn,
+                            tx);
+
+                    if (string.IsNullOrWhiteSpace(
+                            tecnicoProduccionFinalNombre))
+                    {
+                        await tx.RollbackAsync();
+
+                        TempData["Error"] =
+                            "No fue posible resolver el nombre del Técnico en Producción seleccionado.";
+
+                        return RedirectToAction(
+                            nameof(Index));
+                    }
+                }
+
+                if (tecnicoProduccionFinalId.HasValue &&
+                    (
+                        tecnicoProduccionFinalId.Value ==
+                            operadorPrincipalFinalId ||
+                        tecnicoProduccionFinalId.Value ==
+                            operadorAuxiliarFinalId
+                    ))
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "El Técnico en Producción debe ser una persona distinta del operador principal y del auxiliar de producción.";
+
+                    return RedirectToAction(
+                        nameof(Index));
+                }
+
+                if (!string.IsNullOrWhiteSpace(
+                        tecnicoProduccionFinalNombre))
+                {
+                    var tecnicoNombreComparar =
+                        tecnicoProduccionFinalNombre.Trim();
+
+                    if (
+                        (
+                            !string.IsNullOrWhiteSpace(
+                                operadorPrincipalFinalNombre) &&
+                            string.Equals(
+                                tecnicoNombreComparar,
+                                operadorPrincipalFinalNombre.Trim(),
+                                StringComparison.OrdinalIgnoreCase)
+                        ) ||
+                        (
+                            !string.IsNullOrWhiteSpace(
+                                operadorAuxiliarFinalNombre) &&
+                            string.Equals(
+                                tecnicoNombreComparar,
+                                operadorAuxiliarFinalNombre.Trim(),
+                                StringComparison.OrdinalIgnoreCase)
+                        )
+                    )
+                    {
+                        await tx.RollbackAsync();
+
+                        TempData["Error"] =
+                            "El Técnico en Producción debe ser una persona distinta del operador principal y del auxiliar de producción.";
+
+                        return RedirectToAction(
+                            nameof(Index));
+                    }
+                }
 var observacionesFinales =
                     observaciones;
 
@@ -1921,6 +2036,19 @@ var observacionesFinales =
                         " Auxiliar: sin asignar.";
                 }
 
+                if (!string.IsNullOrWhiteSpace(
+                        tecnicoProduccionFinalNombre))
+                {
+                    textoOperadores +=
+                        " Técnico en Producción: " +
+                        tecnicoProduccionFinalNombre.Trim() +
+                        ".";
+                }
+                else
+                {
+                    textoOperadores +=
+                        " Técnico en Producción: sin asignar.";
+                }
                 observacionesFinales =
                     string.IsNullOrWhiteSpace(
                         observacionesFinales)
@@ -1942,6 +2070,8 @@ var observacionesFinales =
                         operadorPrincipalFinalNombre,
                         operadorAuxiliarFinalId,
                         operadorAuxiliarFinalNombre,
+                        tecnicoProduccionFinalId,
+                        tecnicoProduccionFinalNombre,
                         observacionesFinales,
                         usuarioId,
                         cn,
@@ -1975,7 +2105,7 @@ var observacionesFinales =
                     string.IsNullOrWhiteSpace(
                         operadorAuxiliarFinalNombre)
                         ? "Preparación iniciada correctamente con operador principal confirmado. Continúa con el checklist de arranque."
-                        : "Preparación iniciada correctamente con operador principal y auxiliar confirmados. Continúa con el checklist de arranque.";
+                        : "Preparación iniciada correctamente con operador principal, auxiliar de producción y responsables confirmados. Continúa con el checklist de arranque.";
 
                 return RedirectToAction(
                     nameof(Detalle),
@@ -8852,15 +8982,15 @@ SELECT
         }
 
 
-        private async Task<int> InsertarEjecucionAsync(ProgramaParaProduccion programa, int? operadorId, string? operadorNombre, int? operadorAuxiliarId, string? operadorAuxiliarNombre, string? observaciones, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        private async Task<int> InsertarEjecucionAsync(ProgramaParaProduccion programa, int? operadorId, string? operadorNombre, int? operadorAuxiliarId, string? operadorAuxiliarNombre, int? tecnicoProduccionId, string? tecnicoProduccionNombre, string? observaciones, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
 DECLARE @Ids TABLE(EjecucionProduccionID INT NOT NULL);
 INSERT INTO dbo.Produccion_Ejecucion
-(ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,MaquinaID,MaquinaCodigo,MaquinaNombre,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,MoldeID,MoldeCodigo,OperadorID,OperadorNombre,OperadorAuxiliarID,OperadorAuxiliarNombre,EsCambioMolde,FechaCambioMoldeProgramada,FechaArranqueProgramada,FechaInicioReal,CantidadPlaneada,CantidadOKTotal,CantidadSospechosaTotal,CantidadScrapTotal,EstatusID,Observaciones,UsuarioCreacionID,FechaCreacion,Activo)
+(ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,MaquinaID,MaquinaCodigo,MaquinaNombre,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,MoldeID,MoldeCodigo,OperadorID,OperadorNombre,OperadorAuxiliarID,OperadorAuxiliarNombre,TecnicoProduccionID,TecnicoProduccionNombre,EsCambioMolde,FechaCambioMoldeProgramada,FechaArranqueProgramada,FechaInicioReal,CantidadPlaneada,CantidadOKTotal,CantidadSospechosaTotal,CantidadScrapTotal,EstatusID,Observaciones,UsuarioCreacionID,FechaCreacion,Activo)
 OUTPUT INSERTED.EjecucionProduccionID INTO @Ids(EjecucionProduccionID)
 VALUES
-(@ProgramaProduccionID,@SolicitudProduccionID,@SolicitudProduccionDetalleID,@ReleaseID,@ReleaseDetalleID,@MaquinaID,@MaquinaCodigo,@MaquinaNombre,@ParteID,@NumeroParte,@ReferenciaSAP,@DescripcionParte,@MoldeID,@MoldeCodigo,@OperadorID,@OperadorNombre,@OperadorAuxiliarID,@OperadorAuxiliarNombre,@EsCambioMolde,@FechaCambioMoldeProgramada,@FechaArranqueProgramada,GETDATE(),@CantidadPlaneada,0,0,0,@EstatusID,@Observaciones,@UsuarioID,GETDATE(),1);
+(@ProgramaProduccionID,@SolicitudProduccionID,@SolicitudProduccionDetalleID,@ReleaseID,@ReleaseDetalleID,@MaquinaID,@MaquinaCodigo,@MaquinaNombre,@ParteID,@NumeroParte,@ReferenciaSAP,@DescripcionParte,@MoldeID,@MoldeCodigo,@OperadorID,@OperadorNombre,@OperadorAuxiliarID,@OperadorAuxiliarNombre,@TecnicoProduccionID,@TecnicoProduccionNombre,@EsCambioMolde,@FechaCambioMoldeProgramada,@FechaArranqueProgramada,GETDATE(),@CantidadPlaneada,0,0,0,@EstatusID,@Observaciones,@UsuarioID,GETDATE(),1);
 
 DECLARE @EjecucionProduccionID INT=(SELECT TOP(1)EjecucionProduccionID FROM @Ids);
 DECLARE @ApartadosEsperados INT=
@@ -8949,6 +9079,8 @@ SELECT @EjecucionProduccionID;";
             cmd.Parameters.Add("@OperadorNombre", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(operadorNombre) ? DBNull.Value : operadorNombre.Trim();
             cmd.Parameters.Add("@OperadorAuxiliarID", SqlDbType.Int).Value = (object?)operadorAuxiliarId ?? DBNull.Value;
             cmd.Parameters.Add("@OperadorAuxiliarNombre", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(operadorAuxiliarNombre) ? DBNull.Value : operadorAuxiliarNombre.Trim();
+            cmd.Parameters.Add("@TecnicoProduccionID", SqlDbType.Int).Value = (object?)tecnicoProduccionId ?? DBNull.Value;
+            cmd.Parameters.Add("@TecnicoProduccionNombre", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(tecnicoProduccionNombre) ? DBNull.Value : tecnicoProduccionNombre.Trim();
             cmd.Parameters.Add("@EsCambioMolde", SqlDbType.Bit).Value = programa.EsCambioMolde;
             DateTime? fechaCambioMoldeProgramada = null;
             DateTime? fechaArranqueProgramada = null;
@@ -11819,6 +11951,172 @@ END;";
             await cmd.ExecuteNonQueryAsync();
         }
 
+        // NSQ_TECNICO_PRODUCCION_PREP_V2
+        [HttpGet]
+        public async Task<IActionResult> TecnicosProduccionActivos()
+        {
+            if (!UsuarioEnSesion())
+                return Unauthorized();
+
+            var tecnicos = new List<object>();
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            const string sql = @"
+SELECT
+    p.PersonaID,
+    p.NumeroControl,
+    NULLIF(
+        LTRIM(RTRIM(
+            ISNULL(p.Nombre,N'') + N' ' +
+            ISNULL(p.ApellidoPaterno,N'') + N' ' +
+            ISNULL(p.ApellidoMaterno,N''))),
+        N''
+    ) AS NombreCompleto,
+    LTRIM(RTRIM(ISNULL(p.Puesto,N''))) AS Puesto
+FROM dbo.Persona p
+WHERE ISNULL(p.EsColaboradorActivo,0)=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+        COLLATE Latin1_General_CI_AI LIKE N'%TECN%'
+  AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+        COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%'
+ORDER BY
+    NombreCompleto,
+    p.PersonaID;";
+
+            await using var cmd =
+                new SqlCommand(sql, cn);
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                tecnicos.Add(new
+                {
+                    personaID =
+                        Convert.ToInt32(
+                            rd["PersonaID"]),
+
+                    numeroControl =
+                        rd["NumeroControl"] == DBNull.Value
+                            ? string.Empty
+                            : rd["NumeroControl"]
+                                .ToString()?
+                                .Trim()
+                              ?? string.Empty,
+
+                    nombre =
+                        rd["NombreCompleto"] == DBNull.Value
+                            ? string.Empty
+                            : rd["NombreCompleto"]
+                                .ToString()?
+                                .Trim()
+                              ?? string.Empty,
+
+                    puesto =
+                        rd["Puesto"] == DBNull.Value
+                            ? string.Empty
+                            : rd["Puesto"]
+                                .ToString()?
+                                .Trim()
+                              ?? string.Empty
+                });
+            }
+
+            return Json(new
+            {
+                ok = true,
+                tecnicos
+            });
+        }
+
+        private static async Task<bool>
+            PersonaEsTecnicoProduccionActivoAsync(
+                int personaId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            if (personaId <= 0)
+                return false;
+
+            const string sql = @"
+SELECT CASE WHEN EXISTS
+(
+    SELECT 1
+    FROM dbo.Persona p WITH(UPDLOCK,HOLDLOCK)
+    WHERE p.PersonaID=@PersonaID
+      AND ISNULL(p.EsColaboradorActivo,0)=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+            COLLATE Latin1_General_CI_AI LIKE N'%TECN%'
+      AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+            COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%'
+)
+THEN 1 ELSE 0 END;";
+
+            await using var cmd =
+                new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters
+                .Add("@PersonaID", SqlDbType.Int)
+                .Value = personaId;
+
+            return Convert.ToInt32(
+                await cmd.ExecuteScalarAsync()) == 1;
+        }
+
+        private static async Task<string?>
+            ObtenerNombreTecnicoProduccionAsync(
+                int personaId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            if (personaId <= 0)
+                return null;
+
+            const string sql = @"
+SELECT TOP (1)
+    NULLIF(
+        LTRIM(RTRIM(
+            ISNULL(p.Nombre,N'') + N' ' +
+            ISNULL(p.ApellidoPaterno,N'') + N' ' +
+            ISNULL(p.ApellidoMaterno,N''))),
+        N''
+    )
+FROM dbo.Persona p WITH(UPDLOCK,HOLDLOCK)
+WHERE p.PersonaID=@PersonaID
+  AND ISNULL(p.EsColaboradorActivo,0)=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+        COLLATE Latin1_General_CI_AI LIKE N'%TECN%'
+  AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+        COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%';";
+
+            await using var cmd =
+                new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters
+                .Add("@PersonaID", SqlDbType.Int)
+                .Value = personaId;
+
+            var resultado =
+                await cmd.ExecuteScalarAsync();
+
+            if (resultado == null ||
+                resultado == DBNull.Value)
+            {
+                return null;
+            }
+
+            var nombre =
+                resultado.ToString()?.Trim();
+
+            return string.IsNullOrWhiteSpace(nombre)
+                ? null
+                : nombre;
+        }
         private static async Task<string?> ObtenerNombrePersonaActivaProduccionAsync(int personaId, SqlConnection cn, SqlTransaction tx)
         {
             if (personaId <= 0) return null;
