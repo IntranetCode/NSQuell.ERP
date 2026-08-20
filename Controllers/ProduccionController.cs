@@ -4707,8 +4707,8 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
         }
 
         private async Task<List<ProduccionRegistroHoraVm>> ObtenerRegistrosHoraAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn)
+       int ejecucionProduccionId,
+       SqlConnection cn)
         {
             var lista = new List<ProduccionRegistroHoraVm>();
 
@@ -4723,9 +4723,14 @@ SELECT
     FechaProduccion,
     HoraInicio,
     HoraFin,
-    CantidadOK,
-    CantidadSospechosa,
-    CantidadScrap,
+    ISNULL(CantidadOK,0) AS CantidadOK,
+    ISNULL(CantidadSospechosa,0) AS CantidadSospechosa,
+    ISNULL(CantidadScrap,0) AS CantidadScrap,
+    ObjetivoHora,
+    ObjetivoBloque,
+    CumplioObjetivo,
+    DiferenciaObjetivo,
+    PorcentajeCumplimiento,
     Observaciones,
     UsuarioCreacionID,
     FechaCreacion,
@@ -4733,38 +4738,134 @@ SELECT
     FechaModificacion,
     Activo
 FROM dbo.Produccion_RegistroHora
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1
-ORDER BY FechaProduccion DESC, HoraInicio DESC;";
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+ORDER BY FechaProduccion DESC,HoraInicio DESC;";
 
             await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
                 ejecucionProduccionId;
 
-            await using var rd = await cmd.ExecuteReaderAsync();
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
 
             while (await rd.ReadAsync())
             {
                 lista.Add(new ProduccionRegistroHoraVm
                 {
-                    RegistroHoraID = Entero(rd, "RegistroHoraID"),
-                    EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
-                    ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
-                    SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
-                    MaquinaID = NullableEntero(rd, "MaquinaID"),
-                    OperadorID = NullableEntero(rd, "OperadorID"),
-                    FechaProduccion = Fecha(rd, "FechaProduccion"),
-                    HoraInicio = Tiempo(rd, "HoraInicio"),
-                    HoraFin = Tiempo(rd, "HoraFin"),
-                    CantidadOK = Entero(rd, "CantidadOK"),
-                    CantidadSospechosa = Entero(rd, "CantidadSospechosa"),
-                    CantidadScrap = Entero(rd, "CantidadScrap"),
-                    Observaciones = TextoNullable(rd, "Observaciones"),
-                    UsuarioCreacionID = NullableEntero(rd, "UsuarioCreacionID"),
-                    FechaCreacion = Fecha(rd, "FechaCreacion"),
-                    UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
-                    FechaModificacion = NullableFecha(rd, "FechaModificacion"),
-                    Activo = Booleano(rd, "Activo")
+                    RegistroHoraID =
+                        Entero(rd, "RegistroHoraID"),
+
+                    EjecucionProduccionID =
+                        Entero(rd, "EjecucionProduccionID"),
+
+                    ProgramaProduccionID =
+                        Entero(rd, "ProgramaProduccionID"),
+
+                    SolicitudProduccionID =
+                        NullableEntero(
+                            rd,
+                            "SolicitudProduccionID"),
+
+                    MaquinaID =
+                        NullableEntero(
+                            rd,
+                            "MaquinaID"),
+
+                    OperadorID =
+                        NullableEntero(
+                            rd,
+                            "OperadorID"),
+
+                    FechaProduccion =
+                        Fecha(
+                            rd,
+                            "FechaProduccion"),
+
+                    HoraInicio =
+                        Tiempo(
+                            rd,
+                            "HoraInicio"),
+
+                    HoraFin =
+                        Tiempo(
+                            rd,
+                            "HoraFin"),
+
+                    CantidadOK =
+                        Entero(
+                            rd,
+                            "CantidadOK"),
+
+                    CantidadSospechosa =
+                        Entero(
+                            rd,
+                            "CantidadSospechosa"),
+
+                    CantidadScrap =
+                        Entero(
+                            rd,
+                            "CantidadScrap"),
+
+                    ObjetivoHora =
+                        NullableEntero(
+                            rd,
+                            "ObjetivoHora"),
+
+                    ObjetivoBloque =
+                        NullableEntero(
+                            rd,
+                            "ObjetivoBloque"),
+
+                    CumplioObjetivo =
+                        rd["CumplioObjetivo"] == DBNull.Value
+                            ? null
+                            : Convert.ToBoolean(
+                                rd["CumplioObjetivo"]),
+
+                    DiferenciaObjetivo =
+                        NullableEntero(
+                            rd,
+                            "DiferenciaObjetivo"),
+
+                    PorcentajeCumplimiento =
+                        rd["PorcentajeCumplimiento"] == DBNull.Value
+                            ? null
+                            : Convert.ToDecimal(
+                                rd["PorcentajeCumplimiento"]),
+
+                    Observaciones =
+                        TextoNullable(
+                            rd,
+                            "Observaciones"),
+
+                    UsuarioCreacionID =
+                        NullableEntero(
+                            rd,
+                            "UsuarioCreacionID"),
+
+                    FechaCreacion =
+                        Fecha(
+                            rd,
+                            "FechaCreacion"),
+
+                    UsuarioModificacionID =
+                        NullableEntero(
+                            rd,
+                            "UsuarioModificacionID"),
+
+                    FechaModificacion =
+                        NullableFecha(
+                            rd,
+                            "FechaModificacion"),
+
+                    Activo =
+                        Booleano(
+                            rd,
+                            "Activo")
                 });
             }
 

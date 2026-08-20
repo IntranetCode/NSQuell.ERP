@@ -832,6 +832,14 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? Observaciones { get; set; }
     }
 
+    public sealed class CalidadCajaEscaneoViewModel
+    {
+        [Required]
+        [StringLength(500)]
+        public string CodigoBarras { get; set; } = string.Empty;
+
+        public int? InspeccionID { get; set; }
+    }
     public class CalidadCajaGuardarViewModel
     {
         [Range(1, int.MaxValue)]
@@ -1149,6 +1157,23 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? NumeroParte { get; set; }
         public string? Maquina { get; set; }
         public string? Molde { get; set; }
+
+        public string? CodigoBarrasOrigen { get; set; }
+        public string? NumeroOFEtiqueta { get; set; }
+        public string? NumeroParteEtiqueta { get; set; }
+        public int? CantidadEtiqueta { get; set; }
+
+        public DateTime? FechaEscaneoProduccion { get; set; }
+        public DateTime? FechaEscaneoCalidad { get; set; }
+
+        public int? UsuarioEscaneoCalidadID { get; set; }
+
+        public bool RecibidaFisicamente =>
+            FechaEscaneoCalidad.HasValue;
+
+        public bool PendienteRecepcionFisica =>
+            EstadoCajaID == ProduccionCajaEstatus.PendienteCalidad &&
+            !FechaEscaneoCalidad.HasValue;
 
         public bool EstaPendiente => EstadoCajaID == 2;
         public bool EsLiberada =>

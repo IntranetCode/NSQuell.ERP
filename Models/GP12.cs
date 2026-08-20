@@ -846,13 +846,15 @@ namespace ERP.NSQuell.Models
         }
     }
 
+    public sealed class GP12RecepcionEscaneoViewModel
+    {
+        [Range(1, int.MaxValue)]
+        public int SolicitudGP12ID { get; set; }
 
-    // ============================================================
-    // FORMULARIO MANUAL LEGACY
-    // Se conserva por compatibilidad con helpers del controller
-    // actual. Ya no es la pantalla principal de Crear.
-    // ============================================================
-
+        [Required(ErrorMessage = "Escanea la etiqueta física de la caja.")]
+        [StringLength(500)]
+        public string CodigoBarras { get; set; } = string.Empty;
+    }
     public class GP12SolicitudManualViewModel
     {
         [StringLength(100)]

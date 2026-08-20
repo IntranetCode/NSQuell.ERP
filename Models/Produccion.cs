@@ -2059,6 +2059,11 @@ public sealed class ProduccionOperadorCajasVm
         }
     }
 
+    public sealed class ProduccionEscanearCajaPostVm
+    {
+        public int EjecucionProduccionID { get; set; }
+        public string CodigoBarras { get; set; } = string.Empty;
+    }
     public int CantidadOKDisponible =>
         Math.Max(0, CantidadOKTotal - CantidadOKEnCajas);
 
