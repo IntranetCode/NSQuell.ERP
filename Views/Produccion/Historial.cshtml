@@ -1,0 +1,600 @@
+﻿@model ERP.NSQuell.Models.ProduccionHistorialVm
+@using ERP.NSQuell.Models
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Historial de Producción";
+
+    var producciones = Model?.Producciones ?? new List<ProduccionHistorialEjecucionVm>();
+    var busqueda = Model?.Busqueda ?? string.Empty;
+    var fechaDesde = Model?.FechaDesde?.ToString("yyyy-MM-dd") ?? string.Empty;
+    var fechaHasta = Model?.FechaHasta?.ToString("yyyy-MM-dd") ?? string.Empty;
+}
+
+@section Styles {
+    <style>
+        .prod-history {
+            --ph-bg: #f4f7fb;
+            --ph-card: #ffffff;
+            --ph-text: #13213c;
+            --ph-muted: #667085;
+            --ph-border: #dde5ef;
+            --ph-soft: #f8faff;
+            --ph-blue: #0d6efd;
+            --ph-green: #067647;
+            --ph-red: #b42318;
+            --ph-orange: #b54708;
+            color: var(--ph-text);
+        }
+
+            .prod-history .ph-shell {
+                max-width: 1600px;
+                margin: 0 auto;
+                padding: 18px;
+            }
+
+            .prod-history .ph-hero {
+                border-radius: 22px;
+                padding: 22px;
+                color: #fff;
+                background: linear-gradient(135deg, #0b2a55 0%, #0d6efd 100%);
+                box-shadow: 0 14px 35px rgba(13, 110, 253, .18);
+                margin-bottom: 18px;
+            }
+
+                .prod-history .ph-hero h1 {
+                    margin: 0;
+                    font-size: clamp(1.35rem, 2vw, 2rem);
+                    font-weight: 900;
+                }
+
+                .prod-history .ph-hero p {
+                    margin: 6px 0 0;
+                    opacity: .86;
+                    font-weight: 650;
+                }
+
+            .prod-history .ph-hero-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .prod-history .ph-hero-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                border-radius: 12px;
+                padding: 9px 13px;
+                color: #fff;
+                text-decoration: none;
+                font-weight: 850;
+                border: 1px solid rgba(255,255,255,.30);
+                background: rgba(255,255,255,.12);
+            }
+
+            .prod-history .ph-kpis {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
+                margin-bottom: 18px;
+            }
+
+            .prod-history .ph-kpi,
+            .prod-history .ph-panel {
+                background: var(--ph-card);
+                border: 1px solid var(--ph-border);
+                border-radius: 17px;
+                box-shadow: 0 8px 22px rgba(16, 36, 70, .06);
+            }
+
+            .prod-history .ph-kpi {
+                padding: 16px;
+            }
+
+            .prod-history .ph-kpi-label {
+                color: var(--ph-muted);
+                font-size: .76rem;
+                font-weight: 850;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+            }
+
+            .prod-history .ph-kpi-value {
+                margin-top: 3px;
+                font-size: 1.65rem;
+                font-weight: 950;
+                color: var(--ph-text);
+            }
+
+            .prod-history .ph-panel {
+                overflow: hidden;
+                margin-bottom: 18px;
+            }
+
+            .prod-history .ph-panel-head {
+                padding: 14px 16px;
+                background: var(--ph-soft);
+                border-bottom: 1px solid var(--ph-border);
+                font-weight: 900;
+            }
+
+            .prod-history .ph-panel-body {
+                padding: 16px;
+            }
+
+            .prod-history .form-label {
+                font-size: .76rem;
+                font-weight: 850;
+                color: var(--ph-muted);
+                margin-bottom: 5px;
+            }
+
+            .prod-history .form-control {
+                min-height: 44px;
+                border-radius: 11px;
+                border-color: var(--ph-border);
+            }
+
+            .prod-history .ph-filter-actions {
+                display: flex;
+                gap: 8px;
+                align-items: end;
+                height: 100%;
+            }
+
+                .prod-history .ph-filter-actions .btn {
+                    min-height: 44px;
+                    border-radius: 11px;
+                    font-weight: 850;
+                }
+
+            .prod-history .ph-table-wrap {
+                overflow-x: auto;
+            }
+
+            .prod-history .ph-table {
+                min-width: 1220px;
+                margin: 0;
+                vertical-align: middle;
+            }
+
+                .prod-history .ph-table thead th {
+                    background: #f8fafc;
+                    color: #475467;
+                    border-bottom: 1px solid var(--ph-border);
+                    font-size: .72rem;
+                    text-transform: uppercase;
+                    letter-spacing: .03em;
+                    white-space: nowrap;
+                    padding: 12px 10px;
+                }
+
+                .prod-history .ph-table tbody td {
+                    padding: 12px 10px;
+                    border-color: #edf1f6;
+                }
+
+            .prod-history .ph-main {
+                font-weight: 900;
+                color: var(--ph-text);
+            }
+
+            .prod-history .ph-sub {
+                margin-top: 2px;
+                color: var(--ph-muted);
+                font-size: .76rem;
+                font-weight: 650;
+            }
+
+            .prod-history .ph-number {
+                font-weight: 900;
+                white-space: nowrap;
+            }
+
+            .prod-history .ph-ok {
+                color: var(--ph-green);
+            }
+
+            .prod-history .ph-bad {
+                color: var(--ph-red);
+            }
+
+            .prod-history .ph-progress {
+                min-width: 125px;
+            }
+
+            .prod-history .ph-progress-track {
+                height: 7px;
+                border-radius: 999px;
+                background: #e9eef5;
+                overflow: hidden;
+                margin-top: 5px;
+            }
+
+            .prod-history .ph-progress-fill {
+                height: 100%;
+                border-radius: inherit;
+                background: var(--ph-blue);
+            }
+
+            .prod-history .ph-view {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                border-radius: 10px;
+                padding: 8px 11px;
+                background: #edf4ff;
+                color: #175cd3;
+                text-decoration: none;
+                font-weight: 850;
+                white-space: nowrap;
+            }
+
+            .prod-history .ph-empty {
+                padding: 48px 20px;
+                text-align: center;
+                color: var(--ph-muted);
+            }
+
+                .prod-history .ph-empty i {
+                    font-size: 2rem;
+                    margin-bottom: 10px;
+                }
+
+            .prod-history .ph-mobile {
+                display: none;
+            }
+
+            .prod-history .ph-card {
+                border: 1px solid var(--ph-border);
+                border-radius: 15px;
+                background: var(--ph-card);
+                padding: 14px;
+                margin-bottom: 10px;
+            }
+
+            .prod-history .ph-card-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin-top: 12px;
+            }
+
+            .prod-history .ph-card-data span {
+                display: block;
+                color: var(--ph-muted);
+                font-size: .69rem;
+                font-weight: 800;
+                text-transform: uppercase;
+            }
+
+            .prod-history .ph-card-data strong {
+                display: block;
+                margin-top: 2px;
+                color: var(--ph-text);
+            }
+
+        html[data-nsq-theme="dark"] .prod-history {
+            --ph-bg: #0b1422;
+            --ph-card: #111c2d;
+            --ph-text: #edf3fb;
+            --ph-muted: #9aabc1;
+            --ph-border: #2a3b51;
+            --ph-soft: #0d1828;
+        }
+
+            html[data-nsq-theme="dark"] .prod-history .ph-table thead th {
+                background: #0d1828;
+                color: #aebed1;
+            }
+
+            html[data-nsq-theme="dark"] .prod-history .ph-table tbody td {
+                color: #e8eef7;
+                border-color: #26374d;
+            }
+
+            html[data-nsq-theme="dark"] .prod-history .form-control {
+                background: #0b1422;
+                border-color: #354961;
+                color: #f8fafc;
+            }
+
+            html[data-nsq-theme="dark"] .prod-history .ph-view {
+                background: #17345c;
+                color: #9dcaff;
+            }
+
+            html[data-nsq-theme="dark"] .prod-history .ph-progress-track {
+                background: #26374d;
+            }
+
+        @@media (max-width: 980px) {
+            .prod-history .ph-kpis {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .prod-history .ph-desktop {
+                display: none;
+            }
+
+            .prod-history .ph-mobile {
+                display: block;
+            }
+        }
+
+        @@media (max-width: 620px) {
+            .prod-history .ph-shell {
+                padding: 10px;
+            }
+
+            .prod-history .ph-hero {
+                padding: 17px;
+                border-radius: 18px;
+            }
+
+            .prod-history .ph-kpis {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .prod-history .ph-kpi {
+                padding: 12px;
+            }
+
+            .prod-history .ph-kpi-value {
+                font-size: 1.35rem;
+            }
+
+            .prod-history .ph-card-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .prod-history .ph-filter-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+}
+
+<div class="prod-history">
+    <div class="ph-shell">
+
+        <section class="ph-hero">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div>
+                    <h1><i class="bi bi-clock-history me-2"></i>Historial de Producción</h1>
+                    <p>Consulta ejecuciones terminadas, listas para cierre documental y cerradas.</p>
+                </div>
+
+                <div class="ph-hero-actions">
+                    <a class="ph-hero-btn" href="@Url.Action("Index", "Produccion")">
+                        <i class="bi bi-arrow-left"></i>
+                        Producción
+                    </a>
+
+                    <a class="ph-hero-btn" href="@Url.Action("Historial", "Produccion")">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        Actualizar
+                    </a>
+                </div>
+            </div>
+        </section>
+
+       
+        <section class="ph-panel">
+            <div class="ph-panel-head">
+                <i class="bi bi-funnel me-1"></i>
+                Filtros
+            </div>
+
+            <div class="ph-panel-body">
+                <form method="get" action="@Url.Action("Historial", "Produccion")">
+                    <div class="row g-3">
+                        <div class="col-lg-5">
+                            <label class="form-label">Buscar</label>
+                            <input type="text"
+                                   name="busqueda"
+                                   value="@busqueda"
+                                   class="form-control"
+                                   placeholder="Máquina, parte, SAP, operador, programa o ejecución" />
+                        </div>
+
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label">Desde</label>
+                            <input type="date"
+                                   name="fechaDesde"
+                                   value="@fechaDesde"
+                                   class="form-control" />
+                        </div>
+
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label">Hasta</label>
+                            <input type="date"
+                                   name="fechaHasta"
+                                   value="@fechaHasta"
+                                   class="form-control" />
+                        </div>
+
+                        <div class="col-lg-3 col-md-4">
+                            <div class="ph-filter-actions">
+                                <button type="submit" class="btn btn-primary flex-fill">
+                                    <i class="bi bi-search me-1"></i>
+                                    Buscar
+                                </button>
+
+                                <a href="@Url.Action("Historial", "Produccion")"
+                                   class="btn btn-outline-secondary flex-fill">
+                                    Limpiar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="ph-panel">
+            <div class="ph-panel-head d-flex justify-content-between align-items-center gap-2">
+                <span>
+                    <i class="bi bi-archive me-1"></i>
+                    Ejecuciones históricas
+                </span>
+                <span class="badge bg-secondary">@producciones.Count registro(s)</span>
+            </div>
+
+            @if (!producciones.Any())
+            {
+                <div class="ph-empty">
+                    <i class="bi bi-inbox d-block"></i>
+                    <strong>No se encontraron ejecuciones históricas.</strong>
+                    <div class="mt-1">Prueba cambiando los filtros de búsqueda o fechas.</div>
+                </div>
+            }
+            else
+            {
+                <div class="ph-desktop ph-table-wrap">
+                    <table class="table ph-table">
+                        <thead>
+                            <tr>
+                                <th>Ejecución</th>
+                                <th>Parte / Máquina</th>
+                                <th>Periodo</th>
+                                <th>Estado</th>
+                                <th>Planeado</th>
+                                <th>OK</th>
+                                <th>Sosp.</th>
+                                <th>Scrap</th>
+                                <th>Objetivo</th>
+                                <th>Cumplimiento</th>
+                                <th>Eventos</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in producciones)
+                            {
+                                var porcentaje = item.PorcentajeCumplimiento;
+                                var porcentajeBarra = Math.Max(0m, Math.Min(100m, porcentaje));
+
+                                <tr>
+                                    <td>
+                                        <div class="ph-main">EJ-@item.EjecucionProduccionID</div>
+                                        <div class="ph-sub">Programa @item.ProgramaProduccionID</div>
+                                        @if (!string.IsNullOrWhiteSpace(item.OperadorPrincipalNombre))
+                                        {
+                                            <div class="ph-sub">@item.OperadorPrincipalNombre</div>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        <div class="ph-main">@item.TextoParte</div>
+                                        <div class="ph-sub">@item.TextoMaquina</div>
+                                        @if (!string.IsNullOrWhiteSpace(item.DescripcionParte))
+                                        {
+                                            <div class="ph-sub">@item.DescripcionParte</div>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        <div class="ph-main">
+                                            @(item.FechaInicioReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                        </div>
+                                        <div class="ph-sub">
+                                            Fin: @(item.FechaFinReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="badge @item.EstatusClase">@item.EstatusNombre</span>
+                                    </td>
+
+                                    <td class="ph-number">@item.CantidadPlaneada.ToString("N0")</td>
+                                    <td class="ph-number ph-ok">@item.CantidadOK.ToString("N0")</td>
+                                    <td class="ph-number">@item.CantidadSospechosa.ToString("N0")</td>
+                                    <td class="ph-number ph-bad">@item.CantidadScrap.ToString("N0")</td>
+
+                                    <td>
+                                        <div class="ph-number">@item.ObjetivoAcumulado.ToString("N0")</div>
+                                        <div class="ph-sub">@item.HorasCapturadas bloque(s)</div>
+                                    </td>
+
+                                    <td>
+                                        <div class="ph-progress">
+                                            <div class="ph-main">@porcentaje.ToString("0.#")%</div>
+                                            <div class="ph-progress-track">
+                                                <div class="ph-progress-fill" style="width:@porcentajeBarra.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div class="ph-sub">@item.TotalCambiosTurno cambio(s) turno</div>
+                                        <div class="ph-sub">@item.TotalParos paro(s)</div>
+                                    </td>
+
+                                    <td>
+                                        <a class="ph-view"
+                                           href="@Url.Action("Detalle", "Produccion", new { id = item.EjecucionProduccionID })">
+                                            <i class="bi bi-eye"></i>
+                                            Ver detalle
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="ph-mobile p-2">
+                    @foreach (var item in producciones)
+                    {
+                        <article class="ph-card">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <div>
+                                    <div class="ph-main">@item.TextoParte</div>
+                                    <div class="ph-sub">@item.TextoMaquina</div>
+                                    <div class="ph-sub">EJ-@item.EjecucionProduccionID · Programa @item.ProgramaProduccionID</div>
+                                </div>
+                                <span class="badge @item.EstatusClase">@item.EstatusNombre</span>
+                            </div>
+
+                            <div class="ph-card-grid">
+                                <div class="ph-card-data">
+                                    <span>Periodo</span>
+                                    <strong>@(item.FechaInicioReal?.ToString("dd/MM HH:mm") ?? "-")</strong>
+                                    <div class="ph-sub">a @(item.FechaFinReal?.ToString("dd/MM HH:mm") ?? "-")</div>
+                                </div>
+
+                                <div class="ph-card-data">
+                                    <span>Producción</span>
+                                    <strong class="ph-ok">@item.CantidadOK.ToString("N0") OK</strong>
+                                    <div class="ph-sub">@item.CantidadSospechosa.ToString("N0") sosp. · @item.CantidadScrap.ToString("N0") scrap</div>
+                                </div>
+
+                                <div class="ph-card-data">
+                                    <span>Objetivo acumulado</span>
+                                    <strong>@item.ObjetivoAcumulado.ToString("N0")</strong>
+                                    <div class="ph-sub">@item.PorcentajeCumplimiento.ToString("0.#")%</div>
+                                </div>
+
+                                <div class="ph-card-data">
+                                    <span>Eventos</span>
+                                    <strong>@item.TotalCambiosTurno cambio(s)</strong>
+                                    <div class="ph-sub">@item.TotalParos paro(s)</div>
+                                </div>
+                            </div>
+
+                            <a class="ph-view w-100 mt-3"
+                               href="@Url.Action("Detalle", "Produccion", new { id = item.EjecucionProduccionID })">
+                                <i class="bi bi-eye"></i>
+                                Ver detalle completo
+                            </a>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+</div>

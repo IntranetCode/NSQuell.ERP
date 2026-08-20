@@ -156,6 +156,12 @@ namespace ERP.NSQuell.Controllers
                     TempData["Error"] = "Solo puedes capturar piezas cuando la producción está en serie.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+                if (ejecucion.FechaLiberacionMaquina.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La máquina fue liberada por el técnico el {ejecucion.FechaLiberacionMaquina.Value:dd/MM/yyyy HH:mm}. Ya no se pueden registrar nuevas horas de producción.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
                 if (await TieneParoAbiertoAsync(vm.EjecucionProduccionID, cn, tx))
                 {
                     await tx.RollbackAsync();
@@ -223,7 +229,8 @@ namespace ERP.NSQuell.Controllers
                 await RecalcularTotalesEjecucionAsync(vm.EjecucionProduccionID, usuarioId, cn, tx);
                 await tx.CommitAsync();
                 var mensaje = ConstruirMensajeCumplimientoHora(filaSolicitada, vm.CantidadOK);
-                if (vm.CantidadSospechosa > 0 || vm.CantidadScrap > 0) mensaje += " El material sospechoso o scrap reportado quedó pendiente de revisión de Calidad.";
+                if (vm.CantidadSospechosa > 0 || vm.CantidadScrap > 0)
+                    mensaje += " El material sospechoso o scrap reportado quedó pendiente de revisión de Calidad.";
                 TempData["Success"] = mensaje;
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
@@ -280,6 +287,12 @@ namespace ERP.NSQuell.Controllers
                     TempData["Error"] =
                         "Solo puedes reportar paro cuando la producción está en serie.";
 
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+                if (ejecucion.FechaLiberacionMaquina.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La máquina ya fue liberada por el técnico. No se pueden registrar nuevos paros sobre esta corrida.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
 
@@ -788,7 +801,11 @@ VALUES
                     cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones.Trim();
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
                     cmd.Parameters.Add("@EtiquetaCompatibilidad", SqlDbType.NVarChar, 100).Value = folioCaja;
-                    cmd.Parameters.Add("@EstatusCalidad", SqlDbType.NVarChar, 50).Value = esIncompleta ? "PRODUCTO_INCOMPLETO" : "FORMADA";
+                    cmd.Parameters.Add(
+     "@EstatusCalidad",
+     SqlDbType.NVarChar,
+     50).Value =
+     "FORMADA";
                     cmd.Parameters.Add("@EsProductoIncompleto", SqlDbType.Bit).Value = esIncompleta;
                     cmd.Parameters.Add("@EstadoProductoIncompleto", SqlDbType.NVarChar, 30).Value = esIncompleta ? ProduccionProductoIncompletoEstado.Disponible : DBNull.Value;
                     cmd.Parameters.Add("@CapacidadObjetivoCaja", SqlDbType.Int).Value = esIncompleta ? capacidadCaja : DBNull.Value;
@@ -2774,65 +2791,24 @@ WHERE e.EjecucionProduccionID =
                 : string.Join(" - ", partes);
         }
 
-        private async Task<ProduccionEjecucionVm?> ObtenerEjecucionOperadorAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task<ProduccionEjecucionVm?> ObtenerEjecucionOperadorAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
 SELECT
-    EjecucionProduccionID,
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    SolicitudProduccionDetalleID,
-    ReleaseID,
-    ReleaseDetalleID,
-
-    MaquinaID,
-    MaquinaCodigo,
-    MaquinaNombre,
-
-    ParteID,
-    NumeroParte,
-    ReferenciaSAP,
-    DescripcionParte,
-
-    MoldeID,
-    MoldeCodigo,
-
-    OperadorID,
-    OperadorNombre,
-
-    FechaInicioReal,
-    FechaFinReal,
-
-    CantidadPlaneada,
-    CantidadOKTotal,
-    CantidadSospechosaTotal,
-    CantidadScrapTotal,
-
-    EstatusID,
-    Observaciones,
-
-    UsuarioCreacionID,
-    FechaCreacion,
-    UsuarioModificacionID,
-    FechaModificacion,
-    Activo
+    EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,
+    MaquinaID,MaquinaCodigo,MaquinaNombre,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,MoldeID,MoldeCodigo,
+    OperadorID,OperadorNombre,FechaInicioReal,FechaFinReal,
+    FechaLiberacionMaquina,UsuarioLiberacionMaquinaID,ObservacionesLiberacionMaquina,
+    CantidadPlaneada,CantidadOKTotal,CantidadSospechosaTotal,CantidadScrapTotal,
+    EstatusID,Observaciones,UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion,Activo
 FROM dbo.Produccion_Ejecucion
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1;";
-
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1;";
             await using var cmd = new SqlCommand(sql, cn, tx);
-
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                ejecucionProduccionId;
-
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
             await using var rd = await cmd.ExecuteReaderAsync();
-
             if (!await rd.ReadAsync())
                 return null;
-
             return new ProduccionEjecucionVm
             {
                 EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
@@ -2841,33 +2817,28 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
                 SolicitudProduccionDetalleID = NullableEntero(rd, "SolicitudProduccionDetalleID"),
                 ReleaseID = NullableEntero(rd, "ReleaseID"),
                 ReleaseDetalleID = NullableEntero(rd, "ReleaseDetalleID"),
-
                 MaquinaID = NullableEntero(rd, "MaquinaID"),
                 MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
                 MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
-
                 ParteID = NullableEntero(rd, "ParteID"),
                 NumeroParte = TextoNullable(rd, "NumeroParte"),
                 ReferenciaSAP = TextoNullable(rd, "ReferenciaSAP"),
                 DescripcionParte = TextoNullable(rd, "DescripcionParte"),
-
                 MoldeID = NullableEntero(rd, "MoldeID"),
                 MoldeCodigo = TextoNullable(rd, "MoldeCodigo"),
-
                 OperadorID = NullableEntero(rd, "OperadorID"),
                 OperadorNombre = TextoNullable(rd, "OperadorNombre"),
-
                 FechaInicioReal = NullableFecha(rd, "FechaInicioReal"),
                 FechaFinReal = NullableFecha(rd, "FechaFinReal"),
-
+                FechaLiberacionMaquina = NullableFecha(rd, "FechaLiberacionMaquina"),
+                UsuarioLiberacionMaquinaID = NullableEntero(rd, "UsuarioLiberacionMaquinaID"),
+                ObservacionesLiberacionMaquina = TextoNullable(rd, "ObservacionesLiberacionMaquina"),
                 CantidadPlaneada = NullableEntero(rd, "CantidadPlaneada"),
                 CantidadOKTotal = Entero(rd, "CantidadOKTotal"),
                 CantidadSospechosaTotal = Entero(rd, "CantidadSospechosaTotal"),
                 CantidadScrapTotal = Entero(rd, "CantidadScrapTotal"),
-
                 EstatusID = Entero(rd, "EstatusID"),
                 Observaciones = TextoNullable(rd, "Observaciones"),
-
                 UsuarioCreacionID = NullableEntero(rd, "UsuarioCreacionID"),
                 FechaCreacion = Fecha(rd, "FechaCreacion"),
                 UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
@@ -2875,7 +2846,6 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
                 Activo = Booleano(rd, "Activo")
             };
         }
-
         private async Task<int> InsertarRegistroHoraAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int operadorPersonaId, int usuarioId, int? objetivoHora, int? objetivoBloque, SqlConnection cn, SqlTransaction tx)
         {
             bool? cumplioObjetivo = null;
@@ -3784,7 +3754,7 @@ WHERE u.UsuarioID = @UsuarioID
         private async Task<ProduccionCambioTurnoResumenVm?> ConstruirResumenCambioTurnoAsync(int ejecucionProduccionId, int personaSalienteId, SqlConnection cn, SqlTransaction? tx = null)
         {
             const string sql = @"
-SELECT TOP (1)
+SELECT TOP(1)
     e.EjecucionProduccionID,
     e.ProgramaProduccionID,
     e.MaquinaID,
@@ -3806,7 +3776,7 @@ SELECT TOP (1)
 FROM dbo.Produccion_Ejecucion e
 OUTER APPLY
 (
-    SELECT TOP (1)
+    SELECT TOP(1)
         rh.RegistroHoraID,
         rh.FechaProduccion,
         rh.HoraInicio,
@@ -3879,13 +3849,38 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
             vm.EscalaEncontrada = candidatos.EscalaEncontrada;
             vm.EscalaFolio = candidatos.EscalaFolio;
             vm.Operadores = candidatos.Operadores;
-            var sugerido = vm.Operadores.Where(x => x.EnEscala).OrderBy(x => x.MinutosParaInicio ?? int.MaxValue).ThenByDescending(x => x.Nivel ?? 0).FirstOrDefault();
-            if (sugerido != null)
+            var sugerenciaTecnico = await ObtenerSugerenciaTecnicoCambioTurnoAsync(ejecucionProduccionId, cn, tx);
+            var sugeridoTecnico = sugerenciaTecnico == null
+                ? null
+                : vm.Operadores.FirstOrDefault(x => x.PersonaID == sugerenciaTecnico.OperadorSugeridoID);
+            if (sugerenciaTecnico != null && sugeridoTecnico != null)
             {
-                sugerido.EsSugerido = true;
-                vm.OperadorSugeridoID = sugerido.PersonaID;
-                vm.OperadorSugeridoNombre = sugerido.Nombre;
-                vm.TurnoSugeridoNombre = sugerido.TurnoNombre;
+                sugeridoTecnico.EsSugerido = true;
+                vm.OperadorSugeridoID = sugeridoTecnico.PersonaID;
+                vm.OperadorSugeridoNombre = sugeridoTecnico.Nombre;
+                vm.TurnoSugeridoNombre = sugeridoTecnico.TurnoNombre;
+                vm.SugeridoPorTecnico = true;
+                vm.CambioTurnoSugerenciaID = sugerenciaTecnico.CambioTurnoSugerenciaID;
+                vm.UsuarioTecnicoSugerenciaID = sugerenciaTecnico.UsuarioTecnicoID;
+                vm.TecnicoSugerenciaNombre = sugerenciaTecnico.TecnicoNombre;
+                vm.FechaSugerenciaTecnico = sugerenciaTecnico.FechaSugerencia;
+                vm.ObservacionesSugerenciaTecnico = sugerenciaTecnico.Observaciones;
+            }
+            else
+            {
+                var sugeridoEscala = vm.Operadores
+                    .Where(x => x.EnEscala)
+                    .OrderBy(x => x.MinutosParaInicio ?? int.MaxValue)
+                    .ThenByDescending(x => x.Nivel ?? 0)
+                    .FirstOrDefault();
+                if (sugeridoEscala != null)
+                {
+                    sugeridoEscala.EsSugerido = true;
+                    vm.OperadorSugeridoID = sugeridoEscala.PersonaID;
+                    vm.OperadorSugeridoNombre = sugeridoEscala.Nombre;
+                    vm.TurnoSugeridoNombre = sugeridoEscala.TurnoNombre;
+                    vm.SugeridoPorTecnico = false;
+                }
             }
             if (vm.OperadorSalienteID != personaSalienteId)
             {
@@ -4167,9 +4162,19 @@ ORDER BY EnEscala DESC,MinutosParaInicio,Nombre;";
                         : "El operador seleccionado no se encuentra activo o no pertenece al catálogo de operadores.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-                var origen = resumen.OperadorSugeridoID == operadorEntrante.PersonaID && operadorEntrante.EnEscala
-                    ? ProduccionCambioTurnoOrigen.Escala
-                    : ProduccionCambioTurnoOrigen.Manual;
+                string origen;
+                if (resumen.SugeridoPorTecnico && resumen.OperadorSugeridoID == operadorEntrante.PersonaID)
+                {
+                    origen = ProduccionCambioTurnoOrigen.Tecnico;
+                }
+                else if (!resumen.SugeridoPorTecnico && resumen.OperadorSugeridoID == operadorEntrante.PersonaID && operadorEntrante.EnEscala)
+                {
+                    origen = ProduccionCambioTurnoOrigen.Escala;
+                }
+                else
+                {
+                    origen = ProduccionCambioTurnoOrigen.Manual;
+                }
                 const string sqlInsert = @"
 INSERT INTO dbo.Produccion_CambiosTurno
 (
@@ -4241,7 +4246,9 @@ VALUES
                     cmd.Parameters.Add("@TurnoEntranteID", SqlDbType.Int).Value = (object?)operadorEntrante.TurnoID ?? DBNull.Value;
                     cmd.Parameters.Add("@TurnoEntranteNombre", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(operadorEntrante.TurnoNombre) ? DBNull.Value : operadorEntrante.TurnoNombre;
                     cmd.Parameters.Add("@OrigenOperadorEntrante", SqlDbType.NVarChar, 20).Value = origen;
-                    cambioTurnoId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                    var resultado = await cmd.ExecuteScalarAsync();
+                    if (resultado == null || resultado == DBNull.Value) throw new InvalidOperationException("No fue posible recuperar el identificador del cambio de turno.");
+                    cambioTurnoId = Convert.ToInt32(resultado);
                 }
                 const string sqlCajas = @"
 INSERT INTO dbo.Produccion_CambioTurnoCajas
@@ -4277,8 +4284,50 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
                     cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = resumen.EjecucionProduccionID;
                     await cmd.ExecuteNonQueryAsync();
                 }
+                if (resumen.CambioTurnoSugerenciaID.HasValue && resumen.CambioTurnoSugerenciaID.Value > 0)
+                {
+                    if (origen == ProduccionCambioTurnoOrigen.Tecnico)
+                    {
+                        const string sqlSugerenciaUsada = @"
+UPDATE dbo.Produccion_CambioTurnoSugerencias
+SET Utilizada=1,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE CambioTurnoSugerenciaID=@CambioTurnoSugerenciaID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND ISNULL(Utilizada,0)=0;";
+                        await using var cmd = new SqlCommand(sqlSugerenciaUsada, cn, tx);
+                        cmd.Parameters.Add("@CambioTurnoSugerenciaID", SqlDbType.Int).Value = resumen.CambioTurnoSugerenciaID.Value;
+                        cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = resumen.EjecucionProduccionID;
+                        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                    else
+                    {
+                        const string sqlSugerenciaDescartada = @"
+UPDATE dbo.Produccion_CambioTurnoSugerencias
+SET Activo=0,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE CambioTurnoSugerenciaID=@CambioTurnoSugerenciaID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND ISNULL(Utilizada,0)=0;";
+                        await using var cmd = new SqlCommand(sqlSugerenciaDescartada, cn, tx);
+                        cmd.Parameters.Add("@CambioTurnoSugerenciaID", SqlDbType.Int).Value = resumen.CambioTurnoSugerenciaID.Value;
+                        cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = resumen.EjecucionProduccionID;
+                        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                }
                 await tx.CommitAsync();
-                TempData["Success"] = $"Turno enviado a {operadorEntrante.Nombre}. Está pendiente de que el operador confirme la recepción.";
+                TempData["Success"] = origen switch
+                {
+                    ProduccionCambioTurnoOrigen.Tecnico => $"Turno enviado a {operadorEntrante.Nombre}, respetando la sugerencia del técnico. Está pendiente de confirmación del operador entrante.",
+                    ProduccionCambioTurnoOrigen.Escala => $"Turno enviado a {operadorEntrante.Nombre}, usando la sugerencia de escala. Está pendiente de confirmación del operador entrante.",
+                    _ => $"Turno enviado a {operadorEntrante.Nombre}. El operador saliente modificó la sugerencia y la entrega quedó pendiente de confirmación."
+                };
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
@@ -4288,6 +4337,864 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> Historial(
+    string? busqueda,
+    DateTime? fechaDesde,
+    DateTime? fechaHasta)
+        {
+            if (!UsuarioEnSesion())
+                return RedirectToAction(
+                    "Login",
+                    "Login");
+
+            await using var cn =
+                new SqlConnection(
+                    ConnectionString);
+
+            await cn.OpenAsync();
+
+            var usuarioId =
+                ObtenerUsuarioID();
+
+            if (!await UsuarioEsOperadorAsync(
+                usuarioId,
+                cn))
+            {
+                return AccesoDenegadoOperador();
+            }
+
+            var personaId =
+                await ObtenerPersonaIDUsuarioAsync(
+                    usuarioId,
+                    cn);
+
+            if (!personaId.HasValue ||
+                personaId.Value <= 0)
+            {
+                return AccesoDenegadoOperador();
+            }
+
+            busqueda =
+                string.IsNullOrWhiteSpace(
+                    busqueda)
+                    ? null
+                    : busqueda.Trim();
+
+            if (fechaDesde.HasValue &&
+                fechaHasta.HasValue &&
+                fechaDesde.Value.Date >
+                fechaHasta.Value.Date)
+            {
+                var temporal =
+                    fechaDesde;
+
+                fechaDesde =
+                    fechaHasta;
+
+                fechaHasta =
+                    temporal;
+            }
+
+            var vm =
+                new ProduccionHistorialVm
+                {
+                    Busqueda =
+                        busqueda,
+
+                    FechaDesde =
+                        fechaDesde,
+
+                    FechaHasta =
+                        fechaHasta,
+
+                    EsVistaOperador =
+                        true
+                };
+
+            vm.Producciones =
+                await ObtenerHistorialOperadorAsync(
+                    personaId.Value,
+                    busqueda,
+                    fechaDesde,
+                    fechaHasta,
+                    cn);
+
+            return View(vm);
+        }
+
+        private async Task<List<ProduccionHistorialEjecucionVm>>
+    ObtenerHistorialOperadorAsync(
+        int personaId,
+        string? busqueda,
+        DateTime? fechaDesde,
+        DateTime? fechaHasta,
+        SqlConnection cn,
+        SqlTransaction? tx = null)
+        {
+            var resultado =
+                new List<ProduccionHistorialEjecucionVm>();
+
+            if (personaId <= 0)
+                return resultado;
+
+            const string sql = @"
+SELECT
+    e.EjecucionProduccionID,
+    e.ProgramaProduccionID,
+    e.SolicitudProduccionID,
+
+    e.MaquinaID,
+    e.MaquinaCodigo,
+    e.MaquinaNombre,
+
+    e.ParteID,
+    e.NumeroParte,
+    e.ReferenciaSAP,
+    e.DescripcionParte,
+
+    e.FechaInicioReal,
+    e.FechaFinReal,
+
+    ISNULL(e.CantidadPlaneada,0)
+        AS CantidadPlaneada,
+
+    ISNULL(e.CantidadOKTotal,0)
+        AS CantidadOKTotal,
+
+    ISNULL(e.CantidadSospechosaTotal,0)
+        AS CantidadSospechosaTotal,
+
+    ISNULL(e.CantidadScrapTotal,0)
+        AS CantidadScrapTotal,
+
+    e.EstatusID,
+    e.OperadorNombre,
+
+    ISNULL(totalHoras.HorasCapturadas,0)
+        AS HorasCapturadas,
+
+    ISNULL(totalHoras.ObjetivoAcumulado,0)
+        AS ObjetivoAcumulado,
+
+    CAST(
+        CASE
+            WHEN ISNULL(
+                totalHoras.ObjetivoAcumulado,
+                0
+            ) <= 0
+                THEN 0
+            ELSE
+                ISNULL(
+                    e.CantidadOKTotal,
+                    0
+                ) * 100.0
+                /
+                totalHoras.ObjetivoAcumulado
+        END
+        AS DECIMAL(18,2)
+    ) AS PorcentajeCumplimiento,
+
+    ISNULL(miProduccion.CantidadOK,0)
+        AS CantidadOKOperador,
+
+    ISNULL(
+        miProduccion.CantidadSospechosa,
+        0
+    ) AS CantidadSospechosaOperador,
+
+    ISNULL(
+        miProduccion.CantidadScrap,
+        0
+    ) AS CantidadScrapOperador,
+
+    ISNULL(
+        miProduccion.ObjetivoAcumulado,
+        0
+    ) AS ObjetivoOperador,
+
+    ISNULL(
+        miProduccion.HorasCapturadas,
+        0
+    ) AS HorasOperador,
+
+    CAST(
+        CASE
+            WHEN ISNULL(
+                miProduccion.ObjetivoAcumulado,
+                0
+            ) <= 0
+                THEN 0
+            ELSE
+                ISNULL(
+                    miProduccion.CantidadOK,
+                    0
+                ) * 100.0
+                /
+                miProduccion.ObjetivoAcumulado
+        END
+        AS DECIMAL(18,2)
+    ) AS PorcentajeCumplimientoOperador,
+
+    ISNULL(
+        cambios.TotalCambiosTurno,
+        0
+    ) AS TotalCambiosTurno,
+
+    ISNULL(
+        paros.TotalParos,
+        0
+    ) AS TotalParos
+
+FROM dbo.Produccion_Ejecucion e
+
+OUTER APPLY
+(
+    SELECT
+        COUNT(1) AS HorasCapturadas,
+
+        SUM(
+            ISNULL(
+                NULLIF(
+                    rh.ObjetivoBloque,
+                    0
+                ),
+                ISNULL(
+                    rh.ObjetivoHora,
+                    0
+                )
+            )
+        ) AS ObjetivoAcumulado
+
+    FROM dbo.Produccion_RegistroHora rh
+
+    WHERE rh.EjecucionProduccionID =
+          e.EjecucionProduccionID
+
+      AND rh.Activo = 1
+) totalHoras
+
+OUTER APPLY
+(
+    SELECT
+        COUNT(1) AS HorasCapturadas,
+
+        SUM(
+            ISNULL(
+                rh.CantidadOK,
+                0
+            )
+        ) AS CantidadOK,
+
+        SUM(
+            ISNULL(
+                rh.CantidadSospechosa,
+                0
+            )
+        ) AS CantidadSospechosa,
+
+        SUM(
+            ISNULL(
+                rh.CantidadScrap,
+                0
+            )
+        ) AS CantidadScrap,
+
+        SUM(
+            ISNULL(
+                NULLIF(
+                    rh.ObjetivoBloque,
+                    0
+                ),
+                ISNULL(
+                    rh.ObjetivoHora,
+                    0
+                )
+            )
+        ) AS ObjetivoAcumulado
+
+    FROM dbo.Produccion_RegistroHora rh
+
+    WHERE rh.EjecucionProduccionID =
+          e.EjecucionProduccionID
+
+      AND rh.OperadorID =
+          @PersonaID
+
+      AND rh.Activo = 1
+) miProduccion
+
+OUTER APPLY
+(
+    SELECT
+        COUNT(1)
+            AS TotalCambiosTurno
+
+    FROM dbo.Produccion_CambiosTurno ct
+
+    WHERE ct.EjecucionProduccionID =
+          e.EjecucionProduccionID
+
+      AND ct.Activo = 1
+) cambios
+
+OUTER APPLY
+(
+    SELECT
+        COUNT(1)
+            AS TotalParos
+
+    FROM dbo.Produccion_Paros p
+
+    WHERE p.EjecucionProduccionID =
+          e.EjecucionProduccionID
+
+      AND p.Activo = 1
+) paros
+
+WHERE e.Activo = 1
+
+  AND e.EstatusID IN
+  (
+      @TerminadoParcial,
+      @Terminado,
+      @ListaCierreDocumental,
+      @Cerrado
+  )
+
+  /*
+     El operador participó si:
+     1. tiene registros horarios;
+     2. entregó un turno;
+     3. recibió un turno;
+     4. o quedó como operador actual/final.
+  */
+  AND
+  (
+      EXISTS
+      (
+          SELECT 1
+          FROM dbo.Produccion_RegistroHora rhp
+          WHERE rhp.EjecucionProduccionID =
+                e.EjecucionProduccionID
+            AND rhp.OperadorID =
+                @PersonaID
+            AND rhp.Activo = 1
+      )
+
+      OR EXISTS
+      (
+          SELECT 1
+          FROM dbo.Produccion_CambiosTurno ctp
+          WHERE ctp.EjecucionProduccionID =
+                e.EjecucionProduccionID
+            AND ctp.Activo = 1
+            AND
+            (
+                ctp.OperadorSalienteID =
+                @PersonaID
+
+                OR
+
+                ctp.OperadorEntranteID =
+                @PersonaID
+            )
+      )
+
+      OR e.OperadorID =
+         @PersonaID
+  )
+
+  AND
+  (
+      @FechaDesde IS NULL
+
+      OR CAST(
+            ISNULL(
+                e.FechaFinReal,
+                e.FechaModificacion
+            ) AS DATE
+         ) >= @FechaDesde
+  )
+
+  AND
+  (
+      @FechaHasta IS NULL
+
+      OR CAST(
+            ISNULL(
+                e.FechaFinReal,
+                e.FechaModificacion
+            ) AS DATE
+         ) <= @FechaHasta
+  )
+
+  AND
+  (
+      @Busqueda IS NULL
+
+      OR e.MaquinaCodigo
+         LIKE '%' + @Busqueda + '%'
+
+      OR e.MaquinaNombre
+         LIKE '%' + @Busqueda + '%'
+
+      OR e.NumeroParte
+         LIKE '%' + @Busqueda + '%'
+
+      OR e.ReferenciaSAP
+         LIKE '%' + @Busqueda + '%'
+
+      OR e.DescripcionParte
+         LIKE '%' + @Busqueda + '%'
+
+      OR CONVERT(
+            NVARCHAR(30),
+            e.ProgramaProduccionID
+         ) LIKE '%' + @Busqueda + '%'
+
+      OR CONVERT(
+            NVARCHAR(30),
+            e.EjecucionProduccionID
+         ) LIKE '%' + @Busqueda + '%'
+  )
+
+ORDER BY
+    ISNULL(
+        e.FechaFinReal,
+        e.FechaModificacion
+    ) DESC,
+
+    e.EjecucionProduccionID DESC;";
+
+            await using var cmd =
+                tx == null
+                    ? new SqlCommand(sql, cn)
+                    : new SqlCommand(
+                        sql,
+                        cn,
+                        tx);
+
+            cmd.Parameters.Add(
+                "@PersonaID",
+                SqlDbType.Int).Value =
+                personaId;
+
+            cmd.Parameters.Add(
+                "@TerminadoParcial",
+                SqlDbType.Int).Value =
+                ProduccionEstatus
+                    .TerminadoParcial;
+
+            cmd.Parameters.Add(
+                "@Terminado",
+                SqlDbType.Int).Value =
+                ProduccionEstatus
+                    .Terminado;
+
+            cmd.Parameters.Add(
+                "@ListaCierreDocumental",
+                SqlDbType.Int).Value =
+                ProduccionEstatus
+                    .ListaCierreDocumental;
+
+            cmd.Parameters.Add(
+                "@Cerrado",
+                SqlDbType.Int).Value =
+                ProduccionEstatus
+                    .Cerrado;
+
+            cmd.Parameters.Add(
+                "@FechaDesde",
+                SqlDbType.Date).Value =
+                fechaDesde.HasValue
+                    ? fechaDesde.Value.Date
+                    : DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@FechaHasta",
+                SqlDbType.Date).Value =
+                fechaHasta.HasValue
+                    ? fechaHasta.Value.Date
+                    : DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@Busqueda",
+                SqlDbType.NVarChar,
+                200).Value =
+                string.IsNullOrWhiteSpace(
+                    busqueda)
+                    ? DBNull.Value
+                    : busqueda.Trim();
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                resultado.Add(
+                    new ProduccionHistorialEjecucionVm
+                    {
+                        EjecucionProduccionID =
+                            Convert.ToInt32(
+                                rd[
+                                    "EjecucionProduccionID"
+                                ]),
+
+                        ProgramaProduccionID =
+                            Convert.ToInt32(
+                                rd[
+                                    "ProgramaProduccionID"
+                                ]),
+
+                        SolicitudProduccionID =
+                            rd["SolicitudProduccionID"] ==
+                            DBNull.Value
+                                ? null
+                                : Convert.ToInt32(
+                                    rd[
+                                        "SolicitudProduccionID"
+                                    ]),
+
+                        MaquinaID =
+                            rd["MaquinaID"] ==
+                            DBNull.Value
+                                ? null
+                                : Convert.ToInt32(
+                                    rd["MaquinaID"]),
+
+                        MaquinaCodigo =
+                            rd["MaquinaCodigo"] ==
+                            DBNull.Value
+                                ? null
+                                : rd["MaquinaCodigo"]
+                                    .ToString(),
+
+                        MaquinaNombre =
+                            rd["MaquinaNombre"] ==
+                            DBNull.Value
+                                ? null
+                                : rd["MaquinaNombre"]
+                                    .ToString(),
+
+                        ParteID =
+                            rd["ParteID"] ==
+                            DBNull.Value
+                                ? null
+                                : Convert.ToInt32(
+                                    rd["ParteID"]),
+
+                        NumeroParte =
+                            rd["NumeroParte"] ==
+                            DBNull.Value
+                                ? null
+                                : rd["NumeroParte"]
+                                    .ToString(),
+
+                        ReferenciaSAP =
+                            rd["ReferenciaSAP"] ==
+                            DBNull.Value
+                                ? null
+                                : rd["ReferenciaSAP"]
+                                    .ToString(),
+
+                        DescripcionParte =
+                            rd["DescripcionParte"] ==
+                            DBNull.Value
+                                ? null
+                                : rd["DescripcionParte"]
+                                    .ToString(),
+
+                        FechaInicioReal =
+                            rd["FechaInicioReal"] ==
+                            DBNull.Value
+                                ? null
+                                : Convert.ToDateTime(
+                                    rd[
+                                        "FechaInicioReal"
+                                    ]),
+
+                        FechaFinReal =
+                            rd["FechaFinReal"] ==
+                            DBNull.Value
+                                ? null
+                                : Convert.ToDateTime(
+                                    rd[
+                                        "FechaFinReal"
+                                    ]),
+
+                        CantidadPlaneada =
+                            Convert.ToInt32(
+                                rd[
+                                    "CantidadPlaneada"
+                                ]),
+
+                        CantidadOK =
+                            Convert.ToInt32(
+                                rd[
+                                    "CantidadOKTotal"
+                                ]),
+
+                        CantidadSospechosa =
+                            Convert.ToInt32(
+                                rd[
+                                    "CantidadSospechosaTotal"
+                                ]),
+
+                        CantidadScrap =
+                            Convert.ToInt32(
+                                rd[
+                                    "CantidadScrapTotal"
+                                ]),
+
+                        ObjetivoAcumulado =
+                            Convert.ToInt32(
+                                rd[
+                                    "ObjetivoAcumulado"
+                                ]),
+
+                        HorasCapturadas =
+                            Convert.ToInt32(
+                                rd[
+                                    "HorasCapturadas"
+                                ]),
+
+                        PorcentajeCumplimiento =
+                            Convert.ToDecimal(
+                                rd[
+                                    "PorcentajeCumplimiento"
+                                ]),
+
+                        EstatusID =
+                            Convert.ToInt32(
+                                rd["EstatusID"]),
+
+                        OperadorPrincipalNombre =
+                            rd["OperadorNombre"] ==
+                            DBNull.Value
+                                ? null
+                                : rd["OperadorNombre"]
+                                    .ToString(),
+
+                        TotalCambiosTurno =
+                            Convert.ToInt32(
+                                rd[
+                                    "TotalCambiosTurno"
+                                ]),
+
+                        TotalParos =
+                            Convert.ToInt32(
+                                rd["TotalParos"]),
+
+                        PersonaConsultaID =
+                            personaId,
+
+                        CantidadOKOperador =
+                            Convert.ToInt32(
+                                rd[
+                                    "CantidadOKOperador"
+                                ]),
+
+                        CantidadSospechosaOperador =
+                            Convert.ToInt32(
+                                rd[
+                                    "CantidadSospechosaOperador"
+                                ]),
+
+                        CantidadScrapOperador =
+                            Convert.ToInt32(
+                                rd[
+                                    "CantidadScrapOperador"
+                                ]),
+
+                        ObjetivoOperador =
+                            Convert.ToInt32(
+                                rd[
+                                    "ObjetivoOperador"
+                                ]),
+
+                        HorasOperador =
+                            Convert.ToInt32(
+                                rd[
+                                    "HorasOperador"
+                                ]),
+
+                        PorcentajeCumplimientoOperador =
+                            Convert.ToDecimal(
+                                rd[
+                                    "PorcentajeCumplimientoOperador"
+                                ])
+                    });
+            }
+
+            return resultado;
+        }
+
+        private async Task<bool>
+    OperadorParticipoEnEjecucionAsync(
+        int ejecucionProduccionId,
+        int personaId,
+        SqlConnection cn,
+        SqlTransaction? tx = null)
+        {
+            if (ejecucionProduccionId <= 0 ||
+                personaId <= 0)
+            {
+                return false;
+            }
+
+            const string sql = @"
+SELECT CAST(
+    CASE
+        WHEN EXISTS
+        (
+            SELECT 1
+            FROM dbo.Produccion_RegistroHora rh
+            WHERE rh.EjecucionProduccionID =
+                  @EjecucionProduccionID
+              AND rh.OperadorID =
+                  @PersonaID
+              AND rh.Activo = 1
+        )
+        OR EXISTS
+        (
+            SELECT 1
+            FROM dbo.Produccion_CambiosTurno ct
+            WHERE ct.EjecucionProduccionID =
+                  @EjecucionProduccionID
+              AND ct.Activo = 1
+              AND
+              (
+                  ct.OperadorSalienteID =
+                  @PersonaID
+
+                  OR
+
+                  ct.OperadorEntranteID =
+                  @PersonaID
+              )
+        )
+        OR EXISTS
+        (
+            SELECT 1
+            FROM dbo.Produccion_Ejecucion e
+            WHERE e.EjecucionProduccionID =
+                  @EjecucionProduccionID
+              AND e.Activo = 1
+              AND e.OperadorID =
+                  @PersonaID
+        )
+        THEN 1
+        ELSE 0
+    END
+AS BIT);";
+
+            await using var cmd =
+                tx == null
+                    ? new SqlCommand(sql, cn)
+                    : new SqlCommand(
+                        sql,
+                        cn,
+                        tx);
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            cmd.Parameters.Add(
+                "@PersonaID",
+                SqlDbType.Int).Value =
+                personaId;
+
+            return Convert.ToBoolean(
+                await cmd.ExecuteScalarAsync());
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> HistorialDetalle(int id)
+        {
+            if (!UsuarioEnSesion())
+                return RedirectToAction(
+                    "Login",
+                    "Login");
+
+            if (id <= 0)
+                return NotFound();
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            var usuarioId =
+                ObtenerUsuarioID();
+
+            if (!await UsuarioEsOperadorAsync(
+                usuarioId,
+                cn))
+            {
+                return AccesoDenegadoOperador();
+            }
+
+            var personaId =
+                await ObtenerPersonaIDUsuarioAsync(
+                    usuarioId,
+                    cn);
+
+            if (!personaId.HasValue ||
+                personaId.Value <= 0)
+            {
+                return AccesoDenegadoOperador();
+            }
+
+           
+            var participo =
+                await OperadorParticipoEnEjecucionAsync(
+                    id,
+                    personaId.Value,
+                    cn);
+
+            if (!participo)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden);
+            }
+
+            var vm =
+                await ObtenerTabletHistorialVmAsync(
+                    id,
+                    cn);
+
+            if (vm == null)
+                return NotFound();
+
+            vm.MotivosParo =
+                await CargarMotivosParoAsync(
+                    cn);
+
+            vm.HorasCaptura =
+                await ObtenerFilasCapturaHoraAsync(
+                    vm.EjecucionProduccionID,
+                    vm.ProgramaProduccionID,
+                    cn);
+
+            vm.HistorialCambiosTurno =
+                await ObtenerHistorialCambiosTurnoAsync(
+                    vm.EjecucionProduccionID,
+                    cn);
+
+            vm.HistorialTurnos =
+                ConstruirHistorialTurnos(
+                    vm.HorasCaptura,
+                    vm.HistorialCambiosTurno);
+
+            return View(
+                "Captura",
+                vm);
+        }
+
 
         [HttpGet]
         public async Task<IActionResult> ObtenerTurnosPendientesRecepcion()
@@ -4933,6 +5840,8 @@ ORDER BY h.FechaMovimiento;";
             }
             return filas;
         }
+
+
         private bool UsuarioEnSesion()
         {
             return HttpContext.Session.GetInt32("UsuarioID").HasValue;
@@ -5065,7 +5974,195 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
             return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
         }
 
+        private async Task<ProduccionCambioTurnoSugerenciaVm?> ObtenerSugerenciaTecnicoCambioTurnoAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            if (ejecucionProduccionId <= 0) return null;
+            const string sql = @"
+SELECT TOP(1)
+    s.CambioTurnoSugerenciaID,
+    s.EjecucionProduccionID,
+    s.ProgramaProduccionID,
+    s.OperadorSugeridoID,
+    LTRIM(RTRIM(CONCAT(ISNULL(op.Nombre,N''),N' ',ISNULL(op.ApellidoPaterno,N''),N' ',ISNULL(op.ApellidoMaterno,N'')))) AS OperadorSugeridoNombre,
+    s.UsuarioTecnicoID,
+    s.FechaSugerencia,
+    s.Observaciones,
+    ISNULL(s.Utilizada,0) AS Utilizada,
+    ISNULL(s.Activo,1) AS Activo,
+    s.UsuarioModificacionID,
+    s.FechaModificacion
+FROM dbo.Produccion_CambioTurnoSugerencias s
+INNER JOIN dbo.Persona op ON op.PersonaID=s.OperadorSugeridoID
+WHERE s.EjecucionProduccionID=@EjecucionProduccionID
+  AND s.Activo=1
+  AND ISNULL(s.Utilizada,0)=0
+  AND ISNULL(op.EsColaboradorActivo,1)=1
+ORDER BY s.FechaSugerencia DESC,s.CambioTurnoSugerenciaID DESC;";
+            ProduccionCambioTurnoSugerenciaVm? sugerencia = null;
+            await using (var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (!await rd.ReadAsync()) return null;
+                sugerencia = new ProduccionCambioTurnoSugerenciaVm
+                {
+                    CambioTurnoSugerenciaID = Convert.ToInt32(rd["CambioTurnoSugerenciaID"]),
+                    EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                    ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    OperadorSugeridoID = Convert.ToInt32(rd["OperadorSugeridoID"]),
+                    OperadorSugeridoNombre = rd["OperadorSugeridoNombre"]?.ToString()?.Trim() ?? string.Empty,
+                    UsuarioTecnicoID = Convert.ToInt32(rd["UsuarioTecnicoID"]),
+                    FechaSugerencia = Convert.ToDateTime(rd["FechaSugerencia"]),
+                    Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"]?.ToString()?.Trim(),
+                    Utilizada = Convert.ToBoolean(rd["Utilizada"]),
+                    Activo = Convert.ToBoolean(rd["Activo"]),
+                    UsuarioModificacionID = rd["UsuarioModificacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioModificacionID"]),
+                    FechaModificacion = rd["FechaModificacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaModificacion"])
+                };
+            }
+            const string sqlTecnico = @"
+SELECT TOP(1)
+    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS Nombre
+FROM dbo.Persona p
+WHERE p.PersonaID=@PersonaID;";
+            await using (var cmd = tx == null ? new SqlCommand(sqlTecnico, cn) : new SqlCommand(sqlTecnico, cn, tx))
+            {
+                cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = sugerencia.UsuarioTecnicoID;
+                var resultado = await cmd.ExecuteScalarAsync();
+                sugerencia.TecnicoNombre = resultado == null || resultado == DBNull.Value
+                    ? "Técnico de Producción"
+                    : resultado.ToString()?.Trim() ?? "Técnico de Producción";
+            }
+            return sugerencia;
+        }
 
+        private async Task<ProduccionOperadorTabletVm?>
+    ObtenerTabletHistorialVmAsync(
+        int ejecucionProduccionId,
+        SqlConnection cn)
+        {
+            if (ejecucionProduccionId <= 0)
+                return null;
+
+            const string sql = @"
+SELECT
+    e.EjecucionProduccionID,
+    e.ProgramaProduccionID,
+    e.SolicitudProduccionID,
+    s.FolioSolicitud,
+    s.NumeroOFRecibida,
+
+    e.MaquinaID,
+    e.MaquinaCodigo,
+    e.MaquinaNombre,
+
+    e.ParteID,
+    e.NumeroParte,
+    e.ReferenciaSAP,
+    e.DescripcionParte,
+
+    e.OperadorID,
+    e.OperadorNombre,
+
+    e.CantidadPlaneada,
+    ISNULL(e.CantidadOKTotal,0) AS CantidadOKTotal,
+    ISNULL(e.CantidadSospechosaTotal,0) AS CantidadSospechosaTotal,
+    ISNULL(e.CantidadScrapTotal,0) AS CantidadScrapTotal,
+
+    dt.ObjetivoHora,
+    dt.Ciclo,
+    dt.Cavidades,
+
+    e.EstatusID,
+
+    CASE
+        WHEN EXISTS
+        (
+            SELECT 1
+            FROM dbo.Produccion_Paros p
+            WHERE p.EjecucionProduccionID = e.EjecucionProduccionID
+              AND p.Activo = 1
+              AND p.FechaFinParo IS NULL
+        )
+        THEN 1
+        ELSE 0
+    END AS TieneParoAbierto,
+
+    (
+        SELECT TOP (1)
+            p.ParoID
+        FROM dbo.Produccion_Paros p
+        WHERE p.EjecucionProduccionID = e.EjecucionProduccionID
+          AND p.Activo = 1
+          AND p.FechaFinParo IS NULL
+        ORDER BY p.ParoID DESC
+    ) AS ParoAbiertoID
+
+FROM dbo.Produccion_Ejecucion e
+
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID = e.SolicitudProduccionID
+
+OUTER APPLY
+(
+    SELECT TOP (1)
+        dt0.ObjetivoHora,
+        dt0.Ciclo,
+        dt0.Cavidades
+    FROM dbo.ERP_ParteDatosTecnicos dt0
+    WHERE dt0.ParteID = e.ParteID
+      AND dt0.Activo = 1
+    ORDER BY dt0.ParteDatoTecnicoID DESC
+) dt
+
+WHERE e.EjecucionProduccionID = @EjecucionProduccionID
+  AND e.Activo = 1
+  AND e.EstatusID IN
+  (
+      @TerminadoParcial,
+      @Terminado,
+      @ListaCierreDocumental,
+      @Cerrado
+  );";
+
+            await using var cmd = new SqlCommand(sql, cn);
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            cmd.Parameters.Add(
+                "@TerminadoParcial",
+                SqlDbType.Int).Value =
+                ProduccionEstatus.TerminadoParcial;
+
+            cmd.Parameters.Add(
+                "@Terminado",
+                SqlDbType.Int).Value =
+                ProduccionEstatus.Terminado;
+
+            cmd.Parameters.Add(
+                "@ListaCierreDocumental",
+                SqlDbType.Int).Value =
+                ProduccionEstatus.ListaCierreDocumental;
+
+            cmd.Parameters.Add(
+                "@Cerrado",
+                SqlDbType.Int).Value =
+                ProduccionEstatus.Cerrado;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return null;
+
+            var vm = MapearTabletVm(rd);
+
+            AsignarHoraSugerida(vm);
+
+            return vm;
+        }
 
         private async Task<int?> ObtenerPersonaIDUsuarioAsync(
     int usuarioId,

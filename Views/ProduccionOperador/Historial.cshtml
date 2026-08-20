@@ -1,0 +1,661 @@
+﻿@model ERP.NSQuell.Models.ProduccionHistorialVm
+@using ERP.NSQuell.Models
+@{
+    Layout = null;
+
+    var producciones = Model?.Producciones ?? new List<ProduccionHistorialEjecucionVm>();
+    var busqueda = Model?.Busqueda ?? string.Empty;
+    var fechaDesde = Model?.FechaDesde?.ToString("yyyy-MM-dd") ?? string.Empty;
+    var fechaHasta = Model?.FechaHasta?.ToString("yyyy-MM-dd") ?? string.Empty;
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mi historial de producción</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+
+    <script>
+        (() => {
+            try {
+                const tema = localStorage.getItem('nsq-theme') || localStorage.getItem('theme');
+                if (tema === 'dark' || tema === 'light') {
+                    document.documentElement.setAttribute('data-nsq-theme', tema);
+                }
+            } catch { }
+        })();
+    </script>
+
+    <style>
+        :root {
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #15233f;
+            --muted: #667085;
+            --border: #dfe7f0;
+            --blue: #0d6efd;
+            --blue-dark: #0a3d82;
+            --green: #067647;
+            --red: #b42318;
+            --soft-blue: #eef4ff;
+            --shadow: 0 12px 30px rgba(15, 35, 70, .08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .page {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+
+        .hero {
+            border-radius: 24px;
+            padding: 22px;
+            color: #fff;
+            background: linear-gradient(135deg, #082a58 0%, #0d6efd 100%);
+            box-shadow: 0 16px 40px rgba(13, 110, 253, .19);
+            margin-bottom: 16px;
+        }
+
+            .hero h1 {
+                margin: 0;
+                font-size: clamp(1.4rem, 2.4vw, 2.2rem);
+                font-weight: 950;
+            }
+
+            .hero p {
+                margin: 7px 0 0;
+                font-weight: 650;
+                opacity: .88;
+            }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .hero-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            min-height: 44px;
+            border-radius: 12px;
+            padding: 9px 13px;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 900;
+            background: rgba(255,255,255,.12);
+            border: 1px solid rgba(255,255,255,.30);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .summary-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 17px;
+            padding: 15px;
+            box-shadow: var(--shadow);
+        }
+
+        .summary-label {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .summary-value {
+            margin-top: 3px;
+            color: var(--text);
+            font-size: 1.55rem;
+            font-weight: 950;
+        }
+
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .panel-header {
+            padding: 14px 16px;
+            background: #f8faff;
+            border-bottom: 1px solid var(--border);
+            font-weight: 950;
+        }
+
+        .panel-body {
+            padding: 15px;
+        }
+
+        .form-label {
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 900;
+            margin-bottom: 5px;
+        }
+
+        .form-control {
+            min-height: 48px;
+            border-radius: 12px;
+            border-color: var(--border);
+            font-weight: 700;
+        }
+
+        .filter-actions {
+            height: 100%;
+            display: flex;
+            align-items: end;
+            gap: 8px;
+        }
+
+            .filter-actions .btn {
+                min-height: 48px;
+                border-radius: 12px;
+                font-weight: 900;
+            }
+
+        .history-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .history-card {
+            position: relative;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 19px;
+            padding: 16px;
+            overflow: hidden;
+        }
+
+            .history-card::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 5px;
+                background: var(--blue);
+            }
+
+        .history-title {
+            color: var(--text);
+            font-size: 1.05rem;
+            font-weight: 950;
+        }
+
+        .history-sub {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: .79rem;
+            font-weight: 700;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 9px;
+            margin-top: 14px;
+        }
+
+        .metric {
+            min-height: 78px;
+            padding: 10px;
+            border-radius: 13px;
+            background: #f8fafc;
+            border: 1px solid #edf1f5;
+        }
+
+            .metric span {
+                display: block;
+                color: var(--muted);
+                font-size: .67rem;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: .03em;
+            }
+
+            .metric strong {
+                display: block;
+                margin-top: 4px;
+                color: var(--text);
+                font-size: 1.04rem;
+                font-weight: 950;
+            }
+
+            .metric small {
+                display: block;
+                margin-top: 2px;
+                color: var(--muted);
+                font-weight: 750;
+            }
+
+            .metric.ok strong {
+                color: var(--green);
+            }
+
+            .metric.bad strong {
+                color: var(--red);
+            }
+
+        .performance-box {
+            margin-top: 12px;
+            padding: 13px;
+            border: 1px solid #c8d9f5;
+            border-radius: 14px;
+            background: var(--soft-blue);
+        }
+
+        .performance-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .performance-title {
+            color: #1d4ed8;
+            font-size: .77rem;
+            font-weight: 950;
+            text-transform: uppercase;
+        }
+
+        .performance-value {
+            color: #1d4ed8;
+            font-size: 1.15rem;
+            font-weight: 950;
+        }
+
+        .progress-track {
+            height: 9px;
+            margin-top: 8px;
+            border-radius: 999px;
+            background: #dbe7fa;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: inherit;
+            background: var(--blue);
+        }
+
+        .performance-detail {
+            margin-top: 7px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 14px;
+            color: #475467;
+            font-size: .75rem;
+            font-weight: 800;
+        }
+
+        .card-footer-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-top: 13px;
+            padding-top: 13px;
+            border-top: 1px solid var(--border);
+        }
+
+        .view-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            min-height: 44px;
+            border-radius: 12px;
+            padding: 9px 14px;
+            background: var(--blue);
+            color: #fff;
+            text-decoration: none;
+            font-weight: 950;
+        }
+
+        .empty {
+            padding: 50px 20px;
+            text-align: center;
+            color: var(--muted);
+        }
+
+            .empty i {
+                display: block;
+                font-size: 2.2rem;
+                margin-bottom: 10px;
+            }
+
+        html[data-nsq-theme="dark"] {
+            --bg: #08111e;
+            --card: #111c2d;
+            --text: #edf3fb;
+            --muted: #9aabc1;
+            --border: #2c3e55;
+            --soft-blue: #10294a;
+            color-scheme: dark;
+        }
+
+            html[data-nsq-theme="dark"] .panel-header,
+            html[data-nsq-theme="dark"] .metric {
+                background: #0d1828;
+            }
+
+            html[data-nsq-theme="dark"] .metric {
+                border-color: #26374d;
+            }
+
+            html[data-nsq-theme="dark"] .form-control {
+                background: #0b1422;
+                color: #f8fafc;
+                border-color: #354961;
+            }
+
+            html[data-nsq-theme="dark"] .performance-box {
+                background: #10294a;
+                border-color: #28598b;
+            }
+
+            html[data-nsq-theme="dark"] .performance-title,
+            html[data-nsq-theme="dark"] .performance-value {
+                color: #9dcaff;
+            }
+
+            html[data-nsq-theme="dark"] .performance-detail {
+                color: #b9c7d9;
+            }
+
+            html[data-nsq-theme="dark"] .progress-track {
+                background: #294263;
+            }
+
+        @@media (max-width: 980px) {
+            .metric-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @@media (max-width: 700px) {
+            .page {
+                padding: 10px;
+            }
+
+            .hero {
+                border-radius: 18px;
+                padding: 17px;
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .summary-card {
+                padding: 12px;
+            }
+
+            .summary-value {
+                font-size: 1.3rem;
+            }
+
+            .metric-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .filter-actions,
+            .card-footer-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .view-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+
+        <section class="hero">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div>
+                    <h1><i class="fa-solid fa-clock-rotate-left me-2"></i>Mi historial de producción</h1>
+                    <p>Consulta las ejecuciones donde participaste y tu desempeño registrado por hora.</p>
+                </div>
+
+                <div class="hero-actions">
+                    <a class="hero-btn" href="@Url.Action("Index", "ProduccionOperador")">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        Kiosco
+                    </a>
+
+                    <a class="hero-btn" href="@Url.Action("Historial", "ProduccionOperador")">
+                        <i class="fa-solid fa-rotate"></i>
+                        Actualizar
+                    </a>
+                </div>
+            </div>
+        </section>
+
+
+        <section class="panel">
+            <div class="panel-header">
+                <i class="fa-solid fa-filter me-1"></i>
+                Buscar en mi historial
+            </div>
+
+            <div class="panel-body">
+                <form method="get" action="@Url.Action("Historial", "ProduccionOperador")">
+                    <div class="row g-3">
+                        <div class="col-lg-5">
+                            <label class="form-label">Buscar</label>
+                            <input class="form-control"
+                                   type="text"
+                                   name="busqueda"
+                                   value="@busqueda"
+                                   placeholder="Máquina, parte, SAP, programa o ejecución" />
+                        </div>
+
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label">Desde</label>
+                            <input class="form-control"
+                                   type="date"
+                                   name="fechaDesde"
+                                   value="@fechaDesde" />
+                        </div>
+
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label">Hasta</label>
+                            <input class="form-control"
+                                   type="date"
+                                   name="fechaHasta"
+                                   value="@fechaHasta" />
+                        </div>
+
+                        <div class="col-lg-3 col-md-4">
+                            <div class="filter-actions">
+                                <button type="submit" class="btn btn-primary flex-fill">
+                                    <i class="fa-solid fa-magnifying-glass me-1"></i>
+                                    Buscar
+                                </button>
+
+                                <a class="btn btn-outline-secondary flex-fill"
+                                   href="@Url.Action("Historial", "ProduccionOperador")">
+                                    Limpiar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+                <span>
+                    <i class="fa-solid fa-list-check me-1"></i>
+                    Producciones donde participé
+                </span>
+                <span class="badge text-bg-secondary">@producciones.Count registro(s)</span>
+            </div>
+
+            <div class="panel-body">
+                @if (!producciones.Any())
+                {
+                    <div class="empty">
+                        <i class="fa-regular fa-folder-open"></i>
+                        <strong>No se encontraron producciones en tu historial.</strong>
+                        <div class="mt-1">Prueba cambiando las fechas o el texto de búsqueda.</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="history-list">
+                        @foreach (var item in producciones)
+                        {
+                            var porcentaje = item.PorcentajeCumplimientoOperador;
+                            var porcentajeBarra = Math.Max(0m, Math.Min(100m, porcentaje));
+
+                            <article class="history-card">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                    <div>
+                                        <div class="history-title">@item.TextoParte</div>
+                                        <div class="history-sub">
+                                            @item.TextoMaquina · EJ-@item.EjecucionProduccionID · Programa @item.ProgramaProduccionID
+                                        </div>
+                                        <div class="history-sub">
+                                            @(item.FechaInicioReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                            →
+                                            @(item.FechaFinReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                        </div>
+                                    </div>
+
+                                    <span class="badge @item.EstatusClase">@item.EstatusNombre</span>
+                                </div>
+
+                                <div class="metric-grid">
+                                    <div class="metric ok">
+                                        <span>Mis piezas OK</span>
+                                        <strong>@item.CantidadOKOperador.ToString("N0")</strong>
+                                        <small>Registradas por mí</small>
+                                    </div>
+
+                                    <div class="metric">
+                                        <span>Mi objetivo</span>
+                                        <strong>@item.ObjetivoOperador.ToString("N0")</strong>
+                                        <small>@item.HorasOperador bloque(s)</small>
+                                    </div>
+
+                                    <div class="metric @(item.CumplioObjetivoOperador ? "ok" : "bad")">
+                                        <span>Mi cumplimiento</span>
+                                        <strong>@item.PorcentajeCumplimientoOperador.ToString("0.#")%</strong>
+                                        <small>@(item.ObjetivoOperador <= 0 ? "Sin objetivo" : item.CumplioObjetivoOperador ? "Objetivo cumplido" : "Debajo del objetivo")</small>
+                                    </div>
+
+                                    <div class="metric">
+                                        <span>Sospechoso</span>
+                                        <strong>@item.CantidadSospechosaOperador.ToString("N0")</strong>
+                                        <small>Mi registro</small>
+                                    </div>
+
+                                    <div class="metric bad">
+                                        <span>Scrap</span>
+                                        <strong>@item.CantidadScrapOperador.ToString("N0")</strong>
+                                        <small>Mi registro</small>
+                                    </div>
+
+                                    <div class="metric">
+                                        <span>Total ejecución</span>
+                                        <strong>@item.CantidadOK.ToString("N0") OK</strong>
+                                        <small>Planeado @item.CantidadPlaneada.ToString("N0")</small>
+                                    </div>
+                                </div>
+
+                                <div class="performance-box">
+                                    <div class="performance-head">
+                                        <span class="performance-title">Mi rendimiento en esta ejecución</span>
+                                        <span class="performance-value">@item.PorcentajeCumplimientoOperador.ToString("0.#")%</span>
+                                    </div>
+
+                                    <div class="progress-track">
+                                        <div class="progress-fill"
+                                             style="width:@porcentajeBarra.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                                    </div>
+
+                                    <div class="performance-detail">
+                                        <span><i class="fa-solid fa-bullseye me-1"></i>Objetivo: @item.ObjetivoOperador.ToString("N0")</span>
+                                        <span><i class="fa-solid fa-check me-1"></i>OK: @item.CantidadOKOperador.ToString("N0")</span>
+                                        <span><i class="fa-regular fa-clock me-1"></i>@item.HorasOperador bloque(s)</span>
+                                        <span><i class="fa-solid fa-right-left me-1"></i>@item.TotalCambiosTurno cambio(s) de turno en la ejecución</span>
+                                    </div>
+                                </div>
+
+                                <div class="card-footer-actions">
+                                    <div class="history-sub">
+                                        <i class="fa-solid fa-circle-info me-1"></i>
+                                        El detalle es de consulta; la producción ya no está activa.
+                                    </div>
+
+                                    <a href="@Url.Action(
+                                                                                                       "HistorialDetalle",
+                                                                                                       "ProduccionOperador",
+                                                                                                       new { id = item.EjecucionProduccionID })"
+                               class="view-btn">
+                                <i class="fa-solid fa-eye"></i>
+                                Ver detalle
+                            </a>
+                        </div>
+                    </article>
+                                        }
+                    </div>
+                }
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        (() => {
+            const aplicarTema = () => {
+                try {
+                    const tema = localStorage.getItem('nsq-theme') || localStorage.getItem('theme');
+                    if (tema === 'dark' || tema === 'light') {
+                        document.documentElement.setAttribute('data-nsq-theme', tema);
+                    }
+                } catch { }
+            };
+
+            aplicarTema();
+            window.addEventListener('storage', aplicarTema);
+        })();
+    </script>
+</body>
+</html>
