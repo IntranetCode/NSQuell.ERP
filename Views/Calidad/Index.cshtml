@@ -1001,6 +1001,96 @@
             flex-direction: column;
         }
     }
+
+    .quality-scan-card {
+        margin-bottom: 20px;
+        padding: 18px 20px;
+        border: 1px solid #fed7aa;
+        border-radius: 14px;
+        background: linear-gradient(135deg,#fff7ed 0%,#ffffff 70%);
+        box-shadow: 0 8px 24px rgba(15,23,42,.05);
+    }
+
+    .quality-scan-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 14px;
+    }
+
+    .quality-scan-card-title {
+        margin: 0;
+        color: #14213d;
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+        .quality-scan-card-title i {
+            color: #f97316;
+            margin-right: 7px;
+        }
+
+    .quality-scan-card-help {
+        margin-top: 5px;
+        color: #64748b;
+        font-size: .82rem;
+        line-height: 1.45;
+    }
+
+    .quality-scan-form {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) auto;
+        gap: 10px;
+        align-items: stretch;
+    }
+
+    .quality-scan-input {
+        width: 100%;
+        min-height: 48px;
+        padding: 10px 14px;
+        border: 2px solid #fdba74;
+        border-radius: 10px;
+        background: #fff;
+        color: #0f172a;
+        font-size: .95rem;
+        font-weight: 650;
+        outline: none;
+        transition: border-color .15s ease,box-shadow .15s ease;
+    }
+
+        .quality-scan-input:focus {
+            border-color: #f97316;
+            box-shadow: 0 0 0 4px rgba(249,115,22,.12);
+        }
+
+    .quality-scan-submit {
+        min-width: 155px;
+        min-height: 48px;
+    }
+
+    .quality-scan-note {
+        margin-top: 10px;
+        color: #64748b;
+        font-size: .76rem;
+    }
+
+    @@media(max - width:767.98px) {
+        .quality-scan-card-header
+
+    {
+        flex-direction: column;
+    }
+
+    .quality-scan-form {
+        grid-template-columns: 1fr;
+    }
+
+    .quality-scan-submit {
+        width: 100%;
+    }
+
+    }
 </style>
 
 <div class="quality-index-page">
@@ -1256,6 +1346,52 @@
                 </div>
             </form>
         </section>
+
+
+        @if (grupoCalidad == "CAJAS")
+        {
+            <section class="quality-scan-card" aria-labelledby="scanGeneralTitle">
+                <div class="quality-scan-card-header">
+                    <div>
+                        <h2 class="quality-scan-card-title" id="scanGeneralTitle">
+                            <i class="fa-solid fa-barcode"></i>
+                            Recepción rápida por escáner
+                        </h2>
+                        <div class="quality-scan-card-help">
+                            Escanea cualquier caja enviada por Producción. El sistema identificará su OF, registrará la recepción física y abrirá automáticamente el detalle correcto.
+                        </div>
+                    </div>
+                    <span class="quality-status quality-status-info">
+                        <i class="fa-solid fa-keyboard"></i>
+                        Listo para escanear
+                    </span>
+                </div>
+                <form asp-controller="Calidad"
+                      asp-action="EscanearCajaCalidad"
+                      method="post"
+                      class="quality-scan-form"
+                      data-quality-scan-form>
+                    @Html.AntiForgeryToken()
+                    <input type="text"
+                           name="CodigoBarras"
+                           maxlength="500"
+                           autocomplete="off"
+                           class="quality-scan-input"
+                           placeholder="Escanea la etiqueta física de la caja..."
+                           aria-label="Código de barras de la caja"
+                           data-quality-scan-input />
+                    <button type="submit"
+                            class="quality-btn quality-btn-primary quality-scan-submit"
+                            data-quality-scan-submit>
+                        <i class="fa-solid fa-barcode"></i>
+                        Recibir caja
+                    </button>
+                </form>
+                <div class="quality-scan-note">
+                    El lector puede enviar ENTER automáticamente. Después de cada recepción, el sistema abrirá la OF correspondiente.
+                </div>
+            </section>
+        }
 
         @if (grupoCalidad == "CAJAS")
         {
@@ -1591,3 +1727,26 @@
         }
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.querySelector('[data-quality-scan-form]');
+        const input = form?.querySelector('[data-quality-scan-input]');
+        const submit = form?.querySelector('[data-quality-scan-submit]');
+        if (!form || !input) return;
+        input.focus();
+        input.select();
+        form.addEventListener('submit', function (event) {
+            if (!input.value.trim()) {
+                event.preventDefault();
+                input.focus();
+                return;
+            }
+            if (submit) {
+                submit.disabled = true;
+                submit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Recibiendo...';
+            }
+        });
+    });
+</script>
+

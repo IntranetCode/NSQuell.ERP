@@ -2125,6 +2125,13 @@
 
                 <a class="production-nav-btn"
                    asp-controller="Produccion"
+                   asp-action="ProductoIncompleto">
+                    <i class="bi bi-box-seam"></i>
+                    Producto incompleto
+                </a>
+
+                <a class="production-nav-btn"
+                   asp-controller="Produccion"
                    asp-action="Historial">
                     <i class="bi bi-clock-history"></i>
                     Historial
@@ -2429,6 +2436,63 @@
                     Cerrar
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalSolicitarReprogramacion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="@Url.Action("SolicitarReprogramacion","Produccion")" id="formSolicitarReprogramacion">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="programaProduccionId" id="reprogramacionProgramaID" />
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title fw-bold">
+                            <i class="bi bi-calendar2-event me-1"></i>
+                            Solicitar reprogramación
+                        </h5>
+                        <div class="small text-muted" id="reprogramacionResumen"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        Esta acción no cambia directamente la programación. Planeación recibirá la solicitud y decidirá la nueva fecha y hora.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo</label>
+                        <select name="motivo" id="reprogramacionMotivo" class="form-select" required>
+                            <option value="">Selecciona...</option>
+                            <option value="MAQUINA_OCUPADA">Máquina ocupada</option>
+                            <option value="MATERIAL_NO_DISPONIBLE">Material no disponible</option>
+                            <option value="OPERADOR_NO_DISPONIBLE">Operador no disponible</option>
+                            <option value="MOLDE_HERRAMENTAL">Molde / herramental no disponible</option>
+                            <option value="MANTENIMIENTO">Mantenimiento</option>
+                            <option value="CALIDAD">Pendiente de Calidad</option>
+                            <option value="OTRO">Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Explica la situación</label>
+                        <textarea name="observaciones"
+                                  id="reprogramacionObservaciones"
+                                  class="form-control"
+                                  maxlength="500"
+                                  rows="4"
+                                  required
+                                  placeholder="Ej. La máquina continúa ocupada por la OF anterior y no es posible iniciar esta corrida en el horario programado."></textarea>
+                        <div class="form-text">Máximo 500 caracteres.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning fw-bold" id="btnEnviarReprogramacion">
+                        <i class="bi bi-send me-1"></i>
+                        Enviar solicitud
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -3316,6 +3380,59 @@
                     // Panel inicial: pendientes / próximos.
                     cargarPanel('proximos');
                 })();
+
+                        document.addEventListener('click', function (event) {
+            const btn = event.target.closest('.btn-solicitar-reprogramacion');
+            if (!btn) return;
+
+            const programaId = btn.dataset.programaId || '';
+            const titulo = btn.dataset.titulo || '-';
+            const maquina = btn.dataset.maquina || '-';
+            const inicio = btn.dataset.inicio || '-';
+
+            const inputPrograma = document.getElementById('reprogramacionProgramaID');
+            const resumen = document.getElementById('reprogramacionResumen');
+            const motivo = document.getElementById('reprogramacionMotivo');
+            const observaciones = document.getElementById('reprogramacionObservaciones');
+
+            if (inputPrograma) inputPrograma.value = programaId;
+
+            if (resumen) {
+                resumen.textContent = `Programa ${programaId} · ${titulo} · ${maquina} · Inicio original: ${inicio}`;
+            }
+
+            if (motivo) motivo.value = '';
+            if (observaciones) observaciones.value = '';
+
+            setTimeout(() => motivo?.focus(), 250);
+        });
+
+
+        const formSolicitarReprogramacion = document.getElementById('formSolicitarReprogramacion');
+
+formSolicitarReprogramacion?.addEventListener('submit', function (event) {
+    const motivo = document.getElementById('reprogramacionMotivo');
+    const observaciones = document.getElementById('reprogramacionObservaciones');
+    const boton = document.getElementById('btnEnviarReprogramacion');
+
+    if (!motivo?.value) {
+        event.preventDefault();
+        motivo?.focus();
+        return;
+    }
+
+    if (!observaciones?.value.trim()) {
+        event.preventDefault();
+        observaciones?.focus();
+        return;
+    }
+
+    if (boton) {
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Enviando...';
+    }
+});
+
     </script>
 
 

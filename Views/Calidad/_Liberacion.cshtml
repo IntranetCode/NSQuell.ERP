@@ -41,6 +41,13 @@
         string.Equals(x.Resultado?.Trim(), "NOK", StringComparison.OrdinalIgnoreCase));
     var seccionCalidadGuardada = totalPreguntasCalidad > 0 && preguntasCalidadPendientes == 0;
     var checklistCalidadPuedeAutorizar = seccionCalidadGuardada && preguntasCalidadNok == 0;
+    var respuestasChecklistGuardadas = Model.PreguntasChecklistCalidad
+        .Where(x => !string.IsNullOrWhiteSpace(x.Resultado) && new[] { "OK", "NOK", "NO_APLICA", "N/A", "NA" }.Contains(x.Resultado.Trim().ToUpperInvariant()))
+        .OrderBy(x => x.OrdenSeccion)
+        .ThenBy(x => x.OrdenPregunta)
+        .ThenBy(x => x.PreguntaID)
+        .ToList();
+    var hayRespuestasPrevias = respuestasChecklistGuardadas.Any() || hayValidacionPrimerasPiezas || Model.AyudaVisualColocada || Model.HIPColocada || Model.HCCColocada || Model.MatrizPolivalenciaValidada || Model.AlertaCalidadAplica.HasValue || Model.AlertaCalidadColocada.HasValue || !string.IsNullOrWhiteSpace(Model.MotivoDevolucion);
 }
 <style>
     .quality-liberacion {
@@ -524,9 +531,9 @@
         }
 
         /* ============================================================
-                           PRIMERAS PIEZAS / RELIBERACIÓN - VISTA COMPACTA
-                           Reduce scroll sin cambiar nombres de campos ni comportamiento.
-                           ============================================================ */
+                               PRIMERAS PIEZAS / RELIBERACIÓN - VISTA COMPACTA
+                               Reduce scroll sin cambiar nombres de campos ni comportamiento.
+                               ============================================================ */
         .quality-liberacion .quality-firstpieces-card .quality-card-header {
             padding: 9px 14px;
         }
@@ -635,6 +642,146 @@
             padding: 6px 8px;
         }
 
+        .quality-liberacion .quality-history-card {
+            border-color: #cbd5e1;
+            background: #fff;
+        }
+
+        .quality-liberacion .quality-history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .quality-liberacion .quality-history-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            min-height: 36px;
+            padding: 7px 11px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+            color: #14213d;
+            font-size: .82rem;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+            .quality-liberacion .quality-history-toggle:hover {
+                background: #eef4fb;
+            }
+
+        .quality-liberacion .quality-history-content {
+            display: grid;
+            gap: 12px;
+        }
+
+            .quality-liberacion .quality-history-content.is-collapsed {
+                display: none;
+            }
+
+        .quality-liberacion .quality-history-summary {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: .76rem;
+            font-weight: 850;
+        }
+
+        .quality-liberacion .quality-history-group {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        .quality-liberacion .quality-history-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 9px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+            .quality-liberacion .quality-history-group-header strong {
+                color: #14213d;
+                font-size: .88rem;
+            }
+
+        .quality-liberacion .quality-history-list {
+            display: grid;
+        }
+
+        .quality-liberacion .quality-history-row {
+            display: grid;
+            grid-template-columns: minmax(240px,1.2fr) minmax(130px,.35fr) minmax(220px,.8fr);
+            gap: 12px;
+            align-items: start;
+            padding: 10px 12px;
+            border-bottom: 1px solid #eef1f5;
+        }
+
+            .quality-liberacion .quality-history-row:last-child {
+                border-bottom: 0;
+            }
+
+        .quality-liberacion .quality-history-question {
+            font-weight: 750;
+            color: #334155;
+        }
+
+        .quality-liberacion .quality-history-answer {
+            font-weight: 850;
+        }
+
+        .quality-liberacion .quality-history-observation {
+            color: #64748b;
+            font-size: .8rem;
+            line-height: 1.3;
+        }
+
+        .quality-liberacion .quality-history-empty {
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .quality-liberacion .quality-history-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 8px;
+            padding: 10px 12px;
+        }
+
+        .quality-liberacion .quality-history-stat {
+            padding: 9px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #fbfdff;
+        }
+
+            .quality-liberacion .quality-history-stat small {
+                display: block;
+                margin-bottom: 3px;
+                color: #64748b;
+                font-size: .72rem;
+                font-weight: 750;
+                text-transform: uppercase;
+            }
+
+            .quality-liberacion .quality-history-stat strong {
+                color: #14213d;
+            }
+
     @@media(max-width:720px) {
         .quality-liberacion .quality-form-grid {
             grid-template-columns: 1fr
@@ -669,6 +816,15 @@
             .quality-liberacion .quality-form-actions .quality-btn {
                 width: 100%
             }
+
+        .quality-liberacion .quality-history-row {
+            grid-template-columns: 1fr;
+            gap: 5px;
+        }
+
+        .quality-liberacion .quality-history-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 <div class="quality-liberacion">
@@ -750,6 +906,189 @@
             </div>
         </div>
     </section>
+
+    @if (hayRespuestasPrevias)
+    {
+        <section class="quality-card quality-history-card" data-history-section>
+            <div class="quality-card-header quality-history-header">
+                <div>
+                    <h2><i class="fa-solid fa-clock-rotate-left"></i> Lo que ya respondiste</h2>
+                    <div class="quality-help mt-1">Consulta tus respuestas guardadas anteriormente. Esta sección es solo de lectura.</div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="quality-history-summary">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        @if (respuestasChecklistGuardadas.Any())
+                        {
+                            <text>@respuestasChecklistGuardadas.Count respuesta(s) de checklist</text>
+                        }
+                        else if (hayValidacionPrimerasPiezas)
+                        {
+                            <text>Validación registrada</text>
+                        }
+                        else
+                        {
+                            <text>Información registrada</text>
+                        }
+                    </span>
+                    <button type="button" class="quality-history-toggle" data-history-toggle aria-expanded="false">
+                        <i class="fa-solid fa-chevron-down" data-history-toggle-icon></i>
+                        <span data-history-toggle-text>Ver respuestas</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="quality-card-body quality-history-content is-collapsed" data-history-content>
+                @if (respuestasChecklistGuardadas.Any())
+                {
+                    var gruposHistorialChecklist = respuestasChecklistGuardadas
+                    .GroupBy(x => new { x.OrdenSeccion, Seccion = string.IsNullOrWhiteSpace(x.Seccion) ? "VALIDACIÓN DE CALIDAD" : x.Seccion.Trim() })
+                    .OrderBy(x => x.Key.OrdenSeccion)
+                    .ToList();
+
+                    <div class="quality-history-group">
+                        <div class="quality-history-group-header">
+                            <strong><i class="fa-solid fa-list-check"></i> Checklist del auditor de Calidad</strong>
+                            <span class="small text-muted">@respuestasChecklistGuardadas.Count respuesta(s)</span>
+                        </div>
+                        @foreach (var grupoHistorial in gruposHistorialChecklist)
+                        {
+                            <div class="quality-checklist-section mb-0 border-0 rounded-0">
+                                <div class="quality-checklist-section-header">
+                                    <strong><i class="fa-solid fa-clipboard-check"></i> @grupoHistorial.Key.Seccion</strong>
+                                    <span>@grupoHistorial.Count() pregunta(s)</span>
+                                </div>
+                                <div class="quality-history-list">
+                                    @foreach (var respuesta in grupoHistorial)
+                                    {
+                                        var resultadoHistorial = (respuesta.Resultado ?? string.Empty).Trim().ToUpperInvariant();
+                                        if (resultadoHistorial == "N/A" || resultadoHistorial == "NA") resultadoHistorial = "NO_APLICA";
+                                        var claseHistorial = resultadoHistorial == "OK" ? "quality-result-ok" : resultadoHistorial == "NOK" ? "quality-result-nok" : "quality-result-na";
+                                        var textoHistorial = resultadoHistorial == "OK" ? "OK" : resultadoHistorial == "NOK" ? "NOK" : "NO APLICA";
+                                        <div class="quality-history-row">
+                                            <div class="quality-history-question">@respuesta.OrdenPregunta. @respuesta.TextoPregunta</div>
+                                            <div class="quality-history-answer @claseHistorial">@textoHistorial</div>
+                                            <div class="quality-history-observation">
+                                                @if (!string.IsNullOrWhiteSpace(respuesta.Observaciones))
+                                                {
+                                                    <span>@respuesta.Observaciones</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="quality-history-empty">Sin observaciones</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.ObservacionesChecklistCalidad))
+                        {
+                            <div class="p-3 border-top">
+                                <div class="small text-muted fw-bold text-uppercase mb-1">Observaciones generales de Calidad</div>
+                                <div>@Model.ObservacionesChecklistCalidad</div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (Model.AyudaVisualColocada || Model.HIPColocada || Model.HCCColocada || Model.MatrizPolivalenciaValidada || Model.AlertaCalidadAplica.HasValue || Model.AlertaCalidadColocada.HasValue || !string.IsNullOrWhiteSpace(Model.MotivoDevolucion))
+                {
+                    <div class="quality-history-group">
+                        <div class="quality-history-group-header">
+                            <strong><i class="fa-solid fa-power-off"></i> Revisión de prearranque</strong>
+                            <span class="small text-muted">Datos registrados</span>
+                        </div>
+                        <div class="quality-history-grid">
+                            <div class="quality-history-stat"><small>Ayuda visual</small><strong class="@(Model.AyudaVisualColocada ? "quality-result-ok" : "quality-result-nok")">@(Model.AyudaVisualColocada ? "Colocada" : "No colocada")</strong></div>
+                            <div class="quality-history-stat"><small>HIP</small><strong class="@(Model.HIPColocada ? "quality-result-ok" : "quality-result-nok")">@(Model.HIPColocada ? "Colocada" : "No colocada")</strong></div>
+                            <div class="quality-history-stat"><small>HCC</small><strong class="@(Model.HCCColocada ? "quality-result-ok" : "quality-result-nok")">@(Model.HCCColocada ? "Colocada" : "No colocada")</strong></div>
+                            <div class="quality-history-stat"><small>Matriz de polivalencia</small><strong class="@(Model.MatrizPolivalenciaValidada ? "quality-result-ok" : "quality-result-nok")">@(Model.MatrizPolivalenciaValidada ? "Validada" : "No validada")</strong></div>
+                            <div class="quality-history-stat"><small>Alerta de Calidad</small><strong class="@ClaseResultadoNullable(Model.AlertaCalidadAplica)">@(Model.AlertaCalidadAplica == true ? "Sí aplica" : Model.AlertaCalidadAplica == false ? "No aplica" : "Sin respuesta")</strong></div>
+                            <div class="quality-history-stat"><small>Alerta colocada</small><strong class="@ClaseResultadoNullable(Model.AlertaCalidadColocada)">@ResultadoNullable(Model.AlertaCalidadColocada)</strong></div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(Model.MotivoDevolucion))
+                        {
+                            <div class="p-3 border-top">
+                                <div class="small text-muted fw-bold text-uppercase mb-1">Último motivo de devolución</div>
+                                <div>@Model.MotivoDevolucion</div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (hayValidacionPrimerasPiezas)
+                {
+                    <div class="quality-history-group">
+                        <div class="quality-history-group-header">
+                            <strong><i class="fa-solid fa-vial-circle-check"></i> Última validación de primeras piezas</strong>
+                            @if (Model.FechaValidacionPrimerasPiezas.HasValue)
+                            {
+                                <span class="small text-muted">@Model.FechaValidacionPrimerasPiezas.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                            }
+                        </div>
+                        <div class="quality-history-grid">
+                            <div class="quality-history-stat"><small>Cinco disparos segregados</small><strong class="@(Model.CincoDisparosSegregados ? "quality-result-ok" : "quality-result-nok")">@(Model.CincoDisparosSegregados ? "Sí" : "No")</strong></div>
+                            <div class="quality-history-stat"><small>Disparos conformes</small><strong class="@(Model.CantidadDisparosConformes >= 3 ? "quality-result-ok" : "quality-result-nok")">@Model.CantidadDisparosConformes de 5</strong></div>
+                            <div class="quality-history-stat"><small>Dimensional</small><strong class="@ClaseResultadoNullable(Model.ValidacionDimensional)">@ResultadoNullable(Model.ValidacionDimensional)</strong></div>
+                            <div class="quality-history-stat"><small>Apariencia</small><strong class="@ClaseResultadoNullable(Model.ValidacionApariencia)">@ResultadoNullable(Model.ValidacionApariencia)</strong></div>
+                            <div class="quality-history-stat"><small>Gauge</small><strong class="@ClaseResultadoNullable(Model.ValidacionGauge)">@ResultadoNullable(Model.ValidacionGauge)</strong></div>
+                            <div class="quality-history-stat"><small>Conductividad</small><strong class="@ClaseResultadoNullable(Model.ValidacionConductividad)">@ResultadoNullable(Model.ValidacionConductividad)</strong></div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
+                        {
+                            <div class="p-3 border-top">
+                                <div class="small text-muted fw-bold text-uppercase mb-1">Observaciones de la validación</div>
+                                <div>@Model.Observaciones</div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (Model.IntentosPrimerasPiezas.Any())
+                {
+                    <div class="quality-history-group">
+                        <div class="quality-history-group-header">
+                            <strong><i class="fa-solid fa-vials"></i> Intentos registrados</strong>
+                            <span class="small text-muted">@Model.IntentosPrimerasPiezas.Count intento(s)</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Intento</th>
+                                        <th>Disparos</th>
+                                        <th>Dimensional</th>
+                                        <th>Apariencia</th>
+                                        <th>Gauge</th>
+                                        <th>Conductividad</th>
+                                        <th>Resultado</th>
+                                        <th>Fecha</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var intento in Model.IntentosPrimerasPiezas.OrderByDescending(x => x.NumeroIntento))
+                                    {
+                                        <tr>
+                                            <td>#@intento.NumeroIntento</td>
+                                            <td>@intento.CantidadDisparosPresentados</td>
+                                            <td>@ResultadoNullable(intento.ValidacionDimensional)</td>
+                                            <td>@ResultadoNullable(intento.ValidacionApariencia)</td>
+                                            <td>@ResultadoNullable(intento.ValidacionGauge)</td>
+                                            <td>@ResultadoNullable(intento.ValidacionConductividad)</td>
+                                            <td><strong>@intento.Resultado</strong></td>
+                                            <td>@intento.FechaInicio.ToString("dd/MM/yyyy HH:mm")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+    }
 
     @if (puedePrearranque && Model.ChecklistArranqueID.HasValue && Model.PreguntasChecklistCalidad.Any())
     {
@@ -1541,6 +1880,24 @@
 </div>
 <script>
     document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.quality-liberacion [data-history-section]').forEach(function(section){
+        const toggle=section.querySelector('[data-history-toggle]');
+        const content=section.querySelector('[data-history-content]');
+        const text=section.querySelector('[data-history-toggle-text]');
+        const icon=section.querySelector('[data-history-toggle-icon]');
+        function actualizarHistorial(){
+            if(!toggle||!content)return;
+            const collapsed=content.classList.contains('is-collapsed');
+            toggle.setAttribute('aria-expanded',collapsed?'false':'true');
+            if(text)text.textContent=collapsed?'Ver respuestas':'Ocultar respuestas';
+            if(icon){
+                icon.classList.toggle('fa-chevron-down',collapsed);
+                icon.classList.toggle('fa-chevron-up',!collapsed);
+            }
+        }
+        toggle?.addEventListener('click',function(){content?.classList.toggle('is-collapsed');actualizarHistorial();});
+        actualizarHistorial();
+    });
     function actualizarChecklistAuditor(){
         document.querySelectorAll('.quality-liberacion [data-auditor-section]').forEach(function(section){
             const items=Array.from(section.querySelectorAll('[data-quality-result]'));

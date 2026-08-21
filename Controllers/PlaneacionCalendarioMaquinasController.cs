@@ -36,25 +36,14 @@ namespace ERP.NSQuell.Controllers
 
         [HttpGet("")]
         [HttpGet("Index")]
-        public async Task<IActionResult> Index(
-            string? vista,
-            DateTime? fecha,
-            DateTime? rangoInicio,
-            DateTime? rangoFin)
+        public async Task<IActionResult> Index(string? vista, DateTime? fecha, DateTime? rangoInicio, DateTime? rangoFin)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
-
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
             var periodo = ResolverPeriodo(vista, fecha, rangoInicio, rangoFin);
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
-            var maquinas = await ObtenerMaquinasCalendarioAsync(
-                periodo.Inicio,
-                periodo.Fin,
-                cn);
-
+            var maquinas = await ObtenerMaquinasCalendarioAsync(periodo.Inicio, periodo.Fin, cn);
+            var solicitudesReprogramacion = await ObtenerSolicitudesReprogramacionPendientesAsync(cn);
             var vm = new PlaneacionCalendarioMaquinasVm
             {
                 Vista = periodo.Vista,
@@ -66,7 +55,8 @@ namespace ERP.NSQuell.Controllers
                 Ahora = DateTime.Now,
                 Maquinas = maquinas
             };
-
+            ViewBag.SolicitudesReprogramacion = solicitudesReprogramacion;
+            ViewBag.TotalSolicitudesReprogramacion = solicitudesReprogramacion.Count;
             return View(vm);
         }
 
@@ -144,465 +134,150 @@ namespace ERP.NSQuell.Controllers
         }
 
         [HttpGet("AlertasReprogramacion")]
-        public async Task<IActionResult> AlertasReprogramacion(
-    int? programaProduccionId = null,
-    int? maquinaId = null)
+        public async Task<IActionResult> AlertasReprogramacion(int? programaProduccionId = null, int? maquinaId = null)
         {
-            if (!UsuarioEnSesion())
-            {
-                return Unauthorized(new
-                {
-                    ok = false,
-                    mensaje = "La sesión terminó. Vuelve a iniciar sesión."
-                });
-            }
-
+            if (!UsuarioEnSesion()) return Unauthorized(new { ok = false, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             const string sql = @"
-DECLARE @Ahora DATETIME2 = GETDATE();
-DECLARE @LimiteMuyReciente DATETIME2 = DATEADD(HOUR, -2, @Ahora);
-DECLARE @LimiteReciente DATETIME2 = DATEADD(HOUR, -24, @Ahora);
-
+DECLARE @Ahora DATETIME2=GETDATE();
+DECLARE @LimiteMuyReciente DATETIME2=DATEADD(HOUR,-2,@Ahora);
+DECLARE @LimiteReciente DATETIME2=DATEADD(HOUR,-24,@Ahora);
 SELECT
     h.ReprogramacionHistorialID,
     h.ProgramaProduccionID,
-
     h.MaquinaAnteriorID,
-    ISNULL(ma.Codigo, N'SIN MÁQUINA') AS MaquinaAnteriorCodigo,
-    ISNULL(ma.Nombre, N'') AS MaquinaAnteriorNombre,
-
+    ISNULL(ma.Codigo,N'SIN MÁQUINA') AS MaquinaAnteriorCodigo,
+    ISNULL(ma.Nombre,N'') AS MaquinaAnteriorNombre,
     h.MaquinaNuevaID,
-    ISNULL(mn.Codigo, N'SIN MÁQUINA') AS MaquinaNuevaCodigo,
-    ISNULL(mn.Nombre, N'') AS MaquinaNuevaNombre,
-
+    ISNULL(mn.Codigo,N'SIN MÁQUINA') AS MaquinaNuevaCodigo,
+    ISNULL(mn.Nombre,N'') AS MaquinaNuevaNombre,
     h.InicioAnterior,
     h.InicioNuevo,
     h.FinAnterior,
     h.FinNuevo,
-
     h.HorasAnteriores,
     h.HorasNuevas,
-
     h.CambioAnterior,
     h.CambioNuevo,
     h.ArranqueAnterior,
     h.ArranqueNuevo,
-
     h.ReleaseDetalleID,
     h.SolicitudProduccionID,
     h.SolicitudProduccionDetalleID,
-
     h.DaTiempoDespues,
     h.FechaRequeridaCliente,
-
     h.TipoMovimiento,
-    ISNULL(h.EsMovimientoAutomatico, 0)
-        AS EsMovimientoAutomatico,
+    ISNULL(h.EsMovimientoAutomatico,0) AS EsMovimientoAutomatico,
     h.ProgramaOrigenMovimientoID,
-
     h.UsuarioID,
     h.FechaCambio,
     h.Motivo,
-
     pp.NumeroParte,
     pp.ReferenciaSAP,
     pp.DesignacionDescripcionSAP AS DescripcionParte,
     pp.MoldeCodigo,
-
-    CASE
-        WHEN h.FechaCambio >= @LimiteMuyReciente
-            THEN N'MUY_RECIENTE'
-        ELSE N'RECIENTE'
-    END AS NivelAlerta,
-
-    CASE
-        WHEN h.FechaCambio >= @LimiteMuyReciente
-            THEN 1
-        ELSE 2
-    END AS OrdenAlerta,
-
-    DATEDIFF(MINUTE, h.FechaCambio, @Ahora)
-        AS MinutosDesdeCambio,
-
-    u.NombreUsuario,
-
-    CASE
-        WHEN h.MaquinaAnteriorID <> h.MaquinaNuevaID
-            THEN 1
-        ELSE 0
-    END AS CambioMaquina,
-
-    CASE
-        WHEN h.InicioAnterior <> h.InicioNuevo
-            THEN 1
-        ELSE 0
-    END AS CambioInicio,
-
-    CASE
-        WHEN h.FinAnterior <> h.FinNuevo
-            THEN 1
-        ELSE 0
-    END AS CambioFin
-
+    CASE WHEN h.FechaCambio>=@LimiteMuyReciente THEN N'MUY_RECIENTE' ELSE N'RECIENTE' END AS NivelAlerta,
+    CASE WHEN h.FechaCambio>=@LimiteMuyReciente THEN 1 ELSE 2 END AS OrdenAlerta,
+    DATEDIFF(MINUTE,h.FechaCambio,@Ahora) AS MinutosDesdeCambio,
+    CASE WHEN h.MaquinaAnteriorID<>h.MaquinaNuevaID THEN 1 ELSE 0 END AS CambioMaquina,
+    CASE WHEN h.InicioAnterior<>h.InicioNuevo THEN 1 ELSE 0 END AS CambioInicio,
+    CASE WHEN h.FinAnterior<>h.FinNuevo THEN 1 ELSE 0 END AS CambioFin
 FROM dbo.Planeacion_ProgramaReprogramacionHistorial h
-
-INNER JOIN dbo.Planeacion_ProgramaProduccion pp
-    ON pp.ProgramaProduccionID =
-       h.ProgramaProduccionID
-
-LEFT JOIN dbo.ERP_Maquinas ma
-    ON ma.MaquinaID =
-       h.MaquinaAnteriorID
-
-LEFT JOIN dbo.ERP_Maquinas mn
-    ON mn.MaquinaID =
-       h.MaquinaNuevaID
-
-LEFT JOIN dbo.Usuarios u
-    ON u.UsuarioID =
-       h.UsuarioID
-
-WHERE h.FechaCambio >= @LimiteReciente
-
-  AND
-  (
-      @ProgramaProduccionID IS NULL
-      OR h.ProgramaProduccionID =
-         @ProgramaProduccionID
-  )
-
-  AND
-  (
-      @MaquinaID IS NULL
-      OR h.MaquinaAnteriorID = @MaquinaID
-      OR h.MaquinaNuevaID = @MaquinaID
-  )
-
-ORDER BY
-    OrdenAlerta,
-    h.FechaCambio DESC,
-    h.ReprogramacionHistorialID DESC;";
-
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=h.ProgramaProduccionID
+LEFT JOIN dbo.ERP_Maquinas ma ON ma.MaquinaID=h.MaquinaAnteriorID
+LEFT JOIN dbo.ERP_Maquinas mn ON mn.MaquinaID=h.MaquinaNuevaID
+WHERE h.FechaCambio>=@LimiteReciente
+  AND (@ProgramaProduccionID IS NULL OR h.ProgramaProduccionID=@ProgramaProduccionID)
+  AND (@MaquinaID IS NULL OR h.MaquinaAnteriorID=@MaquinaID OR h.MaquinaNuevaID=@MaquinaID)
+ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
             await using var cmd = new SqlCommand(sql, cn);
-
-            cmd.Parameters.Add(
-                "@ProgramaProduccionID",
-                SqlDbType.Int).Value =
-                programaProduccionId.HasValue &&
-                programaProduccionId.Value > 0
-                    ? programaProduccionId.Value
-                    : DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@MaquinaID",
-                SqlDbType.Int).Value =
-                maquinaId.HasValue &&
-                maquinaId.Value > 0
-                    ? maquinaId.Value
-                    : DBNull.Value;
-
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId.HasValue && programaProduccionId.Value > 0 ? programaProduccionId.Value : DBNull.Value;
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId.HasValue && maquinaId.Value > 0 ? maquinaId.Value : DBNull.Value;
             var alertas = new List<object>();
-
             await using var rd = await cmd.ExecuteReaderAsync();
-
             while (await rd.ReadAsync())
             {
-                var inicioAnterior =
-                    rd["InicioAnterior"] == DBNull.Value
-                        ? (DateTime?)null
-                        : Convert.ToDateTime(
-                            rd["InicioAnterior"]);
-
-                var inicioNuevo =
-                    rd["InicioNuevo"] == DBNull.Value
-                        ? (DateTime?)null
-                        : Convert.ToDateTime(
-                            rd["InicioNuevo"]);
-
-                var finAnterior =
-                    rd["FinAnterior"] == DBNull.Value
-                        ? (DateTime?)null
-                        : Convert.ToDateTime(
-                            rd["FinAnterior"]);
-
-                var finNuevo =
-                    rd["FinNuevo"] == DBNull.Value
-                        ? (DateTime?)null
-                        : Convert.ToDateTime(
-                            rd["FinNuevo"]);
-
-                var maquinaAnteriorCodigo =
-                    rd["MaquinaAnteriorCodigo"]
-                        ?.ToString()
-                        ?.Trim()
-                    ?? "SIN MÁQUINA";
-
-                var maquinaNuevaCodigo =
-                    rd["MaquinaNuevaCodigo"]
-                        ?.ToString()
-                        ?.Trim()
-                    ?? "SIN MÁQUINA";
-
-                var cambioMaquina =
-                    rd["CambioMaquina"] != DBNull.Value &&
-                    Convert.ToBoolean(
-                        rd["CambioMaquina"]);
-
-                var cambioInicio =
-                    rd["CambioInicio"] != DBNull.Value &&
-                    Convert.ToBoolean(
-                        rd["CambioInicio"]);
-
-                var cambioFin =
-                    rd["CambioFin"] != DBNull.Value &&
-                    Convert.ToBoolean(
-                        rd["CambioFin"]);
-
-                var esMovimientoAutomatico =
-                    rd["EsMovimientoAutomatico"] != DBNull.Value &&
-                    Convert.ToBoolean(
-                        rd["EsMovimientoAutomatico"]);
-
-                var tipoMovimiento =
-                    rd["TipoMovimiento"]
-                        ?.ToString()
-                        ?.Trim();
-
-                if (string.IsNullOrWhiteSpace(tipoMovimiento))
-                {
-                    tipoMovimiento =
-                        esMovimientoAutomatico
-                            ? "RECORRIDO_POR_COLA"
-                            : "MOVIDO_MANUAL";
-                }
-
+                var inicioAnterior = rd["InicioAnterior"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["InicioAnterior"]);
+                var inicioNuevo = rd["InicioNuevo"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["InicioNuevo"]);
+                var finAnterior = rd["FinAnterior"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FinAnterior"]);
+                var finNuevo = rd["FinNuevo"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FinNuevo"]);
+                var maquinaAnteriorCodigo = rd["MaquinaAnteriorCodigo"]?.ToString()?.Trim() ?? "SIN MÁQUINA";
+                var maquinaNuevaCodigo = rd["MaquinaNuevaCodigo"]?.ToString()?.Trim() ?? "SIN MÁQUINA";
+                var cambioMaquina = rd["CambioMaquina"] != DBNull.Value && Convert.ToBoolean(rd["CambioMaquina"]);
+                var cambioInicio = rd["CambioInicio"] != DBNull.Value && Convert.ToBoolean(rd["CambioInicio"]);
+                var cambioFin = rd["CambioFin"] != DBNull.Value && Convert.ToBoolean(rd["CambioFin"]);
+                var esMovimientoAutomatico = rd["EsMovimientoAutomatico"] != DBNull.Value && Convert.ToBoolean(rd["EsMovimientoAutomatico"]);
+                var tipoMovimiento = rd["TipoMovimiento"]?.ToString()?.Trim();
+                if (string.IsNullOrWhiteSpace(tipoMovimiento)) tipoMovimiento = esMovimientoAutomatico ? "RECORRIDO_POR_COLA" : "MOVIDO_MANUAL";
                 var cambios = new List<string>();
-
-                if (cambioMaquina)
-                {
-                    cambios.Add(
-                        $"Máquina: {maquinaAnteriorCodigo} → " +
-                        $"{maquinaNuevaCodigo}");
-                }
-
-                if (cambioInicio)
-                {
-                    cambios.Add(
-                        "Inicio: " +
-                        $"{FormatearFechaAlerta(inicioAnterior)} → " +
-                        $"{FormatearFechaAlerta(inicioNuevo)}");
-                }
-
-                if (cambioFin)
-                {
-                    cambios.Add(
-                        "Fin: " +
-                        $"{FormatearFechaAlerta(finAnterior)} → " +
-                        $"{FormatearFechaAlerta(finNuevo)}");
-                }
-
-                if (!cambios.Any())
-                {
-                    cambios.Add(
-                        "Se actualizó la programación del programa.");
-                }
-
-                var numeroParte =
-                    rd["ReferenciaSAP"]
-                        ?.ToString()
-                        ?.Trim();
-
-                if (string.IsNullOrWhiteSpace(numeroParte))
-                {
-                    numeroParte =
-                        rd["NumeroParte"]
-                            ?.ToString()
-                            ?.Trim();
-                }
-
+                if (cambioMaquina) cambios.Add($"Máquina: {maquinaAnteriorCodigo} → {maquinaNuevaCodigo}");
+                if (cambioInicio) cambios.Add($"Inicio: {FormatearFechaAlerta(inicioAnterior)} → {FormatearFechaAlerta(inicioNuevo)}");
+                if (cambioFin) cambios.Add($"Fin: {FormatearFechaAlerta(finAnterior)} → {FormatearFechaAlerta(finNuevo)}");
+                if (!cambios.Any()) cambios.Add("Se actualizó la programación del programa.");
+                var numeroParte = rd["ReferenciaSAP"]?.ToString()?.Trim();
+                if (string.IsNullOrWhiteSpace(numeroParte)) numeroParte = rd["NumeroParte"]?.ToString()?.Trim();
+                var usuarioId = rd["UsuarioID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["UsuarioID"]);
+                var fechaCambio = Convert.ToDateTime(rd["FechaCambio"]);
+                var nivelAlerta = rd["NivelAlerta"]?.ToString()?.Trim() ?? "RECIENTE";
                 alertas.Add(new
                 {
-                    reprogramacionHistorialID =
-                        Convert.ToInt32(
-                            rd["ReprogramacionHistorialID"]),
-
-                    programaProduccionID =
-                        Convert.ToInt32(
-                            rd["ProgramaProduccionID"]),
-
-                    programaOrigenMovimientoID =
-                        rd["ProgramaOrigenMovimientoID"] ==
-                        DBNull.Value
-                            ? (int?)null
-                            : Convert.ToInt32(
-                                rd["ProgramaOrigenMovimientoID"]),
-
+                    reprogramacionHistorialID = Convert.ToInt32(rd["ReprogramacionHistorialID"]),
+                    programaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    programaOrigenMovimientoID = rd["ProgramaOrigenMovimientoID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["ProgramaOrigenMovimientoID"]),
                     tipoMovimiento,
-
                     esMovimientoAutomatico,
-
-                    nivelAlerta =
-                        rd["NivelAlerta"]
-                            ?.ToString()
-                            ?.Trim()
-                        ?? "RECIENTE",
-
-                    esMuyReciente =
-                        string.Equals(
-                            rd["NivelAlerta"]?.ToString(),
-                            "MUY_RECIENTE",
-                            StringComparison.OrdinalIgnoreCase),
-
-                    minutosDesdeCambio =
-                        Convert.ToInt32(
-                            rd["MinutosDesdeCambio"]),
-
-                    fechaCambio =
-                        Convert.ToDateTime(
-                            rd["FechaCambio"]),
-
-                    fechaCambioTexto =
-                        Convert.ToDateTime(
-                            rd["FechaCambio"])
-                        .ToString(
-                            "dd/MM/yyyy HH:mm",
-                            CultureInfo.InvariantCulture),
-
-                    maquinaAnteriorID =
-                        rd["MaquinaAnteriorID"] ==
-                        DBNull.Value
-                            ? (int?)null
-                            : Convert.ToInt32(
-                                rd["MaquinaAnteriorID"]),
-
+                    nivelAlerta,
+                    esMuyReciente = string.Equals(nivelAlerta, "MUY_RECIENTE", StringComparison.OrdinalIgnoreCase),
+                    minutosDesdeCambio = Convert.ToInt32(rd["MinutosDesdeCambio"]),
+                    fechaCambio,
+                    fechaCambioTexto = fechaCambio.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+                    maquinaAnteriorID = rd["MaquinaAnteriorID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["MaquinaAnteriorID"]),
                     maquinaAnteriorCodigo,
-
-                    maquinaAnteriorNombre =
-                        rd["MaquinaAnteriorNombre"]
-                            ?.ToString()
-                            ?.Trim(),
-
-                    maquinaNuevaID =
-                        rd["MaquinaNuevaID"] ==
-                        DBNull.Value
-                            ? (int?)null
-                            : Convert.ToInt32(
-                                rd["MaquinaNuevaID"]),
-
+                    maquinaAnteriorNombre = rd["MaquinaAnteriorNombre"]?.ToString()?.Trim(),
+                    maquinaNuevaID = rd["MaquinaNuevaID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["MaquinaNuevaID"]),
                     maquinaNuevaCodigo,
-
-                    maquinaNuevaNombre =
-                        rd["MaquinaNuevaNombre"]
-                            ?.ToString()
-                            ?.Trim(),
-
+                    maquinaNuevaNombre = rd["MaquinaNuevaNombre"]?.ToString()?.Trim(),
                     inicioAnterior,
                     inicioNuevo,
                     finAnterior,
                     finNuevo,
-
-                    inicioAnteriorTexto =
-                        FormatearFechaAlerta(
-                            inicioAnterior),
-
-                    inicioNuevoTexto =
-                        FormatearFechaAlerta(
-                            inicioNuevo),
-
-                    finAnteriorTexto =
-                        FormatearFechaAlerta(
-                            finAnterior),
-
-                    finNuevoTexto =
-                        FormatearFechaAlerta(
-                            finNuevo),
-
+                    inicioAnteriorTexto = FormatearFechaAlerta(inicioAnterior),
+                    inicioNuevoTexto = FormatearFechaAlerta(inicioNuevo),
+                    finAnteriorTexto = FormatearFechaAlerta(finAnterior),
+                    finNuevoTexto = FormatearFechaAlerta(finNuevo),
                     numeroParte,
-
-                    descripcionParte =
-                        rd["DescripcionParte"]
-                            ?.ToString()
-                            ?.Trim(),
-
-                    moldeCodigo =
-                        rd["MoldeCodigo"]
-                            ?.ToString()
-                            ?.Trim(),
-
-                    motivo =
-                        rd["Motivo"]
-                            ?.ToString()
-                            ?.Trim(),
-
-                    usuarioID =
-                        rd["UsuarioID"] ==
-                        DBNull.Value
-                            ? (int?)null
-                            : Convert.ToInt32(
-                                rd["UsuarioID"]),
-
-                    usuarioNombre =
-                        rd["NombreUsuario"]
-                            ?.ToString()
-                            ?.Trim(),
-
+                    descripcionParte = rd["DescripcionParte"]?.ToString()?.Trim(),
+                    moldeCodigo = rd["MoldeCodigo"]?.ToString()?.Trim(),
+                    motivo = rd["Motivo"]?.ToString()?.Trim(),
+                    usuarioID = usuarioId,
+                    usuarioNombre = usuarioId.HasValue ? $"Usuario {usuarioId.Value}" : "Sistema",
                     cambioMaquina,
                     cambioInicio,
                     cambioFin,
-
                     cambios,
-
-                    titulo =
-                        esMovimientoAutomatico
-                            ? "Programa recorrido automáticamente"
-                            : "Programa reprogramado",
-
-                    mensaje =
-                        string.Join(
-                            " · ",
-                            cambios)
+                    titulo = esMovimientoAutomatico ? "Programa recorrido automáticamente" : "Programa reprogramado",
+                    mensaje = string.Join(" · ", cambios)
                 });
             }
-
             return Json(new
             {
                 ok = true,
-
                 total = alertas.Count,
-
                 muyRecientes = alertas.Count(x =>
                 {
-                    var propiedad =
-                        x.GetType()
-                         .GetProperty("esMuyReciente");
-
-                    return propiedad != null &&
-                           Convert.ToBoolean(
-                               propiedad.GetValue(x));
+                    var propiedad = x.GetType().GetProperty("esMuyReciente");
+                    return propiedad != null && Convert.ToBoolean(propiedad.GetValue(x));
                 }),
-
                 recientes = alertas.Count(x =>
                 {
-                    var propiedad =
-                        x.GetType()
-                         .GetProperty("esMuyReciente");
-
-                    return propiedad == null ||
-                           !Convert.ToBoolean(
-                               propiedad.GetValue(x));
+                    var propiedad = x.GetType().GetProperty("esMuyReciente");
+                    return propiedad == null || !Convert.ToBoolean(propiedad.GetValue(x));
                 }),
-
-                consultadoEn =
-                    DateTime.Now.ToString(
-                        "dd/MM/yyyy HH:mm:ss",
-                        CultureInfo.InvariantCulture),
-
+                consultadoEn = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture),
                 alertas
             });
         }
-
 
 
         [HttpPost("ReprogramarCalendario")]
@@ -3303,13 +2978,110 @@ VALUES
             }
         }
 
-        // ============================================================
-        // HORARIO OPERATIVO
-        //
-        // Lunes 07:00 a sábado 18:00.
-        // El domingo solo se usa cuando el switch de la vista está activo.
-        // ============================================================
-
+        private async Task<List<SolicitudReprogramacionCalendarioVm>> ObtenerSolicitudesReprogramacionPendientesAsync(SqlConnection cn)
+        {
+            var lista = new List<SolicitudReprogramacionCalendarioVm>();
+            const string sql = @"
+SELECT
+    sr.SolicitudReprogramacionID,
+    sr.ProgramaProduccionID,
+    sr.SolicitudProduccionID,
+    sr.MaquinaID,
+    sr.FechaInicioProgramadaActual,
+    sr.FechaFinProgramadaActual,
+    sr.Motivo,
+    sr.Observaciones,
+    sr.Estatus,
+    sr.UsuarioSolicitanteID,
+    sr.FechaSolicitud,
+    pp.NumeroParte,
+    pp.ReferenciaSAP,
+    pp.DesignacionDescripcionSAP AS DescripcionParte,
+    pp.MoldeCodigo,
+    pp.CantidadProgramada,
+    pp.FechaInicioProgramada,
+    pp.FechaFinProgramada,
+    pp.MaquinaID AS MaquinaProgramaID,
+    pp.MaquinaCodigo,
+    pp.MaquinaNombre,
+    ISNULL(pp.EstatusID,1) AS EstatusProgramaID,
+    ISNULL(NULLIF(s.NumeroOFRecibida,N''),NULLIF(s.FolioSolicitud,N'')) AS NumeroOF,
+    ISNULL(c.Nombre,pp.ClienteNombre) AS ClienteNombre,
+    LTRIM(RTRIM(CONCAT(
+    ISNULL(pu.Nombre,N''),
+    N' ',
+    ISNULL(pu.ApellidoPaterno,N''),
+    N' ',
+    ISNULL(pu.ApellidoMaterno,N'')
+))) AS UsuarioSolicitanteNombre,
+    DATEDIFF(MINUTE,sr.FechaInicioProgramadaActual,sr.FechaSolicitud) AS MinutosAtrasoAlSolicitar,
+    DATEDIFF(MINUTE,sr.FechaInicioProgramadaActual,GETDATE()) AS MinutosAtrasoActual
+FROM dbo.Planeacion_SolicitudesReprogramacion sr
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.ProgramaProduccionID=sr.ProgramaProduccionID
+   AND pp.Activo=1
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=COALESCE(sr.SolicitudProduccionID,pp.SolicitudProduccionID)
+   AND s.Activo=1
+LEFT JOIN dbo.ERP_Clientes c
+    ON c.ClienteID=pp.ClienteID
+LEFT JOIN dbo.Usuarios u
+    ON u.UsuarioID=sr.UsuarioSolicitanteID
+LEFT JOIN dbo.Persona pu
+    ON pu.PersonaID=u.PersonaID
+WHERE sr.Activo=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(sr.Estatus,N''))))=N'PENDIENTE'
+ORDER BY
+    CASE
+        WHEN sr.FechaInicioProgramadaActual<GETDATE() THEN 0
+        ELSE 1
+    END,
+    sr.FechaSolicitud,
+    sr.SolicitudReprogramacionID;";
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                var inicioActual = rd["FechaInicioProgramadaActual"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaInicioProgramadaActual"]);
+                var finActual = rd["FechaFinProgramadaActual"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaFinProgramadaActual"]);
+                var inicioPrograma = rd["FechaInicioProgramada"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaInicioProgramada"]);
+                var finPrograma = rd["FechaFinProgramada"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaFinProgramada"]);
+                var fechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]);
+                var minutosAtrasoActual = rd["MinutosAtrasoActual"] == DBNull.Value ? 0 : Math.Max(0, Convert.ToInt32(rd["MinutosAtrasoActual"]));
+                var minutosAtrasoSolicitud = rd["MinutosAtrasoAlSolicitar"] == DBNull.Value ? 0 : Math.Max(0, Convert.ToInt32(rd["MinutosAtrasoAlSolicitar"]));
+                lista.Add(new SolicitudReprogramacionCalendarioVm
+                {
+                    SolicitudReprogramacionID = Convert.ToInt32(rd["SolicitudReprogramacionID"]),
+                    ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
+                    MaquinaID = rd["MaquinaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaID"]),
+                    MaquinaProgramaID = rd["MaquinaProgramaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaProgramaID"]),
+                    NumeroOF = rd["NumeroOF"]?.ToString()?.Trim(),
+                    ClienteNombre = rd["ClienteNombre"]?.ToString()?.Trim(),
+                    NumeroParte = rd["NumeroParte"]?.ToString()?.Trim(),
+                    ReferenciaSAP = rd["ReferenciaSAP"]?.ToString()?.Trim(),
+                    DescripcionParte = rd["DescripcionParte"]?.ToString()?.Trim(),
+                    MoldeCodigo = rd["MoldeCodigo"]?.ToString()?.Trim(),
+                    CantidadProgramada = rd["CantidadProgramada"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadProgramada"]),
+                    MaquinaCodigo = rd["MaquinaCodigo"]?.ToString()?.Trim(),
+                    MaquinaNombre = rd["MaquinaNombre"]?.ToString()?.Trim(),
+                    FechaInicioProgramadaActual = inicioActual,
+                    FechaFinProgramadaActual = finActual,
+                    FechaInicioPrograma = inicioPrograma,
+                    FechaFinPrograma = finPrograma,
+                    Motivo = rd["Motivo"]?.ToString()?.Trim(),
+                    Observaciones = rd["Observaciones"]?.ToString()?.Trim(),
+                    Estatus = rd["Estatus"]?.ToString()?.Trim() ?? "PENDIENTE",
+                    UsuarioSolicitanteID = rd["UsuarioSolicitanteID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioSolicitanteID"]),
+                    UsuarioSolicitanteNombre = rd["UsuarioSolicitanteNombre"]?.ToString()?.Trim(),
+                    FechaSolicitud = fechaSolicitud,
+                    EstatusProgramaID = rd["EstatusProgramaID"] == DBNull.Value ? 1 : Convert.ToInt32(rd["EstatusProgramaID"]),
+                    MinutosAtrasoAlSolicitar = minutosAtrasoSolicitud,
+                    MinutosAtrasoActual = minutosAtrasoActual
+                });
+            }
+            return lista;
+        }
         private static DateTime SiguienteAperturaOperativa(
             DateTime fecha,
             bool trabajarDomingo)
@@ -3893,8 +3665,41 @@ VALUES
         }
     }
 
-    // Se deja aquí para que el controlador sea autocontenido.
-    // El JSON de la vista ya usa estos mismos nombres.
+    public sealed class SolicitudReprogramacionCalendarioVm
+    {
+        public int SolicitudReprogramacionID { get; set; }
+        public int ProgramaProduccionID { get; set; }
+        public int? SolicitudProduccionID { get; set; }
+        public int? MaquinaID { get; set; }
+        public int? MaquinaProgramaID { get; set; }
+        public string? NumeroOF { get; set; }
+        public string? ClienteNombre { get; set; }
+        public string? NumeroParte { get; set; }
+        public string? ReferenciaSAP { get; set; }
+        public string? DescripcionParte { get; set; }
+        public string? MoldeCodigo { get; set; }
+        public int CantidadProgramada { get; set; }
+        public string? MaquinaCodigo { get; set; }
+        public string? MaquinaNombre { get; set; }
+        public DateTime? FechaInicioProgramadaActual { get; set; }
+        public DateTime? FechaFinProgramadaActual { get; set; }
+        public DateTime? FechaInicioPrograma { get; set; }
+        public DateTime? FechaFinPrograma { get; set; }
+        public string? Motivo { get; set; }
+        public string? Observaciones { get; set; }
+        public string Estatus { get; set; } = "PENDIENTE";
+        public int? UsuarioSolicitanteID { get; set; }
+        public string? UsuarioSolicitanteNombre { get; set; }
+        public DateTime FechaSolicitud { get; set; }
+        public int EstatusProgramaID { get; set; }
+        public int MinutosAtrasoAlSolicitar { get; set; }
+        public int MinutosAtrasoActual { get; set; }
+        public string TextoParte => !string.IsNullOrWhiteSpace(ReferenciaSAP) ? ReferenciaSAP : !string.IsNullOrWhiteSpace(NumeroParte) ? NumeroParte : "Sin parte";
+        public string TextoOF => string.IsNullOrWhiteSpace(NumeroOF) ? $"Programa {ProgramaProduccionID}" : NumeroOF;
+        public string TextoMaquina => !string.IsNullOrWhiteSpace(MaquinaCodigo) ? string.IsNullOrWhiteSpace(MaquinaNombre) ? MaquinaCodigo : $"{MaquinaCodigo} - {MaquinaNombre}" : "Sin máquina";
+        public string TextoHorarioActual => FechaInicioProgramadaActual.HasValue ? $"{FechaInicioProgramadaActual.Value:dd/MM/yyyy HH:mm} → {(FechaFinProgramadaActual.HasValue ? FechaFinProgramadaActual.Value.ToString("dd/MM/yyyy HH:mm") : "Sin fin")}" : "Sin horario";
+        public string TextoAtrasoActual => MinutosAtrasoActual >= 1440 ? $"{MinutosAtrasoActual / 1440} d {MinutosAtrasoActual % 1440 / 60} h" : MinutosAtrasoActual >= 60 ? $"{MinutosAtrasoActual / 60} h {MinutosAtrasoActual % 60} min" : $"{MinutosAtrasoActual} min";
+    }
     public sealed class CalendarioMaquinasMoverRequest
     {
         public int ProgramaProduccionID { get; set; }

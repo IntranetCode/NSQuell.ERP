@@ -1,0 +1,729 @@
+﻿@model ERP.NSQuell.Models.ProduccionProductoIncompletoIndexVm
+@using ERP.NSQuell.Models
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Producto incompleto";
+    string EstadoClase(string? estado)
+    {
+        estado = (estado ?? string.Empty).Trim().ToUpperInvariant();
+        return estado switch
+        {
+            ProduccionProductoIncompletoEstado.Disponible => "st-disponible",
+            ProduccionProductoIncompletoEstado.Reservada => "st-reservada",
+            ProduccionProductoIncompletoEstado.EnCompletado => "st-completado",
+            ProduccionProductoIncompletoEstado.Completa => "st-completa",
+            ProduccionProductoIncompletoEstado.Cancelada => "st-cancelada",
+            _ => "st-default"
+        };
+    }
+    string AntiguedadClase(ProduccionCajaIncompletaDisponibleVm caja)
+    {
+        if (caja.TieneAntiguedadAlta) return "age-danger";
+        if (caja.TieneAntiguedadMedia) return "age-warning";
+        return "age-normal";
+    }
+    string PorcentajeClase(decimal porcentaje)
+    {
+        if (porcentaje >= 100m) return "progress-complete";
+        if (porcentaje >= 75m) return "progress-high";
+        if (porcentaje >= 40m) return "progress-medium";
+        return "progress-low";
+    }
+}
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+    <style>
+        :root {
+            --azul: #003b82;
+            --azul2: #0056b3;
+            --borde: #d7e2f1;
+            --bg: #f4f7fb;
+            --txt: #102033;
+            --muted: #667085;
+            --success: #107c41;
+            --warning: #b54708;
+            --danger: #b42318
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--txt);
+            font-family: "Segoe UI",Arial,Helvetica,sans-serif;
+            font-size: 14px
+        }
+
+        .pi-page {
+            max-width: 1740px;
+            margin: 0 auto;
+            padding: 18px
+        }
+
+        .pi-topbar {
+            border: 1px solid #bcd2f0;
+            border-radius: 18px;
+            background: linear-gradient(135deg,#0f2f63,#194c9b);
+            color: #fff;
+            padding: 18px 20px;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap
+        }
+
+        .pi-topbar-title {
+            margin: 0;
+            font-size: 1.45rem;
+            font-weight: 950;
+            letter-spacing: -.02em
+        }
+
+        .pi-topbar-sub {
+            margin-top: 4px;
+            color: rgba(255,255,255,.82);
+            font-weight: 600
+        }
+
+        .pi-topbar-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap
+        }
+
+        .pi-topbar .btn {
+            border-radius: 10px;
+            font-weight: 800
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(6,minmax(0,1fr));
+            gap: 10px;
+            margin-bottom: 14px
+        }
+
+        .summary-card {
+            min-width: 0;
+            border: 1px solid var(--borde);
+            border-radius: 14px;
+            background: #fff;
+            padding: 14px;
+            box-shadow: 0 4px 14px rgba(16,42,78,.04)
+        }
+
+        .summary-label {
+            color: var(--muted);
+            font-size: .72rem;
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: .035em
+        }
+
+        .summary-value {
+            margin-top: 4px;
+            color: var(--azul);
+            font-size: 1.45rem;
+            line-height: 1;
+            font-weight: 950
+        }
+
+        .summary-foot {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: .73rem;
+            font-weight: 650
+        }
+
+        .summary-card.warning .summary-value {
+            color: var(--warning)
+        }
+
+        .summary-card.danger .summary-value {
+            color: var(--danger)
+        }
+
+        .summary-card.success .summary-value {
+            color: var(--success)
+        }
+
+        .section {
+            border: 1px solid var(--borde);
+            border-radius: 16px;
+            background: #fff;
+            overflow: hidden;
+            margin-bottom: 14px
+        }
+
+        .section-head {
+            padding: 13px 16px;
+            border-bottom: 1px solid var(--borde);
+            background: #f8fbff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap
+        }
+
+        .section-title {
+            margin: 0;
+            color: var(--azul);
+            font-size: 1rem;
+            font-weight: 950
+        }
+
+        .section-sub {
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: .82rem;
+            font-weight: 650
+        }
+
+        .filters {
+            padding: 14px 16px
+        }
+
+        .form-label {
+            color: #344054;
+            font-size: .76rem;
+            font-weight: 850
+        }
+
+        .form-control, .form-select {
+            border-color: #cfdbea;
+            border-radius: 10px;
+            min-height: 40px;
+            font-size: .86rem
+        }
+
+            .form-control:focus, .form-select:focus {
+                border-color: #82afe3;
+                box-shadow: 0 0 0 .18rem rgba(0,86,179,.10)
+            }
+
+        .btn-filter {
+            min-height: 40px;
+            border-radius: 10px;
+            font-weight: 850
+        }
+
+        .table-wrap {
+            overflow-x: auto
+        }
+
+        .pi-table {
+            width: 100%;
+            min-width: 1320px;
+            border-collapse: separate;
+            border-spacing: 0
+        }
+
+            .pi-table th {
+                padding: 11px 12px;
+                background: #f8fbff;
+                color: #475467;
+                border-bottom: 1px solid var(--borde);
+                font-size: .70rem;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: .035em;
+                white-space: nowrap
+            }
+
+            .pi-table td {
+                padding: 12px;
+                border-bottom: 1px solid #edf1f5;
+                vertical-align: middle
+            }
+
+            .pi-table tbody tr:hover {
+                background: #fbfdff
+            }
+
+            .pi-table tbody tr:last-child td {
+                border-bottom: 0
+            }
+
+        .label-white {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 10px;
+            border: 1px solid #ccd5e1;
+            border-radius: 9px;
+            background: #fff;
+            color: #1d2939;
+            font-weight: 950;
+            box-shadow: inset 0 0 0 1px #f2f4f7;
+            white-space: nowrap
+        }
+
+            .label-white i {
+                color: #667085
+            }
+
+        .main-text {
+            color: #162033;
+            font-weight: 850
+        }
+
+        .sub-text {
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: .76rem;
+            font-weight: 600
+        }
+
+        .state {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 9px;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: 900;
+            white-space: nowrap
+        }
+
+        .st-disponible {
+            background: #ecfdf3;
+            color: #067647;
+            border: 1px solid #abefc6
+        }
+
+        .st-reservada {
+            background: #eff8ff;
+            color: #175cd3;
+            border: 1px solid #b2ddff
+        }
+
+        .st-completado {
+            background: #fff7ed;
+            color: #c2410c;
+            border: 1px solid #fed7aa
+        }
+
+        .st-completa {
+            background: #f2f4f7;
+            color: #344054;
+            border: 1px solid #d0d5dd
+        }
+
+        .st-cancelada {
+            background: #fef3f2;
+            color: #b42318;
+            border: 1px solid #fecdca
+        }
+
+        .st-default {
+            background: #f2f4f7;
+            color: #475467;
+            border: 1px solid #d0d5dd
+        }
+
+        .age {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: .74rem;
+            font-weight: 800;
+            white-space: nowrap
+        }
+
+        .age-normal {
+            color: #475467
+        }
+
+        .age-warning {
+            color: var(--warning)
+        }
+
+        .age-danger {
+            color: var(--danger)
+        }
+
+        .location-empty {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--warning);
+            font-weight: 800
+        }
+
+        .progress-box {
+            min-width: 155px
+        }
+
+        .progress-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 5px;
+            font-size: .73rem
+        }
+
+            .progress-top strong {
+                color: #344054
+            }
+
+            .progress-top span {
+                color: var(--muted)
+            }
+
+        .pi-progress {
+            height: 7px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #eef2f6
+        }
+
+        .pi-progress-bar {
+            height: 100%;
+            border-radius: 999px
+        }
+
+        .progress-complete {
+            background: #12b76a
+        }
+
+        .progress-high {
+            background: #2e90fa
+        }
+
+        .progress-medium {
+            background: #f79009
+        }
+
+        .progress-low {
+            background: #98a2b3
+        }
+
+        .actions {
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+            flex-wrap: wrap
+        }
+
+            .actions .btn {
+                border-radius: 9px;
+                font-size: .76rem;
+                font-weight: 850;
+                white-space: nowrap
+            }
+
+        .empty-state {
+            padding: 50px 20px;
+            text-align: center;
+            color: var(--muted)
+        }
+
+            .empty-state i {
+                display: block;
+                margin-bottom: 10px;
+                color: #98a2b3;
+                font-size: 2rem
+            }
+
+        .trace-summary {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 10px;
+            margin-bottom: 16px
+        }
+
+        .trace-card {
+            padding: 11px 12px;
+            border: 1px solid #e1e8f0;
+            border-radius: 11px;
+            background: #f8fbff
+        }
+
+            .trace-card label {
+                display: block;
+                margin-bottom: 3px;
+                color: var(--muted);
+                font-size: .68rem;
+                font-weight: 850;
+                text-transform: uppercase
+            }
+
+            .trace-card strong {
+                display: block;
+                color: #16335c;
+                font-size: .88rem
+            }
+
+        .timeline {
+            position: relative;
+            margin-left: 8px;
+            padding-left: 20px
+        }
+
+            .timeline::before {
+                content: "";
+                position: absolute;
+                top: 3px;
+                bottom: 3px;
+                left: 5px;
+                width: 2px;
+                background: #d6e2ef
+            }
+
+        .timeline-item {
+            position: relative;
+            padding: 0 0 16px 8px
+        }
+
+            .timeline-item:last-child {
+                padding-bottom: 0
+            }
+
+        .timeline-dot {
+            position: absolute;
+            left: -20px;
+            top: 3px;
+            width: 12px;
+            height: 12px;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            background: var(--azul2);
+            box-shadow: 0 0 0 2px #b9d5f4
+        }
+
+        .timeline-item.complete .timeline-dot {
+            background: #f79009;
+            box-shadow: 0 0 0 2px #fed7aa
+        }
+
+        .timeline-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap
+        }
+
+        .timeline-title {
+            color: #16335c;
+            font-weight: 900
+        }
+
+        .timeline-date {
+            color: var(--muted);
+            font-size: .75rem;
+            font-weight: 700
+        }
+
+        .timeline-body {
+            margin-top: 4px;
+            color: #475467;
+            font-size: .79rem;
+            line-height: 1.45
+        }
+
+        html[data-produccion-theme="dark"] {
+            color-scheme: dark;
+            --azul: #7db7ff;
+            --azul2: #4f9cff;
+            --borde: #304159;
+            --bg: #0b1220;
+            --txt: #e7eef9;
+            --muted: #9aa9bd;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --danger: #fb7185
+        }
+
+            html[data-produccion-theme="dark"] body {
+                background: #0b1220;
+                color: #e7eef9
+            }
+
+            html[data-produccion-theme="dark"] .section, html[data-produccion-theme="dark"] .summary-card {
+                background: #111b2d;
+                border-color: #2c3d55
+            }
+
+            html[data-produccion-theme="dark"] .section-head, html[data-produccion-theme="dark"] .pi-table th {
+                background: #152238;
+                border-color: #2c3d55
+            }
+
+            html[data-produccion-theme="dark"] .pi-table td {
+                border-bottom-color: #25354a
+            }
+
+            html[data-produccion-theme="dark"] .pi-table tbody tr:hover {
+                background: #132036
+            }
+
+            html[data-produccion-theme="dark"] .main-text, html[data-produccion-theme="dark"] .summary-value, html[data-produccion-theme="dark"] .section-title {
+                color: #eef5ff
+            }
+
+            html[data-produccion-theme="dark"] .form-control, html[data-produccion-theme="dark"] .form-select, html[data-produccion-theme="dark"] .modal-content {
+                background: #101b2e;
+                border-color: #304159;
+                color: #e7eef9
+            }
+
+            html[data-produccion-theme="dark"] .label-white {
+                background: #e7e7e7;
+                color: #111827
+            }
+
+            html[data-produccion-theme="dark"] .trace-card {
+                background: #152238;
+                border-color: #304159
+            }
+
+                html[data-produccion-theme="dark"] .trace-card strong, html[data-produccion-theme="dark"] .timeline-title {
+                    color: #eef5ff
+                }
+
+        @@media(max-width:1200px) {
+            .summary-grid {
+                grid-template-columns: repeat(3,minmax(0,1fr))
+            }
+        }
+
+        @@media(max-width:767.98px) {
+            .pi-page {
+                padding: 10px
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+            .trace-summary {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+            .pi-topbar {
+                padding: 15px
+            }
+        }
+    </style>
+}
+<div class="pi-page">
+    <div class="pi-topbar">
+        <div><h1 class="pi-topbar-title"><i class="bi bi-box-seam me-2"></i>Almacén de producto incompleto</h1><div class="pi-topbar-sub">Control y trazabilidad de etiquetas blancas generadas por Producción.</div></div>
+        <div class="pi-topbar-actions"><a asp-controller="Produccion" asp-action="Index" class="btn btn-outline-light"><i class="bi bi-arrow-left me-1"></i>Producción</a><a asp-controller="Produccion" asp-action="ProductoIncompleto" class="btn btn-light text-primary"><i class="bi bi-arrow-clockwise me-1"></i>Actualizar</a></div>
+    </div>
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert"><i class="bi bi-check-circle-fill me-1"></i>@TempData["Success"]<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button></div>
+    }
+    @if (TempData["Info"] != null)
+    {
+        <div class="alert alert-info alert-dismissible fade show" role="alert"><i class="bi bi-info-circle-fill me-1"></i>@TempData["Info"]<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button></div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert"><i class="bi bi-exclamation-triangle-fill me-1"></i>@TempData["Error"]<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button></div>
+    }
+  @*  <div class="summary-grid">
+        <div class="summary-card"><div class="summary-label">Etiquetas</div><div class="summary-value">@Model.TotalEtiquetas.ToString("N0")</div><div class="summary-foot">Resultado actual de la consulta</div></div>
+        <div class="summary-card success"><div class="summary-label">Disponibles</div><div class="summary-value">@Model.Disponibles.ToString("N0")</div><div class="summary-foot">Sin OF de destino activa</div></div>
+        <div class="summary-card"><div class="summary-label">Reservadas / proceso</div><div class="summary-value">@((Model.Reservadas + Model.EnCompletado).ToString("N0"))</div><div class="summary-foot">@Model.Reservadas.ToString("N0") reservadas · @Model.EnCompletado.ToString("N0") completando</div></div>
+        <div class="summary-card"><div class="summary-label">Piezas resguardadas</div><div class="summary-value">@Model.PiezasResguardadas.ToString("N0")</div><div class="summary-foot">@Model.PiezasPendientesCompletar.ToString("N0") pendientes para completar</div></div>
+        <div class="summary-card @(Model.SinUbicacion > 0 ? "warning" : "")"><div class="summary-label">Sin ubicación</div><div class="summary-value">@Model.SinUbicacion.ToString("N0")</div><div class="summary-foot">Requieren ubicación física</div></div>
+        <div class="summary-card @(Model.ConAntiguedadAlta > 0 ? "danger" : Model.ConAntiguedad > 0 ? "warning" : "")"><div class="summary-label">Antigüedad</div><div class="summary-value">@Model.ConAntiguedad.ToString("N0")</div><div class="summary-foot">@Model.ConAntiguedadAlta.ToString("N0") con 15 días o más</div></div>
+    </div>*@
+    <section class="section">
+        <div class="section-head"><div><h2 class="section-title"><i class="bi bi-funnel me-1"></i>Consulta de etiquetas blancas</h2><div class="section-sub">Busca por etiqueta, parte, OF origen, OF destino o ubicación.</div></div></div>
+        <form asp-controller="Produccion" asp-action="ProductoIncompleto" method="get" class="filters">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-lg-4"><label class="form-label">Buscar</label><input type="text" name="busqueda" value="@Model.Busqueda" class="form-control" maxlength="200" placeholder="BLA-000123, número de parte, OF..." /></div>
+                <div class="col-12 col-md-4 col-lg-2"><label class="form-label">Estado</label><select name="estado" class="form-select"><option value="">Todos</option><option value="@ProduccionProductoIncompletoEstado.Disponible" selected="@(Model.Estado == ProduccionProductoIncompletoEstado.Disponible)">Disponible</option><option value="@ProduccionProductoIncompletoEstado.Reservada" selected="@(Model.Estado == ProduccionProductoIncompletoEstado.Reservada)">Reservada</option><option value="@ProduccionProductoIncompletoEstado.EnCompletado" selected="@(Model.Estado == ProduccionProductoIncompletoEstado.EnCompletado)">En completado</option><option value="@ProduccionProductoIncompletoEstado.Completa" selected="@(Model.Estado == ProduccionProductoIncompletoEstado.Completa)">Completa</option><option value="@ProduccionProductoIncompletoEstado.Cancelada" selected="@(Model.Estado == ProduccionProductoIncompletoEstado.Cancelada)">Cancelada</option></select></div>
+                <div class="col-12 col-md-4 col-lg-2"><label class="form-label">Ubicación</label><input type="text" name="ubicacion" value="@Model.Ubicacion" class="form-control" maxlength="100" placeholder="Rack, zona, nivel..." /></div>
+                <div class="col-12 col-md-4 col-lg-2"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" value="true" name="soloConAntiguedad" id="soloConAntiguedad" checked="@Model.SoloConAntiguedad" /><label class="form-check-label fw-semibold" for="soloConAntiguedad">7 días o más</label></div></div>
+                <div class="col-12 col-lg-2"><div class="d-flex gap-2"><button type="submit" class="btn btn-primary btn-filter flex-grow-1"><i class="bi bi-search me-1"></i>Buscar</button><a asp-controller="Produccion" asp-action="ProductoIncompleto" class="btn btn-outline-secondary btn-filter" title="Limpiar filtros"><i class="bi bi-x-lg"></i></a></div></div>
+            </div>
+        </form>
+    </section>
+    <section class="section">
+        <div class="section-head"><div><h2 class="section-title"><i class="bi bi-box2-heart me-1"></i>Inventario físico</h2><div class="section-sub">La etiqueta blanca identifica el resguardo; no requiere escaneo de código de barras.</div></div><span class="badge text-bg-light border">@Model.Cajas.Count.ToString("N0") registro(s)</span></div>
+        @if (!Model.TieneCajas)
+        {
+            <div class="empty-state"><i class="bi bi-inbox"></i><div class="fw-bold text-dark">No se encontraron etiquetas blancas</div><div class="mt-1">Ajusta los filtros o verifica que exista producto incompleto activo.</div></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="pi-table">
+                    <thead><tr><th>Etiqueta blanca</th><th>Parte</th><th>Cantidad / capacidad</th><th>Estado</th><th>OF origen</th><th>OF destino</th><th>Ubicación</th><th>Antigüedad</th><th>Origen físico</th><th class="text-end">Acciones</th></tr></thead>
+                    <tbody>
+                        @foreach (var caja in Model.Cajas)
+                        {
+                            <tr>
+                                <td><span class="label-white"><i class="bi bi-tag-fill"></i>@(string.IsNullOrWhiteSpace(caja.EtiquetaBlanca) ? $"Caja {caja.CajaProduccionID}" : caja.EtiquetaBlanca)</span><div class="sub-text">Caja ID @caja.CajaProduccionID</div></td>
+                                <td><div class="main-text">@caja.TextoParte</div><div class="sub-text">@(string.IsNullOrWhiteSpace(caja.DescripcionParte) ? "Sin descripción" : caja.DescripcionParte)</div></td>
+                                <td><div class="progress-box"><div class="progress-top"><strong>@caja.CantidadPiezas.ToString("N0") / @caja.CapacidadObjetivoCaja.ToString("N0")</strong><span>@caja.PorcentajeLlenado.ToString("N1")%</span></div><div class="pi-progress"><div class="pi-progress-bar @PorcentajeClase(caja.PorcentajeLlenado)" style="width:@Math.Min(100m, caja.PorcentajeLlenado).ToString(System.Globalization.CultureInfo.InvariantCulture)%"></div></div><div class="sub-text">Faltan @caja.CantidadPendienteCompletar.ToString("N0") pieza(s)</div></div></td>
+                                <td><span class="state @EstadoClase(caja.EstadoProductoIncompleto)">@caja.TextoEstado</span></td>
+                                <td><div class="main-text">@caja.TextoOFOrigen</div><div class="sub-text">Programa @caja.ProgramaProduccionID</div></td>
+                                <td><div class="main-text">@caja.TextoOFDestino</div>@if(caja.ProgramaReservaID.HasValue){
+                                <div class="sub-text">Programa @caja.ProgramaReservaID</div>
+                            }
+    </td>
+                            <td>@if(string.IsNullOrWhiteSpace(caja.UbicacionProductoIncompleto)){
+                            <span class="location-empty"><i class="bi bi-exclamation-circle"></i>Sin ubicación</span>
+                        }else
+                        {
+
+                            <div class="main-text"><i class="bi bi-geo-alt me-1 text-primary"></i>@caja.UbicacionProductoIncompleto</div>
+                        }
+@if (caja.FechaIngresoProductoIncompleto.HasValue)
+{
+                            <div class="sub-text">Ingreso @caja.FechaIngresoProductoIncompleto.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                        }
+</td>
+                        <td><span class="age @AntiguedadClase(caja)">@if(caja.TieneAntiguedadAlta){
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                                }else if (caja.TieneAntiguedadMedia)
+                        {
+
+                            <i class="bi bi-clock-history"></i>
+                        }
+                        else
+                        {
+
+                            <i class="bi bi-clock"></i>
+                        }
+@caja.TextoAntiguedad</span></td>
+                        <td><div class="main-text">@(string.IsNullOrWhiteSpace(caja.MaquinaOrigenCodigo) ? "Sin máquina" : caja.MaquinaOrigenCodigo)</div><div class="sub-text">@(string.IsNullOrWhiteSpace(caja.OperadorOrigenNombre) ? "Sin operador" : caja.OperadorOrigenNombre)</div></td>
+                        <td><div class="actions"><button type="button" class="btn btn-outline-primary btn-trazabilidad" data-caja-id="@caja.CajaProduccionID" data-etiqueta="@(caja.EtiquetaBlanca ?? $"Caja {caja.CajaProduccionID}")"><i class="bi bi-diagram-3 me-1"></i>Trazabilidad</button>@if(!caja.EstaCompleta && !caja.EstaCancelada){
+                        <button type="button" class="btn btn-outline-secondary btn-ubicacion" data-bs-toggle="modal" data-bs-target="#modalUbicacion" data-caja-id="@caja.CajaProduccionID" data-etiqueta="@(caja.EtiquetaBlanca ?? $"Caja {caja.CajaProduccionID}")" data-ubicacion="@(caja.UbicacionProductoIncompleto ?? "")"><i class="bi bi-geo-alt me-1"></i>Ubicación</button>
+                                                }
+</div></td>
+                    </tr>
+                                        }
+                </tbody>
+            </table>
+        </div>
+                }
+    </section>
+</div>
+<div class="modal fade" id="modalUbicacion" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form asp-controller="Produccion" asp-action="ActualizarUbicacionProductoIncompleto" method="post" id="formUbicacion">@Html.AntiForgeryToken()<input type="hidden" name="CajaProduccionID" id="ubicacionCajaID" /><div class="modal-header"><div><h5 class="modal-title fw-bold"><i class="bi bi-geo-alt-fill me-1 text-primary"></i>Ubicación física</h5><div class="small text-muted" id="ubicacionEtiqueta"></div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body"><div class="alert alert-light border small">Registra dónde se encuentra físicamente la etiqueta blanca dentro de Producción. Ejemplo: <strong>RACK PI-A / NIVEL 2</strong>.</div><label class="form-label">Ubicación</label><input type="text" class="form-control" name="UbicacionProductoIncompleto" id="ubicacionProductoIncompleto" maxlength="100" autocomplete="off" required placeholder="Ej. RACK PI-A / NIVEL 2" /></div><div class="modal-footer"><button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary" id="btnGuardarUbicacion"><i class="bi bi-check2-circle me-1"></i>Guardar ubicación</button></div></form></div></div></div>
+<div class="modal fade" id="modalTrazabilidad" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><h5 class="modal-title fw-bold"><i class="bi bi-diagram-3-fill me-1 text-primary"></i>Trazabilidad de etiqueta blanca</h5><div class="small text-muted" id="trazabilidadEtiqueta"></div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body"><div id="trazabilidadLoading" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 text-muted fw-semibold">Consultando trazabilidad...</div></div><div id="trazabilidadError" class="alert alert-danger d-none"></div><div id="trazabilidadContenido" class="d-none"><div class="trace-summary"><div class="trace-card"><label>Parte</label><strong id="traceParte">-</strong></div><div class="trace-card"><label>Contenido</label><strong id="traceCantidad">-</strong></div><div class="trace-card"><label>OF origen</label><strong id="traceOrigen">-</strong></div><div class="trace-card"><label>OF destino</label><strong id="traceDestino">-</strong></div><div class="trace-card"><label>Estado</label><strong id="traceEstado">-</strong></div><div class="trace-card"><label>Ubicación</label><strong id="traceUbicacion">-</strong></div><div class="trace-card"><label>Ingreso</label><strong id="traceIngreso">-</strong></div><div class="trace-card"><label>Antigüedad</label><strong id="traceAntiguedad">-</strong></div></div><h6 class="fw-bold text-primary mb-3">Genealogía de piezas</h6><div id="traceTimeline" class="timeline"></div></div></div><div class="modal-footer"><button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cerrar</button></div></div></div></div>
+@section Scripts {
+    <script>
+        (() => {
+        const modalUbicacion=document.getElementById('modalUbicacion'),inputCaja=document.getElementById('ubicacionCajaID'),inputUbicacion=document.getElementById('ubicacionProductoIncompleto'),textoEtiqueta=document.getElementById('ubicacionEtiqueta'),formUbicacion=document.getElementById('formUbicacion'),btnGuardar=document.getElementById('btnGuardarUbicacion');
+        modalUbicacion?.addEventListener('show.bs.modal',event=>{const btn=event.relatedTarget;if(!btn)return;inputCaja.value=btn.dataset.cajaId||'';inputUbicacion.value=btn.dataset.ubicacion||'';textoEtiqueta.textContent=btn.dataset.etiqueta||'';setTimeout(()=>{inputUbicacion.focus();inputUbicacion.select()},250)});
+        formUbicacion?.addEventListener('submit',event=>{if(!inputUbicacion.value.trim()){event.preventDefault();inputUbicacion.focus();return}if(btnGuardar){btnGuardar.disabled=true;btnGuardar.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Guardando...'}});
+        const modalTrazaEl=document.getElementById('modalTrazabilidad'),modalTraza=modalTrazaEl?new bootstrap.Modal(modalTrazaEl):null,loading=document.getElementById('trazabilidadLoading'),error=document.getElementById('trazabilidadError'),contenido=document.getElementById('trazabilidadContenido'),timeline=document.getElementById('traceTimeline');
+        const html=value=>{const div=document.createElement('div');div.textContent=value??'';return div.innerHTML};
+        const fecha=value=>{if(!value)return '-';const d=new Date(value);if(Number.isNaN(d.getTime()))return '-';return d.toLocaleString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})};
+        document.addEventListener('click',async event=>{const btn=event.target.closest('.btn-trazabilidad');if(!btn)return;document.getElementById('trazabilidadEtiqueta').textContent=btn.dataset.etiqueta||'';loading.classList.remove('d-none');error.classList.add('d-none');contenido.classList.add('d-none');timeline.innerHTML='';modalTraza?.show();try{const response=await fetch('@Url.Action("DetalleProductoIncompleto", "Produccion")?id='+encodeURIComponent(btn.dataset.cajaId||''),{headers:{'X-Requested-With':'XMLHttpRequest'}});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.mensaje||'No fue posible consultar la trazabilidad.');const caja=data.caja||{};document.getElementById('traceParte').textContent=caja.textoParte||'-';document.getElementById('traceCantidad').textContent=`${Number(caja.cantidadPiezas||0).toLocaleString('es-MX')} / ${Number(caja.capacidadObjetivoCaja||0).toLocaleString('es-MX')} pieza(s)`;document.getElementById('traceOrigen').textContent=caja.textoOFOrigen||'-';document.getElementById('traceDestino').textContent=caja.textoOFDestino||'-';document.getElementById('traceEstado').textContent=caja.textoEstado||'-';document.getElementById('traceUbicacion').textContent=caja.textoUbicacion||'-';document.getElementById('traceIngreso').textContent=fecha(caja.fechaIngresoProductoIncompleto||caja.fechaFormacion);document.getElementById('traceAntiguedad').textContent=caja.textoAntiguedad||'-';const movimientos=Array.isArray(data.movimientos)?data.movimientos:[];if(!movimientos.length){timeline.innerHTML='<div class="text-muted">No se encontraron movimientos de trazabilidad para esta etiqueta.</div>'}else{timeline.innerHTML=movimientos.map(m=>{const completado=String(m.tipoMovimiento||'').toUpperCase()==='COMPLETADO',maquina=m.textoMaquina||'Sin máquina',operador=m.operadorNombre||'Sin operador',observaciones=m.observaciones?`<div class="mt-1">${html(m.observaciones)}</div>`:'';return `<div class="timeline-item ${completado?'complete':''}"><span class="timeline-dot"></span><div class="timeline-head"><div class="timeline-title">${html(m.textoTipoMovimiento||m.tipoMovimiento||'Movimiento')} · ${Number(m.cantidadPiezas||0).toLocaleString('es-MX')} pieza(s)</div><div class="timeline-date">${fecha(m.fechaMovimiento)}</div></div><div class="timeline-body"><strong>OF:</strong> ${html(m.numeroOF||'-')} · <strong>Programa:</strong> ${html(String(m.programaProduccionID||'-'))} · <strong>Máquina:</strong> ${html(maquina)} · <strong>Operador:</strong> ${html(operador)}${observaciones}</div></div>`}).join('')}loading.classList.add('d-none');contenido.classList.remove('d-none')}catch(ex){loading.classList.add('d-none');error.textContent=ex?.message||'No fue posible consultar la trazabilidad.';error.classList.remove('d-none')}});
+        const syncTheme=()=>{const root=document.documentElement,theme=root.getAttribute('data-bs-theme')||root.getAttribute('data-theme')||'',isDark=theme.toLowerCase()==='dark'||document.body.classList.contains('dark-mode');if(isDark)root.setAttribute('data-produccion-theme','dark');else root.removeAttribute('data-produccion-theme')};syncTheme();const observer=new MutationObserver(syncTheme);observer.observe(document.documentElement,{attributes:true,attributeFilter:['data-bs-theme','data-theme','class']});observer.observe(document.body,{attributes:true,attributeFilter:['class']});
+        })();
+    </script>
+}

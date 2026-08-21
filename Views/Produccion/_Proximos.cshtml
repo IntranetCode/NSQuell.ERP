@@ -726,6 +726,8 @@
             {
                 var fechaInicio = item.FechaInicioProgramada!.Value;
 
+                var estaAtrasado = fechaInicio < DateTime.Now;
+
                 var operador =
                 string.IsNullOrWhiteSpace(item.OperadorSugeridoNombre)
                 ? ""
@@ -846,41 +848,72 @@
                         }
                         else if (maquinaOcupada)
                         {
-                            <button type="button"
-                                    class="btn btn-sm btn-secondary"
-                                    disabled
-                                    title="La máquina todavía tiene otra ejecución activa.">
-                                <i class="bi bi-lock-fill me-1"></i>
-                                Máquina ocupada
-                            </button>
-
+                            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                @if (estaAtrasado)
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-warning btn-solicitar-reprogramacion"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalSolicitarReprogramacion"
+                                            data-programa-id="@item.ProgramaProduccionID"
+                                            data-titulo="@Data(item.TituloPrograma)"
+                                            data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
+                                            data-inicio="@Fecha(item.FechaInicioProgramada)">
+                                        <i class="bi bi-calendar2-event me-1"></i>
+                                        Solicitar reprogramación
+                                    </button>
+                                }
+                                <button type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        disabled
+                                        title="La máquina todavía tiene otra ejecución activa.">
+                                    <i class="bi bi-lock-fill me-1"></i>
+                                    Máquina ocupada
+                                </button>
+                            </div>
                             <div class="prox-blocked-note">
                                 Esperando cierre de la OF anterior.
                             </div>
                         }
                         else
                         {
-                            <button type="button"
-                                    class="btn btn-sm btn-success btn-iniciar-preparacion"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#modalIniciarPreparacion"
-                                    data-programa-id="@item.ProgramaProduccionID"
-                                    data-titulo="@Data(item.TituloPrograma)"
-                                    data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
-                                    data-maquina-id="@(item.MaquinaID?.ToString() ?? "")"
-                                    data-parte-id="@(item.ParteID?.ToString() ?? "")"
-                                    data-parte="@Data(item.TextoParte)"
-                                    data-descripcion="@Data(item.DescripcionParte)"
-                                    data-molde="@Data(item.MoldeCodigo)"
-                                    data-cantidad="@Num(item.CantidadProgramada)"
-                                    data-inicio="@Fecha(item.FechaInicioProgramada)"
-                                    data-fin="@Fecha(item.FechaFinProgramada)"
-                                    data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
-                                    data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
-                                    data-turno="@Data(item.TurnoSugeridoNombre)">
-                                <i class="bi bi-play-fill me-1"></i>
-                                Iniciar preparación
-                            </button>
+                            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                @if (estaAtrasado)
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-warning btn-solicitar-reprogramacion"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalSolicitarReprogramacion"
+                                            data-programa-id="@item.ProgramaProduccionID"
+                                            data-titulo="@Data(item.TituloPrograma)"
+                                            data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
+                                            data-inicio="@Fecha(item.FechaInicioProgramada)">
+                                        <i class="bi bi-calendar2-event me-1"></i>
+                                        Solicitar reprogramación
+                                    </button>
+                                }
+                                <button type="button"
+                                        class="btn btn-sm btn-success btn-iniciar-preparacion"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalIniciarPreparacion"
+                                        data-programa-id="@item.ProgramaProduccionID"
+                                        data-titulo="@Data(item.TituloPrograma)"
+                                        data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
+                                        data-maquina-id="@(item.MaquinaID?.ToString() ?? "")"
+                                        data-parte-id="@(item.ParteID?.ToString() ?? "")"
+                                        data-parte="@Data(item.TextoParte)"
+                                        data-descripcion="@Data(item.DescripcionParte)"
+                                        data-molde="@Data(item.MoldeCodigo)"
+                                        data-cantidad="@Num(item.CantidadProgramada)"
+                                        data-inicio="@Fecha(item.FechaInicioProgramada)"
+                                        data-fin="@Fecha(item.FechaFinProgramada)"
+                                        data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
+                                        data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
+                                        data-turno="@Data(item.TurnoSugeridoNombre)">
+                                    <i class="bi bi-play-fill me-1"></i>
+                                    Iniciar preparación
+                                </button>
+                            </div>
                         }
                     </div>
 

@@ -129,6 +129,12 @@
             fecha = fecha.ToString("yyyy-MM-dd")
         }) ?? "#";
     };
+
+    var solicitudesReprogramacion =
+        ViewBag.SolicitudesReprogramacion as List<ERP.NSQuell.Controllers.SolicitudReprogramacionCalendarioVm>
+        ?? new List<ERP.NSQuell.Controllers.SolicitudReprogramacionCalendarioVm>();
+
+    var totalSolicitudesReprogramacion = solicitudesReprogramacion.Count;
 }
 
 @section Scripts {
@@ -170,7 +176,7 @@
                 return;
             }
 
-           
+
             timelineElement.style.transform = '';
             timelineElement.style.width = '100%';
             timelineElement.style.height = 'auto';
@@ -228,7 +234,7 @@
                     'Vista nítida 100%';
             }
         }
-       
+
 
         function actualizarBotonPantallaCompleta() {
             if (!btnPantallaCompletaCalendario || !calendarKiosk) return;
@@ -559,6 +565,64 @@
             }
         }
 
+        function limpiarResaltadoSolicitudReprogramacion() {
+            document.querySelectorAll('.block.reprogram-request-focus').forEach(x => {
+                x.classList.remove('reprogram-request-focus');
+            });
+        }
+
+        function atenderSolicitudEnCalendario(programaId, urlPrograma) {
+            const programa = Number(programaId || 0);
+
+            if (!Number.isFinite(programa) || programa <= 0) {
+                mostrarModalCalendario(
+                    'Solicitud no disponible',
+                    'No se pudo identificar el programa solicitado.'
+                );
+                return;
+            }
+
+            const modalElement = document.getElementById('modalSolicitudesReprogramacion');
+            const modal = modalElement ? bootstrap.Modal.getInstance(modalElement) : null;
+            modal?.hide();
+            limpiarResaltadoSolicitudReprogramacion();
+
+            const bloque = document.querySelector(`.block[data-programa-id="${programa}"]`);
+
+            if (!bloque) {
+                if (urlPrograma) {
+                    window.location.href = urlPrograma;
+                    return;
+                }
+
+                mostrarModalCalendario(
+                    'Programa fuera del periodo',
+                    'El programa solicitado no está visible en el periodo actual del calendario.'
+                );
+                return;
+            }
+
+            bloque.classList.add('reprogram-request-focus');
+            bloque.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            setStatus(
+                `Solicitud de reprogramación localizada. Programa ${programa} resaltado; arrástralo a la nueva posición o máquina compatible.`,
+                'working'
+            );
+
+            setTimeout(() => {
+                bloque.classList.remove('reprogram-request-focus');
+            }, 7000);
+        }
+
+        document.querySelectorAll('.btn-atender-reprogramacion').forEach(btn => {
+            btn.addEventListener('click', () => {
+                atenderSolicitudEnCalendario(
+                    btn.dataset.programaId,
+                    btn.dataset.urlPrograma || ''
+                );
+            });
+        });
+
         btnPantallaCompletaCalendario
             ?.addEventListener('click', alternarPantallaCompletaCalendario);
 
@@ -803,737 +867,802 @@
 
 @section Styles {
     <link rel="stylesheet" href="~/css/PlaneacionCalendarioMaquinas/index.css" asp-append-version="true" />
+    <style>
+        .reprogram-alert-panel {
+            border: 1px solid #f0ad4e;
+            background: #fff8e8;
+            border-radius: 16px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            box-shadow: 0 5px 18px rgba(122,85,0,.08)
+        }
+
+        .reprogram-alert-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: #ffc107;
+            color: #4d3500;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.05rem;
+            flex: 0 0 42px
+        }
+
+        .reprogram-request-card {
+            border: 1px solid #dce5ef;
+            border-radius: 14px;
+            padding: 14px;
+            background: #fff
+        }
+
+            .reprogram-request-card + .reprogram-request-card {
+                margin-top: 10px
+            }
+
+        .reprogram-request-motive {
+            border-left: 4px solid #f0ad4e;
+            background: #fffaf0;
+            border-radius: 8px;
+            padding: 10px 12px
+        }
+
+        .reprogram-request-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 999px;
+            padding: 4px 8px;
+            background: #fff3cd;
+            border: 1px solid #ffe69c;
+            color: #664d03;
+            font-size: .72rem;
+            font-weight: 800
+        }
+
+        .block.has-reprogram-request {
+            box-shadow: inset 0 0 0 2px #ffc107,0 0 0 1px rgba(255,193,7,.25)
+        }
+
+        .reprogram-request-indicator {
+            position: absolute;
+            right: 4px;
+            top: 4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ffc107;
+            color: #493300;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .60rem;
+            z-index: 4;
+            box-shadow: 0 1px 4px rgba(0,0,0,.18)
+        }
+
+        .block.reprogram-request-focus {
+            outline: 4px solid rgba(255,193,7,.9);
+            outline-offset: 3px;
+            z-index: 25 !important;
+            animation: reprogramRequestPulse .8s ease-in-out infinite alternate
+        }
+        @@keyframes reprogramRequestPulse {
+            from
+
+        {
+            box-shadow: 0 0 0 3px rgba(255,193,7,.25)
+        }
+
+        to {
+            box-shadow: 0 0 0 9px rgba(255,193,7,.08)
+        }
+
+        }
+
+        html[data-bs-theme="dark"] .reprogram-alert-panel, body.dark-mode .reprogram-alert-panel {
+            background: #2a2415;
+            border-color: #7a641e;
+            color: #f6e7a8
+        }
+
+        html[data-bs-theme="dark"] .reprogram-request-card, body.dark-mode .reprogram-request-card {
+            background: #101828;
+            border-color: #344054;
+            color: #f2f4f7
+        }
+
+        html[data-bs-theme="dark"] .reprogram-request-motive, body.dark-mode .reprogram-request-motive {
+            background: #241f14;
+            border-left-color: #ffc107
+        }
+    </style>
 }
 
 
-    @* PLANEACION_NAVBAR_INJECT_V1_0 *@
-    @await Html.PartialAsync("_PlaneacionNavbar")
-    <div class="page" data-nsq-style="--dias-periodo:@totalDias;--horas-periodo:@(Math.Max(1, totalDias * 24));">
-        <section class="hero">
-            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                <div>
-                    <div class="small fw-bold text-uppercase opacity-75 mb-2">
-                        Planeación / Calendario editable
+@* PLANEACION_NAVBAR_INJECT_V1_0 *@
+@await Html.PartialAsync("_PlaneacionNavbar")
+<div class="page" data-nsq-style="--dias-periodo:@totalDias;--horas-periodo:@(Math.Max(1, totalDias * 24));">
+    <section class="hero">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="small fw-bold text-uppercase opacity-75 mb-2">
+                    Planeación / Calendario editable
+                </div>
+
+                <h1>
+                    <i class="fa-solid fa-calendar-days me-2"></i>
+                    CALENDARIO MÁQUINAS
+                </h1>
+
+                <p>
+                    Visualiza por día, semana, mes o rango. Arrastra un bloque azul hacia otra máquina y confirma el movimiento antes de guardarlo.
+                </p>
+            </div>
+
+        </div>
+    </section>
+
+    <section class="metrics">
+        <div class="metric">
+            <span>Máquinas</span>
+            <strong>@Model.TotalMaquinas</strong>
+        </div>
+
+        <div class="metric">
+            <span>OF / programas visibles</span>
+            <strong>@Model.TotalBloques</strong>
+        </div>
+
+        <div class="metric">
+            <span>Trabajando ahora</span>
+            <strong>@Model.TrabajandoAhora</strong>
+        </div>
+    </section>
+
+    @if (totalSolicitudesReprogramacion > 0)
+    {
+        <section class="reprogram-alert-panel">
+            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="reprogram-alert-icon"><i class="fa-solid fa-calendar-arrow-down"></i></span>
+                    <div>
+                        <div class="fw-bold text-warning-emphasis">Solicitudes de reprogramación pendientes</div>
+                        <div class="small text-muted">Producción solicitó revisar @totalSolicitudesReprogramacion programa@(totalSolicitudesReprogramacion == 1 ? "" : "s"). Planeación debe atenderlos desde este calendario.</div>
                     </div>
-
-                    <h1>
-                        <i class="fa-solid fa-calendar-days me-2"></i>
-                        CALENDARIO MÁQUINAS
-                    </h1>
-
-                    <p>
-                        Visualiza por día, semana, mes o rango. Arrastra un bloque azul hacia otra máquina y confirma el movimiento antes de guardarlo.
-                    </p>
                 </div>
-
-            </div>
-        </section>
-
-        <section class="metrics">
-            <div class="metric">
-                <span>Máquinas</span>
-                <strong>@Model.TotalMaquinas</strong>
-            </div>
-
-            <div class="metric">
-                <span>OF / programas visibles</span>
-                <strong>@Model.TotalBloques</strong>
-            </div>
-
-            <div class="metric">
-                <span>Trabajando ahora</span>
-                <strong>@Model.TrabajandoAhora</strong>
-            </div>
-        </section>
-
-        <section class="toolbar">
-            <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
-                <div class="d-flex gap-2 flex-wrap">
-                    <a href="@UrlPeriodo(periodoAnterior)"
-                       class="btn btn-outline-primary fw-bold">
-                        <i class="fa-solid fa-chevron-left"></i>
-                        @TextoPeriodoAnterior(Model)
-                    </a>
-
-                    <a asp-action="Index"
-                       asp-route-vista="@Model.VistaNormalizada"
-                       asp-route-fecha="@DateTime.Today.ToString("yyyy-MM-dd")"
-                       class="btn btn-primary fw-bold">
-                        Hoy
-                    </a>
-
-                    <a href="@UrlPeriodo(periodoSiguiente)"
-                       class="btn btn-outline-primary fw-bold">
-                        @TextoPeriodoSiguiente(Model)
-                        <i class="fa-solid fa-chevron-right"></i>
-                    </a>
-                </div>
-
-                <div data-nsq-style-id="nsq-si-e581e86b44">
-                    <label class="form-label fw-bold mb-1">
-                        Buscar máquina, OF, cliente, parte, operador o turno
-                    </label>
-
-                    <input id="calendarSearch"
-                           class="form-control"
-                           type="search"
-                           placeholder="Ej. 500-T, OF 24, GOLDE, operador, turno..." />
-                </div>
-            </div>
-
-            <div class="d-flex gap-2 flex-wrap mt-3">
-                <a asp-action="Index"
-                   asp-route-vista="dia"
-                   asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista(Model.VistaNormalizada, "dia")">
-                    Día
-                </a>
-
-                <a asp-action="Index"
-                   asp-route-vista="semana"
-                   asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista(Model.VistaNormalizada, "semana")">
-                    Semana
-                </a>
-
-                <a asp-action="Index"
-                   asp-route-vista="mes"
-                   asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
-                   class="@ClaseVista(Model.VistaNormalizada, "mes")">
-                    Mes
-                </a>
-
-                <button type="button"
-                        id="btnMostrarRango"
-                        class="@ClaseVista(Model.VistaNormalizada, "rango")">
-                    Rango
+                <button type="button" class="btn btn-warning fw-bold" data-bs-toggle="modal" data-bs-target="#modalSolicitudesReprogramacion">
+                    <i class="fa-solid fa-bell me-1"></i>Ver solicitudes
+                    <span class="badge text-bg-dark ms-1">@totalSolicitudesReprogramacion</span>
                 </button>
             </div>
-
-            <div class="mt-3 p-3 rounded-4 border bg-light">
-                <div class="form-check form-switch m-0">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           role="switch"
-                           id="trabajarDomingoCalendario" />
-                    <label class="form-check-label fw-bold" for="trabajarDomingoCalendario">
-                        Considerar domingo como día operativo para movimientos
-                    </label>
-                    <div class="small text-muted mt-1">
-                        Déjalo apagado para que el sistema corte sábado a las 22:30 y continúe lunes 07:00. Actívalo solo cuando autoricen trabajar domingo.
-                    </div>
-                </div>
-            </div>
-
-            <form id="formRangoCalendario"
-                  class="range-panel @(Model.EsVistaRango ? "active" : "")"
-                  asp-action="Index"
-                  method="get">
-                <input type="hidden" name="vista" value="rango" />
-
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">Fecha inicio</label>
-                        <input id="rangoInicio"
-                               name="rangoInicio"
-                               class="form-control"
-                               type="date"
-                               value="@rangoInicioVisible" />
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">Fecha fin</label>
-                        <input id="rangoFin"
-                               name="rangoFin"
-                               class="form-control"
-                               type="date"
-                               value="@rangoFinVisible" />
-                    </div>
-
-                    <div class="col-md-4">
-                        <button type="submit"
-                                class="btn btn-primary fw-bold w-100">
-                            Aplicar rango
-                        </button>
-                    </div>
-
-                    <div class="col-12">
-                        <small class="text-muted fw-bold">
-                            El rango no puede ser mayor a 31 días.
-                        </small>
-                    </div>
-                </div>
-            </form>
         </section>
+    }
 
-        @{
-            var errorCalendario = TempData["CalendarioError"] as string;
-        }
-        @if (!string.IsNullOrWhiteSpace(errorCalendario))
-        {
-            <div class="calendar-status error">
-                @errorCalendario
+    <section class="toolbar">
+        <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="@UrlPeriodo(periodoAnterior)"
+                   class="btn btn-outline-primary fw-bold">
+                    <i class="fa-solid fa-chevron-left"></i>
+                    @TextoPeriodoAnterior(Model)
+                </a>
+
+                <a asp-action="Index"
+                   asp-route-vista="@Model.VistaNormalizada"
+                   asp-route-fecha="@DateTime.Today.ToString("yyyy-MM-dd")"
+                   class="btn btn-primary fw-bold">
+                    Hoy
+                </a>
+
+                <a href="@UrlPeriodo(periodoSiguiente)"
+                   class="btn btn-outline-primary fw-bold">
+                    @TextoPeriodoSiguiente(Model)
+                    <i class="fa-solid fa-chevron-right"></i>
+                </a>
             </div>
-        }
 
-        <div id="calendarStatus" class="calendar-status">
-            Arrastra un bloque azul hacia otra máquina. Solo se resaltarán en verde las máquinas compatibles; el sistema insertará en cola y compactará las OF posteriores sin dejar huecos.
+            <div data-nsq-style-id="nsq-si-e581e86b44">
+                <label class="form-label fw-bold mb-1">
+                    Buscar máquina, OF, cliente, parte, operador o turno
+                </label>
+
+                <input id="calendarSearch"
+                       class="form-control"
+                       type="search"
+                       placeholder="Ej. 500-T, OF 24, GOLDE, operador, turno..." />
+            </div>
         </div>
 
-        <div id="antiForgeryToken" class="d-none">
-            @Html.AntiForgeryToken()
+        <div class="d-flex gap-2 flex-wrap mt-3">
+            <a asp-action="Index"
+               asp-route-vista="dia"
+               asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
+               class="@ClaseVista(Model.VistaNormalizada, "dia")">
+                Día
+            </a>
+
+            <a asp-action="Index"
+               asp-route-vista="semana"
+               asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
+               class="@ClaseVista(Model.VistaNormalizada, "semana")">
+                Semana
+            </a>
+
+            <a asp-action="Index"
+               asp-route-vista="mes"
+               asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
+               class="@ClaseVista(Model.VistaNormalizada, "mes")">
+                Mes
+            </a>
+
+            <button type="button"
+                    id="btnMostrarRango"
+                    class="@ClaseVista(Model.VistaNormalizada, "rango")">
+                Rango
+            </button>
         </div>
 
-        <section class="calendar-card" id="calendarKiosk">
-            <div class="calendar-card-header p-2 border-bottom d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                <div>
-                    <strong class="text-primary">
-                        @Model.TituloPeriodo
-                    </strong>
-
-                    <div class="small text-muted">
-                        Vista: @Model.TextoVista. Azul = programado y movible. Amarillo suave = Calidad. Rosa = paro. Morado suave = reliberación. Ámbar = Producción activa. Verde = producido. Gris = cerrado/cancelado. Operador planeado y operador real se muestran por separado.
-                    </div>
-                </div>
-
-                <div class="calendar-actions">
-                    <button type="button"
-                            id="btnCompactarCalendario"
-                            class="btn-calendar-action"
-                            title="Reduce textos y espacios para mostrar más máquinas">
-                        <i class="fa-solid fa-compress"></i>
-                        <span>Compactar</span>
-                    </button>
-
-                    <button type="button"
-                            id="btnPantallaCompletaCalendario"
-                            class="btn-calendar-action"
-                            title="Abrir calendario en modo kiosco a pantalla completa">
-                        <i class="fa-solid fa-expand"></i>
-                        <span class="fullscreen-label">Pantalla completa</span>
-                    </button>
-
-                    <span class="fullscreen-help">Esc para salir</span>
-                    <span id="fitScaleLabel" class="fit-scale-label"></span>
-                </div>
-
-                <div class="legend">
-                    <span><i data-nsq-style-id="nsq-si-93d879e3cf"></i>Programado / movible</span>
-                    <span><i data-nsq-style-id="nsq-si-1c4b44484e"></i>Produciendo / en línea</span>
-                    <span><i data-nsq-style-id="nsq-si-31a65355ef"></i>Paro</span>
-                    <span><i data-nsq-style-id="nsq-si-b64b5184b1"></i>Calidad</span>
-                    <span><i data-nsq-style-id="nsq-si-147df738d9"></i>Reliberación</span>
-                    <span><i data-nsq-style-id="nsq-si-31d8aa2278"></i>Ya producido</span>
-                    <span><i data-nsq-style-id="nsq-si-e71927bd00"></i>Cerrado / cancelado</span>
+        <div class="mt-3 p-3 rounded-4 border bg-light">
+            <div class="form-check form-switch m-0">
+                <input class="form-check-input"
+                       type="checkbox"
+                       role="switch"
+                       id="trabajarDomingoCalendario" />
+                <label class="form-check-label fw-bold" for="trabajarDomingoCalendario">
+                    Considerar domingo como día operativo para movimientos
+                </label>
+                <div class="small text-muted mt-1">
+                    Déjalo apagado para que el sistema corte sábado a las 22:30 y continúe lunes 07:00. Actívalo solo cuando autoricen trabajar domingo.
                 </div>
             </div>
+        </div>
 
-            <div class="timeline-scroll">
-                <div class="timeline">
-                    <div class="timeline-header">
-                        <div class="machine-head">MÁQUINA / BLOQUES</div>
+        <form id="formRangoCalendario"
+              class="range-panel @(Model.EsVistaRango ? "active" : "")"
+              asp-action="Index"
+              method="get">
+            <input type="hidden" name="vista" value="rango" />
 
-                        <div class="days">
-                            @for (var day = 0; day < totalDias; day++)
-                            {
-                                var fecha = inicioPeriodo.AddDays(day);
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Fecha inicio</label>
+                    <input id="rangoInicio"
+                           name="rangoInicio"
+                           class="form-control"
+                           type="date"
+                           value="@rangoInicioVisible" />
+                </div>
 
-                                <div class="day">
-                                    <strong>@fecha.ToString("ddd", cultura).ToUpperInvariant()</strong>
-                                    <span>@fecha.ToString("dd/MM")</span>
-                                </div>
-                            }
-                        </div>
-                    </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Fecha fin</label>
+                    <input id="rangoFin"
+                           name="rangoFin"
+                           class="form-control"
+                           type="date"
+                           value="@rangoFinVisible" />
+                </div>
 
-                    @foreach (var maquina in Model.Maquinas)
-                    {
-                        var rowHeight = Math.Max(56, 8 + maquina.Carriles * 48);
+                <div class="col-md-4">
+                    <button type="submit"
+                            class="btn btn-primary fw-bold w-100">
+                        Aplicar rango
+                    </button>
+                </div>
 
-                        var search = string.Join(" ",
-                        maquina.Codigo,
-                        maquina.Nombre,
-                        string.Join(" ", maquina.Bloques.Select(x =>
-                        $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo} {x.MaquinaSugeridaTexto} {x.EstadoSemaforoTexto} {x.OperadorProgramadoNombre} {x.OperadorRealNombre} {x.TurnoProgramadoNombre} {x.EstatusProduccionNombre} {x.EstadoCalidad}")))
-                        .ToLowerInvariant();
-
-                        <div class="machine-row calendar-machine-row"
-                             data-search="@search">
-                            <div class="machine-info" data-nsq-style="height:@(rowHeight)px">
-                                <div class="machine-inline" title="@maquina.Codigo - @maquina.Nombre">
-                                    <span class="machine-code">@maquina.Codigo</span>
-                                    <span class="machine-name">@maquina.Nombre</span>
-                                    <span class="machine-count">@maquina.Bloques.Count</span>
-                                </div>
-                            </div>
-
-                            <div class="track"
-                                 data-maquina-id="@maquina.MaquinaID"
-                                 data-nsq-style="height:@(rowHeight)px">
-                                @if (ahoraVisible)
-                                {
-                                    <div class="now-line"
-                                         data-nsq-style="left:@Pct(ahoraLeft)%"
-                                         title="Hora actual"></div>
-                                }
-
-                                @if (!maquina.Bloques.Any())
-                                {
-                                    <div class="empty-row">Sin OF programada durante este periodo.</div>
-                                }
-
-                                @foreach (var bloque in maquina.Bloques)
-                                {
-                                    var visibleInicio = bloque.Inicio < inicioPeriodo
-                                    ? inicioPeriodo
-                                    : bloque.Inicio;
-
-                                    var visibleFin = bloque.Fin > finPeriodo
-                                    ? finPeriodo
-                                    : bloque.Fin;
-
-                                    var left = (visibleInicio - inicioPeriodo).TotalMinutes / totalMinutos * 100;
-
-                                    var width = Math.Max(
-                                    .35,
-                                    (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
-
-                                    var top = 8 + bloque.Carril * 48;
-
-                                    var puedeMover = bloque.PuedeMoverCalendario;
-
-                                    var tituloBloqueo = puedeMover
-                                    ? "Arrastra para mandar a cola de otra máquina compatible."
-                                    : bloque.MotivoBloqueoMovimiento;
-
-                                    var textoOperador = bloque.TextoOperadorVisible;
-                                    var origenOperador = bloque.TieneOperadorReal
-                                    ? "Real"
-                                    : "Planeado";
-
-                                    var textoTurno = bloque.TextoTurnoProgramado;
-                                    var textoCalidad = bloque.EstadoCalidadTexto;
-
-                                    var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
-                                    ? Math.Max(0, (int)Math.Floor((Model.Ahora - bloque.Inicio).TotalMinutes))
-                                    : 0;
-
-                                    var mostrarAlertaNoInicio =
-                                    bloque.EstatusID == 1 &&
-                                    minutosAtrasoInicio >= 10 &&
-                                    bloque.EstatusProduccionID != 3;
-
-                                    var textoAlertaNoInicio = mostrarAlertaNoInicio
-                                    ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
-                                    : string.Empty;
-
-                                    /*
-                                    * PRIORIDAD VISUAL DEL CALENDARIO
-                                    * 1. Paro real de Producción.
-                                    * 2. Reliberación / configuración invalidada por Calidad.
-                                    * 3. Proceso activo de Calidad.
-                                    * 4. Producción activa.
-                                    * 5. Semáforo normal que ya calcula el modelo.
-                                    *
-                                    * No modifica lógica ni estados; únicamente decide el color.
-                                    */
-                                    var claseColorBloque = bloque.ClaseSemaforoCalendario;
-
-                                    var estaEnParo =
-                                    bloque.EstatusProduccionID == 4;
-
-                                    var estaEnReliberacion =
-                                    bloque.RequiereReliberacion ||
-                                    bloque.ConfiguracionCalidadInvalidada;
-
-                                    var estadoCalidadNormalizado =
-                                    (bloque.EstadoCalidad ?? string.Empty)
-                                    .Trim()
-                                    .ToUpperInvariant();
-
-                                    var estaEnCalidad =
-                                    bloque.InspeccionCalidadID.HasValue &&
-                                    !string.IsNullOrWhiteSpace(estadoCalidadNormalizado) &&
-                                    estadoCalidadNormalizado != "CERRADA";
-
-                                    if (estaEnParo)
-                                    {
-                                        claseColorBloque = "bloque-paro";
-                                    }
-                                    else if (estaEnReliberacion)
-                                    {
-                                        claseColorBloque = "bloque-reliberacion";
-                                    }
-                                    else if (estaEnCalidad)
-                                    {
-                                        claseColorBloque = "bloque-calidad";
-                                    }
-                                    else if (bloque.EstatusProduccionID == 3)
-                                    {
-                                        claseColorBloque = "bloque-produciendo";
-                                    }
-
-                                    <button type="button"
-                                            class="block @claseColorBloque @(puedeMover ? "" : "no-drag") @(mostrarAlertaNoInicio ? "has-start-delay" : "")"
-                                            draggable="@(puedeMover ? "true" : "false")"
-                                            data-nsq-style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
-                                            data-programa-id="@bloque.ProgramaProduccionID"
-                                            data-maquina-id="@bloque.MaquinaID"
-                                            data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                            data-fin="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                            data-puede-mover="@(puedeMover ? "true" : "false")"
-                                            data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
-                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
-                                        @if (mostrarAlertaNoInicio)
-                                        {
-                                            <span class="start-delay-alert" title="@textoAlertaNoInicio">
-                                                <i class="fa-solid fa-bell"></i>
-                                            </span>
-                                        }
-                                        <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
-                                        <span>@(bloque.ClienteNombre ?? "Sin cliente") · @bloque.EstadoSemaforoTexto</span>
-                                        <span class="operator-line">
-                                            <i class="fa-solid fa-user-gear"></i>
-                                            @origenOperador: @textoOperador · @textoTurno
-                                        </span>
-                                    </button>
-                                }
-                            </div>
-                        </div>
-                    }
+                <div class="col-12">
+                    <small class="text-muted fw-bold">
+                        El rango no puede ser mayor a 31 días.
+                    </small>
                 </div>
             </div>
-        </section>
-    </div>
+        </form>
+    </section>
 
-    @foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
+    @{
+        var errorCalendario = TempData["CalendarioError"] as string;
+    }
+    @if (!string.IsNullOrWhiteSpace(errorCalendario))
     {
-        var textoOperadorModal = bloque.TextoOperadorProgramado;
-        var textoOperadorRealModal = bloque.TextoOperadorReal;
-        var textoAuxiliarModal = bloque.TextoOperadorAuxiliarProgramado;
-        var textoTurnoModal = bloque.TextoTurnoProgramado;
-        var textoCalidadModal = bloque.EstadoCalidadTexto;
-
-        var textoEstatusProduccion = TextoProduccion(
-        bloque.EstatusProduccionID,
-        bloque.EstatusProduccionNombre);
-
-        <div class="modal fade"
-             id="ofModal_@bloque.ProgramaProduccionID"
-             tabindex="-1"
-             aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content border-0 rounded-4 shadow">
-                    <div class="modal-header border-0">
-                        <div>
-                            <div class="small text-muted fw-bold text-uppercase">
-                                Detalle de producción / planeación
-                            </div>
-
-                            <h2 class="modal-title h5 fw-bold text-primary">
-                                @bloque.OFTexto
-                            </h2>
-                        </div>
-
-                        <button type="button"
-                                class="btn-close"
-                                data-bs-dismiss="modal"></button>
-                    </div>
-
-                    <div class="modal-body">
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <div class="operator-card">
-                                    <small>Operador planeado</small>
-                                    <strong class="d-block">@textoOperadorModal</strong>
-                                    <span class="small text-muted">Auxiliar: @textoAuxiliarModal</span>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="operator-card">
-                                    <small>Operador real de la ejecución</small>
-                                    <strong class="d-block">@textoOperadorRealModal</strong>
-                                    @if (bloque.EjecucionProduccionID.HasValue)
-                                    {
-                                        <span class="small text-muted">
-                                            Ejecución @bloque.EjecucionProduccionID
-                                        </span>
-                                    }
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="operator-card">
-                                    <small>Proceso de Calidad</small>
-                                    <strong class="d-block">@textoCalidadModal</strong>
-                                    @if (bloque.InspeccionCalidadID.HasValue)
-                                    {
-                                        <span class="small text-muted">
-                                            Inspección @bloque.InspeccionCalidadID
-                                        </span>
-                                    }
-                                    @if (bloque.ConfiguracionCalidadInvalidada)
-                                    {
-                                        <span class="d-block small text-danger fw-bold">
-                                            Configuración invalidada
-                                        </span>
-                                    }
-                                    @if (bloque.RequiereReliberacion)
-                                    {
-                                        <span class="d-block small text-warning fw-bold">
-                                            Reliberación pendiente
-                                        </span>
-                                    }
-                                </div>
-                            </div>
-
-                            <div class="col-md-3">
-                                <div class="operator-card">
-                                    <small>Turno</small>
-                                    <strong class="d-block">@textoTurnoModal</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-3">
-                                <div class="operator-card">
-                                    <small>Asignación escala</small>
-                                    <strong class="d-block">
-                                        @(bloque.EscalaAsignacionID.HasValue? bloque.EscalaAsignacionID.Value.ToString() : "-")
-                                    </strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Máquina actual</small>
-                                    <strong class="d-block">@bloque.MaquinaCodigo</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Máquina principal</small>
-                                    <strong class="d-block">@(bloque.MaquinaPrincipalCodigo ?? "Sin máquina principal")</strong>
-                                    <span class="small">@bloque.MaquinaPrincipalNombre</span>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Máquina sustituta</small>
-                                    <strong class="d-block">@(bloque.MaquinaSustitutaCodigo ?? "Sin máquina sustituta")</strong>
-                                    <span class="small">@bloque.MaquinaSustitutaNombre</span>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Estatus planeación</small>
-                                    <strong class="d-block">@bloque.EstatusTexto</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Estatus producción</small>
-                                    <span class="@BadgeProduccion(bloque.EstatusProduccionID)">
-                                        @textoEstatusProduccion
-                                    </span>
-
-                                    @if (bloque.EjecucionProduccionID.HasValue)
-                                    {
-                                        <strong class="d-block mt-2">
-                                            Ejecución @bloque.EjecucionProduccionID
-                                        </strong>
-                                    }
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Semáforo</small>
-                                    <strong class="d-block">@bloque.EstadoSemaforoTexto</strong>
-
-                                    @if (!bloque.PuedeMoverCalendario)
-                                    {
-                                        <span class="small text-danger fw-bold">
-                                            @bloque.MotivoBloqueoMovimiento
-                                        </span>
-                                    }
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Molde</small>
-                                    <strong class="d-block">@(bloque.MoldeCodigo ?? "-")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Horas a producir</small>
-                                    <strong class="d-block">@bloque.HorasProgramadas.ToString("N2")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Máquina sugerida</small>
-                                    <strong class="d-block">@bloque.MaquinaSugeridaTexto</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="detail-card">
-                                    <small>Cliente</small>
-                                    <strong class="d-block">@(bloque.ClienteNombre ?? "-")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="detail-card">
-                                    <small>Parte</small>
-                                    <strong class="d-block">@bloque.ParteTexto</strong>
-                                    <span class="small">@bloque.Descripcion</span>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Cambio de molde</small>
-                                    <strong class="d-block">@(bloque.Cambio.HasValue? bloque.Cambio.Value.ToString(@"hh\:mm") : "-")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Arranque</small>
-                                    <strong class="d-block">@(bloque.Arranque.HasValue? bloque.Arranque.Value.ToString(@"hh\:mm") : "-")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Duración visible</small>
-                                    <strong class="d-block">
-                                        @((bloque.Fin - bloque.Inicio).TotalHours.ToString("N2")) h
-                                    </strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="detail-card">
-                                    <small>Inicio</small>
-                                    <strong class="d-block">@bloque.Inicio.ToString("dd/MM/yyyy HH:mm")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="detail-card">
-                                    <small>Fin</small>
-                                    <strong class="d-block">@bloque.Fin.ToString("dd/MM/yyyy HH:mm")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Programadas</small>
-                                    <strong class="d-block">@bloque.CantidadProgramada.ToString("N0")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Producidas</small>
-                                    <strong class="d-block">@bloque.CantidadProducida.ToString("N0")</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="detail-card">
-                                    <small>Pendientes</small>
-                                    <strong class="d-block">@bloque.CantidadPendiente.ToString("N0")</strong>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="modal-footer border-0">
-                        <button type="button"
-                                class="btn btn-outline-secondary fw-bold"
-                                data-bs-dismiss="modal">
-                            Cerrar
-                        </button>
-                    </div>
-                </div>
-            </div>
+        <div class="calendar-status error">
+            @errorCalendario
         </div>
     }
 
-    <div class="modal fade" id="modalConfirmarMovimientoCalendario" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div id="calendarStatus" class="calendar-status">
+        Arrastra un bloque azul hacia otra máquina. Solo se resaltarán en verde las máquinas compatibles; el sistema insertará en cola y compactará las OF posteriores sin dejar huecos.
+    </div>
+
+    <div id="antiForgeryToken" class="d-none">
+        @Html.AntiForgeryToken()
+    </div>
+
+    <section class="calendar-card" id="calendarKiosk">
+        <div class="calendar-card-header p-2 border-bottom d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div>
+                <strong class="text-primary">
+                    @Model.TituloPeriodo
+                </strong>
+
+                <div class="small text-muted">
+                    Vista: @Model.TextoVista. Azul = programado y movible. Amarillo suave = Calidad. Rosa = paro. Morado suave = reliberación. Ámbar = Producción activa. Verde = producido. Gris = cerrado/cancelado. Operador planeado y operador real se muestran por separado.
+                </div>
+            </div>
+
+            <div class="calendar-actions">
+                <button type="button"
+                        id="btnCompactarCalendario"
+                        class="btn-calendar-action"
+                        title="Reduce textos y espacios para mostrar más máquinas">
+                    <i class="fa-solid fa-compress"></i>
+                    <span>Compactar</span>
+                </button>
+
+                <button type="button"
+                        id="btnPantallaCompletaCalendario"
+                        class="btn-calendar-action"
+                        title="Abrir calendario en modo kiosco a pantalla completa">
+                    <i class="fa-solid fa-expand"></i>
+                    <span class="fullscreen-label">Pantalla completa</span>
+                </button>
+
+                <span class="fullscreen-help">Esc para salir</span>
+                <span id="fitScaleLabel" class="fit-scale-label"></span>
+            </div>
+
+            <div class="legend">
+                <span><i data-nsq-style-id="nsq-si-93d879e3cf"></i>Programado / movible</span>
+                <span><i data-nsq-style-id="nsq-si-1c4b44484e"></i>Produciendo / en línea</span>
+                <span><i data-nsq-style-id="nsq-si-31a65355ef"></i>Paro</span>
+                <span><i data-nsq-style-id="nsq-si-b64b5184b1"></i>Calidad</span>
+                <span><i data-nsq-style-id="nsq-si-147df738d9"></i>Reliberación</span>
+                <span><i data-nsq-style-id="nsq-si-31d8aa2278"></i>Ya producido</span>
+                <span><i data-nsq-style-id="nsq-si-e71927bd00"></i>Cerrado / cancelado</span>
+            </div>
+        </div>
+
+        <div class="timeline-scroll">
+            <div class="timeline">
+                <div class="timeline-header">
+                    <div class="machine-head">MÁQUINA / BLOQUES</div>
+
+                    <div class="days">
+                        @for (var day = 0; day < totalDias; day++)
+                        {
+                            var fecha = inicioPeriodo.AddDays(day);
+
+                            <div class="day">
+                                <strong>@fecha.ToString("ddd", cultura).ToUpperInvariant()</strong>
+                                <span>@fecha.ToString("dd/MM")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @foreach (var maquina in Model.Maquinas)
+                {
+                    var rowHeight = Math.Max(56, 8 + maquina.Carriles * 48);
+
+                    var search = string.Join(" ",
+                    maquina.Codigo,
+                    maquina.Nombre,
+                    string.Join(" ", maquina.Bloques.Select(x =>
+                    $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo} {x.MaquinaSugeridaTexto} {x.EstadoSemaforoTexto} {x.OperadorProgramadoNombre} {x.OperadorRealNombre} {x.TurnoProgramadoNombre} {x.EstatusProduccionNombre} {x.EstadoCalidad}")))
+                    .ToLowerInvariant();
+
+                    <div class="machine-row calendar-machine-row"
+                         data-search="@search">
+                        <div class="machine-info" data-nsq-style="height:@(rowHeight)px">
+                            <div class="machine-inline" title="@maquina.Codigo - @maquina.Nombre">
+                                <span class="machine-code">@maquina.Codigo</span>
+                                <span class="machine-name">@maquina.Nombre</span>
+                                <span class="machine-count">@maquina.Bloques.Count</span>
+                            </div>
+                        </div>
+
+                        <div class="track"
+                             data-maquina-id="@maquina.MaquinaID"
+                             data-nsq-style="height:@(rowHeight)px">
+                            @if (ahoraVisible)
+                            {
+                                <div class="now-line"
+                                     data-nsq-style="left:@Pct(ahoraLeft)%"
+                                     title="Hora actual"></div>
+                            }
+
+                            @if (!maquina.Bloques.Any())
+                            {
+                                <div class="empty-row">Sin OF programada durante este periodo.</div>
+                            }
+
+                            @foreach (var bloque in maquina.Bloques)
+                            {
+                                var visibleInicio = bloque.Inicio < inicioPeriodo
+                                ? inicioPeriodo
+                                : bloque.Inicio;
+
+                                var visibleFin = bloque.Fin > finPeriodo
+                                ? finPeriodo
+                                : bloque.Fin;
+
+                                var left = (visibleInicio - inicioPeriodo).TotalMinutes / totalMinutos * 100;
+
+                                var width = Math.Max(
+                                .35,
+                                (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
+
+                                var top = 8 + bloque.Carril * 48;
+
+                                var puedeMover = bloque.PuedeMoverCalendario;
+
+                                var tituloBloqueo = puedeMover
+                                ? "Arrastra para mandar a cola de otra máquina compatible."
+                                : bloque.MotivoBloqueoMovimiento;
+
+                                var textoOperador = bloque.TextoOperadorVisible;
+                                var origenOperador = bloque.TieneOperadorReal
+                                ? "Real"
+                                : "Planeado";
+
+                                var textoTurno = bloque.TextoTurnoProgramado;
+                                var textoCalidad = bloque.EstadoCalidadTexto;
+
+                                var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
+                                ? Math.Max(0, (int)Math.Floor((Model.Ahora - bloque.Inicio).TotalMinutes))
+                                : 0;
+
+                                var mostrarAlertaNoInicio =
+                                bloque.EstatusID == 1 &&
+                                minutosAtrasoInicio >= 10 &&
+                                bloque.EstatusProduccionID != 3;
+
+                                var textoAlertaNoInicio = mostrarAlertaNoInicio
+                                ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
+                                : string.Empty;
+
+                                var solicitudReprogramacionPendiente =
+                                solicitudesReprogramacion.FirstOrDefault(x =>
+                                x.ProgramaProduccionID == bloque.ProgramaProduccionID);
+
+                                var tieneSolicitudReprogramacion = solicitudReprogramacionPendiente != null;
+
+                                /*
+                                * PRIORIDAD VISUAL DEL CALENDARIO
+                                * 1. Paro real de Producción.
+                                * 2. Reliberación / configuración invalidada por Calidad.
+                                * 3. Proceso activo de Calidad.
+                                * 4. Producción activa.
+                                * 5. Semáforo normal que ya calcula el modelo.
+                                *
+                                * No modifica lógica ni estados; únicamente decide el color.
+                                */
+                                var claseColorBloque = bloque.ClaseSemaforoCalendario;
+
+                                var estaEnParo =
+                                bloque.EstatusProduccionID == 4;
+
+                                var estaEnReliberacion =
+                                bloque.RequiereReliberacion ||
+                                bloque.ConfiguracionCalidadInvalidada;
+
+                                var estadoCalidadNormalizado =
+                                (bloque.EstadoCalidad ?? string.Empty)
+                                .Trim()
+                                .ToUpperInvariant();
+
+                                var estaEnCalidad =
+                                bloque.InspeccionCalidadID.HasValue &&
+                                !string.IsNullOrWhiteSpace(estadoCalidadNormalizado) &&
+                                estadoCalidadNormalizado != "CERRADA";
+
+                                if (estaEnParo)
+                                {
+                                    claseColorBloque = "bloque-paro";
+                                }
+                                else if (estaEnReliberacion)
+                                {
+                                    claseColorBloque = "bloque-reliberacion";
+                                }
+                                else if (estaEnCalidad)
+                                {
+                                    claseColorBloque = "bloque-calidad";
+                                }
+                                else if (bloque.EstatusProduccionID == 3)
+                                {
+                                    claseColorBloque = "bloque-produciendo";
+                                }
+
+                                <button type="button"
+                                        class="block @claseColorBloque @(puedeMover ? "" : "no-drag") @(mostrarAlertaNoInicio ? "has-start-delay" : "") @(tieneSolicitudReprogramacion ? "has-reprogram-request" : "")"
+                                        draggable="@(puedeMover ? "true" : "false")"
+                                        data-nsq-style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
+                                        data-programa-id="@bloque.ProgramaProduccionID"
+                                        data-maquina-id="@bloque.MaquinaID"
+                                        data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-fin="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-puede-mover="@(puedeMover ? "true" : "false")"
+                                        data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
+                                        title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
+                                    @if (mostrarAlertaNoInicio)
+                                    {
+                                        <span class="start-delay-alert" title="@textoAlertaNoInicio">
+                                            <i class="fa-solid fa-bell"></i>
+                                        </span>
+                                    }
+                                    @if (tieneSolicitudReprogramacion)
+                                    {
+                                        <span class="reprogram-request-indicator" title="Producción solicitó reprogramación">
+                                            <i class="fa-solid fa-calendar-arrow-down"></i>
+                                        </span>
+                                    }
+                                    <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
+                                    <span>@(bloque.ClienteNombre ?? "Sin cliente") · @bloque.EstadoSemaforoTexto</span>
+                                    <span class="operator-line">
+                                        <i class="fa-solid fa-user-gear"></i>
+                                        @origenOperador: @textoOperador · @textoTurno
+                                    </span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+</div>
+
+@foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
+{
+    var textoOperadorModal = bloque.TextoOperadorProgramado;
+    var textoOperadorRealModal = bloque.TextoOperadorReal;
+    var textoAuxiliarModal = bloque.TextoOperadorAuxiliarProgramado;
+    var textoTurnoModal = bloque.TextoTurnoProgramado;
+    var textoCalidadModal = bloque.EstadoCalidadTexto;
+
+    var textoEstatusProduccion = TextoProduccion(
+    bloque.EstatusProduccionID,
+    bloque.EstatusProduccionNombre);
+
+    <div class="modal fade"
+         id="ofModal_@bloque.ProgramaProduccionID"
+         tabindex="-1"
+         aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 rounded-4 shadow">
-                <div class="modal-header border-0 bg-primary text-white rounded-top-4">
-                    <h5 class="modal-title fw-bold">
-                        Confirmar movimiento de programa
-                    </h5>
+                <div class="modal-header border-0">
+                    <div>
+                        <div class="small text-muted fw-bold text-uppercase">
+                            Detalle de producción / planeación
+                        </div>
+
+                        <h2 class="modal-title h5 fw-bold text-primary">
+                            @bloque.OFTexto
+                        </h2>
+                    </div>
 
                     <button type="button"
-                            class="btn-close btn-close-white"
+                            class="btn-close"
                             data-bs-dismiss="modal"></button>
                 </div>
 
                 <div class="modal-body">
-                    <div class="alert alert-primary rounded-3 fw-bold mb-3">
-                        El sistema calculó dónde quedará el programa si aceptas este movimiento.
-                    </div>
-
                     <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="operator-card">
+                                <small>Operador planeado</small>
+                                <strong class="d-block">@textoOperadorModal</strong>
+                                <span class="small text-muted">Auxiliar: @textoAuxiliarModal</span>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="operator-card">
+                                <small>Operador real de la ejecución</small>
+                                <strong class="d-block">@textoOperadorRealModal</strong>
+                                @if (bloque.EjecucionProduccionID.HasValue)
+                                {
+                                    <span class="small text-muted">
+                                        Ejecución @bloque.EjecucionProduccionID
+                                    </span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="operator-card">
+                                <small>Proceso de Calidad</small>
+                                <strong class="d-block">@textoCalidadModal</strong>
+                                @if (bloque.InspeccionCalidadID.HasValue)
+                                {
+                                    <span class="small text-muted">
+                                        Inspección @bloque.InspeccionCalidadID
+                                    </span>
+                                }
+                                @if (bloque.ConfiguracionCalidadInvalidada)
+                                {
+                                    <span class="d-block small text-danger fw-bold">
+                                        Configuración invalidada
+                                    </span>
+                                }
+                                @if (bloque.RequiereReliberacion)
+                                {
+                                    <span class="d-block small text-warning fw-bold">
+                                        Reliberación pendiente
+                                    </span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="operator-card">
+                                <small>Turno</small>
+                                <strong class="d-block">@textoTurnoModal</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="operator-card">
+                                <small>Asignación escala</small>
+                                <strong class="d-block">
+                                    @(bloque.EscalaAsignacionID.HasValue? bloque.EscalaAsignacionID.Value.ToString() : "-")
+                                </strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Máquina actual</small>
+                                <strong class="d-block">@bloque.MaquinaCodigo</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Máquina principal</small>
+                                <strong class="d-block">@(bloque.MaquinaPrincipalCodigo ?? "Sin máquina principal")</strong>
+                                <span class="small">@bloque.MaquinaPrincipalNombre</span>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Máquina sustituta</small>
+                                <strong class="d-block">@(bloque.MaquinaSustitutaCodigo ?? "Sin máquina sustituta")</strong>
+                                <span class="small">@bloque.MaquinaSustitutaNombre</span>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Estatus planeación</small>
+                                <strong class="d-block">@bloque.EstatusTexto</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Estatus producción</small>
+                                <span class="@BadgeProduccion(bloque.EstatusProduccionID)">
+                                    @textoEstatusProduccion
+                                </span>
+
+                                @if (bloque.EjecucionProduccionID.HasValue)
+                                {
+                                    <strong class="d-block mt-2">
+                                        Ejecución @bloque.EjecucionProduccionID
+                                    </strong>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Semáforo</small>
+                                <strong class="d-block">@bloque.EstadoSemaforoTexto</strong>
+
+                                @if (!bloque.PuedeMoverCalendario)
+                                {
+                                    <span class="small text-danger fw-bold">
+                                        @bloque.MotivoBloqueoMovimiento
+                                    </span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Molde</small>
+                                <strong class="d-block">@(bloque.MoldeCodigo ?? "-")</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Horas a producir</small>
+                                <strong class="d-block">@bloque.HorasProgramadas.ToString("N2")</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Máquina sugerida</small>
+                                <strong class="d-block">@bloque.MaquinaSugeridaTexto</strong>
+                            </div>
+                        </div>
+
                         <div class="col-md-6">
-                            <div class="border rounded-3 p-3">
-                                <small class="text-muted">Máquina destino</small>
-                                <strong id="confirmarMaquinaDestino" class="d-block">-</strong>
+                            <div class="detail-card">
+                                <small>Cliente</small>
+                                <strong class="d-block">@(bloque.ClienteNombre ?? "-")</strong>
                             </div>
                         </div>
 
                         <div class="col-md-6">
-                            <div class="border rounded-3 p-3">
-                                <small class="text-muted">Horas programadas</small>
-                                <strong id="confirmarHoras" class="d-block">-</strong>
+                            <div class="detail-card">
+                                <small>Parte</small>
+                                <strong class="d-block">@bloque.ParteTexto</strong>
+                                <span class="small">@bloque.Descripcion</span>
                             </div>
                         </div>
 
                         <div class="col-md-4">
-                            <div class="border rounded-3 p-3">
-                                <small class="text-muted">Cambio</small>
-                                <strong id="confirmarCambio" class="d-block">-</strong>
+                            <div class="detail-card">
+                                <small>Cambio de molde</small>
+                                <strong class="d-block">@(bloque.Cambio.HasValue? bloque.Cambio.Value.ToString(@"hh\:mm") : "-")</strong>
                             </div>
                         </div>
 
                         <div class="col-md-4">
-                            <div class="border rounded-3 p-3">
-                                <small class="text-muted">Arranque</small>
-                                <strong id="confirmarArranque" class="d-block">-</strong>
+                            <div class="detail-card">
+                                <small>Arranque</small>
+                                <strong class="d-block">@(bloque.Arranque.HasValue? bloque.Arranque.Value.ToString(@"hh\:mm") : "-")</strong>
                             </div>
                         </div>
 
                         <div class="col-md-4">
-                            <div class="border rounded-3 p-3">
-                                <small class="text-muted">Fin estimado</small>
-                                <strong id="confirmarFin" class="d-block">-</strong>
+                            <div class="detail-card">
+                                <small>Duración visible</small>
+                                <strong class="d-block">
+                                    @((bloque.Fin - bloque.Inicio).TotalHours.ToString("N2")) h
+                                </strong>
                             </div>
                         </div>
 
-                        <div class="col-12">
-                            <div class="border rounded-3 p-3 bg-light">
-                                <small class="text-muted">Qué va a pasar</small>
-                                <div id="confirmarMotivo" class="fw-bold mt-1">
-                                    -
-                                </div>
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <small>Inicio</small>
+                                <strong class="d-block">@bloque.Inicio.ToString("dd/MM/yyyy HH:mm")</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="detail-card">
+                                <small>Fin</small>
+                                <strong class="d-block">@bloque.Fin.ToString("dd/MM/yyyy HH:mm")</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Programadas</small>
+                                <strong class="d-block">@bloque.CantidadProgramada.ToString("N0")</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Producidas</small>
+                                <strong class="d-block">@bloque.CantidadProducida.ToString("N0")</strong>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="detail-card">
+                                <small>Pendientes</small>
+                                <strong class="d-block">@bloque.CantidadPendiente.ToString("N0")</strong>
                             </div>
                         </div>
                     </div>
@@ -1543,57 +1672,200 @@
                     <button type="button"
                             class="btn btn-outline-secondary fw-bold"
                             data-bs-dismiss="modal">
-                        Cancelar
-                    </button>
-
-                    <button type="button"
-                            id="btnConfirmarMovimientoCalendario"
-                            class="btn btn-primary fw-bold">
-                        Sí, aplicar movimiento
+                        Cerrar
                     </button>
                 </div>
             </div>
         </div>
     </div>
+}
 
-    <div class="modal fade" id="modalCalendarioMensaje" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 rounded-4 shadow">
-                <div class="modal-header border-0 bg-danger text-white rounded-top-4">
-                    <h5 class="modal-title fw-bold" id="modalCalendarioMensajeTitulo">
-                        Movimiento no permitido
-                    </h5>
+<div class="modal fade" id="modalSolicitudesReprogramacion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 bg-warning-subtle">
+                <div>
+                    <div class="small text-uppercase fw-bold text-warning-emphasis">Producción / Planeación</div>
+                    <h5 class="modal-title fw-bold mb-0"><i class="fa-solid fa-calendar-arrow-down me-2"></i>Solicitudes de reprogramación</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                @if (!solicitudesReprogramacion.Any())
+                {
+                    <div class="alert alert-success mb-0"><i class="fa-solid fa-circle-check me-1"></i>No existen solicitudes de reprogramación pendientes.</div>
+                }
+                else
+                {
+                    <div class="alert alert-warning border-0 rounded-3"><strong>Importante:</strong> atender una solicitud no cambia automáticamente la programación. Ubica el programa en el calendario y muévelo con el flujo normal de Planeación.</div>
+                    @foreach (var solicitud in solicitudesReprogramacion)
+                    {
+                        var fechaPrograma = solicitud.FechaInicioPrograma ?? solicitud.FechaInicioProgramadaActual ?? solicitud.FechaSolicitud;
+                        var urlPrograma = Url.Action("Index", "PlaneacionCalendarioMaquinas", new { vista = Model.VistaNormalizada, fecha = fechaPrograma.ToString("yyyy-MM-dd") }) ?? "#";
+                        <div class="reprogram-request-card">
+                            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                        <strong class="text-primary fs-6">@solicitud.TextoOF</strong>
+                                        <span class="reprogram-request-badge"><i class="fa-solid fa-clock"></i>Pendiente</span>
+                                        @if (solicitud.MinutosAtrasoActual > 0)
+                                        {
+                                            <span class="badge text-bg-danger">Atraso @solicitud.TextoAtrasoActual</span>
+                                        }
+                                    </div>
+                                    <div class="text-muted small">Programa @solicitud.ProgramaProduccionID · @solicitud.TextoParte · @solicitud.TextoMaquina</div>
+                                </div>
+                                <button type="button" class="btn btn-primary fw-bold btn-atender-reprogramacion" data-programa-id="@solicitud.ProgramaProduccionID" data-url-programa="@urlPrograma">
+                                    <i class="fa-solid fa-location-crosshairs me-1"></i>Atender en calendario
+                                </button>
+                            </div>
+                            <div class="row g-3 mt-1">
+                                <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><small class="text-muted">Horario al solicitar</small><strong class="d-block">@solicitud.TextoHorarioActual</strong></div></div>
+                                <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><small class="text-muted">Solicitud registrada</small><strong class="d-block">@solicitud.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</strong><span class="small text-muted">@(string.IsNullOrWhiteSpace(solicitud.UsuarioSolicitanteNombre) ? $"Usuario {solicitud.UsuarioSolicitanteID}" : solicitud.UsuarioSolicitanteNombre)</span></div></div>
+                                <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><small class="text-muted">Cantidad programada</small><strong class="d-block">@solicitud.CantidadProgramada.ToString("N0")</strong><span class="small text-muted">Molde: @(string.IsNullOrWhiteSpace(solicitud.MoldeCodigo) ? "-" : solicitud.MoldeCodigo)</span></div></div>
+                                <div class="col-12">
+                                    <div class="reprogram-request-motive">
+                                        <div class="small text-muted fw-bold text-uppercase">Motivo informado por Producción</div>
+                                        <div class="fw-bold mt-1">@(string.IsNullOrWhiteSpace(solicitud.Motivo) ? "Sin motivo especificado" : solicitud.Motivo)</div>
+                                        @if (!string.IsNullOrWhiteSpace(solicitud.Observaciones))
+                                        {
+                                            <div class="small mt-2">@solicitud.Observaciones</div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-footer border-0">
+                <span class="small text-muted me-auto">Rechazar una solicitud se conectará en el siguiente paso.</span>
+                <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-                    <button type="button"
-                            class="btn-close btn-close-white"
-                            data-bs-dismiss="modal"></button>
+<div class="modal fade" id="modalConfirmarMovimientoCalendario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 bg-primary text-white rounded-top-4">
+                <h5 class="modal-title fw-bold">
+                    Confirmar movimiento de programa
+                </h5>
+
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="alert alert-primary rounded-3 fw-bold mb-3">
+                    El sistema calculó dónde quedará el programa si aceptas este movimiento.
                 </div>
 
-                <div class="modal-body">
-                    <div class="d-flex gap-3">
-                        <div class="fs-3 text-danger">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3">
+                            <small class="text-muted">Máquina destino</small>
+                            <strong id="confirmarMaquinaDestino" class="d-block">-</strong>
                         </div>
+                    </div>
 
-                        <div>
-                            <div class="fw-bold mb-1">
-                                No se pudo mover el programa.
-                            </div>
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3">
+                            <small class="text-muted">Horas programadas</small>
+                            <strong id="confirmarHoras" class="d-block">-</strong>
+                        </div>
+                    </div>
 
-                            <div id="modalCalendarioMensajeTexto" class="text-muted">
-                                La máquina seleccionada no es válida.
+                    <div class="col-md-4">
+                        <div class="border rounded-3 p-3">
+                            <small class="text-muted">Cambio</small>
+                            <strong id="confirmarCambio" class="d-block">-</strong>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="border rounded-3 p-3">
+                            <small class="text-muted">Arranque</small>
+                            <strong id="confirmarArranque" class="d-block">-</strong>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="border rounded-3 p-3">
+                            <small class="text-muted">Fin estimado</small>
+                            <strong id="confirmarFin" class="d-block">-</strong>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="border rounded-3 p-3 bg-light">
+                            <small class="text-muted">Qué va a pasar</small>
+                            <div id="confirmarMotivo" class="fw-bold mt-1">
+                                -
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="modal-footer border-0">
-                    <button type="button"
-                            class="btn btn-primary fw-bold rounded-3"
-                            data-bs-dismiss="modal">
-                        Entendido
-                    </button>
-                </div>
+            <div class="modal-footer border-0">
+                <button type="button"
+                        class="btn btn-outline-secondary fw-bold"
+                        data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        id="btnConfirmarMovimientoCalendario"
+                        class="btn btn-primary fw-bold">
+                    Sí, aplicar movimiento
+                </button>
             </div>
         </div>
     </div>
+</div>
+
+<div class="modal fade" id="modalCalendarioMensaje" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 bg-danger text-white rounded-top-4">
+                <h5 class="modal-title fw-bold" id="modalCalendarioMensajeTitulo">
+                    Movimiento no permitido
+                </h5>
+
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="d-flex gap-3">
+                    <div class="fs-3 text-danger">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+
+                    <div>
+                        <div class="fw-bold mb-1">
+                            No se pudo mover el programa.
+                        </div>
+
+                        <div id="modalCalendarioMensajeTexto" class="text-muted">
+                            La máquina seleccionada no es válida.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0">
+                <button type="button"
+                        class="btn btn-primary fw-bold rounded-3"
+                        data-bs-dismiss="modal">
+                    Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

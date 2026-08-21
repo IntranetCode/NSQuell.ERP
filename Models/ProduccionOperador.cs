@@ -208,7 +208,9 @@ namespace ERP.NSQuell.Models
         public string? Observaciones { get; set; }
 
 
-
+        public string? UbicacionProductoIncompleto { get; set; }
+        public DateTime? FechaIngresoProductoIncompleto { get; set; }
+        public int? UsuarioIngresoProductoIncompletoID { get; set; }
         public bool ActivoParaCalculo { get; set; } = true;
         public bool EsCajaIncompleta => EsProductoIncompleto || string.Equals(TipoCaja, ProduccionCajaTipo.Incompleta, StringComparison.OrdinalIgnoreCase);
         public bool IncompletaDisponible => EsCajaIncompleta && string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Disponible, StringComparison.OrdinalIgnoreCase);
