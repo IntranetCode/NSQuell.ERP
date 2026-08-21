@@ -156,6 +156,27 @@ namespace ERP.NSQuell.Models
         public string? LoteMaterial { get; set; }
         public string? EtiquetaFolio { get; set; }
 
+        public string? CodigoBarrasOrigen { get; set; }
+        public string? NumeroOFEtiqueta { get; set; }
+        public string? NumeroParteEtiqueta { get; set; }
+        public string? DesignacionEtiqueta { get; set; }
+        public int? CantidadEtiqueta { get; set; }
+        public string? LoteEtiqueta { get; set; }
+        public DateTime? FechaEscaneoProduccion { get; set; }
+        public int? UsuarioEscaneoProduccionID { get; set; }
+        public DateTime? FechaEscaneoCalidad { get; set; }
+        public int? UsuarioEscaneoCalidadID { get; set; }
+
+        public bool TieneEtiquetaFisica =>
+            !string.IsNullOrWhiteSpace(CodigoBarrasOrigen);
+
+        public bool RecibidaFisicamenteCalidad =>
+            FechaEscaneoCalidad.HasValue;
+
+        public bool PendienteRecepcionFisicaCalidad =>
+            EstadoCajaID == ProduccionCajaEstatus.PendienteCalidad &&
+            !FechaEscaneoCalidad.HasValue;
+
         public bool EtiquetaVerde { get; set; }
 
         public int EstadoCajaID { get; set; }
@@ -186,6 +207,10 @@ namespace ERP.NSQuell.Models
 
         public string? Observaciones { get; set; }
 
+
+        public string? UbicacionProductoIncompleto { get; set; }
+        public DateTime? FechaIngresoProductoIncompleto { get; set; }
+        public int? UsuarioIngresoProductoIncompletoID { get; set; }
         public bool ActivoParaCalculo { get; set; } = true;
         public bool EsCajaIncompleta => EsProductoIncompleto || string.Equals(TipoCaja, ProduccionCajaTipo.Incompleta, StringComparison.OrdinalIgnoreCase);
         public bool IncompletaDisponible => EsCajaIncompleta && string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Disponible, StringComparison.OrdinalIgnoreCase);

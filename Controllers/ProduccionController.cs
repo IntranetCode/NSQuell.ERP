@@ -4837,8 +4837,8 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
         }
 
         private async Task<List<ProduccionRegistroHoraVm>> ObtenerRegistrosHoraAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn)
+       int ejecucionProduccionId,
+       SqlConnection cn)
         {
             var lista = new List<ProduccionRegistroHoraVm>();
 
@@ -4853,9 +4853,14 @@ SELECT
     FechaProduccion,
     HoraInicio,
     HoraFin,
-    CantidadOK,
-    CantidadSospechosa,
-    CantidadScrap,
+    ISNULL(CantidadOK,0) AS CantidadOK,
+    ISNULL(CantidadSospechosa,0) AS CantidadSospechosa,
+    ISNULL(CantidadScrap,0) AS CantidadScrap,
+    ObjetivoHora,
+    ObjetivoBloque,
+    CumplioObjetivo,
+    DiferenciaObjetivo,
+    PorcentajeCumplimiento,
     Observaciones,
     UsuarioCreacionID,
     FechaCreacion,
@@ -4863,38 +4868,134 @@ SELECT
     FechaModificacion,
     Activo
 FROM dbo.Produccion_RegistroHora
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1
-ORDER BY FechaProduccion DESC, HoraInicio DESC;";
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+ORDER BY FechaProduccion DESC,HoraInicio DESC;";
 
             await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
                 ejecucionProduccionId;
 
-            await using var rd = await cmd.ExecuteReaderAsync();
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
 
             while (await rd.ReadAsync())
             {
                 lista.Add(new ProduccionRegistroHoraVm
                 {
-                    RegistroHoraID = Entero(rd, "RegistroHoraID"),
-                    EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
-                    ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
-                    SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
-                    MaquinaID = NullableEntero(rd, "MaquinaID"),
-                    OperadorID = NullableEntero(rd, "OperadorID"),
-                    FechaProduccion = Fecha(rd, "FechaProduccion"),
-                    HoraInicio = Tiempo(rd, "HoraInicio"),
-                    HoraFin = Tiempo(rd, "HoraFin"),
-                    CantidadOK = Entero(rd, "CantidadOK"),
-                    CantidadSospechosa = Entero(rd, "CantidadSospechosa"),
-                    CantidadScrap = Entero(rd, "CantidadScrap"),
-                    Observaciones = TextoNullable(rd, "Observaciones"),
-                    UsuarioCreacionID = NullableEntero(rd, "UsuarioCreacionID"),
-                    FechaCreacion = Fecha(rd, "FechaCreacion"),
-                    UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
-                    FechaModificacion = NullableFecha(rd, "FechaModificacion"),
-                    Activo = Booleano(rd, "Activo")
+                    RegistroHoraID =
+                        Entero(rd, "RegistroHoraID"),
+
+                    EjecucionProduccionID =
+                        Entero(rd, "EjecucionProduccionID"),
+
+                    ProgramaProduccionID =
+                        Entero(rd, "ProgramaProduccionID"),
+
+                    SolicitudProduccionID =
+                        NullableEntero(
+                            rd,
+                            "SolicitudProduccionID"),
+
+                    MaquinaID =
+                        NullableEntero(
+                            rd,
+                            "MaquinaID"),
+
+                    OperadorID =
+                        NullableEntero(
+                            rd,
+                            "OperadorID"),
+
+                    FechaProduccion =
+                        Fecha(
+                            rd,
+                            "FechaProduccion"),
+
+                    HoraInicio =
+                        Tiempo(
+                            rd,
+                            "HoraInicio"),
+
+                    HoraFin =
+                        Tiempo(
+                            rd,
+                            "HoraFin"),
+
+                    CantidadOK =
+                        Entero(
+                            rd,
+                            "CantidadOK"),
+
+                    CantidadSospechosa =
+                        Entero(
+                            rd,
+                            "CantidadSospechosa"),
+
+                    CantidadScrap =
+                        Entero(
+                            rd,
+                            "CantidadScrap"),
+
+                    ObjetivoHora =
+                        NullableEntero(
+                            rd,
+                            "ObjetivoHora"),
+
+                    ObjetivoBloque =
+                        NullableEntero(
+                            rd,
+                            "ObjetivoBloque"),
+
+                    CumplioObjetivo =
+                        rd["CumplioObjetivo"] == DBNull.Value
+                            ? null
+                            : Convert.ToBoolean(
+                                rd["CumplioObjetivo"]),
+
+                    DiferenciaObjetivo =
+                        NullableEntero(
+                            rd,
+                            "DiferenciaObjetivo"),
+
+                    PorcentajeCumplimiento =
+                        rd["PorcentajeCumplimiento"] == DBNull.Value
+                            ? null
+                            : Convert.ToDecimal(
+                                rd["PorcentajeCumplimiento"]),
+
+                    Observaciones =
+                        TextoNullable(
+                            rd,
+                            "Observaciones"),
+
+                    UsuarioCreacionID =
+                        NullableEntero(
+                            rd,
+                            "UsuarioCreacionID"),
+
+                    FechaCreacion =
+                        Fecha(
+                            rd,
+                            "FechaCreacion"),
+
+                    UsuarioModificacionID =
+                        NullableEntero(
+                            rd,
+                            "UsuarioModificacionID"),
+
+                    FechaModificacion =
+                        NullableFecha(
+                            rd,
+                            "FechaModificacion"),
+
+                    Activo =
+                        Booleano(
+                            rd,
+                            "Activo")
                 });
             }
 
@@ -6593,36 +6694,40 @@ SELECT TOP(1)
     s.UsuarioModificacionID,
     s.FechaModificacion
 FROM dbo.Produccion_CambioTurnoSugerencias s
-INNER JOIN dbo.Persona op
-    ON op.PersonaID=s.OperadorSugeridoID
+INNER JOIN dbo.Persona op ON op.PersonaID=s.OperadorSugeridoID
 WHERE s.EjecucionProduccionID=@EjecucionProduccionID
   AND s.Activo=1
   AND ISNULL(s.Utilizada,0)=0
 ORDER BY s.FechaSugerencia DESC,s.CambioTurnoSugerenciaID DESC;";
-            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-            await using var rd = await cmd.ExecuteReaderAsync();
-            if (!await rd.ReadAsync()) return null;
-            var usuarioTecnicoId = Convert.ToInt32(rd["UsuarioTecnicoID"]);
-            var vm = new ProduccionCambioTurnoSugerenciaVm
+            ProduccionCambioTurnoSugerenciaVm? vm = null;
+            int usuarioTecnicoId = 0;
+            await using (var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx))
             {
-                CambioTurnoSugerenciaID = Convert.ToInt32(rd["CambioTurnoSugerenciaID"]),
-                EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
-                ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
-                OperadorSugeridoID = Convert.ToInt32(rd["OperadorSugeridoID"]),
-                OperadorSugeridoNombre = rd["OperadorSugeridoNombre"]?.ToString()?.Trim() ?? string.Empty,
-                UsuarioTecnicoID = usuarioTecnicoId,
-                FechaSugerencia = Convert.ToDateTime(rd["FechaSugerencia"]),
-                Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"]?.ToString(),
-                Utilizada = Convert.ToBoolean(rd["Utilizada"]),
-                Activo = Convert.ToBoolean(rd["Activo"]),
-                UsuarioModificacionID = rd["UsuarioModificacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioModificacionID"]),
-                FechaModificacion = rd["FechaModificacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaModificacion"])
-            };
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                await using (var rd = await cmd.ExecuteReaderAsync())
+                {
+                    if (!await rd.ReadAsync()) return null;
+                    usuarioTecnicoId = Convert.ToInt32(rd["UsuarioTecnicoID"]);
+                    vm = new ProduccionCambioTurnoSugerenciaVm
+                    {
+                        CambioTurnoSugerenciaID = Convert.ToInt32(rd["CambioTurnoSugerenciaID"]),
+                        EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                        ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                        OperadorSugeridoID = Convert.ToInt32(rd["OperadorSugeridoID"]),
+                        OperadorSugeridoNombre = rd["OperadorSugeridoNombre"]?.ToString()?.Trim() ?? string.Empty,
+                        UsuarioTecnicoID = usuarioTecnicoId,
+                        FechaSugerencia = Convert.ToDateTime(rd["FechaSugerencia"]),
+                        Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"]?.ToString(),
+                        Utilizada = Convert.ToBoolean(rd["Utilizada"]),
+                        Activo = Convert.ToBoolean(rd["Activo"]),
+                        UsuarioModificacionID = rd["UsuarioModificacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioModificacionID"]),
+                        FechaModificacion = rd["FechaModificacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaModificacion"])
+                    };
+                }
+            }
             vm.TecnicoNombre = await ObtenerPersonaNombreAsync(usuarioTecnicoId, cn, tx) ?? $"Usuario {usuarioTecnicoId}";
             return vm;
         }
-
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -10477,6 +10582,165 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
             await cmd.ExecuteNonQueryAsync();
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SolicitarReprogramacion(int programaProduccionId, string? motivo, string? observaciones)
+        {
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (programaProduccionId <= 0)
+            {
+                TempData["Error"] = "No se recibió correctamente el programa de producción.";
+                return RedirectToAction(nameof(Index));
+            }
+            motivo = string.IsNullOrWhiteSpace(motivo) ? null : motivo.Trim();
+            observaciones = string.IsNullOrWhiteSpace(observaciones) ? null : observaciones.Trim();
+            if (string.IsNullOrWhiteSpace(motivo))
+            {
+                TempData["Error"] = "Selecciona el motivo de la solicitud de reprogramación.";
+                return RedirectToAction(nameof(Index));
+            }
+            if (string.IsNullOrWhiteSpace(observaciones))
+            {
+                TempData["Error"] = "Explica brevemente por qué no puede iniciarse la producción en el horario programado.";
+                return RedirectToAction(nameof(Index));
+            }
+            if (motivo.Length > 100)
+            {
+                TempData["Error"] = "El motivo de reprogramación no puede superar 100 caracteres.";
+                return RedirectToAction(nameof(Index));
+            }
+            if (observaciones.Length > 500)
+            {
+                TempData["Error"] = "Las observaciones no pueden superar 500 caracteres.";
+                return RedirectToAction(nameof(Index));
+            }
+            var usuarioId = ObtenerUsuarioID();
+            if (usuarioId <= 0) return Unauthorized();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                const string sqlPrograma = @"
+SELECT TOP(1)
+    pp.ProgramaProduccionID,
+    pp.SolicitudProduccionID,
+    pp.MaquinaID,
+    pp.FechaInicioProgramada,
+    pp.FechaFinProgramada,
+    ISNULL(pp.EstatusID,1) AS EstatusID,
+    pp.FechaInicioReal
+FROM dbo.Planeacion_ProgramaProduccion pp WITH(UPDLOCK,HOLDLOCK)
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;";
+                int? solicitudProduccionId;
+                int? maquinaId;
+                DateTime fechaInicioProgramada;
+                DateTime? fechaFinProgramada;
+                int estatusId;
+                DateTime? fechaInicioReal;
+                await using (var cmd = new SqlCommand(sqlPrograma, cn, tx))
+                {
+                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "El programa de producción ya no existe o dejó de estar activo.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                    solicitudProduccionId = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]);
+                    maquinaId = rd["MaquinaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaID"]);
+                    if (rd["FechaInicioProgramada"] == DBNull.Value)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "El programa no tiene fecha de inicio programada.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                    fechaInicioProgramada = Convert.ToDateTime(rd["FechaInicioProgramada"]);
+                    fechaFinProgramada = rd["FechaFinProgramada"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinProgramada"]);
+                    estatusId = Convert.ToInt32(rd["EstatusID"]);
+                    fechaInicioReal = rd["FechaInicioReal"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioReal"]);
+                }
+                if (fechaInicioProgramada >= DateTime.Now)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La reprogramación por atraso solo puede solicitarse cuando la hora programada de inicio ya fue superada.";
+                    return RedirectToAction(nameof(Index));
+                }
+                if (fechaInicioReal.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La producción ya inició. Esta opción solo aplica a programas atrasados que todavía no han comenzado.";
+                    return RedirectToAction(nameof(Index));
+                }
+                if (estatusId != ProgramaProduccionEstatus.Pendiente)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El programa ya cambió de estatus y no puede solicitar reprogramación desde esta bandeja.";
+                    return RedirectToAction(nameof(Index));
+                }
+                const string sqlExiste = @"
+SELECT TOP(1) SolicitudReprogramacionID
+FROM dbo.Planeacion_SolicitudesReprogramacion WITH(UPDLOCK,HOLDLOCK)
+WHERE ProgramaProduccionID=@ProgramaProduccionID
+  AND Activo=1
+  AND Estatus=N'PENDIENTE';";
+                await using (var cmd = new SqlCommand(sqlExiste, cn, tx))
+                {
+                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                    var existente = await cmd.ExecuteScalarAsync();
+                    if (existente != null && existente != DBNull.Value)
+                    {
+                        await tx.CommitAsync();
+                        TempData["Info"] = "Este programa ya tiene una solicitud de reprogramación pendiente de revisión por Planeación.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                }
+                const string sqlInsert = @"
+INSERT INTO dbo.Planeacion_SolicitudesReprogramacion
+(
+    ProgramaProduccionID,SolicitudProduccionID,MaquinaID,
+    FechaInicioProgramadaActual,FechaFinProgramadaActual,
+    Motivo,Observaciones,Estatus,
+    UsuarioSolicitanteID,FechaSolicitud,Activo,
+    UsuarioCreacionID,FechaCreacion
+)
+VALUES
+(
+    @ProgramaProduccionID,@SolicitudProduccionID,@MaquinaID,
+    @FechaInicioProgramada,@FechaFinProgramada,
+    @Motivo,@Observaciones,N'PENDIENTE',
+    @UsuarioID,SYSDATETIME(),1,
+    @UsuarioID,SYSDATETIME()
+);";
+                await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
+                {
+                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                    cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)solicitudProduccionId ?? DBNull.Value;
+                    cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)maquinaId ?? DBNull.Value;
+                    cmd.Parameters.Add("@FechaInicioProgramada", SqlDbType.DateTime2).Value = fechaInicioProgramada;
+                    cmd.Parameters.Add("@FechaFinProgramada", SqlDbType.DateTime2).Value = (object?)fechaFinProgramada ?? DBNull.Value;
+                    cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 100).Value = motivo;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = observaciones;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                await tx.CommitAsync();
+                TempData["Success"] = "Solicitud de reprogramación enviada a Planeación. El programa permanece disponible hasta que Planeación determine la nueva programación.";
+            }
+            catch (SqlException ex) when (ex.Number is 2601 or 2627)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Info"] = "Este programa ya tiene una solicitud de reprogramación pendiente.";
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Error"] = "No fue posible solicitar la reprogramación: " + ex.Message;
+            }
+            return RedirectToAction(nameof(Index));
+        }
         private async Task CambiarEstatusProgramaAsync(
             int programaProduccionId,
             int estatusId,

@@ -313,6 +313,104 @@
             grid-template-columns: 1fr
         }
     }
+
+    .quality-boxes .quality-scan-reception {
+        margin-bottom: 20px;
+        padding: 16px;
+        border: 1px solid #fed7aa;
+        border-radius: 12px;
+        background: linear-gradient(135deg,#fff7ed 0%,#ffffff 72%);
+    }
+
+    .quality-boxes .quality-scan-reception-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+        margin-bottom: 12px;
+    }
+
+    .quality-boxes .quality-scan-reception-title {
+        margin: 0;
+        color: var(--qb-navy);
+        font-size: .95rem;
+        font-weight: 850;
+    }
+
+        .quality-boxes .quality-scan-reception-title i {
+            color: var(--qb-orange);
+            margin-right: 7px;
+        }
+
+    .quality-boxes .quality-scan-reception-form {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) auto;
+        gap: 10px;
+    }
+
+    .quality-boxes .quality-scan-reception-input {
+        min-height: 48px;
+        border: 2px solid #fdba74;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-weight: 650;
+        outline: none;
+    }
+
+        .quality-boxes .quality-scan-reception-input:focus {
+            border-color: var(--qb-orange);
+            box-shadow: 0 0 0 4px rgba(249,115,22,.12);
+        }
+
+    .quality-boxes .quality-reception-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 800;
+    }
+
+        .quality-boxes .quality-reception-state.is-pending {
+            background: #fff7ed;
+            color: #c2410c;
+            border: 1px solid #fed7aa;
+        }
+
+        .quality-boxes .quality-reception-state.is-received {
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+
+    .quality-boxes .quality-reception-waiting {
+        padding: 14px;
+        border: 1px dashed #fdba74;
+        border-radius: 10px;
+        background: #fffaf5;
+        color: #9a3412;
+        font-size: .84rem;
+        font-weight: 650;
+    }
+
+    @@media(max - width:767.98px) {
+        .quality-boxes .quality-scan-reception-head
+
+    {
+        flex-direction: column;
+    }
+
+    .quality-boxes .quality-scan-reception-form {
+        grid-template-columns: 1fr;
+    }
+
+        .quality-boxes .quality-scan-reception-form .quality-btn {
+            width: 100%;
+        }
+
+    }
 </style>
 <div class="quality-boxes">
     @if (Model.CajasProduccion.Any())
@@ -339,6 +437,69 @@
             </div>
 
             <div class="quality-card-body">
+
+                <div class="quality-scan-reception" id="recepcion-cajas-escaner">
+                    <div class="quality-scan-reception-head">
+                        <div>
+                            <h3 class="quality-scan-reception-title">
+                                <i class="fa-solid fa-barcode"></i>
+                                Recibir cajas físicas de esta OF
+                            </h3>
+                            <div class="quality-help">
+                                Mantén esta OF abierta y escanea una caja a la vez. Una etiqueta de otra corrida será rechazada sin registrar su recepción.
+                            </div>
+                        </div>
+                        <span class="badge bg-light text-dark border">
+                            Inspección #@Model.InspeccionID
+                        </span>
+                    </div>
+                    <form asp-controller="Calidad"
+                          asp-action="EscanearCajaCalidad"
+                          method="post"
+                          class="quality-scan-reception-form"
+                          data-quality-detail-scan-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden"
+                               name="InspeccionID"
+                               value="@Model.InspeccionID" />
+                        <input type="text"
+                               name="CodigoBarras"
+                               maxlength="500"
+                               autocomplete="off"
+                               class="form-control quality-scan-reception-input"
+                               placeholder="Escanea la siguiente caja de esta OF..."
+                               aria-label="Código de barras de la caja"
+                               data-quality-detail-scan-input />
+                        <button type="submit"
+                                class="quality-btn quality-btn-primary"
+                                data-quality-detail-scan-submit>
+                            <i class="fa-solid fa-barcode"></i>
+                            Recibir caja
+                        </button>
+                    </form>
+                    <div class="quality-help">
+                        El lector puede enviar ENTER. Después de recibir una caja volverás a este mismo detalle para escanear la siguiente.
+                    </div>
+                </div>
+
+                @if (TempData["InspeccionCajaEscaneadaID"] is int inspeccionCajaEscaneadaId && inspeccionCajaEscaneadaId > 0)
+                {
+                    <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                        <div>
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                            La última etiqueta pertenece a otra OF. No se registró la recepción.
+                        </div>
+                        <a asp-controller="Calidad"
+                           asp-action="Detalle"
+                           asp-route-id="@inspeccionCajaEscaneadaId"
+                           asp-fragment="recepcion-cajas-escaner"
+                           class="quality-btn quality-btn-primary">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            Ir a la OF correcta
+                        </a>
+                    </div>
+                }
+
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-lg">
                         <div class="border rounded-3 p-3 h-100">
@@ -397,9 +558,25 @@
                                 </div>
                             </div>
 
-                            <span class="badge @caja.EstadoBadgeClase">
-                                @caja.EstadoVisualTexto
-                            </span>
+                            <div class="text-end">
+                                <span class="badge @caja.EstadoBadgeClase">
+                                    @caja.EstadoVisualTexto
+                                </span>
+                                @if (caja.FechaEscaneoCalidad.HasValue)
+                                {
+                                    <div class="quality-reception-state is-received">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                        Recibida físicamente · @caja.FechaEscaneoCalidad.Value.ToString("dd/MM HH:mm")
+                                    </div>
+                                }
+                                else if (caja.EstadoCajaID == ProduccionCajaEstatus.PendienteCalidad)
+                                {
+                                    <div class="quality-reception-state is-pending">
+                                        <i class="fa-solid fa-barcode"></i>
+                                        Pendiente de escaneo físico
+                                    </div>
+                                }
+                            </div>
                         </div>
 
                         <div class="row g-3 mb-3">
@@ -427,7 +604,7 @@
                             </div>
                         </div>
 
-                        @if (caja.PuedeRevisar)
+                        @if (caja.PuedeRevisar && caja.FechaEscaneoCalidad.HasValue)
                         {
                             <form asp-controller="Calidad"
                                   asp-action="ResolverCajaProduccion"
@@ -611,6 +788,13 @@
                                 </button>
                             </form>
                         }
+                        else if (caja.PuedeRevisar && !caja.FechaEscaneoCalidad.HasValue)
+                        {
+                            <div class="quality-reception-waiting">
+                                <i class="fa-solid fa-barcode me-1"></i>
+                                Esta caja ya fue avisada por Producción, pero todavía no ha sido recibida físicamente. Escanea su etiqueta arriba antes de liberar, enviar a GP12 o devolver.
+                            </div>
+                        }
                         else
                         {
                             <div class="row g-3">
@@ -716,6 +900,30 @@
         </section>
     }
     <script>
+        const qualityDetailScanForm = document.querySelector('[data-quality-detail-scan-form]');
+        const qualityDetailScanInput = qualityDetailScanForm?.querySelector('[data-quality-detail-scan-input]');
+        const qualityDetailScanSubmit = qualityDetailScanForm?.querySelector('[data-quality-detail-scan-submit]');
+
+        if (qualityDetailScanForm && qualityDetailScanInput) {
+            setTimeout(function () {
+                qualityDetailScanInput.focus();
+                qualityDetailScanInput.select();
+            }, 80);
+
+            qualityDetailScanForm.addEventListener('submit', function (event) {
+                if (!qualityDetailScanInput.value.trim()) {
+                    event.preventDefault();
+                    qualityDetailScanInput.focus();
+                    return;
+                }
+
+                if (qualityDetailScanSubmit) {
+                    qualityDetailScanSubmit.disabled = true;
+                    qualityDetailScanSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Recibiendo...';
+                }
+            });
+        }
+
         document.querySelectorAll('[data-box-review-form]').forEach(function (form) {
             const validationItems = form.querySelectorAll('[data-box-validation-item]');
             const decisions = form.querySelectorAll('[data-box-decision]');
@@ -840,4 +1048,3 @@
         });
     </script>
 </div>
-s

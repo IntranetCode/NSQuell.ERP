@@ -40,6 +40,9 @@
     var avanceEmbalajes = Model.CajasEsperadas > 0 ? Math.Min(100m, Math.Round((decimal)cajasOKNuevasFormadas * 100m / Model.CajasEsperadas, 2)) : 0m;
     var avanceEmbalajesTexto = avanceEmbalajes.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     var piezasPlaneadasPendientes = Math.Max(0, Model.CantidadPlaneada - Model.PiezasOKEmpacadas);
+    var cajasConEtiquetaFisica = cajas.Count(x => x.TieneEtiquetaFisica);
+    var cajasPendientesRecepcionCalidad = cajas.Count(x => x.PendienteRecepcionFisicaCalidad);
+    var cajasRecibidasFisicamenteCalidad = cajas.Count(x => x.RecibidaFisicamenteCalidad);
 }
 
 @functions {
@@ -715,6 +718,194 @@
                 min-width: 120px;
             }
 
+        .scanner-panel {
+            border: 2px solid #93c5fd;
+            border-radius: 24px;
+            background: linear-gradient(135deg,#eff6ff 0%,#ffffff 55%,#eefcf5 100%);
+            box-shadow: 0 18px 44px rgba(0,74,173,.12);
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .scanner-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            padding: 17px 20px;
+            border-bottom: 1px solid #bfdbfe;
+            background: rgba(255,255,255,.72);
+        }
+
+        .scanner-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--blue-dark);
+            font-size: 1.15rem;
+            font-weight: 950;
+        }
+
+        .scanner-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 11px;
+            border-radius: 999px;
+            color: #067647;
+            background: #ecfdf3;
+            border: 1px solid #abefc6;
+            font-size: .78rem;
+            font-weight: 950;
+        }
+
+        .scanner-body {
+            padding: 20px;
+        }
+
+        .scanner-grid {
+            display: grid;
+            grid-template-columns: minmax(0,1.45fr) minmax(300px,.55fr);
+            gap: 16px;
+            align-items: stretch;
+        }
+
+        .scanner-input-wrap {
+            position: relative;
+        }
+
+        .scanner-input {
+            height: 64px;
+            padding: 12px 58px 12px 16px;
+            border: 2px solid #60a5fa;
+            border-radius: 18px;
+            font-size: 1.05rem;
+            font-weight: 800;
+            letter-spacing: .01em;
+            background: #fff;
+        }
+
+            .scanner-input:focus {
+                border-color: var(--blue);
+                box-shadow: 0 0 0 .28rem rgba(0,74,173,.13);
+            }
+
+        .scanner-icon {
+            position: absolute;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--blue);
+            font-size: 1.45rem;
+            pointer-events: none;
+        }
+
+        .scanner-help {
+            margin-top: 9px;
+            color: #475467;
+            font-size: .86rem;
+            font-weight: 700;
+        }
+
+        .scanner-side {
+            border: 1px solid #d1e9ff;
+            border-radius: 18px;
+            background: #fff;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+            .scanner-side strong {
+                color: var(--blue-dark);
+                font-size: 1.05rem;
+            }
+
+        .scan-stats {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .scan-stat {
+            border: 1px solid #dbe7f5;
+            border-radius: 15px;
+            background: #fff;
+            padding: 11px 12px;
+        }
+
+            .scan-stat .n {
+                margin-top: 3px;
+                font-size: 1.15rem;
+                font-weight: 950;
+                color: #101828;
+            }
+
+        .manual-details {
+            border: 1px dashed #cbd5e1;
+            border-radius: 18px;
+            background: #f8fafc;
+            overflow: hidden;
+        }
+
+            .manual-details summary {
+                cursor: pointer;
+                list-style: none;
+                padding: 14px 16px;
+                color: #475467;
+                font-weight: 900;
+            }
+
+                .manual-details summary::-webkit-details-marker {
+                    display: none;
+                }
+
+            .manual-details[open] summary {
+                border-bottom: 1px solid #e4e7ec;
+                background: #fff;
+            }
+
+        .physical-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 9px;
+            border-radius: 999px;
+            font-size: .75rem;
+            font-weight: 900;
+        }
+
+        .physical-pending {
+            color: #9a3412;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+        }
+
+        .physical-ok {
+            color: #067647;
+            background: #ecfdf3;
+            border: 1px solid #abefc6;
+        }
+
+        .physical-none {
+            color: #475467;
+            background: #f2f4f7;
+            border: 1px solid #d0d5dd;
+        }
+
+        .code-text {
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: Consolas,monospace;
+            font-size: .78rem;
+            color: #475467;
+        }
+
         .actions-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(140px, 1fr));
@@ -748,6 +939,10 @@
 
         @@media (max-width: 1280px) {
             .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .scanner-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -797,6 +992,10 @@
             .white-grid {
                 grid-template-columns: 1fr;
             }
+
+            .scan-stats {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -812,7 +1011,7 @@
                         Cajas de Producción
                     </h1>
                     <p>
-                        Punto 12 al 16: formar caja, solicitar Calidad, mover a zona verde, escanear salida y esperar recepción de Almacén.
+                        Escanea la etiqueta física para formar y enviar la caja a Calidad. El sistema valida OF, parte, cantidad y duplicados antes de registrarla.
                     </p>
                 </div>
 
@@ -921,13 +1120,60 @@
         }
 
 
+        <section class="scanner-panel">
+            <div class="scanner-head">
+                <div class="scanner-title">
+                    <i class="fa-solid fa-barcode"></i>
+                    Escaneo de caja física
+                </div>
+                <span class="scanner-status"><i class="fa-solid fa-circle"></i>Lector listo</span>
+            </div>
+            <div class="scanner-body">
+                @if (Model.TieneParoAbierto)
+                {
+                    <div class="danger-note mb-3"><i class="fa-solid fa-circle-pause me-1"></i>Hay un paro abierto. Cierra el paro antes de registrar una nueva caja.</div>
+                }
+                else if (Model.EstatusID != 3)
+                {
+                    <div class="warn-note mb-3"><i class="fa-solid fa-triangle-exclamation me-1"></i>El escaneo de cajas está disponible únicamente mientras la corrida se encuentre en Producción.</div>
+                }
+                else
+                {
+                    <div class="success-note mb-3"><i class="fa-solid fa-circle-check me-1"></i>Escanea la etiqueta física. Si OF, número de parte, cantidad y disponibilidad coinciden, la caja se formará y Calidad quedará notificada automáticamente.</div>
+                }
+                <div class="scanner-grid">
+                    <form method="post" action="@Url.Action("EscanearCaja", "ProduccionOperador")" id="formEscanearCaja" autocomplete="off">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                        <label class="form-label" for="CodigoBarras">Etiqueta física</label>
+                        <div class="scanner-input-wrap">
+                            <input type="text" name="CodigoBarras" id="CodigoBarras" maxlength="500" class="form-control scanner-input" placeholder="Escanea aquí y el lector enviará ENTER..." autocomplete="off" autocapitalize="off" spellcheck="false" @(Model.PuedeFormarCaja ? "" : "disabled") autofocus />
+                            <i class="fa-solid fa-barcode scanner-icon"></i>
+                        </div>
+                        <div class="scanner-help">No captures OF, parte ni cantidad manualmente. El sistema toma esos datos de la etiqueta y los compara con la corrida actual.</div>
+                        <div class="form-message" id="mensajeEscaneoCaja"></div>
+                    </form>
+                    <div class="scanner-side">
+                        <div class="k">Debe coincidir con esta corrida</div>
+                        <strong>@OFTexto(Model)</strong>
+                        <div class="sub">Parte: @ParteTexto(Model) · Siguiente caja esperada: @Numero(Model.CantidadSugeridaSiguienteCaja) pza(s)</div>
+                        <div class="scan-stats">
+                            <div class="scan-stat"><div class="k">Etiquetas escaneadas</div><div class="n">@Numero(cajasConEtiquetaFisica)</div></div>
+                            <div class="scan-stat"><div class="k">Esperando recepción Calidad</div><div class="n text-warning">@Numero(cajasPendientesRecepcionCalidad)</div></div>
+                            <div class="scan-stat"><div class="k">Recibidas por Calidad</div><div class="n text-success">@Numero(cajasRecibidasFisicamenteCalidad)</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <div class="layout">
 
             <aside>
                 <section class="panel @(Model.PuedeFormarCaja ? "" : "disabled-area")">
                     <div class="panel-head">
-                        <i class="fa-solid fa-box me-2"></i>
-                        Formar caja
+                        <i class="fa-solid fa-screwdriver-wrench me-2"></i>
+                        Excepciones de empaque
                     </div>
 
                     <div class="panel-body">
@@ -949,7 +1195,7 @@
                         {
                             <div class="note mb-3">
                                 <i class="fa-solid fa-circle-info me-1"></i>
-                                Forma la caja con piezas ya capturadas por hora. Después envíala a Calidad.
+                                El flujo normal ahora es por escáner. Usa este formulario solo para excepciones, material sospechoso, scrap, retención o producto incompleto.
                             </div>
                         }
 
@@ -996,7 +1242,7 @@
 
                             <div class="note mb-3">
                                 <i class="fa-solid fa-circle-info me-1"></i>
-                                El lote y la etiqueta física no se capturan en Producción. Almacén PT enlazará posteriormente la etiqueta de Label Matrix usando OF, número de parte y cantidad.
+                                Para cajas OK normales usa el escáner superior. Este formulario manual se conserva únicamente como contingencia y para tipos especiales.
                             </div>
 
                             <div class="mb-3">
@@ -1010,7 +1256,7 @@
 
                             <button type="submit" class="btn-main" id="btnFormarCaja">
                                 <i class="fa-solid fa-box"></i>
-                                Formar caja
+                                Formar caja manual
                             </button>
                             <div class="form-message" id="mensajeFormarCaja"></div>
                         </form>
@@ -1106,6 +1352,8 @@
                                             <th>Tipo</th>
                                             <th>Cantidad</th>
                                             <th>Estado</th>
+                                            <th>Etiqueta física</th>
+                                            <th>Recepción Calidad</th>
                                             <th>Etiqueta verde</th>
                                             <th>Formación</th>
                                             <th>Calidad</th>
@@ -1181,6 +1429,36 @@
                                                 </td>
 
                                                 <td>
+                                                    @if (caja.TieneEtiquetaFisica)
+                                                    {
+                                                        <span class="physical-chip physical-ok"><i class="fa-solid fa-barcode"></i>Escaneada</span>
+                                                        <div class="code-text mt-1" title="@caja.CodigoBarrasOrigen">@TxtNullable(caja.CodigoBarrasOrigen)</div>
+                                                        <div class="sub">@TxtNullable(caja.NumeroOFEtiqueta) · @TxtNullable(caja.NumeroParteEtiqueta) · @Numero(caja.CantidadEtiqueta ?? caja.CantidadPiezas) pza(s)</div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="physical-chip physical-none"><i class="fa-solid fa-keyboard"></i>Registro manual</span>
+                                                    }
+                                                </td>
+
+                                                <td>
+                                                    @if (caja.RecibidaFisicamenteCalidad)
+                                                    {
+                                                        <span class="physical-chip physical-ok"><i class="fa-solid fa-circle-check"></i>Recibida</span>
+                                                        <div class="sub mt-1">@FechaTxt(caja.FechaEscaneoCalidad)</div>
+                                                    }
+                                                    else if (caja.PendienteRecepcionFisicaCalidad)
+                                                    {
+                                                        <span class="physical-chip physical-pending"><i class="fa-solid fa-hourglass-half"></i>Esperando escaneo</span>
+                                                        <div class="sub mt-1">Calidad ya sabe que viene</div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="physical-chip physical-none">No aplica</span>
+                                                    }
+                                                </td>
+
+                                                <td>
                                                     @if (caja.EtiquetaVerde)
                                                     {
                                                         <span class="badge-flow badge-success">
@@ -1237,7 +1515,7 @@
 
                                                                 <button type="submit" class="btn-warningx">
                                                                     <i class="fa-solid fa-microscope"></i>
-                                                                    Solicitar Calidad
+                                                                    Enviar a Calidad
                                                                 </button>
                                                             </form>
                                                         }
@@ -1336,6 +1614,22 @@
 
     <script>
         (() => {
+            const formEscanearCaja=document.getElementById('formEscanearCaja');
+            const codigoBarras=document.getElementById('CodigoBarras');
+            const mensajeEscaneoCaja=document.getElementById('mensajeEscaneoCaja');
+            let enviandoEscaneo=false;
+            function enviarEscaneo(){
+                if(!formEscanearCaja||!codigoBarras||codigoBarras.disabled||enviandoEscaneo)return;
+                const codigo=codigoBarras.value.trim();
+                if(!codigo){mostrarError(mensajeEscaneoCaja,'Escanea una etiqueta física.');codigoBarras.focus();return;}
+                enviandoEscaneo=true;
+                limpiarError(mensajeEscaneoCaja);
+                codigoBarras.readOnly=true;
+                formEscanearCaja.requestSubmit();
+            }
+            codigoBarras?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();enviarEscaneo();}});
+            window.addEventListener('load',()=>{if(codigoBarras&&!codigoBarras.disabled){codigoBarras.value='';codigoBarras.focus();}});
+            document.addEventListener('click',e=>{if(codigoBarras&&!codigoBarras.disabled&&!e.target.closest('input,textarea,select,button,a,summary'))codigoBarras.focus();});
             const formFormarCaja=document.getElementById('formFormarCaja');
             const tipoCaja=document.getElementById('tipoCaja');
             const cantidadPiezas=document.getElementById('cantidadPiezas');

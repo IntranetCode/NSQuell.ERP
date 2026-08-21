@@ -1876,6 +1876,7 @@ public sealed class ProduccionCajaIncompletaDisponibleVm
     public int? ParteID { get; set; }
     public string? NumeroParte { get; set; }
     public string? ReferenciaSAP { get; set; }
+    public string? DescripcionParte { get; set; }
     public string? FolioCaja { get; set; }
     public string? EtiquetaBlanca { get; set; }
     public int CantidadPiezas { get; set; }
@@ -1888,11 +1889,113 @@ public sealed class ProduccionCajaIncompletaDisponibleVm
     public int? SolicitudDetalleReservaID { get; set; }
     public DateTime FechaFormacion { get; set; }
     public DateTime? FechaReservaIncompleto { get; set; }
+    public DateTime? FechaCompletadoIncompleto { get; set; }
+    public string? UbicacionProductoIncompleto { get; set; }
+    public DateTime? FechaIngresoProductoIncompleto { get; set; }
+    public int? UsuarioIngresoProductoIncompletoID { get; set; }
+    public string? UsuarioIngresoProductoIncompletoNombre { get; set; }
+    public string? NumeroOFOrigen { get; set; }
+    public string? NumeroOFDestino { get; set; }
+    public string? MaquinaOrigenCodigo { get; set; }
+    public string? MaquinaOrigenNombre { get; set; }
+    public string? OperadorOrigenNombre { get; set; }
+    public string? TurnoOrigenNombre { get; set; }
+    public string? MaterialCodigo { get; set; }
+    public string? MaterialDescripcion { get; set; }
     public string TextoEstado => ProduccionProductoIncompletoEstado.Nombre(EstadoProductoIncompleto);
     public bool EstaDisponible => string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Disponible, StringComparison.OrdinalIgnoreCase) && !EjecucionReservaID.HasValue;
     public bool EstaReservada => string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Reservada, StringComparison.OrdinalIgnoreCase);
+    public bool EstaEnCompletado => string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.EnCompletado, StringComparison.OrdinalIgnoreCase);
+    public bool EstaCompleta => string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Completa, StringComparison.OrdinalIgnoreCase);
+    public bool EstaCancelada => string.Equals(EstadoProductoIncompleto, ProduccionProductoIncompletoEstado.Cancelada, StringComparison.OrdinalIgnoreCase);
     public decimal PorcentajeLlenado => CapacidadObjetivoCaja > 0 ? Math.Round((decimal)CantidadPiezas * 100m / CapacidadObjetivoCaja, 1) : 0m;
     public string TextoCantidad => $"{CantidadPiezas:N0} / {CapacidadObjetivoCaja:N0}";
+    public string TextoParte => !string.IsNullOrWhiteSpace(ReferenciaSAP) ? ReferenciaSAP : !string.IsNullOrWhiteSpace(NumeroParte) ? NumeroParte : "Sin parte";
+    public string TextoUbicacion => string.IsNullOrWhiteSpace(UbicacionProductoIncompleto) ? "Sin ubicación" : UbicacionProductoIncompleto;
+    public string TextoOFOrigen => string.IsNullOrWhiteSpace(NumeroOFOrigen) ? $"Programa {ProgramaProduccionID}" : NumeroOFOrigen;
+    public string TextoOFDestino => string.IsNullOrWhiteSpace(NumeroOFDestino) ? "Sin asignar" : NumeroOFDestino;
+    public int DiasEnAlmacen
+    {
+        get
+        {
+            var fechaBase = FechaIngresoProductoIncompleto ?? FechaFormacion;
+            return Math.Max(0, (DateTime.Today - fechaBase.Date).Days);
+        }
+    }
+    public bool TieneAntiguedadMedia => DiasEnAlmacen >= 7 && DiasEnAlmacen < 15 && !EstaCompleta && !EstaCancelada;
+    public bool TieneAntiguedadAlta => DiasEnAlmacen >= 15 && !EstaCompleta && !EstaCancelada;
+    public string TextoAntiguedad
+    {
+        get
+        {
+            if (DiasEnAlmacen <= 0) return "Ingresó hoy";
+            if (DiasEnAlmacen == 1) return "1 día en resguardo";
+            return $"{DiasEnAlmacen:N0} días en resguardo";
+        }
+    }
+}
+
+public sealed class ProduccionProductoIncompletoIndexVm
+{
+    public string? Busqueda { get; set; }
+    public string? Estado { get; set; }
+    public int? ParteID { get; set; }
+    public string? Ubicacion { get; set; }
+    public bool SoloConAntiguedad { get; set; }
+    public List<ProduccionCajaIncompletaDisponibleVm> Cajas { get; set; } = new();
+    public int TotalEtiquetas => Cajas.Count;
+    public int Disponibles => Cajas.Count(x => x.EstaDisponible);
+    public int Reservadas => Cajas.Count(x => x.EstaReservada);
+    public int EnCompletado => Cajas.Count(x => x.EstaEnCompletado);
+    public int Completas => Cajas.Count(x => x.EstaCompleta);
+    public int SinUbicacion => Cajas.Count(x => string.IsNullOrWhiteSpace(x.UbicacionProductoIncompleto) && !x.EstaCompleta && !x.EstaCancelada);
+    public int ConAntiguedad => Cajas.Count(x => x.TieneAntiguedadMedia || x.TieneAntiguedadAlta);
+    public int ConAntiguedadAlta => Cajas.Count(x => x.TieneAntiguedadAlta);
+    public int PiezasResguardadas => Cajas.Where(x => !x.EstaCompleta && !x.EstaCancelada).Sum(x => x.CantidadPiezas);
+    public int PiezasPendientesCompletar => Cajas.Where(x => !x.EstaCompleta && !x.EstaCancelada).Sum(x => x.CantidadPendienteCompletar);
+    public bool TieneCajas => Cajas.Count > 0;
+}
+
+public sealed class ProduccionProductoIncompletoDetalleVm
+{
+    public ProduccionCajaIncompletaDisponibleVm Caja { get; set; } = new();
+    public List<ProduccionProductoIncompletoMovimientoVm> Movimientos { get; set; } = new();
+    public int TotalPiezasOrigen => Movimientos.Where(x => string.Equals(x.TipoMovimiento, ProduccionCajaOrigenMovimiento.Origen, StringComparison.OrdinalIgnoreCase)).Sum(x => x.CantidadPiezas);
+    public int TotalPiezasCompletado => Movimientos.Where(x => string.Equals(x.TipoMovimiento, ProduccionCajaOrigenMovimiento.Completado, StringComparison.OrdinalIgnoreCase)).Sum(x => x.CantidadPiezas);
+    public int TotalTrazado => TotalPiezasOrigen + TotalPiezasCompletado;
+}
+
+public sealed class ProduccionProductoIncompletoMovimientoVm
+{
+    public long CajaOrigenDetalleID { get; set; }
+    public long CajaProduccionID { get; set; }
+    public string TipoMovimiento { get; set; } = string.Empty;
+    public int EjecucionProduccionID { get; set; }
+    public int ProgramaProduccionID { get; set; }
+    public int? SolicitudProduccionID { get; set; }
+    public int? SolicitudProduccionDetalleID { get; set; }
+    public int? ReleaseID { get; set; }
+    public int? ReleaseDetalleID { get; set; }
+    public int CantidadPiezas { get; set; }
+    public string? NumeroOF { get; set; }
+    public string? NumeroParte { get; set; }
+    public string? ReferenciaSAP { get; set; }
+    public string? MaquinaCodigo { get; set; }
+    public string? MaquinaNombre { get; set; }
+    public string? OperadorNombre { get; set; }
+    public DateTime FechaMovimiento { get; set; }
+    public int? UsuarioID { get; set; }
+    public string? UsuarioNombre { get; set; }
+    public string? Observaciones { get; set; }
+    public string TextoTipoMovimiento => string.Equals(TipoMovimiento, ProduccionCajaOrigenMovimiento.Origen, StringComparison.OrdinalIgnoreCase) ? "Origen" : string.Equals(TipoMovimiento, ProduccionCajaOrigenMovimiento.Completado, StringComparison.OrdinalIgnoreCase) ? "Completado" : TipoMovimiento;
+    public string TextoParte => !string.IsNullOrWhiteSpace(ReferenciaSAP) ? ReferenciaSAP : !string.IsNullOrWhiteSpace(NumeroParte) ? NumeroParte : "Sin parte";
+    public string TextoMaquina => string.IsNullOrWhiteSpace(MaquinaCodigo) ? "Sin máquina" : string.IsNullOrWhiteSpace(MaquinaNombre) ? MaquinaCodigo : $"{MaquinaCodigo} - {MaquinaNombre}";
+}
+
+public sealed class ProduccionProductoIncompletoUbicacionPostVm
+{
+    public long CajaProduccionID { get; set; }
+    public string? UbicacionProductoIncompleto { get; set; }
 }
 public sealed class ProduccionReservarCajaIncompletaPostVm
 {
@@ -2059,6 +2162,11 @@ public sealed class ProduccionOperadorCajasVm
         }
     }
 
+    public sealed class ProduccionEscanearCajaPostVm
+    {
+        public int EjecucionProduccionID { get; set; }
+        public string CodigoBarras { get; set; } = string.Empty;
+    }
     public int CantidadOKDisponible =>
         Math.Max(0, CantidadOKTotal - CantidadOKEnCajas);
 
