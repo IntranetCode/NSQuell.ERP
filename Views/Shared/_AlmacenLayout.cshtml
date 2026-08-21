@@ -123,27 +123,31 @@
     <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
+<!-- NSQ_BRAND_FIX_V4_ALMACEN_START -->
+<style id="nsq-brand-fix-v4-almacen">
+    .alm-shell-brand__logo {
+        width: 52px !important;
+        height: 52px !important;
+        border-radius: 17px !important;
+        object-fit: contain !important;
+        background: rgba(255, 255, 255, 0.10) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        padding: 6px !important;
+        box-shadow: none !important;
+    }
+</style>
+<!-- NSQ_BRAND_FIX_V4_ALMACEN_END -->
+
 </head>
 <body>
     <header class="alm-shell-header">
         <div class="alm-shell-navbar">
             <a href="/Menu/Grupo/1" class="alm-shell-brand" aria-label="Ir al menú principal">
-                @if (!string.IsNullOrWhiteSpace(logoEmpresa) && logoEmpresa != "default-logo.png")
-                {
-                    <img src="~/imagenes/@logoEmpresa"
-                         alt="Logo de NS QUELL"
-                         class="alm-shell-brand__logo" />
-                }
-                else
-                {
-                    <span class="alm-shell-brand__icon" aria-hidden="true">
-                        <i class="fa-solid fa-warehouse"></i>
-                    </span>
-                }
-
+                <img src="~/Imagenes/logo-quell.png"
+                     alt="NS Quell - ERP"
+                     class="alm-shell-brand__logo" />
                 <span class="alm-shell-brand__copy">
-                    <strong>NS QUELL</strong>
-                    <small>· ALMACÉN</small>
+                    <strong>NS Quell - ERP</strong>
                 </span>
             </a>
 

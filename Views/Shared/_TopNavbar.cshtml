@@ -2,14 +2,14 @@
 @using Microsoft.AspNetCore.Http
 
 @{
-    // Datos dinÃ¡micos de sesiÃ³n / claims
+    // Datos dinámicos de sesión / claims
     var nombreUsuario = Context.Session.GetString("NombreMostrar")
         ?? Context.Session.GetString("Username")
         ?? User.FindFirst(ClaimTypes.Name)?.Value
         ?? "Invitado";
 
     var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NS Group";
-    var logoEmpresa = Context.Session.GetString("EmpresaLogo") ?? "default-logo.png";
+    var logoEmpresa = "logo-quell.png";
 
     var rolUsuario = Context.Session.GetString("Rol")
         ?? Context.Session.GetString("NombreRol")
@@ -26,6 +26,16 @@
 @{
     var plnController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
     var plnAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+
+    // NSQ_NAVBAR_GLOBAL_OPERADOR_V3
+    var esProduccionOperador =
+        plnController.Equals("ProduccionOperador", StringComparison.OrdinalIgnoreCase);
+
+    var navbarHomeUrl = esProduccionOperador
+        ? (Url.Action("Index", "ProduccionOperador") ?? "/ProduccionOperador/Index")
+        : (Url.Action("Index", "Menu") ?? "/Menu/Index");
+
+    var navbarTitulo = esProduccionOperador ? "NS QUELL" : nombreEmpresa;
 
     var plnEsModulo =
         plnController.StartsWith("Planeacion", StringComparison.OrdinalIgnoreCase);
@@ -589,22 +599,139 @@
             padding-top: .35rem;
         }
     }
+    /* NSQ_NAVBAR_GLOBAL_OPERADOR_V3_CSS */
+    .top-navbar--operador .theme-switcher,
+    .top-navbar--operador .quick-actions-navbar,
+    .top-navbar--operador #linkMiPerfil,
+    .top-navbar--operador [data-bs-target="#modalDenunciaAnonima"] {
+        display: none !important;
+    }
+
+    .top-navbar--operador .navbar-title::after {
+        content: "OPERADORES";
+    }
 </style>
 
-<nav class="top-navbar @(plnEsModulo ? "top-navbar--planeacion" : string.Empty)" role="navigation" aria-label="NavegaciÃ³n principal">
+<!-- NSQ_BRAND_FIX_V4_START -->
+<style id="nsq-brand-fix-v4">
+    .navbar-brand .navbar-logo {
+        width: 52px !important;
+        height: 52px !important;
+        flex: 0 0 52px !important;
+        border-radius: 17px !important;
+        object-fit: contain !important;
+        background: rgba(255, 255, 255, 0.10) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        padding: 6px !important;
+        box-shadow: none !important;
+    }
+
+    .navbar-title::after {
+        content: none !important;
+        display: none !important;
+    }
+</style>
+<!-- NSQ_BRAND_FIX_V4_END -->
+
+
+<style id="NSQ_SHARED_LOGO_SIZE_V5_3">
+    .top-navbar .navbar-logo {
+        width: 58px !important;
+        height: 58px !important;
+        flex: 0 0 58px !important;
+        object-fit: contain !important;
+    }
+
+    /* NSQ_BRAND_FIX_V6 */
+    .navbar-brand .navbar-logo {
+        width: 58px !important;
+        height: 58px !important;
+        flex: 0 0 58px !important;
+        display: block !important;
+        object-fit: contain !important;
+        padding: 0 !important;
+        border-radius: 14px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .navbar-brand .navbar-title {
+        font-size: 1.08rem !important;
+    }
+
+    .navbar-brand .navbar-title::after {
+        content: none !important;
+        display: none !important;
+    }
+</style>
+
+<style id="nsq-brand-theme-v7">
+    /* NSQ_BRAND_THEME_V7_START */
+    .navbar-brand .nsq-brand-logo {
+        width: 62px !important;
+        height: 62px !important;
+        flex: 0 0 62px !important;
+        object-fit: contain !important;
+        object-position: center !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .navbar-brand .nsq-brand-logo--light {
+        display: block !important;
+    }
+
+    .navbar-brand .nsq-brand-logo--dark {
+        display: none !important;
+    }
+
+    html[data-nsq-theme="dark"] .navbar-brand .nsq-brand-logo--light {
+        display: none !important;
+    }
+
+    html[data-nsq-theme="dark"] .navbar-brand .nsq-brand-logo--dark {
+        display: block !important;
+    }
+
+    html[data-nsq-theme="light"] .navbar-brand .nsq-brand-logo--light {
+        display: block !important;
+    }
+
+    html[data-nsq-theme="light"] .navbar-brand .nsq-brand-logo--dark {
+        display: none !important;
+    }
+
+    .navbar-brand .nsq-brand-title {
+        font-size: 1.05rem !important;
+        font-weight: 950 !important;
+        letter-spacing: .055em !important;
+        white-space: nowrap !important;
+    }
+
+    .navbar-brand .nsq-brand-title::after,
+    .navbar-brand .navbar-title-mark {
+        content: none !important;
+        display: none !important;
+    }
+    /* NSQ_BRAND_THEME_V7_END */
+</style><nav class="top-navbar @(plnEsModulo ? "top-navbar--planeacion" : string.Empty) @(esProduccionOperador ? "top-navbar--operador" : string.Empty)" role="navigation" aria-label="Navegación principal">
     <div class="navbar-content">
         <div class="navbar-left">
-            <a href="@Url.Action("Index", "Menu")" class="navbar-brand">
-                @if (!string.IsNullOrEmpty(logoEmpresa) && logoEmpresa != "default-logo.png")
-                {
-                    <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="navbar-logo" loading="lazy" />
-                }
-                else
-                {
-                    <i class="fas fa-building" aria-hidden="true"></i>
-                }
-
-                <span class="navbar-title">@nombreEmpresa</span>
+            <a href="@navbarHomeUrl" class="navbar-brand">
+                <img src="@Url.Content("~/Imagenes/logo-quell.png")"
+                     alt="Logo NS Quell"
+                     class="navbar-logo nsq-brand-logo nsq-brand-logo--light"
+                     loading="eager" />
+                <img src="@Url.Content("~/Imagenes/logo-blanco.png")"
+                     alt="Logo NS Quell"
+                     class="navbar-logo nsq-brand-logo nsq-brand-logo--dark"
+                     loading="eager" />
+                <span class="navbar-title nsq-brand-title">NS Quell - ERP</span>
             </a>
         </div>
 
@@ -669,7 +796,7 @@
             </div>
 
             <div class="user-menu">
-                <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="MenÃº de usuario">
+                <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario">
                     <div class="user-avatar" aria-hidden="true">@inicialUsuario</div>
 
                     <div class="user-info">
@@ -690,11 +817,11 @@
                        role="menuitem"
                        data-bs-toggle="modal"
                        data-bs-target="#modalDenunciaAnonima">
-                        <i class="fas fa-user-secret" aria-hidden="true"></i> Denuncia anÃ³nima
+                        <i class="fas fa-user-secret" aria-hidden="true"></i> Denuncia anónima
                     </a>
 
                     <a href="/Login/Logout" class="dropdown-item">
-                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar SesiÃ³n
+                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar Sesión
                     </a>
                 </div>
             </div>
@@ -737,7 +864,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="fw-bold"><i class="fas fa-phone"></i> TelÃ©fono:</label>
+                        <label class="fw-bold"><i class="fas fa-phone"></i> Teléfono:</label>
                         <p id="perfilTelefono" class="ms-3"></p>
                     </div>
 
@@ -747,7 +874,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="fw-bold"><i class="fas fa-info-circle"></i> DescripciÃ³n del Rol:</label>
+                        <label class="fw-bold"><i class="fas fa-info-circle"></i> Descripción del Rol:</label>
                         <p id="perfilDescripcionRol" class="ms-3"></p>
                     </div>
                 </div>
@@ -760,13 +887,13 @@
     </div>
 </div>
 
-<!-- Modal de denuncia anÃ³nima -->
+<!-- Modal de denuncia anónima -->
 <div class="modal fade" id="modalDenunciaAnonima" tabindex="-1" role="dialog" aria-labelledby="modalDenunciaAnonimaLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content modal-denuncia">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalDenunciaAnonimaLabel">
-                    Denuncia anÃ³nima y confidencial
+                    Denuncia anónima y confidencial
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
@@ -777,13 +904,13 @@
 
                 <div class="modal-body">
                     <p class="text-muted small">
-                        Tu identidad no se mostrarÃ¡ en ningÃºn lado. La informaciÃ³n se enviarÃ¡ de forma confidencial.
+                        Tu identidad no se mostrará en ningún lado. La información se enviará de forma confidencial.
                     </p>
 
                     <div class="form-group">
                         <label for="TipoDenuncia">Tipo de denuncia *</label>
                         <select id="TipoDenuncia" name="TipoDenuncia" class="form-control" required>
-                            <option value="">-- Selecciona una opciÃ³n --</option>
+                            <option value="">-- Selecciona una opción --</option>
                             <option value="Acoso">Acoso</option>
                             <option value="Fraude">Fraude</option>
                             <option value="Conducta inadecuada">Conducta inadecuada</option>
@@ -795,18 +922,18 @@
                     <div class="form-group">
                         <label for="DepartamentoAfectado">Departamento afectado *</label>
                         <select id="DepartamentoAfectado" name="DepartamentoAfectado" class="form-control" required>
-                            <option value="">-- Selecciona una opciÃ³n --</option>
+                            <option value="">-- Selecciona una opción --</option>
                             <option value="Recursos Humanos">Recursos Humanos</option>
                             <option value="Ventas">Compras</option>
                             <option value="Proyectos">Proyectos</option>
-                            <option value="Operaciones">AlmacÃ©n</option>
+                            <option value="Operaciones">Almacén</option>
                             <option value="Finanzas">Finanzas</option>
                             <option value="Otro">Otro</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label for="Descripcion">DescripciÃ³n detallada *</label>
+                        <label for="Descripcion">Descripción detallada *</label>
                         <textarea id="Descripcion" name="Descripcion" class="form-control" rows="4" required></textarea>
                     </div>
 

@@ -4,7 +4,7 @@
 
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Intranet - NS Group";
+    ViewData["Title"] = "NS Quell - ERP";
 
     // Datos de sesión
     var nombreUsuario = Context.Session.GetString("NombreMostrar") ?? Context.Session.GetString("Username") ?? "Invitado";
@@ -113,7 +113,9 @@
             const toggleBtn = document.getElementById('userToggle');
             const dropdown = document.getElementById('userDropdownMenu');
 
-            if (!toggleBtn || !dropdown) return;
+            if (!toggleBtn || !dropdown || toggleBtn.dataset.topNavbarInit === '1') return;
+
+            toggleBtn.dataset.topNavbarInit = '1';
 
             toggleBtn.addEventListener('click', function (e) {
                 e.stopPropagation();

@@ -4,7 +4,7 @@
 
 @{
     Layout = null;
-    ViewData["Title"] = "ERP Industrial | NSQuell";
+    ViewData["Title"] = "NS Quell - ERP";
 
     var nombreUsuario = Context.Session.GetString("NombreMostrar") ?? Context.Session.GetString("Username") ?? "Invitado";
     var nombreEmpresa = Context.Session.GetString("EmpresaNombre") ?? "NSQuell";
@@ -32,7 +32,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>@ViewData["Title"]</title>
+    <title>NS Quell - ERP</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/overlay.css" asp-append-version="true" />
@@ -110,6 +110,94 @@
         }
     </style>
 
+<!-- NSQ_BRAND_FIX_V4_MENU_START -->
+<style id="nsq-brand-fix-v4-menu">
+    .navbar-brand .navbar-logo {
+        width: 52px !important;
+        height: 52px !important;
+        flex: 0 0 52px !important;
+        border-radius: 17px !important;
+        object-fit: contain !important;
+        background: rgba(255, 255, 255, 0.10) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        padding: 6px !important;
+        box-shadow: none !important;
+    }
+
+    .navbar-title-mark {
+        display: none !important;
+    }
+</style>
+<!-- NSQ_BRAND_FIX_V4_MENU_END -->
+
+
+    <style id="NSQ_MENU_INDEX_BRAND_V5_3">
+        .navbar-brand .navbar-logo {
+            width: 58px !important;
+            height: 58px !important;
+            flex: 0 0 58px !important;
+            object-fit: contain !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+    </style><style id="nsq-brand-theme-v7">
+    /* NSQ_BRAND_THEME_V7_START */
+    .navbar-brand .nsq-brand-logo {
+        width: 62px !important;
+        height: 62px !important;
+        flex: 0 0 62px !important;
+        object-fit: contain !important;
+        object-position: center !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .navbar-brand .nsq-brand-logo--light {
+        display: block !important;
+    }
+
+    .navbar-brand .nsq-brand-logo--dark {
+        display: none !important;
+    }
+
+    html[data-nsq-theme="dark"] .navbar-brand .nsq-brand-logo--light {
+        display: none !important;
+    }
+
+    html[data-nsq-theme="dark"] .navbar-brand .nsq-brand-logo--dark {
+        display: block !important;
+    }
+
+    html[data-nsq-theme="light"] .navbar-brand .nsq-brand-logo--light {
+        display: block !important;
+    }
+
+    html[data-nsq-theme="light"] .navbar-brand .nsq-brand-logo--dark {
+        display: none !important;
+    }
+
+    .navbar-brand .nsq-brand-title {
+        font-size: 1.05rem !important;
+        font-weight: 950 !important;
+        letter-spacing: .055em !important;
+        white-space: nowrap !important;
+    }
+
+    .navbar-brand .nsq-brand-title::after,
+    .navbar-brand .navbar-title-mark {
+        content: none !important;
+        display: none !important;
+    }
+    /* NSQ_BRAND_THEME_V7_END */
+</style>
+
 </head>
 
 <body class="nsq-theme-dark" data-empresa="@empresaId">
@@ -122,18 +210,16 @@
             <div class="navbar-content">
                 <div class="navbar-left">
                     <a href="/Menu/Index" class="navbar-brand">
-                        @if (!string.IsNullOrEmpty(logoEmpresa) && logoEmpresa != "default-logo.png")
-                        {
-                            <img src="~/imagenes/@logoEmpresa" alt="Logo de @nombreEmpresa" class="navbar-logo" loading="lazy" />
-                        }
-                        else
-                        {
-                            <i class="fas fa-industry" aria-hidden="true"></i>
-                        }
-
-                        <span class="navbar-title">@nombreEmpresa</span>
-                        <span class="navbar-title-mark">Industrial</span>
-                    </a>
+                <img src="@Url.Content("~/Imagenes/logo-quell.png")"
+                     alt="Logo NS Quell"
+                     class="navbar-logo nsq-brand-logo nsq-brand-logo--light"
+                     loading="eager" />
+                <img src="@Url.Content("~/Imagenes/logo-blanco.png")"
+                     alt="Logo NS Quell"
+                     class="navbar-logo nsq-brand-logo nsq-brand-logo--dark"
+                     loading="eager" />
+                <span class="navbar-title nsq-brand-title">NS Quell - ERP</span>
+            </a>
                 </div>
 
                 <div class="navbar-right">
