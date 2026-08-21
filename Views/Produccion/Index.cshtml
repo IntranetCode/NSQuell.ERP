@@ -1810,6 +1810,30 @@
         }
 
 
+
+        /* NSQ_MODAL_PREPARACION_LIGHT_V1
+           El encabezado azul debe conservar contraste tambien en tema claro. */
+        #modalIniciarPreparacion .modal-header .modal-title,
+        #modalIniciarPreparacion .modal-header .small,
+        #modalIniciarPreparacion .modal-header i {
+            color: #ffffff !important;
+        }
+
+        #modalIniciarPreparacion .modal-header .small {
+            opacity: .92 !important;
+        }
+
+        html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header {
+            background: linear-gradient(135deg, #0f2f63, #194c9b) !important;
+            color: #ffffff !important;
+        }
+
+        html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header .modal-title,
+        html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header .small,
+        html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header i {
+            color: #ffffff !important;
+            text-shadow: 0 1px 1px rgba(0,0,0,.18);
+        }
         #modalIniciarPreparacion .modal-dialog {
             width: min(760px, calc(100vw - 32px));
             max-width: 760px;
@@ -2121,6 +2145,12 @@
                    asp-action="Preparacion">
                     <i class="bi bi-tools"></i>
                     Preparación próxima
+                </a>
+                @* NSQ_PRODUCCION_CALENDARIO_MENU_V1 *@
+                <a class="production-nav-btn"
+                   href="@Url.RouteUrl("ProduccionCalendario")">
+                    <i class="bi bi-calendar3-week"></i>
+                    Calendario de Producci&oacute;n
                 </a>
 
                 <a class="production-nav-btn"
@@ -3378,7 +3408,39 @@
                     });
 
                     // Panel inicial: pendientes / próximos.
-                    cargarPanel('proximos');
+                    // NSQ_PREPARACION_DESDE_CALENDARIO_V1
+                    cargarPanel('proximos').then(() => {
+                        const params = new URLSearchParams(window.location.search);
+                        const prepararProgramaId = params.get('prepararProgramaId') || '';
+
+                        if (!/^\d+$/.test(prepararProgramaId)) return;
+
+                        const btnPreparar = contenidoProduccion?.querySelector(
+                            `.btn-iniciar-preparacion[data-programa-id="${prepararProgramaId}"]`
+                        );
+
+                        if (btnPreparar) {
+                            btnPreparar.click();
+
+                            params.delete('prepararProgramaId');
+                            const query = params.toString();
+                            const limpia = window.location.pathname +
+                                (query ? '?' + query : '') +
+                                window.location.hash;
+
+                            window.history.replaceState({}, document.title, limpia);
+                            return;
+                        }
+
+                        const aviso = document.createElement('div');
+                        aviso.className = 'alert alert-info m-3';
+                        aviso.innerHTML =
+                            '<i class="bi bi-info-circle me-1"></i>' +
+                            'El programa seleccionado todav\u00eda no est\u00e1 habilitado para iniciar preparaci\u00f3n. ' +
+                            'Puede estar fuera de la ventana de 15 minutos, tener la m\u00e1quina ocupada o requerir otra validaci\u00f3n.';
+
+                        contenidoProduccion?.prepend(aviso);
+                    });
                 })();
 
                         document.addEventListener('click', function (event) {

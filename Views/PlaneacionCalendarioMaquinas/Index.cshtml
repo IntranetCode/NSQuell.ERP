@@ -79,6 +79,14 @@
     ViewData["Title"] = "Calendario de mÃ¡quinas | PlaneaciÃ³n";
     var cultura = new CultureInfo("es-MX");
 
+    // NSQ_PRODUCCION_CALENDARIO_VIEW_V1
+    var modoProduccion = ViewBag.ModoProduccion is bool modo && modo;
+
+    if (modoProduccion)
+    {
+        ViewData["Title"] = "Calendario de Producci\u00F3n";
+    }
+
     var inicioPeriodo = Model.InicioPeriodo;
     var finPeriodo = Model.FinPeriodo;
 
@@ -115,11 +123,30 @@
         {
             var finRango = fecha.AddDays(totalDias - 1).ToString("yyyy-MM-dd");
 
+            if (modoProduccion)
+            {
+                return Url.RouteUrl("ProduccionCalendario", new
+                {
+                    vista = "rango",
+                    rangoInicio = fecha.ToString("yyyy-MM-dd"),
+                    rangoFin = finRango
+                }) ?? "#";
+            }
+
             return Url.Action("Index", "PlaneacionCalendarioMaquinas", new
             {
                 vista = "rango",
                 rangoInicio = fecha.ToString("yyyy-MM-dd"),
                 rangoFin = finRango
+            }) ?? "#";
+        }
+
+        if (modoProduccion)
+        {
+            return Url.RouteUrl("ProduccionCalendario", new
+            {
+                vista = Model.VistaNormalizada,
+                fecha = fecha.ToString("yyyy-MM-dd")
             }) ?? "#";
         }
 
@@ -142,6 +169,7 @@
         const search = document.getElementById('calendarSearch');
         const statusBox = document.getElementById('calendarStatus');
         const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+        const modoProduccion = @(modoProduccion ? "true" : "false");
         const trabajarDomingoCalendario = document.getElementById('trabajarDomingoCalendario');
         const calendarKiosk = document.getElementById('calendarKiosk');
         const btnPantallaCompletaCalendario = document.getElementById('btnPantallaCompletaCalendario');
@@ -368,7 +396,7 @@
         }
 
         function puedeArrastrar(block) {
-            return block.dataset.puedeMover === 'true';
+            return !modoProduccion && block.dataset.puedeMover === 'true';
         }
 
 
@@ -977,30 +1005,63 @@
             background: #241f14;
             border-left-color: #ffc107
         }
-    </style>
+
+        /* NSQ_PRODUCCION_CALENDARIO_READONLY_CSS_V1 */
+        .production-calendar-readonly .block {
+            cursor: pointer !important;
+        }
+
+        .production-calendar-readonly .block.no-drag {
+            opacity: 1;
+        }
+
+        .production-calendar-readonly .calendar-status.success {
+            border-color: rgba(34, 197, 94, .35);
+            background: rgba(34, 197, 94, .08);
+        }    </style>
 }
 
 
 @* PLANEACION_NAVBAR_INJECT_V1_0 *@
-@await Html.PartialAsync("_PlaneacionNavbar")
-<div class="page" data-nsq-style="--dias-periodo:@totalDias;--horas-periodo:@(Math.Max(1, totalDias * 24));">
+@if (!modoProduccion)
+{
+    @await Html.PartialAsync("_PlaneacionNavbar")
+}
+else
+{
+    <div class="mb-3">
+        <a href="@Url.Action("Index", "Produccion")" class="btn btn-outline-primary fw-bold">
+            <i class="fa-solid fa-arrow-left me-1"></i>
+            Regresar a Producci&oacute;n
+        </a>
+    </div>
+}
+<div class="page @(modoProduccion ? "production-calendar-readonly" : string.Empty)" data-nsq-style="--dias-periodo:@totalDias;--horas-periodo:@(Math.Max(1, totalDias * 24));">
     <section class="hero">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
             <div>
                 <div class="small fw-bold text-uppercase opacity-75 mb-2">
-                    Planeación / Calendario editable
+                    @(modoProduccion ? "Producci\u00F3n / Calendario de solo lectura" : "Planeaci\u00F3n / Calendario editable")
                 </div>
 
                 <h1>
                     <i class="fa-solid fa-calendar-days me-2"></i>
-                    CALENDARIO MÁQUINAS
+                    @(modoProduccion ? "CALENDARIO DE PRODUCCI\u00D3N" : "CALENDARIO M\u00C1QUINAS")
                 </h1>
 
-                <p>
-                    Visualiza por día, semana, mes o rango. Arrastra un bloque azul hacia otra máquina y confirma el movimiento antes de guardarlo.
-                </p>
+                @if (modoProduccion)
+                {
+                    <p>
+                        Consulta las OF programadas, su m&aacute;quina, horario, operador, estado de Producci&oacute;n y Calidad. Esta vista no permite reprogramar ni mover bloques.
+                    </p>
+                }
+                else
+                {
+                    <p>
+                        Visualiza por d&iacute;a, semana, mes o rango. Arrastra un bloque azul hacia otra m&aacute;quina y confirma el movimiento antes de guardarlo.
+                    </p>
+                }
             </div>
-
         </div>
     </section>
 
@@ -1049,7 +1110,7 @@
                     @TextoPeriodoAnterior(Model)
                 </a>
 
-                <a asp-action="Index"
+                <a asp-action="Index" asp-route-modo="@(modoProduccion ? "produccion" : null)"
                    asp-route-vista="@Model.VistaNormalizada"
                    asp-route-fecha="@DateTime.Today.ToString("yyyy-MM-dd")"
                    class="btn btn-primary fw-bold">
@@ -1076,21 +1137,21 @@
         </div>
 
         <div class="d-flex gap-2 flex-wrap mt-3">
-            <a asp-action="Index"
+            <a asp-action="Index" asp-route-modo="@(modoProduccion ? "produccion" : null)"
                asp-route-vista="dia"
                asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
                class="@ClaseVista(Model.VistaNormalizada, "dia")">
                 Día
             </a>
 
-            <a asp-action="Index"
+            <a asp-action="Index" asp-route-modo="@(modoProduccion ? "produccion" : null)"
                asp-route-vista="semana"
                asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
                class="@ClaseVista(Model.VistaNormalizada, "semana")">
                 Semana
             </a>
 
-            <a asp-action="Index"
+            <a asp-action="Index" asp-route-modo="@(modoProduccion ? "produccion" : null)"
                asp-route-vista="mes"
                asp-route-fecha="@Model.Ahora.ToString("yyyy-MM-dd")"
                class="@ClaseVista(Model.VistaNormalizada, "mes")">
@@ -1104,7 +1165,9 @@
             </button>
         </div>
 
-        <div class="mt-3 p-3 rounded-4 border bg-light">
+        @if (!modoProduccion)
+        {
+<div class="mt-3 p-3 rounded-4 border bg-light">
             <div class="form-check form-switch m-0">
                 <input class="form-check-input"
                        type="checkbox"
@@ -1118,10 +1181,11 @@
                 </div>
             </div>
         </div>
+        }
 
         <form id="formRangoCalendario"
               class="range-panel @(Model.EsVistaRango ? "active" : "")"
-              asp-action="Index"
+              asp-action="Index" asp-route-modo="@(modoProduccion ? "produccion" : null)"
               method="get">
             <input type="hidden" name="vista" value="rango" />
 
@@ -1170,9 +1234,18 @@
         </div>
     }
 
-    <div id="calendarStatus" class="calendar-status">
-        Arrastra un bloque azul hacia otra máquina. Solo se resaltarán en verde las máquinas compatibles; el sistema insertará en cola y compactará las OF posteriores sin dejar huecos.
-    </div>
+    @if (modoProduccion)
+    {
+        <div id="calendarStatus" class="calendar-status success">
+            Vista de solo lectura para Producci&oacute;n. Selecciona una OF para consultar el detalle y, cuando est&eacute; habilitada, ir directamente al inicio de preparaci&oacute;n.
+        </div>
+    }
+    else
+    {
+        <div id="calendarStatus" class="calendar-status">
+            Arrastra un bloque azul hacia otra m&aacute;quina. Solo se resaltar&aacute;n en verde las m&aacute;quinas compatibles; el sistema insertar&aacute; en cola y compactar&aacute; las OF posteriores sin dejar huecos.
+        </div>
+    }
 
     <div id="antiForgeryToken" class="d-none">
         @Html.AntiForgeryToken()
@@ -1212,7 +1285,7 @@
             </div>
 
             <div class="legend">
-                <span><i data-nsq-style-id="nsq-si-93d879e3cf"></i>Programado / movible</span>
+                <span><i data-nsq-style-id="nsq-si-93d879e3cf"></i>@(modoProduccion ? "Programado" : "Programado / movible")</span>
                 <span><i data-nsq-style-id="nsq-si-1c4b44484e"></i>Produciendo / en línea</span>
                 <span><i data-nsq-style-id="nsq-si-31a65355ef"></i>Paro</span>
                 <span><i data-nsq-style-id="nsq-si-b64b5184b1"></i>Calidad</span>
@@ -1294,11 +1367,13 @@
 
                                 var top = 8 + bloque.Carril * 48;
 
-                                var puedeMover = bloque.PuedeMoverCalendario;
+                                var puedeMover = !modoProduccion && bloque.PuedeMoverCalendario;
 
-                                var tituloBloqueo = puedeMover
-                                ? "Arrastra para mandar a cola de otra máquina compatible."
-                                : bloque.MotivoBloqueoMovimiento;
+                                var tituloBloqueo = modoProduccion
+                                ? "Vista de solo lectura para Produccion."
+                                : puedeMover
+                                    ? "Arrastra para mandar a cola de otra máquina compatible."
+                                    : bloque.MotivoBloqueoMovimiento;
 
                                 var textoOperador = bloque.TextoOperadorVisible;
                                 var origenOperador = bloque.TieneOperadorReal
@@ -1669,6 +1744,23 @@
                 </div>
 
                 <div class="modal-footer border-0">
+                    @if (modoProduccion && bloque.EjecucionProduccionID.HasValue)
+                    {
+                        <a class="btn btn-primary fw-bold"
+                           href="@Url.Action("Detalle", "Produccion", new { id = bloque.EjecucionProduccionID.Value })">
+                            <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>
+                            Ver ejecuci&oacute;n
+                        </a>
+                    }
+                    else if (modoProduccion && (!bloque.EstatusProduccionID.HasValue || bloque.EstatusProduccionID == 1))
+                    {
+                        <a class="btn btn-primary fw-bold"
+                           href="@Url.Action("Index", "Produccion", new { prepararProgramaId = bloque.ProgramaProduccionID })">
+                            <i class="fa-solid fa-play me-1"></i>
+                            Ir a iniciar preparaci&oacute;n
+                        </a>
+                    }
+
                     <button type="button"
                             class="btn btn-outline-secondary fw-bold"
                             data-bs-dismiss="modal">

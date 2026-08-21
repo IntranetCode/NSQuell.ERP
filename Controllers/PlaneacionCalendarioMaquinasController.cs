@@ -36,14 +36,30 @@ namespace ERP.NSQuell.Controllers
 
         [HttpGet("")]
         [HttpGet("Index")]
+        [HttpGet("/Produccion/Calendario", Name = "ProduccionCalendario")]
         public async Task<IActionResult> Index(string? vista, DateTime? fecha, DateTime? rangoInicio, DateTime? rangoFin)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
+            // NSQ_PRODUCCION_CALENDARIO_READONLY_V1
+            var modoProduccion =
+                Request.Path.Value?.StartsWith(
+                    "/Produccion/Calendario",
+                    StringComparison.OrdinalIgnoreCase) == true ||
+                string.Equals(
+                    Request.Query["modo"].ToString(),
+                    "produccion",
+                    StringComparison.OrdinalIgnoreCase);
+
+            ViewBag.ModoProduccion = modoProduccion;
+
             var periodo = ResolverPeriodo(vista, fecha, rangoInicio, rangoFin);
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
             var maquinas = await ObtenerMaquinasCalendarioAsync(periodo.Inicio, periodo.Fin, cn);
-            var solicitudesReprogramacion = await ObtenerSolicitudesReprogramacionPendientesAsync(cn);
+            var solicitudesReprogramacion = modoProduccion
+                ? new List<SolicitudReprogramacionCalendarioVm>()
+                : await ObtenerSolicitudesReprogramacionPendientesAsync(cn);
             var vm = new PlaneacionCalendarioMaquinasVm
             {
                 Vista = periodo.Vista,
