@@ -868,8 +868,8 @@
 
 
         /* ============================================================
-                                                           NAVEGACION OPERATIVA / CONTENIDO AJAX
-                                                           ============================================================ */
+                                                                   NAVEGACION OPERATIVA / CONTENIDO AJAX
+                                                                   ============================================================ */
         .production-nav {
             display: flex;
             gap: 8px;
@@ -963,9 +963,9 @@
 
 
         /* =========================================================
-                                                   AJUSTE VISUAL AMIGABLE - PRODUCCION
-                                                   Mantiene la estructura y la logica original.
-                                                   ========================================================= */
+                                                           AJUSTE VISUAL AMIGABLE - PRODUCCION
+                                                           Mantiene la estructura y la logica original.
+                                                           ========================================================= */
 
         /* El fondo exterior pertenece al Layout global. */
         .page {
@@ -1284,9 +1284,9 @@
 
 
         /* =========================================================
-                                                   REFINAMIENTO PROFESIONAL - PRODUCCION
-                                                   Ajustes de jerarquia, espaciado y consistencia visual.
-                                                   ========================================================= */
+                                                           REFINAMIENTO PROFESIONAL - PRODUCCION
+                                                           Ajustes de jerarquia, espaciado y consistencia visual.
+                                                           ========================================================= */
 
         .page {
             max-width: 1660px;
@@ -1496,11 +1496,11 @@
 
 
         /* ==========================================================
-                                                   TEMA OSCURO INTERACTIVO - PRODUCCION
-                                                   Se activa con html[data-nsq-theme="dark"].
-                                                   El script al final sincroniza esta vista con el switch
-                                                   Claro/Oscuro existente en _Layout.
-                                                   ========================================================== */
+                                                           TEMA OSCURO INTERACTIVO - PRODUCCION
+                                                           Se activa con html[data-nsq-theme="dark"].
+                                                           El script al final sincroniza esta vista con el switch
+                                                           Claro/Oscuro existente en _Layout.
+                                                           ========================================================== */
         html[data-nsq-theme="dark"] {
             color-scheme: dark;
             --azul: #7db7ff;
@@ -1812,7 +1812,7 @@
 
 
         /* NSQ_MODAL_PREPARACION_LIGHT_V1
-           El encabezado azul debe conservar contraste tambien en tema claro. */
+                   El encabezado azul debe conservar contraste tambien en tema claro. */
         #modalIniciarPreparacion .modal-header .modal-title,
         #modalIniciarPreparacion .modal-header .small,
         #modalIniciarPreparacion .modal-header i {
@@ -1828,15 +1828,16 @@
             color: #ffffff !important;
         }
 
-        html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header .modal-title,
-        html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header .small,
-        html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header i {
-            color: #ffffff !important;
-            text-shadow: 0 1px 1px rgba(0,0,0,.18);
-        }
+            html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header .modal-title,
+            html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header .small,
+            html[data-nsq-theme="light"] #modalIniciarPreparacion .modal-header i {
+                color: #ffffff !important;
+                text-shadow: 0 1px 1px rgba(0,0,0,.18);
+            }
+
         #modalIniciarPreparacion .modal-dialog {
-            width: min(760px, calc(100vw - 32px));
-            max-width: 760px;
+            width: min(980px, calc(100vw - 32px));
+            max-width: 980px;
             margin: 20px auto;
         }
 
@@ -1970,9 +1971,9 @@
 
 
         /* ==========================================================
-                   PRODUCCION - REFINAMIENTO VISUAL DARK V2
-                   Superficies neutras + estados como acento, no como relleno.
-                   ========================================================== */
+                           PRODUCCION - REFINAMIENTO VISUAL DARK V2
+                           Superficies neutras + estados como acento, no como relleno.
+                           ========================================================== */
         .page {
             background: transparent !important;
         }
@@ -2107,6 +2108,269 @@
             background: #223149;
             border-color: #3c506b;
             color: inherit;
+        }
+
+        /* ==========================================================
+                   PRODUCTO INCOMPLETO / ETIQUETAS BLANCAS AL INICIAR
+                   ========================================================== */
+        .pi-start-box {
+            border: 1px solid #d7e2f1;
+            border-radius: 16px;
+            background: #fbfdff;
+            overflow: hidden;
+        }
+
+        .pi-start-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 16px;
+            border-bottom: 1px solid #e5edf6;
+            background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
+        }
+
+        .pi-start-title {
+            color: #163b68;
+            font-weight: 900;
+        }
+
+        .pi-start-sub {
+            margin-top: 3px;
+            color: #667085;
+            font-size: .78rem;
+            font-weight: 650;
+        }
+
+        .pi-start-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 9px;
+            padding: 12px 14px;
+            border-bottom: 1px solid #edf2f7;
+            background: #fff;
+        }
+
+        .pi-start-summary-item {
+            min-width: 0;
+            padding: 10px 12px;
+            border: 1px solid #e0e7ef;
+            border-radius: 12px;
+            background: #f9fbfd;
+        }
+
+            .pi-start-summary-item.is-selected {
+                border-color: #b8ccef;
+                background: #f4f8ff;
+            }
+
+            .pi-start-summary-item.is-net {
+                border-color: #abefc6;
+                background: #f0fdf4;
+            }
+
+        .pi-start-summary-label {
+            color: #667085;
+            font-size: .68rem;
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+        }
+
+        .pi-start-summary-value {
+            margin-top: 2px;
+            color: #182437;
+            font-size: 1.18rem;
+            font-weight: 950;
+        }
+
+        .pi-start-alert {
+            margin: 12px 14px 0;
+            padding: 10px 12px;
+            border: 1px solid #fecdca;
+            border-radius: 11px;
+            background: #fef3f2;
+            color: #b42318;
+            font-size: .78rem;
+            font-weight: 750;
+        }
+
+        .pi-start-list {
+            display: grid;
+            gap: 8px;
+            max-height: 285px;
+            overflow-y: auto;
+            padding: 12px 14px;
+            scrollbar-gutter: stable;
+        }
+
+        .pi-start-loading,
+        .pi-start-empty {
+            padding: 18px 12px;
+            text-align: center;
+            color: #667085;
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+        .pi-start-item {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: 11px;
+            align-items: start;
+            padding: 11px 12px;
+            border: 1px solid #dfe6ef;
+            border-radius: 12px;
+            background: #fff;
+            cursor: pointer;
+            transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+        }
+
+            .pi-start-item:hover {
+                border-color: #a9c2df;
+                box-shadow: 0 4px 12px rgba(16,42,78,.06);
+            }
+
+            .pi-start-item.is-selected {
+                border-color: #6eb995;
+                background: #f2fbf6;
+                box-shadow: 0 0 0 2px rgba(16,124,65,.06);
+            }
+
+        .pi-start-check {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .pi-start-name {
+            color: #182437;
+            font-weight: 900;
+        }
+
+        .pi-start-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px 12px;
+            margin-top: 4px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .pi-start-qty {
+            min-width: 88px;
+            padding: 7px 9px;
+            border-radius: 10px;
+            background: #eef4ff;
+            color: #194185;
+            text-align: right;
+            font-size: .73rem;
+            font-weight: 800;
+        }
+
+            .pi-start-qty strong {
+                display: block;
+                font-size: 1rem;
+                line-height: 1.1;
+            }
+
+        .pi-start-rule {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 10px 14px 13px;
+            color: #667085;
+            font-size: .74rem;
+            font-weight: 650;
+        }
+
+        html[data-nsq-theme="dark"] .pi-start-box {
+            background: #111b2d;
+            border-color: #31455f;
+        }
+
+        html[data-nsq-theme="dark"] .pi-start-head {
+            background: #16243a;
+            border-bottom-color: #31455f;
+        }
+
+        html[data-nsq-theme="dark"] .pi-start-title,
+        html[data-nsq-theme="dark"] .pi-start-name,
+        html[data-nsq-theme="dark"] .pi-start-summary-value {
+            color: #edf4fd;
+        }
+
+        html[data-nsq-theme="dark"] .pi-start-sub,
+        html[data-nsq-theme="dark"] .pi-start-meta,
+        html[data-nsq-theme="dark"] .pi-start-rule,
+        html[data-nsq-theme="dark"] .pi-start-loading,
+        html[data-nsq-theme="dark"] .pi-start-empty,
+        html[data-nsq-theme="dark"] .pi-start-summary-label {
+            color: #9eacc0;
+        }
+
+        html[data-nsq-theme="dark"] .pi-start-summary {
+            background: #111b2d;
+            border-bottom-color: #2d3d54;
+        }
+
+        html[data-nsq-theme="dark"] .pi-start-summary-item {
+            background: #162133;
+            border-color: #33465e;
+        }
+
+            html[data-nsq-theme="dark"] .pi-start-summary-item.is-selected {
+                background: #152a43;
+                border-color: #39699b;
+            }
+
+            html[data-nsq-theme="dark"] .pi-start-summary-item.is-net {
+                background: #102a20;
+                border-color: #286446;
+            }
+
+        html[data-nsq-theme="dark"] .pi-start-item {
+            background: #162133;
+            border-color: #33465e;
+        }
+
+            html[data-nsq-theme="dark"] .pi-start-item:hover {
+                background: #1a2940;
+                border-color: #506b8c;
+            }
+
+            html[data-nsq-theme="dark"] .pi-start-item.is-selected {
+                background: #122a21;
+                border-color: #347a58;
+            }
+
+        html[data-nsq-theme="dark"] .pi-start-qty {
+            background: #102b4c;
+            color: #a9d2ff;
+        }
+
+        html[data-nsq-theme="dark"] .pi-start-alert {
+            background: #351719;
+            border-color: #7f2b32;
+            color: #fecdd3;
+        }
+
+        @@media (max-width: 700px) {
+            .pi-start-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .pi-start-item {
+                grid-template-columns: auto minmax(0, 1fr);
+            }
+
+            .pi-start-qty {
+                grid-column: 2;
+                width: fit-content;
+                text-align: left;
+            }
         }
 
     </style>
@@ -2602,6 +2866,53 @@
                         </div>
                     </div>
 
+                    <div class="pi-start-box mb-3" id="productoIncompletoInicio">
+                        <div class="pi-start-head">
+                            <div>
+                                <div class="pi-start-title">
+                                    <i class="bi bi-box-seam me-1"></i>
+                                    Producto incompleto disponible
+                                </div>
+                                <div class="pi-start-sub">
+                                    Producción puede utilizar etiquetas blancas existentes de la misma parte antes de fabricar la cantidad restante.
+                                </div>
+                            </div>
+                            <span class="badge rounded-pill text-bg-secondary" id="productoIncompletoEstado">
+                                Pendiente
+                            </span>
+                        </div>
+
+                        <div class="pi-start-summary">
+                            <div class="pi-start-summary-item">
+                                <div class="pi-start-summary-label">Programado por Planeación</div>
+                                <div class="pi-start-summary-value" id="piCantidadProgramada">0</div>
+                            </div>
+                            <div class="pi-start-summary-item is-selected">
+                                <div class="pi-start-summary-label">Etiqueta blanca seleccionada</div>
+                                <div class="pi-start-summary-value" id="piCantidadSeleccionada">0</div>
+                            </div>
+                            <div class="pi-start-summary-item is-net">
+                                <div class="pi-start-summary-label">Producción a fabricar</div>
+                                <div class="pi-start-summary-value" id="piCantidadNeta">0</div>
+                            </div>
+                        </div>
+
+                        <div class="pi-start-alert d-none" id="productoIncompletoAlerta" role="alert"></div>
+
+                        <div class="pi-start-list" id="productoIncompletoLista">
+                            <div class="pi-start-empty">
+                                Abre una OF para consultar producto incompleto disponible.
+                            </div>
+                        </div>
+
+                        <div class="pi-start-rule">
+                            <i class="bi bi-shield-check mt-1"></i>
+                            <div>
+                                La selección es opcional. Cada etiqueta blanca se consume completa; no se divide una caja entre órdenes. El servidor vuelve a validar disponibilidad, parte, cantidad y reserva antes de crear la ejecución.
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="operator-box" id="boxOperadorSugerido">
                         <div class="operator-title" id="tituloOperadorSugerido">
                             Operador principal sugerido desde RRHH
@@ -2724,776 +3035,1073 @@
 
 @section Scripts {
     <script>
-                (() => {
-                    const contenidoProduccion = document.getElementById('contenidoProduccion');
-                    const formFiltros = document.getElementById('formFiltrosProduccion');
-                    const navButtons = Array.from(document.querySelectorAll('[data-production-panel]'));
+                        (() => {
+                            const contenidoProduccion = document.getElementById('contenidoProduccion');
+                            const formFiltros = document.getElementById('formFiltrosProduccion');
+                            const navButtons = Array.from(document.querySelectorAll('[data-production-panel]'));
 
-                    const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
-                    const modalProgramaTexto = document.getElementById('modalProgramaTexto');
-                    const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
-                    const modalParteTexto = document.getElementById('modalParteTexto');
-                    const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
-                    const modalMoldeTexto = document.getElementById('modalMoldeTexto');
-                    const modalCantidadTexto = document.getElementById('modalCantidadTexto');
-                    const modalInicioTexto = document.getElementById('modalInicioTexto');
-                    const modalFinTexto = document.getElementById('modalFinTexto');
+                            const modalProgramaProduccionId = document.getElementById('modalProgramaProduccionId');
+                            const modalProgramaTexto = document.getElementById('modalProgramaTexto');
+                            const modalMaquinaTexto = document.getElementById('modalMaquinaTexto');
+                            const modalParteTexto = document.getElementById('modalParteTexto');
+                            const modalDescripcionTexto = document.getElementById('modalDescripcionTexto');
+                            const modalMoldeTexto = document.getElementById('modalMoldeTexto');
+                            const modalCantidadTexto = document.getElementById('modalCantidadTexto');
+                            const modalInicioTexto = document.getElementById('modalInicioTexto');
+                            const modalFinTexto = document.getElementById('modalFinTexto');
 
-                    const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
-                    const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
-                    const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
+                            const boxOperadorSugerido = document.getElementById('boxOperadorSugerido');
+                            const tituloOperadorSugerido = document.getElementById('tituloOperadorSugerido');
+                            const detalleOperadorSugerido = document.getElementById('detalleOperadorSugerido');
 
-                    const modalOperadorId = document.getElementById('modalOperadorId');
-                    const modalOperadorNombre = document.getElementById('modalOperadorNombre');
-                    const modalOperadorManual = document.getElementById('modalOperadorManual');
-                    const modalOperadorAuxiliarId = document.getElementById('modalOperadorAuxiliarId');
-                    const modalOperadorAuxiliarNombre = document.getElementById('modalOperadorAuxiliarNombre');
-                    const modalOperadorAuxiliarManual = document.getElementById('modalOperadorAuxiliarManual');
-                    const modalTecnicoProduccionId = document.getElementById('modalTecnicoProduccionId');
-                    const modalTecnicoProduccionManual = document.getElementById('modalTecnicoProduccionManual');
-                    const modalPolivalenciaInfo = document.getElementById('modalPolivalenciaInfo');
-                    const opcionesOperadorBase = modalOperadorId?.innerHTML || '';
-                    const opcionesAuxiliarBase = modalOperadorAuxiliarId?.innerHTML || '';
-                    const modalObservaciones = document.getElementById('modalObservaciones');
-                    const mensajeValidacionOperadores = document.getElementById('mensajeValidacionOperadores');
-                    const textoValidacionOperadores = document.getElementById('textoValidacionOperadores');
+                            const modalOperadorId = document.getElementById('modalOperadorId');
+                            const modalOperadorNombre = document.getElementById('modalOperadorNombre');
+                            const modalOperadorManual = document.getElementById('modalOperadorManual');
+                            const modalOperadorAuxiliarId = document.getElementById('modalOperadorAuxiliarId');
+                            const modalOperadorAuxiliarNombre = document.getElementById('modalOperadorAuxiliarNombre');
+                            const modalOperadorAuxiliarManual = document.getElementById('modalOperadorAuxiliarManual');
+                            const modalTecnicoProduccionId = document.getElementById('modalTecnicoProduccionId');
+                            const modalTecnicoProduccionManual = document.getElementById('modalTecnicoProduccionManual');
+                            const modalPolivalenciaInfo = document.getElementById('modalPolivalenciaInfo');
+                            const opcionesOperadorBase = modalOperadorId?.innerHTML || '';
+                            const opcionesAuxiliarBase = modalOperadorAuxiliarId?.innerHTML || '';
+                            const modalObservaciones = document.getElementById('modalObservaciones');
+                            const mensajeValidacionOperadores = document.getElementById('mensajeValidacionOperadores');
+                            const textoValidacionOperadores = document.getElementById('textoValidacionOperadores');
 
-                    const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
-                    const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
+                            const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
+                            const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
 
-                    let panelActivo = 'proximos';
-                    let controladorCarga = null;
+                            const productoIncompletoEstado = document.getElementById('productoIncompletoEstado');
+                            const productoIncompletoAlerta = document.getElementById('productoIncompletoAlerta');
+                            const productoIncompletoLista = document.getElementById('productoIncompletoLista');
+                            const piCantidadProgramada = document.getElementById('piCantidadProgramada');
+                            const piCantidadSeleccionada = document.getElementById('piCantidadSeleccionada');
+                            const piCantidadNeta = document.getElementById('piCantidadNeta');
 
-                    function texto(value) {
-                        if (!value || !value.trim()) return '-';
-                        return value.trim();
-                    }
+                            let panelActivo = 'proximos';
+                            let controladorCarga = null;
+                            let controladorEtiquetasBlancas = null;
+                            let etiquetasBlancasCargando = false;
+                            let etiquetasBlancasConsultaValida = false;
+                            let cantidadProgramadaEtiquetas = 0;
 
-                    function seleccionarPersonaSiExiste(select, personaId) {
-                        if (!select) return false;
-                        const id = personaId || '';
-                        for (const option of select.options) {
-                            if (option.value === id) {
-                                select.value = id;
-                                return true;
-                            }
-                        }
-                        select.value = '';
-                        return false;
-                    }
-
-                    function obtenerTextoSeleccionado(select) {
-                        if (!select || !select.value) return '';
-                        const selected = select.options[select.selectedIndex];
-                        return selected ? (selected.textContent || '').trim() : '';
-                    }
-
-                    function limpiarSelectEscala(select, placeholder) {
-                        if (!select) return;
-                        select.innerHTML = '';
-                        const vacio = document.createElement('option');
-                        vacio.value = '';
-                        vacio.textContent = placeholder;
-                        select.appendChild(vacio);
-                    }
-
-                    function textoPersonaEscala(x, mostrarNivel) {
-                        const sep = ' \u00B7 ';
-                        const partes = [];
-
-                        if (mostrarNivel && x.nivel) partes.push(`N${x.nivel}`);
-                        partes.push(x.nombre || '');
-                        if (x.numeroControl) partes.push(`Ctrl ${x.numeroControl}`);
-                        if (x.enEscala) partes.push('EN ESCALA');
-                        if (x.turnoNombre) partes.push(x.turnoNombre);
-                        if (x.maquinaCodigo) partes.push(x.maquinaCodigo);
-
-                        return partes.filter(Boolean).join(sep);
-                    }
-                    function sincronizarModoManual(select, manual, tipo = 'principal') {
-                        if (!manual) return;
-
-                        const haySeleccion = !!select?.value;
-                        manual.disabled = haySeleccion;
-
-                        if (haySeleccion) {
-                            manual.value = '';
-                            manual.placeholder = tipo === 'auxiliar'
-                                ? 'Bloqueado: ya seleccionaste un auxiliar'
-                                : 'Bloqueado: ya seleccionaste un operador';
-                        }
-                        else {
-                            manual.placeholder = tipo === 'auxiliar'
-                                ? 'Escribe el nombre si no seleccionas auxiliar'
-                                : 'Escribe el nombre si no seleccionas operador';
-                        }
-                    }
-        async function cargarOperadoresPolivalencia(programaId, parteId, maquinaId, operadorPreferido, auxiliarPreferido) {
-                        limpiarSelectEscala(modalOperadorId, '-- Cargando operadores --');
-                        limpiarSelectEscala(modalOperadorAuxiliarId, '-- Cargando auxiliares --');
-
-                        if (modalOperadorManual) {
-                            modalOperadorManual.disabled = false;
-                            modalOperadorManual.placeholder = 'Escribe el nombre si no seleccionas operador';
-                        }
-                        if (modalOperadorAuxiliarManual) {
-                            modalOperadorAuxiliarManual.disabled = false;
-                            modalOperadorAuxiliarManual.placeholder = 'Escribe el nombre si no seleccionas auxiliar';
-                        }
-
-                        try {
-                            const params = new URLSearchParams();
-                            if (programaId) params.set('programaId', programaId);
-                            if (parteId) params.set('parteId', parteId);
-                            if (maquinaId) params.set('maquinaId', maquinaId);
-
-                            const url = '@Url.Action("OperadoresPolivalenciaParte", "Produccion")' + '?' + params.toString();
-                            const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                            const data = await response.json();
-
-                            if (!data?.configurado) {
-                                limpiarSelectEscala(modalOperadorId, '-- Polivalencia no configurada --');
-                                limpiarSelectEscala(modalOperadorAuxiliarId, '-- Auxiliares no disponibles --');
-                                if (modalPolivalenciaInfo) {
-                                    modalPolivalenciaInfo.textContent = 'No esta disponible la configuracion de Polivalencia.';
-                                    modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
-                                }
-                                return;
+                            function texto(value) {
+                                if (!value || !value.trim()) return '-';
+                                return value.trim();
                             }
 
-                            const operadores = Array.isArray(data.operadores) ? data.operadores : [];
-                            const auxiliares = Array.isArray(data.auxiliares) ? data.auxiliares : [];
-                            const tieneMatriz = data.tieneMatriz === true;
-                            const numeroParte = data.numeroParte || '';
-                            const etiquetaEscala = data.escalaEncontrada
-                                ? `${data.escalaFolio || 'Escala'} - ${data.escalaEstado || ''}`
-                                : 'Sin Escala aplicable';
+                            function seleccionarPersonaSiExiste(select, personaId) {
+                                if (!select) return false;
+                                const id = personaId || '';
+                                for (const option of select.options) {
+                                    if (option.value === id) {
+                                        select.value = id;
+                                        return true;
+                                    }
+                                }
+                                select.value = '';
+                                return false;
+                            }
 
-                            limpiarSelectEscala(
-                                modalOperadorId,
-                                tieneMatriz
-                                    ? (operadores.length > 0
-                                        ? '-- Seleccionar operador evaluado N1-N4 --'
-                                        : '-- Sin operadores evaluados N1-N4 --')
-                                    : '-- Seleccionar operador --');
+                            function obtenerTextoSeleccionado(select) {
+                                if (!select || !select.value) return '';
+                                const selected = select.options[select.selectedIndex];
+                                return selected ? (selected.textContent || '').trim() : '';
+                            }
 
-                            operadores.forEach(x => {
-                                const op = document.createElement('option');
-                                op.value = String(x.personaID);
-                                op.textContent = textoPersonaEscala(x, tieneMatriz);
-                                if (x.nivel) op.dataset.nivel = String(x.nivel);
-                                modalOperadorId?.appendChild(op);
-                            });
+                            function limpiarSelectEscala(select, placeholder) {
+                                if (!select) return;
+                                select.innerHTML = '';
+                                const vacio = document.createElement('option');
+                                vacio.value = '';
+                                vacio.textContent = placeholder;
+                                select.appendChild(vacio);
+                            }
 
-                            // Solo conserva el sugerido si tambien esta dentro del listado permitido.
-                            seleccionarPersonaSiExiste(modalOperadorId, operadorPreferido);
-                            sincronizarModoManual(modalOperadorId, modalOperadorManual);
+                            function textoPersonaEscala(x, mostrarNivel) {
+                                const sep = ' \u00B7 ';
+                                const partes = [];
 
-                            limpiarSelectEscala(
-                                modalOperadorAuxiliarId,
-                                auxiliares.length > 0
-                                    ? '-- Seleccionar auxiliar --'
-                                    : '-- Sin auxiliares activos --');
+                                if (mostrarNivel && x.nivel) partes.push(`N${x.nivel}`);
+                                partes.push(x.nombre || '');
+                                if (x.numeroControl) partes.push(`Ctrl ${x.numeroControl}`);
+                                if (x.enEscala) partes.push('EN ESCALA');
+                                if (x.turnoNombre) partes.push(x.turnoNombre);
+                                if (x.maquinaCodigo) partes.push(x.maquinaCodigo);
 
-                            auxiliares.forEach(x => {
-                                const op = document.createElement('option');
-                                op.value = String(x.personaID);
-                                op.textContent = textoPersonaEscala(x, false);
-                                modalOperadorAuxiliarId?.appendChild(op);
-                            });
-                            seleccionarPersonaSiExiste(modalOperadorAuxiliarId, auxiliarPreferido);
-                            sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
+                                return partes.filter(Boolean).join(sep);
+                            }
+                            function sincronizarModoManual(select, manual, tipo = 'principal') {
+                                if (!manual) return;
 
-                            if (modalPolivalenciaInfo) {
-                                if (tieneMatriz) {
-                                    modalPolivalenciaInfo.textContent = operadores.length > 0
-                                        ? `Parte ${numeroParte || ''} enlazada a Polivalencia: ${operadores.length} operador(es) evaluados N1-N4. Los asignados en ${etiquetaEscala} aparecen primero; despues N4 -> N1.`
-                                        : `Parte ${numeroParte || ''} tiene matriz, pero no hay operadores activos evaluados N1-N4.`;
-                                    modalPolivalenciaInfo.className = operadores.length > 0
-                                        ? 'small text-success fw-semibold mt-1'
-                                        : 'small text-danger fw-semibold mt-1';
-                                } else {
-                                    modalPolivalenciaInfo.textContent =
-                                        `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; puedes seleccionar del catalogo general o capturar un nombre manual.`;
-                                    modalPolivalenciaInfo.className = 'small text-warning fw-semibold mt-1';
+                                const haySeleccion = !!select?.value;
+                                manual.disabled = haySeleccion;
+
+                                if (haySeleccion) {
+                                    manual.value = '';
+                                    manual.placeholder = tipo === 'auxiliar'
+                                        ? 'Bloqueado: ya seleccionaste un auxiliar'
+                                        : 'Bloqueado: ya seleccionaste un operador';
+                                }
+                                else {
+                                    manual.placeholder = tipo === 'auxiliar'
+                                        ? 'Escribe el nombre si no seleccionas auxiliar'
+                                        : 'Escribe el nombre si no seleccionas operador';
+                                }
+                            }
+                async function cargarOperadoresPolivalencia(programaId, parteId, maquinaId, operadorPreferido, auxiliarPreferido) {
+                                limpiarSelectEscala(modalOperadorId, '-- Cargando operadores --');
+                                limpiarSelectEscala(modalOperadorAuxiliarId, '-- Cargando auxiliares --');
+
+                                if (modalOperadorManual) {
+                                    modalOperadorManual.disabled = false;
+                                    modalOperadorManual.placeholder = 'Escribe el nombre si no seleccionas operador';
+                                }
+                                if (modalOperadorAuxiliarManual) {
+                                    modalOperadorAuxiliarManual.disabled = false;
+                                    modalOperadorAuxiliarManual.placeholder = 'Escribe el nombre si no seleccionas auxiliar';
+                                }
+
+                                try {
+                                    const params = new URLSearchParams();
+                                    if (programaId) params.set('programaId', programaId);
+                                    if (parteId) params.set('parteId', parteId);
+                                    if (maquinaId) params.set('maquinaId', maquinaId);
+
+                                    const url = '@Url.Action("OperadoresPolivalenciaParte", "Produccion")' + '?' + params.toString();
+                                    const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                    const data = await response.json();
+
+                                    if (!data?.configurado) {
+                                        limpiarSelectEscala(modalOperadorId, '-- Polivalencia no configurada --');
+                                        limpiarSelectEscala(modalOperadorAuxiliarId, '-- Auxiliares no disponibles --');
+                                        if (modalPolivalenciaInfo) {
+                                            modalPolivalenciaInfo.textContent = 'No esta disponible la configuracion de Polivalencia.';
+                                            modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+                                        }
+                                        return;
+                                    }
+
+                                    const operadores = Array.isArray(data.operadores) ? data.operadores : [];
+                                    const auxiliares = Array.isArray(data.auxiliares) ? data.auxiliares : [];
+                                    const tieneMatriz = data.tieneMatriz === true;
+                                    const numeroParte = data.numeroParte || '';
+                                    const etiquetaEscala = data.escalaEncontrada
+                                        ? `${data.escalaFolio || 'Escala'} - ${data.escalaEstado || ''}`
+                                        : 'Sin Escala aplicable';
+
+                                    limpiarSelectEscala(
+                                        modalOperadorId,
+                                        tieneMatriz
+                                            ? (operadores.length > 0
+                                                ? '-- Seleccionar operador evaluado N1-N4 --'
+                                                : '-- Sin operadores evaluados N1-N4 --')
+                                            : '-- Seleccionar operador --');
+
+                                    operadores.forEach(x => {
+                                        const op = document.createElement('option');
+                                        op.value = String(x.personaID);
+                                        op.textContent = textoPersonaEscala(x, tieneMatriz);
+                                        if (x.nivel) op.dataset.nivel = String(x.nivel);
+                                        modalOperadorId?.appendChild(op);
+                                    });
+
+                                    // Solo conserva el sugerido si tambien esta dentro del listado permitido.
+                                    seleccionarPersonaSiExiste(modalOperadorId, operadorPreferido);
+                                    sincronizarModoManual(modalOperadorId, modalOperadorManual);
+
+                                    limpiarSelectEscala(
+                                        modalOperadorAuxiliarId,
+                                        auxiliares.length > 0
+                                            ? '-- Seleccionar auxiliar --'
+                                            : '-- Sin auxiliares activos --');
+
+                                    auxiliares.forEach(x => {
+                                        const op = document.createElement('option');
+                                        op.value = String(x.personaID);
+                                        op.textContent = textoPersonaEscala(x, false);
+                                        modalOperadorAuxiliarId?.appendChild(op);
+                                    });
+                                    seleccionarPersonaSiExiste(modalOperadorAuxiliarId, auxiliarPreferido);
+                                    sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
+
+                                    if (modalPolivalenciaInfo) {
+                                        if (tieneMatriz) {
+                                            modalPolivalenciaInfo.textContent = operadores.length > 0
+                                                ? `Parte ${numeroParte || ''} enlazada a Polivalencia: ${operadores.length} operador(es) evaluados N1-N4. Los asignados en ${etiquetaEscala} aparecen primero; despues N4 -> N1.`
+                                                : `Parte ${numeroParte || ''} tiene matriz, pero no hay operadores activos evaluados N1-N4.`;
+                                            modalPolivalenciaInfo.className = operadores.length > 0
+                                                ? 'small text-success fw-semibold mt-1'
+                                                : 'small text-danger fw-semibold mt-1';
+                                        } else {
+                                            modalPolivalenciaInfo.textContent =
+                                                `La parte ${numeroParte || ''} no tiene matriz de Polivalencia; puedes seleccionar del catalogo general o capturar un nombre manual.`;
+                                            modalPolivalenciaInfo.className = 'small text-warning fw-semibold mt-1';
+                                        }
+                                    }
+
+                                    if (tieneMatriz) {
+                                        if (operadores.length > 0) {
+                                            boxOperadorSugerido?.classList.remove('warn');
+                                            if (tituloOperadorSugerido) {
+                                                tituloOperadorSugerido.textContent = 'Operadores evaluados para la pieza';
+                                                tituloOperadorSugerido.className = 'operator-title';
+                                            }
+                                            if (detalleOperadorSugerido) {
+                                                detalleOperadorSugerido.textContent =
+                                                    `${operadores.length} operador(es) con nivel N1-N4 para ${numeroParte || 'esta pieza'}. No se muestran personas sin nivel. Auxiliares disponibles: ${auxiliares.length}.`;
+                                            }
+                                        } else {
+                                            boxOperadorSugerido?.classList.add('warn');
+                                            if (tituloOperadorSugerido) {
+                                                tituloOperadorSugerido.textContent = 'Sin operadores evaluados';
+                                                tituloOperadorSugerido.className = 'operator-title warn';
+                                            }
+                                            if (detalleOperadorSugerido) {
+                                                detalleOperadorSugerido.textContent =
+                                                    `La pieza ${numeroParte || ''} tiene matriz, pero no hay personas activas con N1-N4.`;
+                                            }
+                                        }
+                                    } else {
+                                        boxOperadorSugerido?.classList.add('warn');
+                                        if (tituloOperadorSugerido) {
+                                            tituloOperadorSugerido.textContent = 'Pieza sin matriz de polivalencia';
+                                            tituloOperadorSugerido.className = 'operator-title warn';
+                                        }
+                                        if (detalleOperadorSugerido) {
+                                            detalleOperadorSugerido.textContent =
+                                                'Se habilita el catalogo general. Si la persona no aparece, tambien puedes capturar el nombre manualmente.';
+                                        }
+                                    }
+                                }
+                                catch (error) {
+                                    console.error('Polivalencia:', error);
+                                    limpiarSelectEscala(modalOperadorId, '-- Error al cargar operadores --');
+                                    limpiarSelectEscala(modalOperadorAuxiliarId, '-- Error al cargar auxiliares --');
+                                    if (modalPolivalenciaInfo) {
+                                        modalPolivalenciaInfo.textContent = 'No fue posible consultar Polivalencia.';
+                                        modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+                                    }
                                 }
                             }
 
-                            if (tieneMatriz) {
-                                if (operadores.length > 0) {
-                                    boxOperadorSugerido?.classList.remove('warn');
-                                    if (tituloOperadorSugerido) {
-                                        tituloOperadorSugerido.textContent = 'Operadores evaluados para la pieza';
-                                        tituloOperadorSugerido.className = 'operator-title';
-                                    }
-                                    if (detalleOperadorSugerido) {
-                                        detalleOperadorSugerido.textContent =
-                                            `${operadores.length} operador(es) con nivel N1-N4 para ${numeroParte || 'esta pieza'}. No se muestran personas sin nivel. Auxiliares disponibles: ${auxiliares.length}.`;
-                                    }
-                                } else {
-                                    boxOperadorSugerido?.classList.add('warn');
-                                    if (tituloOperadorSugerido) {
-                                        tituloOperadorSugerido.textContent = 'Sin operadores evaluados';
-                                        tituloOperadorSugerido.className = 'operator-title warn';
-                                    }
-                                    if (detalleOperadorSugerido) {
-                                        detalleOperadorSugerido.textContent =
-                                            `La pieza ${numeroParte || ''} tiene matriz, pero no hay personas activas con N1-N4.`;
-                                    }
+                            // NSQ_TECNICO_PRODUCCION_PREP_V2
+                            function sincronizarTecnicoProduccion() {
+                                if (!modalTecnicoProduccionManual) return;
+
+                                const haySeleccion = !!modalTecnicoProduccionId?.value;
+                                modalTecnicoProduccionManual.disabled = haySeleccion;
+
+                                if (haySeleccion) {
+                                    modalTecnicoProduccionManual.value = '';
+                                    modalTecnicoProduccionManual.placeholder =
+                                        'Bloqueado: ya seleccionaste un técnico';
                                 }
-                            } else {
-                                boxOperadorSugerido?.classList.add('warn');
-                                if (tituloOperadorSugerido) {
-                                    tituloOperadorSugerido.textContent = 'Pieza sin matriz de polivalencia';
-                                    tituloOperadorSugerido.className = 'operator-title warn';
-                                }
-                                if (detalleOperadorSugerido) {
-                                    detalleOperadorSugerido.textContent =
-                                        'Se habilita el catalogo general. Si la persona no aparece, tambien puedes capturar el nombre manualmente.';
+                                else {
+                                    modalTecnicoProduccionManual.placeholder =
+                                        'Escribe el nombre si no seleccionas técnico';
                                 }
                             }
-                        }
-                        catch (error) {
-                            console.error('Polivalencia:', error);
-                            limpiarSelectEscala(modalOperadorId, '-- Error al cargar operadores --');
-                            limpiarSelectEscala(modalOperadorAuxiliarId, '-- Error al cargar auxiliares --');
-                            if (modalPolivalenciaInfo) {
-                                modalPolivalenciaInfo.textContent = 'No fue posible consultar Polivalencia.';
-                                modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+
+                            async function cargarTecnicosProduccion() {
+                                if (!modalTecnicoProduccionId) return;
+
+                                limpiarSelectEscala(
+                                    modalTecnicoProduccionId,
+                                    '-- Cargando técnicos --');
+
+                                if (modalTecnicoProduccionManual) {
+                                    modalTecnicoProduccionManual.value = '';
+                                    modalTecnicoProduccionManual.disabled = false;
+                                    modalTecnicoProduccionManual.placeholder =
+                                        'Escribe el nombre si no seleccionas técnico';
+                                }
+
+                                try {
+                                    const url =
+                                        '@Url.Action("TecnicosProduccionActivos", "Produccion")';
+
+                                    const response = await fetch(
+                                        url,
+                                        {
+                                            headers: {
+                                                'X-Requested-With': 'XMLHttpRequest'
+                                            }
+                                        });
+
+                                    if (!response.ok)
+                                        throw new Error(`HTTP ${response.status}`);
+
+                                    const data = await response.json();
+                                    const tecnicos =
+                                        Array.isArray(data?.tecnicos)
+                                            ? data.tecnicos
+                                            : [];
+
+                                    limpiarSelectEscala(
+                                        modalTecnicoProduccionId,
+                                        tecnicos.length > 0
+                                            ? '-- Seleccionar técnico --'
+                                            : '-- Sin técnicos activos --');
+
+                                    tecnicos.forEach(x => {
+                                        const option =
+                                            document.createElement('option');
+
+                                        option.value =
+                                            String(x.personaID);
+
+                                        const partes = [
+                                            x.nombre || ''
+                                        ];
+
+                                        if (x.numeroControl)
+                                            partes.push(`Ctrl ${x.numeroControl}`);
+
+                                        if (x.puesto)
+                                            partes.push(x.puesto);
+
+                                        option.textContent =
+                                            partes.filter(Boolean).join(' · ');
+
+                                        modalTecnicoProduccionId
+                                            .appendChild(option);
+                                    });
+                                }
+                                catch (error) {
+                                    console.error(
+                                        'TecnicosProduccion:',
+                                        error);
+
+                                    limpiarSelectEscala(
+                                        modalTecnicoProduccionId,
+                                        '-- Error al cargar técnicos --');
+                                }
+
+                                sincronizarTecnicoProduccion();
                             }
-                        }
-                    }
+                            function limpiarValidacionOperadores() {
+                                mensajeValidacionOperadores?.classList.remove('show', 'is-success');
+                                if (textoValidacionOperadores) textoValidacionOperadores.textContent = '';
+                                [modalOperadorId, modalOperadorManual, modalOperadorAuxiliarId, modalOperadorAuxiliarManual, modalTecnicoProduccionId, modalTecnicoProduccionManual]
+                                    .forEach(x => x?.classList.remove('operator-field-invalid'));
+                            }
 
-                    // NSQ_TECNICO_PRODUCCION_PREP_V2
-                    function sincronizarTecnicoProduccion() {
-                        if (!modalTecnicoProduccionManual) return;
+                            function mostrarValidacionOperadores(mensaje, campos = [], exito = false) {
+                                limpiarValidacionOperadores();
+                                if (textoValidacionOperadores) textoValidacionOperadores.textContent = mensaje;
+                                mensajeValidacionOperadores?.classList.add('show');
+                                if (exito) mensajeValidacionOperadores?.classList.add('is-success');
+                                campos.forEach(x => x?.classList.add('operator-field-invalid'));
+                                campos.find(x => x)?.focus();
+                            }
 
-                        const haySeleccion = !!modalTecnicoProduccionId?.value;
-                        modalTecnicoProduccionManual.disabled = haySeleccion;
+                            function formatearPiezas(value) {
+                                const numero = Number(value || 0);
+                                return Number.isFinite(numero)
+                                    ? Math.max(0, numero).toLocaleString('es-MX')
+                                    : '0';
+                            }
 
-                        if (haySeleccion) {
-                            modalTecnicoProduccionManual.value = '';
-                            modalTecnicoProduccionManual.placeholder =
-                                'Bloqueado: ya seleccionaste un técnico';
-                        }
-                        else {
-                            modalTecnicoProduccionManual.placeholder =
-                                'Escribe el nombre si no seleccionas técnico';
-                        }
-                    }
+                            function limpiarAlertaProductoIncompleto() {
+                                if (!productoIncompletoAlerta) return;
+                                productoIncompletoAlerta.textContent = '';
+                                productoIncompletoAlerta.classList.add('d-none');
+                            }
 
-                    async function cargarTecnicosProduccion() {
-                        if (!modalTecnicoProduccionId) return;
+                            function mostrarAlertaProductoIncompleto(mensaje) {
+                                if (!productoIncompletoAlerta) return;
+                                productoIncompletoAlerta.textContent = mensaje || '';
+                                productoIncompletoAlerta.classList.remove('d-none');
+                            }
 
-                        limpiarSelectEscala(
-                            modalTecnicoProduccionId,
-                            '-- Cargando técnicos --');
+                            function totalEtiquetasBlancasSeleccionadas() {
+                                if (!productoIncompletoLista) return 0;
 
-                        if (modalTecnicoProduccionManual) {
-                            modalTecnicoProduccionManual.value = '';
-                            modalTecnicoProduccionManual.disabled = false;
-                            modalTecnicoProduccionManual.placeholder =
-                                'Escribe el nombre si no seleccionas técnico';
-                        }
+                                return Array.from(
+                                    productoIncompletoLista.querySelectorAll(
+                                        'input[name="etiquetasBlancasSeleccionadas"]:checked'
+                                    )
+                                ).reduce((total, input) => {
+                                    const cantidad = Number(input.dataset.cantidad || 0);
+                                    return total + (Number.isFinite(cantidad) ? cantidad : 0);
+                                }, 0);
+                            }
 
-                        try {
-                            const url =
-                                '@Url.Action("TecnicosProduccionActivos", "Produccion")';
+                            function recalcularProductoIncompleto() {
+                                const seleccionado = totalEtiquetasBlancasSeleccionadas();
+                                const neto = Math.max(0, cantidadProgramadaEtiquetas - seleccionado);
 
-                            const response = await fetch(
-                                url,
-                                {
-                                    headers: {
-                                        'X-Requested-With': 'XMLHttpRequest'
+                                if (piCantidadProgramada)
+                                    piCantidadProgramada.textContent = formatearPiezas(cantidadProgramadaEtiquetas);
+
+                                if (piCantidadSeleccionada)
+                                    piCantidadSeleccionada.textContent = formatearPiezas(seleccionado);
+
+                                if (piCantidadNeta)
+                                    piCantidadNeta.textContent = formatearPiezas(neto);
+
+                                productoIncompletoLista
+                                    ?.querySelectorAll('.pi-start-item')
+                                    .forEach(item => {
+                                        const check = item.querySelector('input[type="checkbox"]');
+                                        item.classList.toggle('is-selected', !!check?.checked);
+                                    });
+                            }
+
+                            function reiniciarProductoIncompleto() {
+                                etiquetasBlancasCargando = false;
+                                etiquetasBlancasConsultaValida = false;
+                                cantidadProgramadaEtiquetas = 0;
+                                limpiarAlertaProductoIncompleto();
+
+                                if (piCantidadProgramada) piCantidadProgramada.textContent = '0';
+                                if (piCantidadSeleccionada) piCantidadSeleccionada.textContent = '0';
+                                if (piCantidadNeta) piCantidadNeta.textContent = '0';
+
+                                if (productoIncompletoEstado) {
+                                    productoIncompletoEstado.textContent = 'Pendiente';
+                                    productoIncompletoEstado.className = 'badge rounded-pill text-bg-secondary';
+                                }
+
+                                if (productoIncompletoLista) {
+                                    productoIncompletoLista.innerHTML =
+                                        '<div class="pi-start-empty">Abre una OF para consultar producto incompleto disponible.</div>';
+                                }
+                            }
+
+                            function agregarMetaProductoIncompleto(contenedor, icono, valor) {
+                                if (!contenedor || !valor) return;
+
+                                const span = document.createElement('span');
+                                const i = document.createElement('i');
+                                i.className = `bi ${icono} me-1`;
+                                span.appendChild(i);
+                                span.appendChild(document.createTextNode(valor));
+                                contenedor.appendChild(span);
+                            }
+
+                            function crearTarjetaEtiquetaBlanca(caja) {
+                                const id = Number(caja?.cajaProduccionId || 0);
+                                const cantidad = Number(caja?.cantidadPiezas || 0);
+
+                                const label = document.createElement('label');
+                                label.className = 'pi-start-item';
+
+                                const input = document.createElement('input');
+                                input.type = 'checkbox';
+                                input.className = 'form-check-input pi-start-check';
+                                input.name = 'etiquetasBlancasSeleccionadas';
+                                input.value = String(id);
+                                input.dataset.cantidad = String(cantidad);
+                                input.id = `etiquetaBlancaInicio_${id}`;
+
+                                const body = document.createElement('div');
+
+                                const nombre = document.createElement('div');
+                                nombre.className = 'pi-start-name';
+                                nombre.textContent =
+                                    caja?.etiquetaBlanca ||
+                                    caja?.folioCaja ||
+                                    `Caja ${id}`;
+                                body.appendChild(nombre);
+
+                                const meta = document.createElement('div');
+                                meta.className = 'pi-start-meta';
+                                agregarMetaProductoIncompleto(meta, 'bi-file-earmark-text', caja?.numeroOFOrigen || '');
+                                agregarMetaProductoIncompleto(meta, 'bi-geo-alt', caja?.ubicacion || '');
+                                agregarMetaProductoIncompleto(meta, 'bi-gear', caja?.maquinaOrigen || '');
+                                agregarMetaProductoIncompleto(meta, 'bi-clock-history', caja?.antiguedad || '');
+                                body.appendChild(meta);
+
+                                const qty = document.createElement('div');
+                                qty.className = 'pi-start-qty';
+
+                                const strong = document.createElement('strong');
+                                strong.textContent = formatearPiezas(cantidad);
+                                qty.appendChild(strong);
+                                qty.appendChild(document.createTextNode('pzas disponibles'));
+
+                                label.appendChild(input);
+                                label.appendChild(body);
+                                label.appendChild(qty);
+
+                                input.addEventListener('change', () => {
+                                    limpiarAlertaProductoIncompleto();
+
+                                    const total = totalEtiquetasBlancasSeleccionadas();
+
+                                    if (input.checked && total > cantidadProgramadaEtiquetas) {
+                                        input.checked = false;
+                                        mostrarAlertaProductoIncompleto(
+                                            `No puedes seleccionar esta etiqueta. La suma superaría las ${formatearPiezas(cantidadProgramadaEtiquetas)} piezas programadas y no se permite dividir una caja.`
+                                        );
                                     }
+
+                                    recalcularProductoIncompleto();
                                 });
 
-                            if (!response.ok)
-                                throw new Error(`HTTP ${response.status}`);
+                                return label;
+                            }
 
-                            const data = await response.json();
-                            const tecnicos =
-                                Array.isArray(data?.tecnicos)
-                                    ? data.tecnicos
-                                    : [];
+                            async function cargarEtiquetasBlancasInicio(programaId) {
+                                if (controladorEtiquetasBlancas)
+                                    controladorEtiquetasBlancas.abort();
 
-                            limpiarSelectEscala(
-                                modalTecnicoProduccionId,
-                                tecnicos.length > 0
-                                    ? '-- Seleccionar técnico --'
-                                    : '-- Sin técnicos activos --');
+                                controladorEtiquetasBlancas = new AbortController();
+                                etiquetasBlancasCargando = true;
+                                etiquetasBlancasConsultaValida = false;
+                                cantidadProgramadaEtiquetas = 0;
+                                limpiarAlertaProductoIncompleto();
 
-                            tecnicos.forEach(x => {
-                                const option =
-                                    document.createElement('option');
+                                if (productoIncompletoEstado) {
+                                    productoIncompletoEstado.textContent = 'Consultando...';
+                                    productoIncompletoEstado.className = 'badge rounded-pill text-bg-secondary';
+                                }
 
-                                option.value =
-                                    String(x.personaID);
+                                if (productoIncompletoLista) {
+                                    productoIncompletoLista.innerHTML =
+                                        '<div class="pi-start-loading"><span class="spinner-border spinner-border-sm me-2"></span>Consultando etiquetas blancas disponibles...</div>';
+                                }
 
-                                const partes = [
-                                    x.nombre || ''
-                                ];
+                                if (piCantidadProgramada) piCantidadProgramada.textContent = '0';
+                                if (piCantidadSeleccionada) piCantidadSeleccionada.textContent = '0';
+                                if (piCantidadNeta) piCantidadNeta.textContent = '0';
 
-                                if (x.numeroControl)
-                                    partes.push(`Ctrl ${x.numeroControl}`);
+                                try {
+                                    const url =
+                                        '@Url.Action("EtiquetasBlancasDisponiblesInicio", "Produccion")' +
+                                        '?programaProduccionId=' + encodeURIComponent(programaId || '');
 
-                                if (x.puesto)
-                                    partes.push(x.puesto);
+                                    const response = await fetch(url, {
+                                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                                        signal: controladorEtiquetasBlancas.signal
+                                    });
 
-                                option.textContent =
-                                    partes.filter(Boolean).join(' · ');
+                                    let data = null;
+                                    try {
+                                        data = await response.json();
+                                    } catch {
+                                        data = null;
+                                    }
 
-                                modalTecnicoProduccionId
-                                    .appendChild(option);
+                                    if (!response.ok || data?.ok !== true) {
+                                        throw new Error(
+                                            data?.mensaje ||
+                                            `No fue posible consultar producto incompleto (HTTP ${response.status}).`
+                                        );
+                                    }
+
+                                    cantidadProgramadaEtiquetas = Number(data.cantidadProgramada || 0);
+                                    etiquetasBlancasConsultaValida = true;
+
+                                    const cajas = Array.isArray(data.cajas) ? data.cajas : [];
+                                    const totalDisponible = Number(data.totalDisponible || 0);
+
+                                    if (piCantidadProgramada)
+                                        piCantidadProgramada.textContent = formatearPiezas(cantidadProgramadaEtiquetas);
+
+                                    if (piCantidadSeleccionada)
+                                        piCantidadSeleccionada.textContent = '0';
+
+                                    if (piCantidadNeta)
+                                        piCantidadNeta.textContent = formatearPiezas(cantidadProgramadaEtiquetas);
+
+                                    if (productoIncompletoLista)
+                                        productoIncompletoLista.innerHTML = '';
+
+                                    if (cajas.length === 0) {
+                                        if (productoIncompletoEstado) {
+                                            productoIncompletoEstado.textContent = 'Sin disponibles';
+                                            productoIncompletoEstado.className = 'badge rounded-pill text-bg-light';
+                                        }
+
+                                        if (productoIncompletoLista) {
+                                            const empty = document.createElement('div');
+                                            empty.className = 'pi-start-empty';
+                                            empty.innerHTML =
+                                                '<i class="bi bi-check-circle me-1"></i>No hay etiquetas blancas disponibles para esta parte. La ejecución conservará la cantidad completa de Planeación.';
+                                            productoIncompletoLista.appendChild(empty);
+                                        }
+
+                                        return;
+                                    }
+
+                                    if (productoIncompletoEstado) {
+                                        productoIncompletoEstado.textContent =
+                                            `${cajas.length} etiqueta${cajas.length === 1 ? '' : 's'} · ${formatearPiezas(totalDisponible)} pzas`;
+                                        productoIncompletoEstado.className = 'badge rounded-pill text-bg-success';
+                                    }
+
+                                    cajas.forEach(caja => {
+                                        productoIncompletoLista?.appendChild(
+                                            crearTarjetaEtiquetaBlanca(caja)
+                                        );
+                                    });
+
+                                    recalcularProductoIncompleto();
+                                }
+                                catch (error) {
+                                    if (error?.name === 'AbortError') return;
+
+                                    console.error('Producto incompleto al iniciar:', error);
+                                    etiquetasBlancasConsultaValida = false;
+
+                                    if (productoIncompletoEstado) {
+                                        productoIncompletoEstado.textContent = 'Error';
+                                        productoIncompletoEstado.className = 'badge rounded-pill text-bg-danger';
+                                    }
+
+                                    if (productoIncompletoLista) {
+                                        productoIncompletoLista.innerHTML =
+                                            '<div class="pi-start-empty text-danger"><i class="bi bi-exclamation-triangle me-1"></i>No se pudo validar producto incompleto para esta OF.</div>';
+                                    }
+
+                                    mostrarAlertaProductoIncompleto(
+                                        error?.message ||
+                                        'No fue posible consultar las etiquetas blancas disponibles.'
+                                    );
+                                }
+                                finally {
+                                    etiquetasBlancasCargando = false;
+                                }
+                            }
+
+                            function marcarPanelActivo(panel) {
+                                panelActivo = panel || 'proximos';
+
+                                navButtons.forEach(btn => {
+                                    btn.classList.toggle(
+                                        'is-active',
+                                        btn.dataset.productionPanel === panelActivo);
+                                });
+                            }
+
+                            function parametrosFiltros(panel, maquinaForzada = null) {
+                                const params = new URLSearchParams();
+
+                                if (!formFiltros) {
+                                    if (maquinaForzada) params.set('maquinaId', maquinaForzada);
+                                    return params;
+                                }
+
+                                const data = new FormData(formFiltros);
+
+                                const busqueda = (data.get('busqueda') || '').toString().trim();
+                                const maquinaId = maquinaForzada ?? (data.get('maquinaId') || '').toString();
+                                const estatusId = (data.get('estatusId') || '').toString();
+                                const fechaDesde = (data.get('fechaDesde') || '').toString();
+                                const fechaHasta = (data.get('fechaHasta') || '').toString();
+
+                                if (busqueda) params.set('busqueda', busqueda);
+                                if (maquinaId) params.set('maquinaId', maquinaId);
+                                if (fechaDesde) params.set('fechaDesde', fechaDesde);
+                                if (fechaHasta) params.set('fechaHasta', fechaHasta);
+
+                                if (panel === 'ejecuciones' && estatusId) {
+                                    params.set('estatusId', estatusId);
+                                }
+
+                                return params;
+                            }
+
+                            function urlPanel(panel, maquinaForzada = null) {
+                                const btn = navButtons.find(x => x.dataset.productionPanel === panel);
+                                const baseUrl = btn?.dataset.url;
+
+                                if (!baseUrl) return null;
+
+                                const params = parametrosFiltros(panel, maquinaForzada);
+                                const query = params.toString();
+
+                                return query ? `${baseUrl}?${query}` : baseUrl;
+                            }
+
+                            async function cargarPanel(panel, url = null, maquinaForzada = null) {
+                                if (!contenidoProduccion) return;
+
+                                const destino = url || urlPanel(panel, maquinaForzada);
+                                if (!destino) return;
+
+                                marcarPanelActivo(panel);
+
+                                if (controladorCarga) {
+                                    controladorCarga.abort();
+                                }
+
+                                controladorCarga = new AbortController();
+
+                                contenidoProduccion.innerHTML = `
+                                    <div class="panel-loading">
+                                        <div class="spinner-border" role="status" aria-hidden="true"></div>
+                                        <div>Cargando ${panel === 'cola' ? 'cola' : panel === 'proximos' ? 'próximos inicios' : 'ejecuciones'}...</div>
+                                    </div>`;
+
+                                try {
+                                    const response = await fetch(destino, {
+                                        method: 'GET',
+                                        headers: {
+                                            'X-Requested-With': 'XMLHttpRequest'
+                                        },
+                                        signal: controladorCarga.signal
+                                    });
+
+                                    if (response.status === 401) {
+                                        window.location.href = '@Url.Action("Login", "Login")';
+                                        return;
+                                    }
+
+                                    if (!response.ok) {
+                                        throw new Error(`HTTP ${response.status}`);
+                                    }
+
+                                    contenidoProduccion.innerHTML = await response.text();
+                                }
+                                catch (error) {
+                                    if (error?.name === 'AbortError') return;
+
+                                    console.error(error);
+
+                                    contenidoProduccion.innerHTML = `
+                                        <div class="panel-error">
+                                            <i class="bi bi-exclamation-triangle"></i>
+                                            <div>No fue posible cargar el panel de Producción.</div>
+                                            <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="btnReintentarPanel">
+                                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                                Reintentar
+                                            </button>
+                                        </div>`;
+                                }
+                            }
+
+                            navButtons.forEach(btn => {
+                                btn.addEventListener('click', () => {
+                                    cargarPanel(btn.dataset.productionPanel || 'proximos');
+                                });
                             });
-                        }
-                        catch (error) {
-                            console.error(
-                                'TecnicosProduccion:',
-                                error);
 
-                            limpiarSelectEscala(
-                                modalTecnicoProduccionId,
-                                '-- Error al cargar técnicos --');
-                        }
-
-                        sincronizarTecnicoProduccion();
-                    }
-                    function limpiarValidacionOperadores() {
-                        mensajeValidacionOperadores?.classList.remove('show', 'is-success');
-                        if (textoValidacionOperadores) textoValidacionOperadores.textContent = '';
-                        [modalOperadorId, modalOperadorManual, modalOperadorAuxiliarId, modalOperadorAuxiliarManual, modalTecnicoProduccionId, modalTecnicoProduccionManual]
-                            .forEach(x => x?.classList.remove('operator-field-invalid'));
-                    }
-
-                    function mostrarValidacionOperadores(mensaje, campos = [], exito = false) {
-                        limpiarValidacionOperadores();
-                        if (textoValidacionOperadores) textoValidacionOperadores.textContent = mensaje;
-                        mensajeValidacionOperadores?.classList.add('show');
-                        if (exito) mensajeValidacionOperadores?.classList.add('is-success');
-                        campos.forEach(x => x?.classList.add('operator-field-invalid'));
-                        campos.find(x => x)?.focus();
-                    }
-
-                    function marcarPanelActivo(panel) {
-                        panelActivo = panel || 'proximos';
-
-                        navButtons.forEach(btn => {
-                            btn.classList.toggle(
-                                'is-active',
-                                btn.dataset.productionPanel === panelActivo);
-                        });
-                    }
-
-                    function parametrosFiltros(panel, maquinaForzada = null) {
-                        const params = new URLSearchParams();
-
-                        if (!formFiltros) {
-                            if (maquinaForzada) params.set('maquinaId', maquinaForzada);
-                            return params;
-                        }
-
-                        const data = new FormData(formFiltros);
-
-                        const busqueda = (data.get('busqueda') || '').toString().trim();
-                        const maquinaId = maquinaForzada ?? (data.get('maquinaId') || '').toString();
-                        const estatusId = (data.get('estatusId') || '').toString();
-                        const fechaDesde = (data.get('fechaDesde') || '').toString();
-                        const fechaHasta = (data.get('fechaHasta') || '').toString();
-
-                        if (busqueda) params.set('busqueda', busqueda);
-                        if (maquinaId) params.set('maquinaId', maquinaId);
-                        if (fechaDesde) params.set('fechaDesde', fechaDesde);
-                        if (fechaHasta) params.set('fechaHasta', fechaHasta);
-
-                        if (panel === 'ejecuciones' && estatusId) {
-                            params.set('estatusId', estatusId);
-                        }
-
-                        return params;
-                    }
-
-                    function urlPanel(panel, maquinaForzada = null) {
-                        const btn = navButtons.find(x => x.dataset.productionPanel === panel);
-                        const baseUrl = btn?.dataset.url;
-
-                        if (!baseUrl) return null;
-
-                        const params = parametrosFiltros(panel, maquinaForzada);
-                        const query = params.toString();
-
-                        return query ? `${baseUrl}?${query}` : baseUrl;
-                    }
-
-                    async function cargarPanel(panel, url = null, maquinaForzada = null) {
-                        if (!contenidoProduccion) return;
-
-                        const destino = url || urlPanel(panel, maquinaForzada);
-                        if (!destino) return;
-
-                        marcarPanelActivo(panel);
-
-                        if (controladorCarga) {
-                            controladorCarga.abort();
-                        }
-
-                        controladorCarga = new AbortController();
-
-                        contenidoProduccion.innerHTML = `
-                            <div class="panel-loading">
-                                <div class="spinner-border" role="status" aria-hidden="true"></div>
-                                <div>Cargando ${panel === 'cola' ? 'cola' : panel === 'proximos' ? 'próximos inicios' : 'ejecuciones'}...</div>
-                            </div>`;
-
-                        try {
-                            const response = await fetch(destino, {
-                                method: 'GET',
-                                headers: {
-                                    'X-Requested-With': 'XMLHttpRequest'
-                                },
-                                signal: controladorCarga.signal
+                            formFiltros?.addEventListener('submit', event => {
+                                event.preventDefault();
+                                cargarPanel(panelActivo);
                             });
 
-                            if (response.status === 401) {
-                                window.location.href = '@Url.Action("Login", "Login")';
-                                return;
-                            }
+                            document.addEventListener('click', event => {
+                                const reintentar = event.target.closest('#btnReintentarPanel');
+                                if (reintentar) {
+                                    cargarPanel(panelActivo);
+                                    return;
+                                }
 
-                            if (!response.ok) {
-                                throw new Error(`HTTP ${response.status}`);
-                            }
+                                const linkPanel = event.target.closest('a.js-panel-produccion');
+                                if (linkPanel && contenidoProduccion?.contains(linkPanel)) {
+                                    event.preventDefault();
+                                    cargarPanel('ejecuciones', linkPanel.href);
+                                    return;
+                                }
 
-                            contenidoProduccion.innerHTML = await response.text();
-                        }
-                        catch (error) {
-                            if (error?.name === 'AbortError') return;
+                                const maquinaCola = event.target.closest('[data-panel-cola-maquina]');
+                                if (maquinaCola && contenidoProduccion?.contains(maquinaCola)) {
+                                    const maquinaId = maquinaCola.getAttribute('data-panel-cola-maquina');
+                                    cargarPanel('cola', null, maquinaId);
+                                    return;
+                                }
 
-                            console.error(error);
+                                const btnInicio = event.target.closest('.btn-iniciar-preparacion');
+                                if (!btnInicio) return;
 
-                            contenidoProduccion.innerHTML = `
-                                <div class="panel-error">
-                                    <i class="bi bi-exclamation-triangle"></i>
-                                    <div>No fue posible cargar el panel de Producción.</div>
-                                    <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="btnReintentarPanel">
-                                        <i class="bi bi-arrow-clockwise me-1"></i>
-                                        Reintentar
-                                    </button>
-                                </div>`;
-                        }
+                                const programaId = btnInicio.dataset.programaId || '';
+                                const titulo = btnInicio.dataset.titulo || '';
+                                const maquina = btnInicio.dataset.maquina || '';
+                                const maquinaId = btnInicio.dataset.maquinaId || '';
+                                const parteId = btnInicio.dataset.parteId || '';
+                                const parte = btnInicio.dataset.parte || '';
+                                const descripcion = btnInicio.dataset.descripcion || '';
+                                const molde = btnInicio.dataset.molde || '';
+                                const cantidad = btnInicio.dataset.cantidad || '';
+                                const inicio = btnInicio.dataset.inicio || '';
+                                const fin = btnInicio.dataset.fin || '';
+                                const operadorId = btnInicio.dataset.operadorId || '';
+                                const operadorNombre = btnInicio.dataset.operadorNombre || '';
+                                const operadorAuxiliarId = btnInicio.dataset.operadorAuxiliarId || '';
+                                const operadorAuxiliarNombre = btnInicio.dataset.operadorAuxiliarNombre || '';
+                                const turno = btnInicio.dataset.turno || '';
+
+                                if (modalProgramaProduccionId) modalProgramaProduccionId.value = programaId;
+                                if (modalProgramaTexto) modalProgramaTexto.textContent = 'Programa ' + texto(programaId) + ' · ' + texto(titulo);
+                                if (modalMaquinaTexto) modalMaquinaTexto.textContent = texto(maquina);
+                                if (modalParteTexto) modalParteTexto.textContent = texto(parte);
+                                if (modalDescripcionTexto) modalDescripcionTexto.textContent = texto(descripcion);
+                                if (modalMoldeTexto) modalMoldeTexto.textContent = texto(molde);
+                                if (modalCantidadTexto) modalCantidadTexto.textContent = texto(cantidad);
+                                if (modalInicioTexto) modalInicioTexto.textContent = texto(inicio);
+                                if (modalFinTexto) modalFinTexto.textContent = texto(fin);
+
+                                if (modalObservaciones) modalObservaciones.value = '';
+                                if (modalOperadorManual) modalOperadorManual.value = '';
+                                if (modalOperadorNombre) modalOperadorNombre.value = '';
+                                if (modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
+                                if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = '';
+                                if (modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
+                                limpiarValidacionOperadores();
+
+                                const pudoSeleccionar = seleccionarPersonaSiExiste(modalOperadorId, operadorId);
+                                const pudoSeleccionarAuxiliar = seleccionarPersonaSiExiste(modalOperadorAuxiliarId, operadorAuxiliarId);
+
+                                if (operadorAuxiliarNombre && !pudoSeleccionarAuxiliar && modalOperadorAuxiliarManual) {
+                                    modalOperadorAuxiliarManual.value = operadorAuxiliarNombre;
+                                }
+
+                                if (operadorNombre) {
+                                    boxOperadorSugerido?.classList.remove('warn');
+
+                                    if (tituloOperadorSugerido) {
+                                        tituloOperadorSugerido.textContent = 'Operador principal sugerido desde RRHH';
+                                        tituloOperadorSugerido.className = 'operator-title';
+                                    }
+
+                                    if (detalleOperadorSugerido) {
+                                        detalleOperadorSugerido.textContent =
+                                            operadorNombre +
+                                            (turno ? ' · Turno: ' + turno : '') +
+                                            (pudoSeleccionar ? '' : ' · No aparece en el catálogo, se puede capturar manual.');
+                                    }
+
+                                    if (!pudoSeleccionar && modalOperadorManual) {
+                                        modalOperadorManual.value = operadorNombre;
+                                    }
+                                }
+                                else {
+                                    boxOperadorSugerido?.classList.add('warn');
+
+                                    if (tituloOperadorSugerido) {
+                                        tituloOperadorSugerido.textContent = 'Sin operador sugerido';
+                                        tituloOperadorSugerido.className = 'operator-title warn';
+                                    }
+
+                                    if (detalleOperadorSugerido) {
+                                        detalleOperadorSugerido.textContent =
+                                            'No hay operador principal sugerido en la escala RRHH para este horario. Debes seleccionar un operador del catálogo o capturar su nombre manual antes de iniciar.';
+                                    }
+                                }
+
+                                cargarOperadoresPolivalencia(
+                                    programaId,
+                                    parteId,
+                                    maquinaId,
+                                    operadorId,
+                                    operadorAuxiliarId);
+
+                                cargarTecnicosProduccion();
+                                cargarEtiquetasBlancasInicio(programaId);
+                            });
+
+                            modalOperadorId?.addEventListener('change', () => {
+                                if (modalOperadorId.value && modalOperadorManual) modalOperadorManual.value = '';
+                                sincronizarModoManual(modalOperadorId, modalOperadorManual);
+                                limpiarValidacionOperadores();
+                            });
+
+                            modalOperadorManual?.addEventListener('input', () => {
+                                if (modalOperadorManual.value.trim() && modalOperadorId) modalOperadorId.value = '';
+                                sincronizarModoManual(modalOperadorId, modalOperadorManual);
+                                limpiarValidacionOperadores();
+                            });
+
+                            modalOperadorAuxiliarId?.addEventListener('change', () => {
+                                if (modalOperadorAuxiliarId.value && modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
+                                sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
+                                limpiarValidacionOperadores();
+                            });
+
+                            modalOperadorAuxiliarManual?.addEventListener('input', () => {
+                                if (modalOperadorAuxiliarManual.value.trim() && modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
+                                sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
+                                limpiarValidacionOperadores();
+                            });
+
+                            modalTecnicoProduccionId?.addEventListener('change', () => {
+                                if (modalTecnicoProduccionId.value && modalTecnicoProduccionManual) {
+                                    modalTecnicoProduccionManual.value = '';
+                                }
+                                sincronizarTecnicoProduccion();
+                                limpiarValidacionOperadores();
+                            });
+
+                            modalTecnicoProduccionManual?.addEventListener('input', () => {
+                                if (modalTecnicoProduccionManual.value.trim() && modalTecnicoProduccionId) {
+                                    modalTecnicoProduccionId.value = '';
+                                }
+                                sincronizarTecnicoProduccion();
+                                limpiarValidacionOperadores();
+                            });
+
+                            formIniciarPreparacion?.addEventListener('submit', event => {
+                                event.preventDefault();
+                                limpiarValidacionOperadores();
+
+                                if (etiquetasBlancasCargando) {
+                                    mostrarValidacionOperadores(
+                                        'Espera un momento. Producción todavía está consultando las etiquetas blancas disponibles para esta OF.'
+                                    );
+                                    return;
+                                }
+
+                                if (!etiquetasBlancasConsultaValida) {
+                                    mostrarValidacionOperadores(
+                                        'No se pudo validar el producto incompleto disponible. Cierra y vuelve a abrir la OF antes de iniciar la preparación.'
+                                    );
+                                    return;
+                                }
+
+                                const principalId = modalOperadorId?.value || '';
+                                const principalManual = modalOperadorManual?.value.trim() || '';
+                                const auxiliarId = modalOperadorAuxiliarId?.value || '';
+                                const auxiliarManual = modalOperadorAuxiliarManual?.value.trim() || '';
+
+                                if (!principalId && !principalManual) {
+                                    mostrarValidacionOperadores(
+                                        'Falta confirmar el operador principal. Selecciona un OPERADOR de la lista o captura su nombre manual antes de iniciar la preparación.',
+                                        [modalOperadorId, modalOperadorManual]);
+                                    return;
+                                }
+
+                                if (principalId && principalManual) {
+                                    mostrarValidacionOperadores(
+                                        'Para el operador principal usa solamente una opción: selección del catálogo o nombre manual.',
+                                        [modalOperadorId, modalOperadorManual]);
+                                    return;
+                                }
+
+                                if (auxiliarId && auxiliarManual) {
+                                    mostrarValidacionOperadores(
+                                        'Para el auxiliar de producción usa solamente una opción: selección del catálogo o nombre manual.',
+                                        [modalOperadorAuxiliarId, modalOperadorAuxiliarManual]);
+                                    return;
+                                }
+
+                                const nombrePrincipal = principalId
+                                    ? obtenerTextoSeleccionado(modalOperadorId)
+                                    : principalManual;
+
+                                const nombreAuxiliar = auxiliarId
+                                    ? obtenerTextoSeleccionado(modalOperadorAuxiliarId)
+                                    : auxiliarManual;
+
+                                if (principalId && auxiliarId && principalId === auxiliarId) {
+                                    mostrarValidacionOperadores(
+                                        'El operador principal y el auxiliar no pueden ser la misma persona.',
+                                        [modalOperadorId, modalOperadorAuxiliarId]);
+                                    return;
+                                }
+
+                                if (nombrePrincipal && nombreAuxiliar &&
+                                    nombrePrincipal.localeCompare(nombreAuxiliar, 'es', { sensitivity: 'base' }) === 0) {
+                                    mostrarValidacionOperadores(
+                                        'El operador principal y el auxiliar no pueden tener el mismo nombre.',
+                                        [modalOperadorManual, modalOperadorAuxiliarManual]);
+                                    return;
+                                }
+
+                                if (modalOperadorNombre) modalOperadorNombre.value = nombrePrincipal;
+                                if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = nombreAuxiliar;
+
+                                if (btnConfirmarInicio) {
+                                    btnConfirmarInicio.disabled = true;
+                                    btnConfirmarInicio.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
+                                }
+
+                                formIniciarPreparacion.submit();
+                            });
+
+                            // Panel inicial: pendientes / próximos.
+                            // NSQ_PREPARACION_DESDE_CALENDARIO_V1
+                            cargarPanel('proximos').then(() => {
+                                const params = new URLSearchParams(window.location.search);
+                                const prepararProgramaId = params.get('prepararProgramaId') || '';
+
+                                if (!/^\d+$/.test(prepararProgramaId)) return;
+
+                                const btnPreparar = contenidoProduccion?.querySelector(
+                                    `.btn-iniciar-preparacion[data-programa-id="${prepararProgramaId}"]`
+                                );
+
+                                if (btnPreparar) {
+                                    btnPreparar.click();
+
+                                    params.delete('prepararProgramaId');
+                                    const query = params.toString();
+                                    const limpia = window.location.pathname +
+                                        (query ? '?' + query : '') +
+                                        window.location.hash;
+
+                                    window.history.replaceState({}, document.title, limpia);
+                                    return;
+                                }
+
+                                const aviso = document.createElement('div');
+                                aviso.className = 'alert alert-info m-3';
+                                aviso.innerHTML =
+                                    '<i class="bi bi-info-circle me-1"></i>' +
+                                    'El programa seleccionado todav\u00eda no est\u00e1 habilitado para iniciar preparaci\u00f3n. ' +
+                                    'Puede estar fuera de la ventana de 15 minutos, tener la m\u00e1quina ocupada o requerir otra validaci\u00f3n.';
+
+                                contenidoProduccion?.prepend(aviso);
+                            });
+                        })();
+
+                                document.addEventListener('click', function (event) {
+                    const btn = event.target.closest('.btn-solicitar-reprogramacion');
+                    if (!btn) return;
+
+                    const programaId = btn.dataset.programaId || '';
+                    const titulo = btn.dataset.titulo || '-';
+                    const maquina = btn.dataset.maquina || '-';
+                    const inicio = btn.dataset.inicio || '-';
+
+                    const inputPrograma = document.getElementById('reprogramacionProgramaID');
+                    const resumen = document.getElementById('reprogramacionResumen');
+                    const motivo = document.getElementById('reprogramacionMotivo');
+                    const observaciones = document.getElementById('reprogramacionObservaciones');
+
+                    if (inputPrograma) inputPrograma.value = programaId;
+
+                    if (resumen) {
+                        resumen.textContent = `Programa ${programaId} · ${titulo} · ${maquina} · Inicio original: ${inicio}`;
                     }
 
-                    navButtons.forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            cargarPanel(btn.dataset.productionPanel || 'proximos');
-                        });
-                    });
+                    if (motivo) motivo.value = '';
+                    if (observaciones) observaciones.value = '';
 
-                    formFiltros?.addEventListener('submit', event => {
-                        event.preventDefault();
-                        cargarPanel(panelActivo);
-                    });
+                    setTimeout(() => motivo?.focus(), 250);
+                });
 
-                    document.addEventListener('click', event => {
-                        const reintentar = event.target.closest('#btnReintentarPanel');
-                        if (reintentar) {
-                            cargarPanel(panelActivo);
-                            return;
-                        }
 
-                        const linkPanel = event.target.closest('a.js-panel-produccion');
-                        if (linkPanel && contenidoProduccion?.contains(linkPanel)) {
-                            event.preventDefault();
-                            cargarPanel('ejecuciones', linkPanel.href);
-                            return;
-                        }
+                const formSolicitarReprogramacion = document.getElementById('formSolicitarReprogramacion');
 
-                        const maquinaCola = event.target.closest('[data-panel-cola-maquina]');
-                        if (maquinaCola && contenidoProduccion?.contains(maquinaCola)) {
-                            const maquinaId = maquinaCola.getAttribute('data-panel-cola-maquina');
-                            cargarPanel('cola', null, maquinaId);
-                            return;
-                        }
-
-                        const btnInicio = event.target.closest('.btn-iniciar-preparacion');
-                        if (!btnInicio) return;
-
-                        const programaId = btnInicio.dataset.programaId || '';
-                        const titulo = btnInicio.dataset.titulo || '';
-                        const maquina = btnInicio.dataset.maquina || '';
-                        const maquinaId = btnInicio.dataset.maquinaId || '';
-                        const parteId = btnInicio.dataset.parteId || '';
-                        const parte = btnInicio.dataset.parte || '';
-                        const descripcion = btnInicio.dataset.descripcion || '';
-                        const molde = btnInicio.dataset.molde || '';
-                        const cantidad = btnInicio.dataset.cantidad || '';
-                        const inicio = btnInicio.dataset.inicio || '';
-                        const fin = btnInicio.dataset.fin || '';
-                        const operadorId = btnInicio.dataset.operadorId || '';
-                        const operadorNombre = btnInicio.dataset.operadorNombre || '';
-                        const operadorAuxiliarId = btnInicio.dataset.operadorAuxiliarId || '';
-                        const operadorAuxiliarNombre = btnInicio.dataset.operadorAuxiliarNombre || '';
-                        const turno = btnInicio.dataset.turno || '';
-
-                        if (modalProgramaProduccionId) modalProgramaProduccionId.value = programaId;
-                        if (modalProgramaTexto) modalProgramaTexto.textContent = 'Programa ' + texto(programaId) + ' · ' + texto(titulo);
-                        if (modalMaquinaTexto) modalMaquinaTexto.textContent = texto(maquina);
-                        if (modalParteTexto) modalParteTexto.textContent = texto(parte);
-                        if (modalDescripcionTexto) modalDescripcionTexto.textContent = texto(descripcion);
-                        if (modalMoldeTexto) modalMoldeTexto.textContent = texto(molde);
-                        if (modalCantidadTexto) modalCantidadTexto.textContent = texto(cantidad);
-                        if (modalInicioTexto) modalInicioTexto.textContent = texto(inicio);
-                        if (modalFinTexto) modalFinTexto.textContent = texto(fin);
-
-                        if (modalObservaciones) modalObservaciones.value = '';
-                        if (modalOperadorManual) modalOperadorManual.value = '';
-                        if (modalOperadorNombre) modalOperadorNombre.value = '';
-                        if (modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
-                        if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = '';
-                        if (modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
-                        limpiarValidacionOperadores();
-
-                        const pudoSeleccionar = seleccionarPersonaSiExiste(modalOperadorId, operadorId);
-                        const pudoSeleccionarAuxiliar = seleccionarPersonaSiExiste(modalOperadorAuxiliarId, operadorAuxiliarId);
-
-                        if (operadorAuxiliarNombre && !pudoSeleccionarAuxiliar && modalOperadorAuxiliarManual) {
-                            modalOperadorAuxiliarManual.value = operadorAuxiliarNombre;
-                        }
-
-                        if (operadorNombre) {
-                            boxOperadorSugerido?.classList.remove('warn');
-
-                            if (tituloOperadorSugerido) {
-                                tituloOperadorSugerido.textContent = 'Operador principal sugerido desde RRHH';
-                                tituloOperadorSugerido.className = 'operator-title';
-                            }
-
-                            if (detalleOperadorSugerido) {
-                                detalleOperadorSugerido.textContent =
-                                    operadorNombre +
-                                    (turno ? ' · Turno: ' + turno : '') +
-                                    (pudoSeleccionar ? '' : ' · No aparece en el catálogo, se puede capturar manual.');
-                            }
-
-                            if (!pudoSeleccionar && modalOperadorManual) {
-                                modalOperadorManual.value = operadorNombre;
-                            }
-                        }
-                        else {
-                            boxOperadorSugerido?.classList.add('warn');
-
-                            if (tituloOperadorSugerido) {
-                                tituloOperadorSugerido.textContent = 'Sin operador sugerido';
-                                tituloOperadorSugerido.className = 'operator-title warn';
-                            }
-
-                            if (detalleOperadorSugerido) {
-                                detalleOperadorSugerido.textContent =
-                                    'No hay operador principal sugerido en la escala RRHH para este horario. Debes seleccionar un operador del catálogo o capturar su nombre manual antes de iniciar.';
-                            }
-                        }
-
-                        cargarOperadoresPolivalencia(
-                            programaId,
-                            parteId,
-                            maquinaId,
-                            operadorId,
-                            operadorAuxiliarId);
-
-                        cargarTecnicosProduccion();
-                    });
-
-                    modalOperadorId?.addEventListener('change', () => {
-                        if (modalOperadorId.value && modalOperadorManual) modalOperadorManual.value = '';
-                        sincronizarModoManual(modalOperadorId, modalOperadorManual);
-                        limpiarValidacionOperadores();
-                    });
-
-                    modalOperadorManual?.addEventListener('input', () => {
-                        if (modalOperadorManual.value.trim() && modalOperadorId) modalOperadorId.value = '';
-                        sincronizarModoManual(modalOperadorId, modalOperadorManual);
-                        limpiarValidacionOperadores();
-                    });
-
-                    modalOperadorAuxiliarId?.addEventListener('change', () => {
-                        if (modalOperadorAuxiliarId.value && modalOperadorAuxiliarManual) modalOperadorAuxiliarManual.value = '';
-                        sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
-                        limpiarValidacionOperadores();
-                    });
-
-                    modalOperadorAuxiliarManual?.addEventListener('input', () => {
-                        if (modalOperadorAuxiliarManual.value.trim() && modalOperadorAuxiliarId) modalOperadorAuxiliarId.value = '';
-                        sincronizarModoManual(modalOperadorAuxiliarId, modalOperadorAuxiliarManual, 'auxiliar');
-                        limpiarValidacionOperadores();
-                    });
-
-                    modalTecnicoProduccionId?.addEventListener('change', () => {
-                        if (modalTecnicoProduccionId.value && modalTecnicoProduccionManual) {
-                            modalTecnicoProduccionManual.value = '';
-                        }
-                        sincronizarTecnicoProduccion();
-                        limpiarValidacionOperadores();
-                    });
-
-                    modalTecnicoProduccionManual?.addEventListener('input', () => {
-                        if (modalTecnicoProduccionManual.value.trim() && modalTecnicoProduccionId) {
-                            modalTecnicoProduccionId.value = '';
-                        }
-                        sincronizarTecnicoProduccion();
-                        limpiarValidacionOperadores();
-                    });
-
-                    formIniciarPreparacion?.addEventListener('submit', event => {
-                        event.preventDefault();
-                        limpiarValidacionOperadores();
-
-                        const principalId = modalOperadorId?.value || '';
-                        const principalManual = modalOperadorManual?.value.trim() || '';
-                        const auxiliarId = modalOperadorAuxiliarId?.value || '';
-                        const auxiliarManual = modalOperadorAuxiliarManual?.value.trim() || '';
-
-                        if (!principalId && !principalManual) {
-                            mostrarValidacionOperadores(
-                                'Falta confirmar el operador principal. Selecciona un OPERADOR de la lista o captura su nombre manual antes de iniciar la preparación.',
-                                [modalOperadorId, modalOperadorManual]);
-                            return;
-                        }
-
-                        if (principalId && principalManual) {
-                            mostrarValidacionOperadores(
-                                'Para el operador principal usa solamente una opción: selección del catálogo o nombre manual.',
-                                [modalOperadorId, modalOperadorManual]);
-                            return;
-                        }
-
-                        if (auxiliarId && auxiliarManual) {
-                            mostrarValidacionOperadores(
-                                'Para el auxiliar de producción usa solamente una opción: selección del catálogo o nombre manual.',
-                                [modalOperadorAuxiliarId, modalOperadorAuxiliarManual]);
-                            return;
-                        }
-
-                        const nombrePrincipal = principalId
-                            ? obtenerTextoSeleccionado(modalOperadorId)
-                            : principalManual;
-
-                        const nombreAuxiliar = auxiliarId
-                            ? obtenerTextoSeleccionado(modalOperadorAuxiliarId)
-                            : auxiliarManual;
-
-                        if (principalId && auxiliarId && principalId === auxiliarId) {
-                            mostrarValidacionOperadores(
-                                'El operador principal y el auxiliar no pueden ser la misma persona.',
-                                [modalOperadorId, modalOperadorAuxiliarId]);
-                            return;
-                        }
-
-                        if (nombrePrincipal && nombreAuxiliar &&
-                            nombrePrincipal.localeCompare(nombreAuxiliar, 'es', { sensitivity: 'base' }) === 0) {
-                            mostrarValidacionOperadores(
-                                'El operador principal y el auxiliar no pueden tener el mismo nombre.',
-                                [modalOperadorManual, modalOperadorAuxiliarManual]);
-                            return;
-                        }
-
-                        if (modalOperadorNombre) modalOperadorNombre.value = nombrePrincipal;
-                        if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = nombreAuxiliar;
-
-                        if (btnConfirmarInicio) {
-                            btnConfirmarInicio.disabled = true;
-                            btnConfirmarInicio.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
-                        }
-
-                        formIniciarPreparacion.submit();
-                    });
-
-                    // Panel inicial: pendientes / próximos.
-                    // NSQ_PREPARACION_DESDE_CALENDARIO_V1
-                    cargarPanel('proximos').then(() => {
-                        const params = new URLSearchParams(window.location.search);
-                        const prepararProgramaId = params.get('prepararProgramaId') || '';
-
-                        if (!/^\d+$/.test(prepararProgramaId)) return;
-
-                        const btnPreparar = contenidoProduccion?.querySelector(
-                            `.btn-iniciar-preparacion[data-programa-id="${prepararProgramaId}"]`
-                        );
-
-                        if (btnPreparar) {
-                            btnPreparar.click();
-
-                            params.delete('prepararProgramaId');
-                            const query = params.toString();
-                            const limpia = window.location.pathname +
-                                (query ? '?' + query : '') +
-                                window.location.hash;
-
-                            window.history.replaceState({}, document.title, limpia);
-                            return;
-                        }
-
-                        const aviso = document.createElement('div');
-                        aviso.className = 'alert alert-info m-3';
-                        aviso.innerHTML =
-                            '<i class="bi bi-info-circle me-1"></i>' +
-                            'El programa seleccionado todav\u00eda no est\u00e1 habilitado para iniciar preparaci\u00f3n. ' +
-                            'Puede estar fuera de la ventana de 15 minutos, tener la m\u00e1quina ocupada o requerir otra validaci\u00f3n.';
-
-                        contenidoProduccion?.prepend(aviso);
-                    });
-                })();
-
-                        document.addEventListener('click', function (event) {
-            const btn = event.target.closest('.btn-solicitar-reprogramacion');
-            if (!btn) return;
-
-            const programaId = btn.dataset.programaId || '';
-            const titulo = btn.dataset.titulo || '-';
-            const maquina = btn.dataset.maquina || '-';
-            const inicio = btn.dataset.inicio || '-';
-
-            const inputPrograma = document.getElementById('reprogramacionProgramaID');
-            const resumen = document.getElementById('reprogramacionResumen');
+        formSolicitarReprogramacion?.addEventListener('submit', function (event) {
             const motivo = document.getElementById('reprogramacionMotivo');
             const observaciones = document.getElementById('reprogramacionObservaciones');
+            const boton = document.getElementById('btnEnviarReprogramacion');
 
-            if (inputPrograma) inputPrograma.value = programaId;
-
-            if (resumen) {
-                resumen.textContent = `Programa ${programaId} · ${titulo} · ${maquina} · Inicio original: ${inicio}`;
+            if (!motivo?.value) {
+                event.preventDefault();
+                motivo?.focus();
+                return;
             }
 
-            if (motivo) motivo.value = '';
-            if (observaciones) observaciones.value = '';
+            if (!observaciones?.value.trim()) {
+                event.preventDefault();
+                observaciones?.focus();
+                return;
+            }
 
-            setTimeout(() => motivo?.focus(), 250);
+            if (boton) {
+                boton.disabled = true;
+                boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Enviando...';
+            }
         });
-
-
-        const formSolicitarReprogramacion = document.getElementById('formSolicitarReprogramacion');
-
-formSolicitarReprogramacion?.addEventListener('submit', function (event) {
-    const motivo = document.getElementById('reprogramacionMotivo');
-    const observaciones = document.getElementById('reprogramacionObservaciones');
-    const boton = document.getElementById('btnEnviarReprogramacion');
-
-    if (!motivo?.value) {
-        event.preventDefault();
-        motivo?.focus();
-        return;
-    }
-
-    if (!observaciones?.value.trim()) {
-        event.preventDefault();
-        observaciones?.focus();
-        return;
-    }
-
-    if (boton) {
-        boton.disabled = true;
-        boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Enviando...';
-    }
-});
 
     </script>
 
@@ -3502,42 +4110,42 @@ formSolicitarReprogramacion?.addEventListener('submit', function (event) {
 
 @* NSQ_PRODUCCION_PERSONAL_PREFILL_V30 *@
 <script>
-document.addEventListener('shown.bs.modal', async function (event) {
-    if (event.target?.id !== 'modalIniciarPreparacion') return;
+    document.addEventListener('shown.bs.modal', async function (event) {
+        if (event.target?.id !== 'modalIniciarPreparacion') return;
 
-    const programa = document.getElementById('modalProgramaProduccionId')?.value;
-    if (!programa) return;
+        const programa = document.getElementById('modalProgramaProduccionId')?.value;
+        if (!programa) return;
 
-    try {
-        const response = await fetch(`/Produccion/PersonalProgramadoPrograma?programaProduccionId=${encodeURIComponent(programa)}`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!data?.ok || !data?.asignado) return;
+        try {
+            const response = await fetch(`/Produccion/PersonalProgramadoPrograma?programaProduccionId=${encodeURIComponent(programa)}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (!data?.ok || !data?.asignado) return;
 
-        const selectWhenReady = (id, value) => {
-            if (!value) return;
-            let intentos = 0;
-            const timer = window.setInterval(() => {
-                intentos++;
-                const select = document.getElementById(id);
-                if (select && Array.from(select.options).some(x => String(x.value) === String(value))) {
-                    select.value = String(value);
-                    select.dispatchEvent(new Event('change', { bubbles: true }));
-                    window.clearInterval(timer);
-                    return;
-                }
-                if (intentos >= 20) window.clearInterval(timer);
-            }, 100);
-        };
+            const selectWhenReady = (id, value) => {
+                if (!value) return;
+                let intentos = 0;
+                const timer = window.setInterval(() => {
+                    intentos++;
+                    const select = document.getElementById(id);
+                    if (select && Array.from(select.options).some(x => String(x.value) === String(value))) {
+                        select.value = String(value);
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                        window.clearInterval(timer);
+                        return;
+                    }
+                    if (intentos >= 20) window.clearInterval(timer);
+                }, 100);
+            };
 
-        selectWhenReady('modalOperadorId', data.operadorID);
-        selectWhenReady('modalOperadorAuxiliarId', data.auxiliarID);
-        selectWhenReady('modalTecnicoProduccionId', data.tecnicoProduccionID);
-    }
-    catch (error) {
-        console.debug('Programacion de Personal no disponible para preseleccion:', error);
-    }
-});
+            selectWhenReady('modalOperadorId', data.operadorID);
+            selectWhenReady('modalOperadorAuxiliarId', data.auxiliarID);
+            selectWhenReady('modalTecnicoProduccionId', data.tecnicoProduccionID);
+        }
+        catch (error) {
+            console.debug('Programacion de Personal no disponible para preseleccion:', error);
+        }
+    });
 </script>

@@ -2445,6 +2445,22 @@ public sealed class ProduccionCompletarCajaIncompletaPostVm
     public string? Observaciones { get; set; }
 }
 
+public sealed class ProduccionEtiquetasBlancasInicioVm
+{
+    public int ProgramaProduccionID { get; set; }
+    public int ParteID { get; set; }
+    public string? NumeroParte { get; set; }
+    public string? ReferenciaSAP { get; set; }
+    public int CantidadProgramada { get; set; }
+    public List<ProduccionCajaIncompletaDisponibleVm> Etiquetas { get; set; } = new();
+    public string TextoParte =>
+        !string.IsNullOrWhiteSpace(ReferenciaSAP)
+            ? ReferenciaSAP
+            : !string.IsNullOrWhiteSpace(NumeroParte)
+                ? NumeroParte
+                : $"Parte {ParteID}";
+}
+
 public sealed class ProduccionOperadorCajasVm
 {
     public int EjecucionProduccionID { get; set; }

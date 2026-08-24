@@ -463,4 +463,554 @@ ORDER BY d.FechaCreacion,d.CajaOrigenDetalleID;";
         }
         return lista;
     }
+
+    // =========================================================
+    // PRODUCTO INCOMPLETO AL INICIAR PRODUCCION
+    // =========================================================
+
+    private sealed class EtiquetaBlancaInicioValidada
+    {
+        public long CajaProduccionID { get; set; }
+        public string Etiqueta { get; set; } = string.Empty;
+        public int CantidadPiezas { get; set; }
+        public int CapacidadObjetivoCaja { get; set; }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> EtiquetasBlancasDisponiblesInicio(int programaProduccionId)
+    {
+        if (!UsuarioEnSesion())
+            return Unauthorized(new { ok = false, mensaje = "La sesión ya no está activa." });
+
+        if (programaProduccionId <= 0)
+            return BadRequest(new { ok = false, mensaje = "No se recibió correctamente el programa de producción." });
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync();
+
+        const string sqlPrograma = @"
+SELECT TOP(1)
+    pp.ProgramaProduccionID,
+    pp.ParteID,
+    pp.NumeroParte,
+    pp.ReferenciaSAP,
+    CONVERT(INT,ISNULL(pp.CantidadProgramada,0)) AS CantidadProgramada
+FROM dbo.Planeacion_ProgramaProduccion pp
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1
+  AND ISNULL(pp.EstatusID,1) NOT IN(3,4,5,8,9,99);";
+
+        int parteId;
+        int cantidadProgramada;
+        string? numeroParte;
+        string? referenciaSap;
+
+        await using (var cmd = new SqlCommand(sqlPrograma, cn))
+        {
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return NotFound(new
+                {
+                    ok = false,
+                    mensaje = "El programa ya no está disponible para iniciar Producción."
+                });
+
+            parteId = rd["ParteID"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["ParteID"]);
+
+            cantidadProgramada = rd["CantidadProgramada"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["CantidadProgramada"]);
+
+            numeroParte = rd["NumeroParte"] == DBNull.Value
+                ? null
+                : rd["NumeroParte"].ToString();
+
+            referenciaSap = rd["ReferenciaSAP"] == DBNull.Value
+                ? null
+                : rd["ReferenciaSAP"].ToString();
+        }
+
+        if (parteId <= 0)
+            return BadRequest(new
+            {
+                ok = false,
+                mensaje = "El programa no tiene una parte válida relacionada."
+            });
+
+        if (cantidadProgramada <= 0)
+            return BadRequest(new
+            {
+                ok = false,
+                mensaje = "El programa no tiene una cantidad válida para iniciar."
+            });
+
+        var cajas = await ObtenerEtiquetasBlancasDisponiblesInicioAsync(
+            parteId,
+            cn,
+            null);
+
+        var totalDisponible = cajas.Sum(x => x.CantidadPiezas);
+
+        return Json(new
+        {
+            ok = true,
+            programaProduccionId,
+            parteId,
+            numeroParte,
+            referenciaSAP = referenciaSap,
+            cantidadProgramada,
+            totalDisponible,
+            totalEtiquetas = cajas.Count,
+            cajas = cajas.Select(x => new
+            {
+                cajaProduccionId = x.CajaProduccionID,
+                etiquetaBlanca = string.IsNullOrWhiteSpace(x.EtiquetaBlanca)
+                    ? $"Caja {x.CajaProduccionID}"
+                    : x.EtiquetaBlanca,
+                folioCaja = x.FolioCaja,
+                cantidadPiezas = x.CantidadPiezas,
+                capacidadObjetivoCaja = x.CapacidadObjetivoCaja,
+                cantidadPendienteCompletar = x.CantidadPendienteCompletar,
+                fechaFormacion = x.FechaFormacion,
+                fechaIngreso = x.FechaIngresoProductoIncompleto,
+                ubicacion = x.TextoUbicacion,
+                numeroOFOrigen = x.TextoOFOrigen,
+                maquinaOrigen = x.MaquinaOrigenCodigo,
+                operadorOrigen = x.OperadorOrigenNombre,
+                antiguedad = x.TextoAntiguedad
+            })
+        });
+    }
+
+    private async Task<List<ProduccionCajaIncompletaDisponibleVm>> ObtenerEtiquetasBlancasDisponiblesInicioAsync(
+        int parteId,
+        SqlConnection cn,
+        SqlTransaction? tx)
+    {
+        var lista = new List<ProduccionCajaIncompletaDisponibleVm>();
+
+        if (parteId <= 0)
+            return lista;
+
+        var capacidadEsperada = await ObtenerCapacidadEsperadaEtiquetaBlancaAsync(
+            parteId,
+            cn,
+            tx);
+
+        const string sql = @"
+SELECT
+    c.CajaProduccionID,
+    c.EjecucionProduccionID,
+    e.ProgramaProduccionID,
+    e.SolicitudProduccionID,
+    e.SolicitudProduccionDetalleID,
+    e.ParteID,
+    e.NumeroParte,
+    e.ReferenciaSAP,
+    e.DescripcionParte,
+    c.FolioCaja,
+    c.EtiquetaBlanca,
+    ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) AS CantidadPiezas,
+    ISNULL(c.CapacidadObjetivoCaja,0) AS CapacidadObjetivoCaja,
+    ISNULL(
+        c.CantidadPendienteCompletar,
+        CASE
+            WHEN ISNULL(c.CapacidadObjetivoCaja,0)>ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0))
+                THEN ISNULL(c.CapacidadObjetivoCaja,0)-ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0))
+            ELSE 0
+        END
+    ) AS CantidadPendienteCompletar,
+    ISNULL(c.EstadoProductoIncompleto,N'DISPONIBLE') AS EstadoProductoIncompleto,
+    c.EjecucionReservaID,
+    c.ProgramaReservaID,
+    c.SolicitudReservaID,
+    c.SolicitudDetalleReservaID,
+    ISNULL(c.FechaFormacion,c.FechaCreacion) AS FechaFormacion,
+    c.FechaReservaIncompleto,
+    c.FechaCompletadoIncompleto,
+    c.UbicacionProductoIncompleto,
+    c.FechaIngresoProductoIncompleto,
+    c.UsuarioIngresoProductoIncompletoID,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+        NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),
+        N'Programa '+CONVERT(NVARCHAR(20),e.ProgramaProduccionID)
+    ) AS NumeroOFOrigen,
+    e.MaquinaCodigo AS MaquinaOrigenCodigo,
+    e.MaquinaNombre AS MaquinaOrigenNombre,
+    e.OperadorNombre AS OperadorOrigenNombre
+FROM dbo.Produccion_Cajas c
+INNER JOIN dbo.Produccion_Ejecucion e
+    ON e.EjecucionProduccionID=c.EjecucionProduccionID
+   AND e.Activo=1
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=e.SolicitudProduccionID
+   AND s.Activo=1
+WHERE c.Activo=1
+  AND ISNULL(c.EsProductoIncompleto,0)=1
+  AND e.ParteID=@ParteID
+  AND ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0))>0
+  AND UPPER(LTRIM(RTRIM(ISNULL(c.EstadoProductoIncompleto,N''))))=N'DISPONIBLE'
+  AND c.EjecucionReservaID IS NULL
+  AND c.ProgramaReservaID IS NULL
+  AND c.SolicitudReservaID IS NULL
+  AND c.SolicitudDetalleReservaID IS NULL
+  AND
+  (
+      @CapacidadEsperada IS NULL
+      OR @CapacidadEsperada<=0
+      OR ISNULL(c.CapacidadObjetivoCaja,0)=@CapacidadEsperada
+  )
+ORDER BY
+    ISNULL(c.FechaIngresoProductoIncompleto,ISNULL(c.FechaFormacion,c.FechaCreacion)),
+    c.CajaProduccionID;";
+
+        await using var cmd = tx == null
+            ? new SqlCommand(sql, cn)
+            : new SqlCommand(sql, cn, tx);
+
+        cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
+        cmd.Parameters.Add("@CapacidadEsperada", SqlDbType.Int).Value =
+            capacidadEsperada.HasValue && capacidadEsperada.Value > 0
+                ? capacidadEsperada.Value
+                : DBNull.Value;
+
+        await using var rd = await cmd.ExecuteReaderAsync();
+
+        while (await rd.ReadAsync())
+        {
+            lista.Add(new ProduccionCajaIncompletaDisponibleVm
+            {
+                CajaProduccionID = Convert.ToInt64(rd["CajaProduccionID"]),
+                EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["SolicitudProduccionID"]),
+                SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
+                ParteID = rd["ParteID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["ParteID"]),
+                NumeroParte = rd["NumeroParte"] == DBNull.Value
+                    ? null
+                    : rd["NumeroParte"].ToString(),
+                ReferenciaSAP = rd["ReferenciaSAP"] == DBNull.Value
+                    ? null
+                    : rd["ReferenciaSAP"].ToString(),
+                DescripcionParte = rd["DescripcionParte"] == DBNull.Value
+                    ? null
+                    : rd["DescripcionParte"].ToString(),
+                FolioCaja = rd["FolioCaja"] == DBNull.Value
+                    ? null
+                    : rd["FolioCaja"].ToString(),
+                EtiquetaBlanca = rd["EtiquetaBlanca"] == DBNull.Value
+                    ? null
+                    : rd["EtiquetaBlanca"].ToString(),
+                CantidadPiezas = rd["CantidadPiezas"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["CantidadPiezas"]),
+                CapacidadObjetivoCaja = rd["CapacidadObjetivoCaja"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["CapacidadObjetivoCaja"]),
+                CantidadPendienteCompletar = rd["CantidadPendienteCompletar"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["CantidadPendienteCompletar"]),
+                EstadoProductoIncompleto = rd["EstadoProductoIncompleto"] == DBNull.Value
+                    ? ProduccionProductoIncompletoEstado.Disponible
+                    : rd["EstadoProductoIncompleto"].ToString() ?? ProduccionProductoIncompletoEstado.Disponible,
+                EjecucionReservaID = rd["EjecucionReservaID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["EjecucionReservaID"]),
+                ProgramaReservaID = rd["ProgramaReservaID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["ProgramaReservaID"]),
+                SolicitudReservaID = rd["SolicitudReservaID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["SolicitudReservaID"]),
+                SolicitudDetalleReservaID = rd["SolicitudDetalleReservaID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["SolicitudDetalleReservaID"]),
+                FechaFormacion = Convert.ToDateTime(rd["FechaFormacion"]),
+                FechaReservaIncompleto = rd["FechaReservaIncompleto"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["FechaReservaIncompleto"]),
+                FechaCompletadoIncompleto = rd["FechaCompletadoIncompleto"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["FechaCompletadoIncompleto"]),
+                UbicacionProductoIncompleto = rd["UbicacionProductoIncompleto"] == DBNull.Value
+                    ? null
+                    : rd["UbicacionProductoIncompleto"].ToString(),
+                FechaIngresoProductoIncompleto = rd["FechaIngresoProductoIncompleto"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["FechaIngresoProductoIncompleto"]),
+                UsuarioIngresoProductoIncompletoID = rd["UsuarioIngresoProductoIncompletoID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["UsuarioIngresoProductoIncompletoID"]),
+                NumeroOFOrigen = rd["NumeroOFOrigen"] == DBNull.Value
+                    ? null
+                    : rd["NumeroOFOrigen"].ToString(),
+                MaquinaOrigenCodigo = rd["MaquinaOrigenCodigo"] == DBNull.Value
+                    ? null
+                    : rd["MaquinaOrigenCodigo"].ToString(),
+                MaquinaOrigenNombre = rd["MaquinaOrigenNombre"] == DBNull.Value
+                    ? null
+                    : rd["MaquinaOrigenNombre"].ToString(),
+                OperadorOrigenNombre = rd["OperadorOrigenNombre"] == DBNull.Value
+                    ? null
+                    : rd["OperadorOrigenNombre"].ToString()
+            });
+        }
+
+        return lista;
+    }
+
+    private async Task<int?> ObtenerCapacidadEsperadaEtiquetaBlancaAsync(
+        int parteId,
+        SqlConnection cn,
+        SqlTransaction? tx)
+    {
+        const string sql = @"
+SELECT TOP(1)
+    TRY_CONVERT(INT,COALESCE(PiezasPorEmbalaje,PiezasPorCaja))
+FROM dbo.ERP_ParteDatosTecnicos
+WHERE ParteID=@ParteID
+  AND Activo=1;";
+
+        await using var cmd = tx == null
+            ? new SqlCommand(sql, cn)
+            : new SqlCommand(sql, cn, tx);
+
+        cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
+
+        var resultado = await cmd.ExecuteScalarAsync();
+
+        if (resultado == null || resultado == DBNull.Value)
+            return null;
+
+        var capacidad = Convert.ToInt32(resultado);
+
+        return capacidad > 0
+            ? capacidad
+            : null;
+    }
+
+    private async Task<List<EtiquetaBlancaInicioValidada>> ValidarEtiquetasBlancasInicioAsync(
+        IEnumerable<long>? cajasSeleccionadas,
+        ProgramaParaProduccion programa,
+        SqlConnection cn,
+        SqlTransaction tx)
+    {
+        var ids = (cajasSeleccionadas ?? Enumerable.Empty<long>())
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+
+        var resultado = new List<EtiquetaBlancaInicioValidada>();
+
+        if (ids.Count == 0)
+            return resultado;
+
+        if (!programa.ParteID.HasValue || programa.ParteID.Value <= 0)
+            throw new InvalidOperationException(
+                "El programa no tiene una parte válida para aplicar producto incompleto.");
+
+        var cantidadProgramada = programa.CantidadPlaneada ?? 0;
+
+        if (cantidadProgramada <= 0)
+            throw new InvalidOperationException(
+                "El programa no tiene una cantidad válida para aplicar producto incompleto.");
+
+        var capacidadEsperada =
+            await ObtenerCapacidadEsperadaEtiquetaBlancaAsync(
+                programa.ParteID.Value,
+                cn,
+                tx);
+
+        foreach (var cajaId in ids)
+        {
+            const string sql = @"
+SELECT TOP(1)
+    c.CajaProduccionID,
+    c.EtiquetaBlanca,
+    c.FolioCaja,
+    ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) AS CantidadPiezas,
+    ISNULL(c.CapacidadObjetivoCaja,0) AS CapacidadObjetivoCaja,
+    ISNULL(c.EsProductoIncompleto,0) AS EsProductoIncompleto,
+    ISNULL(c.EstadoProductoIncompleto,N'') AS EstadoProductoIncompleto,
+    c.EjecucionReservaID,
+    c.ProgramaReservaID,
+    c.SolicitudReservaID,
+    c.SolicitudDetalleReservaID,
+    e.ParteID
+FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Produccion_Ejecucion e
+    ON e.EjecucionProduccionID=c.EjecucionProduccionID
+WHERE c.CajaProduccionID=@CajaProduccionID
+  AND c.Activo=1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                throw new InvalidOperationException(
+                    $"La etiqueta blanca correspondiente a la caja {cajaId} ya no existe o fue desactivada.");
+
+            var etiqueta =
+                rd["EtiquetaBlanca"] == DBNull.Value
+                    ? rd["FolioCaja"] == DBNull.Value
+                        ? $"Caja {cajaId}"
+                        : rd["FolioCaja"].ToString() ?? $"Caja {cajaId}"
+                    : rd["EtiquetaBlanca"].ToString() ?? $"Caja {cajaId}";
+
+            var parteCaja = rd["ParteID"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["ParteID"]);
+
+            var cantidadPiezas = rd["CantidadPiezas"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["CantidadPiezas"]);
+
+            var capacidadCaja = rd["CapacidadObjetivoCaja"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["CapacidadObjetivoCaja"]);
+
+            var esProductoIncompleto =
+                rd["EsProductoIncompleto"] != DBNull.Value &&
+                Convert.ToBoolean(rd["EsProductoIncompleto"]);
+
+            var estado =
+                rd["EstadoProductoIncompleto"] == DBNull.Value
+                    ? string.Empty
+                    : rd["EstadoProductoIncompleto"].ToString()?.Trim().ToUpperInvariant()
+                      ?? string.Empty;
+
+            var tieneReserva =
+                rd["EjecucionReservaID"] != DBNull.Value ||
+                rd["ProgramaReservaID"] != DBNull.Value ||
+                rd["SolicitudReservaID"] != DBNull.Value ||
+                rd["SolicitudDetalleReservaID"] != DBNull.Value;
+
+            if (!esProductoIncompleto)
+                throw new InvalidOperationException(
+                    $"{etiqueta} ya no está marcada como producto incompleto.");
+
+            if (parteCaja != programa.ParteID.Value)
+                throw new InvalidOperationException(
+                    $"{etiqueta} corresponde a una parte diferente de la OF que se intenta iniciar.");
+
+            if (cantidadPiezas <= 0)
+                throw new InvalidOperationException(
+                    $"{etiqueta} ya no contiene piezas disponibles.");
+
+            if (!string.Equals(
+                    estado,
+                    ProduccionProductoIncompletoEstado.Disponible,
+                    StringComparison.OrdinalIgnoreCase) ||
+                tieneReserva)
+            {
+                throw new InvalidOperationException(
+                    $"{etiqueta} ya fue reservada o dejó de estar disponible.");
+            }
+
+            if (capacidadEsperada.HasValue &&
+                capacidadEsperada.Value > 0 &&
+                capacidadCaja != capacidadEsperada.Value)
+            {
+                throw new InvalidOperationException(
+                    $"{etiqueta} tiene capacidad de {capacidadCaja:N0} piezas y esta parte utiliza embalaje de {capacidadEsperada.Value:N0} piezas.");
+            }
+
+            resultado.Add(new EtiquetaBlancaInicioValidada
+            {
+                CajaProduccionID = cajaId,
+                Etiqueta = etiqueta,
+                CantidadPiezas = cantidadPiezas,
+                CapacidadObjetivoCaja = capacidadCaja
+            });
+        }
+
+        var totalSeleccionado =
+            resultado.Sum(x => x.CantidadPiezas);
+
+        if (totalSeleccionado > cantidadProgramada)
+        {
+            throw new InvalidOperationException(
+                $"Las etiquetas blancas seleccionadas contienen {totalSeleccionado:N0} piezas, pero el programa requiere {cantidadProgramada:N0}. No se permite dividir una etiqueta blanca.");
+        }
+
+        return resultado;
+    }
+
+    private async Task ReservarEtiquetasBlancasInicioAsync(
+        IReadOnlyCollection<EtiquetaBlancaInicioValidada> etiquetas,
+        ProgramaParaProduccion programa,
+        int ejecucionProduccionId,
+        int usuarioId,
+        SqlConnection cn,
+        SqlTransaction tx)
+    {
+        if (etiquetas.Count == 0)
+            return;
+
+        foreach (var etiqueta in etiquetas)
+        {
+            const string sql = @"
+UPDATE dbo.Produccion_Cajas
+SET EstadoProductoIncompleto=N'RESERVADA',
+    ProgramaReservaID=@ProgramaProduccionID,
+    SolicitudReservaID=@SolicitudProduccionID,
+    SolicitudDetalleReservaID=@SolicitudProduccionDetalleID,
+    EjecucionReservaID=@EjecucionProduccionID,
+    FechaReservaIncompleto=SYSDATETIME(),
+    UsuarioReservaIncompletoID=@UsuarioID,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1
+  AND ISNULL(EsProductoIncompleto,0)=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(EstadoProductoIncompleto,N''))))=N'DISPONIBLE'
+  AND EjecucionReservaID IS NULL
+  AND ProgramaReservaID IS NULL
+  AND SolicitudReservaID IS NULL
+  AND SolicitudDetalleReservaID IS NULL;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
+                etiqueta.CajaProduccionID;
+
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
+                programa.ProgramaProduccionID;
+
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
+                (object?)programa.SolicitudProduccionID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value =
+                (object?)programa.SolicitudProduccionDetalleID ?? DBNull.Value;
+
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                usuarioId;
+
+            var filas = await cmd.ExecuteNonQueryAsync();
+
+            if (filas != 1)
+            {
+                throw new InvalidOperationException(
+                    $"La etiqueta {etiqueta.Etiqueta} cambió de estado mientras se iniciaba Producción. No se realizó el inicio.");
+            }
+        }
+    }
+
 }
