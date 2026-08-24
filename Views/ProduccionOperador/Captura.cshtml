@@ -21,6 +21,7 @@
     var puedeIniciarTiempoExtra = Model.PuedeIniciarTiempoExtra && !tieneTiempoExtraActivo && Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
     var segundosSesionTiempoExtra = tiempoExtraActivo != null ? Math.Max(0d, (Model.FechaHoraServidor - tiempoExtraActivo.FechaHoraInicio).TotalSeconds) : 0d;
     var segundosCorteTiempoExtra = tiempoExtraActivo != null ? Math.Max(0d, (Model.FechaHoraServidor - tiempoExtraActivo.FechaHoraUltimoCorte).TotalSeconds) : 0d;
+    var corteTiempoExtraDisponible = tiempoExtraActivo != null && segundosCorteTiempoExtra >= 3600d;
     var objetivoHora = Model.ObjetivoHoraEnUso ?? Model.ObjetivoHora;
     var cavidadesEnUso = Model.CavidadesEnUso;
     var cicloEnUso = Model.CicloEnUso;
@@ -1433,6 +1434,94 @@
             animation: extraPulse 1.2s infinite;
         }
 
+        .extra-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+
+        .btn-extra-cut,
+        .btn-extra-finish {
+            border: 0;
+            border-radius: 14px;
+            padding: 12px 16px;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 46px;
+            transition: transform .15s ease,box-shadow .15s ease,opacity .15s ease;
+        }
+
+        .btn-extra-cut {
+            background: linear-gradient(135deg,#00347a,#004aad);
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(0,74,173,.18);
+        }
+
+        .btn-extra-cut.ready {
+            animation: extraCutPulse 1.4s infinite;
+        }
+
+        .btn-extra-cut:hover:not(:disabled) {
+            color: #fff;
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(0,74,173,.24);
+        }
+
+        .btn-extra-finish {
+            background: #fff;
+            color: #b42318;
+            border: 1px solid #fda29b;
+        }
+
+        .btn-extra-finish:hover:not(:disabled) {
+            background: #fef3f2;
+            color: #912018;
+            transform: translateY(-1px);
+        }
+
+        .btn-extra-cut:disabled,
+        .btn-extra-finish:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .extra-due-alert {
+            margin-top: 14px;
+            border: 1px solid #fda29b;
+            background: #fef3f2;
+            color: #b42318;
+            border-radius: 14px;
+            padding: 11px 13px;
+            font-weight: 900;
+        }
+
+        .extra-mode-help {
+            border-radius: 14px;
+            padding: 11px 13px;
+            font-weight: 750;
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .extra-mode-help.finish {
+            border-color: #fedf89;
+            background: #fffcf5;
+            color: #93370d;
+        }
+
+        @@keyframes extraCutPulse {
+            0%,100% { box-shadow: 0 8px 18px rgba(0,74,173,.18); }
+            50% { box-shadow: 0 0 0 6px rgba(0,74,173,.10),0 10px 24px rgba(0,74,173,.25); }
+        }
+
         @@keyframes extraPulse {
             0%,100% { opacity: .35; transform: scale(.85); }
             50% { opacity: 1; transform: scale(1.15); }
@@ -1531,6 +1620,16 @@
             }
 
             .btn-extra-start {
+                width: 100%;
+            }
+
+            .extra-actions {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .btn-extra-cut,
+            .btn-extra-finish {
                 width: 100%;
             }
 
@@ -2111,7 +2210,7 @@
             <div class="extra-head">
                 <div>
                     <div class="extra-title"><i class="fa-solid fa-stopwatch me-2"></i>Tiempo extra en curso</div>
-                    <div class="extra-subtitle">La sesión queda guardada en el ERP. Puedes actualizar la pantalla sin perder el cronómetro.</div>
+                    <div class="extra-subtitle">La sesión queda guardada en el ERP. Cada corte toma como base la última lectura registrada y reinicia automáticamente el bloque siguiente.</div>
                 </div>
                 <span class="extra-running-badge"><span class="extra-running-dot"></span>@tiempoExtraActivo.EstadoNombre</span>
             </div>
@@ -2124,8 +2223,10 @@
                     </div>
                     <div class="extra-timer-card cut">
                         <div class="extra-timer-label">Desde el último corte</div>
-                        <div class="extra-timer-value" id="cronometroCorteTiempoExtra">00:00:00</div>
-                        <div class="extra-cut-status" id="estadoCorteTiempoExtra">Próximo corte al cumplir 60 minutos.</div>
+                        <div class="extra-timer-value @(corteTiempoExtraDisponible ? "overdue" : "")" id="cronometroCorteTiempoExtra">00:00:00</div>
+                        <div class="extra-cut-status @(corteTiempoExtraDisponible ? "overdue" : "")" id="estadoCorteTiempoExtra">
+                            @(corteTiempoExtraDisponible ? "Corte de 60 minutos disponible." : "Próximo corte al cumplir 60 minutos.")
+                        </div>
                     </div>
                 </div>
                 <div class="extra-meta-grid">
@@ -2135,9 +2236,36 @@
                     <div class="extra-meta-card"><div class="k">Último contador corte</div><div class="v">@tiempoExtraActivo.ContadorUltimoCorte.ToString("N0")</div></div>
                     <div class="extra-meta-card"><div class="k">Motivo</div><div class="v">@tiempoExtraActivo.MotivoNombre</div></div>
                 </div>
+                <div id="alertaCorteTiempoExtra" class="extra-due-alert @(corteTiempoExtraDisponible ? "" : "d-none")">
+                    <i class="fa-solid fa-bell me-2"></i>Ya se cumplieron 60 minutos desde el último corte. Captura la lectura actual del contador para cerrar este bloque.
+                </div>
+                @if (Model.TieneParoAbierto)
+                {
+                    <div class="alert alert-danger rounded-4 fw-bold mt-3 mb-0"><i class="fa-solid fa-circle-pause me-1"></i>Existe un paro abierto. Cierra el paro antes de registrar o finalizar el tiempo extra.</div>
+                }
+                else if (Model.EstatusID != ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+                {
+                    <div class="alert alert-warning rounded-4 fw-bold mt-3 mb-0"><i class="fa-solid fa-triangle-exclamation me-1"></i>La ejecución no se encuentra en Producción. El tiempo extra queda visible, pero no puede capturarse hasta recuperar el estado operativo correspondiente.</div>
+                }
+                <div class="extra-actions">
+                    <button type="button"
+                            class="btn-extra-cut @(corteTiempoExtraDisponible && Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto ? "ready" : "")"
+                            id="btnCapturarCorteTiempoExtra"
+                            @((corteTiempoExtraDisponible && Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto) ? "" : "disabled")>
+                        <i class="fa-solid fa-gauge-high"></i>
+                        Capturar corte
+                    </button>
+                    <button type="button"
+                            class="btn-extra-finish"
+                            id="btnFinalizarTiempoExtra"
+                            @((Model.EstatusID != ERP.NSQuell.Models.ProduccionEstatus.EnProduccion || Model.TieneParoAbierto) ? "disabled" : "")>
+                        <i class="fa-solid fa-flag-checkered"></i>
+                        Finalizar tiempo extra
+                    </button>
+                </div>
                 @if (!string.IsNullOrWhiteSpace(tiempoExtraActivo.Observaciones))
                 {
-                    <div class="alert alert-light border rounded-4 mt-3 mb-0"><strong>Observaciones:</strong> @tiempoExtraActivo.Observaciones</div>
+                    <div class="alert alert-light border rounded-4 mt-3 mb-0"><strong>Observaciones de la sesión:</strong> @tiempoExtraActivo.Observaciones</div>
                 }
             </div>
         </section>
@@ -2242,6 +2370,81 @@
         </div>
     </div>
 </div>
+
+@if (tieneTiempoExtraActivo && tiempoExtraActivo != null)
+{
+    <div class="modal fade modal-extra" id="modalCorteTiempoExtra" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title mb-1" id="tituloModalCorteTiempoExtra"><i class="fa-solid fa-stopwatch me-2"></i>Capturar corte de tiempo extra</h5>
+                        <div class="small opacity-75 fw-semibold" id="subtituloModalCorteTiempoExtra">Registra la lectura actual para cerrar el bloque.</div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form method="post" action="@Url.Action("CapturarCorteTiempoExtra","ProduccionOperador")" id="formCorteTiempoExtra">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="TiempoExtraID" value="@tiempoExtraActivo.TiempoExtraID" />
+                    <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                    <input type="hidden" name="OkModificadoManual" id="extraOkModificadoManual" value="false" />
+                    <input type="hidden" name="FinalizarTiempoExtra" id="extraFinalizarTiempoExtra" value="false" />
+                    <div class="modal-body p-4">
+                        <div class="extra-mode-help mb-3" id="extraModoAyuda"><i class="fa-solid fa-circle-info me-1"></i>Este corte se guarda y el siguiente bloque de tiempo extra comienza automáticamente desde la lectura que captures.</div>
+                        <div id="mensajeCorteTiempoExtra" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
+                        <div class="counter-capture-card">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                <div>
+                                    <div class="fw-bold text-primary"><i class="fa-solid fa-gauge-high me-1"></i>Contador de máquina</div>
+                                    <div class="small text-muted fw-semibold">Captura la lectura física actual. El servidor calculará las piezas desde el último corte.</div>
+                                </div>
+                                <span class="badge bg-primary">Sesión #@tiempoExtraActivo.TiempoExtraID</span>
+                            </div>
+                            <div class="counter-capture-grid">
+                                <div>
+                                    <label for="extraContador" class="form-label fw-bold">Contador actual</label>
+                                    <input type="number" min="0" step="1" value="" placeholder="Ej. 12850" name="ContadorMaquinaActual" id="extraContador" class="counter-value-input empty-number" inputmode="numeric" autocomplete="off" />
+                                </div>
+                                <div class="counter-reference">
+                                    <div class="k">Último contador del corte</div>
+                                    <div class="v">@tiempoExtraActivo.ContadorUltimoCorte.ToString("N0")</div>
+                                    <div class="small text-muted mt-1">Último corte: @tiempoExtraActivo.FechaHoraUltimoCorte.ToString("dd/MM/yyyy HH:mm")</div>
+                                </div>
+                            </div>
+                            <div class="counter-feedback" id="extraContadorFeedback">Captura el contador actual para obtener producción física, objetivo proporcional y OK sugerido.</div>
+                        </div>
+                        <div class="extra-meta-grid mb-3" id="extraResumenPreview">
+                            <div class="extra-meta-card"><div class="k">Producción física</div><div class="v" id="extraPiezasFisicas">-</div></div>
+                            <div class="extra-meta-card"><div class="k">OK sugerido</div><div class="v text-success" id="extraOKSugerido">-</div></div>
+                            <div class="extra-meta-card"><div class="k">Objetivo bloque</div><div class="v" id="extraObjetivoBloque">-</div></div>
+                            <div class="extra-meta-card"><div class="k">Cumplimiento</div><div class="v" id="extraCumplimiento">-</div></div>
+                            <div class="extra-meta-card"><div class="k">Bonus provisional</div><div class="v text-success" id="extraBonusInicial">-</div></div>
+                        </div>
+                        <div class="modal-grid mb-3">
+                            <div class="ok-capture-wrap">
+                                <div class="modal-label text-success">OK</div>
+                                <input type="number" min="0" value="" placeholder="Auto" name="CantidadOK" id="extraOK" class="modal-qty ok empty-number" inputmode="numeric" autocomplete="off" />
+                                <div class="ok-mode-row">
+                                    <span class="ok-mode-badge" id="extraOKModo"><i class="fa-solid fa-wand-magic-sparkles"></i>Automático</span>
+                                    <button type="button" class="btn-ok-auto d-none" id="btnRestaurarOKAutomaticoExtra"><i class="fa-solid fa-rotate-left me-1"></i>Usar cálculo automático</button>
+                                </div>
+                            </div>
+                            <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="0" placeholder="0" name="CantidadSospechosa" id="extraYellow" class="modal-qty yellow empty-number" inputmode="numeric" autocomplete="off" /></div>
+                            <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="0" placeholder="0" name="CantidadScrap" id="extraScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" /></div>
+                        </div>
+                        <div class="classification-feedback" id="extraClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>El ERP propondrá el OK como producción física menos Sospechosos y Scrap. Puedes ajustar el OK manualmente si existe una diferencia real y dejar la explicación en observaciones.</div>
+                        <label class="form-label fw-bold mt-3" for="extraObservaciones">Observaciones</label>
+                        <textarea name="Observaciones" id="extraObservaciones" class="form-control" rows="3" maxlength="500" placeholder="Opcional. Obligatorio si modificas el OK y la clasificación ya no coincide con la producción física, o si el contador no registra producción."></textarea>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4">
+                        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary fw-bold" id="btnConfirmarCorteTiempoExtra" disabled><i class="fa-solid fa-floppy-disk me-1"></i>Guardar corte</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
 
 <div class="modal fade modal-turn" id="modalCambioTurno" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -2563,6 +2766,7 @@
             const capturaHabilitada=@capturaHabilitada.ToString().ToLowerInvariant();
             const tieneParoAbierto=@Model.TieneParoAbierto.ToString().ToLowerInvariant();
             const tieneTiempoExtraActivo=@tieneTiempoExtraActivo.ToString().ToLowerInvariant();
+            const ejecucionEnProduccion=@(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion ? "true" : "false");
             const formIniciarTiempoExtra=document.getElementById('formIniciarTiempoExtra');
             let filaActiva=null;
             let okManual=false;
@@ -3241,6 +3445,396 @@
             }
 
             const panelTiempoExtra=document.getElementById('panelTiempoExtra');
+            const btnCapturarCorteTiempoExtra=document.getElementById('btnCapturarCorteTiempoExtra');
+            const btnFinalizarTiempoExtra=document.getElementById('btnFinalizarTiempoExtra');
+            const alertaCorteTiempoExtra=document.getElementById('alertaCorteTiempoExtra');
+            const modalCorteTiempoExtraElemento=document.getElementById('modalCorteTiempoExtra');
+            const modalCorteTiempoExtra=modalCorteTiempoExtraElemento?bootstrap.Modal.getOrCreateInstance(modalCorteTiempoExtraElemento):null;
+            const formCorteTiempoExtra=document.getElementById('formCorteTiempoExtra');
+            const urlPrevisualizarCorteTiempoExtra='@Url.Action("PrevisualizarCorteTiempoExtra","ProduccionOperador")';
+            const urlCapturarCorteTiempoExtra='@Url.Action("CapturarCorteTiempoExtra","ProduccionOperador")';
+            const urlFinalizarTiempoExtra='@Url.Action("FinalizarTiempoExtra","ProduccionOperador")';
+            let modoRegistroTiempoExtra='CORTE';
+            let segundosCorteActual=panelTiempoExtra?Number(panelTiempoExtra.dataset.segundosCorte||0):0;
+            let extraOkManual=false;
+            let extraActualizandoOK=false;
+            let extraPreviewTimer=null;
+            let extraPreviewSecuencia=0;
+            let ultimaPrevisualizacionExtra=null;
+            let extraPreviewValida=false;
+
+            function actualizarBotonConfirmarExtra(){
+                const boton=document.getElementById('btnConfirmarCorteTiempoExtra');
+                if(!boton)return;
+                const cortePermitido=modoRegistroTiempoExtra!=='CORTE'||segundosCorteActual>=3600;
+                boton.disabled=!ejecucionEnProduccion||tieneParoAbierto||!extraPreviewValida||!cortePermitido;
+            }
+
+            function mostrarMensajeCorteExtra(mensaje){
+                const box=document.getElementById('mensajeCorteTiempoExtra');
+                if(!box)return;
+                box.innerHTML='<i class="fa-solid fa-triangle-exclamation me-2"></i>'+mensaje;
+                box.classList.remove('d-none');
+            }
+
+            function limpiarMensajeCorteExtra(){
+                const box=document.getElementById('mensajeCorteTiempoExtra');
+                if(!box)return;
+                box.classList.add('d-none');
+                box.innerHTML='';
+            }
+
+            function limpiarPrevisualizacionExtra(){
+                ultimaPrevisualizacionExtra=null;
+                extraPreviewValida=false;
+                const ids=['extraPiezasFisicas','extraOKSugerido','extraObjetivoBloque','extraCumplimiento','extraBonusInicial'];
+                ids.forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='-';});
+                actualizarBotonConfirmarExtra();
+            }
+
+            function cambiarModoOKExtra(manual){
+                extraOkManual=manual;
+                const hidden=document.getElementById('extraOkModificadoManual');
+                if(hidden)hidden.value=manual?'true':'false';
+                const badge=document.getElementById('extraOKModo');
+                const restaurar=document.getElementById('btnRestaurarOKAutomaticoExtra');
+                if(badge){
+                    badge.classList.toggle('manual',manual);
+                    badge.innerHTML=manual
+                        ?'<i class="fa-solid fa-pen"></i>Manual'
+                        :'<i class="fa-solid fa-wand-magic-sparkles"></i>Automático';
+                }
+                restaurar?.classList.toggle('d-none',!manual);
+            }
+
+            function establecerOKAutomaticoExtra(valor){
+                const input=document.getElementById('extraOK');
+                if(!input)return;
+                extraActualizandoOK=true;
+                input.value=Number(valor||0).toString();
+                extraActualizandoOK=false;
+            }
+
+            function actualizarComparacionExtra(){
+                const ok=numeroSeguro(document.getElementById('extraOK'));
+                const bonus=document.getElementById('extraBonusInicial');
+                if(bonus)bonus.textContent='+'+Math.max(0,ok).toLocaleString('es-MX');
+                const cumplimiento=document.getElementById('extraCumplimiento');
+                if(!cumplimiento)return;
+                if(!ultimaPrevisualizacionExtra){
+                    cumplimiento.textContent='-';
+                    cumplimiento.className='v';
+                    return;
+                }
+                const objetivo=Number(ultimaPrevisualizacionExtra.objetivoBloque??ultimaPrevisualizacionExtra.ObjetivoBloque??0);
+                if(objetivo<=0){
+                    cumplimiento.textContent='-';
+                    cumplimiento.className='v';
+                    return;
+                }
+                const porcentaje=Math.round((ok*1000)/objetivo)/10;
+                cumplimiento.textContent=porcentaje.toLocaleString('es-MX')+'%';
+                cumplimiento.className='v '+(ok>=objetivo?'text-success':'text-danger');
+            }
+
+            function actualizarClasificacionExtra(){
+                const feedback=document.getElementById('extraClasificacionFeedback');
+                if(!feedback)return;
+                const ok=numeroSeguro(document.getElementById('extraOK'));
+                const sospechoso=numeroSeguro(document.getElementById('extraYellow'));
+                const scrap=numeroSeguro(document.getElementById('extraScrap'));
+                const total=ok+sospechoso+scrap;
+                actualizarComparacionExtra();
+                if(!ultimaPrevisualizacionExtra){
+                    feedback.className='classification-feedback';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura el contador para calcular la producción física del periodo.';
+                    return;
+                }
+                const fisicas=Number(ultimaPrevisualizacionExtra.piezasFisicas??ultimaPrevisualizacionExtra.PiezasFisicas??0);
+                const diferencia=total-fisicas;
+                if(diferencia===0){
+                    feedback.className='classification-feedback ok';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>La clasificación cuadra con las <strong>'+fisicas.toLocaleString('es-MX')+'</strong> piezas físicas. OK '+ok.toLocaleString('es-MX')+' + Sospechosos '+sospechoso.toLocaleString('es-MX')+' + Scrap '+scrap.toLocaleString('es-MX')+'.';
+                    return;
+                }
+                feedback.className='classification-feedback warning';
+                const texto=diferencia>0
+                    ?'La clasificación excede la producción física por <strong>'+Math.abs(diferencia).toLocaleString('es-MX')+'</strong> pieza(s).'
+                    :'Faltan por clasificar <strong>'+Math.abs(diferencia).toLocaleString('es-MX')+'</strong> pieza(s) respecto al contador.';
+                feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+texto+(extraOkManual?' <strong>El OK está en modo manual.</strong>':'');
+            }
+
+            function pintarPrevisualizacionExtra(data,forzarAutomatico=false){
+                ultimaPrevisualizacionExtra=data;
+                extraPreviewValida=true;
+                const fisicas=Number(data.piezasFisicas??data.PiezasFisicas??0);
+                const sugerido=Number(data.cantidadOK??data.CantidadOK??0);
+                const objetivo=Number(data.objetivoBloque??data.ObjetivoBloque??0);
+                const minutos=Number(data.minutosProductivos??data.MinutosProductivos??0);
+                const segmentos=Number(data.numeroSegmentos??data.NumeroSegmentos??0);
+                const numeroCorte=Number(data.numeroCorte??data.NumeroCorte??0);
+                const pFisicas=document.getElementById('extraPiezasFisicas');
+                const pSugerido=document.getElementById('extraOKSugerido');
+                const pObjetivo=document.getElementById('extraObjetivoBloque');
+                if(pFisicas)pFisicas.textContent=fisicas.toLocaleString('es-MX');
+                if(pSugerido)pSugerido.textContent=sugerido.toLocaleString('es-MX');
+                if(pObjetivo)pObjetivo.textContent=objetivo>0?objetivo.toLocaleString('es-MX'):'-';
+                if(!extraOkManual||forzarAutomatico){
+                    cambiarModoOKExtra(false);
+                    establecerOKAutomaticoExtra(sugerido);
+                }
+                const contadorInicial=data.contadorInicial??data.ContadorInicial;
+                const contadorFinal=data.contadorFinal??data.ContadorFinal;
+                const feedback=document.getElementById('extraContadorFeedback');
+                if(feedback){
+                    let texto='<i class="fa-solid fa-calculator me-1"></i><strong>'+fisicas.toLocaleString('es-MX')+' pieza(s) físicas</strong> calculadas por el servidor';
+                    if(numeroCorte>0)texto+=' para el corte #'+numeroCorte;
+                    texto+='. '+minutos.toLocaleString('es-MX',{maximumFractionDigits:2})+' min productivos · '+segmentos.toLocaleString('es-MX')+' segmento(s).';
+                    if(contadorInicial!==null&&contadorInicial!==undefined&&contadorFinal!==null&&contadorFinal!==undefined)texto+=' Contador '+Number(contadorInicial).toLocaleString('es-MX')+' → '+Number(contadorFinal).toLocaleString('es-MX')+'.';
+                    if(Boolean(data.tieneCambioConfiguracion??data.TieneCambioConfiguracion))texto+=' <span class="text-primary">Se consideraron cambios de configuración.</span>';
+                    if(Boolean(data.tieneReinicioContador??data.TieneReinicioContador))texto+=' <span class="text-warning">Se detectó reinicio del contador.</span>';
+                    feedback.className='counter-feedback';
+                    feedback.innerHTML=texto;
+                }
+                const servidorDiceDisponible=Boolean(data.corte60Disponible??data.Corte60Disponible);
+                if(modoRegistroTiempoExtra==='CORTE'&&!servidorDiceDisponible){
+                    extraPreviewValida=false;
+                    const segundosFaltantes=Number(data.segundosParaCorte??data.SegundosParaCorte??0);
+                    mostrarMensajeCorteExtra('El bloque todavía no cumple 60 minutos. Faltan aproximadamente '+formatoCronometro(segundosFaltantes)+'.');
+                }else{
+                    limpiarMensajeCorteExtra();
+                }
+                actualizarClasificacionExtra();
+                actualizarBotonConfirmarExtra();
+            }
+
+            async function ejecutarPrevisualizacionExtra(forzarAutomatico=false){
+                const contadorInput=document.getElementById('extraContador');
+                const raw=(contadorInput?.value||'').trim();
+                if(raw===''||!Number.isFinite(Number(raw))||Number(raw)<0){
+                    limpiarPrevisualizacionExtra();
+                    const feedback=document.getElementById('extraContadorFeedback');
+                    if(feedback){
+                        feedback.className='counter-feedback';
+                        feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura un contador válido para calcular la producción de este periodo de tiempo extra.';
+                    }
+                    actualizarClasificacionExtra();
+                    return;
+                }
+                if(!formCorteTiempoExtra)return;
+                const secuencia=++extraPreviewSecuencia;
+                extraPreviewValida=false;
+                actualizarBotonConfirmarExtra();
+                document.getElementById('extraResumenPreview')?.classList.add('preview-loading');
+                const token=formCorteTiempoExtra.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
+                const tiempoExtraId=formCorteTiempoExtra.querySelector('input[name="TiempoExtraID"]')?.value||'0';
+                const datos=new FormData();
+                datos.append('__RequestVerificationToken',token);
+                datos.append('tiempoExtraId',tiempoExtraId);
+                datos.append('contadorMaquinaActual',raw);
+                datos.append('cantidadSospechosa',String(numeroSeguro(document.getElementById('extraYellow'))));
+                datos.append('cantidadScrap',String(numeroSeguro(document.getElementById('extraScrap'))));
+                try{
+                    const response=await fetch(urlPrevisualizarCorteTiempoExtra,{method:'POST',body:datos,headers:{'X-Requested-With':'XMLHttpRequest'}});
+                    let data=null;
+                    try{data=await response.json();}catch{data=null;}
+                    if(secuencia!==extraPreviewSecuencia)return;
+                    if(!response.ok||!data||data.ok===false){
+                        extraPreviewValida=false;
+                        ultimaPrevisualizacionExtra=null;
+                        const mensaje=data?.mensaje||data?.Mensaje||'No fue posible calcular el corte de tiempo extra.';
+                        const feedback=document.getElementById('extraContadorFeedback');
+                        if(feedback){feedback.className='counter-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+mensaje;}
+                        const ids=['extraPiezasFisicas','extraOKSugerido','extraObjetivoBloque','extraCumplimiento','extraBonusInicial'];
+                        ids.forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='-';});
+                        mostrarMensajeCorteExtra(mensaje);
+                        actualizarClasificacionExtra();
+                        actualizarBotonConfirmarExtra();
+                        return;
+                    }
+                    pintarPrevisualizacionExtra(data,forzarAutomatico);
+                }catch(error){
+                    if(secuencia!==extraPreviewSecuencia)return;
+                    extraPreviewValida=false;
+                    ultimaPrevisualizacionExtra=null;
+                    const mensaje=error?.message||'No fue posible consultar el cálculo del tiempo extra.';
+                    const feedback=document.getElementById('extraContadorFeedback');
+                    if(feedback){feedback.className='counter-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+mensaje;}
+                    mostrarMensajeCorteExtra(mensaje);
+                    actualizarClasificacionExtra();
+                    actualizarBotonConfirmarExtra();
+                }finally{
+                    if(secuencia===extraPreviewSecuencia)document.getElementById('extraResumenPreview')?.classList.remove('preview-loading');
+                }
+            }
+
+            function programarPrevisualizacionExtra(forzarAutomatico=false){
+                if(extraPreviewTimer)window.clearTimeout(extraPreviewTimer);
+                extraPreviewTimer=window.setTimeout(function(){ejecutarPrevisualizacionExtra(forzarAutomatico);},300);
+            }
+
+            function prepararModalTiempoExtra(modo){
+                if(!ejecucionEnProduccion||tieneParoAbierto){
+                    return;
+                }
+                if(modo==='CORTE'&&segundosCorteActual<3600){
+                    return;
+                }
+                modoRegistroTiempoExtra=modo;
+                limpiarMensajeCorteExtra();
+                limpiarPrevisualizacionExtra();
+                cambiarModoOKExtra(false);
+                const contador=document.getElementById('extraContador');
+                const ok=document.getElementById('extraOK');
+                const sospechoso=document.getElementById('extraYellow');
+                const scrap=document.getElementById('extraScrap');
+                const observaciones=document.getElementById('extraObservaciones');
+                if(contador)contador.value='';
+                if(ok)ok.value='';
+                if(sospechoso)sospechoso.value='0';
+                if(scrap)scrap.value='0';
+                if(observaciones)observaciones.value='';
+                const finalizar=document.getElementById('extraFinalizarTiempoExtra');
+                if(finalizar)finalizar.value=modo==='FINALIZAR'?'true':'false';
+                const titulo=document.getElementById('tituloModalCorteTiempoExtra');
+                const subtitulo=document.getElementById('subtituloModalCorteTiempoExtra');
+                const ayuda=document.getElementById('extraModoAyuda');
+                const boton=document.getElementById('btnConfirmarCorteTiempoExtra');
+                if(formCorteTiempoExtra)formCorteTiempoExtra.action=modo==='FINALIZAR'?urlFinalizarTiempoExtra:urlCapturarCorteTiempoExtra;
+                if(modo==='FINALIZAR'){
+                    if(titulo)titulo.innerHTML='<i class="fa-solid fa-flag-checkered me-2"></i>Finalizar tiempo extra';
+                    if(subtitulo)subtitulo.textContent='Se guardará un último corte con el tiempo realmente transcurrido y después se cerrará la sesión.';
+                    if(ayuda){
+                        ayuda.className='extra-mode-help finish mb-3';
+                        ayuda.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>No necesitas esperar a los 60 minutos para finalizar. El ERP calculará el último bloque parcial hasta la lectura actual del contador.';
+                    }
+                    if(boton)boton.innerHTML='<i class="fa-solid fa-flag-checkered me-1"></i>Guardar último corte y finalizar';
+                }else{
+                    if(titulo)titulo.innerHTML='<i class="fa-solid fa-stopwatch me-2"></i>Capturar corte de tiempo extra';
+                    if(subtitulo)subtitulo.textContent='Registra la lectura actual para cerrar este bloque y comenzar automáticamente el siguiente.';
+                    if(ayuda){
+                        ayuda.className='extra-mode-help mb-3';
+                        ayuda.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Este corte se guarda y el siguiente bloque de tiempo extra comienza automáticamente desde la lectura que captures.';
+                    }
+                    if(boton)boton.innerHTML='<i class="fa-solid fa-floppy-disk me-1"></i>Guardar corte';
+                }
+                actualizarClasificacionExtra();
+                actualizarBotonConfirmarExtra();
+                modalCorteTiempoExtra?.show();
+                window.setTimeout(()=>document.getElementById('extraContador')?.focus(),250);
+            }
+
+            btnCapturarCorteTiempoExtra?.addEventListener('click',function(){
+                prepararModalTiempoExtra('CORTE');
+            });
+
+            btnFinalizarTiempoExtra?.addEventListener('click',function(){
+                prepararModalTiempoExtra('FINALIZAR');
+            });
+
+            document.getElementById('extraContador')?.addEventListener('input',function(){
+                extraPreviewValida=false;
+                actualizarBotonConfirmarExtra();
+                programarPrevisualizacionExtra(false);
+            });
+
+            ['extraYellow','extraScrap'].forEach(function(id){
+                document.getElementById(id)?.addEventListener('input',function(){
+                    extraPreviewValida=false;
+                    actualizarBotonConfirmarExtra();
+                    actualizarClasificacionExtra();
+                    programarPrevisualizacionExtra(false);
+                });
+            });
+
+            document.getElementById('extraOK')?.addEventListener('input',function(){
+                if(!extraActualizandoOK)cambiarModoOKExtra(true);
+                actualizarClasificacionExtra();
+            });
+
+            document.getElementById('btnRestaurarOKAutomaticoExtra')?.addEventListener('click',function(){
+                cambiarModoOKExtra(false);
+                if(ultimaPrevisualizacionExtra){
+                    const sugerido=Number(ultimaPrevisualizacionExtra.cantidadOK??ultimaPrevisualizacionExtra.CantidadOK??0);
+                    establecerOKAutomaticoExtra(sugerido);
+                    actualizarClasificacionExtra();
+                }else{
+                    programarPrevisualizacionExtra(true);
+                }
+            });
+
+            formCorteTiempoExtra?.addEventListener('submit',function(e){
+                limpiarMensajeCorteExtra();
+                const contadorRaw=(document.getElementById('extraContador')?.value||'').trim();
+                const contador=Number(contadorRaw);
+                const okRaw=(document.getElementById('extraOK')?.value||'').trim();
+                const ok=Number(okRaw||0);
+                const sospechoso=numeroSeguro(document.getElementById('extraYellow'));
+                const scrap=numeroSeguro(document.getElementById('extraScrap'));
+                const observaciones=(document.getElementById('extraObservaciones')?.value||'').trim();
+
+                if(modoRegistroTiempoExtra==='CORTE'&&segundosCorteActual<3600){
+                    e.preventDefault();
+                    mostrarMensajeCorteExtra('El corte todavía no cumple 60 minutos.');
+                    return;
+                }
+
+                if(contadorRaw===''||!Number.isFinite(contador)||contador<0){
+                    e.preventDefault();
+                    mostrarMensajeCorteExtra('Captura el contador actual de la máquina.');
+                    document.getElementById('extraContador')?.focus();
+                    return;
+                }
+
+                if(okRaw===''||!Number.isFinite(ok)||ok<0||sospechoso<0||scrap<0){
+                    e.preventDefault();
+                    mostrarMensajeCorteExtra('Revisa las cantidades. OK, Sospechosos y Scrap deben ser números mayores o iguales a cero.');
+                    return;
+                }
+
+                if(!extraPreviewValida||!ultimaPrevisualizacionExtra){
+                    e.preventDefault();
+                    mostrarMensajeCorteExtra('Espera a que el ERP termine de calcular la producción física antes de guardar.');
+                    programarPrevisualizacionExtra(false);
+                    return;
+                }
+
+                const fisicas=Number(ultimaPrevisualizacionExtra.piezasFisicas??ultimaPrevisualizacionExtra.PiezasFisicas??0);
+                const total=ok+sospechoso+scrap;
+
+                if(fisicas===0&&total===0&&!observaciones){
+                    e.preventDefault();
+                    mostrarMensajeCorteExtra('El contador no registró producción en este periodo. Indica en observaciones qué ocurrió.');
+                    document.getElementById('extraObservaciones')?.focus();
+                    return;
+                }
+
+                if(total!==fisicas&&!observaciones){
+                    e.preventDefault();
+                    mostrarMensajeCorteExtra('La clasificación suma '+total.toLocaleString('es-MX')+' pieza(s), pero el contador indica '+fisicas.toLocaleString('es-MX')+'. Agrega una observación explicando la diferencia.');
+                    document.getElementById('extraObservaciones')?.focus();
+                    return;
+                }
+
+                const boton=document.getElementById('btnConfirmarCorteTiempoExtra');
+                if(boton){
+                    boton.disabled=true;
+                    boton.innerHTML=modoRegistroTiempoExtra==='FINALIZAR'
+                        ?'<i class="fa-solid fa-spinner fa-spin me-1"></i>Finalizando...'
+                        :'<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando corte...';
+                }
+            });
+
+            modalCorteTiempoExtraElemento?.addEventListener('hidden.bs.modal',function(){
+                if(extraPreviewTimer)window.clearTimeout(extraPreviewTimer);
+                extraPreviewSecuencia++;
+                limpiarMensajeCorteExtra();
+                limpiarPrevisualizacionExtra();
+                cambiarModoOKExtra(false);
+                const boton=document.getElementById('btnConfirmarCorteTiempoExtra');
+                if(boton)boton.innerHTML='<i class="fa-solid fa-floppy-disk me-1"></i>Guardar corte';
+            });
+
             if(panelTiempoExtra&&tieneTiempoExtraActivo){
                 const segundosSesionBase=Number(panelTiempoExtra.dataset.segundosSesion||0);
                 const segundosCorteBase=Number(panelTiempoExtra.dataset.segundosCorte||0);
@@ -3248,25 +3842,50 @@
                 const timerSesion=document.getElementById('cronometroTiempoExtra');
                 const timerCorte=document.getElementById('cronometroCorteTiempoExtra');
                 const estadoCorte=document.getElementById('estadoCorteTiempoExtra');
+
                 function actualizarCronometroTiempoExtra(){
                     const transcurrido=(performance.now()-inicioReloj)/1000;
                     const segundosSesion=segundosSesionBase+transcurrido;
                     const segundosCorte=segundosCorteBase+transcurrido;
+                    segundosCorteActual=segundosCorte;
+
                     if(timerSesion)timerSesion.textContent=formatoCronometro(segundosSesion);
                     if(timerCorte)timerCorte.textContent=formatoCronometro(segundosCorte);
+
+                    const corteDisponible=segundosCorte>=3600;
+
+                    if(btnCapturarCorteTiempoExtra){
+                        btnCapturarCorteTiempoExtra.disabled=!corteDisponible||!ejecucionEnProduccion||tieneParoAbierto;
+                        btnCapturarCorteTiempoExtra.classList.toggle('ready',corteDisponible&&ejecucionEnProduccion&&!tieneParoAbierto);
+                        btnCapturarCorteTiempoExtra.title=corteDisponible
+                            ?'Captura la lectura actual del contador para cerrar este bloque.'
+                            :'El corte se habilita al cumplir 60 minutos desde el último corte.';
+                    }
+
+                    if(btnFinalizarTiempoExtra){
+                        btnFinalizarTiempoExtra.disabled=!ejecucionEnProduccion||tieneParoAbierto;
+                    }
+
+                    if(alertaCorteTiempoExtra){
+                        alertaCorteTiempoExtra.classList.toggle('d-none',!corteDisponible);
+                    }
+
                     if(estadoCorte){
-                        if(segundosCorte>=3600){
+                        if(corteDisponible){
                             timerCorte?.classList.add('overdue');
                             estadoCorte.classList.add('overdue');
-                            const excedente=Math.floor(segundosCorte-3600);
-                            estadoCorte.innerHTML='<i class="fa-solid fa-bell me-1"></i>Corte de 60 min pendiente · '+formatoCronometro(excedente)+' después del corte.';
+                            const excedente=Math.max(0,Math.floor(segundosCorte-3600));
+                            estadoCorte.innerHTML='<i class="fa-solid fa-bell me-1"></i>Corte de 60 min disponible · '+formatoCronometro(excedente)+' después del corte.';
                         }else{
                             timerCorte?.classList.remove('overdue');
                             estadoCorte.classList.remove('overdue');
                             estadoCorte.innerHTML='<i class="fa-solid fa-hourglass-half me-1"></i>Próximo corte en '+formatoCronometro(3600-segundosCorte)+'.';
                         }
                     }
+
+                    actualizarBotonConfirmarExtra();
                 }
+
                 actualizarCronometroTiempoExtra();
                 window.setInterval(actualizarCronometroTiempoExtra,1000);
             }

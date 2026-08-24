@@ -92,6 +92,38 @@
     {
         accionActual = "TERMINAR";
     }
+
+    var accionDestino = accionActual switch
+    {
+        "CERRAR_PARO" => "#panelParo",
+        "MONITOREO_TURNO" => "#panelMonitoreoTurno",
+        "GENERAR_CHECKLIST" => "#panelChecklist",
+        "CONFIGURAR_CORRIDA" => "#panelConfiguracionCorrida",
+        "ESPERAR_CALIDAD" => "#panelCalidad",
+        "INICIAR_SERIE" => "#panelIniciarSerie",
+        "REINICIAR_SERIE" => "#panelIniciarSerie",
+        "TERMINAR" => "#panelTerminar",
+        _ => puedeVerCapturasHora ? "#panelCapturas" : "#panelDatosEjecucion"
+    };
+
+    var textoContextoPuesto =
+        puedeGestionarConfiguracionCorrida && puedeGestionarSugerenciaCambioTurno
+            ? "Técnico / supervisión"
+            : puedeGestionarConfiguracionCorrida
+                ? "Técnico de Producción"
+                : puedeGestionarCajas
+                    ? "Producción / cajas"
+                    : puedeVerCapturasHora
+                        ? "Seguimiento de Producción"
+                        : "Consulta";
+
+    var cortesTiempoExtra = Model.RegistrosHora.Count(x => x.EsTiempoExtra);
+    var minutosTiempoExtra = Model.RegistrosHora
+        .Where(x => x.EsTiempoExtra)
+        .Sum(x => x.MinutosProductivos ?? 0m);
+    var piezasFisicasTiempoExtra = Model.RegistrosHora
+        .Where(x => x.EsTiempoExtra)
+        .Sum(x => x.PiezasCalculadasContador ?? x.TotalCapturado);
 }
 
 @functions {
@@ -790,6 +822,320 @@
         }
 
 
+
+        .smart-workspace {
+            position: relative;
+            border: 1px solid #d9e5f5;
+            border-radius: 22px;
+            background: linear-gradient(180deg,#f8fbff,#ffffff);
+            box-shadow: 0 14px 34px rgba(15,47,99,.08);
+            padding: 16px;
+        }
+
+        .smart-toolbar {
+            position: sticky;
+            top: 10px;
+            z-index: 1020;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            margin: -4px -4px 14px;
+            border: 1px solid #d9e5f5;
+            border-radius: 16px;
+            background: rgba(255,255,255,.94);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 22px rgba(15,47,99,.08);
+        }
+
+        .smart-toolbar-title {
+            color: #102a56;
+            font-weight: 900;
+            font-size: .94rem;
+        }
+
+        .smart-toolbar-subtitle {
+            color: #667085;
+            font-size: .76rem;
+            margin-top: 1px;
+        }
+
+        .smart-status-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+        }
+
+        .smart-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: .74rem;
+            font-weight: 900;
+            background: #eef4ff;
+            color: #1d4ed8;
+            border: 1px solid #d7e5ff;
+        }
+
+        .smart-chip.success {
+            background: #ecfdf3;
+            color: #067647;
+            border-color: #abefc6;
+        }
+
+        .smart-chip.warning {
+            background: #fffaeb;
+            color: #b54708;
+            border-color: #fedf89;
+        }
+
+        .smart-chip.danger {
+            background: #fef3f2;
+            color: #b42318;
+            border-color: #fecdca;
+        }
+
+        .smart-quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .smart-quick-btn {
+            border: 1px solid #dbe4f0;
+            background: #fff;
+            color: #344054;
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: .76rem;
+            font-weight: 800;
+            transition: .15s ease;
+        }
+
+        .smart-quick-btn:hover {
+            border-color: #8db8f4;
+            color: #0d6efd;
+            transform: translateY(-1px);
+        }
+
+        .smart-priority-zone {
+            margin-top: 14px;
+        }
+
+        .smart-priority-zone:empty {
+            display: none;
+        }
+
+        .smart-priority-zone > .panel,
+        .smart-priority-zone > .machine-release-card,
+        .smart-priority-zone > .primary-series-action {
+            margin-bottom: 0 !important;
+        }
+
+        .smart-priority-panel {
+            border: 2px solid #9fc4f8 !important;
+            box-shadow: 0 16px 36px rgba(13,110,253,.12) !important;
+        }
+
+        .smart-priority-panel > .panel-header::before {
+            content: "AHORA";
+            display: inline-flex;
+            align-items: center;
+            margin-right: 8px;
+            border-radius: 999px;
+            padding: 3px 7px;
+            background: #0d6efd;
+            color: #fff;
+            font-size: .64rem;
+            font-weight: 900;
+            letter-spacing: .05em;
+            vertical-align: middle;
+        }
+
+        .smart-help {
+            margin-top: 10px;
+            color: #667085;
+            font-size: .78rem;
+        }
+
+        .smart-section-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin: 8px 0 12px;
+            color: #667085;
+            font-size: .74rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .capture-list {
+            display: grid;
+            gap: 10px;
+            padding: 14px;
+        }
+
+        .capture-card {
+            border: 1px solid #e5eaf3;
+            border-radius: 16px;
+            background: #fff;
+            padding: 13px;
+            transition: .15s ease;
+        }
+
+        .capture-card:hover {
+            border-color: #c8d8ee;
+            box-shadow: 0 8px 20px rgba(15,23,42,.05);
+        }
+
+        .capture-card.is-extra {
+            border-left: 5px solid #7c3aed;
+            background: linear-gradient(90deg,#faf7ff,#ffffff 32%);
+        }
+
+        .capture-card.is-normal {
+            border-left: 5px solid #0d6efd;
+        }
+
+        .capture-heading {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .capture-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: .7rem;
+            font-weight: 900;
+            background: #eef4ff;
+            color: #1d4ed8;
+        }
+
+        .capture-type.extra {
+            background: #f3e8ff;
+            color: #6d28d9;
+        }
+
+        .capture-time {
+            font-weight: 900;
+            color: #102a56;
+        }
+
+        .capture-grid {
+            display: grid;
+            grid-template-columns: repeat(7,minmax(86px,1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .capture-stat {
+            border: 1px solid #edf0f5;
+            border-radius: 11px;
+            background: #f8fafc;
+            padding: 8px 9px;
+            min-width: 0;
+        }
+
+        .capture-stat-label {
+            color: #667085;
+            font-size: .64rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+
+        .capture-stat-value {
+            color: #102a56;
+            font-size: .9rem;
+            font-weight: 900;
+            margin-top: 2px;
+            word-break: break-word;
+        }
+
+        .capture-observation {
+            margin-top: 9px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: #f8fafc;
+            color: #475467;
+            font-size: .78rem;
+        }
+
+        .capture-segments {
+            margin-top: 9px;
+        }
+
+        .segment-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .segment-card {
+            border: 1px dashed #cbd5e1;
+            border-radius: 11px;
+            padding: 9px;
+            background: #fbfdff;
+            font-size: .76rem;
+        }
+
+        .capture-hidden {
+            display: none;
+        }
+
+        .capture-hidden.is-visible {
+            display: block;
+        }
+
+        .panel#panelDatosEjecucion {
+            margin-bottom: 1rem !important;
+        }
+
+        @@media (max-width: 1200px) {
+            .capture-grid {
+                grid-template-columns: repeat(4,minmax(90px,1fr));
+            }
+        }
+
+        @@media (max-width: 768px) {
+            .smart-toolbar {
+                position: static;
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .capture-grid {
+                grid-template-columns: repeat(2,minmax(0,1fr));
+            }
+
+            .segment-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .smart-quick-actions {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding-bottom: 3px;
+            }
+
+            .smart-quick-btn {
+                flex: 0 0 auto;
+            }
+        }
+
         html[data-nsq-theme="dark"] body {
             background: #0b1220;
             color: #e7eef9;
@@ -1045,6 +1391,69 @@
             background: #351719;
             color: #ff9aa5;
         }
+
+        html[data-nsq-theme="dark"] .smart-workspace {
+            background: linear-gradient(180deg,#101a2b,#111b2d);
+            border-color: #2d3e55;
+            box-shadow: 0 14px 34px rgba(0,0,0,.18);
+        }
+
+        html[data-nsq-theme="dark"] .smart-toolbar {
+            background: rgba(17,27,45,.94);
+            border-color: #354961;
+            box-shadow: 0 8px 22px rgba(0,0,0,.20);
+        }
+
+        html[data-nsq-theme="dark"] .smart-toolbar-title,
+        html[data-nsq-theme="dark"] .capture-time,
+        html[data-nsq-theme="dark"] .capture-stat-value {
+            color: #eaf2ff;
+        }
+
+        html[data-nsq-theme="dark"] .smart-toolbar-subtitle,
+        html[data-nsq-theme="dark"] .smart-help,
+        html[data-nsq-theme="dark"] .smart-section-label,
+        html[data-nsq-theme="dark"] .capture-stat-label {
+            color: #9aa9bd;
+        }
+
+        html[data-nsq-theme="dark"] .smart-quick-btn {
+            background: #17263c;
+            border-color: #354961;
+            color: #dce7f6;
+        }
+
+        html[data-nsq-theme="dark"] .capture-card {
+            background: #111b2d;
+            border-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"] .capture-card.is-extra {
+            background: linear-gradient(90deg,#211a35,#111b2d 36%);
+            border-left-color: #a78bfa;
+        }
+
+        html[data-nsq-theme="dark"] .capture-card.is-normal {
+            border-left-color: #5da6ff;
+        }
+
+        html[data-nsq-theme="dark"] .capture-stat,
+        html[data-nsq-theme="dark"] .capture-observation,
+        html[data-nsq-theme="dark"] .segment-card {
+            background: #101a2b;
+            border-color: #2d3e55;
+            color: #dce7f6;
+        }
+
+        html[data-nsq-theme="dark"] .capture-type {
+            background: #17345c;
+            color: #9dcaff;
+        }
+
+        html[data-nsq-theme="dark"] .capture-type.extra {
+            background: #2d2148;
+            color: #c4b5fd;
+        }
     </style>
 </head>
 
@@ -1084,7 +1493,6 @@
                 </div>
             </div>
         </div>
-    </div>
 
     @if (TempData["Success"] != null)
     {
@@ -1171,6 +1579,45 @@
         </div>
     </div>
 
+    <section class="smart-workspace mb-4" id="smartWorkspace" data-smart-workspace data-priority-target="@accionDestino">
+        <div class="smart-toolbar">
+            <div>
+                <div class="smart-toolbar-title">
+                    <i class="bi bi-stars me-1"></i>
+                    Centro de trabajo inteligente
+                </div>
+                <div class="smart-toolbar-subtitle">
+                    Vista adaptada a @textoContextoPuesto · solo se abre primero lo que requiere atención.
+                </div>
+            </div>
+            <div class="smart-status-row">
+                @if (Model.TieneParoAbierto)
+                {
+                    <span class="smart-chip danger"><i class="bi bi-pause-circle"></i>Paro abierto</span>
+                }
+                @if (!tieneConfiguracionCorrida && esPreparacion)
+                {
+                    <span class="smart-chip warning"><i class="bi bi-sliders"></i>Configuración pendiente</span>
+                }
+                @if (Model.CalidadResumen?.PuedeIniciarSerie == true)
+                {
+                    <span class="smart-chip success"><i class="bi bi-patch-check"></i>Calidad liberó</span>
+                }
+                else if (calidadRequiereAtencion && esPreparacion)
+                {
+                    <span class="smart-chip warning"><i class="bi bi-patch-exclamation"></i>Calidad pendiente</span>
+                }
+                @if (e.MaquinaLiberada)
+                {
+                    <span class="smart-chip success"><i class="bi bi-unlock"></i>Máquina liberada</span>
+                }
+                @if (cortesTiempoExtra > 0)
+                {
+                    <span class="smart-chip"><i class="bi bi-stopwatch"></i>@cortesTiempoExtra corte(s) extra · @minutosTiempoExtra.ToString("0.#") min · @piezasFisicasTiempoExtra.ToString("N0") pzas</span>
+                }
+            </div>
+        </div>
+
     <section class="next-action mb-4 @(accionActual == "CERRAR_PARO" ? "is-danger" : accionActual == "MONITOREO_TURNO" || accionActual == "ESPERAR_CALIDAD" || accionActual == "CONFIGURAR_CORRIDA" ? "is-warning" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" || accionActual == "TERMINAR" ? "is-success" : "")">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div class="d-flex align-items-start gap-3">
@@ -1230,10 +1677,50 @@
 
             <a class="btn btn-primary btn-strong"
                href="#@(accionActual == "CERRAR_PARO" ? "panelParo" : accionActual == "MONITOREO_TURNO" ? "panelMonitoreoTurno" : accionActual == "GENERAR_CHECKLIST" ? "panelChecklist" : accionActual == "CONFIGURAR_CORRIDA" ? "panelConfiguracionCorrida" : accionActual == "ESPERAR_CALIDAD" ? "panelCalidad" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "panelIniciarSerie" : accionActual == "TERMINAR" ? "panelTerminar" : "panelCapturas")"
-               data-open-target>
+               data-open-target data-smart-priority-link>
                 <i class="bi @(accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "bi-play-circle" : "bi-arrow-down-circle") me-1"></i>
                 @(accionActual == "CONFIGURAR_CORRIDA" ? "Configurar corrida" : accionActual == "REINICIAR_SERIE" ? "Reiniciar ahora" : accionActual == "INICIAR_SERIE" ? "Iniciar ahora" : "Ir a la acción")
             </a>
+        </div>
+    </section>
+
+        <div id="zonaPrioritaria" class="smart-priority-zone"></div>
+
+        <div class="smart-section-label">
+            <span><i class="bi bi-grid me-1"></i>Accesos rápidos</span>
+            <span>El resto permanece plegado</span>
+        </div>
+
+        <div class="smart-quick-actions">
+            <button type="button" class="smart-quick-btn" data-smart-open="#panelDatosEjecucion"><i class="bi bi-info-circle me-1"></i>Datos</button>
+            @if (configuracionTiempoReal != null)
+            {
+                <button type="button" class="smart-quick-btn" data-smart-open="#panelConfiguracionCorrida"><i class="bi bi-sliders me-1"></i>Configuración</button>
+            }
+            <button type="button" class="smart-quick-btn" data-smart-open="#panelChecklist"><i class="bi bi-clipboard-check me-1"></i>Checklist</button>
+            <button type="button" class="smart-quick-btn" data-smart-open="#panelCalidad"><i class="bi bi-patch-check me-1"></i>Calidad</button>
+            @if (monitoreoTurno != null)
+            {
+                <button type="button" class="smart-quick-btn" data-smart-open="#panelMonitoreoTurno"><i class="bi bi-cpu me-1"></i>Turno</button>
+            }
+            @if (e.PuedePausar || Model.TieneParoAbierto)
+            {
+                <button type="button" class="smart-quick-btn" data-smart-open="#panelParo"><i class="bi bi-pause-circle me-1"></i>Paros</button>
+            }
+            @if (puedeVerCapturasHora)
+            {
+                <button type="button" class="smart-quick-btn" data-smart-open="#panelCapturas"><i class="bi bi-clock-history me-1"></i>Capturas</button>
+            }
+            <button type="button" class="smart-quick-btn" data-smart-open="#panelMateriales"><i class="bi bi-box-seam me-1"></i>Materiales</button>
+            <button type="button" class="smart-quick-btn" data-smart-open="#panelHistorialParos"><i class="bi bi-clock-history me-1"></i>Historial paros</button>
+            @if (puedeGestionarCajas)
+            {
+                <a class="smart-quick-btn text-decoration-none" href="@Url.Action("Cajas","Produccion",new { id=e.EjecucionProduccionID })"><i class="bi bi-boxes me-1"></i>Cajas</a>
+            }
+        </div>
+        <div class="smart-help">
+            <i class="bi bi-lightning-charge me-1"></i>
+            Cuando cambia el estado de la ejecución, el bloque necesario se mueve automáticamente a esta zona y se abre. No tienes que buscarlo más abajo.
         </div>
     </section>
 
@@ -1386,7 +1873,7 @@
     <div class="row g-4">
         <div class="col-12 col-xl-4">
 
-            <div class="panel mb-4">
+            <div class="panel mb-4" id="panelDatosEjecucion" data-collapsible data-default-open="false">
                 <div class="panel-header">
                     <i class="bi bi-info-circle me-1"></i>
                     Datos de ejecución
@@ -1771,7 +2258,7 @@
                 </div>
             }
 
-            @if (cambioTurnoTecnico != null)
+            @if (cambioTurnoTecnico != null && puedeGestionarSugerenciaCambioTurno)
             {
                 <div class="panel mb-4" id="panelCambioTurnoTecnico" data-collapsible data-default-open="true">
                     <div class="panel-header d-flex justify-content-between align-items-center gap-2">
@@ -1889,7 +2376,7 @@
                 </div>
             }
 
-            <div class="panel mb-4" id="panelChecklist" data-collapsible data-default-open="@(esPreparacion || Model.ChecklistResumen == null ? "true" : "false")">
+            <div class="panel mb-4" id="panelChecklist" data-collapsible data-default-open="@(accionActual == "GENERAR_CHECKLIST" ? "true" : "false")">
                 <div class="panel-header">
                     <i class="bi bi-clipboard2-check me-1"></i>
                     Checklist de arranque
@@ -2004,7 +2491,7 @@
                 </div>
             }
 
-            <div class="panel mb-4" id="panelCalidad" data-collapsible data-default-open="@((calidadRequiereAtencion && Model.CalidadResumen?.PuedeIniciarSerie != true) ? "true" : "false")">
+            <div class="panel mb-4" id="panelCalidad" data-collapsible data-default-open="@(accionActual == "ESPERAR_CALIDAD" ? "true" : "false")">
                 <div class="panel-header">
                     <i class="bi bi-patch-check me-1"></i>
                     Liberación de Calidad
@@ -2140,7 +2627,7 @@
 
             @if (e.PuedeTerminar && !Model.TieneParoAbierto)
             {
-                <div class="panel" id="panelTerminar">
+                <div class="panel" id="panelTerminar" data-collapsible data-default-open="@(accionActual == "TERMINAR" ? "true" : "false")">
                     <div class="panel-header">
                         <i class="bi bi-flag me-1"></i>
                         Terminar producción
@@ -2302,89 +2789,185 @@
                 </div>
             </div>
 
-            <div class="panel mb-4" id="panelCapturas" data-collapsible data-default-open="true">
-                <div class="panel-header">
-                    <i class="bi bi-clock-history me-1"></i>
-                    Capturas por hora y objetivos del operador
-                </div>
+            @if (puedeVerCapturasHora)
+            {
+                var registrosOrdenados = Model.RegistrosHora
+                    .OrderByDescending(x => x.FechaProduccion)
+                    .ThenByDescending(x => x.HoraInicio)
+                    .ThenByDescending(x => x.RegistroHoraID)
+                    .ToList();
+                var indiceCaptura = 0;
 
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 align-middle">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Hora</th>
-                                <th class="text-center">Objetivo</th>
-                                <th class="text-center">OK</th>
-                                <th class="text-center">Sospechoso</th>
-                                <th class="text-center">Scrap</th>
-                                <th>Cumplimiento</th>
-                                <th>Observaciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (!Model.RegistrosHora.Any())
+                <div class="panel mb-4" id="panelCapturas" data-collapsible data-default-open="@(accionActual == "SEGUIMIENTO" ? "true" : "false")">
+                    <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span>
+                            <i class="bi bi-clock-history me-1"></i>
+                            Capturas de producción
+                        </span>
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-primary">@registrosOrdenados.Count registro(s)</span>
+                            @if (cortesTiempoExtra > 0)
                             {
-                                <tr>
-                                    <td colspan="8" class="text-center text-muted py-4">
-                                        Sin capturas por hora.
-                                    </td>
-                                </tr>
+                                <span class="badge bg-purple text-white" style="background:#7c3aed!important;">@cortesTiempoExtra tiempo extra</span>
                             }
-                            else
+                        </div>
+                    </div>
+
+                    <div class="capture-list">
+                        @if (!registrosOrdenados.Any())
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                Sin capturas registradas.
+                            </div>
+                        }
+                        else
+                        {
+                            foreach (var r in registrosOrdenados)
                             {
-                                foreach (var r in Model.RegistrosHora)
+                                indiceCaptura++;
+                                var objetivoRegistro = r.ObjetivoBloque ?? r.ObjetivoHora;
+                                var piezasFisicas = r.PiezasCalculadasContador ?? r.TotalCapturado;
+                                var minutosRegistro = r.MinutosProductivos;
+                                if (!minutosRegistro.HasValue)
                                 {
-                                    var objetivoRegistro = r.ObjetivoBloque ?? r.ObjetivoHora;
-                                    var porcentajeRegistro = r.PorcentajeCumplimiento;
-                                    var cumplioRegistro = r.CumplioObjetivo;
-                                    <tr>
-                                        <td>@r.FechaProduccion.ToString("dd/MM/yyyy")</td>
-                                        <td class="fw-bold">@r.RangoHora</td>
-                                        <td class="text-center">
-                                            @if (objetivoRegistro.HasValue && objetivoRegistro.Value > 0)
-                                            {
-                                                <span class="objective-pill">@objetivoRegistro.Value.ToString("N0") PZA</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">-</span>
-                                            }
-                                        </td>
-                                        <td class="text-center fw-bold text-success">@r.CantidadOK.ToString("N0")</td>
-                                        <td class="text-center fw-bold text-warning">@r.CantidadSospechosa.ToString("N0")</td>
-                                        <td class="text-center fw-bold text-danger">@r.CantidadScrap.ToString("N0")</td>
-                                        <td>
-                                            @if (!objetivoRegistro.HasValue || objetivoRegistro.Value <= 0)
-                                            {
-                                                <span class="objective-result neutral">
-                                                    Sin objetivo
-                                                    <small>No evaluable</small>
-                                                </span>
-                                            }
-                                            else if (cumplioRegistro == true)
-                                            {
-                                                <span class="objective-result ok">
-                                                    <span><i class="bi bi-check-circle me-1"></i>Cumplió</span>
-                                                    <small>@(porcentajeRegistro?.ToString("0.#") ?? "-")%</small>
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="objective-result fail">
-                                                    <span><i class="bi bi-x-circle me-1"></i>No cumplió</span>
-                                                    <small>@(porcentajeRegistro?.ToString("0.#") ?? "-")%</small>
-                                                </span>
-                                            }
-                                        </td>
-                                        <td>@r.Observaciones</td>
-                                    </tr>
+                                    var duracion = r.HoraFin >= r.HoraInicio
+                                        ? r.HoraFin - r.HoraInicio
+                                        : (TimeSpan.FromDays(1) - r.HoraInicio) + r.HoraFin;
+                                    minutosRegistro = Convert.ToDecimal(duracion.TotalMinutes);
                                 }
+                                var ocultarInicial = indiceCaptura > 8;
+                                var idSegmentos = $"segmentosRegistro_{r.RegistroHoraID}";
+
+                                <article class="capture-card @(r.EsTiempoExtra ? "is-extra" : "is-normal") @(ocultarInicial ? "capture-hidden" : "")" data-capture-card>
+                                    <div class="capture-heading">
+                                        <div class="d-flex flex-wrap align-items-center gap-2">
+                                            <span class="capture-type @(r.EsTiempoExtra ? "extra" : "")">
+                                                <i class="bi @(r.EsTiempoExtra ? "bi-stopwatch" : "bi-clock")"></i>
+                                                @if (r.EsTiempoExtra)
+                                                {
+                                                    <text>@(string.IsNullOrWhiteSpace(r.TipoBloque) ? "TIEMPO EXTRA" : r.TipoBloque.Replace("_", " "))</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>CAPTURA NORMAL</text>
+                                                }
+                                            </span>
+                                            <span class="capture-time">@r.FechaProduccion.ToString("dd/MM/yyyy") · @r.RangoHora</span>
+                                        </div>
+
+                                        @if (!objetivoRegistro.HasValue || objetivoRegistro.Value <= 0)
+                                        {
+                                            <span class="objective-result neutral"><span>Sin objetivo</span><small>No evaluable</small></span>
+                                        }
+                                        else if (r.CumplioObjetivo == true)
+                                        {
+                                            <span class="objective-result ok"><span><i class="bi bi-check-circle me-1"></i>Cumplió</span><small>@(r.PorcentajeCumplimiento?.ToString("0.#") ?? "-")%</small></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="objective-result fail"><span><i class="bi bi-x-circle me-1"></i>No cumplió</span><small>@(r.PorcentajeCumplimiento?.ToString("0.#") ?? "-")%</small></span>
+                                        }
+                                    </div>
+
+                                    <div class="capture-grid">
+                                        <div class="capture-stat">
+                                            <div class="capture-stat-label">Físicas</div>
+                                            <div class="capture-stat-value">@piezasFisicas.ToString("N0")</div>
+                                        </div>
+                                        <div class="capture-stat">
+                                            <div class="capture-stat-label">OK</div>
+                                            <div class="capture-stat-value text-success">@r.CantidadOK.ToString("N0")</div>
+                                        </div>
+                                        <div class="capture-stat">
+                                            <div class="capture-stat-label">Sospechoso</div>
+                                            <div class="capture-stat-value text-warning">@r.CantidadSospechosa.ToString("N0")</div>
+                                        </div>
+                                        <div class="capture-stat">
+                                            <div class="capture-stat-label">Scrap</div>
+                                            <div class="capture-stat-value text-danger">@r.CantidadScrap.ToString("N0")</div>
+                                        </div>
+                                        <div class="capture-stat">
+                                            <div class="capture-stat-label">Min. productivos</div>
+                                            <div class="capture-stat-value">@minutosRegistro.Value.ToString("0.##")</div>
+                                        </div>
+                                        <div class="capture-stat">
+                                            <div class="capture-stat-label">Contador</div>
+                                            <div class="capture-stat-value">@(r.ContadorInicial?.ToString("N0") ?? "-") → @(r.ContadorFinal?.ToString("N0") ?? "-")</div>
+                                        </div>
+                                        <div class="capture-stat">
+                                            <div class="capture-stat-label">Objetivo</div>
+                                            <div class="capture-stat-value">@(objetivoRegistro?.ToString("N0") ?? "-")</div>
+                                        </div>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(r.Observaciones))
+                                    {
+                                        <div class="capture-observation">
+                                            <i class="bi bi-chat-left-text me-1"></i>@r.Observaciones
+                                        </div>
+                                    }
+
+                                    @if (r.TieneCambioConfiguracion || r.TieneReinicioContador || (r.Segmentos?.Count ?? 0) > 1)
+                                    {
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            @if (r.TieneCambioConfiguracion)
+                                            {
+                                                <span class="badge bg-info text-dark"><i class="bi bi-sliders me-1"></i>Cambio de configuración</span>
+                                            }
+                                            @if (r.TieneReinicioContador)
+                                            {
+                                                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-counterclockwise me-1"></i>Reinicio de contador</span>
+                                            }
+                                            @if ((r.Segmentos?.Count ?? 0) > 1)
+                                            {
+                                                <span class="badge bg-secondary">@r.Segmentos.Count segmentos</span>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (r.Segmentos != null && r.Segmentos.Any())
+                                    {
+                                        <div class="capture-segments">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" data-bs-toggle="collapse" data-bs-target="#@idSegmentos" aria-expanded="false">
+                                                <i class="bi bi-diagram-3 me-1"></i>Ver detalle técnico
+                                            </button>
+                                            <div class="collapse" id="@idSegmentos">
+                                                <div class="segment-grid">
+                                                    @foreach (var s in r.Segmentos.OrderBy(x => x.NumeroSegmento))
+                                                    {
+                                                        <div class="segment-card">
+                                                            <div class="d-flex justify-content-between gap-2">
+                                                                <strong>Segmento @s.NumeroSegmento</strong>
+                                                                <span>@s.Rango</span>
+                                                            </div>
+                                                            <div class="mt-1">Contador: <strong>@s.ContadorInicial.ToString("N0") → @s.ContadorFinal.ToString("N0")</strong></div>
+                                                            <div>Cavidades: <strong>@s.CavidadesUsadas</strong> · Ciclo: <strong>@s.TiempoCicloSegundos.ToString("0.####") s</strong></div>
+                                                            <div>Piezas: <strong>@s.PiezasCalculadas.ToString("N0")</strong> · Min: <strong>@s.MinutosProductivos.ToString("0.##")</strong></div>
+                                                            @if (!string.IsNullOrWhiteSpace(s.Observaciones))
+                                                            {
+                                                                <div class="mt-1 text-warning">@s.Observaciones</div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </article>
                             }
-                        </tbody>
-                    </table>
+
+                            @if (registrosOrdenados.Count > 8)
+                            {
+                                <button type="button" class="btn btn-outline-primary btn-strong" data-capture-show-all>
+                                    <i class="bi bi-chevron-down me-1"></i>
+                                    Mostrar @(registrosOrdenados.Count - 8) captura(s) anteriores
+                                </button>
+                            }
+                        }
+                    </div>
                 </div>
-            </div>
+            }
 
             <div class="panel" id="panelHistorialParos" data-collapsible data-default-open="false">
                 <div class="panel-header">
@@ -2668,9 +3251,54 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            const workspace = document.querySelector('[data-smart-workspace]');
+            const zonaPrioritaria = document.getElementById('zonaPrioritaria');
+
+            function abrirPanel(panel, desplazar) {
+                if (!panel) return;
+                panel.classList.remove('is-collapsed');
+                const header = panel.querySelector(':scope > .panel-header');
+                if (header) header.setAttribute('aria-expanded', 'true');
+                if (desplazar) {
+                    window.setTimeout(function () {
+                        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 40);
+                }
+            }
+
+            if (workspace && zonaPrioritaria) {
+                const selectorPrioridad = workspace.dataset.priorityTarget;
+                if (selectorPrioridad) {
+                    const panelPrioritario = document.querySelector(selectorPrioridad);
+                    if (panelPrioritario) {
+                        panelPrioritario.classList.add('smart-priority-panel');
+                        zonaPrioritaria.appendChild(panelPrioritario);
+                        abrirPanel(panelPrioritario, false);
+                    }
+                }
+            }
+
+            document.querySelectorAll('[data-smart-open]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const selector = button.dataset.smartOpen;
+                    if (!selector) return;
+                    abrirPanel(document.querySelector(selector), true);
+                });
+            });
+
+            const botonCapturas = document.querySelector('[data-capture-show-all]');
+            if (botonCapturas) {
+                botonCapturas.addEventListener('click', function () {
+                    document.querySelectorAll('.capture-hidden').forEach(function (item) {
+                        item.classList.add('is-visible');
+                    });
+                    botonCapturas.remove();
+                });
+            }
+
             document.querySelectorAll('.panel[data-collapsible]').forEach(function (panel) {
                 const header = panel.querySelector(':scope > .panel-header');
-                const abierto = panel.dataset.defaultOpen === 'true';
+                const abierto = panel.classList.contains('smart-priority-panel') || panel.dataset.defaultOpen === 'true';
 
                 panel.classList.toggle('is-collapsed', !abierto);
 
@@ -2709,6 +3337,10 @@
 
                     const header = panel.querySelector(':scope > .panel-header');
                     if (header) header.setAttribute('aria-expanded', 'true');
+
+                    window.setTimeout(function () {
+                        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 40);
                 });
             });
 

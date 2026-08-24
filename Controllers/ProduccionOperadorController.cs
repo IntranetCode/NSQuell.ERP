@@ -534,9 +534,7 @@ ORDER BY te.TiempoExtraID DESC;";
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RegistrarHora(ProduccionRegistroHoraPostVm vm)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
-
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
             if (vm.EjecucionProduccionID <= 0)
             {
                 TempData["Error"] = "No se recibió la ejecución de producción.";
@@ -553,9 +551,7 @@ ORDER BY te.TiempoExtraID DESC;";
             var horaFin = new TimeSpan(horaFinEnviada.Hours, horaFinEnviada.Minutes, 0);
             var fechaInicioSolicitada = vm.FechaProduccion.Date.Add(horaInicio);
             var fechaFinSolicitada = vm.FechaProduccion.Date.Add(horaFin);
-
-            if (fechaFinSolicitada <= fechaInicioSolicitada)
-                fechaFinSolicitada = fechaFinSolicitada.AddDays(1);
+            if (fechaFinSolicitada <= fechaInicioSolicitada) fechaFinSolicitada = fechaFinSolicitada.AddDays(1);
 
             if (DateTime.Now < fechaFinSolicitada)
             {
@@ -575,9 +571,16 @@ ORDER BY te.TiempoExtraID DESC;";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
 
-            if (vm.CantidadSospechosa < 0 || vm.CantidadScrap < 0)
+            if (vm.CantidadOK < 0 || vm.CantidadSospechosa < 0 || vm.CantidadScrap < 0)
             {
-                TempData["Error"] = "Las cantidades de sospechosos y scrap no pueden ser negativas.";
+                TempData["Error"] = "Las cantidades OK, sospechosas y scrap no pueden ser negativas.";
+                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+            }
+
+            vm.Observaciones = vm.Observaciones?.Trim();
+            if (!string.IsNullOrWhiteSpace(vm.Observaciones) && vm.Observaciones.Length > 500)
+            {
+                TempData["Error"] = "Las observaciones no pueden superar 500 caracteres.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
 
@@ -585,13 +588,10 @@ ORDER BY te.TiempoExtraID DESC;";
             await cn.OpenAsync();
 
             var usuarioId = ObtenerUsuarioID();
-
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn))
-                return AccesoDenegadoOperador();
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
 
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
-            if (!personaId.HasValue || personaId.Value <= 0)
-                return AccesoDenegadoOperador();
+            if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
 
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
@@ -633,7 +633,7 @@ ORDER BY te.TiempoExtraID DESC;";
                 }
 
                 var configuracionActual = await ObtenerConfiguracionActualOperadorAsync(vm.EjecucionProduccionID, cn, tx);
-                if (configuracionActual == null)
+                if (configuracionActual == null || !configuracionActual.EstaVigente)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La corrida no tiene configuración técnica vigente. El Técnico de Producción debe confirmar cavidades y ciclo.";
@@ -669,8 +669,7 @@ ORDER BY te.TiempoExtraID DESC;";
 
                 var fechaInicioFila = filaSolicitada.FechaProduccion.Date.Add(filaSolicitada.HoraInicio);
                 var fechaFinFila = filaSolicitada.FechaProduccion.Date.Add(filaSolicitada.HoraFin);
-                if (fechaFinFila <= fechaInicioFila)
-                    fechaFinFila = fechaFinFila.AddDays(1);
+                if (fechaFinFila <= fechaInicioFila) fechaFinFila = fechaFinFila.AddDays(1);
 
                 var diferenciaInicioSegundos = Math.Abs((fechaInicioFila - fechaInicioSolicitada).TotalSeconds);
                 if (diferenciaInicioSegundos >= 60)
@@ -716,23 +715,46 @@ ORDER BY te.TiempoExtraID DESC;";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
 
-                // El navegador NO decide las piezas OK.
-                // El servidor las calcula siempre con la producción física.
-                vm.CantidadOK = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
+                var okSugerido = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
+                var okCapturado = vm.CantidadOK;
+                var okModificadoManual = okCapturado != okSugerido;
+                var totalClasificado = (long)okCapturado + vm.CantidadSospechosa + vm.CantidadScrap;
 
-                if (calculo.PiezasCalculadas == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
+                if (totalClasificado > int.MaxValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La cantidad total clasificada excede el máximo permitido.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (totalClasificado != calculo.PiezasCalculadas && string.IsNullOrWhiteSpace(vm.Observaciones))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La clasificación suma {totalClasificado:N0} pieza(s), mientras que el contador indica {calculo.PiezasCalculadas:N0}. Puedes conservar el OK capturado, pero debes agregar una observación explicando la diferencia.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (calculo.PiezasCalculadas == 0 && totalClasificado == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "El contador no registró producción durante este bloque. Indica en observaciones qué ocurrió.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
 
+                vm.CantidadOK = okCapturado;
+                vm.OkModificadoManual = okModificadoManual;
+                if (okModificadoManual) vm.Observaciones = ConstruirObservacionAuditoriaOkManual(okSugerido, okCapturado, calculo.PiezasCalculadas, totalClasificado, vm.Observaciones);
+
+                vm.EsTiempoExtra = false;
+                vm.MinutosTiempoExtra = null;
+                vm.TiempoExtraID = null;
+                vm.NumeroCorteTiempoExtra = null;
+                vm.FinalizarTiempoExtra = false;
                 vm.FechaProduccion = fechaProduccionReal;
                 vm.HoraInicio = horaInicioReal.ToString(@"hh\:mm");
                 vm.HoraFin = horaFinReal.ToString(@"hh\:mm");
 
                 var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
-
                 await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucion.EjecucionProduccionID, calculo, usuarioId, cn, tx);
                 await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
                 await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucion.EjecucionProduccionID, registroHoraId, vm.CantidadOK, calculo.PiezasCalculadas, usuarioId, cn, tx);
@@ -747,7 +769,8 @@ ORDER BY te.TiempoExtraID DESC;";
                     vm.CantidadSospechosa,
                     vm.CantidadScrap,
                     vm.ContadorMaquinaActual.Value,
-                    calculo);
+                    calculo,
+                    vm.OkModificadoManual);
 
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
@@ -758,6 +781,7 @@ ORDER BY te.TiempoExtraID DESC;";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
         }
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -3623,37 +3647,26 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
             };
         }
 
-        private async Task<int> InsertarRegistroHoraAsync(
-    ProduccionEjecucionVm ejecucion,
-    ProduccionRegistroHoraPostVm vm,
-    TimeSpan horaInicio,
-    TimeSpan horaFin,
-    int operadorPersonaId,
-    int usuarioId,
-    CalculoProduccionContadorHora calculo,
-    SqlConnection cn,
-    SqlTransaction tx)
+        private async Task<int> InsertarRegistroHoraAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int operadorPersonaId, int usuarioId, CalculoProduccionContadorHora calculo, SqlConnection cn, SqlTransaction tx)
         {
+            if (vm.EsTiempoExtra && (!vm.TiempoExtraID.HasValue || vm.TiempoExtraID.Value <= 0 || !vm.NumeroCorteTiempoExtra.HasValue || vm.NumeroCorteTiempoExtra.Value <= 0))
+                throw new InvalidOperationException("El registro de tiempo extra no contiene una sesión y número de corte válidos.");
+
+            if (!vm.EsTiempoExtra)
+            {
+                vm.TiempoExtraID = null;
+                vm.NumeroCorteTiempoExtra = null;
+            }
+
             bool? cumplioObjetivo = null;
             int? diferenciaObjetivo = null;
             decimal? porcentajeCumplimiento = null;
 
             if (calculo.ObjetivoBloque > 0)
             {
-                diferenciaObjetivo =
-                    vm.CantidadOK -
-                    calculo.ObjetivoBloque;
-
-                cumplioObjetivo =
-                    vm.CantidadOK >=
-                    calculo.ObjetivoBloque;
-
-                porcentajeCumplimiento =
-                    Math.Round(
-                        (decimal)vm.CantidadOK *
-                        100m /
-                        calculo.ObjetivoBloque,
-                        2);
+                diferenciaObjetivo = vm.CantidadOK - calculo.ObjetivoBloque;
+                cumplioObjetivo = vm.CantidadOK >= calculo.ObjetivoBloque;
+                porcentajeCumplimiento = Math.Round((decimal)vm.CantidadOK * 100m / calculo.ObjetivoBloque, 2);
             }
 
             const string sql = @"
@@ -3667,24 +3680,22 @@ INSERT INTO dbo.Produccion_RegistroHora
     FechaProduccion,
     HoraInicio,
     HoraFin,
-
     CantidadOK,
     CantidadSospechosa,
     CantidadScrap,
-
     ObjetivoHora,
     ObjetivoBloque,
     CumplioObjetivo,
     DiferenciaObjetivo,
     PorcentajeCumplimiento,
-
     PiezasCalculadasContador,
     MinutosProductivos,
     EsTiempoExtra,
     TipoBloque,
+    TiempoExtraID,
+    NumeroCorteTiempoExtra,
     TieneCambioConfiguracion,
     TieneReinicioContador,
-
     Observaciones,
     UsuarioCreacionID,
     FechaCreacion,
@@ -3701,195 +3712,84 @@ VALUES
     @FechaProduccion,
     @HoraInicio,
     @HoraFin,
-
     @CantidadOK,
     @CantidadSospechosa,
     @CantidadScrap,
-
     @ObjetivoHora,
     @ObjetivoBloque,
     @CumplioObjetivo,
     @DiferenciaObjetivo,
     @PorcentajeCumplimiento,
-
     @PiezasCalculadasContador,
     @MinutosProductivos,
     @EsTiempoExtra,
     @TipoBloque,
+    @TiempoExtraID,
+    @NumeroCorteTiempoExtra,
     @TieneCambioConfiguracion,
     @TieneReinicioContador,
-
     @Observaciones,
     @UsuarioID,
     SYSDATETIME(),
     1
 );";
 
-            await using var cmd =
-                new SqlCommand(
-                    sql,
-                    cn,
-                    tx);
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = ejecucion.ProgramaProduccionID;
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)ejecucion.SolicitudProduccionID ?? DBNull.Value;
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)ejecucion.MaquinaID ?? DBNull.Value;
+            cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value = operadorPersonaId;
+            cmd.Parameters.Add("@FechaProduccion", SqlDbType.Date).Value = vm.FechaProduccion.Date;
+            cmd.Parameters.Add("@HoraInicio", SqlDbType.Time).Value = horaInicio;
+            cmd.Parameters.Add("@HoraFin", SqlDbType.Time).Value = horaFin;
+            cmd.Parameters.Add("@CantidadOK", SqlDbType.Int).Value = vm.CantidadOK;
+            cmd.Parameters.Add("@CantidadSospechosa", SqlDbType.Int).Value = vm.CantidadSospechosa;
+            cmd.Parameters.Add("@CantidadScrap", SqlDbType.Int).Value = vm.CantidadScrap;
+            cmd.Parameters.Add("@ObjetivoHora", SqlDbType.Int).Value = calculo.ObjetivoHora;
+            cmd.Parameters.Add("@ObjetivoBloque", SqlDbType.Int).Value = calculo.ObjetivoBloque;
+            cmd.Parameters.Add("@CumplioObjetivo", SqlDbType.Bit).Value = (object?)cumplioObjetivo ?? DBNull.Value;
+            cmd.Parameters.Add("@DiferenciaObjetivo", SqlDbType.Int).Value = (object?)diferenciaObjetivo ?? DBNull.Value;
 
-            cmd.Parameters.Add(
-                "@EjecucionProduccionID",
-                SqlDbType.Int).Value =
-                ejecucion.EjecucionProduccionID;
-
-            cmd.Parameters.Add(
-                "@ProgramaProduccionID",
-                SqlDbType.Int).Value =
-                ejecucion.ProgramaProduccionID;
-
-            cmd.Parameters.Add(
-                "@SolicitudProduccionID",
-                SqlDbType.Int).Value =
-                (object?)ejecucion.SolicitudProduccionID ??
-                DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@MaquinaID",
-                SqlDbType.Int).Value =
-                (object?)ejecucion.MaquinaID ??
-                DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@OperadorID",
-                SqlDbType.Int).Value =
-                operadorPersonaId;
-
-            cmd.Parameters.Add(
-                "@FechaProduccion",
-                SqlDbType.Date).Value =
-                vm.FechaProduccion.Date;
-
-            cmd.Parameters.Add(
-                "@HoraInicio",
-                SqlDbType.Time).Value =
-                horaInicio;
-
-            cmd.Parameters.Add(
-                "@HoraFin",
-                SqlDbType.Time).Value =
-                horaFin;
-
-            cmd.Parameters.Add(
-                "@CantidadOK",
-                SqlDbType.Int).Value =
-                vm.CantidadOK;
-
-            cmd.Parameters.Add(
-                "@CantidadSospechosa",
-                SqlDbType.Int).Value =
-                vm.CantidadSospechosa;
-
-            cmd.Parameters.Add(
-                "@CantidadScrap",
-                SqlDbType.Int).Value =
-                vm.CantidadScrap;
-
-            cmd.Parameters.Add(
-                "@ObjetivoHora",
-                SqlDbType.Int).Value =
-                calculo.ObjetivoHora;
-
-            cmd.Parameters.Add(
-                "@ObjetivoBloque",
-                SqlDbType.Int).Value =
-                calculo.ObjetivoBloque;
-
-            cmd.Parameters.Add(
-                "@CumplioObjetivo",
-                SqlDbType.Bit).Value =
-                (object?)cumplioObjetivo ??
-                DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@DiferenciaObjetivo",
-                SqlDbType.Int).Value =
-                (object?)diferenciaObjetivo ??
-                DBNull.Value;
-
-            var pPorcentaje =
-                cmd.Parameters.Add(
-                    "@PorcentajeCumplimiento",
-                    SqlDbType.Decimal);
-
+            var pPorcentaje = cmd.Parameters.Add("@PorcentajeCumplimiento", SqlDbType.Decimal);
             pPorcentaje.Precision = 8;
             pPorcentaje.Scale = 2;
-            pPorcentaje.Value =
-                (object?)porcentajeCumplimiento ??
-                DBNull.Value;
+            pPorcentaje.Value = (object?)porcentajeCumplimiento ?? DBNull.Value;
 
-            cmd.Parameters.Add(
-                "@PiezasCalculadasContador",
-                SqlDbType.Int).Value =
-                calculo.PiezasCalculadas;
+            cmd.Parameters.Add("@PiezasCalculadasContador", SqlDbType.Int).Value = calculo.PiezasCalculadas;
 
-            var pMinutos =
-                cmd.Parameters.Add(
-                    "@MinutosProductivos",
-                    SqlDbType.Decimal);
-
+            var pMinutos = cmd.Parameters.Add("@MinutosProductivos", SqlDbType.Decimal);
             pMinutos.Precision = 10;
             pMinutos.Scale = 2;
-            pMinutos.Value =
-                calculo.MinutosProductivos;
+            pMinutos.Value = calculo.MinutosProductivos;
 
-            cmd.Parameters.Add(
-                "@EsTiempoExtra",
-                SqlDbType.Bit).Value =
-                vm.EsTiempoExtra;
+            cmd.Parameters.Add("@EsTiempoExtra", SqlDbType.Bit).Value = vm.EsTiempoExtra;
+            cmd.Parameters.Add("@TipoBloque", SqlDbType.NVarChar, 30).Value = vm.EsTiempoExtra ? "TIEMPO_EXTRA" : "NORMAL";
+            cmd.Parameters.Add("@TiempoExtraID", SqlDbType.Int).Value = (object?)vm.TiempoExtraID ?? DBNull.Value;
+            cmd.Parameters.Add("@NumeroCorteTiempoExtra", SqlDbType.Int).Value = (object?)vm.NumeroCorteTiempoExtra ?? DBNull.Value;
+            cmd.Parameters.Add("@TieneCambioConfiguracion", SqlDbType.Bit).Value = calculo.TieneCambioConfiguracion;
+            cmd.Parameters.Add("@TieneReinicioContador", SqlDbType.Bit).Value = calculo.TieneReinicioContador;
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(vm.Observaciones) ? DBNull.Value : vm.Observaciones.Trim();
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
 
-            cmd.Parameters.Add(
-                "@TipoBloque",
-                SqlDbType.NVarChar,
-                30).Value =
-                vm.EsTiempoExtra
-                    ? "TIEMPO_EXTRA"
-                    : "NORMAL";
+            var resultado = await cmd.ExecuteScalarAsync();
 
-            cmd.Parameters.Add(
-                "@TieneCambioConfiguracion",
-                SqlDbType.Bit).Value =
-                calculo.TieneCambioConfiguracion;
+            if (resultado == null || resultado == DBNull.Value)
+                throw new InvalidOperationException("No fue posible obtener el identificador del registro horario.");
 
-            cmd.Parameters.Add(
-                "@TieneReinicioContador",
-                SqlDbType.Bit).Value =
-                calculo.TieneReinicioContador;
-
-            cmd.Parameters.Add(
-                "@Observaciones",
-                SqlDbType.NVarChar,
-                500).Value =
-                string.IsNullOrWhiteSpace(
-                    vm.Observaciones)
-                    ? DBNull.Value
-                    : vm.Observaciones.Trim();
-
-            cmd.Parameters.Add(
-                "@UsuarioID",
-                SqlDbType.Int).Value =
-                usuarioId;
-
-            var resultado =
-                await cmd.ExecuteScalarAsync();
-
-            if (resultado == null ||
-                resultado == DBNull.Value)
-            {
-                throw new InvalidOperationException(
-                    "No fue posible obtener el identificador del registro horario.");
-            }
-
-            return Convert.ToInt32(
-                resultado);
+            return Convert.ToInt32(resultado);
         }
 
-        private static string ConstruirMensajeCumplimientoHora(int numeroHora, int cantidadOK, int cantidadSospechosa, int cantidadScrap, long contadorActual, CalculoProduccionContadorHora calculo)
+        private static string ConstruirMensajeCumplimientoHora(int numeroHora, int cantidadOK, int cantidadSospechosa, int cantidadScrap, long contadorActual, CalculoProduccionContadorHora calculo, bool okModificadoManual)
         {
-            var mensaje = $"Hora {numeroHora} guardada. Contador: {contadorActual:N0}. Producción física: {calculo.PiezasCalculadas:N0} pieza(s). OK calculadas automáticamente: {cantidadOK:N0}; sospechosas: {cantidadSospechosa:N0}; posible scrap: {cantidadScrap:N0}.";
+            var textoOk = okModificadoManual
+                ? $"OK registradas manualmente: {cantidadOK:N0}"
+                : $"OK sugeridas por el ERP: {cantidadOK:N0}";
+
+            var mensaje = $"Hora {numeroHora} guardada. Contador: {contadorActual:N0}. Producción física: {calculo.PiezasCalculadas:N0} pieza(s). {textoOk}; sospechosas: {cantidadSospechosa:N0}; posible scrap: {cantidadScrap:N0}.";
+
+            if (okModificadoManual)
+                mensaje += " El operador modificó el OK sugerido y la corrección quedó registrada para trazabilidad.";
 
             if (calculo.ObjetivoBloque > 0)
             {
@@ -3922,16 +3822,24 @@ VALUES
             if (ejecucion.EjecucionProduccionID <= 0) throw new InvalidOperationException("La ejecución de Producción no es válida.");
             if (registroHoraId <= 0) throw new InvalidOperationException("El registro horario no es válido.");
             if (usuarioId <= 0) throw new InvalidOperationException("No se pudo identificar al usuario que capturó la hora.");
+
             var fechaHoraInicio = vm.FechaProduccion.Date.Add(horaInicio);
             var fechaHoraFin = vm.FechaProduccion.Date.Add(horaFin);
             if (fechaHoraFin <= fechaHoraInicio) fechaHoraFin = fechaHoraFin.AddDays(1);
-            var cantidadPeriodo = vm.CantidadOK + vm.CantidadSospechosa + vm.CantidadScrap;
+
+            var cantidadPeriodoLong = (long)vm.CantidadOK + vm.CantidadSospechosa + vm.CantidadScrap;
+            if (cantidadPeriodoLong > int.MaxValue) throw new InvalidOperationException("La cantidad producida del periodo excede el máximo permitido.");
+
+            var cantidadPeriodo = Convert.ToInt32(cantidadPeriodoLong);
             var cantidadPendienteRevision = vm.CantidadSospechosa + vm.CantidadScrap;
+
             const string sql = @"
 DECLARE @InspeccionID INT;
 DECLARE @EstadoInspeccion NVARCHAR(50);
 DECLARE @MonitoreoID INT;
 DECLARE @RegistroHoraVinculado INT;
+DECLARE @NumeroHoraExtra INT;
+
 SELECT TOP(1)
     @InspeccionID=ci.InspeccionID,
     @EstadoInspeccion=UPPER(LTRIM(RTRIM(ISNULL(ci.Estado,N''))))
@@ -3939,10 +3847,13 @@ FROM dbo.Calidad_Inspecciones ci WITH(UPDLOCK,HOLDLOCK)
 WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
   AND ISNULL(ci.Estado,N'')<>N'CERRADA'
 ORDER BY ci.InspeccionID DESC;
+
 IF @InspeccionID IS NULL
     THROW 51050,'No existe una inspección activa de Calidad para la ejecución.',1;
+
 IF @EstadoInspeccion<>N'MONITOREO_ACTIVO'
     THROW 51051,'La inspección de Calidad no se encuentra en monitoreo activo.',1;
+
 SELECT TOP(1)
     @MonitoreoID=m.MonitoreoID,
     @RegistroHoraVinculado=m.RegistroHoraID
@@ -3952,6 +3863,7 @@ WHERE m.InspeccionID=@InspeccionID
   AND m.RegistroHoraID=@RegistroHoraID
   AND m.Activo=1
 ORDER BY m.MonitoreoID DESC;
+
 IF @MonitoreoID IS NULL
 BEGIN
     SELECT TOP(1)
@@ -3965,10 +3877,62 @@ BEGIN
       AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N''))))=N'PENDIENTE'
     ORDER BY m.NumeroHora,m.FechaHoraProgramada,m.MonitoreoID;
 END;
+
+IF @MonitoreoID IS NULL AND @EsTiempoExtra=1
+BEGIN
+    SELECT @NumeroHoraExtra=ISNULL(MAX(m.NumeroHora),0)+1
+    FROM dbo.Calidad_MonitoreosProceso m WITH(UPDLOCK,HOLDLOCK)
+    WHERE m.InspeccionID=@InspeccionID;
+
+    INSERT INTO dbo.Calidad_MonitoreosProceso
+    (
+        InspeccionID,
+        EjecucionProduccionID,
+        RegistroHoraID,
+        NumeroHora,
+        FechaHoraProgramada,
+        CantidadProducidaPeriodo,
+        CantidadRevisadaMuestra,
+        Resultado,
+        CantidadSospechosa,
+        CantidadNoRecuperable,
+        RequiereSeleccion,
+        RequiereRetrabajo,
+        Observaciones,
+        UsuarioCreacionID,
+        FechaCreacion,
+        Activo
+    )
+    VALUES
+    (
+        @InspeccionID,
+        @EjecucionProduccionID,
+        @RegistroHoraID,
+        @NumeroHoraExtra,
+        @FechaHoraFin,
+        @CantidadProducidaPeriodo,
+        0,
+        N'PENDIENTE',
+        0,
+        0,
+        0,
+        0,
+        N'Monitoreo generado automáticamente por un corte de tiempo extra registrado en Producción.',
+        @UsuarioID,
+        SYSDATETIME(),
+        1
+    );
+
+    SET @MonitoreoID=CONVERT(INT,SCOPE_IDENTITY());
+    SET @RegistroHoraVinculado=@RegistroHoraID;
+END;
+
 IF @MonitoreoID IS NULL
     THROW 51052,'No existe un monitoreo horario pendiente para vincular la captura de Producción.',1;
+
 IF @RegistroHoraVinculado IS NOT NULL AND @RegistroHoraVinculado<>@RegistroHoraID
     THROW 51053,'El monitoreo seleccionado ya se encuentra vinculado con otra captura horaria.',1;
+
 IF EXISTS
 (
     SELECT 1
@@ -3978,8 +3942,10 @@ IF EXISTS
       AND m.Activo=1
 )
     THROW 51054,'La captura horaria ya se encuentra vinculada con otro monitoreo de Calidad.',1;
+
 UPDATE dbo.Calidad_MonitoreosProceso
-SET RegistroHoraID=@RegistroHoraID,
+SET
+    RegistroHoraID=@RegistroHoraID,
     CantidadProducidaPeriodo=@CantidadProducidaPeriodo,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=SYSDATETIME()
@@ -3988,8 +3954,10 @@ WHERE MonitoreoID=@MonitoreoID
   AND EjecucionProduccionID=@EjecucionProduccionID
   AND Activo=1
   AND (RegistroHoraID IS NULL OR RegistroHoraID=@RegistroHoraID);
+
 IF @@ROWCOUNT<>1
     THROW 51055,'El monitoreo cambió de estado mientras se vinculaba la captura horaria.',1;
+
 INSERT INTO dbo.Calidad_InspeccionHistorial
 (
     InspeccionID,
@@ -4010,7 +3978,8 @@ SELECT
     CASE WHEN @CantidadPendienteRevision>0 THEN N'PENDIENTE_REVISION' ELSE NULL END,
     CASE WHEN @CantidadPendienteRevision>0 THEN N'AMARILLA' ELSE NULL END,
     CONCAT(
-        N'Captura horaria recibida desde Producción. RegistroHoraID: ',@RegistroHoraID,
+        CASE WHEN @EsTiempoExtra=1 THEN N'Captura de tiempo extra recibida desde Producción. ' ELSE N'Captura horaria recibida desde Producción. ' END,
+        N'RegistroHoraID: ',@RegistroHoraID,
         N'. Periodo: ',CONVERT(NVARCHAR(19),@FechaHoraInicio,120),
         N' a ',CONVERT(NVARCHAR(19),@FechaHoraFin,120),
         N'. OK: ',@CantidadOK,
@@ -4028,6 +3997,7 @@ WHERE NOT EXISTS
       AND h.Movimiento=N'CAPTURA_HORARIA_RECIBIDA'
       AND h.Comentario LIKE N'%RegistroHoraID: '+CONVERT(NVARCHAR(20),@RegistroHoraID)+N'%'
 );";
+
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
             cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
@@ -4038,6 +4008,7 @@ WHERE NOT EXISTS
             cmd.Parameters.Add("@CantidadSospechosa", SqlDbType.Int).Value = vm.CantidadSospechosa;
             cmd.Parameters.Add("@CantidadScrap", SqlDbType.Int).Value = vm.CantidadScrap;
             cmd.Parameters.Add("@CantidadPendienteRevision", SqlDbType.Int).Value = cantidadPendienteRevision;
+            cmd.Parameters.Add("@EsTiempoExtra", SqlDbType.Bit).Value = vm.EsTiempoExtra;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
         }
@@ -6742,9 +6713,7 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
             var ahora =
                 DateTime.Now;
 
-            // ============================================================
-            // REGISTROS HORARIOS YA CAPTURADOS
-            // ============================================================
+          
 
             var registros =
                 new List<ProduccionRegistroHoraVm>();
@@ -6777,6 +6746,7 @@ SELECT
 FROM dbo.Produccion_RegistroHora
 WHERE EjecucionProduccionID=@EjecucionProduccionID
   AND Activo=1
+  AND ISNULL(EsTiempoExtra,0)=0
 ORDER BY
     FechaProduccion,
     HoraInicio;";
@@ -8009,16 +7979,28 @@ SELECT CAST(1 AS BIT) Permitido,@InspeccionID InspeccionID,N'La caja puede envia
         private async Task<bool> ExisteRegistroHoraAsync(int ejecucionProduccionId, DateTime fechaProduccion, TimeSpan horaInicio, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
-SELECT CAST(CASE WHEN EXISTS
+SELECT CAST
 (
-    SELECT 1
-    FROM dbo.Produccion_RegistroHora
-    WHERE EjecucionProduccionID=@EjecucionProduccionID AND FechaProduccion=@FechaProduccion AND HoraInicio=@HoraInicio AND Activo=1
-) THEN 1 ELSE 0 END AS BIT);";
+    CASE WHEN EXISTS
+    (
+        SELECT 1
+        FROM dbo.Produccion_RegistroHora
+        WHERE EjecucionProduccionID=@EjecucionProduccionID
+          AND FechaProduccion=@FechaProduccion
+          AND HoraInicio=@HoraInicio
+          AND Activo=1
+          AND ISNULL(EsTiempoExtra,0)=0
+    )
+    THEN 1
+    ELSE 0
+    END
+AS BIT);";
+
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
             cmd.Parameters.Add("@FechaProduccion", SqlDbType.Date).Value = fechaProduccion.Date;
             cmd.Parameters.Add("@HoraInicio", SqlDbType.Time).Value = horaInicio;
+
             return Convert.ToBoolean(await cmd.ExecuteScalarAsync());
         }
         private async Task<bool> TieneParoAbiertoAsync(
@@ -8493,81 +8475,61 @@ ORDER BY rh.NumeroCorteTiempoExtra,rh.RegistroHoraID;";
         {
             if (ejecucionProduccionId <= 0) return false;
 
-            const string sql = @"
+            var hint = tx != null ? " WITH(UPDLOCK,HOLDLOCK)" : string.Empty;
+            var sql = $@"
 SELECT TOP(1)
-    ISNULL(e.CantidadPlaneada,0) AS CantidadPlaneada,
-    TRY_CONVERT(DECIMAL(18,4),dt.ObjetivoHora) AS ObjetivoHora,
-    ISNULL
+    e.ProgramaProduccionID,
+    e.EstatusID,
+    e.FechaLiberacionMaquina,
+    CASE WHEN EXISTS
     (
-        (
-            SELECT SUM
-            (
-                CASE
-                    WHEN rh.MinutosProductivos IS NOT NULL
-                     AND rh.MinutosProductivos>0
-                        THEN rh.MinutosProductivos
-                    WHEN rh.HoraFin>=rh.HoraInicio
-                        THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
-                    ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
-                END
-            )
-            FROM dbo.Produccion_RegistroHora rh
-            WHERE rh.EjecucionProduccionID=e.EjecucionProduccionID
-              AND rh.Activo=1
-              AND ISNULL(rh.EsTiempoExtra,0)=0
-        ),
-        0
-    ) AS MinutosNormalesCapturados,
-    ISNULL
+        SELECT 1
+        FROM dbo.Produccion_Paros p
+        WHERE p.EjecucionProduccionID=e.EjecucionProduccionID
+          AND p.Activo=1
+          AND p.FechaFinParo IS NULL
+    ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS TieneParoAbierto,
+    CASE WHEN EXISTS
     (
-        (
-            SELECT COUNT(1)
-            FROM dbo.Produccion_Paros p
-            WHERE p.EjecucionProduccionID=e.EjecucionProduccionID
-              AND p.Activo=1
-              AND p.FechaFinParo IS NULL
-        ),
-        0
-    ) AS ParosAbiertos,
-    CASE
-        WHEN e.FechaLiberacionMaquina IS NULL THEN CAST(0 AS BIT)
-        ELSE CAST(1 AS BIT)
-    END AS MaquinaLiberada,
-    e.EstatusID
-FROM dbo.Produccion_Ejecucion e
-OUTER APPLY
-(
-    SELECT TOP(1) dt0.ObjetivoHora
-    FROM dbo.ERP_ParteDatosTecnicos dt0
-    WHERE dt0.ParteID=e.ParteID
-      AND dt0.Activo=1
-    ORDER BY dt0.ParteDatoTecnicoID DESC
-) dt
+        SELECT 1
+        FROM dbo.Produccion_TiempoExtra te
+        WHERE te.EjecucionProduccionID=e.EjecucionProduccionID
+          AND te.Activo=1
+          AND te.FechaHoraFin IS NULL
+          AND UPPER(LTRIM(RTRIM(te.Estado))) IN(N'EN_CURSO',N'PAUSADO')
+    ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS TieneTiempoExtraActivo
+FROM dbo.Produccion_Ejecucion e{hint}
 WHERE e.EjecucionProduccionID=@EjecucionProduccionID
   AND e.Activo=1;";
 
-            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            int programaProduccionId;
+            int estatusId;
+            bool maquinaLiberada;
+            bool tieneParoAbierto;
+            bool tieneTiempoExtraActivo;
 
-            await using var rd = await cmd.ExecuteReaderAsync();
-            if (!await rd.ReadAsync()) return false;
+            await using (var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                await using var rd = await cmd.ExecuteReaderAsync();
 
-            var estatusId = Convert.ToInt32(rd["EstatusID"]);
-            var maquinaLiberada = Convert.ToBoolean(rd["MaquinaLiberada"]);
-            var parosAbiertos = Convert.ToInt32(rd["ParosAbiertos"]);
-            var cantidadPlaneada = Convert.ToInt32(rd["CantidadPlaneada"]);
-            var objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["ObjetivoHora"]);
-            var minutosCapturados = rd["MinutosNormalesCapturados"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["MinutosNormalesCapturados"]);
+                if (!await rd.ReadAsync()) return false;
 
-            if (estatusId != ProduccionEstatus.EnProduccion || maquinaLiberada || parosAbiertos > 0) return false;
-            if (cantidadPlaneada <= 0 || objetivoHora <= 0) return false;
+                programaProduccionId = Convert.ToInt32(rd["ProgramaProduccionID"]);
+                estatusId = Convert.ToInt32(rd["EstatusID"]);
+                maquinaLiberada = rd["FechaLiberacionMaquina"] != DBNull.Value;
+                tieneParoAbierto = Convert.ToBoolean(rd["TieneParoAbierto"]);
+                tieneTiempoExtraActivo = Convert.ToBoolean(rd["TieneTiempoExtraActivo"]);
+            }
 
-            var horasNormalesRequeridas = (int)Math.Ceiling(cantidadPlaneada / objetivoHora);
-            var minutosNormalesRequeridos = horasNormalesRequeridas * 60m;
+            if (estatusId != ProduccionEstatus.EnProduccion) return false;
+            if (maquinaLiberada || tieneParoAbierto || tieneTiempoExtraActivo) return false;
 
-            return minutosCapturados >= minutosNormalesRequeridos;
+            var filasNormales = await ObtenerFilasCapturaHoraAsync(ejecucionProduccionId, programaProduccionId, cn, tx);
+            if (filasNormales.Count == 0) return false;
+
+            return filasNormales.All(x => x.Capturada);
         }
-
         private static ProduccionTiempoExtraVm MapearTiempoExtra(SqlDataReader rd)
         {
             return new ProduccionTiempoExtraVm
@@ -9505,39 +9467,22 @@ VALUES
             }
         }
 
-        private static async Task RegistrarLecturaContadorHoraAsync(
-    ProduccionEjecucionVm ejecucion,
-    int registroHoraId,
-    int operadorPersonaId,
-    int usuarioId,
-    DateTime fechaLectura,
-    long valorContador,
-    CalculoProduccionContadorHora calculo,
-    SqlConnection cn,
-    SqlTransaction tx)
+        private static async Task RegistrarLecturaContadorHoraAsync(ProduccionEjecucionVm ejecucion, int registroHoraId, int operadorPersonaId, int usuarioId, DateTime fechaLectura, long valorContador, CalculoProduccionContadorHora calculo, SqlConnection cn, SqlTransaction tx, bool esTiempoExtra = false)
         {
             if (calculo.Segmentos.Count == 0)
-            {
-                throw new InvalidOperationException(
-                    "No existe un segmento técnico para relacionar la lectura del contador.");
-            }
+                throw new InvalidOperationException("No existe un segmento técnico para relacionar la lectura del contador.");
 
-            var configuracionFinalId =
-                calculo.Segmentos
-                    .OrderByDescending(
-                        x => x.NumeroSegmento)
-                    .First()
-                    .ConfiguracionCorridaID;
+            var configuracionFinalId = calculo.Segmentos.OrderByDescending(x => x.NumeroSegmento).First().ConfiguracionCorridaID;
 
-            var tipoLectura =
-                calculo.TieneReinicioContador
-                    ? ProduccionTipoLecturaContador.ReinicioContador
+            var tipoLectura = calculo.TieneReinicioContador
+                ? ProduccionTipoLecturaContador.ReinicioContador
+                : esTiempoExtra
+                    ? ProduccionTipoLecturaContador.TiempoExtra
                     : ProduccionTipoLecturaContador.FinBloque;
 
-            var motivoReinicio =
-                calculo.TieneReinicioContador
-                    ? "El contador capturado fue menor a la lectura anterior. El sistema interpretó un reinicio del contador."
-                    : null;
+            var motivoReinicio = calculo.TieneReinicioContador
+                ? "El contador capturado fue menor a la lectura anterior. El sistema interpretó un reinicio del contador."
+                : null;
 
             const string sql = @"
 INSERT INTO dbo.Produccion_ContadorMaquinaLecturas
@@ -9575,80 +9520,23 @@ VALUES
     1
 );";
 
-            await using var cmd =
-                new SqlCommand(
-                    sql,
-                    cn,
-                    tx);
-
-            cmd.Parameters.Add(
-                "@EjecucionProduccionID",
-                SqlDbType.Int).Value =
-                ejecucion.EjecucionProduccionID;
-
-            cmd.Parameters.Add(
-                "@ConfiguracionCorridaID",
-                SqlDbType.Int).Value =
-                configuracionFinalId;
-
-            cmd.Parameters.Add(
-                "@MaquinaID",
-                SqlDbType.Int).Value =
-                (object?)ejecucion.MaquinaID ??
-                DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@OperadorID",
-                SqlDbType.Int).Value =
-                operadorPersonaId;
-
-            cmd.Parameters.Add(
-                "@TipoLectura",
-                SqlDbType.NVarChar,
-                50).Value =
-                tipoLectura;
-
-            cmd.Parameters.Add(
-                "@ValorContador",
-                SqlDbType.BigInt).Value =
-                valorContador;
-
-            cmd.Parameters.Add(
-                "@FechaLectura",
-                SqlDbType.DateTime2).Value =
-                fechaLectura;
-
-            cmd.Parameters.Add(
-                "@EsReinicioContador",
-                SqlDbType.Bit).Value =
-                calculo.TieneReinicioContador;
-
-            cmd.Parameters.Add(
-                "@MotivoReinicio",
-                SqlDbType.NVarChar,
-                500).Value =
-                (object?)motivoReinicio ??
-                DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@Observaciones",
-                SqlDbType.NVarChar,
-                500).Value =
-                $"Lectura asociada al RegistroHoraID {registroHoraId}.";
-
-            cmd.Parameters.Add(
-                "@RegistroHoraID",
-                SqlDbType.Int).Value =
-                registroHoraId;
-
-            cmd.Parameters.Add(
-                "@UsuarioID",
-                SqlDbType.Int).Value =
-                usuarioId;
-
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
+            cmd.Parameters.Add("@ConfiguracionCorridaID", SqlDbType.Int).Value = configuracionFinalId;
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)ejecucion.MaquinaID ?? DBNull.Value;
+            cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value = operadorPersonaId;
+            cmd.Parameters.Add("@TipoLectura", SqlDbType.NVarChar, 50).Value = tipoLectura;
+            cmd.Parameters.Add("@ValorContador", SqlDbType.BigInt).Value = valorContador;
+            cmd.Parameters.Add("@FechaLectura", SqlDbType.DateTime2).Value = fechaLectura;
+            cmd.Parameters.Add("@EsReinicioContador", SqlDbType.Bit).Value = calculo.TieneReinicioContador;
+            cmd.Parameters.Add("@MotivoReinicio", SqlDbType.NVarChar, 500).Value = (object?)motivoReinicio ?? DBNull.Value;
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = esTiempoExtra
+                ? $"Lectura de tiempo extra asociada al RegistroHoraID {registroHoraId}."
+                : $"Lectura asociada al RegistroHoraID {registroHoraId}.";
+            cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
         }
-
         private static async Task RegistrarBonusProduccionHoraAsync(
     int operadorId,
     int ejecucionProduccionId,
@@ -9771,6 +9659,525 @@ WHERE NOT EXISTS
             await cmd.ExecuteNonQueryAsync();
         }
 
+        private async Task<ProduccionTiempoExtraVm?> ObtenerTiempoExtraPorIdAsync(int tiempoExtraId, SqlConnection cn, SqlTransaction? tx = null, bool bloquear = false)
+        {
+            if (tiempoExtraId <= 0) return null;
+            var hint = bloquear && tx != null ? " WITH(UPDLOCK,HOLDLOCK)" : string.Empty;
+            var sql = $@"
+SELECT TOP(1)
+    te.TiempoExtraID,
+    te.EjecucionProduccionID,
+    te.OperadorInicioID,
+    LTRIM(RTRIM(CONCAT(ISNULL(pi.Nombre,N''),N' ',ISNULL(pi.ApellidoPaterno,N''),N' ',ISNULL(pi.ApellidoMaterno,N'')))) AS OperadorInicioNombre,
+    te.OperadorFinID,
+    LTRIM(RTRIM(CONCAT(ISNULL(pf.Nombre,N''),N' ',ISNULL(pf.ApellidoPaterno,N''),N' ',ISNULL(pf.ApellidoMaterno,N'')))) AS OperadorFinNombre,
+    te.ConfiguracionCorridaInicioID,
+    te.FechaHoraInicio,
+    te.FechaHoraUltimoCorte,
+    te.FechaHoraFin,
+    te.ContadorInicio,
+    te.ContadorUltimoCorte,
+    te.ContadorFin,
+    te.Estado,
+    te.Motivo,
+    te.Observaciones,
+    te.UsuarioCreacionID,
+    te.FechaCreacion,
+    te.UsuarioModificacionID,
+    te.FechaModificacion,
+    te.UsuarioCancelacionID,
+    te.FechaCancelacion,
+    te.MotivoCancelacion,
+    te.Activo
+FROM dbo.Produccion_TiempoExtra te{hint}
+LEFT JOIN dbo.Persona pi ON pi.PersonaID=te.OperadorInicioID
+LEFT JOIN dbo.Persona pf ON pf.PersonaID=te.OperadorFinID
+WHERE te.TiempoExtraID=@TiempoExtraID
+  AND te.Activo=1;";
+            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@TiempoExtraID", SqlDbType.Int).Value = tiempoExtraId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            return await rd.ReadAsync() ? MapearTiempoExtra(rd) : null;
+        }
+
+        private static string ConstruirObservacionAuditoriaOkManual(int okSugerido, int okCapturado, int piezasFisicas, long totalClasificado, string? observacionOperador)
+        {
+            var auditoria = $"OK manual. Sugerido por contador: {okSugerido:N0}; capturado: {okCapturado:N0}; físico: {piezasFisicas:N0}; clasificación total: {totalClasificado:N0}.";
+            var observacion = observacionOperador?.Trim();
+
+            if (string.IsNullOrWhiteSpace(observacion))
+                return auditoria.Length <= 500 ? auditoria : auditoria[..500];
+
+            var prefijo = auditoria + " Observación operador: ";
+            if (prefijo.Length >= 500) return prefijo[..500];
+
+            var espacioDisponible = 500 - prefijo.Length;
+            if (observacion.Length > espacioDisponible) observacion = observacion[..espacioDisponible];
+
+            return prefijo + observacion;
+        }
+
+        private static async Task<int> ObtenerSiguienteNumeroCorteTiempoExtraAsync(int tiempoExtraId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT ISNULL(MAX(NumeroCorteTiempoExtra),0)+1
+FROM dbo.Produccion_RegistroHora WITH(UPDLOCK,HOLDLOCK)
+WHERE TiempoExtraID=@TiempoExtraID
+  AND Activo=1;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@TiempoExtraID", SqlDbType.Int).Value = tiempoExtraId;
+            var resultado = await cmd.ExecuteScalarAsync();
+            return resultado == null || resultado == DBNull.Value ? 1 : Convert.ToInt32(resultado);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PrevisualizarCorteTiempoExtra(int tiempoExtraId, long? contadorMaquinaActual, int cantidadSospechosa = 0, int cantidadScrap = 0)
+        {
+            if (!UsuarioEnSesion()) return Unauthorized(new { ok = false, mensaje = "La sesión ha expirado." });
+            if (tiempoExtraId <= 0) return Json(new { ok = false, mensaje = "La sesión de tiempo extra no es válida." });
+            if (!contadorMaquinaActual.HasValue) return Json(new { ok = false, mensaje = "Captura el contador actual de la máquina." });
+            if (contadorMaquinaActual.Value < 0) return Json(new { ok = false, mensaje = "El contador no puede ser negativo." });
+            if (cantidadSospechosa < 0 || cantidadScrap < 0) return Json(new { ok = false, mensaje = "Sospechosos y scrap no pueden ser negativos." });
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            var usuarioId = ObtenerUsuarioID();
+
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return Unauthorized(new { ok = false, mensaje = "El usuario no tiene permisos de operador." });
+
+            var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
+            if (!personaId.HasValue || personaId.Value <= 0) return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al operador." });
+
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            try
+            {
+                var sesion = await ObtenerTiempoExtraPorIdAsync(tiempoExtraId, cn, tx, true);
+                if (sesion == null)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "No se encontró la sesión de tiempo extra." });
+                }
+
+                if (sesion.FechaHoraFin.HasValue || !string.Equals(sesion.Estado, ProduccionTiempoExtraEstado.EnCurso, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "La sesión de tiempo extra ya no se encuentra en curso." });
+                }
+
+                if (!await PersonaAsignadaAEjecucionAsync(sesion.EjecucionProduccionID, personaId.Value, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "La ejecución ya no está asignada al operador conectado." });
+                }
+
+                var ejecucion = await ObtenerEjecucionOperadorAsync(sesion.EjecucionProduccionID, cn, tx);
+                if (ejecucion == null)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
+                }
+
+                if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "La corrida no se encuentra actualmente en Producción." });
+                }
+
+                if (ejecucion.FechaLiberacionMaquina.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "La máquina ya fue liberada." });
+                }
+
+                if (await TieneParoAbiertoAsync(sesion.EjecucionProduccionID, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "Existe un paro abierto. Finalízalo antes de capturar el corte." });
+                }
+
+                var configuracion = await ObtenerConfiguracionActualOperadorAsync(sesion.EjecucionProduccionID, cn, tx);
+                if (configuracion == null || !configuracion.EstaVigente)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "La corrida no tiene una configuración técnica vigente." });
+                }
+
+                var fechaInicio = sesion.FechaHoraUltimoCorte;
+                var fechaFin = DateTime.Now;
+
+                if (fechaFin <= fechaInicio)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = "Todavía no existe tiempo transcurrido para calcular este corte." });
+                }
+
+                var calculo = await CalcularProduccionContadorHoraAsync(sesion.EjecucionProduccionID, fechaInicio, fechaFin, contadorMaquinaActual.Value, cn, tx);
+                var piezasNoOk = (long)cantidadSospechosa + cantidadScrap;
+
+                if (piezasNoOk > calculo.PiezasCalculadas)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new
+                    {
+                        ok = false,
+                        mensaje = $"Sospechosos + Scrap suman {piezasNoOk:N0}, pero el contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas.",
+                        piezasFisicas = calculo.PiezasCalculadas,
+                        cantidadOK = 0
+                    });
+                }
+
+                var cantidadOK = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
+                var siguienteCorte = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(tiempoExtraId, cn, tx);
+                var fechaCorte60 = fechaInicio.AddMinutes(60);
+                var corteDisponible = fechaFin >= fechaCorte60;
+                var segundosTranscurridos = Math.Max(0, (long)Math.Floor((fechaFin - fechaInicio).TotalSeconds));
+                var segundosParaCorte = Math.Max(0, (long)Math.Ceiling((fechaCorte60 - fechaFin).TotalSeconds));
+
+                decimal? porcentajeCumplimiento = null;
+                int? diferenciaObjetivo = null;
+                bool? cumplioObjetivo = null;
+
+                if (calculo.ObjetivoBloque > 0)
+                {
+                    diferenciaObjetivo = cantidadOK - calculo.ObjetivoBloque;
+                    cumplioObjetivo = cantidadOK >= calculo.ObjetivoBloque;
+                    porcentajeCumplimiento = Math.Round((decimal)cantidadOK * 100m / calculo.ObjetivoBloque, 2);
+                }
+
+                await tx.RollbackAsync();
+
+                return Json(new
+                {
+                    ok = true,
+                    tiempoExtraId,
+                    numeroCorte = siguienteCorte,
+                    fechaHoraInicio = fechaInicio,
+                    fechaHoraFin = fechaFin,
+                    fechaHoraCorte60 = fechaCorte60,
+                    corte60Disponible = corteDisponible,
+                    segundosTranscurridos,
+                    segundosParaCorte,
+                    contadorInicial = calculo.ContadorInicialReferencia,
+                    contadorFinal = contadorMaquinaActual.Value,
+                    piezasFisicas = calculo.PiezasCalculadas,
+                    cantidadOK,
+                    cantidadSospechosa,
+                    cantidadScrap,
+                    objetivoHora = calculo.ObjetivoHora,
+                    objetivoBloque = calculo.ObjetivoBloque,
+                    porcentajeCumplimiento,
+                    diferenciaObjetivo,
+                    cumplioObjetivo,
+                    minutosProductivos = calculo.MinutosProductivos,
+                    tieneCambioConfiguracion = calculo.TieneCambioConfiguracion,
+                    tieneReinicioContador = calculo.TieneReinicioContador,
+                    numeroSegmentos = calculo.Segmentos.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                return Json(new { ok = false, mensaje = "No fue posible calcular el corte de tiempo extra: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public Task<IActionResult> CapturarCorteTiempoExtra(ProduccionTiempoExtraCortePostVm vm)
+        {
+            vm.FinalizarTiempoExtra = false;
+            return ProcesarCorteTiempoExtraAsync(vm, false, true);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public Task<IActionResult> FinalizarTiempoExtra(ProduccionTiempoExtraCortePostVm vm)
+        {
+            vm.FinalizarTiempoExtra = true;
+            return ProcesarCorteTiempoExtraAsync(vm, true, false);
+        }
+
+        private async Task<IActionResult> ProcesarCorteTiempoExtraAsync(ProduccionTiempoExtraCortePostVm vm, bool finalizar, bool exigirSesentaMinutos)
+        {
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
+            if (vm.TiempoExtraID <= 0)
+            {
+                TempData["Error"] = "No se recibió una sesión de tiempo extra válida.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (!vm.ContadorMaquinaActual.HasValue)
+            {
+                TempData["Error"] = "Captura el contador actual de la máquina.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (vm.ContadorMaquinaActual.Value < 0)
+            {
+                TempData["Error"] = "El contador de la máquina no puede ser negativo.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (vm.CantidadOK < 0 || vm.CantidadSospechosa < 0 || vm.CantidadScrap < 0)
+            {
+                TempData["Error"] = "Las cantidades capturadas no pueden ser negativas.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            vm.Observaciones = vm.Observaciones?.Trim();
+            if (!string.IsNullOrWhiteSpace(vm.Observaciones) && vm.Observaciones.Length > 500)
+            {
+                TempData["Error"] = "Las observaciones no pueden superar 500 caracteres.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            var usuarioId = ObtenerUsuarioID();
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+
+            var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
+            if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
+
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            var ejecucionProduccionId = vm.EjecucionProduccionID;
+
+            try
+            {
+                var sesion = await ObtenerTiempoExtraPorIdAsync(vm.TiempoExtraID, cn, tx, true);
+
+                if (sesion == null)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No se encontró la sesión de tiempo extra.";
+                    return ejecucionProduccionId > 0
+                        ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId })
+                        : RedirectToAction(nameof(Index));
+                }
+
+                ejecucionProduccionId = sesion.EjecucionProduccionID;
+
+                if (vm.EjecucionProduccionID > 0 && vm.EjecucionProduccionID != ejecucionProduccionId)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La sesión de tiempo extra no corresponde a esta ejecución.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                if (sesion.FechaHoraFin.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Info"] = "La sesión de tiempo extra ya fue finalizada.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                if (!string.Equals(sesion.Estado, ProduccionTiempoExtraEstado.EnCurso, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La sesión se encuentra en estado {ProduccionTiempoExtraEstado.Nombre(sesion.Estado)} y no puede capturarse.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                if (!await PersonaAsignadaAEjecucionAsync(ejecucionProduccionId, personaId.Value, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La ejecución ya no está asignada al operador conectado.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var ejecucion = await ObtenerEjecucionOperadorAsync(ejecucionProduccionId, cn, tx);
+                if (ejecucion == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+
+                if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La corrida debe encontrarse en Producción para capturar tiempo extra.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                if (ejecucion.FechaLiberacionMaquina.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La máquina ya fue liberada. No se pueden registrar nuevos cortes.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                if (await TieneParoAbiertoAsync(ejecucionProduccionId, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Existe un paro abierto. Finalízalo antes de capturar el corte de tiempo extra.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                var configuracionActual = await ObtenerConfiguracionActualOperadorAsync(ejecucionProduccionId, cn, tx);
+                if (configuracionActual == null || !configuracionActual.EstaVigente)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La corrida no tiene configuración técnica vigente.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                var fechaInicioCorte = sesion.FechaHoraUltimoCorte;
+                var fechaFinCorte = DateTime.Now;
+
+                if (fechaFinCorte <= fechaInicioCorte)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Todavía no existe tiempo transcurrido para registrar el corte.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                if (exigirSesentaMinutos && fechaFinCorte < fechaInicioCorte.AddMinutes(60))
+                {
+                    var faltan = fechaInicioCorte.AddMinutes(60) - fechaFinCorte;
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"El corte todavía no cumple 60 minutos. Faltan aproximadamente {Math.Max(1, (int)Math.Ceiling(faltan.TotalMinutes))} minuto(s). Si la máquina dejará de producir antes, utiliza Finalizar tiempo extra.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                var calculo = await CalcularProduccionContadorHoraAsync(ejecucionProduccionId, fechaInicioCorte, fechaFinCorte, vm.ContadorMaquinaActual.Value, cn, tx);
+                var piezasNoOk = (long)vm.CantidadSospechosa + vm.CantidadScrap;
+
+                if (piezasNoOk > calculo.PiezasCalculadas)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"El contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas, pero Sospechosos + Scrap suman {piezasNoOk:N0}.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                var okSugerido = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
+                var okCapturado = vm.CantidadOK;
+                var okModificadoManual = okCapturado != okSugerido;
+                var okFinal = okCapturado;
+                var totalClasificado = (long)okFinal + vm.CantidadSospechosa + vm.CantidadScrap;
+
+                if (totalClasificado > int.MaxValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La cantidad total clasificada excede el máximo permitido.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                if (totalClasificado != calculo.PiezasCalculadas && string.IsNullOrWhiteSpace(vm.Observaciones))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La clasificación suma {totalClasificado:N0} pieza(s), mientras el contador indica {calculo.PiezasCalculadas:N0}. Puedes conservar el OK capturado, pero debes agregar una observación explicando la diferencia.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                if (calculo.PiezasCalculadas == 0 && totalClasificado == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No se detectó producción durante este periodo. Indica en observaciones qué ocurrió.";
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+
+                vm.OkModificadoManual = okModificadoManual;
+                var observacionesRegistro = okModificadoManual
+                    ? ConstruirObservacionAuditoriaOkManual(okSugerido, okFinal, calculo.PiezasCalculadas, totalClasificado, vm.Observaciones)
+                    : vm.Observaciones;
+
+                var numeroCorte = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(vm.TiempoExtraID, cn, tx);
+                var horaInicioReal = fechaInicioCorte.TimeOfDay;
+                var horaFinReal = fechaFinCorte.TimeOfDay;
+
+                var registroVm = new ProduccionRegistroHoraPostVm
+                {
+                    EjecucionProduccionID = ejecucionProduccionId,
+                    FechaProduccion = fechaInicioCorte.Date,
+                    HoraInicio = horaInicioReal.ToString(@"hh\:mm\:ss"),
+                    HoraFin = horaFinReal.ToString(@"hh\:mm\:ss"),
+                    ContadorMaquinaActual = vm.ContadorMaquinaActual,
+                    CantidadOK = okFinal,
+                    OkModificadoManual = okModificadoManual,
+                    CantidadSospechosa = vm.CantidadSospechosa,
+                    CantidadScrap = vm.CantidadScrap,
+                    EsTiempoExtra = true,
+                    MinutosTiempoExtra = (int)Math.Ceiling(calculo.MinutosProductivos),
+                    TiempoExtraID = vm.TiempoExtraID,
+                    NumeroCorteTiempoExtra = numeroCorte,
+                    FinalizarTiempoExtra = finalizar,
+                    Observaciones = observacionesRegistro
+                };
+
+                var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, registroVm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
+                await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucionProduccionId, calculo, usuarioId, cn, tx);
+                await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinCorte, vm.ContadorMaquinaActual.Value, calculo, cn, tx, true);
+                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucionProduccionId, registroHoraId, okFinal, calculo.PiezasCalculadas, usuarioId, cn, tx);
+
+                if (totalClasificado > 0)
+                    await VincularRegistroHoraConCalidadAsync(ejecucion, registroVm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
+
+                const string sqlActualizarSesion = @"
+UPDATE dbo.Produccion_TiempoExtra
+SET
+    FechaHoraUltimoCorte=@FechaHoraFin,
+    ContadorUltimoCorte=@ContadorFinal,
+    FechaHoraFin=CASE WHEN @Finalizar=1 THEN @FechaHoraFin ELSE FechaHoraFin END,
+    ContadorFin=CASE WHEN @Finalizar=1 THEN @ContadorFinal ELSE ContadorFin END,
+    OperadorFinID=CASE WHEN @Finalizar=1 THEN @OperadorID ELSE OperadorFinID END,
+    Estado=CASE WHEN @Finalizar=1 THEN @EstadoFinalizado ELSE Estado END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE TiempoExtraID=@TiempoExtraID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND FechaHoraFin IS NULL
+  AND UPPER(LTRIM(RTRIM(Estado)))=N'EN_CURSO';";
+
+                await using (var cmd = new SqlCommand(sqlActualizarSesion, cn, tx))
+                {
+                    cmd.Parameters.Add("@TiempoExtraID", SqlDbType.Int).Value = vm.TiempoExtraID;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                    cmd.Parameters.Add("@FechaHoraFin", SqlDbType.DateTime2).Value = fechaFinCorte;
+                    cmd.Parameters.Add("@ContadorFinal", SqlDbType.BigInt).Value = vm.ContadorMaquinaActual.Value;
+                    cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value = personaId.Value;
+                    cmd.Parameters.Add("@Finalizar", SqlDbType.Bit).Value = finalizar;
+                    cmd.Parameters.Add("@EstadoFinalizado", SqlDbType.NVarChar, 20).Value = ProduccionTiempoExtraEstado.Finalizado;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
+                    if (await cmd.ExecuteNonQueryAsync() != 1)
+                        throw new InvalidOperationException("La sesión de tiempo extra cambió de estado mientras se guardaba el corte.");
+                }
+
+                await RecalcularTotalesEjecucionAsync(ejecucionProduccionId, usuarioId, cn, tx);
+                await tx.CommitAsync();
+
+                var textoModoOk = okModificadoManual
+                    ? $" OK manual: {okFinal:N0}."
+                    : $" OK calculado: {okFinal:N0}.";
+
+                TempData["Success"] = finalizar
+                    ? $"Tiempo extra finalizado correctamente. Corte #{numeroCorte}: {calculo.MinutosProductivos:0.##} min productivos, {calculo.PiezasCalculadas:N0} pieza(s) físicas.{textoModoOk}"
+                    : $"Corte #{numeroCorte} de tiempo extra guardado. {calculo.MinutosProductivos:0.##} min productivos, {calculo.PiezasCalculadas:N0} pieza(s) físicas.{textoModoOk} El siguiente bloque de tiempo extra comenzó automáticamente.";
+
+                return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+            }
+            catch (SqlException ex) when (ex.Number is 2601 or 2627)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Error"] = "Este corte de tiempo extra ya fue registrado. Actualiza la pantalla.";
+                return ejecucionProduccionId > 0
+                    ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId })
+                    : RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Error"] = "No fue posible guardar el corte de tiempo extra: " + ex.Message;
+                return ejecucionProduccionId > 0
+                    ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId })
+                    : RedirectToAction(nameof(Index));
+            }
+        }
         private static async Task<bool> PersonaAsignadaAEjecucionAsync(
     int ejecucionProduccionId,
     int personaId,

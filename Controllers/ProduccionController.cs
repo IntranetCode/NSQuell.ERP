@@ -4542,23 +4542,13 @@ VALUES
                 }
 
 
-                /* ========================================================
-                   PRIMERO ACTUALIZAMOS LOS TOTALES DESDE LAS CAPTURAS
-                   HORARIAS.
-
-                   La validación de cajas debe utilizar los valores reales
-                   más recientes.
-                   ======================================================== */
+               
                 await RecalcularTotalesEjecucionAsync(
                     vm.EjecucionProduccionID,
                     usuarioId,
                     cn,
                     tx);
 
-
-                /* ========================================================
-                   VALIDACIÓN GENERAL DE PENDIENTES
-                   ======================================================== */
                 var validacion =
                     await ValidarTerminarProduccionAsync(
                         vm.EjecucionProduccionID,
@@ -4793,12 +4783,9 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
             return false;
         }
 
-        private async Task<List<ProduccionRegistroHoraVm>> ObtenerRegistrosHoraAsync(
-       int ejecucionProduccionId,
-       SqlConnection cn)
+        private async Task<List<ProduccionRegistroHoraVm>> ObtenerRegistrosHoraAsync(int ejecucionProduccionId, SqlConnection cn)
         {
             var lista = new List<ProduccionRegistroHoraVm>();
-
             const string sql = @"
 SELECT
     RegistroHoraID,
@@ -4818,6 +4805,14 @@ SELECT
     CumplioObjetivo,
     DiferenciaObjetivo,
     PorcentajeCumplimiento,
+    PiezasCalculadasContador,
+    MinutosProductivos,
+    ISNULL(EsTiempoExtra,0) AS EsTiempoExtra,
+    TipoBloque,
+    TiempoExtraID,
+    NumeroCorteTiempoExtra,
+    ISNULL(TieneCambioConfiguracion,0) AS TieneCambioConfiguracion,
+    ISNULL(TieneReinicioContador,0) AS TieneReinicioContador,
     Observaciones,
     UsuarioCreacionID,
     FechaCreacion,
@@ -4827,203 +4822,127 @@ SELECT
 FROM dbo.Produccion_RegistroHora
 WHERE EjecucionProduccionID=@EjecucionProduccionID
   AND Activo=1
-ORDER BY FechaProduccion DESC,HoraInicio DESC;";
+ORDER BY FechaProduccion DESC,HoraInicio DESC,RegistroHoraID DESC;";
 
-            await using var cmd = new SqlCommand(sql, cn);
-
-            cmd.Parameters.Add(
-                "@EjecucionProduccionID",
-                SqlDbType.Int).Value =
-                ejecucionProduccionId;
-
-            await using var rd =
-                await cmd.ExecuteReaderAsync();
-
-            while (await rd.ReadAsync())
+            await using (var cmd = new SqlCommand(sql, cn))
             {
-                lista.Add(new ProduccionRegistroHoraVm
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
                 {
-                    RegistroHoraID =
-                        Entero(rd, "RegistroHoraID"),
-
-                    EjecucionProduccionID =
-                        Entero(rd, "EjecucionProduccionID"),
-
-                    ProgramaProduccionID =
-                        Entero(rd, "ProgramaProduccionID"),
-
-                    SolicitudProduccionID =
-                        NullableEntero(
-                            rd,
-                            "SolicitudProduccionID"),
-
-                    MaquinaID =
-                        NullableEntero(
-                            rd,
-                            "MaquinaID"),
-
-                    OperadorID =
-                        NullableEntero(
-                            rd,
-                            "OperadorID"),
-
-                    FechaProduccion =
-                        Fecha(
-                            rd,
-                            "FechaProduccion"),
-
-                    HoraInicio =
-                        Tiempo(
-                            rd,
-                            "HoraInicio"),
-
-                    HoraFin =
-                        Tiempo(
-                            rd,
-                            "HoraFin"),
-
-                    CantidadOK =
-                        Entero(
-                            rd,
-                            "CantidadOK"),
-
-                    CantidadSospechosa =
-                        Entero(
-                            rd,
-                            "CantidadSospechosa"),
-
-                    CantidadScrap =
-                        Entero(
-                            rd,
-                            "CantidadScrap"),
-
-                    ObjetivoHora =
-                        NullableEntero(
-                            rd,
-                            "ObjetivoHora"),
-
-                    ObjetivoBloque =
-                        NullableEntero(
-                            rd,
-                            "ObjetivoBloque"),
-
-                    CumplioObjetivo =
-                        rd["CumplioObjetivo"] == DBNull.Value
-                            ? null
-                            : Convert.ToBoolean(
-                                rd["CumplioObjetivo"]),
-
-                    DiferenciaObjetivo =
-                        NullableEntero(
-                            rd,
-                            "DiferenciaObjetivo"),
-
-                    PorcentajeCumplimiento =
-                        rd["PorcentajeCumplimiento"] == DBNull.Value
-                            ? null
-                            : Convert.ToDecimal(
-                                rd["PorcentajeCumplimiento"]),
-
-                    Observaciones =
-                        TextoNullable(
-                            rd,
-                            "Observaciones"),
-
-                    UsuarioCreacionID =
-                        NullableEntero(
-                            rd,
-                            "UsuarioCreacionID"),
-
-                    FechaCreacion =
-                        Fecha(
-                            rd,
-                            "FechaCreacion"),
-
-                    UsuarioModificacionID =
-                        NullableEntero(
-                            rd,
-                            "UsuarioModificacionID"),
-
-                    FechaModificacion =
-                        NullableFecha(
-                            rd,
-                            "FechaModificacion"),
-
-                    Activo =
-                        Booleano(
-                            rd,
-                            "Activo")
-                });
+                    lista.Add(new ProduccionRegistroHoraVm
+                    {
+                        RegistroHoraID = Entero(rd, "RegistroHoraID"),
+                        EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
+                        ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
+                        SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
+                        MaquinaID = NullableEntero(rd, "MaquinaID"),
+                        OperadorID = NullableEntero(rd, "OperadorID"),
+                        FechaProduccion = Fecha(rd, "FechaProduccion"),
+                        HoraInicio = Tiempo(rd, "HoraInicio"),
+                        HoraFin = Tiempo(rd, "HoraFin"),
+                        CantidadOK = Entero(rd, "CantidadOK"),
+                        CantidadSospechosa = Entero(rd, "CantidadSospechosa"),
+                        CantidadScrap = Entero(rd, "CantidadScrap"),
+                        ObjetivoHora = NullableEntero(rd, "ObjetivoHora"),
+                        ObjetivoBloque = NullableEntero(rd, "ObjetivoBloque"),
+                        CumplioObjetivo = rd["CumplioObjetivo"] == DBNull.Value ? null : Convert.ToBoolean(rd["CumplioObjetivo"]),
+                        DiferenciaObjetivo = NullableEntero(rd, "DiferenciaObjetivo"),
+                        PorcentajeCumplimiento = rd["PorcentajeCumplimiento"] == DBNull.Value ? null : Convert.ToDecimal(rd["PorcentajeCumplimiento"]),
+                        PiezasCalculadasContador = rd["PiezasCalculadasContador"] == DBNull.Value ? null : Convert.ToInt32(rd["PiezasCalculadasContador"]),
+                        MinutosProductivos = rd["MinutosProductivos"] == DBNull.Value ? null : Convert.ToDecimal(rd["MinutosProductivos"]),
+                        EsTiempoExtra = rd["EsTiempoExtra"] != DBNull.Value && Convert.ToBoolean(rd["EsTiempoExtra"]),
+                        TipoBloque = TextoNullable(rd, "TipoBloque"),
+                        TiempoExtraID = NullableEntero(rd, "TiempoExtraID"),
+                        NumeroCorteTiempoExtra = NullableEntero(rd, "NumeroCorteTiempoExtra"),
+                        TieneCambioConfiguracion = rd["TieneCambioConfiguracion"] != DBNull.Value && Convert.ToBoolean(rd["TieneCambioConfiguracion"]),
+                        TieneReinicioContador = rd["TieneReinicioContador"] != DBNull.Value && Convert.ToBoolean(rd["TieneReinicioContador"]),
+                        Observaciones = TextoNullable(rd, "Observaciones"),
+                        UsuarioCreacionID = NullableEntero(rd, "UsuarioCreacionID"),
+                        FechaCreacion = Fecha(rd, "FechaCreacion"),
+                        UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
+                        FechaModificacion = NullableFecha(rd, "FechaModificacion"),
+                        Activo = Booleano(rd, "Activo")
+                    });
+                }
             }
+
+            foreach (var registro in lista)
+                registro.Segmentos = await ObtenerSegmentosRegistroHoraAsync(registro.RegistroHoraID, cn);
 
             return lista;
         }
 
-        private async Task<List<ProduccionParoVm>> ObtenerParosAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn)
+        private async Task<List<ProduccionRegistroHoraSegmentoVm>> ObtenerSegmentosRegistroHoraAsync(int registroHoraId, SqlConnection cn)
         {
-            var lista = new List<ProduccionParoVm>();
+            var lista = new List<ProduccionRegistroHoraSegmentoVm>();
+            if (registroHoraId <= 0) return lista;
 
             const string sql = @"
 SELECT
-    ParoID,
+    RegistroHoraSegmentoID,
+    RegistroHoraID,
     EjecucionProduccionID,
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    MaquinaID,
-    OperadorID,
-    FechaInicioParo,
-    FechaFinParo,
-    DuracionMinutos,
-    MotivoParoID,
-    MotivoParoTexto,
-    Descripcion,
-    EsMayorA15Minutos,
+    ConfiguracionCorridaID,
+    NumeroSegmento,
+    FechaHoraInicio,
+    FechaHoraFin,
+    ISNULL(MinutosProductivos,0) AS MinutosProductivos,
+    ContadorInicial,
+    ContadorFinal,
+    CavidadesUsadas,
+    TiempoCicloSegundos,
+    ObjetivoHoraCalculado,
+    ObjetivoSegmentoCalculado,
+    Observaciones,
     UsuarioCreacionID,
     FechaCreacion,
-    UsuarioModificacionID,
-    FechaModificacion,
     Activo
-FROM dbo.Produccion_Paros
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1
-ORDER BY FechaInicioParo DESC;";
+FROM dbo.Produccion_RegistroHoraSegmentos
+WHERE RegistroHoraID=@RegistroHoraID
+  AND Activo=1
+ORDER BY NumeroSegmento,RegistroHoraSegmentoID;";
 
             await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                ejecucionProduccionId;
-
+            cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
             await using var rd = await cmd.ExecuteReaderAsync();
 
             while (await rd.ReadAsync())
             {
-                lista.Add(new ProduccionParoVm
+                var contadorInicial = rd["ContadorInicial"] == DBNull.Value ? 0L : Convert.ToInt64(rd["ContadorInicial"]);
+                var contadorFinal = rd["ContadorFinal"] == DBNull.Value ? 0L : Convert.ToInt64(rd["ContadorFinal"]);
+                var cavidades = rd["CavidadesUsadas"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CavidadesUsadas"]);
+                var ciclos = contadorFinal >= contadorInicial ? contadorFinal - contadorInicial : 0L;
+                var piezasCalculadas = checked(ciclos * (long)cavidades);
+
+                lista.Add(new ProduccionRegistroHoraSegmentoVm
                 {
-                    ParoID = Entero(rd, "ParoID"),
-                    EjecucionProduccionID = Entero(rd, "EjecucionProduccionID"),
-                    ProgramaProduccionID = Entero(rd, "ProgramaProduccionID"),
-                    SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
-                    MaquinaID = NullableEntero(rd, "MaquinaID"),
-                    OperadorID = NullableEntero(rd, "OperadorID"),
-                    FechaInicioParo = Fecha(rd, "FechaInicioParo"),
-                    FechaFinParo = NullableFecha(rd, "FechaFinParo"),
-                    DuracionMinutos = NullableEntero(rd, "DuracionMinutos"),
-                    MotivoParoID = NullableEntero(rd, "MotivoParoID"),
-                    MotivoParoTexto = TextoNullable(rd, "MotivoParoTexto"),
-                    Descripcion = TextoNullable(rd, "Descripcion"),
-                    EsMayorA15Minutos = Booleano(rd, "EsMayorA15Minutos"),
-                    UsuarioCreacionID = NullableEntero(rd, "UsuarioCreacionID"),
-                    FechaCreacion = Fecha(rd, "FechaCreacion"),
-                    UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
-                    FechaModificacion = NullableFecha(rd, "FechaModificacion"),
-                    Activo = Booleano(rd, "Activo")
+                    RegistroHoraSegmentoID = Convert.ToInt64(rd["RegistroHoraSegmentoID"]),
+                    RegistroHoraID = Convert.ToInt32(rd["RegistroHoraID"]),
+                    EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                    ConfiguracionCorridaID = Convert.ToInt32(rd["ConfiguracionCorridaID"]),
+                    NumeroSegmento = Convert.ToInt32(rd["NumeroSegmento"]),
+                    FechaHoraInicio = Convert.ToDateTime(rd["FechaHoraInicio"]),
+                    FechaHoraFin = Convert.ToDateTime(rd["FechaHoraFin"]),
+                    MinutosProductivos = rd["MinutosProductivos"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["MinutosProductivos"]),
+                    ContadorInicial = contadorInicial,
+                    ContadorFinal = contadorFinal,
+                    CiclosPeriodo = ciclos,
+                    CavidadesUsadas = cavidades,
+                    TiempoCicloSegundos = rd["TiempoCicloSegundos"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["TiempoCicloSegundos"]),
+                    PiezasCalculadas = piezasCalculadas,
+                    ObjetivoHoraCalculado = rd["ObjetivoHoraCalculado"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["ObjetivoHoraCalculado"]),
+                    ObjetivoSegmentoCalculado = rd["ObjetivoSegmentoCalculado"] == DBNull.Value ? null : Convert.ToDecimal(rd["ObjetivoSegmentoCalculado"]),
+                    Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"]?.ToString()?.Trim(),
+                    UsuarioCreacionID = rd["UsuarioCreacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioCreacionID"]),
+                    FechaCreacion = Convert.ToDateTime(rd["FechaCreacion"]),
+                    Activo = rd["Activo"] != DBNull.Value && Convert.ToBoolean(rd["Activo"])
                 });
             }
 
             return lista;
         }
-
         private async Task<List<ProduccionProgramaDisponibleVm>> ObtenerProgramasDisponiblesAsync(
      string? busqueda,
      int? maquinaId,
@@ -7244,665 +7163,194 @@ ORDER BY
                     : string.Join(" ", Bloqueos);
         }
 
-        private async Task<ValidacionTerminarProduccionResultado>
-    ValidarTerminarProduccionAsync(
-        int ejecucionProduccionId,
-        SqlConnection cn,
-        SqlTransaction tx)
+        private async Task<ValidacionTerminarProduccionResultado> ValidarTerminarProduccionAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
         {
-            var resultado =
-                new ValidacionTerminarProduccionResultado();
-
+            var resultado = new ValidacionTerminarProduccionResultado();
             if (ejecucionProduccionId <= 0)
             {
-                resultado.Bloqueos.Add(
-                    "La ejecución de Producción no es válida.");
-
+                resultado.Bloqueos.Add("La ejecución de Producción no es válida.");
                 return resultado;
             }
-
             const string sql = @"
-DECLARE @CantidadOK INT = 0;
-DECLARE @CantidadSospechosa INT = 0;
-DECLARE @CantidadScrap INT = 0;
+DECLARE @CantidadOK INT=0;
+DECLARE @CantidadSospechosa INT=0;
+DECLARE @CantidadScrap INT=0;
+DECLARE @OkEnCajas INT=0;
+DECLARE @SospechosoEnCajas INT=0;
+DECLARE @RetencionEnCajas INT=0;
+DECLARE @ScrapEnCajas INT=0;
+DECLARE @DetalleOk INT=0;
+DECLARE @ParosAbiertos INT=0;
+DECLARE @TiempoExtraActivo INT=0;
+DECLARE @CajasFormadasPendientes INT=0;
+DECLARE @CajasPendientesCalidad INT=0;
+DECLARE @InspeccionID INT=NULL;
+DECLARE @EstadoCalidad NVARCHAR(50)=NULL;
+DECLARE @ConfiguracionInvalidada BIT=0;
+DECLARE @RequiereReliberacion BIT=0;
+DECLARE @MonitoreosPendientes INT=0;
+DECLARE @DisposicionesPendientes INT=0;
+DECLARE @ReliberacionesPendientes INT=0;
 
-DECLARE @OkEnCajas INT = 0;
-DECLARE @SospechosoEnCajas INT = 0;
-DECLARE @RetencionEnCajas INT = 0;
-DECLARE @ScrapEnCajas INT = 0;
-DECLARE @DetalleOk INT = 0;
-
-DECLARE @ParosAbiertos INT = 0;
-DECLARE @CajasFormadasPendientes INT = 0;
-DECLARE @CajasPendientesCalidad INT = 0;
-
-DECLARE @InspeccionID INT = NULL;
-DECLARE @EstadoCalidad NVARCHAR(50) = NULL;
-DECLARE @ConfiguracionInvalidada BIT = 0;
-DECLARE @RequiereReliberacion BIT = 0;
-
-DECLARE @MonitoreosPendientes INT = 0;
-DECLARE @DisposicionesPendientes INT = 0;
-DECLARE @ReliberacionesPendientes INT = 0;
-
-
-/* ============================================================
-   PRODUCCIÓN
-   ============================================================ */
 SELECT
-    @CantidadOK =
-        ISNULL(e.CantidadOKTotal, 0),
+    @CantidadOK=ISNULL(e.CantidadOKTotal,0),
+    @CantidadSospechosa=ISNULL(e.CantidadSospechosaTotal,0),
+    @CantidadScrap=ISNULL(e.CantidadScrapTotal,0)
+FROM dbo.Produccion_Ejecucion e WITH (UPDLOCK,HOLDLOCK)
+WHERE e.EjecucionProduccionID=@EjecucionProduccionID
+  AND e.Activo=1;
 
-    @CantidadSospechosa =
-        ISNULL(e.CantidadSospechosaTotal, 0),
-
-    @CantidadScrap =
-        ISNULL(e.CantidadScrapTotal, 0)
-
-FROM dbo.Produccion_Ejecucion e
-WITH (UPDLOCK, HOLDLOCK)
-
-WHERE e.EjecucionProduccionID =
-      @EjecucionProduccionID
-
-  AND e.Activo = 1;
-
-
-/* ============================================================
-   PAROS ABIERTOS
-   ============================================================ */
-SELECT
-    @ParosAbiertos =
-        COUNT(1)
-
-FROM dbo.Produccion_Paros p
-WITH (UPDLOCK, HOLDLOCK)
-
-WHERE p.EjecucionProduccionID =
-      @EjecucionProduccionID
-
-  AND p.Activo = 1
-
+SELECT @ParosAbiertos=COUNT(1)
+FROM dbo.Produccion_Paros p WITH (UPDLOCK,HOLDLOCK)
+WHERE p.EjecucionProduccionID=@EjecucionProduccionID
+  AND p.Activo=1
   AND p.FechaFinParo IS NULL;
 
+SELECT @TiempoExtraActivo=COUNT(1)
+FROM dbo.Produccion_TiempoExtra te WITH (UPDLOCK,HOLDLOCK)
+WHERE te.EjecucionProduccionID=@EjecucionProduccionID
+  AND te.Activo=1
+  AND te.FechaHoraFin IS NULL
+  AND UPPER(LTRIM(RTRIM(ISNULL(te.Estado,N''))))=N'EN_CURSO';
 
-/* ============================================================
-   CONSUMO DE PIEZAS EN CAJAS
-
-   Igualamos la lógica utilizada por ProduccionOperadorController:
-   OK
-   SOSPECHOSO
-   RETENCION
-   SCRAP
-   ============================================================ */
 SELECT
-    @OkEnCajas =
-        ISNULL(
-            SUM(
-                CASE
-                    WHEN UPPER(
-                        LTRIM(
-                            RTRIM(
-                                ISNULL(
-                                    c.TipoCaja,
-                                    N'OK'
-                                )
-                            )
-                        )
-                    ) = N'OK'
-                    THEN ISNULL(
-                        c.CantidadPiezas,
-                        ISNULL(c.Cantidad, 0)
-                    )
-                    ELSE 0
-                END
-            ),
-            0
-        ),
-
-    @SospechosoEnCajas =
-        ISNULL(
-            SUM(
-                CASE
-                    WHEN UPPER(
-                        LTRIM(
-                            RTRIM(
-                                ISNULL(
-                                    c.TipoCaja,
-                                    N''
-                                )
-                            )
-                        )
-                    ) = N'SOSPECHOSO'
-                    THEN ISNULL(
-                        c.CantidadPiezas,
-                        ISNULL(c.Cantidad, 0)
-                    )
-                    ELSE 0
-                END
-            ),
-            0
-        ),
-
-    @RetencionEnCajas =
-        ISNULL(
-            SUM(
-                CASE
-                    WHEN UPPER(
-                        LTRIM(
-                            RTRIM(
-                                ISNULL(
-                                    c.TipoCaja,
-                                    N''
-                                )
-                            )
-                        )
-                    ) = N'RETENCION'
-                    THEN ISNULL(
-                        c.CantidadPiezas,
-                        ISNULL(c.Cantidad, 0)
-                    )
-                    ELSE 0
-                END
-            ),
-            0
-        ),
-
-    @ScrapEnCajas =
-        ISNULL(
-            SUM(
-                CASE
-                    WHEN UPPER(
-                        LTRIM(
-                            RTRIM(
-                                ISNULL(
-                                    c.TipoCaja,
-                                    N''
-                                )
-                            )
-                        )
-                    ) = N'SCRAP'
-                    THEN ISNULL(
-                        c.CantidadPiezas,
-                        ISNULL(c.Cantidad, 0)
-                    )
-                    ELSE 0
-                END
-            ),
-            0
-        )
-
-FROM dbo.Produccion_Cajas c
-WITH (UPDLOCK, HOLDLOCK)
-
-WHERE c.EjecucionProduccionID =
-      @EjecucionProduccionID
-
-  AND c.Activo = 1
-
+    @OkEnCajas=ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N'OK'))))=N'OK' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END),0),
+    @SospechosoEnCajas=ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'SOSPECHOSO' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END),0),
+    @RetencionEnCajas=ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'RETENCION' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END),0),
+    @ScrapEnCajas=ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'SCRAP' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END),0)
+FROM dbo.Produccion_Cajas c WITH (UPDLOCK,HOLDLOCK)
+WHERE c.EjecucionProduccionID=@EjecucionProduccionID
+  AND c.Activo=1
   AND NOT EXISTS
   (
       SELECT 1
       FROM dbo.Produccion_CajaOrigenDetalle od
-      WHERE od.CajaProduccionID =
-            c.CajaProduccionID
-        AND od.Activo = 1
+      WHERE od.CajaProduccionID=c.CajaProduccionID
+        AND od.Activo=1
   );
 
+SELECT @DetalleOk=ISNULL(SUM(od.CantidadPiezas),0)
+FROM dbo.Produccion_CajaOrigenDetalle od WITH (UPDLOCK,HOLDLOCK)
+WHERE od.EjecucionProduccionID=@EjecucionProduccionID
+  AND od.Activo=1;
 
-/*
- * Las piezas OK utilizadas para completar una caja originada
- * en otra ejecución también cuentan como empacadas por esta
- * ejecución.
- */
+SET @OkEnCajas=@OkEnCajas+@DetalleOk;
+
 SELECT
-    @DetalleOk =
-        ISNULL(
-            SUM(
-                od.CantidadPiezas
-            ),
-            0
-        )
+    @CajasFormadasPendientes=SUM(CASE WHEN c.EstadoCajaID=@CajaFormadaProduccion THEN 1 ELSE 0 END),
+    @CajasPendientesCalidad=SUM(CASE WHEN c.EstadoCajaID=@CajaPendienteCalidad THEN 1 ELSE 0 END)
+FROM dbo.Produccion_Cajas c WITH (UPDLOCK,HOLDLOCK)
+WHERE c.EjecucionProduccionID=@EjecucionProduccionID
+  AND c.Activo=1;
 
-FROM dbo.Produccion_CajaOrigenDetalle od
-WITH (UPDLOCK, HOLDLOCK)
+SET @CajasFormadasPendientes=ISNULL(@CajasFormadasPendientes,0);
+SET @CajasPendientesCalidad=ISNULL(@CajasPendientesCalidad,0);
 
-WHERE od.EjecucionProduccionID =
-      @EjecucionProduccionID
-
-  AND od.Activo = 1;
-
-SET @OkEnCajas =
-    @OkEnCajas +
-    @DetalleOk;
-
-
-/* ============================================================
-   ESTADOS DE CAJAS
-   ============================================================ */
-SELECT
-    @CajasFormadasPendientes =
-        SUM(
-            CASE
-                WHEN c.EstadoCajaID =
-                     @CajaFormadaProduccion
-                THEN 1
-                ELSE 0
-            END
-        ),
-
-    @CajasPendientesCalidad =
-        SUM(
-            CASE
-                WHEN c.EstadoCajaID =
-                     @CajaPendienteCalidad
-                THEN 1
-                ELSE 0
-            END
-        )
-
-FROM dbo.Produccion_Cajas c
-WITH (UPDLOCK, HOLDLOCK)
-
-WHERE c.EjecucionProduccionID =
-      @EjecucionProduccionID
-
-  AND c.Activo = 1;
-
-SET @CajasFormadasPendientes =
-    ISNULL(
-        @CajasFormadasPendientes,
-        0
-    );
-
-SET @CajasPendientesCalidad =
-    ISNULL(
-        @CajasPendientesCalidad,
-        0
-    );
-
-
-/* ============================================================
-   ÚLTIMA INSPECCIÓN DE CALIDAD ACTIVA
-   ============================================================ */
 SELECT TOP (1)
-
-    @InspeccionID =
-        ci.InspeccionID,
-
-    @EstadoCalidad =
-        UPPER(
-            LTRIM(
-                RTRIM(
-                    ISNULL(
-                        ci.Estado,
-                        N''
-                    )
-                )
-            )
-        ),
-
-    @ConfiguracionInvalidada =
-        ISNULL(
-            ci.ConfiguracionInvalidada,
-            0
-        ),
-
-    @RequiereReliberacion =
-        ISNULL(
-            ci.RequiereReliberacion,
-            0
-        )
-
-FROM dbo.Calidad_Inspecciones ci
-WITH (UPDLOCK, HOLDLOCK)
-
-WHERE ci.EjecucionProduccionID =
-      @EjecucionProduccionID
-
+    @InspeccionID=ci.InspeccionID,
+    @EstadoCalidad=UPPER(LTRIM(RTRIM(ISNULL(ci.Estado,N'')))),
+    @ConfiguracionInvalidada=ISNULL(ci.ConfiguracionInvalidada,0),
+    @RequiereReliberacion=ISNULL(ci.RequiereReliberacion,0)
+FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK,HOLDLOCK)
+WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
 ORDER BY ci.InspeccionID DESC;
 
-
-/* ============================================================
-   MONITOREOS PENDIENTES
-   ============================================================ */
 IF @InspeccionID IS NOT NULL
 BEGIN
+    SELECT @MonitoreosPendientes=COUNT(1)
+    FROM dbo.Calidad_MonitoreosProceso m WITH (UPDLOCK,HOLDLOCK)
+    WHERE m.InspeccionID=@InspeccionID
+      AND m.Activo=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N'PENDIENTE'))))=N'PENDIENTE';
 
-    SELECT
-        @MonitoreosPendientes =
-            COUNT(1)
+    SELECT @DisposicionesPendientes=COUNT(1)
+    FROM dbo.Calidad_DisposicionesMaterial d WITH (UPDLOCK,HOLDLOCK)
+    WHERE d.InspeccionID=@InspeccionID
+      AND d.Activo=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(d.ResultadoFinal,N'PENDIENTE'))))=N'PENDIENTE';
 
-    FROM dbo.Calidad_MonitoreosProceso m
-    WITH (UPDLOCK, HOLDLOCK)
-
-    WHERE m.InspeccionID =
-          @InspeccionID
-
-      AND m.Activo = 1
-
-      AND UPPER(
-            LTRIM(
-                RTRIM(
-                    ISNULL(
-                        m.Resultado,
-                        N'PENDIENTE'
-                    )
-                )
-            )
-          ) = N'PENDIENTE';
-
-
-    /* ========================================================
-       DISPOSICIONES PENDIENTES
-       ======================================================== */
-    SELECT
-        @DisposicionesPendientes =
-            COUNT(1)
-
-    FROM dbo.Calidad_DisposicionesMaterial d
-    WITH (UPDLOCK, HOLDLOCK)
-
-    WHERE d.InspeccionID =
-          @InspeccionID
-
-      AND d.Activo = 1
-
-      AND UPPER(
-            LTRIM(
-                RTRIM(
-                    ISNULL(
-                        d.ResultadoFinal,
-                        N'PENDIENTE'
-                    )
-                )
-            )
-          ) = N'PENDIENTE';
-
-
-    /* ========================================================
-       RELIBERACIONES SIN AUTORIZAR
-       ======================================================== */
-    SELECT
-        @ReliberacionesPendientes =
-            COUNT(1)
-
-    FROM dbo.Calidad_Reliberaciones r
-    WITH (UPDLOCK, HOLDLOCK)
-
-    WHERE r.InspeccionID =
-          @InspeccionID
-
-      AND r.Activo = 1
-
-      AND UPPER(
-            LTRIM(
-                RTRIM(
-                    ISNULL(
-                        r.Resultado,
-                        N'PENDIENTE'
-                    )
-                )
-            )
-          ) <> N'AUTORIZADA';
-
+    SELECT @ReliberacionesPendientes=COUNT(1)
+    FROM dbo.Calidad_Reliberaciones r WITH (UPDLOCK,HOLDLOCK)
+    WHERE r.InspeccionID=@InspeccionID
+      AND r.Activo=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(r.Resultado,N'PENDIENTE'))))<>N'AUTORIZADA';
 END;
 
-
-/* ============================================================
-   RESULTADO
-   ============================================================ */
 SELECT
-    @CantidadOK
-        AS CantidadOK,
-
-    @CantidadSospechosa
-        AS CantidadSospechosa,
-
-    @CantidadScrap
-        AS CantidadScrap,
-
-    @OkEnCajas
-        AS OkEnCajas,
-
-    @SospechosoEnCajas
-        AS SospechosoEnCajas,
-
-    @RetencionEnCajas
-        AS RetencionEnCajas,
-
-    @ScrapEnCajas
-        AS ScrapEnCajas,
-
-    @ParosAbiertos
-        AS ParosAbiertos,
-
-    @CajasFormadasPendientes
-        AS CajasFormadasPendientes,
-
-    @CajasPendientesCalidad
-        AS CajasPendientesCalidad,
-
-    @InspeccionID
-        AS InspeccionID,
-
-    @EstadoCalidad
-        AS EstadoCalidad,
-
-    @ConfiguracionInvalidada
-        AS ConfiguracionInvalidada,
-
-    @RequiereReliberacion
-        AS RequiereReliberacion,
-
-    @MonitoreosPendientes
-        AS MonitoreosPendientes,
-
-    @DisposicionesPendientes
-        AS DisposicionesPendientes,
-
-    @ReliberacionesPendientes
-        AS ReliberacionesPendientes;
-";
-
-            await using var cmd =
-                new SqlCommand(
-                    sql,
-                    cn,
-                    tx);
-
-            cmd.Parameters.Add(
-                "@EjecucionProduccionID",
-                SqlDbType.Int).Value =
-                ejecucionProduccionId;
-
-            cmd.Parameters.Add(
-                "@CajaFormadaProduccion",
-                SqlDbType.Int).Value =
-                ProduccionCajaEstatus
-                    .FormadaProduccion;
-
-            cmd.Parameters.Add(
-                "@CajaPendienteCalidad",
-                SqlDbType.Int).Value =
-                ProduccionCajaEstatus
-                    .PendienteCalidad;
-
-            await using var rd =
-                await cmd.ExecuteReaderAsync();
-
+    @CantidadOK AS CantidadOK,
+    @CantidadSospechosa AS CantidadSospechosa,
+    @CantidadScrap AS CantidadScrap,
+    @OkEnCajas AS OkEnCajas,
+    @SospechosoEnCajas AS SospechosoEnCajas,
+    @RetencionEnCajas AS RetencionEnCajas,
+    @ScrapEnCajas AS ScrapEnCajas,
+    @ParosAbiertos AS ParosAbiertos,
+    @TiempoExtraActivo AS TiempoExtraActivo,
+    @CajasFormadasPendientes AS CajasFormadasPendientes,
+    @CajasPendientesCalidad AS CajasPendientesCalidad,
+    @InspeccionID AS InspeccionID,
+    @EstadoCalidad AS EstadoCalidad,
+    @ConfiguracionInvalidada AS ConfiguracionInvalidada,
+    @RequiereReliberacion AS RequiereReliberacion,
+    @MonitoreosPendientes AS MonitoreosPendientes,
+    @DisposicionesPendientes AS DisposicionesPendientes,
+    @ReliberacionesPendientes AS ReliberacionesPendientes;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            cmd.Parameters.Add("@CajaFormadaProduccion", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
+            cmd.Parameters.Add("@CajaPendienteCalidad", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
+            await using var rd = await cmd.ExecuteReaderAsync();
             if (!await rd.ReadAsync())
             {
-                resultado.Bloqueos.Add(
-                    "No fue posible validar los pendientes de la producción.");
-
+                resultado.Bloqueos.Add("No fue posible validar los pendientes de la producción.");
                 return resultado;
             }
-
-            var cantidadOk =
-                Convert.ToInt32(
-                    rd["CantidadOK"]);
-
-            var cantidadSospechosa =
-                Convert.ToInt32(
-                    rd["CantidadSospechosa"]);
-
-            var cantidadScrap =
-                Convert.ToInt32(
-                    rd["CantidadScrap"]);
-
-            var okEnCajas =
-                Convert.ToInt32(
-                    rd["OkEnCajas"]);
-
-            var sospechosoEnCajas =
-                Convert.ToInt32(
-                    rd["SospechosoEnCajas"]);
-
-            var retencionEnCajas =
-                Convert.ToInt32(
-                    rd["RetencionEnCajas"]);
-
-            var scrapEnCajas =
-                Convert.ToInt32(
-                    rd["ScrapEnCajas"]);
-
-            var parosAbiertos =
-                Convert.ToInt32(
-                    rd["ParosAbiertos"]);
-
-            var cajasFormadasPendientes =
-                Convert.ToInt32(
-                    rd["CajasFormadasPendientes"]);
-
-            var cajasPendientesCalidad =
-                Convert.ToInt32(
-                    rd["CajasPendientesCalidad"]);
-
-            var configuracionInvalidada =
-                Convert.ToBoolean(
-                    rd["ConfiguracionInvalidada"]);
-
-            var requiereReliberacion =
-                Convert.ToBoolean(
-                    rd["RequiereReliberacion"]);
-
-            var monitoreosPendientes =
-                Convert.ToInt32(
-                    rd["MonitoreosPendientes"]);
-
-            var disposicionesPendientes =
-                Convert.ToInt32(
-                    rd["DisposicionesPendientes"]);
-
-            var reliberacionesPendientes =
-                Convert.ToInt32(
-                    rd["ReliberacionesPendientes"]);
-
-
-            var pendienteOk =
-                Math.Max(
-                    0,
-                    cantidadOk -
-                    okEnCajas);
-
-            var pendienteSospechoso =
-                Math.Max(
-                    0,
-                    cantidadSospechosa -
-                    sospechosoEnCajas -
-                    retencionEnCajas);
-
-            var pendienteScrap =
-                Math.Max(
-                    0,
-                    cantidadScrap -
-                    scrapEnCajas);
-
-
+            var cantidadOk = Convert.ToInt32(rd["CantidadOK"]);
+            var cantidadSospechosa = Convert.ToInt32(rd["CantidadSospechosa"]);
+            var cantidadScrap = Convert.ToInt32(rd["CantidadScrap"]);
+            var okEnCajas = Convert.ToInt32(rd["OkEnCajas"]);
+            var sospechosoEnCajas = Convert.ToInt32(rd["SospechosoEnCajas"]);
+            var retencionEnCajas = Convert.ToInt32(rd["RetencionEnCajas"]);
+            var scrapEnCajas = Convert.ToInt32(rd["ScrapEnCajas"]);
+            var parosAbiertos = Convert.ToInt32(rd["ParosAbiertos"]);
+            var tiempoExtraActivo = Convert.ToInt32(rd["TiempoExtraActivo"]);
+            var cajasFormadasPendientes = Convert.ToInt32(rd["CajasFormadasPendientes"]);
+            var cajasPendientesCalidad = Convert.ToInt32(rd["CajasPendientesCalidad"]);
+            var configuracionInvalidada = Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
+            var requiereReliberacion = Convert.ToBoolean(rd["RequiereReliberacion"]);
+            var monitoreosPendientes = Convert.ToInt32(rd["MonitoreosPendientes"]);
+            var disposicionesPendientes = Convert.ToInt32(rd["DisposicionesPendientes"]);
+            var reliberacionesPendientes = Convert.ToInt32(rd["ReliberacionesPendientes"]);
+            var pendienteOk = Math.Max(0, cantidadOk - okEnCajas);
+            var pendienteSospechoso = Math.Max(0, cantidadSospechosa - sospechosoEnCajas - retencionEnCajas);
+            var pendienteScrap = Math.Max(0, cantidadScrap - scrapEnCajas);
             if (parosAbiertos > 0)
-            {
-                resultado.Bloqueos.Add(
-                    "Existe un paro abierto.");
-            }
-
-
+                resultado.Bloqueos.Add("Existe un paro abierto.");
+            if (tiempoExtraActivo > 0)
+                resultado.Bloqueos.Add("Existe una sesión de tiempo extra en curso. Debe finalizarse y registrar su último corte antes de terminar la producción.");
             if (pendienteOk > 0)
-            {
-                resultado.Bloqueos.Add(
-                    $"Faltan {pendienteOk:N0} pieza(s) OK por asignar a caja.");
-            }
-
-
+                resultado.Bloqueos.Add($"Faltan {pendienteOk:N0} pieza(s) OK por asignar a caja.");
             if (pendienteSospechoso > 0)
-            {
-                resultado.Bloqueos.Add(
-                    $"Faltan {pendienteSospechoso:N0} pieza(s) sospechosas/retención por asignar a caja.");
-            }
-
-
+                resultado.Bloqueos.Add($"Faltan {pendienteSospechoso:N0} pieza(s) sospechosas/retención por asignar a caja.");
             if (pendienteScrap > 0)
-            {
-                resultado.Bloqueos.Add(
-                    $"Faltan {pendienteScrap:N0} pieza(s) scrap por asignar a caja.");
-            }
-
-
+                resultado.Bloqueos.Add($"Faltan {pendienteScrap:N0} pieza(s) scrap por asignar a caja.");
             if (cajasFormadasPendientes > 0)
-            {
-                resultado.Bloqueos.Add(
-                    $"Existen {cajasFormadasPendientes:N0} caja(s) todavía sin enviar a Calidad.");
-            }
-
-
+                resultado.Bloqueos.Add($"Existen {cajasFormadasPendientes:N0} caja(s) todavía sin enviar a Calidad.");
             if (cajasPendientesCalidad > 0)
-            {
-                resultado.Bloqueos.Add(
-                    $"Existen {cajasPendientesCalidad:N0} caja(s) pendientes de decisión de Calidad.");
-            }
-
-
+                resultado.Bloqueos.Add($"Existen {cajasPendientesCalidad:N0} caja(s) pendientes de decisión de Calidad.");
             if (configuracionInvalidada)
-            {
-                resultado.Bloqueos.Add(
-                    "La configuración de Calidad se encuentra invalidada.");
-            }
-
-
+                resultado.Bloqueos.Add("La configuración de Calidad se encuentra invalidada.");
             if (requiereReliberacion)
-            {
-                resultado.Bloqueos.Add(
-                    "Existe una reliberación de Calidad pendiente.");
-            }
-
-
+                resultado.Bloqueos.Add("Existe una reliberación de Calidad pendiente.");
             if (monitoreosPendientes > 0)
-            {
-                resultado.Bloqueos.Add(
-                    $"Calidad tiene {monitoreosPendientes:N0} monitoreo(s) pendiente(s).");
-            }
-
-
+                resultado.Bloqueos.Add($"Calidad tiene {monitoreosPendientes:N0} monitoreo(s) pendiente(s).");
             if (disposicionesPendientes > 0)
-            {
-                resultado.Bloqueos.Add(
-                    $"Calidad tiene {disposicionesPendientes:N0} disposición(es) pendiente(s).");
-            }
-
-
+                resultado.Bloqueos.Add($"Calidad tiene {disposicionesPendientes:N0} disposición(es) pendiente(s).");
             if (reliberacionesPendientes > 0)
-            {
-                resultado.Bloqueos.Add(
-                    $"Existen {reliberacionesPendientes:N0} reliberación(es) sin concluir.");
-            }
-
-
-            resultado.Permitido =
-                resultado.Bloqueos.Count == 0;
-
+                resultado.Bloqueos.Add($"Existen {reliberacionesPendientes:N0} reliberación(es) sin concluir.");
+            resultado.Permitido = resultado.Bloqueos.Count == 0;
             return resultado;
         }
-
 
         private sealed class ProduccionTurnoActual
         {
@@ -11145,29 +10593,111 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
             return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
         }
 
+        private async Task<List<ProduccionParoVm>> ObtenerParosAsync(int ejecucionProduccionId, SqlConnection cn)
+        {
+            var lista = new List<ProduccionParoVm>();
+            if (ejecucionProduccionId <= 0) return lista;
+
+            const string sql = @"
+SELECT
+    ParoID,
+    EjecucionProduccionID,
+    ProgramaProduccionID,
+    SolicitudProduccionID,
+    MaquinaID,
+    OperadorID,
+    FechaInicioParo,
+    FechaFinParo,
+    CASE
+        WHEN FechaFinParo IS NOT NULL
+            THEN ISNULL(DuracionMinutos,DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo))
+        ELSE DATEDIFF(MINUTE,FechaInicioParo,GETDATE())
+    END AS DuracionMinutos,
+    MotivoParoID,
+    MotivoParoTexto,
+    Descripcion,
+    CAST
+    (
+        CASE
+            WHEN ISNULL(EsMayorA15Minutos,0)=1 THEN 1
+            WHEN DATEDIFF(MINUTE,FechaInicioParo,ISNULL(FechaFinParo,GETDATE()))>15 THEN 1
+            ELSE 0
+        END
+    AS BIT) AS EsMayorA15Minutos,
+    UsuarioCreacionID,
+    FechaCreacion,
+    UsuarioModificacionID,
+    FechaModificacion,
+    Activo
+FROM dbo.Produccion_Paros
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+ORDER BY FechaInicioParo DESC,ParoID DESC;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new ProduccionParoVm
+                {
+                    ParoID = Convert.ToInt32(rd["ParoID"]),
+                    EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                    ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
+                    MaquinaID = rd["MaquinaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaID"]),
+                    OperadorID = rd["OperadorID"] == DBNull.Value ? null : Convert.ToInt32(rd["OperadorID"]),
+                    FechaInicioParo = Convert.ToDateTime(rd["FechaInicioParo"]),
+                    FechaFinParo = rd["FechaFinParo"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinParo"]),
+                    DuracionMinutos = rd["DuracionMinutos"] == DBNull.Value ? null : Convert.ToInt32(rd["DuracionMinutos"]),
+                    MotivoParoID = rd["MotivoParoID"] == DBNull.Value ? null : Convert.ToInt32(rd["MotivoParoID"]),
+                    MotivoParoTexto = rd["MotivoParoTexto"] == DBNull.Value ? null : rd["MotivoParoTexto"]?.ToString()?.Trim(),
+                    Descripcion = rd["Descripcion"] == DBNull.Value ? null : rd["Descripcion"]?.ToString()?.Trim(),
+                    EsMayorA15Minutos = rd["EsMayorA15Minutos"] != DBNull.Value && Convert.ToBoolean(rd["EsMayorA15Minutos"]),
+                    UsuarioCreacionID = rd["UsuarioCreacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioCreacionID"]),
+                    FechaCreacion = rd["FechaCreacion"] == DBNull.Value ? DateTime.MinValue : Convert.ToDateTime(rd["FechaCreacion"]),
+                    UsuarioModificacionID = rd["UsuarioModificacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioModificacionID"]),
+                    FechaModificacion = rd["FechaModificacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaModificacion"]),
+                    Activo = rd["Activo"] != DBNull.Value && Convert.ToBoolean(rd["Activo"])
+                });
+            }
+
+            return lista;
+        }
         private async Task<ValidacionLiberacionMaquinaResultado> ValidarLiberacionMaquinaAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
         {
             var resultado = new ValidacionLiberacionMaquinaResultado();
             const string sql = @"
-SELECT TOP (1)
+SELECT TOP(1)
     e.EstatusID,
     e.MaquinaID,
     e.FechaLiberacionMaquina,
     ISNULL(e.CantidadPlaneada,0) AS CantidadPlaneada,
-    dt.ObjetivoHora,
-    ISNULL(reg.HorasCapturadas,0) AS HorasCapturadas,
+    TRY_CONVERT(DECIMAL(18,4),dt.ObjetivoHora) AS ObjetivoHora,
+    ISNULL(reg.RegistrosNormales,0) AS RegistrosNormales,
+    ISNULL(reg.MinutosNormalesCapturados,0) AS MinutosNormalesCapturados,
     CASE WHEN EXISTS
     (
         SELECT 1
-        FROM dbo.Produccion_Paros p WITH (UPDLOCK,HOLDLOCK)
+        FROM dbo.Produccion_Paros p WITH(UPDLOCK,HOLDLOCK)
         WHERE p.EjecucionProduccionID=e.EjecucionProduccionID
           AND p.Activo=1
           AND p.FechaFinParo IS NULL
-    ) THEN 1 ELSE 0 END AS TieneParoAbierto
-FROM dbo.Produccion_Ejecucion e WITH (UPDLOCK,HOLDLOCK)
+    ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS TieneParoAbierto,
+    CASE WHEN EXISTS
+    (
+        SELECT 1
+        FROM dbo.Produccion_TiempoExtra te WITH(UPDLOCK,HOLDLOCK)
+        WHERE te.EjecucionProduccionID=e.EjecucionProduccionID
+          AND te.Activo=1
+          AND te.FechaHoraFin IS NULL
+          AND UPPER(LTRIM(RTRIM(ISNULL(te.Estado,N'')))) IN(N'EN_CURSO',N'PAUSADO')
+    ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS TieneTiempoExtraActivo
+FROM dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
 OUTER APPLY
 (
-    SELECT TOP (1) dt0.ObjetivoHora
+    SELECT TOP(1) dt0.ObjetivoHora
     FROM dbo.ERP_ParteDatosTecnicos dt0
     WHERE dt0.ParteID=e.ParteID
       AND dt0.Activo=1
@@ -11175,10 +10705,26 @@ OUTER APPLY
 ) dt
 OUTER APPLY
 (
-    SELECT COUNT(1) AS HorasCapturadas
-    FROM dbo.Produccion_RegistroHora r WITH (UPDLOCK,HOLDLOCK)
+    SELECT
+        COUNT(1) AS RegistrosNormales,
+        ISNULL
+        (
+            SUM
+            (
+                CASE
+                    WHEN r.MinutosProductivos IS NOT NULL AND r.MinutosProductivos>0
+                        THEN r.MinutosProductivos
+                    WHEN r.HoraFin>=r.HoraInicio
+                        THEN CONVERT(DECIMAL(18,2),DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin))
+                    ELSE CONVERT(DECIMAL(18,2),1440+DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin))
+                END
+            ),
+            0
+        ) AS MinutosNormalesCapturados
+    FROM dbo.Produccion_RegistroHora r WITH(UPDLOCK,HOLDLOCK)
     WHERE r.EjecucionProduccionID=e.EjecucionProduccionID
       AND r.Activo=1
+      AND ISNULL(r.EsTiempoExtra,0)=0
 ) reg
 WHERE e.EjecucionProduccionID=@EjecucionProduccionID
   AND e.Activo=1;";
@@ -11190,48 +10736,70 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                 resultado.Mensaje = "No se encontró la ejecución de Producción.";
                 return resultado;
             }
+
             var estatusId = Convert.ToInt32(rd["EstatusID"]);
             var maquinaId = rd["MaquinaID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["MaquinaID"]);
             var fechaLiberacion = rd["FechaLiberacionMaquina"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaLiberacionMaquina"]);
             var cantidadPlaneada = rd["CantidadPlaneada"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadPlaneada"]);
-            var objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["ObjetivoHora"]);
-            var horasCapturadas = rd["HorasCapturadas"] == DBNull.Value ? 0 : Convert.ToInt32(rd["HorasCapturadas"]);
+            var objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["ObjetivoHora"]);
+            var registrosNormales = rd["RegistrosNormales"] == DBNull.Value ? 0 : Convert.ToInt32(rd["RegistrosNormales"]);
+            var minutosNormalesCapturados = rd["MinutosNormalesCapturados"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["MinutosNormalesCapturados"]);
             var tieneParoAbierto = rd["TieneParoAbierto"] != DBNull.Value && Convert.ToBoolean(rd["TieneParoAbierto"]);
+            var tieneTiempoExtraActivo = rd["TieneTiempoExtraActivo"] != DBNull.Value && Convert.ToBoolean(rd["TieneTiempoExtraActivo"]);
+
             if (fechaLiberacion.HasValue)
             {
                 resultado.Mensaje = $"La máquina ya fue liberada el {fechaLiberacion.Value:dd/MM/yyyy HH:mm}.";
                 return resultado;
             }
+
             if (estatusId != ProduccionEstatus.EnProduccion)
             {
                 resultado.Mensaje = "La máquina únicamente puede liberarse cuando la ejecución se encuentra en producción.";
                 return resultado;
             }
+
             if (!maquinaId.HasValue || maquinaId.Value <= 0)
             {
                 resultado.Mensaje = "La ejecución no tiene una máquina válida relacionada.";
                 return resultado;
             }
+
             if (tieneParoAbierto)
             {
                 resultado.Mensaje = "No puedes liberar la máquina mientras exista un paro abierto.";
                 return resultado;
             }
-            if (horasCapturadas <= 0)
+
+            if (tieneTiempoExtraActivo)
             {
-                resultado.Mensaje = "No puedes liberar la máquina porque todavía no existe ninguna captura horaria de producción.";
+                resultado.Mensaje = "No puedes liberar la máquina mientras exista una sesión de tiempo extra abierta. Finaliza el tiempo extra y registra su último corte.";
                 return resultado;
             }
-            if (cantidadPlaneada > 0 && objetivoHora.HasValue && objetivoHora.Value > 0)
+
+            if (registrosNormales <= 0)
             {
-                var horasRequeridas = (int)Math.Ceiling((decimal)cantidadPlaneada / objetivoHora.Value);
-                if (horasCapturadas < horasRequeridas)
+                resultado.Mensaje = "No puedes liberar la máquina porque todavía no existe ninguna captura normal de producción.";
+                return resultado;
+            }
+
+            if (cantidadPlaneada > 0)
+            {
+                if (!objetivoHora.HasValue || objetivoHora.Value <= 0)
                 {
-                    var pendientes = horasRequeridas - horasCapturadas;
-                    resultado.Mensaje = $"No puedes liberar la máquina. Faltan {pendientes:N0} captura(s) horaria(s) de las {horasRequeridas:N0} requeridas para esta corrida.";
+                    resultado.Mensaje = "No se puede validar la liberación porque la pieza no tiene un objetivo por hora válido.";
+                    return resultado;
+                }
+
+                var minutosNormalesRequeridos = Math.Ceiling((decimal)cantidadPlaneada * 60m / objetivoHora.Value);
+                if (minutosNormalesCapturados + 0.01m < minutosNormalesRequeridos)
+                {
+                    var minutosPendientes = Math.Max(0m, minutosNormalesRequeridos - minutosNormalesCapturados);
+                    resultado.Mensaje = $"No puedes liberar la máquina. Se han capturado {minutosNormalesCapturados:0.##} de {minutosNormalesRequeridos:0.##} minuto(s) productivos normales requeridos. Faltan aproximadamente {minutosPendientes:0.##} minuto(s).";
                     return resultado;
                 }
             }
+
             resultado.Permitido = true;
             resultado.Mensaje = "La máquina puede liberarse.";
             return resultado;
