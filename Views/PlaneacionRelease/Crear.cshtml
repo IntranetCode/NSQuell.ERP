@@ -11,7 +11,7 @@
 @section Scripts {
     <script>
         const urlParteInfoRelease = '@Url.Action("ObtenerParteInfoRelease", "PlaneacionRelease")';
-        const urlPartesPorCliente = '@Url.Action("ObtenerPartesPorCliente", "PlaneacionRelease")';
+        const urlPartesPorCliente = '@Url.Action("ObtenerPartesDisponibles", "PlaneacionRelease")'; // NSQ_RELEASE_PARTES_GLOBALES_V1
 
         const formRelease = document.getElementById('formRelease');
         const clienteSelect = document.getElementById('ClienteID');
@@ -901,7 +901,7 @@ function validarCriticidadManual() { return true; }
                             </select>
                             <input asp-for="ClienteNombre" type="hidden" id="ClienteNombre" />
                             <div class="small-help">
-                                La lista de partes se filtrará con base en el cliente.
+                                Las partes del cliente seleccionado aparecen primero, pero puedes buscar y elegir cualquier parte activa del ERP.
                             </div>
                         </div>
 

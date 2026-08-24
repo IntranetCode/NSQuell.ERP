@@ -408,7 +408,11 @@
                     <a href="/Menu/Grupo/3" class="btn-erp btn-erp-light">
                         <i class="fa-solid fa-arrow-left"></i>Volver
                     </a>
-                    <a asp-controller="Planeacion"
+                                        <a asp-controller="Planeacion"
+                       asp-action="Historial"
+                       class="btn-erp btn-erp-light"> @* NSQ_HISTORIAL_OF_BUTTON_V2 *@
+                        <i class="fa-solid fa-clock-rotate-left"></i>Historial de OF
+                    </a><a asp-controller="Planeacion"
                        asp-action="Crear"
                        class="btn-erp btn-erp-primary">
                         <i class="fa-solid fa-plus"></i>Nueva OF manual

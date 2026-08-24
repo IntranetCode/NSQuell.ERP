@@ -1200,6 +1200,31 @@ WHERE MaterialID=@Id AND Activo=1;";
         ModelState.Remove(nameof(model.Unidad));
         ModelState.Remove(nameof(model.Lote));
 
+        // NSQ_ALMACEN_MP_BLANK_ZERO_V1
+        // En entrega de OF, dejar Virgen o Molido vacio equivale a 0.
+        // Se elimina el error de binding solo si el navegador envio
+        // realmente el campo vacio; valores no numericos siguen siendo error.
+        if (model.EsEntregaOF && Request.HasFormContentType)
+        {
+            var cantidadVirgenRaw =
+                Request.Form[nameof(model.CantidadVirgen)].ToString();
+
+            var cantidadMolidoRaw =
+                Request.Form[nameof(model.CantidadMolido)].ToString();
+
+            if (string.IsNullOrWhiteSpace(cantidadVirgenRaw))
+            {
+                model.CantidadVirgen = 0m;
+                ModelState.Remove(nameof(model.CantidadVirgen));
+            }
+
+            if (string.IsNullOrWhiteSpace(cantidadMolidoRaw))
+            {
+                model.CantidadMolido = 0m;
+                ModelState.Remove(nameof(model.CantidadMolido));
+            }
+        }
+
         if (!AlmacenOFEntregaService.TokenValido(model.OperacionToken))
         {
             ModelState.AddModelError(

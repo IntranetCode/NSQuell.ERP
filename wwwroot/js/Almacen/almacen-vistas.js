@@ -222,27 +222,167 @@
         refresh();
     }
 
+    // NSQ_ALMACEN_MP_SPLIT_EMPTY_ZERO_V1
+    // En entregas de MP a OF, Virgen y Molido son componentes opcionales:
+    // uno puede quedar en cero. Un campo vacio se interpreta como 0.
+    function configureSplitAmounts(form) {
+        if (form.dataset.splitAmountsReady === "true") return;
+
+        const cantidadV =
+            form.querySelector('[name="CantidadVirgen"]');
+
+        const cantidadM =
+            form.querySelector('[name="CantidadMolido"]');
+
+        if (!cantidadV && !cantidadM) return;
+
+        form.dataset.splitAmountsReady = "true";
+
+        const clearValidationMessage = input => {
+            if (!input || !input.name) return;
+
+            const message =
+                form.querySelector(
+                    `[data-valmsg-for="${input.name}"]`);
+
+            if (!message) return;
+
+            message.textContent = "";
+            message.classList.remove(
+                "field-validation-error");
+
+            message.classList.add(
+                "field-validation-valid");
+        };
+
+        const normalizeEmpty = (
+            input,
+            displayFourDecimals = false) => {
+
+            if (!input) return;
+
+            const raw =
+                (input.value || "").trim();
+
+            if (raw !== "") return;
+
+            input.value =
+                displayFourDecimals
+                    ? "0.0000"
+                    : "0";
+
+            clearValidationMessage(input);
+
+            input.dispatchEvent(
+                new Event("input", {
+                    bubbles: true
+                }));
+
+            input.dispatchEvent(
+                new Event("change", {
+                    bubbles: true
+                }));
+        };
+
+        cantidadV?.addEventListener(
+            "blur",
+            () => normalizeEmpty(
+                cantidadV,
+                true));
+
+        cantidadM?.addEventListener(
+            "blur",
+            () => normalizeEmpty(
+                cantidadM,
+                true));
+
+        // Capturing = true para ejecutar ANTES de jQuery
+        // Unobtrusive Validation y del bloqueo de submit.
+        form.addEventListener(
+            "submit",
+            () => {
+                normalizeEmpty(
+                    cantidadV,
+                    false);
+
+                normalizeEmpty(
+                    cantidadM,
+                    false);
+            },
+            true);
+    }
+    // NSQ_ALMACEN_SUBMIT_UNLOCK_V1
     function configureSubmitLock(form) {
         if (form.dataset.submitLockReady === "true") return;
         form.dataset.submitLockReady = "true";
 
-        form.addEventListener("submit", event => {
-            if (event.defaultPrevented || !form.checkValidity()) return;
+        const restoreSubmitButton = button => {
+            button.disabled = false;
+            button.removeAttribute("aria-disabled");
 
-            const buttons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+            if (button.tagName === "BUTTON") {
+                if (button.dataset.originalHtml !== undefined) {
+                    button.innerHTML =
+                        button.dataset.originalHtml;
+
+                    delete button.dataset.originalHtml;
+                }
+            }
+            else if (
+                button.dataset.originalValue !==
+                undefined) {
+
+                button.value =
+                    button.dataset.originalValue;
+
+                delete button.dataset.originalValue;
+            }
+        };
+
+        form.addEventListener("submit", event => {
+            if (
+                event.defaultPrevented ||
+                !form.checkValidity()) {
+                return;
+            }
+
+            const buttons =
+                Array.from(
+                    form.querySelectorAll(
+                        'button[type="submit"], input[type="submit"]'));
+
             buttons.forEach(button => {
                 button.disabled = true;
-                button.setAttribute("aria-disabled", "true");
+
+                button.setAttribute(
+                    "aria-disabled",
+                    "true");
 
                 if (button.tagName === "BUTTON") {
-                    button.dataset.originalHtml = button.innerHTML;
-                    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Guardando...';
+                    button.dataset.originalHtml =
+                        button.innerHTML;
+
+                    button.innerHTML =
+                        '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Guardando...';
                 }
                 else {
-                    button.dataset.originalValue = button.value;
+                    button.dataset.originalValue =
+                        button.value;
+
                     button.value = "Guardando...";
                 }
             });
+
+            // Puede existir un validador posterior (por ejemplo
+            // jQuery Unobtrusive) que haga preventDefault().
+            // En ese caso el navegador NO navega y el boton debe
+            // volver a quedar disponible.
+            window.setTimeout(() => {
+                if (!event.defaultPrevented) return;
+
+                buttons.forEach(
+                    restoreSubmitButton);
+            }, 0);
         });
     }
 
@@ -252,6 +392,7 @@
         const scope = root && root.querySelectorAll ? root : document;
         scope.querySelectorAll("form").forEach(form => {
             configureMovementForm(form);
+            configureSplitAmounts(form);
             configureSubmitLock(form);
         });
     }

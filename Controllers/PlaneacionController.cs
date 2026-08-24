@@ -6,7 +6,7 @@ using System.Data;
 
 namespace ERP.NSQuell.Controllers
 {
-    public class PlaneacionController : Controller // NSQ_OF_PRINT_REAL_V19
+    public partial class PlaneacionController : Controller // NSQ_OF_PRINT_REAL_V19
     {
         private readonly IConfiguration _configuration;
 
